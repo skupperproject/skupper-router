@@ -32,15 +32,19 @@
 #define FLAT_BUF_SIZE (100000)
 static unsigned char buffer[FLAT_BUF_SIZE];
 
+// given a buffer list, copy the data it contains into a single contiguous
+// buffer.
 static size_t flatten_bufs(qd_message_content_t *content)
 {
     unsigned char *cursor = buffer;
     qd_buffer_t *buf      = DEQ_HEAD(content->buffers);
 
     while (buf) {
+        // if this asserts you need a bigger buffer!
+        assert(((size_t) (cursor - buffer)) + qd_buffer_size(buf) < FLAT_BUF_SIZE);
         memcpy(cursor, qd_buffer_base(buf), qd_buffer_size(buf));
         cursor += qd_buffer_size(buf);
-        buf = buf->next;
+        buf = DEQ_NEXT(buf);
     }
 
     return (size_t) (cursor - buffer);
@@ -49,20 +53,10 @@ static size_t flatten_bufs(qd_message_content_t *content)
 
 static void set_content(qd_message_content_t *content, unsigned char *buffer, size_t len)
 {
-    unsigned char        *cursor = buffer;
-    qd_buffer_t *buf;
+    qd_buffer_list_t blist = DEQ_EMPTY;
 
-    while (len > (size_t) (cursor - buffer)) {
-        buf = qd_buffer();
-        size_t segment   = qd_buffer_capacity(buf);
-        size_t remaining = len - (size_t) (cursor - buffer);
-        if (segment > remaining)
-            segment = remaining;
-        memcpy(qd_buffer_base(buf), cursor, segment);
-        cursor += segment;
-        qd_buffer_insert(buf, segment);
-        DEQ_INSERT_TAIL(content->buffers, buf);
-    }
+    qd_buffer_list_append(&blist, buffer, len);
+    DEQ_APPEND(content->buffers, blist);
     SET_ATOMIC_FLAG(&content->receive_complete);
 }
 
@@ -361,115 +355,255 @@ static char* test_check_multiple(void *context)
 }
 
 
-static char* test_send_message_annotations(void *context)
+// Generate a test message with the given router annotations data
+//
+static qd_message_t *generate_ra_test_message(unsigned int flags,
+                                              const char *to_override,
+                                              const char *ingress_router,
+                                              const char *trace[])
 {
+    // create a test message using proton
+    qd_buffer_list_t pton_buffers = DEQ_EMPTY;
+    pn_message_t *pn_msg = pn_message();
+    pn_message_set_durable(pn_msg, true);
+    pn_message_set_address(pn_msg, "test_addr_0");
+    pn_data_t *pn_ma = pn_message_annotations(pn_msg);
+    pn_data_clear(pn_ma);
+    pn_data_put_map(pn_ma);
+    pn_data_enter(pn_ma);
+    pn_data_put_symbol(pn_ma, pn_bytes(strlen("ma-key1"), "ma-key1"));
+    pn_data_put_string(pn_ma, pn_bytes(strlen("distress"), "distress"));
+    pn_data_put_symbol(pn_ma, pn_bytes(strlen("ma-key2"), "ma-key2"));
+    pn_data_put_int(pn_ma, 1);
+    pn_data_exit(pn_ma);
+
+    pn_data_t *body = pn_message_body(pn_msg);
+    pn_data_put_list(body);
+    pn_data_enter(body);
+    pn_data_put_long(body, 1);
+    pn_data_put_long(body, 2);
+    pn_data_put_long(body, 3);
+    pn_data_exit(body);
+
+    size_t len = FLAT_BUF_SIZE;
+    pn_message_encode(pn_msg, (char*) buffer, &len);
+    qd_buffer_list_append(&pton_buffers, buffer, len);
+    pn_message_free(pn_msg);
+
+    // generate the RA
+    qd_buffer_list_t ra_buffers = DEQ_EMPTY;
+    qd_composed_field_t *ra = qd_compose(QD_PERFORMATIVE_ROUTER_ANNOTATIONS, 0);
+    qd_compose_start_list(ra);
+
+    qd_compose_insert_uint(ra, flags);
+    if (to_override)
+        qd_compose_insert_string(ra, to_override);
+    else
+        qd_compose_insert_null(ra);
+    if (ingress_router)
+        qd_compose_insert_string(ra, ingress_router);
+    else
+        qd_compose_insert_null(ra);
+    if (!trace)
+        qd_compose_empty_list(ra);
+    else {
+        qd_compose_start_list(ra);
+        for (int i = 0; trace[i]; ++i) {
+            qd_compose_insert_string(ra, trace[i]);
+        }
+        qd_compose_end_list(ra);
+    }
+    qd_compose_end_list(ra);
+    qd_compose_take_buffers(ra, &ra_buffers);
+    qd_compose_free(ra);
+
     qd_message_t         *msg     = qd_message();
     qd_message_content_t *content = MSG_CONTENT(msg);
+    DEQ_APPEND(content->buffers, ra_buffers);
+    DEQ_APPEND(content->buffers, pton_buffers);
+    SET_ATOMIC_FLAG(&content->receive_complete);
+    return msg;
+}
+
+
+// Create a message containing router-specific annotations.
+// Ensure the annotations are properly parsed.
+//
+static char* test_parse_router_annotations(void *context)
+{
     char *error = 0;
+    qd_buffer_list_t blist = DEQ_EMPTY;
 
-    qd_composed_field_t *trace = qd_compose_subfield(0);
-    qd_compose_start_list(trace);
-    qd_compose_insert_string(trace, "Node1");
-    qd_compose_insert_string(trace, "Node2");
-    qd_compose_end_list(trace);
-    qd_message_set_trace_annotation(msg, trace);
-
-    qd_composed_field_t *to_override = qd_compose_subfield(0);
-    qd_compose_insert_string(to_override, "to/address");
-    qd_message_set_to_override_annotation(msg, to_override);
-
-    qd_composed_field_t *ingress = qd_compose_subfield(0);
-    qd_compose_insert_string(ingress, "distress");
-    qd_message_set_ingress_annotation(msg, ingress);
-
-    qd_message_compose_1(msg, "test_addr_0", 0);
-    qd_buffer_t *buf = DEQ_HEAD(content->buffers);
-    if (buf == 0) {
-        qd_message_free(msg);
-        return "Expected a buffer in the test message";
-    }
-
-    pn_message_t *pn_msg = pn_message();
-    size_t len = flatten_bufs(content);
-    int result = pn_message_decode(pn_msg, (char *)buffer, len);
-    if (result != 0) {
-        error = "Error in pn_message_decode";
+    // Test: empty RA
+    qd_message_t *msg = generate_ra_test_message(0, 0, 0, 0);
+    error = (char*) qd_message_parse_router_annotations(msg);
+    if (error) {
         goto exit;
     }
 
-    pn_data_t *ma = pn_message_annotations(pn_msg);
-    if (!ma) {
-        error = "Missing message annotations";
-        goto exit;
-    }
-    pn_data_rewind(ma);
-    pn_data_next(ma);
-    if (pn_data_type(ma) != PN_MAP) {
-        error = "Invalid message annotation type";
-        goto exit;
-    }
-    if (pn_data_get_map(ma) != QD_MA_N_KEYS * 2) {
-        error = "Invalid map length";
+    // validate sections parsed correctly:
+
+    if (((qd_message_pvt_t*) msg)->ra_flags != 0) {
+        error = "Test0: Invalid RA flags";
         goto exit;
     }
 
-    pn_data_enter(ma);
-    for (int i = 0; i < QD_MA_N_KEYS; i++) {
-        pn_data_next(ma);
-        if (pn_data_type(ma) != PN_SYMBOL) {
-            error = "Bad map index";
-            goto exit;
-        }
-        pn_bytes_t sym = pn_data_get_symbol(ma);
-        if (!strncmp(QD_MA_PREFIX, sym.start, sym.size)) {
-            pn_data_next(ma);
-            sym = pn_data_get_string(ma);
-        } else if (!strncmp(QD_MA_INGRESS, sym.start, sym.size)) {
-            pn_data_next(ma);
-            sym = pn_data_get_string(ma);
-            if (strncmp("distress", sym.start, sym.size)) {
-                error = "Bad ingress";
-                goto exit;
-            }
-            //fprintf(stderr, "[%.*s]\n", (int)sym.size, sym.start);
-        } else if (!strncmp(QD_MA_TO, sym.start, sym.size)) {
-            pn_data_next(ma);
-            sym = pn_data_get_string(ma);
-            if (strncmp("to/address", sym.start, sym.size)) {
-                error = "Bad to override";
-                goto exit;
-            }
-            //fprintf(stderr, "[%.*s]\n", (int)sym.size, sym.start);
-        } else if (!strncmp(QD_MA_TRACE, sym.start, sym.size)) {
-            pn_data_next(ma);
-            if (pn_data_type(ma) != PN_LIST) {
-                error = "List not found";
-                goto exit;
-            }
-            pn_data_enter(ma);
-            pn_data_next(ma);
-            sym = pn_data_get_string(ma);
-            if (strncmp("Node1", sym.start, sym.size)) {
-                error = "Bad trace entry";
-                goto exit;
-            }
-            //fprintf(stderr, "[%.*s]\n", (int)sym.size, sym.start);
-            pn_data_next(ma);
-            sym = pn_data_get_string(ma);
-            if (strncmp("Node2", sym.start, sym.size)) {
-                error = "Bad trace entry";
-                goto exit;
-            }
-            //fprintf(stderr, "[%.*s]\n", (int)sym.size, sym.start);
-            pn_data_exit(ma);
-        } else error = "Unexpected map key";
+    if (qd_message_is_streaming(msg)) {
+        error = "Test0: streaming not expected";
+        goto exit;
     }
+
+    qd_parsed_field_t *pf_trace = qd_message_get_trace(msg);
+    if (!pf_trace) {
+        error = "Test0: trace not found!";
+        goto exit;
+    }
+    if (qd_parse_sub_count(pf_trace) != 0) {
+        error = "Test0: trace list not empty";
+        goto exit;
+    }
+
+    if (qd_message_get_to_override(msg) != 0) {
+        error = "Test0: expected no to override";
+        goto exit;
+    }
+
+    if (qd_message_get_ingress_router(msg)) {
+        error = "Test0: expected no ingress!";
+        goto exit;
+    }
+
+    // set values and compose:
+
+    qd_message_set_streaming_annotation(msg);
+    qd_message_set_to_override_annotation(msg, "to/override");
+
+    uint32_t len = _compose_router_annotations((qd_message_pvt_t*) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
+    if (len == 0) {
+        error = "Test1: failed to compose 1";
+        goto exit;
+    }
+
+    qd_message_free(msg);
+
+    msg = qd_message();
+    qd_message_content_t *content = MSG_CONTENT(msg);
+    DEQ_APPEND(content->buffers, blist);
+    SET_ATOMIC_FLAG(&content->receive_complete);
+
+    // parse updated values
+
+    error = (char*) qd_message_parse_router_annotations(msg);
+    if (error) {
+        goto exit;
+    }
+
+    // validate
+
+    if (!qd_message_is_streaming(msg)) {
+        error = "Test1: streaming expected";
+        goto exit;
+    }
+
+    qd_parsed_field_t *pf_to = qd_message_get_to_override(msg);
+    if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char*) "to/override")) {
+        error = "Test1: to override not found!";
+        goto exit;
+    }
+
+    // expected _compose_router_annotations to update trace an ingress properly
+
+    qd_parsed_field_t *pf_ingress = qd_message_get_ingress_router(msg);
+    if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char*) "0/UnitTestRouter")) {
+        error = "Test1: ingress router not found!";
+        goto exit;
+    }
+
+    pf_trace = qd_message_get_trace(msg);
+    if (!pf_trace || qd_parse_sub_count(pf_trace) != 1) {
+        error = "Test1: trace list not found!";
+        goto exit;
+    }
+    pf_trace = qd_parse_sub_value(pf_trace, 0);
+    if (!pf_trace || !qd_iterator_equal(qd_parse_raw(pf_trace), (const unsigned char*) "0/UnitTestRouter")) {
+        error = "Test1: invalid trace list";
+        goto exit;
+    }
+
+    qd_message_free(msg);
+
+    // Test: populated RA
+    const char *dummy_trace[] = {
+        "0/OneReallyVeryLongRouterId",
+        "0/AnotherShorterRouterId",
+        0
+    };
+    msg = generate_ra_test_message(MSG_FLAG_STREAMING,
+                                   "to/override/address",
+                                   "0/AnIngressRouter",
+                                   dummy_trace);
+    error = (char*) qd_message_parse_router_annotations(msg);
+    if (error) {
+        goto exit;
+    }
+
+    if (!qd_message_is_streaming(msg)) {
+        error = "Test2: streaming expected";
+        goto exit;
+    }
+    pf_to = qd_message_get_to_override(msg);
+    if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char*) "to/override/address")) {
+        error = "Test2: invalid to override!";
+        goto exit;
+    }
+    pf_ingress = qd_message_get_ingress_router(msg);
+    if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char*) "0/AnIngressRouter")) {
+        error = "Test2: invalid ingress router!";
+        goto exit;
+    }
+    pf_trace = qd_message_get_trace(msg);
+    if (!pf_trace || qd_parse_sub_count(pf_trace) != 2) {
+        error = "Test2: invalid trace list!";
+        goto exit;
+    }
+    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 0)), (const unsigned char*) dummy_trace[0])) {
+        error = "Test2: invalid trace list index 0";
+        goto exit;
+    }
+    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 1)), (const unsigned char*) dummy_trace[1])) {
+        error = "Test2: invalid trace list index 1";
+        goto exit;
+    }
+
+    // re-compose & parse, check trace list for local router id
+    len = _compose_router_annotations((qd_message_pvt_t*) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
+    if (len == 0) {
+        error = "Test3: failed to compose 2";
+        goto exit;
+    }
+    qd_message_free(msg);
+    msg = qd_message();
+    content = MSG_CONTENT(msg);
+    DEQ_APPEND(content->buffers, blist);
+    SET_ATOMIC_FLAG(&content->receive_complete);
+    error = (char*) qd_message_parse_router_annotations(msg);
+    if (error) {
+        goto exit;
+    }
+    pf_trace = qd_message_get_trace(msg);
+    if (!pf_trace || qd_parse_sub_count(pf_trace) != 3) {
+        error = "Test3: invalid trace list!";
+        goto exit;
+    }
+    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 2)), (const unsigned char*) "0/UnitTestRouter")) {
+        error = "Test2: invalid trace list index 1";
+        goto exit;
+    }
+
 
 exit:
 
-    pn_message_free(pn_msg);
     qd_message_free(msg);
-
     return error;
 }
 
@@ -1795,7 +1929,7 @@ int message_tests(void)
     TEST_CASE(test_receive_from_messenger, 0);
     TEST_CASE(test_message_properties, 0);
     TEST_CASE(test_check_multiple, 0);
-    TEST_CASE(test_send_message_annotations, 0);
+    TEST_CASE(test_parse_router_annotations, 0);
     TEST_CASE(test_q2_input_holdoff_sensing, 0);
     TEST_CASE(test_incomplete_annotations, 0);
     TEST_CASE(test_check_weird_messages, 0);

@@ -37,23 +37,6 @@ static void qdr_send_to_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 // Interface Functions
 //==================================================================================
 
-void qdr_new_message_annotate(qdr_core_t *core, qd_message_t *msg)
-{
-    if (core->router_mode != QD_ROUTER_MODE_EDGE) {
-        qd_composed_field_t *ingress = qd_compose_subfield(0);
-        qd_compose_insert_string(ingress, qd_router_id(core->qd));
-
-        qd_composed_field_t *trace = qd_compose_subfield(0);
-        qd_compose_start_list(trace);
-        qd_compose_insert_string(trace, qd_router_id(core->qd));
-        qd_compose_end_list(trace);
-
-        qd_message_set_ingress_annotation(msg, ingress);
-        qd_message_set_trace_annotation(msg, trace);
-    }
-}
-
-
 qdr_delivery_t *qdr_link_deliver(qdr_link_t *link, qd_message_t *msg, qd_iterator_t *ingress,
                                  bool settled, qd_bitmask_t *link_exclusion, int ingress_index,
                                  uint64_t remote_disposition,
@@ -143,6 +126,9 @@ qdr_delivery_t *qdr_link_deliver_to_routed_link(qdr_link_t *link, qd_message_t *
     dlv->link_id            = link->identity;
     dlv->conn_id            = link->conn_id;
     dlv->dispo_lock         = sys_mutex();
+
+    qd_message_disable_router_annotations(msg);  // routed links do not use router annotations
+
     qd_log(link->core->log, QD_LOG_DEBUG, DLV_FMT" Delivery created qdr_link_deliver_to_routed_link", DLV_ARGS(dlv));
 
     qdr_delivery_incref(dlv, "qdr_link_deliver_to_routed_link - newly created delivery, add to action list");

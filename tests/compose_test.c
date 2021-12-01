@@ -20,8 +20,8 @@
 #define _GNU_SOURCE
 #include "compose_private.h"
 #include "test_case.h"
-
 #include "qpid/dispatch.h"
+#include "buffer_field_api.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -397,6 +397,110 @@ static char *test_compose_subfields(void *context)
 }
 
 
+static char *test_compose_buffer_field(void *context)
+{
+    const uint8_t test_data[10] = {
+        0x53, 66,  // smallulong
+        0xA1, 5, 'a', 'b', 'c', 'd', 'e',  // 5 char string
+        0x45,  // empty list
+    };
+
+    char              *error = 0;
+    qd_buffer_list_t   blist = DEQ_EMPTY;
+    qd_parsed_field_t *pmap = 0;
+
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_MESSAGE_ANNOTATIONS, 0);
+
+    qd_compose_start_map(field);
+    qd_compose_insert_symbol(field, "key1");
+    qd_compose_insert_uint(field, 10);
+
+    qd_compose_insert_symbol(field, "key2");
+    qd_compose_start_list(field);
+
+    // insert a buffer field holding test_datas 3 elements
+    qd_buffer_list_append(&blist, test_data, 10);
+    qd_buffer_field_t bfield = qd_buffer_field(DEQ_HEAD(blist), qd_buffer_base(DEQ_HEAD(blist)), 10);
+    qd_compose_insert_buffer_field(field, &bfield, 3);
+    qd_buffer_list_free_buffers(&blist);
+
+    qd_compose_end_list(field);
+
+    qd_compose_insert_symbol(field, "key3");
+    qd_compose_insert_uint(field, 99);
+
+    qd_compose_end_map(field);
+
+    // extract the raw buffers
+    qd_compose_take_buffers(field, &blist);
+    qd_compose_free(field);
+
+    // parse the composed buffer (skip the 3 octet section header)
+    unsigned int length = qd_buffer_list_length(&blist);
+    qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(blist), 3, (length - 3), ITER_VIEW_ALL);
+    pmap = qd_parse(iter);
+    qd_iterator_free(iter);
+    if (!pmap || !qd_parse_ok(pmap) || !qd_parse_is_map(pmap)) {
+        error = "Failed to parse";
+        goto exit;
+    }
+
+    qd_parsed_field_t *pvalue = qd_parse_value_by_key(pmap, "key1");
+    if (!pvalue || qd_parse_as_uint(pvalue) != 10) {
+        error = "Failed to parse key1";
+        goto exit;
+    }
+
+    pvalue = qd_parse_value_by_key(pmap, "key3");
+    if (!pvalue || qd_parse_as_uint(pvalue) != 99) {
+        error = "Failed to parse key3";
+        goto exit;
+    }
+
+    qd_parsed_field_t *plist = qd_parse_value_by_key(pmap, "key2");
+    if (!plist || !qd_parse_is_list(plist)) {
+        error = "Failed to parse key2";
+        goto exit;
+    }
+
+    if (qd_parse_sub_count(plist) != 3) {
+        error = "Invalid list count";
+        goto exit;
+    }
+
+    pvalue = qd_parse_sub_value(plist, 0);
+    if (!pvalue || qd_parse_as_ulong(pvalue) != 66) {
+        error = "Invalid element 0";
+        goto exit;
+    }
+
+    pvalue = qd_parse_sub_value(plist, 1);
+    if (!pvalue) {
+        error = "Missing list element 1";
+        goto exit;
+    }
+
+    qd_iterator_t *citer = qd_parse_raw(pvalue);
+    if (!citer || !qd_iterator_equal(citer, (const unsigned char*) "abcde")) {
+        error = "Invalid element 1";
+        goto exit;
+    }
+
+    pvalue = qd_parse_sub_value(plist, 2);
+    if (!pvalue || !qd_parse_is_list(pvalue) || qd_parse_sub_count(pvalue) != 0) {
+        error = "Invalid element 2";
+        goto exit;
+    }
+
+
+exit:
+
+    qd_parse_free(pmap);
+    qd_buffer_list_free_buffers(&blist);
+    return error;
+}
+
+
 int compose_tests()
 {
     int result = 0;
@@ -409,6 +513,7 @@ int compose_tests()
     TEST_CASE(test_compose_insert_empty_binary, 0);
     TEST_CASE(test_compose_scalars, 0);
     TEST_CASE(test_compose_subfields, 0);
+    TEST_CASE(test_compose_buffer_field, 0);
 
     return result;
 }

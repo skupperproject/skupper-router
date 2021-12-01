@@ -201,6 +201,7 @@ static void qdr_ref_flow(void *context, qdr_link_t *link, int credit)
 
         qd_message_compose_2(adaptor->streaming_message, props, false);
         qd_compose_free(props);
+        qd_message_set_streaming_annotation(adaptor->streaming_message);
 
         printf("qdr_ref_flow: Starting a streaming delivery\n");
         adaptor->streaming_delivery =

@@ -23,8 +23,9 @@
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/amqp.h"
-#include "qpid/dispatch/buffer.h"
 #include "qpid/dispatch/ctools.h"
+
+#include "buffer_field_api.h"
 
 #include <string.h>
 
@@ -538,12 +539,13 @@ void qd_compose_insert_buffers(qd_composed_field_t *field,
 }
 
 
-void qd_compose_insert_opaque_elements(qd_composed_field_t *field,
-                                       uint32_t             count,
-                                       uint32_t             size)
+void qd_compose_insert_buffer_field(qd_composed_field_t *field,
+                                    const qd_buffer_field_t *bfield,
+                                    uint32_t count)
 {
+    qd_buffer_field_t bf = *bfield;
+    qd_buffer_field_iterate(&bf, (qd_buffer_field_iterator_t)qd_insert, field);
     bump_count_by_n(field, count);
-    bump_length(field, size);
 }
 
 

@@ -92,6 +92,7 @@ typedef struct {
     qd_buffer_t         *pending;                         // Buffer owned by and filled by qd_message_receive
     uint64_t             buffers_freed;                   // count of large msg buffers freed on send
 
+    qd_field_location_t  section_router_annotation;       // Router annotations (internal use only)
     qd_field_location_t  section_message_header;          // The message header list
     qd_field_location_t  section_delivery_annotation;     // The delivery annotation map
     qd_field_location_t  section_message_annotation;      // The message annotation map
@@ -99,7 +100,6 @@ typedef struct {
     qd_field_location_t  section_application_properties;  // The application properties list
     qd_field_location_t  section_body;                    // The message body: Data
     qd_field_location_t  section_footer;                  // The footer
-    qd_field_location_t  field_user_annotations;          // Opaque user message annotations, not a real field.
 
     qd_field_location_t  field_message_id;                // The string value of the message-id
     qd_field_location_t  field_user_id;                   // The string value of the user-id
@@ -118,32 +118,31 @@ typedef struct {
     qd_buffer_t         *parse_buffer;                    // Buffer where parsing should resume
     unsigned char       *parse_cursor;                    // Octet in parse_buffer where parsing should resume
     qd_message_depth_t   parse_depth;                     // Depth to which message content has been parsed
-    qd_iterator_t       *ma_field_iter_in;                // Iter for msg.FIELD_MESSAGE_ANNOTATION
 
-    qd_buffer_field_t    ma_user_annotation_blob;        // Original user annotations
-                                                          //  with router annotations stripped
-    uint32_t             ma_count;                        // Number of map elements in blob
-                                                          //  after router fields stripped
-    qd_parsed_field_t   *ma_pf_ingress;
-    qd_parsed_field_t   *ma_pf_phase;
-    qd_parsed_field_t   *ma_pf_to_override;
-    qd_parsed_field_t   *ma_pf_trace;
-    int                  ma_int_phase;
-    sys_atomic_t         ma_stream;                      // Message is streaming
+    // Per-message Router annotations.  These values are extracted from the
+    // incoming messages router annotations section.  Refer to
+    // docs/notes/router-annotations.adoc for more information.
+    //
+    qd_parsed_field_t   *ra_pf_ingress;                  // ingress router id
+    qd_parsed_field_t   *ra_pf_to_override;              // optional dest address override
+    qd_parsed_field_t   *ra_pf_trace;                    // the fields from the trace list
+    qd_parsed_field_t   *ra_pf_flags;                    // misc control flags
+    bool                 ra_disabled;                    // true: link routing - no router annotations involved.
+    bool                 ra_parsed;
+
     uint64_t             max_message_size;               // Configured max; 0 if no max to enforce
     uint64_t             bytes_received;                 // Bytes returned by pn_link_recv()
                                                          //  when enforcing max_message_size
     size_t               protected_buffers;              // Count of permanent buffers that hold message headers
     uint32_t             fanout;                         // Number of receivers for this message
                                                          //  including in-process subscribers.
-
     qd_message_q2_unblocker_t q2_unblocker;              // Callback and context to signal Q2 unblocked to receiver
 
-    bool                 ma_parsed;                      // Have parsed incoming message annotations message
-    sys_atomic_t         discard;                        // Message is being discarded
-    sys_atomic_t         receive_complete;               // Message has been completely received
     bool                 q2_input_holdoff;               // Q2 state: hold off calling pn_link_recv
     bool                 disable_q2_holdoff;             // Disable Q2 flow control
+
+    sys_atomic_t         discard;                        // Message is being discarded
+    sys_atomic_t         receive_complete;               // Message has been completely received
     sys_atomic_t         priority_parsed;                // Message priority has been parsed
     sys_atomic_t         oversize;                       // Policy oversize-message handling in effect
     sys_atomic_t         no_body;                        // HTTP2 request has no body
@@ -152,36 +151,45 @@ typedef struct {
 } qd_message_content_t;
 
 struct qd_message_pvt_t {
-    qd_buffer_field_t              cursor;          // Pointer to current location of outgoing byte stream.
-    qd_message_depth_t             message_depth;   // Depth of incoming received message
-    qd_message_depth_t             sent_depth;      // Depth of outgoing sent message
+    struct {
+        qd_buffer_t *buffer;
+        unsigned char *cursor;
+    }                              cursor;          // Pointer to current location of outgoing byte stream.
     qd_message_content_t          *content;         // Singleton content shared by reference between
                                                     //  incoming and all outgoing copies
-    qd_buffer_list_t               ma_to_override;  // To field in outgoing message annotations.
-    qd_buffer_list_t               ma_trace;        // Trace list in outgoing message annotations
-    qd_buffer_list_t               ma_ingress;      // Ingress field in outgoing message annotations
-    int                            ma_phase;        // Phase for override address
+    char                          *ra_to_override;  // new outgoing value for to-override annotation
+    uint32_t                       ra_flags;        // new outgoing value for flag annotation
+    bool                           strip_annotations_in;
+    bool                           ra_sent;         // false == router annotation section not yet sent
+    bool                           tag_sent;        // Tags are sent
+    bool                           is_fanout;       // Message is an outgoing fanout
+
     qd_message_stream_data_list_t  stream_data_list;// Stream data parse structure
                                                     // TODO - move this to the content for one-time parsing (TLR)
     unsigned char                 *body_cursor;     // Stream: tracks the point in the content buffer chain
     qd_buffer_t                   *body_buffer;     // Stream: to parse the next body data section, if any
-    bool                           strip_annotations_in;
     sys_atomic_t                   send_complete;   // Message has been been completely sent
-    bool                           tag_sent;        // Tags are sent
-    bool                           is_fanout;       // Message is an outgoing fanout
 };
 
 ALLOC_DECLARE(qd_message_t);
 ALLOC_DECLARE(qd_message_content_t);
 
-#define MSG_CONTENT(m) (((qd_message_pvt_t*) m)->content)
+#define MSG_CONTENT(m)     (((qd_message_pvt_t*) m)->content)
+#define MSG_FLAG_STREAMING 0x01u
 
 /** Initialize logging */
 void qd_message_initialize();
 
+//
+// Internal API - exported for unit testing ONLY:
+//
+
 // These expect content->lock to be locked.
 bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content);
 bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content);
+
+uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flags, qd_buffer_list_t *ra_buffers);
+
 
 ///@}
 
