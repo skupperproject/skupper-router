@@ -28,6 +28,7 @@
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/timer.h"
 #include "dispatch_private.h"
+#include "buffer_field_api.h"
 #include "stdbool.h"
 #include <inttypes.h>
 #include <stdlib.h>
@@ -754,11 +755,6 @@ static void _plog_emit_record_as_event_TH(qdr_core_t *core, plog_record_t *recor
     qd_message_compose_2(event, field, true);
 
     //
-    // Annotate the message so it will be properly multicast
-    //
-    qdr_new_message_annotate(core, event);
-
-    //
     // Send the message to all of the bound receivers
     //
     qdr_send_to2(core, event, event_address_my, true, false);
@@ -845,11 +841,6 @@ static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
         //
         qd_message_t *beacon = qd_message();
         qd_message_compose_2(beacon, field, true);
-
-        //
-        // Annotate the message so it will be properly multicast
-        //
-        qdr_new_message_annotate(core, beacon);
 
         //
         // Send the message to all of the bound receivers
@@ -1166,60 +1157,30 @@ void plog_set_uint64(plog_record_t *record, plog_attribute_t attribute_type, uin
 void plog_set_trace(plog_record_t *record, qd_message_t *msg)
 {
 #define MAX_TRACE_BUFFER 1000
-    qd_iterator_t *ma_iter = qd_message_field_iterator(msg, QD_FIELD_MESSAGE_ANNOTATION);
     char *trace_text     = "Local";
     char *trace_text_ptr = trace_text;
     char  trace_buffer[MAX_TRACE_BUFFER + 1];
+    qd_parsed_field_t *trace_value = qd_message_get_trace(msg);
 
-    do {
-        if (!ma_iter) {
-            break;
+    if (trace_value && qd_parse_is_list(trace_value)) {
+        uint32_t trace_count = qd_parse_sub_count(trace_value);
+        if (trace_count > 0) {
+            trace_text_ptr = trace_buffer;
+            char *cursor   = trace_text_ptr;
+            for (uint32_t i = 0; i < trace_count; i++) {
+                qd_parsed_field_t *trace_item = qd_parse_sub_value(trace_value, i);
+                if (i > 0) {
+                    *(cursor++) = '|';
+                }
+                if (qd_parse_is_scalar(trace_item)) {
+                    qd_buffer_field_t raw_trace = qd_parse_raw_field(trace_item);
+                    cursor += qd_buffer_field_ncopy(&raw_trace,
+                                                    (uint8_t*) cursor, MAX_TRACE_BUFFER - (cursor - trace_text_ptr));
+                }
+            }
+            *(cursor++) = '\0';
         }
-
-        qd_parsed_field_t *ma = qd_parse(ma_iter);
-        if (!ma) {
-            break;
-        }
-
-        do {
-            if (!qd_parse_ok(ma) || !qd_parse_is_map(ma)) {
-                break;
-            }
-
-            uint32_t count = qd_parse_sub_count(ma);
-            qd_parsed_field_t *trace_value = 0;
-            for (uint32_t i = 0; i < count; i++) {
-                qd_parsed_field_t *key = qd_parse_sub_key(ma, i);
-                if (key == 0) {
-                    break;
-                }
-                qd_iterator_t *key_iter = qd_parse_raw(key);
-                if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char*) QD_MA_TRACE)) {
-                    trace_value = qd_parse_sub_value(ma, i);
-                    break;
-                }
-            }
-
-            if (!!trace_value && qd_parse_is_list(trace_value)) {
-                trace_text_ptr = trace_buffer;
-                char *cursor   = trace_text_ptr;
-                uint32_t trace_count = qd_parse_sub_count(trace_value);
-                for (uint32_t i = 0; i < trace_count; i++) {
-                    qd_parsed_field_t *trace_item = qd_parse_sub_value(trace_value, i);
-                    if (i > 0) {
-                        *(cursor++) = '|';
-                    }
-                    if (qd_parse_is_scalar(trace_item)) {
-                        cursor += qd_iterator_ncopy(qd_parse_raw(trace_item),
-                                                    (uint8_t*) cursor, MAX_TRACE_BUFFER - (cursor - trace_text_ptr));;
-                    }
-                }
-                *(cursor++) = '\0';
-            }
-        } while (false);
-        qd_parse_free(ma);
-    } while (false);
-    qd_iterator_free(ma_iter);
+    }
 
     plog_work_t *work = _plog_work(_plog_set_string_TH);
     work->record    = record;

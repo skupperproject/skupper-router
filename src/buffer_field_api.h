@@ -26,6 +26,7 @@
  */
 
 #include "qpid/dispatch/buffer_field.h"
+#include "qpid/dispatch/parse.h"
 #include <stdbool.h>
 
 /* qd_buffer_field_normalize
@@ -187,10 +188,7 @@ static inline bool qd_buffer_field_uint32(qd_buffer_field_t *bfield, uint32_t *v
     if (bfield->remaining >= 4) {
         uint8_t buf[4];
         qd_buffer_field_ncopy(bfield, buf, 4);
-        *value = (((uint32_t) buf[0]) << 24)
-            | (((uint32_t) buf[1]) << 16)
-            | (((uint32_t) buf[2]) << 8)
-            | ((uint32_t) buf[3]);
+        *value = qd_parse_uint32_decode(buf);
         return true;
     }
     return false;
@@ -292,6 +290,32 @@ static inline void qd_buffer_list_append_field(qd_buffer_list_t *buflist, qd_buf
             bfield->cursor = qd_buffer_base(bfield->buffer);
         }
     }
+}
+
+
+/* qd_buffer_field_iterate
+ *
+ * Call the given iterator handler for each buffer in the field. The field is
+ * advanced to the end.
+ */
+typedef void (*qd_buffer_field_iterator_t)(void *context, const uint8_t *data, size_t len);
+static inline void qd_buffer_field_iterate(qd_buffer_field_t *bfield,
+                                           qd_buffer_field_iterator_t iterator,
+                                           void *context)
+{
+    assert(bfield);
+    while (bfield->remaining) {
+        size_t avail = qd_buffer_cursor(bfield->buffer) - bfield->cursor;
+        avail = MIN(avail, bfield->remaining);
+        iterator(context, bfield->cursor, avail);
+        bfield->remaining -= avail;
+        if (bfield->remaining) {
+            bfield->buffer = DEQ_NEXT(bfield->buffer);
+            assert(bfield->buffer);
+            bfield->cursor = qd_buffer_base(bfield->buffer);
+        }
+    }
+    bfield->cursor = qd_buffer_cursor(bfield->buffer);
 }
 
 ///@}

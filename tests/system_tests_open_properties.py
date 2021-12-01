@@ -433,7 +433,7 @@ class OpenPropertiesInterRouterTest(TestCase):
         self.RouterA.teardown()
         self.RouterB.teardown()
 
-        log_msg = "ROUTER (debug) Remote router annotations version: 1"
+        log_msg = "ROUTER (debug) Remote router annotations version: 2"
         line = get_log_line(a_logfile, log_msg)
         self.assertIsNotNone(line)
 
@@ -490,7 +490,7 @@ class OpenPropertiesEdgeRouterTest(TestCase):
         self.RouterA.teardown()
         self.RouterB.teardown()
 
-        log_msg = "ROUTER (debug) Remote router annotations version: 1"
+        log_msg = "ROUTER (debug) Remote router annotations version: 2"
         line = get_log_line(a_logfile, log_msg)
         self.assertIsNotNone(line)
 

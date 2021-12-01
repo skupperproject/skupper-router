@@ -19,6 +19,11 @@
 
 import time
 
+# must include interrouter_msg BEFORE any proton modules because it
+# monkey-patches proton.Message so we can get the message trace
+# annotation
+import interrouter_msg  # noqa: F401
+
 from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
@@ -521,7 +526,7 @@ class TopologyFailover (MessagingHandler):
             # ----------------------------------------------------------------
             self.n_received += 1
             if self.state == 'examine_trace' :
-                trace    = event.message.annotations['x-opt-qd.trace']
+                trace    = event.message.router_annotations.trace
                 expected = self.expected_traces[self.trace_count]
                 if trace == expected :
                     if self.trace_count == len(self.expected_traces) - 1 :

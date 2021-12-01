@@ -66,6 +66,7 @@ typedef struct qd_message_stream_data_t qd_message_stream_data_t;
 /** Amount of message to be parsed.  */
 typedef enum {
     QD_DEPTH_NONE,
+    QD_DEPTH_ROUTER_ANNOTATIONS,
     QD_DEPTH_HEADER,
     QD_DEPTH_DELIVERY_ANNOTATIONS,
     QD_DEPTH_MESSAGE_ANNOTATIONS,
@@ -83,6 +84,7 @@ typedef enum {
     //
     // Message Sections
     //
+    QD_FIELD_ROUTER_ANNOTATION,
     QD_FIELD_HEADER,
     QD_FIELD_DELIVERY_ANNOTATION,
     QD_FIELD_MESSAGE_ANNOTATION,
@@ -146,55 +148,38 @@ void qd_message_free(qd_message_t *msg);
 qd_message_t *qd_message_copy(qd_message_t *msg);
 
 /**
- * Retrieve the message annotations from a message and place them in message storage.
- *
- * IMPORTANT: The pointer returned by this function remains owned by the message.
- *            The caller MUST NOT free the parsed field.
+ * Parse the router annotations section from a message and place them in
+ * the qd_message_t/qd_message_content_t data structures.
  *
  * @param msg Pointer to a received message.
+ * @return 0 on success, else an error message
  */
-void qd_message_message_annotations(qd_message_t *msg);
-
-/**
- * Set the value for the QD_MA_TRACE field in the outgoing message annotations
- * for the message.
- *
- * IMPORTANT: This method takes ownership of the trace_field - the calling
- * method must not reference it after this call.
- *
- * @param msg Pointer to an outgoing message.
- * @param trace_field Pointer to a composed field representing the list that
- * will be used as the value for the QD_MA_TRACE map entry.  If null, the
- * message will not have a QA_MA_TRACE message annotation field.  Ownership of
- * this field is transferred to the message.
- *
- */
-void qd_message_set_trace_annotation(qd_message_t *msg, qd_composed_field_t *trace_field);
+const char *qd_message_parse_router_annotations(qd_message_t *msg);
 
 /**
  * Set the value for the QD_MA_TO field in the outgoing message annotations for
  * the message.
  *
- * IMPORTANT: This method takes ownership of the to_field - the calling
- * method must not reference it after this call.
- *
  * @param msg Pointer to an outgoing message.
- * @param to_field Pointer to a composed field representing the to override
- * address that will be used as the value for the QD_MA_TO map entry.  If null,
- * the message will not have a QA_MA_TO message annotation field.  Ownership of
- * this field is transferred to the message.
- *
+ * @param to_field Pointer to a c string holding the to override address that
+ * will be used as the value for the outgoing QD_MA_TO annotations map entry.
+ * If null, the message will not have a QA_MA_TO message annotation field.
  */
-void qd_message_set_to_override_annotation(qd_message_t *msg, qd_composed_field_t *to_field);
+void qd_message_set_to_override_annotation(qd_message_t *msg, const char *to_field);
 
 /**
- * Indicate whether message should be considered to be streaming.
+ * Classify the message as streaming.
+ *
+ * Marking a message as streaming will prevent downstream routers from manually
+ * determining if this message should be sent on an inter-router streaming
+ * link. Once a message is classified as streaming it retains the
+ * classification until it is delivered to an endpoint
  *
  * @param msg Pointer to an outgoing message.
- * @param stream true if the message is streaming
  *
  */
-void qd_message_set_stream_annotation(qd_message_t *msg, bool stream);
+void qd_message_set_streaming_annotation(qd_message_t *msg);
+
 /**
  * Test whether received message should be considered to be streaming.
  *
@@ -202,23 +187,16 @@ void qd_message_set_stream_annotation(qd_message_t *msg, bool stream);
  * @return true if the received message has the streaming annotation set, else false.
  *
  */
-int qd_message_is_streaming(qd_message_t *msg);
+int qd_message_is_streaming(const qd_message_t *msg);
 
 /**
- * Set the value for the QD_MA_INGRESS field in the outgoing message
- * annotations for the message.
+ * Prevent the router from doing any transformations to the message annotations
+ * section of the message.
  *
- * IMPORTANT: This method takes ownership of the ingress_field - the calling
- * method must not reference it after this call.
- *
- * @param msg Pointer to an outgoing message.
- * @param ingress_field Pointer to a composed field representing ingress router
- * that will be used as the value for the QD_MA_INGRESS map entry.  If null,
- * the message will not have a QA_MA_INGRESS message annotation field.
- * Ownership of this field is transferred to the message.
- *
+ * Used by link-routing to completely skip all MA handling, including parsing
+ * MA on receive and restoring/composing MA on send.
  */
-void qd_message_set_ingress_annotation(qd_message_t *msg, qd_composed_field_t *ingress_field);
+void qd_message_disable_router_annotations(qd_message_t *in_msg);
 
 /**
  * Receive message data frame by frame via a delivery.  This function may be called more than once on the same
@@ -251,10 +229,14 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg);
  *
  * @param msg A pointer to a message to be sent.
  * @param link The outgoing link on which to send the message.
- * @param strip_outbound_annotations [in] annotation control flag
+ * @param ra_flags [in] outbound router annotations control flag
  * @param q3_stalled [out] indicates that the link is stalled due to proton-buffer-full
  */
-void qd_message_send(qd_message_t *msg, qd_link_t *link, bool strip_outbound_annotations, bool *q3_stalled);
+#define QD_MESSAGE_RA_STRIP_NONE    0x00  // send all router annotations
+#define QD_MESSAGE_RA_STRIP_INGRESS 0x01
+#define QD_MESSAGE_RA_STRIP_TRACE   0x02
+#define QD_MESSAGE_RA_STRIP_ALL     0xFF  // no router annotations section sent
+void qd_message_send(qd_message_t *msg, qd_link_t *link, unsigned int ra_flags, bool *q3_stalled);
 
 /**
  * Check that the message is well-formed up to a certain depth.  Any part of the message that is
@@ -285,11 +267,27 @@ qd_iterator_t *qd_message_field_iterator(qd_message_t *msg, qd_message_field_t f
 ssize_t qd_message_field_length(qd_message_t *msg, qd_message_field_t field);
 ssize_t qd_message_field_copy(qd_message_t *msg, qd_message_field_t field, char *buffer, size_t *hdr_length);
 
+// Create a message using composed fields to supply content.
 //
-// Functions for composed messages
+// This message constructor will create a new message using each fields buffers
+// concatenated in order (f1 first, f2 second, etc). There is no need to
+// provide all three fields: concatenation stops at the first null fx pointer.
 //
+// Note well that while this constructor can support up to three separate
+// composed fields it is more efficent to chain as many message sections as
+// possible into as few separate composed fields as possible.  This means that
+// any passed composed field can contain several message sections.
+//
+// This constructor takes ownership of the composed fields - the caller must
+// not reference them after the call.
+//
+qd_message_t *qd_message_compose(qd_composed_field_t *f1,
+                                 qd_composed_field_t *f2,
+                                 qd_composed_field_t *f3,
+                                 bool receive_complete);
 
-// Convenience Functions
+// The following qd_message_compose_X are deprecated: Please use the
+// qd_message_compose() to create locally generated messages instead
 void qd_message_compose_1(qd_message_t *msg, const char *to, qd_buffer_list_t *buffers);
 void qd_message_compose_2(qd_message_t *msg, qd_composed_field_t *content, bool receive_complete);
 void qd_message_compose_3(qd_message_t *msg, qd_composed_field_t *content1, qd_composed_field_t *content2, bool receive_complete);
@@ -442,25 +440,25 @@ int qd_message_repr_len();
 qd_log_source_t* qd_message_log_source();
 
 /**
- * Accessor for message field ingress
- * 
+ * Accessor for incoming messages ingress router annotation
+ *
  * @param msg A pointer to the message
- * @return the parsed field
+ * @return the parsed field or 0 if no ingress present in msg
  */
-qd_parsed_field_t *qd_message_get_ingress(qd_message_t *msg);
+qd_parsed_field_t *qd_message_get_ingress_router(qd_message_t *msg);
 
 /**
  * Accessor for message field to_override
- * 
+ *
  * @param msg A pointer to the message
- * @return the parsed field
+ * @return the parsed field or 0 if no to_override present
  */
 qd_parsed_field_t *qd_message_get_to_override(qd_message_t *msg);
 
 /**
- * Accessor for message field trace
- * 
- * @param msg A pointer to the message
+ * Accessor for incoming messages trace annotation
+ *
+ * @param msg A pointer to the received message
  * @return the parsed field
  */
 qd_parsed_field_t *qd_message_get_trace(qd_message_t *msg);

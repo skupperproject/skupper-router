@@ -33,10 +33,12 @@ includes:
 non-edge router the message encounters along the forwarding path.
 
 * The trace list: an ordered list of router identifiers. This list
-reflects the path the message has travelled in the router network. The
-first entry on the list is the ingress router.  The current router
-identifier is added to the end of this list before the message is
-forwarded to a next hop router.
+reflects the path the message has travelled in the router
+network. Note that only routers of type 'interior' are included in
+this list - edge routers are not included. The first entry on the list
+is the ingress interior router.  The current router identifier is
+added to the end of this list before the message is forwarded to a
+next hop router.
 
 * A destination address.  This optional field overrides the value of
 the *to* field in the message properties section.
@@ -64,9 +66,8 @@ performative. In the case where peers advertise different versions,
 the numerically lower version will be used by both routers.
 
 The open property map key for the version is
-*"qd.annotations-version"*.
-The value is encoded as a signed integer. This document defines
-version 1.
+*"qd.annotations-version"*. The value is encoded as a signed
+integer. This document defines version 2.
 
 == Encoding
 
@@ -74,45 +75,38 @@ Router annotations will be encoded as a custom section in the
 message. This section will appear as the first section of the message
 (prior to the header section).
 
-In order to avoid conflicts with the described types defined by the AMQP
-specification, skupper-router will reserve a numeric domain
-identifier.  The value for this domain will be *0xFFFFFFFF*.
+In order to avoid conflicts with the described types defined by the
+AMQP specification, skupper-router will reserve a numeric domain
+identifier.  The value for this domain will be *0x534B5052*. This is
+the four ascii character sequence 'SKPR'.
 
-The value for the new section identifier will be *0x2000*.
+The value for the new section identifier will be *0x2D2D5241*. This is
+the four ascii character sequence '--RA'.
+
+These values allows for easy identification of the router annotation
+section in the protocol trace logs.  Simply search for the string
+'SKPR--RA'.
 
 The definition of this custom section follows:
 
  <type name="skupper-router-annotations" class="composite" source="list" provides="section">
-    <descriptor name="skupper:router-annotations" code="0xFFFFFFFF:0x00002000"/>
-    <field name="flags" type="ubyte" default="0" mandatory="true"/>
+    <descriptor name="skupper:router-annotations" code="0x534B5052:0x2D2D5241"/>
+    <field name="flags" type="uint" default="0" mandatory="true"/>
     <field name="to-override" type="str32-utf8" mandatory="false"/>
-    <field name="ingress-router" type="str8-utf8" mandatory="true"/>
+    <field name="ingress-router" type="str8-utf8" mandatory="false"/>
     <field name="trace" type="list" mandatory="true"/>
  </type>
 
 * The flags field is used for passing boolean flags.  The least
-significant bit (bit 0) is used for the streaming flag.  All other
-bits are reserved and initialized to zero on ingress
+significant bit (bit 0; hex 0x01) is used for the streaming flag.  All
+other bits are reserved and initialized to zero. An interior router
+must ignore these unreserved flags and pass them to the next hop
+without modifying them.
 
-* Entries on the trace list are restricted to the *str8-utf8* type.
-
-== Extensions
-
-It should be possible to extend the router-annotations in the future
-without requiring a version bump. The following rules will ensure
-this:
-
-* The unreserved bits in the flags field MUST be forwarded without
-modification. In other words a router must not reset any reserved
-fields that have been set to one by the upstream router(s).
-
-* New fields may be added to the definition IF:
-** The new fields are appended to the existing definition AND
-** It is safe for intermediate routers to ignore these fields
-
-* Routers must forward any extra fields appearing at the end of the
-  list beyond those described above. These extra fields must be NOT be
-  modified.
+* Entries on the trace list are restricted to the *str8-utf8*
+type. Note that the trace list will always be present however it may
+be a null list (AMQP list0, code 0x45) when sent by an edge router
+(see below).
 
 == Section Inclusion/Removal
 
@@ -124,4 +118,17 @@ fields that have been set to one by the upstream router(s).
 * The router message annotation MUST be removed when sending a message
   over a non-inter-router/edge connection. It should be possible to
   disable this rule for debug and testing purposes via configuration.
+
+== Edge Router Annotations
+
+An edge router will include a router annotations section in all
+messages sent to an interior router. However the edge router will only
+populate the flags and to-override entries.  The ingress-router field
+MUST be set to the AMQP null value (code 0x40). The trace list must be
+sent as an empty list.
+
+Interior routers will include the full set of router annotations -
+including the ingress-router and trace list fields - on messages sent
+to an edge router. It is expected that the edge router can safely
+ignore the ingress-router and trace field values in this case.
 

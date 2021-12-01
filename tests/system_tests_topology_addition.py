@@ -19,6 +19,11 @@
 
 import unittest
 
+# must include interrouter_msg BEFORE any proton modules because it
+# monkey-patches proton.Message so we can get the message trace
+# annotation
+import interrouter_msg  # noqa: F401
+
 from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
@@ -467,7 +472,7 @@ class AddRouter (MessagingHandler):
         if self.finishing :
             return
         self.n_received += 1
-        trace = event.message.annotations['x-opt-qd.trace']
+        trace = event.message.router_annotations.trace
         # Introduce flaws for debugging.
         # if self.n_received == 13 :
         #     trace = [ '0/B', '0/A', '0/D' ]

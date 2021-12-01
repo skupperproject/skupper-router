@@ -368,6 +368,63 @@ exit:
 }
 
 
+typedef struct {
+    uint8_t *data;
+    size_t   length;
+} iter_context_t;
+
+
+static void buffer_field_iter(void *context, const uint8_t *data, size_t length)
+{
+    iter_context_t *ctx = (iter_context_t*) context;
+    size_t offset = ctx->length;
+    ctx->length += length;
+    ctx->data = realloc(ctx->data, ctx->length);
+    memcpy(&ctx->data[offset], data, length);
+}
+
+static void buffer_field_iter_fail(void *context, const uint8_t *data, size_t length)
+{
+    char **result = (char**) context;
+    *result = "Error: should not be called!";
+}
+
+
+static char *test_buffer_field_iterator(void *context)
+{
+    char *result = 0;
+    iter_context_t ctx = {0};
+    qd_buffer_list_t blist = DEQ_EMPTY;
+    const char *append_str = "abcdefghijklmnopqrstuvwxyz";
+
+    for (int i = 0; i < 1000; ++i)
+        qd_buffer_list_append(&blist, (const uint8_t*) append_str, strlen(append_str));
+    const size_t total = qd_buffer_list_length(&blist);
+
+    qd_buffer_field_t bfield = qd_buffer_field(DEQ_HEAD(blist), qd_buffer_base(DEQ_HEAD(blist)), total);
+    qd_buffer_field_t save = bfield;
+
+    qd_buffer_field_iterate(&bfield, buffer_field_iter, &ctx);
+    if (bfield.remaining != 0) {
+        result = "Did not exhaust field";
+        goto exit;
+    }
+
+    if (!qd_buffer_field_equal(&save, ctx.data, ctx.length)) {
+        result = "Iterator did not duplicate the field";
+        goto exit;
+    }
+
+    // expect: since bfield is empty the handler should not be called:
+    qd_buffer_field_iterate(&bfield, buffer_field_iter_fail, &result);
+
+exit:
+    free(ctx.data);
+    qd_buffer_list_free_buffers(&blist);
+    return result;
+}
+
+
 int buffer_tests()
 {
     int result = 0;
@@ -376,6 +433,7 @@ int buffer_tests()
     TEST_CASE(test_buffer_list_clone, 0);
     TEST_CASE(test_buffer_list_append, 0);
     TEST_CASE(test_buffer_field, 0);
+    TEST_CASE(test_buffer_field_iterator, 0);
 
     return result;
 }

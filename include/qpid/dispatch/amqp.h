@@ -19,6 +19,8 @@
  * under the License.
  */
 
+#include <stdint.h>
+
 /**@file
  * AMQP constants.
  *
@@ -27,6 +29,11 @@
  * AMQP related constant definitions.
  */
 /// @{
+
+/**
+ * Skupper type domain identifier "SKPR"
+ */
+#define QD_SKUPPER_DOMAIN_ID UINT32_C(0x534B5052)
 
 
 /**
@@ -47,17 +54,17 @@ int qd_port_int(const char* port_str);
 /**
  * AMQP Performative Tags
  */
-typedef enum {
-    QD_PERFORMATIVE_HEADER = 0x70,
-    QD_PERFORMATIVE_DELIVERY_ANNOTATIONS = 0x71,
-    QD_PERFORMATIVE_MESSAGE_ANNOTATIONS = 0x72  ,
-    QD_PERFORMATIVE_PROPERTIES = 0x73,
-    QD_PERFORMATIVE_APPLICATION_PROPERTIES = 0x74,
-    QD_PERFORMATIVE_BODY_DATA = 0x75,
-    QD_PERFORMATIVE_BODY_AMQP_SEQUENCE = 0x76,
-    QD_PERFORMATIVE_BODY_AMQP_VALUE = 0x77,
-    QD_PERFORMATIVE_FOOTER = 0x78,
-} qd_amqp_performative_t;
+typedef uint64_t qd_amqp_performative_t;
+#define QD_PERFORMATIVE_ROUTER_ANNOTATIONS     UINT64_C(0x534B50522D2D5241) // "SKPR--RA"
+#define QD_PERFORMATIVE_HEADER                 UINT64_C(0x70)
+#define QD_PERFORMATIVE_DELIVERY_ANNOTATIONS   UINT64_C(0x71)
+#define QD_PERFORMATIVE_MESSAGE_ANNOTATIONS    UINT64_C(0x72)
+#define QD_PERFORMATIVE_PROPERTIES             UINT64_C(0x73)
+#define QD_PERFORMATIVE_APPLICATION_PROPERTIES UINT64_C(0x74)
+#define QD_PERFORMATIVE_BODY_DATA              UINT64_C(0x75)
+#define QD_PERFORMATIVE_BODY_AMQP_SEQUENCE     UINT64_C(0x76)
+#define QD_PERFORMATIVE_BODY_AMQP_VALUE        UINT64_C(0x77)
+#define QD_PERFORMATIVE_FOOTER                 UINT64_C(0x78)
 
 /**
  * AMQP Type Tags
@@ -104,27 +111,9 @@ typedef enum {
     QD_AMQP_ARRAY32 = 0xf0,
 } qd_amqp_type_t;
 
-/** @name Message Annotation Headers */
-/// @{
-#define QD_ROUTER_ANNOTATIONS_VERSION     1
-extern const char * const QD_MA_PREFIX;
-extern const char * const QD_MA_INGRESS;  ///< Ingress Router
-extern const char * const QD_MA_TRACE;    ///< Trace
-extern const char * const QD_MA_TO;       ///< To-Override
-extern const char * const QD_MA_CLASS;    ///< Message-Class
-extern const char * const QD_MA_STREAM;   ///< Indicate streaming message
-
-#define QD_MA_PREFIX_LEN  (9)
-#define QD_MA_INGRESS_LEN (16)
-#define QD_MA_TRACE_LEN   (14)
-#define QD_MA_TO_LEN      (11)
-#define QD_MA_CLASS_LEN   (14)
-#define QD_MA_STREAM_LEN  (15)
-
-extern const int          QD_MA_MAX_KEY_LEN;  ///< strlen of longest key name
-extern const int          QD_MA_N_KEYS;       ///< number of router annotation keys
-extern const int          QD_MA_FILTER_LEN;   ///< size of annotation filter buffer
-/// @}
+// Router annotations: maximum supported version
+//
+#define QD_ROUTER_ANNOTATIONS_VERSION 2
 
 /** @name Application Propertiy Names */
 /// @{
