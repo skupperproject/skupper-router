@@ -18,13 +18,15 @@
 #
 
 import json
+from subprocess import PIPE, STDOUT
 from threading import Timer
+
 from proton import Message
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
-from system_test import unittest
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
-from subprocess import PIPE, STDOUT
+
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
+from system_test import unittest
 from system_test import QdManager
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
