@@ -235,6 +235,13 @@ qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, const qd_ht
                "[C%"PRIu64"] Initiating connection to HTTP server %s",
                hconn->conn_id, hconn->cfg.host_port);
 
+        c->plog = plog_start_record(PLOG_RECORD_CONNECTOR, 0);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "tcp");
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config.name);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config.host);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config.port);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config.address);
+
         // lock out the core activation thread.  Up until this point the core
         // thread cannot activate the qdr_connection_t since the
         // qdr_connection_t context has not been set (see

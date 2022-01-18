@@ -20,6 +20,7 @@
 #include "http_common.h"
 
 #include <proton/listener.h>
+#include "qpid/dispatch/protocol_log.h"
 
 #include <stdio.h>
 
@@ -231,6 +232,7 @@ void qd_http_listener_decref(qd_http_listener_t* li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         qd_http_free_bridge_config(&li->config);
+        plog_end_record(li->plog);
         free_qd_http_listener_t(li);
     }
 }
@@ -253,6 +255,7 @@ void qd_http_connector_decref(qd_http_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         qd_http_free_bridge_config(&c->config);
+        plog_end_record(c->plog);
         free_qd_http_connector_t(c);
     }
 }

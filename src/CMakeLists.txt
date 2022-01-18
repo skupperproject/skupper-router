@@ -81,6 +81,7 @@ set(qpid_dispatch_SOURCES
   router_agent.c
   router_config.c
   platform.c
+  protocol_log.c
   router.c
   router_core.c
   router_core/agent.c
