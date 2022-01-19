@@ -55,7 +55,7 @@ const char * const QD_CAPABILITY_STREAMING_LINKS  = "qd.streaming-links";
 const char * const QD_DYNAMIC_NODE_PROPERTY_ADDRESS = "x-opt-qd.address";
 
 const char * const QD_CONNECTION_PROPERTY_PRODUCT_KEY           = "product";
-const char * const QD_CONNECTION_PROPERTY_PRODUCT_VALUE         = "qpid-dispatch-router";
+const char * const QD_CONNECTION_PROPERTY_PRODUCT_VALUE         = "do-not-merge";
 const char * const QD_CONNECTION_PROPERTY_VERSION_KEY           = "version";
 const char * const QD_CONNECTION_PROPERTY_COST_KEY              = "qd.inter-router-cost";
 const char * const QD_CONNECTION_PROPERTY_CONN_ID               = "qd.conn-id";
