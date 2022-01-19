@@ -35,7 +35,7 @@ jobs:
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
-      DispatchBuildDir: ${{github.workspace}}/qpid-dispatch/build
+      RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
       VERBOSE: 1
 
@@ -47,7 +47,7 @@ jobs:
         -DBUILD_TESTING=OFF
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
-      DispatchCMakeExtraArgs: >
+      RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DCMAKE_C_FLAGS=-DQD_MEMORY_DEBUG
@@ -75,7 +75,7 @@ jobs:
 
       - uses: actions/checkout@v2
         with:
-          path: 'qpid-dispatch'
+          path: 'skupper-router'
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       - name: Prepare ccache timestamp
@@ -95,7 +95,7 @@ jobs:
             ${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}
 
       - name: Create Build and Install directories
-        run: mkdir -p "${ProtonBuildDir}" "${DispatchBuildDir}" "${InstallPrefix}"
+        run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
       - name: Setup python
         uses: actions/setup-python@v2
@@ -129,18 +129,18 @@ jobs:
       - name: Display ccache stats
         run: ccache -s
 
-      - name: qpid-dispatch cmake configure
-        working-directory: ${{env.DispatchBuildDir}}
+      - name: skupper-router cmake configure
+        working-directory: ${{env.RouterBuildDir}}
         run: >
-          cmake "${{github.workspace}}/qpid-dispatch" \
+          cmake "${{github.workspace}}/skupper-router" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             "-GNinja" \
-            ${DispatchCMakeExtraArgs}
+            ${RouterCMakeExtraArgs}
 
-      - name: qpid-dispatch cmake build/install
-        run: cmake --build "${DispatchBuildDir}" --config ${BuildType} -t install
+      - name: skupper-router cmake build/install
+        run: cmake --build "${RouterBuildDir}" --config ${BuildType} -t install
 
       - name: Display ccache stats
         run: ccache -s
@@ -155,15 +155,15 @@ jobs:
             --exclude '*.o' \
             --exclude '*.pyc' \
             --exclude '.git' \
-            --exclude='qpid-dispatch/build/console' \
-            qpid-dispatch \
+            --exclude='skupper-router/build/console' \
+            skupper-router \
             install \
             qpid-proton/build/python/pkgs
 
       - name: Upload archive
         uses: actions/upload-artifact@v2
         with:
-          name: qpid_dispatch_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{ matrix.protonGitRef }}
+          name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{ matrix.protonGitRef }}
           path: /tmp/archive.tar.xz
 
   test:
@@ -182,10 +182,10 @@ jobs:
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
-      DispatchBuildDir: ${{github.workspace}}/qpid-dispatch/build
+      RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
       # TODO(DISPATCH-2078) re-enable system_tests_authz_service_plugin when the GHA failure is understood and fixed
-      DispatchCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
+      RouterCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
       LD_LIBRARY_PATH: ${{github.workspace}}/install/lib
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
@@ -198,7 +198,7 @@ jobs:
       - name: Download Build
         uses: actions/download-artifact@v2
         with:
-          name: qpid_dispatch_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}
+          name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}
 
       - name: Setup python
         uses: actions/setup-python@v2
@@ -221,17 +221,17 @@ jobs:
         run: python -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
 
       - name: CTest
-        working-directory: ${{env.DispatchBuildDir}}
+        working-directory: ${{env.RouterBuildDir}}
         run: |
           ulimit -c unlimited
-          ctest --timeout 1200 -C ${BuildType} -V -T Test --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j2 ${{env.DispatchCTestExtraArgs}}
+          ctest --timeout 1200 -C ${BuildType} -V -T Test --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j2 ${{env.RouterCTestExtraArgs}}
 
       - name: Upload test results
         uses: actions/upload-artifact@v2
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
-          path: ${{env.DispatchBuildDir}}/Testing/**/*.xml
+          path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Upload log files (if any tests failed)
         uses: actions/upload-artifact@v2
@@ -239,7 +239,7 @@ jobs:
         with:
           name: testLogs_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: |
-            qpid-dispatch/build/tests
+            skupper-router/build/tests
 
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v2
@@ -301,10 +301,10 @@ jobs:
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
-      DispatchBuildDir: ${{github.workspace}}/qpid-dispatch/build
+      RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
       # TODO(DISPATCH-2078) re-enable system_tests_authz_service_plugin when the GHA failure is understood and fixed
-      DispatchCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
+      RouterCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
 
       # TODO(DISPATCH-2144) use -DPython_EXECUTABLE=/usr/bin/python3-debug when issue is fixed,
       #  as that allows for -DSANITIZE_3RD_PARTY=ON on Fedora
@@ -318,7 +318,7 @@ jobs:
         -DBUILD_TESTING=OFF
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
-      DispatchCMakeExtraArgs: >
+      RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DPython_EXECUTABLE=/usr/bin/python3
@@ -347,7 +347,7 @@ jobs:
 
       - uses: actions/checkout@v2
         with:
-          path: 'qpid-dispatch'
+          path: 'skupper-router'
 
       - name: Install EPEL (on CentOS 7)
         if: ${{ matrix.container == 'centos' }}
@@ -380,7 +380,7 @@ jobs:
             ${{ matrix.container }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}
 
       - name: Create Build and Install directories
-        run: mkdir -p "${ProtonBuildDir}" "${DispatchBuildDir}" "{InstallPrefix}"
+        run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "{InstallPrefix}"
 
       - name: Zero ccache stats
         run: ccache -z
@@ -401,23 +401,23 @@ jobs:
 
       - name: enable asserts on asan build
         if: matrix.runtimeCheck == 'asan' || matrix.runtimeCheck == 'OFF'
-        run: echo "DispatchCMakeAsserts=ON" >> $GITHUB_ENV
+        run: echo "RouterCMakeAsserts=ON" >> $GITHUB_ENV
 
       - name: disable asserts on tsan build
         if: matrix.runtimeCheck == 'tsan'
-        run: echo "DispatchCMakeAsserts=OFF" >> $GITHUB_ENV
+        run: echo "RouterCMakeAsserts=OFF" >> $GITHUB_ENV
 
-      - name: qpid-dispatch cmake configure
-        working-directory: ${{env.DispatchBuildDir}}
+      - name: skupper-router cmake configure
+        working-directory: ${{env.RouterBuildDir}}
         run: >
-          cmake "${{github.workspace}}/qpid-dispatch" \
+          cmake "${{github.workspace}}/skupper-router" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
-            ${DispatchCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${DispatchCMakeAsserts}
+            ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts}
 
-      - name: qpid-dispatch cmake build/install
-        run: cmake --build "${DispatchBuildDir}" --config ${BuildType} --target install
+      - name: skupper-router cmake build/install
+        run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install
 
       - name: Display ccache stats
         run: ccache -s
@@ -447,17 +447,17 @@ jobs:
         run: python3 -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
 
       - name: CTest
-        working-directory: ${{env.DispatchBuildDir}}
+        working-directory: ${{env.RouterBuildDir}}
         run: |
           ulimit -c unlimited
-          ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j2 ${{env.DispatchCTestExtraArgs}}
+          ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j2 ${{env.RouterCTestExtraArgs}}
 
       - name: Upload test results
         uses: actions/upload-artifact@v2
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
-          path: ${{env.DispatchBuildDir}}/Testing/**/*.xml
+          path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Upload log files (if any tests failed)
         uses: actions/upload-artifact@v2
@@ -465,7 +465,7 @@ jobs:
         with:
           name: testLogs_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: |
-            qpid-dispatch/build/tests
+            skupper-router/build/tests
 
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v2
@@ -483,9 +483,9 @@ jobs:
         os: [ ubuntu-20.04 ]
         buildType: [ RelWithDebInfo ]
     env:
-      DispatchBuildDir: ${{github.workspace}}/build
+      RouterBuildDir: ${{github.workspace}}/build
       InstallPrefix: ${{github.workspace}}/install
-      DispatchCMakeExtraArgs: >
+      RouterCMakeExtraArgs: >
         -GNinja
         -DDOC_XMLLINT=ON
         -DCONSOLE_INSTALL=OFF
@@ -494,7 +494,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Create Build and Install directories
-        run: mkdir -p "${DispatchBuildDir}" "{InstallPrefix}"
+        run: mkdir -p "${RouterBuildDir}" "{InstallPrefix}"
 
       - name: Add Qpid PPA repository
         if: ${{ runner.os == 'Linux' }}
@@ -512,32 +512,32 @@ jobs:
         run: |
           sudo apt update; sudo apt install -y asciidoc asciidoctor ruby-asciidoctor-pdf dblatex libxml2-utils
 
-      - name: qpid-dispatch cmake configure
-        working-directory: ${{env.DispatchBuildDir}}
+      - name: skupper-router cmake configure
+        working-directory: ${{env.RouterBuildDir}}
         run: >
           cmake "${{github.workspace}}" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
-            ${DispatchCMakeExtraArgs}
+            ${RouterCMakeExtraArgs}
 
       - name: CMake build for docs
-        run: cmake --build "${DispatchBuildDir}" -t docs
+        run: cmake --build "${RouterBuildDir}" -t docs
 
       - name: Store the rendered user-guide
         uses: actions/upload-artifact@v2
         with:
           name: UserGuide
-          path: ${{env.DispatchBuildDir}}/docs/books/user-guide
+          path: ${{env.RouterBuildDir}}/docs/books/user-guide
 
       - name: Store the rendered html man pages
         uses: actions/upload-artifact@v2
         with:
           name: Manpages
-          path: ${{env.DispatchBuildDir}}/docs/man/*.html
+          path: ${{env.RouterBuildDir}}/docs/man/*.html
 
-      - name: Build the PDF version of the Dispatch book
+      - name: Build the PDF version of the Router book
         run: asciidoctor-pdf --failure-level INFO ${{github.workspace}}/docs/books/user-guide/book.adoc
 
-      - name: Store the rendered Dispatch book PDF
+      - name: Store the rendered Router book PDF
         uses: actions/upload-artifact@v2
         with:
           name: book.pdf
