@@ -1,0 +1,287 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-network-connections.adoc
+
+[id='securing-outgoing-connections-{context}']
+= Securing outgoing connections
+
+If a router is configured to create connections to external AMQP containers (such as message brokers), you can use the following methods to secure the connection:
+
+* xref:connecting-using-one-way-ssl-tls-authentication-{context}[Connect using SSL/TLS encryption (one-way authentication)]
+* xref:connecting-using-mutual-ssl-tls-authentication-{context}[Connect using SSL/TLS mutual authentication]
+* xref:connecting-using-username-password-authentication-{context}[Connect using user name and password authentication (with or without SSL/TLS encryption)]
+
+// Connecting using SSL/TLS encryption
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-one-way-ssl-tls-authentication-{context}']
+= Connecting using one-way SSL/TLS authentication
+
+You can connect to an external AMQP container (such as a broker) using one-way SSL/TLS. With this method, the router validates the external AMQP container's server certificate to verify its identity.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-one-way-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. If the router does not contain an `sslProfile` that defines a certificate that can be used to validate the external AMQP container's identity, then add one.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: broker-tls
+    caCertFile: /etc/qpid-dispatch-certs/ca.crt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`caCertFile`:: The absolute path to the CA certificate used to verify the external AMQP container's identity.
+--
+
+. Configure the `connector` for this connection to use SSL/TLS to validate the server certificate received by the broker during the SSL handshake.
++
+--
+This example configures a `connector` to a broker. When the router connects to the broker, it will use the CA certificate defined in the `broker-tls` `sslProfile` to validate the server certificate received from the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    sslProfile: broker-tls
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the certificate to use to validate the external AMQP container's identity.
+--
+
+:leveloffset!:
+
+// Connecting using SSL/TLS mutual authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-mutual-ssl-tls-authentication-{context}']
+= Connecting using mutual SSL/TLS authentication
+
+You can connect to an external AMQP container (such as a broker) using mutual SSL/TLS authentication. With this method, the router, acting as a client, provides a certificate to the external AMQP container so that it can verify the router's identity.
+
+.Prerequisites
+
+* An X.509 Certificate Authority (CA) must exist for the router.
+
+* A security certificate must be generated for the router and be signed by the CA.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. If the router does not contain an `sslProfile` that defines the private keys and certificates to connect to the external AMQP container, then add one.
++
+--
+This `sslProfile` contains the locations of the private key and certificates that the router should use to authenticate with its peer.
+
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: broker-tls
+    certFile: /etc/pki/tls/certs/tls.crt
+    caCertFile: /etc/pki/tls/certs/ca.crt
+    privateKeyFile: /etc/pki/tls/private/tls.key
+    password: file:/etc/pki/tls/private/password.txt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`certFile`:: The absolute path to the file containing the public certificate for this router.
+
+`caCertFile`:: The absolute path to the CA certificate that the router uses to authenticate incoming clients.
+
+`privateKeyFile`:: The absolute path to the file containing the private key for this router's public certificate.
++
+[NOTE]
+====
+Ensure that the `qdrouterd` or root user can access the private key. For example:
+
+[options="nowrap",subs="+quotes"]
+----
+chmod 0600 /etc/pki/tls/private/tls.key
+chown qdrouterd /etc/pki/tls/private/tls.key
+----
+====
+
+//`password`
+Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+--
+
+. Configure the `connector` for this connection to use the `sslProfile` that you created.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    sslProfile: broker-tls
+    saslMechanisms: EXTERNAL
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the SSL/TLS private keys and certificates for the inter-router network.
+--
+
+:leveloffset!:
+
+// Connecting using user name and password authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-username-password-authentication-{context}']
+= Connecting using user name and password authentication
+
+You can use the SASL PLAIN mechanism to connect to an external AMQP container that requires a user name and password. You can use this method by itself, or you can combine it with SSL/TLS encryption.
+
+.Prerequisites
+
+* The `cyrus-sasl-plain` plugin is installed.
++
+Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use a particular SASL mechanism, the relevant plugin must be installed.
++
+--
+// Note about searching for an installing SASL plugins.
+Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+--
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure the `connector` for this connection to provide user name and password credentials to the external AMQP container.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    saslMechanisms: PLAIN
+    saslUsername: user
+    saslPassword: file:/path/to/file/password.txt
+    }
+----
+`saslPassword`:: The password to connect to the peer. By using different prefixes, you can specify the password several different ways depending on your security requirements:
++
+* Specify the absolute path to a file that contains the password. This is the most secure option, because you can set permissions on the file that contains the password. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: file:/path/to/file/password.txt
+----
+
+* Specify an environment variable that stores the password. Use this option with caution, because the environment of other processes is visible on certain platforms. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: env:PASSWORD
+----
+
+* Specify the password in clear text. This option is insecure, so it should only be used if security is not a concern. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: pass:mypassword
+----
+--
+
+:leveloffset!:

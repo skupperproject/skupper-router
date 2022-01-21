@@ -1,0 +1,28 @@
+runtime:
+  cache_dir: ./.cache/antora
+site:
+  title: Artemis
+  url: https://artemis.netlify.app
+  start_page: artemis-docs::index.adoc
+
+content:
+  sources:
+  - url: ../
+    branches: HEAD
+    start_path: antora
+ui:
+  bundle:
+    url: https://github.com/pwright/skupper-docs/raw/main/ui-preview-bundle.zip
+    snapshot: true
+
+asciidoc:
+  extensions:
+  - ./lib/tab-block.js
+  attributes:
+    imagesdir: _images
+    experimental: ''
+    idprefix: ''
+    idseparator: '-'
+    linkattrs: ''
+    include-tags: ''
+    context: ''

@@ -1,0 +1,310 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+[id='important-terms-concepts-{context}']
+= Important terms and concepts
+
+Before using {RouterName}, you should be familiar with AMQP and understand some key concepts about {RouterName}.
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// important-terms-concepts.adoc
+
+[id='overview-of-amqp-{context}']
+= Overview of AMQP
+
+{RouterName} implements version 1.0 of the Advanced Message Queueing Protocol (AMQP) specification. Therefore, you should understand several key AMQP terms and concepts before deploying or configuring {RouterName}.
+
+Containers::
+AMQP is a wire-level messaging protocol for transferring messages between applications called _containers_. In AMQP, a container is any application that sends or receives messages, such as a client application or message broker.
++
+Containers connect to each other over _connections_, which are channels for communication.
+
+Nodes::
+Containers contain addressable entities called _nodes_ that are responsible for storing or delivering messages. For example, a queue on a message broker is a node.
+
+Links::
+Messages are transferred between connected containers over _links_. A link is a unidirectional route between nodes. Essentially, a link is a channel for sending or receiving messages.
++
+Links are established over _sessions_, which are contexts for sending and receiving messages. Sessions are established over connections.
+
+.Additional resources
+
+* link:http://www.amqp.org/resources/download[OASIS AMQP 1.0 Specification]
+* link:https://dzone.com/refcardz/amqp-essentials?chapter=1[AMQP Essentials Refcard]
+* link:https://channel9.msdn.com/Blogs/Subscribe/The-AMQP-10-Protocol-16-Overview[Video series introducing AMQP 1.0]
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// overview.adoc
+
+[id='what-routers-are-{context}']
+= What routers are
+
+{RouterName} is an application layer program running as a normal user program or as a daemon. A running instance of {RouterName} is called a _router_.
+
+Routers do not take responsibility for messages::
+Routers transfer messages between producers and consumers, but unlike message brokers, they do not take responsibility for messages. Instead, routers propagate message settlement and disposition across a network such that delivery guarantees are met. That is, the router network will deliver the message, possibly through several intermediate routers, and then route the consumer's acknowledgement of that message back across the same path. The responsibility for the message is transferred from the producer to the consumer as if they were directly connected.
+
+Routers are combined to form router networks::
+Routers are often deployed in topologies of multiple routers called a router network. Routers use link-state routing protocols and algorithms similar to the Open Shortest Path First (OSPF) and Intermediate System to Intermediate System (IS-IS) protocols to calculate the best path from every message source to every message destination, and to recover quickly from failures. A router network relies on redundant network paths to provide continued connectivity in case of system or network failure.
+
+Routers enhance both direct and indirect messaging patterns::
+A messaging client can make a single AMQP connection into a router network and, over that connection, exchange messages with one or more message brokers connected to any router in the network. At the same time, the client can exchange messages directly with other endpoints without involving a broker at all.
++
+.Enhancing the use of message brokers
+====
+Routers can enhance a cluster of message brokers that provide a scalable, distributed work queue.
+
+The router network makes the broker cluster appear as a single queue, with producers publishing to a single address, and consumers subscribing to a single address. The router network can distribute work to any broker in the cluster, and collect work from any broker for any consumer.
+
+The routers improve the scalability of the broker cluster, because brokers can be added or removed from the cluster without affecting the clients.
+
+The routers also solve the common difficulty of "stuck messages". Without the router network, if a consumer is connected to a broker that does not have any messages (but other brokers in the cluster do have messages), you must either transfer the messages or leave them "stuck". The routers solve this issue, however, because all of the consumers are connected to all of the brokers through the router network. A message on any broker can be delivered to any of the consumers.
+====
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// important-terms-concepts.adoc
+
+[id='how-routers-route-messages-{context}']
+= How routers route messages
+
+In a router network, _routing_ is the process by which messages are delivered to their destinations. To accomplish this, {RouterName} offers two different routing mechanisms:
+
+Message routing::
+Message routing enables you to distribute messages in anycast and multicast patterns. These patterns can be used for both direct routing, in which the router distributes messages between clients without a message broker, and indirect routing, in which the router enables clients to exchange messages through a message broker.
++
+Message routing is useful for the following types of requirements:
++
+--
+* Default, basic message routing
++
+{RouterName} automatically routes messages by default, so manual configuration is only required if you want routing behavior that is different than the default.
+
+* Message-based routing patterns
++
+Message routing supports both anycast and multicast routing patterns. You can load-balance individual messages across multiple consumers, and multicast (or fan-out) messages to multiple subscribers.
+
+* Sharding messages across multiple message brokers when message delivery order is not important
++
+Sharding messages from one producer might cause that producer's messages to be received in a different order than the order in which they were sent.
+--
+
+Link routing::
+Link routing enables you to establish a dedicated, virtual "path" between a sender and receiver that travels through the router network. Link routes are typically used to connect clients to message brokers in scenarios in which a direct connection is unfeasible. Therefore, link routes enable messaging capabilities that are not possible with message routing, such as:
++
+--
+* Transactional messaging
++
+Link routing supports local transactions to a single broker. Distributed transactions are not supported.
+
+* Guaranteed message delivery order
++
+Link routing to a sharded queue preserves the delivery order of the producer's messages by causing all messages on that link to go to the same broker instance.
+
+* End-to-end flow control
++
+Flow control is "real" in that credits flow across the link route from the receiver to the sender.
+
+* Server-side selectors
++
+With a link route, consumers can provide server-side selectors for broker subscriptions.
+
+* Consumer specific acknowledgements
++
+With a link route, modified delivery states can be interpreted by a broker.
+For example, a broker can prevent redelivery of any messsages with the `undeliverable-here=true` modified delivery state.
+
+--
+
+.Additional resources
+
+* xref:configuring-message-routing-{context}[]
+
+* xref:creating-link-routes-{context}[]
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// important-terms-concepts.adoc
+
+[id='router-security-{context}']
+= Router security
+
+{RouterName} provides authentication and authorization mechanisms so that you can control who can access the router network, and what they can do with the messaging resources.
+
+Authentication::
+{RouterName} supports both SSL/TLS and SASL for encrypting and authenticating remote peers. Using these mechanisms, you can secure the router network in the following ways:
+
+* Authenticate incoming connections from remote peers (such as clients and message brokers)
+* Provide authentication credentials for outgoing connections to remote peers (such as clients and message brokers)
+* Secure the inter-router connections between the routers in the router network
+
+Authorization::
+{RouterName} provides a `policy` mechanism that you can use to enforce user connection restrictions and AMQP resource access control.
+
+.Additional resources
+
+* xref:securing-network-connections-{context}[]
+
+* xref:configuring-authorization-{context}[]
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// important-terms-concepts.adoc
+
+[id='router-management-{context}']
+= Router management
+
+{RouterName} provides both graphical and CLI tools for monitoring and managing a router network.
+
+{RouterLongName} Console::
+A web console for monitoring the layout and health of the router network.
+
+qdstat::
+A command-line tool for monitoring the status of a router in the router network. Using this tool, you can view the following information about a router:
+
+* Incoming and outgoing connections
+* Incoming and outgoing links
+* Router network topology from the perspective of this router
+* Addresses known to this router
+* Link routes and autolinks
+* Memory consumption information
+
+qdmanage::
+A command-line tool for viewing and updating the configuration of a router at runtime.
+
+.Additional resources
+
+* xref:management[Management]
+
+:leveloffset!:

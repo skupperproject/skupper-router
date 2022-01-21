@@ -1,0 +1,1258 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+[id='configuring-routing-{context}']
+= Configuring routing
+
+Routing is the process by which messages are delivered to their destinations. To accomplish this, {RouterName} provides two routing mechanisms: _message routing_ and _link routing_.
+
+xref:configuring-message-routing-{context}[Message routing]::
+Message routing is the default routing mechanism. You can use it to route messages on a per-message basis between clients directly (direct-routed messaging), or to and from broker queues (brokered messaging).
+
+xref:creating-link-routes-{context}[Link routing]::
+A link route represents a private messaging path between a sender and a receiver in which the router passes the messages between end points. You can use it to connect a client to a service (such as a broker queue).
+
+// Configuring the address space for message routing
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// routing-messages-through-router-network.adoc
+
+[id='configuring-message-routing-{context}']
+= Configuring message routing
+
+Message routing is the default routing mechanism. You can use it to route messages on a per-message basis between clients directly (direct-routed messaging), or to and from broker queues (brokered messaging).
+
+With message routing, you can do the following:
+
+* xref:understanding-message-routing-{context}[Understand message routing concepts]
+* xref:configuring-address-semantics-{context}[Configure address semantics (route messages between clients)]
+* xref:configuring-addresses-prioritized-message-delivery-{context}[Configure addresses for prioritized message delivery]
+* xref:configuring-brokered-messaging-{context}[Configure brokered messaging]
+* xref:address-pattern-matching-{context}[Understand address pattern matching]
+
+// Understanding message routing
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-address-space-message-routing.adoc
+
+[id='understanding-message-routing-{context}']
+= Understanding message routing
+
+With message routing, routing is performed on messages as producers send them to a router. When a message arrives on a router, the router routes the message and its _settlement_ based on the message's _address_ and _routing pattern_.
+
+// Message routing flow control
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// understanding-message-routing.adoc
+
+[id='message-routing-flow-control-{context}']
+= Message routing flow control
+
+{RouterName} uses a _credit-based_ flow control mechanism to ensure that producers can only send messages to a router if at least one consumer is available to receive them. Because {RouterName} does not store messages, this credit-based flow control prevents producers from sending messages when there are no consumers present.
+
+A client wishing to send a message to the router must wait until the router has provided it with credit. Attempting to publish a message without credit available will cause the client to block. Once credit is made available, the client will unblock, and the message will be sent to the router.
+
+NOTE: Most AMQP client libraries enable you to determine the amount of credit available to a producer. For more information, consult your client's documentation.
+
+:leveloffset!:
+
+// Addresses
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// understanding-message-routing.adoc
+
+[id='addresses-message-routing-{context}']
+= Addresses
+
+Addresses determine how messages flow through your router network. An address designates an endpoint in your messaging network, such as:
+
+* Endpoint processes that consume data or offer a service
+* Topics that match multiple consumers to multiple producers
+* Entities within a messaging broker:
+** Queues
+** Durable Topics
+** Exchanges
+
+When a router receives a message, it uses the message's address to determine where to send the message (either its destination or one step closer to its destination).
+
+{RouterName} considers addresses to be _mobile_ in that any user of an address may be directly connected to any router in the router network and may even
+move around the topology. In cases where messages are broadcast to or
+balanced across multiple consumers, the users of the address may be connected to multiple routers in the network.
+
+Mobile addresses may be discovered during normal router operation or
+configured through management settings.
+
+:leveloffset!:
+
+// Routing patterns
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// understanding-message-routing.adoc
+
+[id='routing-patterns-message-routing-{context}']
+= Routing patterns
+
+Routing patterns define the paths that a message with a mobile address
+can take across a network. These routing patterns can be used for both
+direct routing, in which the router distributes messages between
+clients without a broker, and indirect routing, in which the router
+enables clients to exchange messages through a broker.
+
+Routing patterns fall into two categories: Anycast
+(Balanced and Closest) and Multicast. There is no concept of
+"unicast" in which there is only one consumer for an address.
+
+Anycast distribution delivers each message to one consumer whereas
+multicast distribution delivers each message to all consumers.
+
+Each address has one of the following routing patterns, which define the path that a message with the address can take across the messaging network:
+
+Balanced:: An anycast method that allows multiple consumers to use the same address. Each message is delivered to a single consumer only, and {RouterName} attempts to balance the traffic load across the router network.
++
+--
+If multiple consumers are attached to the same address, each router determines which outbound path should receive a message by considering each path's current number of unsettled deliveries. This means that more messages will be delivered along paths where deliveries are settled at higher rates.
+
+[NOTE]
+====
+{RouterName} neither measures nor uses message settlement time to determine which outbound path to use.
+====
+
+In this scenario, the messages are spread across both receivers regardless of path length:
+
+.Balanced Message Routing
+image::balanced-routing.png[Balanced Message Routing, align="center"]
+--
+
+Closest:: An anycast method in which every message is sent along the shortest path to reach the destination, even if there are other consumers for the same address.
++
+{RouterName} determines the shortest path based on the topology cost to reach each of the consumers. If there are multiple consumers with the same lowest cost, messages will be spread evenly among those consumers.
++
+In this scenario, all messages sent by `Sender` will be delivered to `Receiver 1`:
++
+.Closest Message Routing
+image::closest-routing.png[Closest Message Routing, align="center"]
+
+Multicast:: Messages are sent to all consumers attached to the address. Each consumer will receive one copy of the message.
++
+In this scenario, all messages are sent to all receivers:
++
+.Multicast Message Routing
+image::multicast-routing.png[Multicast Message Routing, align="center"]
+
+:leveloffset!:
+
+// Message settlement and reliability
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// understanding-message-routing.adoc
+
+[id='message-settlement-reliability-message-routing-{context}']
+= Message settlement and reliability
+
+{RouterName} can deliver messages with the following degrees of reliability:
+
+* At most once
+* At least once
+* Exactly once
+
+The level of reliability is negotiated between the producer and the router when the producer establishes a link to the router. To achieve the negotiated level of reliability, {RouterName} treats all messages as either _pre-settled_ or _unsettled_.
+
+Pre-settled::
+Sometimes called _fire and forget_, the router settles the incoming and outgoing deliveries and propagates the settlement to the message's destination. However, it does not guarantee delivery.
+
+Unsettled::
+{RouterName} propagates the settlement between the producer and consumer. For an anycast address, the router associates the incoming delivery with the resulting outgoing delivery. Based on this association, the router propagates changes in delivery state from the consumer to the producer.
++
+For a multicast address, the router associates the incoming delivery with all outbound deliveries. The router waits for each consumer to set their delivery's final state. After all outgoing deliveries have reached their final state, the router sets a final delivery state for the original inbound delivery and passes it to the producer.
++
+The following table describes the reliability guarantees for unsettled messages sent to an anycast or multicast address:
++
+[cols="20,40,40"]
+|===
+| Final disposition | Anycast | Multicast
+
+| `accepted`
+| The consumer accepted the message.
+| At least one consumer accepted the message, but no consumers rejected it.
+
+| `released`
+| The message did not reach its destination.
+| The message did not reach any of the consumers.
+
+| `modified`
+| The message may or may not have reached its destination. The delivery is considered to be "in-doubt" and should be re-sent if "at least once" delivery is required.
+| The message may or may not have reached any of the consumers. However, no consumers rejected or accepted it.
+
+| `rejected`
+| The consumer rejected the message.
+| At least one consumer rejected the message.
+|===
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Configuring address semantics
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-address-space-message-routing.adoc
+
+[id='configuring-address-semantics-{context}']
+= Configuring address semantics
+
+You can route messages between clients without using a broker. In a brokerless scenario (sometimes called _direct-routed messaging_), {RouterName} routes messages between clients directly.
+
+To route messages between clients, you configure an address with a routing distribution pattern. When a router receives a message with this address, the message is routed to its destination or destinations based on the address's routing distribution pattern.
+
+.Procedure
+
+. In the `{RouterConfigFile}` configuration file, add an `address` section.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my_address
+    distribution: multicast
+    ...
+}
+----
+
+`prefix` | `pattern`::
+The address or group of addresses to which the address settings should be applied. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
++
+Unresolved directive in ../../modules/user-guide/configuring-address-semantics.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
++
+Unresolved directive in ../../modules/user-guide/configuring-address-semantics.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+
+`distribution`:: The message distribution pattern. The default is `balanced`, but you can specify any of the following options:
++
+* `balanced` - Messages sent to the address will be routed to one of the receivers, and the routing network will attempt to balance the traffic load based on the rate of settlement.
+* `closest` - Messages sent to the address are sent on the shortest path to reach the destination. It means that if there are multiple receivers for the same address, only the closest one will receive the message.
+* `multicast` - Messages are sent to all receivers that are attached to the address in a _publish/subscribe_ model.
++
+For more information about message distribution patterns, see xref:routing-patterns-message-routing-{context}[].
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_address[address] in the `qdrouterd.conf` man page.
+--
+
+. Add the same `address` section to any other routers that need to use the address.
++
+The `address` that you added to this router configuration file only controls how this router distributes messages sent to the address. If you have additional routers in your router network that should distribute messages for this address, then you must add the same `address` section to each of their configuration files.
+
+:leveloffset!:
+
+// Configuring addresses for prioritized message delivery
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-address-space-message-routing.adoc
+
+[id='configuring-addresses-prioritized-message-delivery-{context}']
+= Configuring addresses for prioritized message delivery
+
+You can set the priority level of an address to control how {RouterName} processes messages sent to that address. Within the scope of a connection, {RouterName} attempts to process messages based on their priority. For a connection with a large volume of messages in flight, this lowers the latency for higher-priority messages.
+
+Assigning a high priority level to an address does not guarantee that messages sent to the address will be delivered before messages sent to lower-priority addresses. However, higher-priority messages will travel more quickly through the router network than they otherwise would.
+
+[NOTE]
+====
+You can also control the priority level of individual messages by setting the priority level in the message header. However, the address priority takes precedence: if you send a prioritized message to an address with a different priority level, the router will use the address priority level.
+====
+
+.Procedure
+
+* In the `{RouterConfigFile}` configuration file, add or edit an address and assign a priority level.
++
+--
+This example adds an address with the highest priority level. The router will attempt to deliver messages sent to this address before messages with lower priority levels.
+
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my-high-priority-address
+    priority: 9
+    ...
+}
+----
+`priority`:: The priority level to assign to all messages sent to this address. The range of valid priority levels is 0-9, in which the higher the number, the higher the priority. The default is 4.
+--
+
+.Additional resources
+
+* For more information about setting the priority level in a message, see the {AmqpSpecLink}.
+
+:leveloffset!:
+
+// Configuring brokered messaging
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-message-routing.adoc
+
+[id='configuring-brokered-messaging-{context}']
+= Configuring brokered messaging
+
+If you require "store and forward" capabilities, you can configure {RouterName} to use brokered messaging. In this scenario, clients connect to a router to send and receive messages, and the router routes the messages to or from queues on a message broker.
+
+You can configure the following:
+
+* xref:routing-messages-through-broker-queues-{context}[Route messages through broker queues]
++
+You can route messages to a queue hosted on a single broker, or route messages to a _sharded queue_ distributed across multiple brokers.
+
+* xref:handling-undeliverable-messages-{context}[Store and retrieve undeliverable messages on a broker queue]
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='how-router-enables-brokered-messaging-{context}']
+= How {RouterName} enables brokered messaging
+
+Brokered messaging enables {RouterName} to store messages on a broker queue. This requires a connection to the broker, a _waypoint_ address to represent the broker queue, and _autolinks_ to attach to the waypoint address.
+
+An autolink is a link that is automatically created by the router to attach to a waypoint address. With autolinks, client traffic is handled on the router, not the broker. Clients attach their links to the router, and then the router uses internal autolinks to connect to the queue on the broker. Therefore, the queue will always have a single producer and a single consumer regardless of how many clients are attached to the router.
+
+Using autolinks is a form of _message routing_, as distinct from _link routing_.
+It is recommended to use link routing if you want to use semantics associated with a consumer, for example, the `undeliverable-here=true` modified delivery state.
+
+.Brokered messaging
+image::brokered-messaging.png[Brokered Messaging, align="center"]
+
+In this diagram, the sender connects to the router and sends messages to my_queue. The router attaches an outgoing link to the broker, and then sends the messages to my_queue. Later, the receiver connects to the router and requests messages from my_queue. The router attaches an incoming link to the broker to receive the messages from my_queue, and then delivers them to the receiver.
+
+You can also route messages to a _sharded queue_, which is a single, logical queue comprised of multiple, underlying physical queues. Using queue sharding, it is possible to distribute a single queue over multiple brokers. Clients can connect to any of the brokers that hold a shard to send and receive messages.
+
+.Brokered messaging with sharded queue
+image::sharded-queue-02.png[Brokered Messaging with Sharded Queue, align="center"]
+
+In this diagram, a sharded queue (my_queue) is distributed across two brokers. The router is connected to the clients and to both brokers. The sender connects to the router and sends messages to my_queue. The router attaches an outgoing link to each broker, and then sends messages to each shard (by default, the routing distribution is `balanced`). Later, the receiver connects to the router and requests all of the messages from my_queue. The router attaches an incoming link to one of the brokers to receive the messages from my_queue, and then delivers them to the receiver.
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='routing-messages-through-broker-queues-{context}']
+= Routing messages through broker queues
+
+You can route messages to and from a broker queue to provide clients with access to the queue through a router. In this scenario, clients connect to a router to send and receive messages, and the router routes the messages to or from the broker queue.
+
+You can route messages to a queue hosted on a single broker, or route messages to a _sharded queue_ distributed across multiple brokers.
+
+.Procedure
+
+. In the `{RouterConfigFile}` configuration file, add a waypoint address for the broker queue.
++
+--
+A waypoint address identifies a queue on a broker to which you want to route messages. This example adds a waypoint address for the `my_queue` queue:
+
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my_queue
+    waypoint: yes
+}
+----
+
+`prefix` | `pattern`:: The address prefix or pattern that matches the broker queue to which you want to send messages. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
++
+Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
++
+Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+
+`waypoint`:: Set this attribute to `yes` so that the router handles messages sent to this address as a waypoint.
+--
+
+. Connect the router to the broker.
+
+.. Add an outgoing connection to the broker if one does not exist.
++
+--
+If the queue is sharded across multiple brokers, you must add a connection for each broker. For more information, see xref:connecting-to-external-amqp-containers-{context}[].
+
+[NOTE]
+====
+If the connection to the broker fails, {RouterName} automatically attempts to reestablish the connection and reroute message deliveries to any available alternate destinations. However, some deliveries could be returned to the sender with a `RELEASED` or `MODIFIED` disposition. Therefore, you should ensure that your clients can handle these deliveries appropriately (generally by resending them).
+====
+--
+
+.. If you want to send messages to the broker queue, add an _outgoing_ autolink to the broker queue.
++
+--
+If the queue is sharded across multiple brokers, you must add an outgoing autolink for each broker.
+
+This example configures an outgoing auto link to send messages to a broker queue:
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_queue
+    connection: my_broker
+    direction: out
+    ...
+}
+----
+
+`address`:: The address of the broker queue. When the autolink is created, it will be attached to this address.
+`externalAddress`:: An optional alternate address for the broker queue. You use an external address if the broker queue should have a different address than that which the sender uses. In this scenario, senders send messages to the `address` address, and then the router routes them to the broker queue represented by the `externalAddress` address.
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
+`direction`:: Set this attribute to `out` to specify that this autolink can send messages from the router to the broker.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_autolink[autoLink] in the `qdrouterd.conf` man page.
+--
+
+. If you want to receive messages from the broker queue, add an _incoming_ autolink from the broker queue:
++
+--
+If the queue is sharded across multiple brokers, you must add an outgoing autolink for each broker.
+
+This example configures an incoming auto link to receive messages from a broker queue:
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_queue
+    connection: my_broker
+    direction: in
+    ...
+}
+----
+
+`address`:: The address of the broker queue. When the autolink is created, it will be attached to this address.
+`externalAddress`:: An optional alternate address for the broker queue. You use an external address if the broker queue should have a different address than that which the receiver uses. In this scenario, receivers receive messages from the `address` address, and the router retrieves them from the broker queue represented by the `externalAddress` address.
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
+`direction`:: Set this attribute to `in` to specify that this autolink can receive messages from the broker to the router.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_autolink[autoLink] in the `qdrouterd.conf` man page.
+--
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='handling-undeliverable-messages-{context}']
+= Handling undeliverable messages
+
+You handle undeliverable messages for an address by configuring autolinks that point to _fallback destinations_. A fallback destination (such as a queue on a broker) stores messages that are not directly routable to any consumers.
+
+During normal message delivery, {RouterName} delivers messages to the consumers that are attached to the router network. However, if no consumers are reachable, the messages are diverted to any fallback destinations that were configured for the address (if the autolinks that point to the fallback destinations are active). When a consumer reconnects and becomes reachable again, it receives the messages stored at the fallback destination.
+
+[NOTE]
+====
+{RouterName} preserves the original delivery order for messages stored at a fallback destination. However, when a consumer reconnects, any new messages produced while the queue is draining will be interleaved with the messages stored at the fallback destination.
+====
+
+.Prerequisites
+
+* The router is connected to a broker.
++
+For more information, see xref:connecting-to-external-amqp-containers-{context}[].
+
+.Procedure
+
+This procedure enables fallback for an address and configures autolinks to connect to the broker queue that provides the fallback destination for the address.
+
+. In the `{RouterConfigFile}` configuration file, enable fallback destinations for the address.
++
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my_address
+    enableFallback: yes
+}
+----
+
+. Add an _outgoing_ autolink to a queue on the broker.
++
+--
+For the address for which you enabled fallback, if messages are not routable to any consumers, the router will use this autolink to send the messages to a queue on the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_address.2
+    direction: out
+    connection: my_broker
+    fallback: yes
+}
+----
+--
+
+. If you want the router to send queued messages to attached consumers as soon as they connect to the router network, add an _incoming_ autolink.
++
+--
+As soon as a consumer attaches to the router, it will receive the messages stored in the broker queue, along with any new messages sent by the producer. The original delivery order of the queued messages is preserved; however, the queued messages will be interleaved with the new messages.
+
+If you do not add the incoming autolink, the messages will be stored on the broker, but will not be sent to consumers when they attach to the router.
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_address.2
+    direction: in
+    connection: my_broker
+    fallback: yes
+}
+----
+--
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Address pattern matching
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-address-space-message-routing.adoc
+
+[id='address-pattern-matching-{context}']
+= Address pattern matching
+
+In some router configuration scenarios, you might need to use pattern matching to match a range of addresses rather than a single, literal address. Address patterns match any address that corresponds to the pattern.
+
+An address pattern is a sequence of tokens (typically words) that are delimited by either `.` or `/` characters. They also can contain special wildcard characters that represent words:
+
+* `*` represents exactly one word
+* `#` represents zero or more words
+
+.Address pattern
+====
+This address contains two tokens, separated by the `/` delimiter:
+
+`my/address`
+====
+
+.Address pattern with wildcard
+====
+This address contains three tokens. The `*` is a wildcard, representing any single word that might be between `my` and `address`:
+
+`my/*/address`
+====
+
+The following table shows some address patterns and examples of the addresses that would match them:
+
+[options="header"]
+|===
+| This pattern... | Matches... | But not...
+
+a| `news/*`
+a| `news/europe`
+
+`news/usa`
+a| `news`
+
+`news/usa/sports`
+
+a| `news/#`
+a| `news`
+
+`news/europe`
+
+`news/usa/sports`
+a| `europe`
+
+`usa`
+
+a| `news/europe/#`
+a| `news/europe`
+
+`news/europe/sports`
+
+`news/europe/politics/fr`
+a| `news/usa`
+
+`europe`
+
+a| `news/*/sports`
+a| `news/europe/sports`
+
+`news/usa/sports`
+a| `news`
+
+`news/europe/fr/sports`
+
+|===
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Creating link routes
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-routing.adoc
+
+[id='creating-link-routes-{context}']
+= Creating link routes
+
+A link route represents a private messaging path between a sender and a receiver in which the router passes the messages between end points. You can use it to connect a client to a service (such as a broker queue).
+
+// Understanding link routing
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-link-routing.adoc
+
+[id='understanding-link-routing-{context}']
+= Understanding link routing
+Link routing provides an alternative strategy for brokered messaging. A link route represents a private messaging path between a sender and a receiver in which the router passes the messages between end points. You can think of a link route as a "virtual connection" or "tunnel" that travels from a sender, through the router network, to a receiver.
+
+With link routing, routing is performed on link-attach frames, which are chained together to form a virtual messaging path that directly connects a sender and receiver. Once a link route is established, the transfer of message deliveries, flow frames, and dispositions is performed across the link route.
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// understanding-link-routing.adoc
+
+[id='link-routing-flow-control-{context}']
+= Link routing flow control
+
+Unlike message routing, with link routing, the sender and receiver handle flow control directly: the receiver grants link credits, which is the number of messages it is able to receive. The router sends them directly to the sender, and then the sender sends the messages based on the credits that the receiver granted.
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// understanding-link-routing.adoc
+
+[id='link-route-addresses-{context}']
+= Link route addresses
+
+A link route address represents a broker queue, topic, or other service. When a client attaches a link route address to a router, the router propagates a link attachment to the broker resource identified by the address.
+
+Using link route addresses, the router network does not participate in
+aggregated message distribution. The router simply passes message
+delivery and settlement between the two end points.
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// understanding-link-routing.adoc
+
+[id='routing-patterns-link-routing-{context}']
+= Routing patterns for link routing
+
+Routing patterns are not used with link routing, because there is a direct link between the sender and receiver. The router only makes a routing decision when it receives the initial link-attach request frame. Once the link is established, the router passes the messages along the link in a balanced distribution.
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Creating a link route
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-link-routing.adoc
+
+[id='creating-link-route-{context}']
+= Creating a link route
+
+Link routes establish a link between a sender and a receiver that travels through a router. You can configure inward and outward link routes to enable the router to receive link-attaches from clients and to send them to a particular destination.
+
+With link routing, client traffic is handled on the broker, not the router. Clients have a direct link through the router to a broker's queue. Therefore, each client is a separate producer or consumer.
+
+[NOTE]
+====
+If the connection to the broker fails, the routed links are detached, and the router will attempt to reconnect to the broker (or its backup). Once the connection is reestablished, the link route to the broker will become reachable again.
+
+From the client's perspective, the client will see the detached links (that is, the senders or receivers), but not the failed connection. Therefore, if you want the client to reattach dropped links in the event of a broker connection failure, you must configure this functionality on the client. Alternatively, you can use message routing with autolinks instead of link routing. For more information, see xref:routing-messages-through-broker-queues-{context}[].
+====
+
+.Procedure
+
+. Add an outgoing connection to the broker if one does not exist.
++
+If the queue is sharded across multiple brokers, you must add a connection for each broker. For more information, see xref:connecting-to-external-amqp-containers-{context}[].
+
+. If you want clients to send local transactions to the broker, create a link route for the transaction coordinator:
++
+--
+[options="nowrap",subs="+quotes"]
+----
+linkRoute {
+    prefix: $coordinator  <1>
+    connection: my_broker
+    direction: in
+}
+----
+<1> The `$coordinator` prefix designates this link route as a transaction coordinator. When the client opens a transacted session, the requests to start and end the transaction are propagated along this link route to the broker.
+
+{RouterName} does not support routing transactions to multiple brokers. If you have multiple brokers in your environment, choose a single broker and route all transactions to it.
+--
+
+. If you want clients to send messages on this link route, create an incoming link route:
++
+--
+[options="nowrap",subs="+quotes"]
+----
+linkRoute {
+    prefix: my_queue
+    connection: my_broker
+    direction: in
+    ...
+}
+----
+
+`prefix` | `pattern`:: The address prefix or pattern that matches the broker queue that should be the destination for routed link-attaches. All messages that match this prefix or pattern will be distributed along the link route. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
++
+Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
++
+Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
++
+If multiple brokers are connected to the router through this connection, requests for addresses matching the link route's prefix or pattern are balanced across the brokers. Alternatively, if you want to specify a particular broker, use `containerID` and add the broker's container ID.
+
+`direction`:: Set this attribute to `in` to specify that clients can send messages into the router network on this link route.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_linkroute[linkRoute] in the `qdrouterd.conf` man page.
+--
+
+. If you want clients to receive messages on this link route, create an outgoing link route:
++
+--
+[options="nowrap",subs="+quotes"]
+----
+linkRoute {
+    prefix: my_queue
+    connection: my_broker
+    direction: out
+    ...
+}
+----
+
+`prefix` | `pattern`:: The address prefix or pattern that matches the broker queue from which you want to receive routed link-attaches. All messages that match this prefix or pattern will be distributed along the link route. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
++
+Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
++
+Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
++
+If multiple brokers are connected to the router through this connection, requests for addresses matching the link route's prefix or pattern are balanced across the brokers. Alternatively, if you want to specify a particular broker, use `containerID` and add the broker's container ID.
+`direction`:: Set this attribute to `out` to specify that this link route is for receivers.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_linkroute[linkRoute] in the `qdrouterd.conf` man page.
+--
+
+:leveloffset!:
+
+// Link route example
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-link-routing.adoc
+
+[id='link-route-example-{context}']
+= Link route example: Connecting clients and brokers on different networks
+
+This example shows how a link route can connect a client to a message broker that is on a different private network.
+
+.Router network with isolated clients
+image::link-routing-02.png[Network isolation with link routing, align="center"]
+
+The client is constrained by firewall policy to connect to the router in its own network (`R3`). However, it can use a link route to access queues, topics, and any other AMQP services that are provided on message brokers `B1` and `B2` -- even though they are on different networks.
+
+In this example, the client needs to receive messages from `b2.event-queue`, which is hosted on broker `B2` in `Private Network 1`. A link route connects the client and broker even though neither of them is aware that there is a router network between them.
+
+[discrete]
+== Router configuration
+
+To enable the client to receive messages from `b2.event-queue` on broker `B2`, router `R2` must be able to do the following:
+
+* Connect to broker `B2`
+* Route links to and from broker `B2`
+* Advertise itself to the router network as a valid destination for links that have a `b2.event-queue` address
+
+The relevant part of the configuration file for router `R2` shows the following:
+
+--
+[options="nowrap"]
+----
+connector {  // <1>
+    name: broker
+    role: route-container
+    host: 192.0.2.1
+    port: 61617
+    saslMechanisms: ANONYMOUS
+}
+
+linkRoute {  // <2>
+    prefix: b2
+    direction: in
+    connection: broker
+}
+
+linkRoute {  // <3>
+    prefix: b2
+    direction: out
+    connection: broker
+}
+----
+<1> The outgoing connection from the router to broker `B2`. The `route-container` role enables the router to connect to an external AMQP container (in this case, a broker).
+<2> The incoming link route for receiving links from client senders. Any sender with a target whose address begins with `b2` will be routed to broker `B2` using the `broker` connector.
+<3> The outgoing link route for sending links to client receivers. Any receivers whose source address begins with `b2` will be routed to broker `B2` using the `broker` connector.
+--
+
+This configuration enables router `R2` to advertise itself as a valid destination for targets and sources starting with `b2`. It also enables the router to connect to broker `B2`, and to route links to and from queues starting with the `b2` prefix.
+
+[NOTE]
+====
+While not required, routers `R1` and `R3` should also have the same configuration.
+====
+
+[discrete]
+== How the client receives messages
+
+By using the configured link route, the client can receive messages from broker `B2` even though they are on different networks.
+
+Router `R2` establishes a connection to broker `B2`. Once the connection is open, `R2` tells the other routers (`R1` and `R3`) that it is a valid destination for link routes to the `b2` prefix. This means that sender and receiver links attached to `R1` or `R3` will be routed along the shortest path to `R2`, which then routes them to broker `B2`.
+
+To receive messages from the `b2.event-queue` on broker `B2`, the client attaches a receiver link with a source address of `b2.event-queue` to its local router, `R3`. Because the address matches the `b2` prefix, `R3` routes the link to `R1`, which is the next hop in the route to its destination. `R1` routes the link to `R2`, which routes it to broker `B2`. The client now has a receiver established, and it can begin receiving messages.
+
+[NOTE]
+====
+If broker `B2` is unavailable for any reason, router `R2` will not advertise itself as a destination for `b2` addresses. In this case, routers `R1` and `R3` will reject link attaches that should be routed to broker `B2` with an error message indicating that there is no route available to the destination.
+====
+
+:leveloffset!:
+
+:leveloffset!:

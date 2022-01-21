@@ -1,0 +1,298 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-message-routing.adoc
+
+[id='configuring-brokered-messaging-{context}']
+= Configuring brokered messaging
+
+If you require "store and forward" capabilities, you can configure {RouterName} to use brokered messaging. In this scenario, clients connect to a router to send and receive messages, and the router routes the messages to or from queues on a message broker.
+
+You can configure the following:
+
+* xref:routing-messages-through-broker-queues-{context}[Route messages through broker queues]
++
+You can route messages to a queue hosted on a single broker, or route messages to a _sharded queue_ distributed across multiple brokers.
+
+* xref:handling-undeliverable-messages-{context}[Store and retrieve undeliverable messages on a broker queue]
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='how-router-enables-brokered-messaging-{context}']
+= How {RouterName} enables brokered messaging
+
+Brokered messaging enables {RouterName} to store messages on a broker queue. This requires a connection to the broker, a _waypoint_ address to represent the broker queue, and _autolinks_ to attach to the waypoint address.
+
+An autolink is a link that is automatically created by the router to attach to a waypoint address. With autolinks, client traffic is handled on the router, not the broker. Clients attach their links to the router, and then the router uses internal autolinks to connect to the queue on the broker. Therefore, the queue will always have a single producer and a single consumer regardless of how many clients are attached to the router.
+
+Using autolinks is a form of _message routing_, as distinct from _link routing_.
+It is recommended to use link routing if you want to use semantics associated with a consumer, for example, the `undeliverable-here=true` modified delivery state.
+
+.Brokered messaging
+image::brokered-messaging.png[Brokered Messaging, align="center"]
+
+In this diagram, the sender connects to the router and sends messages to my_queue. The router attaches an outgoing link to the broker, and then sends the messages to my_queue. Later, the receiver connects to the router and requests messages from my_queue. The router attaches an incoming link to the broker to receive the messages from my_queue, and then delivers them to the receiver.
+
+You can also route messages to a _sharded queue_, which is a single, logical queue comprised of multiple, underlying physical queues. Using queue sharding, it is possible to distribute a single queue over multiple brokers. Clients can connect to any of the brokers that hold a shard to send and receive messages.
+
+.Brokered messaging with sharded queue
+image::sharded-queue-02.png[Brokered Messaging with Sharded Queue, align="center"]
+
+In this diagram, a sharded queue (my_queue) is distributed across two brokers. The router is connected to the clients and to both brokers. The sender connects to the router and sends messages to my_queue. The router attaches an outgoing link to each broker, and then sends messages to each shard (by default, the routing distribution is `balanced`). Later, the receiver connects to the router and requests all of the messages from my_queue. The router attaches an incoming link to one of the brokers to receive the messages from my_queue, and then delivers them to the receiver.
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='routing-messages-through-broker-queues-{context}']
+= Routing messages through broker queues
+
+You can route messages to and from a broker queue to provide clients with access to the queue through a router. In this scenario, clients connect to a router to send and receive messages, and the router routes the messages to or from the broker queue.
+
+You can route messages to a queue hosted on a single broker, or route messages to a _sharded queue_ distributed across multiple brokers.
+
+.Procedure
+
+. In the `{RouterConfigFile}` configuration file, add a waypoint address for the broker queue.
++
+--
+A waypoint address identifies a queue on a broker to which you want to route messages. This example adds a waypoint address for the `my_queue` queue:
+
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my_queue
+    waypoint: yes
+}
+----
+
+`prefix` | `pattern`:: The address prefix or pattern that matches the broker queue to which you want to send messages. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
++
+Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
++
+Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+
+`waypoint`:: Set this attribute to `yes` so that the router handles messages sent to this address as a waypoint.
+--
+
+. Connect the router to the broker.
+
+.. Add an outgoing connection to the broker if one does not exist.
++
+--
+If the queue is sharded across multiple brokers, you must add a connection for each broker. For more information, see xref:connecting-to-external-amqp-containers-{context}[].
+
+[NOTE]
+====
+If the connection to the broker fails, {RouterName} automatically attempts to reestablish the connection and reroute message deliveries to any available alternate destinations. However, some deliveries could be returned to the sender with a `RELEASED` or `MODIFIED` disposition. Therefore, you should ensure that your clients can handle these deliveries appropriately (generally by resending them).
+====
+--
+
+.. If you want to send messages to the broker queue, add an _outgoing_ autolink to the broker queue.
++
+--
+If the queue is sharded across multiple brokers, you must add an outgoing autolink for each broker.
+
+This example configures an outgoing auto link to send messages to a broker queue:
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_queue
+    connection: my_broker
+    direction: out
+    ...
+}
+----
+
+`address`:: The address of the broker queue. When the autolink is created, it will be attached to this address.
+`externalAddress`:: An optional alternate address for the broker queue. You use an external address if the broker queue should have a different address than that which the sender uses. In this scenario, senders send messages to the `address` address, and then the router routes them to the broker queue represented by the `externalAddress` address.
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
+`direction`:: Set this attribute to `out` to specify that this autolink can send messages from the router to the broker.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_autolink[autoLink] in the `qdrouterd.conf` man page.
+--
+
+. If you want to receive messages from the broker queue, add an _incoming_ autolink from the broker queue:
++
+--
+If the queue is sharded across multiple brokers, you must add an outgoing autolink for each broker.
+
+This example configures an incoming auto link to receive messages from a broker queue:
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_queue
+    connection: my_broker
+    direction: in
+    ...
+}
+----
+
+`address`:: The address of the broker queue. When the autolink is created, it will be attached to this address.
+`externalAddress`:: An optional alternate address for the broker queue. You use an external address if the broker queue should have a different address than that which the receiver uses. In this scenario, receivers receive messages from the `address` address, and the router retrieves them from the broker queue represented by the `externalAddress` address.
+`connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
+`direction`:: Set this attribute to `in` to specify that this autolink can receive messages from the broker to the router.
+
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_autolink[autoLink] in the `qdrouterd.conf` man page.
+--
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// configuring-brokered-messaging.adoc
+
+[id='handling-undeliverable-messages-{context}']
+= Handling undeliverable messages
+
+You handle undeliverable messages for an address by configuring autolinks that point to _fallback destinations_. A fallback destination (such as a queue on a broker) stores messages that are not directly routable to any consumers.
+
+During normal message delivery, {RouterName} delivers messages to the consumers that are attached to the router network. However, if no consumers are reachable, the messages are diverted to any fallback destinations that were configured for the address (if the autolinks that point to the fallback destinations are active). When a consumer reconnects and becomes reachable again, it receives the messages stored at the fallback destination.
+
+[NOTE]
+====
+{RouterName} preserves the original delivery order for messages stored at a fallback destination. However, when a consumer reconnects, any new messages produced while the queue is draining will be interleaved with the messages stored at the fallback destination.
+====
+
+.Prerequisites
+
+* The router is connected to a broker.
++
+For more information, see xref:connecting-to-external-amqp-containers-{context}[].
+
+.Procedure
+
+This procedure enables fallback for an address and configures autolinks to connect to the broker queue that provides the fallback destination for the address.
+
+. In the `{RouterConfigFile}` configuration file, enable fallback destinations for the address.
++
+[options="nowrap",subs="+quotes"]
+----
+address {
+    prefix: my_address
+    enableFallback: yes
+}
+----
+
+. Add an _outgoing_ autolink to a queue on the broker.
++
+--
+For the address for which you enabled fallback, if messages are not routable to any consumers, the router will use this autolink to send the messages to a queue on the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_address.2
+    direction: out
+    connection: my_broker
+    fallback: yes
+}
+----
+--
+
+. If you want the router to send queued messages to attached consumers as soon as they connect to the router network, add an _incoming_ autolink.
++
+--
+As soon as a consumer attaches to the router, it will receive the messages stored in the broker queue, along with any new messages sent by the producer. The original delivery order of the queued messages is preserved; however, the queued messages will be interleaved with the new messages.
+
+If you do not add the incoming autolink, the messages will be stored on the broker, but will not be sent to consumers when they attach to the router.
+
+[options="nowrap",subs="+quotes"]
+----
+autoLink {
+    address: my_address.2
+    direction: in
+    connection: my_broker
+    fallback: yes
+}
+----
+--
+
+:leveloffset!:

@@ -1,0 +1,419 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// adding-routers-router-network.adoc
+
+[id='configuring-network-connections-{context}']
+= Configuring network connections
+
+{RouterName} connects clients, servers, AMQP services, and other routers through network connections. To connect the router to other messaging endpoints, you configure _listeners_ to accept connections, and _connectors_ to make outbound connections. However, connections are bidirectional - once the connection is established, message traffic flows in both directions.
+
+You can do the following:
+
+* xref:connecting-routers-{context}[Connect a router to another router]
+* xref:listening-client-connections-{context}[Listen for client connections]
+* xref:connecting-to-external-amqp-containers-{context}[Connect a router to an external AMQP container]
+* xref:adding-metadata-to-connections-{context}[Add metadata to connections]
+* xref:understanding-connection-failover-{context}[Understand connection failover]
+
+// Connecting routers
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='connecting-routers-{context}']
+= Connecting routers
+
+To connect a router to another router in the router network, you configure a `connector` on one router to create the outbound connection, and a `listener` on the other router to accept the connection.
+
+Because connections are bidirectional, there should only be one connection between any pair of routers. Once the connection is established, message traffic flows in both directions.
+
+This procedure describes how to connect a router to another router in the router network.
+
+.Procedure
+
+. Determine the direction of the connection.
++
+--
+Decide which router should be the "connector", and which should be the "listener". The direction of the connection establishment is sometimes arbitrary, but consider the following factors:
+
+IP network boundaries and firewalls::
+Generally, inter-router connections should always be established from more private to more public. For example, to connect a router in a private IP network to another router in a public location (such as a public cloud provider), the router in the private network must be the "connector" and the router in the public location must be the "listener". This is because the public location cannot reach the private location by TCP/IP without the use of VPNs or other firewall features designed to allow public-to-private access.
+
+Network topology::
+The topology of the router network may affect the direction in which connections should be established between the routers. For example, a star-topology that has a series of routers connected to one or two central "hub" routers should have "listeners" on the hub and "connectors" on the spokes. That way, new spoke routers may be added without changing the configuration of the hub.
+--
+
+. On the router that should create the connection, open the `{RouterConfigFile}` configuration file and add a `connector`.
++
+--
+This example creates a `connector` for an inter-router connection between two interior routers:
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5001
+    role: inter-router
+    ...
+}
+----
+
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will connect.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will connect.
+`role`:: The role of the connection. If the connection is between two interior routers, specify `inter-router`. If the connection is between an interior router and an edge router, specify `edge`.
+--
+
+. On the router that should accept the connection establishment, open the `{RouterConfigFile}` configuration file and verify that an inter-router `listener` is configured.
++
+--
+This example creates a `listener` to accept the connection establishment configured in the previous step:
+
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5001
+    role: inter-router
+    ...
+}
+----
+
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will listen.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will listen.
+`role`:: The role of the connection. If the connection is between two interior routers, specify `inter-router`. If the connection is between an interior router and an edge router, specify `edge`.
+--
+
+. If the router should connect to any other routers, repeat this procedure.
++
+Edge routers can only connect to interior routers. They cannot connect to other edge routers.
+
+.Additional resources
+
+* After connecting a router to another router, secure the connection.
++
+For more information, see xref:securing-connections-between-routers-{context}[].
+
+:leveloffset!:
+
+// Listening for client connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-router.adoc
+
+[id='listening-client-connections-{context}']
+= Listening for client connections
+
+To enable a router to listen for and accept connections from AMQP clients, you configure a `listener`.
+
+Once the connection is enabled on the router, clients can connect to it using the same methods they use to connect to a broker. From the client's perspective, the router connection and link establishment are identical to a broker connection and link establishment.
+
+[NOTE]
+====
+Instead of configuring a `listener` to listen for connections from the client, you can configure a `connector` to initiate connections to the client. In this case, the router will use the `connector` to initiate the connection, but it will not create any links. Links are only created by the peer that accepts the connection.
+====
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/listening-client-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure a `listener` with the `normal` role.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: primary.example.com
+    port: 5672
+    role: normal
+    failoverUrls: secondary.example.com:20000, tertiary.example.com
+    ...
+}
+----
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will listen.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will listen.
+`role`:: The role of the connection. Specify `normal` to indicate that this connection is used for message delivery for AMQP clients.
+`failoverUrls` (optional):: A comma-separated list of backup URLs the client can use to reconnect if the established connection is lost. Each URL must use the following form:
++
+`[(amqp|amqps|ws|wss)://](__HOST__|__IP ADDRESS__)[:port]`
++
+For more information, see xref:understanding-connection-failover-{context}[].
+--
+
+.Additional resources
+
+* After enabling a router to listen for client connections, secure the connection.
++
+For more information, see xref:securing-incoming-client-connections-{context}[].
+
+:leveloffset!:
+
+// Creating a connection to an external AMQP container
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='connecting-to-external-amqp-containers-{context}']
+= Connecting to external AMQP containers
+
+To enable a router to establish a connection to an external AMQP container (such as a message broker), you configure a `connector`.
+
+[NOTE]
+====
+Instead of configuring a `connector` to initiate connections to the AMQP container, you can configure a `listener` to listen for connections from the AMQP container. However, in this case, the addresses on the AMQP container are available for routing only after the AMQP container has created a connection.
+====
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-routers-external-amqp-containers.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure a `connector` with the `route-container` role.
++
+--
+This example creates a `connector` that initiates connections to a broker. The addresses on the broker will be available for routing once the router creates the connection and it is accepted by the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    name: my-broker
+    host: 192.0.2.10
+    port: 5672
+    role: route-container
+    ...
+}
+----
+`name`:: The name of the `connector`. Specify a name that describes the entity to which the router will connect.
+`host`:: The IP address (IPv4 or IPv6) or hostname to which the router will connect.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, to which the router will connect.
+`role`:: The role of the connection. Specify `route-container` to indicate that this connection is for an AMQP container that holds known addresses.
+--
+
+.Additional resources
+
+* After enabling a router to connect to an external AMQP container, configure any necessary security credentials.
++
+For more information, see xref:securing-outgoing-connections-{context}[].
+
+:leveloffset!:
+
+// Openproperties
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='adding-metadata-to-connections-{context}']
+= Adding metadata to connections
+
+In a complex topology, it can be useful to add metadata to connections so that messages can be handled programmatically.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/adding-metadata-to-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Add arbitrary JSON to the `connector` configuration using the 'openProperties' attribute.
++
+--
+This example adds the property `label` with the value `green`.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+   name: broker
+   role: route-container
+   host: 127.0.0.1
+   port: 22180
+   saslMechanisms: ANONYMOUS
+   openProperties: {
+      "label": "green"
+   }
+}
+----
+
+Note the following restrictions on the JSON entries:
+
+* ASCII characters only for keys
+* The following keys are not allowed:
+** product
+** version
+** failover-server-list
+** network-host
+** port
+** scheme
+** hostname
+** any key starting with `qd.`
+** any key starting with `x-opt-qd.`
+
+The `openProperties` attribute can only be set for a connector with a `normal` or `route-container` role.
+You cannot set the attribute for connectors that have the following settings:
+
+* `role: inter-router`
+* `role: edge`
+* `http: true`
+
+The JSON format supports lists, maps and multiple entries, for example:
+
+----
+connector {
+   name: broker
+   role: route-container
+   host: 127.0.0.1
+   port: 22180
+   saslMechanisms: ANONYMOUS
+   openProperties: {
+      "foo": "bar",
+      "integer": 7,
+ "list":  ["a", 1, "b", -9, true],
+ "map":  {"key1": null, "key2": [1, 2, 3]},
+ }
+   cost: 10
+}
+----
+--
+
+:leveloffset!:
+
+// Connection failover
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+// configuring-network-connections.adoc
+
+[id='understanding-connection-failover-{context}']
+= Understanding connection failover
+
+If a connection between a router and a remote host fails, connection failover enables the connection to be reestablished automatically on an alternate URL.
+
+A router can use connection failover for both incoming and outgoing connections.
+
+Connection failover for outgoing connections::
+By default, when you configure a `connector` on a router, the router attempts to maintain an open network transport connection to the configured remote host and port. If the connection cannot be established, the router continually retries until the connection is established. If the connection is established and then fails, the router immediately attempts to reestablish the connection.
++
+When the router establishes a connection to a remote host, the client may provide the router with alternate connection information (sometimes called failover lists) that it can use if the connection is lost. In these cases, rather than attempting to reestablish the connection on the same host, the router will also try the alternate hosts.
++
+Connection failover is particularly useful when the router establishes outgoing connections to a cluster of servers providing the same service.
+
+Connection failover for incoming connections::
+You can configure a `listener` on a router to provide a list of failover URLs to be used as backups. If the connection is lost, the client can use these failover URLs to reestablish the connection to the router.
+
+:leveloffset!:

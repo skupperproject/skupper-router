@@ -1,0 +1,229 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+[id='creating-router-network-topology-{context}']
+= Creating a router network topology
+
+You can deploy {RouterName} as a single standalone router, or as multiple routers connected together in a router network. Router networks may represent any arbitrary topology, enabling you to design the network to best fit your requirements.
+
+With {RouterName}, the router network topology is independent from the message routing. This means that messaging clients always experience the same message routing behavior regardless of the underlying network topology. Even in a multi-site or hybrid cloud router network, the connected endpoints behave as if they were connected to a single, logical router.
+
+To create the router network topology, complete the following:
+
+. xref:router-deployment-guidelines-{context}[Understand the router network deployment guidelines].
++
+You should understand the different router operating modes you can deploy in your topology, and be aware of security requirements for the interior portion of the router network.
+
+. xref:router-deployment-workflow-{context}[Build the router network by deploying routers one at a time].
+
+// Router deployment guidelines
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// creating-router-network-topology.adoc
+
+[id='router-deployment-guidelines-{context}']
+= {RouterName} deployment guidelines
+
+To plan your router network and design the network topology, you must first understand the different router modes and how you can use them to create different types of networks.
+
+// Router operating modes
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// planning-router-network.adoc
+
+[id='router-operating-modes-{context}']
+= Router operating modes
+
+In {RouterName}, each router can operate in _standalone_, _interior_, or _edge_ mode. In a router network, you deploy multiple interior routers or a combination of interior and edge routers to create the desired network topology.
+
+Standalone::
+The router operates as a single, standalone network node. A standalone router cannot be used in a router network - it does not establish connections with other routers, and only routes messages between directly-connected endpoints.
+
+Interior::
+The router is part of the interior of the router network. Interior routers establish connections with each other and automatically compute the lowest cost paths across the network.
+
+Edge::
+The router maintains a single uplink connection to one or more interior routers. Edge routers do not participate in the routing protocol or route computation, but they enable you to efficiently scale the routing network.
+
+[NOTE]
+====
+Performance of your router network is determined by various factors:
+
+* topology
+* number of routers
+* underlying infrastructure (host resources, network speed, etc)
+
+====
+
+:leveloffset!:
+
+// Security guidelines
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// router-deployment-guidelines.adoc
+
+[id='security-guidelines-{context}']
+= Security guidelines
+
+In the router network, the interior routers should be secured with a strong authentication mechanism in which they identify themselves to each other. You should choose and plan this authentication mechanism before creating the router network.
+
+[WARNING]
+====
+If the interior routers are not properly secured, unauthorized routers (or endpoints pretending to be routers) could join the router network, compromising its integrity and availability.
+====
+
+You can choose a security mechanism that best fits your requirements. However, you should consider the following recommendations:
+
+* Create an X.509 Certificate Authority (CA) to oversee the interior portion of the router network.
+
+* Generate an individual certificate for each interior router.
++
+Each interior router can be configured to use the CA to authenticate connections from any other interior routers.
++
+[NOTE]
+====
+Connections from edge routers and clients can use different levels of security, depending on your requirements.
+====
+
+By using these recommendations, a new interior router cannot join the network until the owner of the CA issues a new certificate for the new router. In addition, an intruder wishing to spoof an interior router cannot do so because it would not have a valid X.509 certificate issued by the network's CA.
+
+:leveloffset!:
+
+// Router connection guidelines
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// router-deployment-guidelines.adoc
+
+[id='router-connection-guidelines-{context}']
+= Router connection guidelines
+
+Before creating a router network, you should understand how routers connect to each other, and the factors that affect the direction in which an inter-router connection should be established.
+
+[discrete]
+== Inter-router connections are bidirectional
+
+When a connection is established between routers, message traffic flows in both directions across that connection. Each connection has a client side (a _connector_) and a server side (a _listener_) for the purposes of connection establishment. Once the connection is established, the two sides become equal participants in a bidirectional connection. For the purposes of routing AMQP traffic across the network, the direction of connection establishment is not relevant.
+
+[discrete]
+== Factors that affect the direction of connection establishment
+
+When establishing inter-router connections, you must choose which router will be the "listener" and which will be the "connector". There should be only one connection between any pair of routers.
+
+When determining the direction of inter-router connections in the network topology, consider the following factors:
+
+IP network boundaries and firewalls::
+Generally, inter-router connections should always be established from more private to more public. For example, to connect a router in a private IP network to another router in a public location (such as a public cloud provider), the router in the private network must have the connector and the router in the public location must have the listener. This is because the public location cannot reach the private location by TCP/IP without the use of VPNs or other firewall features designed to allow public-to-private access.
+
+Network topology::
+The topology of the router network may affect the direction in which connections should be established between the routers. For example, a star-topology that has a series of routers connected to one or two central "hub" routers should have listeners on the hub and connectors on the spokes. That way, new spoke routers may be added without changing the configuration of the hub.
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Router deployment workflow
+Unresolved directive in creating-router-network-topology.adoc - include::../../modules/user-guide/router-deployment-workflow.adoc[leveloffset=+1]

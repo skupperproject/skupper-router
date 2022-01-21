@@ -1,0 +1,1627 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+[id='configuring-router-{context}']
+= Configuring {RouterName}
+
+Each {RouterName} router contains a `qdrouterd.conf` configuration file. You edit this file to define how the router should operate.
+
+You can do the following:
+
+* xref:configuring-router-properties-{context}[Configure essential router properties]
+* xref:configuring-network-connections-{context}[Configure network connections]
+* xref:securing-network-connections-{context}[Secure network connections]
+* xref:authorizing-access-messaging-resources-{context}[Authorize access to messaging resources]
+* xref:configuring-logging-{context}[Configure logging]
+
+// Configuring router properties
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// adding-routers-router-network.adoc
+
+[id='configuring-router-properties-{context}']
+= Configuring router properties
+
+By default, {RouterName} operates in `standalone` mode with a randomly-generated ID. If you want to use this router in a router network, you must change these properties.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/configuring-router-properties.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. In the `router` section, specify the mode and ID.
++
+--
+This example shows a router configured to operate in `interior` mode:
+
+[options="nowrap",subs="+quotes"]
+----
+router {
+    mode: interior
+    id: Router.A
+}
+----
+
+`mode`:: Specify one of the following modes:
++
+* `standalone` - Use this mode if the router does not communicate with
+other routers and is not part of a router network. When operating in
+this mode, the router only routes messages between directly connected
+endpoints.
+* `interior` - Use this mode if the router is part of a router network
+and needs to collaborate with other routers.
+* `edge` - Use this mode if the router is an edge router that will
+connect to a network of interior routers.
+
+`id`:: The unique
+identifier for the router. This ID will also be the container name at
+the AMQP protocol level.
+--
+
+. If necessary, configure any additional properties for the router.
++
+For information about additional attributes, see link:{qdrouterdConfManPageUrl}#_router[router] in the `qdrouterd.conf` man page.
+
+:leveloffset!:
+
+// Configuring network connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// adding-routers-router-network.adoc
+
+[id='configuring-network-connections-{context}']
+= Configuring network connections
+
+{RouterName} connects clients, servers, AMQP services, and other routers through network connections. To connect the router to other messaging endpoints, you configure _listeners_ to accept connections, and _connectors_ to make outbound connections. However, connections are bidirectional - once the connection is established, message traffic flows in both directions.
+
+You can do the following:
+
+* xref:connecting-routers-{context}[Connect a router to another router]
+* xref:listening-client-connections-{context}[Listen for client connections]
+* xref:connecting-to-external-amqp-containers-{context}[Connect a router to an external AMQP container]
+* xref:adding-metadata-to-connections-{context}[Add metadata to connections]
+* xref:understanding-connection-failover-{context}[Understand connection failover]
+
+// Connecting routers
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='connecting-routers-{context}']
+= Connecting routers
+
+To connect a router to another router in the router network, you configure a `connector` on one router to create the outbound connection, and a `listener` on the other router to accept the connection.
+
+Because connections are bidirectional, there should only be one connection between any pair of routers. Once the connection is established, message traffic flows in both directions.
+
+This procedure describes how to connect a router to another router in the router network.
+
+.Procedure
+
+. Determine the direction of the connection.
++
+--
+Decide which router should be the "connector", and which should be the "listener". The direction of the connection establishment is sometimes arbitrary, but consider the following factors:
+
+IP network boundaries and firewalls::
+Generally, inter-router connections should always be established from more private to more public. For example, to connect a router in a private IP network to another router in a public location (such as a public cloud provider), the router in the private network must be the "connector" and the router in the public location must be the "listener". This is because the public location cannot reach the private location by TCP/IP without the use of VPNs or other firewall features designed to allow public-to-private access.
+
+Network topology::
+The topology of the router network may affect the direction in which connections should be established between the routers. For example, a star-topology that has a series of routers connected to one or two central "hub" routers should have "listeners" on the hub and "connectors" on the spokes. That way, new spoke routers may be added without changing the configuration of the hub.
+--
+
+. On the router that should create the connection, open the `{RouterConfigFile}` configuration file and add a `connector`.
++
+--
+This example creates a `connector` for an inter-router connection between two interior routers:
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5001
+    role: inter-router
+    ...
+}
+----
+
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will connect.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will connect.
+`role`:: The role of the connection. If the connection is between two interior routers, specify `inter-router`. If the connection is between an interior router and an edge router, specify `edge`.
+--
+
+. On the router that should accept the connection establishment, open the `{RouterConfigFile}` configuration file and verify that an inter-router `listener` is configured.
++
+--
+This example creates a `listener` to accept the connection establishment configured in the previous step:
+
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5001
+    role: inter-router
+    ...
+}
+----
+
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will listen.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will listen.
+`role`:: The role of the connection. If the connection is between two interior routers, specify `inter-router`. If the connection is between an interior router and an edge router, specify `edge`.
+--
+
+. If the router should connect to any other routers, repeat this procedure.
++
+Edge routers can only connect to interior routers. They cannot connect to other edge routers.
+
+.Additional resources
+
+* After connecting a router to another router, secure the connection.
++
+For more information, see xref:securing-connections-between-routers-{context}[].
+
+:leveloffset!:
+
+// Listening for client connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-router.adoc
+
+[id='listening-client-connections-{context}']
+= Listening for client connections
+
+To enable a router to listen for and accept connections from AMQP clients, you configure a `listener`.
+
+Once the connection is enabled on the router, clients can connect to it using the same methods they use to connect to a broker. From the client's perspective, the router connection and link establishment are identical to a broker connection and link establishment.
+
+[NOTE]
+====
+Instead of configuring a `listener` to listen for connections from the client, you can configure a `connector` to initiate connections to the client. In this case, the router will use the `connector` to initiate the connection, but it will not create any links. Links are only created by the peer that accepts the connection.
+====
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/listening-client-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure a `listener` with the `normal` role.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: primary.example.com
+    port: 5672
+    role: normal
+    failoverUrls: secondary.example.com:20000, tertiary.example.com
+    ...
+}
+----
+`host`:: The IP address (IPv4 or IPv6) or hostname on which the router will listen.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, on which the router will listen.
+`role`:: The role of the connection. Specify `normal` to indicate that this connection is used for message delivery for AMQP clients.
+`failoverUrls` (optional):: A comma-separated list of backup URLs the client can use to reconnect if the established connection is lost. Each URL must use the following form:
++
+`[(amqp|amqps|ws|wss)://](__HOST__|__IP ADDRESS__)[:port]`
++
+For more information, see xref:understanding-connection-failover-{context}[].
+--
+
+.Additional resources
+
+* After enabling a router to listen for client connections, secure the connection.
++
+For more information, see xref:securing-incoming-client-connections-{context}[].
+
+:leveloffset!:
+
+// Creating a connection to an external AMQP container
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='connecting-to-external-amqp-containers-{context}']
+= Connecting to external AMQP containers
+
+To enable a router to establish a connection to an external AMQP container (such as a message broker), you configure a `connector`.
+
+[NOTE]
+====
+Instead of configuring a `connector` to initiate connections to the AMQP container, you can configure a `listener` to listen for connections from the AMQP container. However, in this case, the addresses on the AMQP container are available for routing only after the AMQP container has created a connection.
+====
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-routers-external-amqp-containers.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure a `connector` with the `route-container` role.
++
+--
+This example creates a `connector` that initiates connections to a broker. The addresses on the broker will be available for routing once the router creates the connection and it is accepted by the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    name: my-broker
+    host: 192.0.2.10
+    port: 5672
+    role: route-container
+    ...
+}
+----
+`name`:: The name of the `connector`. Specify a name that describes the entity to which the router will connect.
+`host`:: The IP address (IPv4 or IPv6) or hostname to which the router will connect.
+`port`:: The port number or symbolic service name, defined in `/etc/services`, to which the router will connect.
+`role`:: The role of the connection. Specify `route-container` to indicate that this connection is for an AMQP container that holds known addresses.
+--
+
+.Additional resources
+
+* After enabling a router to connect to an external AMQP container, configure any necessary security credentials.
++
+For more information, see xref:securing-outgoing-connections-{context}[].
+
+:leveloffset!:
+
+// Openproperties
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// configuring-network-connections.adoc
+
+[id='adding-metadata-to-connections-{context}']
+= Adding metadata to connections
+
+In a complex topology, it can be useful to add metadata to connections so that messages can be handled programmatically.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/adding-metadata-to-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Add arbitrary JSON to the `connector` configuration using the 'openProperties' attribute.
++
+--
+This example adds the property `label` with the value `green`.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+   name: broker
+   role: route-container
+   host: 127.0.0.1
+   port: 22180
+   saslMechanisms: ANONYMOUS
+   openProperties: {
+      "label": "green"
+   }
+}
+----
+
+Note the following restrictions on the JSON entries:
+
+* ASCII characters only for keys
+* The following keys are not allowed:
+** product
+** version
+** failover-server-list
+** network-host
+** port
+** scheme
+** hostname
+** any key starting with `qd.`
+** any key starting with `x-opt-qd.`
+
+The `openProperties` attribute can only be set for a connector with a `normal` or `route-container` role.
+You cannot set the attribute for connectors that have the following settings:
+
+* `role: inter-router`
+* `role: edge`
+* `http: true`
+
+The JSON format supports lists, maps and multiple entries, for example:
+
+----
+connector {
+   name: broker
+   role: route-container
+   host: 127.0.0.1
+   port: 22180
+   saslMechanisms: ANONYMOUS
+   openProperties: {
+      "foo": "bar",
+      "integer": 7,
+ "list":  ["a", 1, "b", -9, true],
+ "map":  {"key1": null, "key2": [1, 2, 3]},
+ }
+   cost: 10
+}
+----
+--
+
+:leveloffset!:
+
+// Connection failover
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+// configuring-network-connections.adoc
+
+[id='understanding-connection-failover-{context}']
+= Understanding connection failover
+
+If a connection between a router and a remote host fails, connection failover enables the connection to be reestablished automatically on an alternate URL.
+
+A router can use connection failover for both incoming and outgoing connections.
+
+Connection failover for outgoing connections::
+By default, when you configure a `connector` on a router, the router attempts to maintain an open network transport connection to the configured remote host and port. If the connection cannot be established, the router continually retries until the connection is established. If the connection is established and then fails, the router immediately attempts to reestablish the connection.
++
+When the router establishes a connection to a remote host, the client may provide the router with alternate connection information (sometimes called failover lists) that it can use if the connection is lost. In these cases, rather than attempting to reestablish the connection on the same host, the router will also try the alternate hosts.
++
+Connection failover is particularly useful when the router establishes outgoing connections to a cluster of servers providing the same service.
+
+Connection failover for incoming connections::
+You can configure a `listener` on a router to provide a list of failover URLs to be used as backups. If the connection is lost, the client can use these failover URLs to reestablish the connection to the router.
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Securing network connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// adding-routers-router-network.adoc
+
+[id='securing-network-connections-{context}']
+= Securing network connections
+
+You can configure {RouterName} to communicate with clients, routers, and brokers in a secure way by authenticating and encrypting the router's connections. {RouterName} supports the following security protocols:
+
+* SSL/TLS for certificate-based encryption and mutual authentication
+* SASL for authentication with mechanisms
+
+You configure SSL/TLS, SASL (or a combination of both) to secure any of the following:
+
+* xref:securing-connections-between-routers-{context}[Secure connections between routers]
+* xref:securing-incoming-client-connections-{context}[Secure incoming client connections]
+* xref:securing-outgoing-connections-{context}[Secure outgoing connections]
+
+// Securing connections between routers
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-network-connections.adoc
+
+[id='securing-connections-between-routers-{context}']
+= Securing connections between routers
+
+Connections between interior routers should be secured with SSL/TLS encryption and authentication (also called mutual authentication) to prevent unauthorized routers (or endpoints pretending to be routers) from joining the network.
+
+SSL/TLS mutual authentication requires an X.509 Certificate Authority (CA) with individual certificates generated for each interior router. Connections between the interior routers are encrypted, and the CA authenticates each incoming inter-router connection.
+
+This procedure describes how to secure a connection between two interior routers using SSL/TLS mutual authentication.
+
+.Prerequisites
+
+* An X.509 Certificate Authority must exist for the interior routers.
+
+* A security certificate must be generated for each router and be signed by the CA.
+
+* An inter-router connection must exist between the routers.
++
+For more information, see xref:connecting-routers-{context}[].
+
+.Procedure
+
+. On the router that establishes the connection, do the following:
+
+.. Open the `{RouterConfigFile}`.
+
+.. If the router does not contain an `sslProfile` that defines the private keys and certificates for the inter-router network, then add one.
++
+--
+This `sslProfile` contains the locations of the private key and certificates that the router uses to authenticate with its peer.
+
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: inter-router-tls
+    certFile: /etc/pki/tls/certs/tls.crt
+    caCertFile: /etc/pki/tls/certs/ca.crt
+    privateKeyFile: /etc/pki/tls/private/tls.key
+    password: file:/etc/pki/tls/private/password.txt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`certFile`:: The absolute path to the file containing the public certificate for this router.
+
+`caCertFile`:: The absolute path to the CA certificate that the router uses to authenticate incoming clients.
+
+`privateKeyFile`:: The absolute path to the file containing the private key for this router's public certificate.
++
+[NOTE]
+====
+Ensure that the `qdrouterd` or root user can access the private key. For example:
+
+[options="nowrap",subs="+quotes"]
+----
+chmod 0600 /etc/pki/tls/private/tls.key
+chown qdrouterd /etc/pki/tls/private/tls.key
+----
+====
+
+//`password`
+Unresolved directive in ../../modules/user-guide/securing-connections-between-routers.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+--
+
+.. Configure the inter-router `connector` for this connection to use the `sslProfile` that you created.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5001
+    role: inter-router
+    sslProfile: inter-router-tls
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the SSL/TLS private keys and certificates for the inter-router network.
+--
+
+. On the router that listens for the connection, do the following:
+
+.. Open the `{RouterConfigFile}`.
+
+.. If the router does not contain an `sslProfile` that defines the private keys and certificates for the inter-router network, then add one.
+
+.. Configure the inter-router `listener` for this connection to use SSL/TLS to secure the connection.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5001
+    role: inter-router
+    sslProfile: inter_router_tls
+    authenticatePeer: yes
+    requireSsl: yes
+    saslMechanisms: EXTERNAL
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the SSL/TLS private keys and certificates for the inter-router network.
+
+`authenticatePeer`:: Specify `yes` to authenticate the peer interior router's identity.
+
+`requireSsl`:: Specify `yes` to encrypt the connection with SSL/TLS.
+
+`saslMechanisms`:: Specify `EXTERNAL` to enable X.509 client certificate authentication.
+--
+
+:leveloffset!:
+
+// Securing incoming client connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-network-connections.adoc
+
+[id='securing-incoming-client-connections-{context}']
+= Securing incoming client connections
+
+You can use SSL/TLS and SASL to provide the appropriate level of security for client traffic into the router network. You can use the following methods to secure incoming connections to a router from AMQP clients, external containers, or edge routers:
+
+* xref:enabling-ssl-tls-encryption-{context}[Enable SSL/TLS encryption]
+* xref:enabling-ssl-tls-client-authentication-{context}[Enable SSL/TLS client authentication]
+* xref:enabling-username-password-authentication-{context}[Enable user name and password authentication]
+* xref:integrating-with-kerberos-{context}[Integrate with Kerberos]
+
+// Enabling SSL/TLS encryption
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-incoming-client-connections.adoc
+
+[id='enabling-ssl-tls-encryption-{context}']
+= Enabling SSL/TLS encryption
+
+You can use SSL/TLS to encrypt an incoming connection from a client.
+
+.Prerequisites
+
+* An X.509 Certificate Authority (CA) must exist for the client connections.
+
+* A security certificate must be generated and signed by the CA.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. If the router does not contain an `sslProfile` that defines the private keys and certificates for client connections, then add one.
++
+--
+This `sslProfile` contains the locations of the private key and certificates that the router should use to encrypt connections from clients.
+
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: service-tls
+    certFile: /etc/pki/tls/certs/tls.crt
+    caCertFile: /etc/pki/tls/certs/ca.crt
+    privateKeyFile: /etc/pki/tls/private/tls.key
+    password: file:/etc/pki/tls/private/password.txt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`certFile`:: The absolute path to the file containing the public certificate for this router.
+
+`caCertFile`:: The absolute path to the CA certificate that the router uses to authenticate incoming clients.
+
+`privateKeyFile`:: The absolute path to the file containing the private key for this router's public certificate.
++
+[NOTE]
+====
+Ensure that the `qdrouterd` or root user can access the private key. For example:
+
+[options="nowrap",subs="+quotes"]
+----
+chmod 0600 /etc/pki/tls/private/tls.key
+chown qdrouterd /etc/pki/tls/private/tls.key
+----
+====
+
+//`password`
+Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+--
+
+. Configure the `listener` for this connection to use SSL/TLS to encrypt the connection.
++
+--
+This example configures a `normal` listener to encrypt connections from clients.
+
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5672
+    role: normal
+    sslProfile: inter_router_tls
+    requireSsl: yes
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the SSL/TLS private keys and certificates for client connections.
+
+`requireSsl`:: Specify `true` to encrypt the connection with SSL/TLS.
+--
+
+:leveloffset!:
+
+// Enabling SSL/TLS client authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-incoming-client-connections.adoc
+
+[id='enabling-ssl-tls-client-authentication-{context}']
+= Enabling SSL/TLS client authentication
+
+In addition to SSL/TLS encryption, you can also use SSL/TLS to authenticate an incoming connection from a client. With this method, a clients must present its own X.509 certificate to the router, which the router uses to verify the client's identity.
+
+.Prerequisites
+
+* SSL/TLS encryption must be configured.
++
+For more information, see xref:enabling-ssl-tls-encryption-{context}[].
+
+* The client must have an X.509 certificate that it can use to authenticate to the router.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-client-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure the `listener` for this connection to use SSL/TLS to authenticate the client.
++
+--
+This example adds SSL/TLS authentication to a `normal` listener to authenticate incoming connections from a client. The client will only be able to connect to the router by presenting its own X.509 certificate to the router, which the router will use to verify the client's identity.
+
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5672
+    role: normal
+    sslProfile: service-tls
+    requireSsl: yes
+    authenticatePeer: yes
+    saslMechanisms: EXTERNAL
+    ...
+}
+----
+`authenticatePeer`:: Specify `yes` to authenticate the client's identity.
+
+`saslMechanisms`:: Specify `EXTERNAL` to enable X.509 client certificate authentication.
+--
+
+:leveloffset!:
+
+// Enabling username/password authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-incoming-client-connections.adoc
+
+[id='enabling-username-password-authentication-{context}']
+= Enabling user name and password authentication
+
+You can use the SASL PLAIN mechanism to authenticate incoming client connections against a set of user names and passwords. You can use this method by itself, or you can combine it with SSL/TLS encryption.
+
+.Prerequisites
+
+* The `cyrus-sasl-plain` plugin is installed.
++
+Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use a particular SASL mechanism, the relevant plugin must be installed.
++
+--
+// Note about searching for an installing SASL plugins.
+Unresolved directive in ../../modules/user-guide/enabling-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+--
+
+.Procedure
+
+. If necessary, add the user names and passwords to the SASL database.
++
+--
+This example adds a new user (\user1@example.com) to the SASL database (qdrouterd.sasldb):
+
+[options="nowrap",subs="+quotes"]
+----
+$ sudo saslpasswd2 -c -f qdrouterd.sasldb -u example.com user1
+----
+
+[NOTE]
+====
+The full user name is the user name you entered plus the domain name (`__<user-name>__`@`__<domain-name>__`). Providing a domain name is not required when you add a user to the database, but if you do not provide one, a default domain will be added automatically (the hostname of the machine on which the tool is running).
+====
+--
+
+. Ensure that the `qdrouterd` process can read the SASL database.
++
+--
+If the `qdrouterd` process runs as an unprivileged user, you might need to adjust the permissions or ownership of the SASL database so that the router can read it.
+
+This example makes the qdrouterd user the owner of the SASL database:
+
+[options="nowrap"]
+----
+$ sudo chown qdrouterd /var/lib/qdrouterd/qdrouterd.sasldb
+----
+--
+
+. Open the `/etc/sasl2/qdrouterd.conf` configuration file.
++
+--
+This example shows a `/etc/sasl2/qdrouterd.conf` configuration file:
+
+[options="nowrap",subs="+quotes"]
+----
+pwcheck_method: auxprop
+auxprop_plugin: sasldb
+sasldb_path: qdrouterd.sasldb
+mech_list: ANONYMOUS DIGEST-MD5 EXTERNAL PLAIN GSSAPI
+----
+--
+
+. Verify that the `mech_list` attribute contains the `PLAIN` mechanism.
+
+. Open the `{RouterConfigFile}` configuration file.
+
+. In the `router` section, specify the path to the SASL configuration file.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+router {
+    mode: interior
+    id: Router.A
+    saslConfigDir: /etc/sasl2/
+}
+----
+`saslConfigDir`:: The absolute path to the SASL configuration file that contains the path to the SASL database that stores the user names and passwords.
+--
+
+. Configure the `listener` for this connection to authenticate clients using SASL PLAIN.
++
+--
+This example configures basic user name and password authentication for a `listener`. In this case, no SSL/TLS encryption is being used.
+
+[options="nowrap",subs="+quotes"]
+----
+listener {
+    host: 0.0.0.0
+    port: 5672
+    authenticatePeer: yes
+    saslMechanisms: PLAIN
+    }
+----
+--
+
+:leveloffset!:
+
+// Integrating with Kerberos
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-incoming-client-connections.adoc
+
+[id='integrating-with-kerberos-{context}']
+= Integrating with Kerberos
+
+If you have implemented Kerberos in your environment, you can use it with the `GSSAPI` SASL mechanism to authenticate incoming connections.
+
+.Prerequisites
+
+* A Kerberos infrastructure must be deployed in your environment.
+
+* In the Kerberos environment, a service principal of `amqp/<hostname>@<realm>` must be configured.
++
+This is the service principal that {RouterName} uses.
+
+* The `cyrus-sasl-gssapi` package must be installed on each client and the router host machine.
+
+.Procedure
+
+. On the router's host machine, open the `/etc/sasl2/qdrouterd.conf` configuration file.
++
+--
+This example shows a `/etc/sasl2/qdrouterd.conf` configuration file:
+
+[options="nowrap"]
+----
+pwcheck_method: auxprop
+auxprop_plugin: sasldb
+sasldb_path: qdrouterd.sasldb
+keytab: /etc/krb5.keytab
+mech_list: ANONYMOUS DIGEST-MD5 EXTERNAL PLAIN GSSAPI
+----
+--
+
+. Verify the following:
++
+--
+* The `mech_list` attribute contains the `GSSAPI` mechanism.
+* The `keytab` attribute points to the location of the keytab file.
+--
+
+. Open the `{RouterConfigFile}` configuration file.
+
+. In the `router` section, specify the path to the SASL configuration file.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+router {
+    mode: interior
+    id: Router.A
+    saslConfigDir: /etc/sasl2/
+}
+----
+`saslConfigDir`:: The absolute path to the SASL configuration file that contains the path to the SASL database.
+--
+
+. For each incoming connection using Kerberos for authentication, set the `listener` to use the `GSSAPI` mechanism.
++
+--
+----
+listener {
+    host: 0.0.0.0
+    port: 5672
+    authenticatePeer: yes
+    saslMechanisms: GSSAPI
+    }
+----
+--
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Securing outgoing connections
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-network-connections.adoc
+
+[id='securing-outgoing-connections-{context}']
+= Securing outgoing connections
+
+If a router is configured to create connections to external AMQP containers (such as message brokers), you can use the following methods to secure the connection:
+
+* xref:connecting-using-one-way-ssl-tls-authentication-{context}[Connect using SSL/TLS encryption (one-way authentication)]
+* xref:connecting-using-mutual-ssl-tls-authentication-{context}[Connect using SSL/TLS mutual authentication]
+* xref:connecting-using-username-password-authentication-{context}[Connect using user name and password authentication (with or without SSL/TLS encryption)]
+
+// Connecting using SSL/TLS encryption
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-one-way-ssl-tls-authentication-{context}']
+= Connecting using one-way SSL/TLS authentication
+
+You can connect to an external AMQP container (such as a broker) using one-way SSL/TLS. With this method, the router validates the external AMQP container's server certificate to verify its identity.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-one-way-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. If the router does not contain an `sslProfile` that defines a certificate that can be used to validate the external AMQP container's identity, then add one.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: broker-tls
+    caCertFile: /etc/qpid-dispatch-certs/ca.crt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`caCertFile`:: The absolute path to the CA certificate used to verify the external AMQP container's identity.
+--
+
+. Configure the `connector` for this connection to use SSL/TLS to validate the server certificate received by the broker during the SSL handshake.
++
+--
+This example configures a `connector` to a broker. When the router connects to the broker, it will use the CA certificate defined in the `broker-tls` `sslProfile` to validate the server certificate received from the broker.
+
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    sslProfile: broker-tls
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the certificate to use to validate the external AMQP container's identity.
+--
+
+:leveloffset!:
+
+// Connecting using SSL/TLS mutual authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-mutual-ssl-tls-authentication-{context}']
+= Connecting using mutual SSL/TLS authentication
+
+You can connect to an external AMQP container (such as a broker) using mutual SSL/TLS authentication. With this method, the router, acting as a client, provides a certificate to the external AMQP container so that it can verify the router's identity.
+
+.Prerequisites
+
+* An X.509 Certificate Authority (CA) must exist for the router.
+
+* A security certificate must be generated for the router and be signed by the CA.
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. If the router does not contain an `sslProfile` that defines the private keys and certificates to connect to the external AMQP container, then add one.
++
+--
+This `sslProfile` contains the locations of the private key and certificates that the router should use to authenticate with its peer.
+
+[options="nowrap",subs="+quotes"]
+----
+sslProfile {
+    name: broker-tls
+    certFile: /etc/pki/tls/certs/tls.crt
+    caCertFile: /etc/pki/tls/certs/ca.crt
+    privateKeyFile: /etc/pki/tls/private/tls.key
+    password: file:/etc/pki/tls/private/password.txt
+    ...
+}
+----
+`name`:: A unique name that you can use to refer to this `sslProfile`.
+
+`certFile`:: The absolute path to the file containing the public certificate for this router.
+
+`caCertFile`:: The absolute path to the CA certificate that the router uses to authenticate incoming clients.
+
+`privateKeyFile`:: The absolute path to the file containing the private key for this router's public certificate.
++
+[NOTE]
+====
+Ensure that the `qdrouterd` or root user can access the private key. For example:
+
+[options="nowrap",subs="+quotes"]
+----
+chmod 0600 /etc/pki/tls/private/tls.key
+chown qdrouterd /etc/pki/tls/private/tls.key
+----
+====
+
+//`password`
+Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+--
+
+. Configure the `connector` for this connection to use the `sslProfile` that you created.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    sslProfile: broker-tls
+    saslMechanisms: EXTERNAL
+    ...
+}
+----
+`sslProfile`:: The name of the `sslProfile` that defines the SSL/TLS private keys and certificates for the inter-router network.
+--
+
+:leveloffset!:
+
+// Connecting using user name and password authentication
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module is included in the following assemblies:
+//
+// securing-outgoing-connections.adoc
+
+[id='connecting-using-username-password-authentication-{context}']
+= Connecting using user name and password authentication
+
+You can use the SASL PLAIN mechanism to connect to an external AMQP container that requires a user name and password. You can use this method by itself, or you can combine it with SSL/TLS encryption.
+
+.Prerequisites
+
+* The `cyrus-sasl-plain` plugin is installed.
++
+Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use a particular SASL mechanism, the relevant plugin must be installed.
++
+--
+// Note about searching for an installing SASL plugins.
+Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+--
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+
+. Configure the `connector` for this connection to provide user name and password credentials to the external AMQP container.
++
+--
+[options="nowrap",subs="+quotes"]
+----
+connector {
+    host: 192.0.2.1
+    port: 5672
+    role: route-container
+    saslMechanisms: PLAIN
+    saslUsername: user
+    saslPassword: file:/path/to/file/password.txt
+    }
+----
+`saslPassword`:: The password to connect to the peer. By using different prefixes, you can specify the password several different ways depending on your security requirements:
++
+* Specify the absolute path to a file that contains the password. This is the most secure option, because you can set permissions on the file that contains the password. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: file:/path/to/file/password.txt
+----
+
+* Specify an environment variable that stores the password. Use this option with caution, because the environment of other processes is visible on certain platforms. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: env:PASSWORD
+----
+
+* Specify the password in clear text. This option is insecure, so it should only be used if security is not a concern. For example:
++
+[options="nowrap",subs="+quotes"]
+----
+password: pass:mypassword
+----
+--
+
+:leveloffset!:
+
+:leveloffset!:
+
+:leveloffset!:
+
+// Authorizing access to messaging resources
+Unresolved directive in configuring-router.adoc - include::authorizing-access-messaging-resources.adoc[leveloffset=+1]
+
+// Configuring logging
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-router.adoc
+
+[id='configuring-logging-{context}']
+= Configuring logging
+
+{RouterName} contains internal logging modules that provide important information about each router. For each module, you can configure the logging level, the format of the log file, and the location to which the logs should be written.
+
+// Logging modules
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-logging.adoc
+
+[id='logging-modules-{context}']
+= Logging modules
+
+{RouterName} logs are broken into different categories called _logging modules_. Each module provides important information about a particular aspect of {RouterName}.
+
+`DEFAULT`::
+The default module. This module applies defaults to all of the other logging modules.
+
+`ROUTER`::
+This module provides information and statistics about the local router. This includes how the router connects to other routers in the network, and information about the remote destinations that are directly reachable from the router (link routes, waypoints, autolinks, and so on).
+
+`ROUTER_HELLO`::
+This module provides information about the _Hello_ protocol used by interior routers to exchange Hello messages, which include information about the router's ID and a list of its reachable neighbors (the other routers with which this router has bidirectional connectivity).
+
+`ROUTER_LS`::
+This module provides information about link-state data between routers, including Router Advertisement (RA), Link State Request (LSR), and Link State Update (LSU) messages.
++
+Periodically, each router sends an LSR to the other routers and receives an LSU with the requested information. Exchanging the above information, each router can compute the next hops in the topology, and the related costs.
+
+`ROUTER_MA`::
+This module provides information about the exchange of mobile address information between routers, including Mobile Address Request (MAR) and Mobile Address Update (MAU) messages exchanged between routers. You can use this log to monitor the state of mobile addresses attached to each router.
+
+`MESSAGE`::
+This module provides information about AMQP messages sent and received by the router, including information about the address, body, and link. You can use this log to find high-level information about messages on a particular router.
+
+`SERVER`::
+This module provides information about how the router is listening for and connecting to other containers in the network (such as clients, routers, and brokers). This information includes the state of AMQP messages sent and received by the broker (open, begin, attach, transfer, flow, and so on), and the related content of those messages.
+
+`AGENT`::
+This module provides information about configuration changes made to the router from either editing the router's configuration file or using `qdmanage`.
+
+`CONTAINER`::
+This module provides information about the nodes related to the router. This includes only the AMQP relay node.
+
+`ERROR`::
+This module provides detailed information about error conditions encountered during execution.
+
+`POLICY`::
+This module provides information about policies that have been configured for the router.
+
+.Additional resources
+
+* For examples of these logging modules, see xref:troubleshooting-using-logs-{context}[].
+
+:leveloffset!:
+
+// Configuring default logging
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// configuring-logging.adoc
+
+[id='configuring-default-logging-{context}']
+= Configuring default logging
+
+You can specify the types of events that should be logged, the format of the log entries, and where those entries should be sent.
+
+.Procedure
+
+. In the `{RouterConfigFile}` configuration file, add a `log` section to set the default logging properties:
++
+--
+This example configures all logging modules to log events starting at the `info` level:
+
+[options="nowrap",subs="+quotes"]
+----
+log {
+    module: DEFAULT
+    enable: info+
+    includeTimestamp: yes
+}
+----
+
+`module`:: Specify `DEFAULT`.
+
+`enable`:: The logging level. You can specify any of the following levels (from lowest to highest):
++
+* `trace` - provides the most information, but significantly affects system performance
+* `debug` - useful for debugging, but affects system performance
+* `info` - provides general information without affecting system performance
+* `notice` - provides general information, but is less verbose than `info`
+* `warning` - provides information about issues you should be aware of, but which are not errors
+* `error` - error conditions that you should address
+* `critical` - critical system issues that you must address immediately
+
++
+To specify multiple levels, use a comma-separated list. You can also use `+` to specify a level and all levels above it. For example, `trace,debug,warning+` enables trace, debug, warning, error, and critical levels. For default logging, you should typically use the `info+` or `notice+` level. These levels will provide general information, warnings, and errors for all modules without affecting the performance of {RouterName}.
+
+`includeTimestamp`:: Set this to `yes` to include the timestamp in all logs.
+
+For information about additional log attributes, see link:{qdrouterdConfManPageUrl}#_log[log] in the `qdrouterd.conf` man page.
+--
+
+. If you want to configure non-default logging for any of the logging modules, add an additional `log` section for each module that should not follow the default.
++
+--
+This example configures the `ROUTER` logging module to log `debug` events:
+[options="nowrap",subs="+quotes"]
+----
+log {
+    module: ROUTER
+    enable: debug
+    includeTimestamp: yes
+}
+----
+--
+
+.Additional resources
+
+* For more information about viewing and using logs, see xref:troubleshooting-{context}[].
+
+:leveloffset!:
+
+:leveloffset!:

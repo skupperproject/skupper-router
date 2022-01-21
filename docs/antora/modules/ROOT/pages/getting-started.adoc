@@ -1,0 +1,385 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+
+[id='getting-started-{context}']
+= Getting started
+
+This section provides a quick introduction to {RouterName} by showing you how to install {RouterName}, start the router with the default configuration settings, and distribute messages between two clients.
+
+:context: getting-started
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='installing-router-linux-{context}']
+= Installing {RouterName} on {RouterPlatform}
+
+Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-intro.adoc[]
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-steps.adoc[]
+
+:leveloffset!:
+:!context:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='exploring-default-router-configuration-file-{context}']
+= Exploring the default router configuration file
+
+The router's configuration file (`qdrouterd.conf`) controls the way in which the router functions. The default configuration file contains the minimum number of settings required for the router to run. As you become more familiar with the router, you can add to or change these settings, or create your own configuration files.
+
+By default, the router configuration file defines the following settings for the router:
+
+* Operating mode
+* How it listens for incoming connections
+* Routing patterns for the message routing mechanism
+
+.Procedure
+
+. Open the following file: `{RouterConfigFile}`.
++
+--
+When {RouterName} is installed, `qdrouterd.conf` is installed in this directory. When the router is started, it runs with the settings defined in this file.
+--
+
+. Review the default settings in `qdrouterd.conf`.
++
+--
+.Default configuration file
+[options="nowrap"]
+----
+router {
+    mode: standalone // <1>
+    id: Router.A // <2>
+}
+
+listener { // <3>
+    host: 0.0.0.0
+    port: amqp
+    authenticatePeer: no
+}
+
+address { // <4>
+    prefix: closest
+    distribution: closest
+}
+
+address {
+    prefix: multicast
+    distribution: multicast
+}
+
+address {
+    prefix: unicast
+    distribution: closest
+}
+
+address {
+    prefix: exclusive
+    distribution: closest
+}
+
+address {
+    prefix: broadcast
+    distribution: multicast
+}
+----
+<1> By default, the router operates in _standalone_ mode. This means that it can only communicate with endpoints that are directly connected to it. It cannot connect to other routers, or participate in a router network.
+<2> The unique identifier of the router. This ID is used as the `container-id` (container name) at the AMQP protocol level. If it is not specified, the router shall generate a random identifier at startup.
+<3> The `listener` entity handles incoming connections from client endpoints. By default, the router listens on all network interfaces on the default AMQP port (5672).
+<4> By default, the router is configured to use the message routing mechanism. Each `address` entity defines how messages that are received with a particular address `prefix` should be distributed. For example, all messages with addresses that start with `closest` will be distributed using the `closest` distribution pattern.
+
+[NOTE]
+====
+If a client requests a message with an address that is not defined in the router's configuration file, the `balanced` distribution pattern will be used automatically.
+====
+--
+
+.Additional resources
+
+* For more information about the router configuration file (including available entities and attributes), see the {qdrouterdManPageLink}.
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='starting-router-getting-started-{context}']
+= Starting the router
+
+After installing {RouterName}, you start the router by using the `qdrouterd` command.
+
+.Procedure
+
+. Start the router:
++
+--
+[source,bash,options="nowrap"]
+----
+$ qdrouterd
+----
+
+The router starts, using the default configuration file stored at `/etc/qpid-dispatch/qdrouterd.conf`.
+--
+
+. Review the `qdrouterd` command output to verify the router status.
++
+--
+This example shows that the router was correctly installed, is running, and is ready to route traffic between clients:
+
+[options="nowrap"]
+----
+$ qdrouterd
+Fri May 20 09:38:03 2017 SERVER (info) Container Name: Router.A
+Fri May 20 09:38:03 2017 ROUTER (info) Router started in Standalone mode
+Fri May 20 09:38:03 2017 ROUTER (info) Router Core thread running. 0/Router.A
+Fri May 20 09:38:03 2017 ROUTER (info) In-process subscription M/$management
+Fri May 20 09:38:03 2017 AGENT (info) Activating management agent on $_management_internal
+Fri May 20 09:38:03 2017 ROUTER (info) In-process subscription L/$management
+Fri May 20 09:38:03 2017 ROUTER (info) In-process subscription L/$_management_internal
+Fri May 20 09:38:03 2017 DISPLAYNAME (info) Activating DisplayNameService on $displayname
+Fri May 20 09:38:03 2017 ROUTER (info) In-process subscription L/$displayname
+Fri May 20 09:38:03 2017 CONN_MGR (info) Configured Listener: 0.0.0.0:amqp proto=any role=normal
+Fri May 20 09:38:03 2017 POLICY (info) Policy configured maximumConnections: 0, policyFolder: '', access rules enabled: 'false'
+Fri May 20 09:38:03 2017 POLICY (info) Policy fallback defaultApplication is disabled
+Fri May 20 09:38:03 2017 SERVER (info) Operational, 4 Threads Running
+----
+--
+
+.Additional resources
+
+* The {qdrouterdManPageLink}.
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='sending-test-messages-{context}']
+= Sending test messages
+
+After starting the router, send some test messages to see how the router can connect two endpoints by distributing messages between them.
+
+This procedure demonstrates a simple configuration consisting of a single router with two clients connected to it: a sender and a receiver. The receiver wants to receive messages on a specific address, and the sender sends
+messages to that address.
+
+A broker is not used in this procedure, so there is no _"store and forward"_ mechanism in the middle. Instead, the messages flow from the sender, through the router, to the receiver only if the receiver is online, and the sender can confirm that the messages have arrived at their destination.
+
+.Prerequisites
+
+{ClientAmqpPythonName} must be installed. For more information, see {ClientAmqpPythonUrl}.
+
+.Procedure
+
+. Navigate to the {ClientAmqpPythonName} examples directory.
++
+--
+[source,bash,options="nowrap",subs="+quotes"]
+----
+$ cd __<install-dir>__/examples/python/
+----
+
+<install-dir>:: The directory where you installed {ClientAmqpPythonName}.
+--
+
+. Start the `simple_recv.py` receiver client.
++
+--
+[source,bash,options="nowrap"]
+----
+$ python simple_recv.py -a 127.0.0.1:5672/examples -m 5
+----
+
+This command starts the receiver and listens on the `examples` address (`127.0.0.1:5672/examples`). The receiver is also set to receive a maximum of five messages.
+
+[NOTE]
+====
+In practice, the order in which you start senders and receivers does not matter. In both cases, messages will be sent as soon as the receiver comes online.
+====
+--
+
+. In a new terminal window, navigate to the Python examples directory and run the `simple_send.py` example:
++
+--
+[source,bash,options="nowrap",subs="+quotes"]
+----
+$ cd __<install-dir>__/examples/python/
+$ python simple_send.py -a 127.0.0.1:5672/examples -m 5
+----
+
+This command sends five auto-generated messages to the `examples` address (`127.0.0.1:5672/examples`) and then confirms that they were delivered and acknowledged by the receiver:
+
+[source,bash,options="nowrap"]
+----
+all messages confirmed
+----
+--
+
+. Verify that the receiver client received the messages.
++
+--
+The receiver client should display the contents of the five messages:
+
+[source,bash,options="nowrap"]
+----
+{u'sequence': 1L}
+{u'sequence': 2L}
+{u'sequence': 3L}
+{u'sequence': 4L}
+{u'sequence': 5L}
+----
+--
+
+:leveloffset!:
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='next-steps-{context}']
+= Next steps
+
+After using {RouterName} to distribute messages between two clients, you can use the following sections to learn more about {RouterName} configuration, deployment, and management.
+
+xref:configuration[Change the router's configuration]::
+{RouterName} ships with default settings that are suitable for many basic use cases. You can further experiment with the standalone router that you used in the _Getting started_ example by changing the router's essential properties, network connections, security settings, logging, and routing mechanisms.
+
+xref:installing-router-{context}[Install and configure {RouterName}]::
+{RouterName} is typically deployed in router networks. You can design a router network of any arbitrary topology to interconnect the endpoints in your messaging network.
+
+xref:management[Monitor and manage {RouterName}]::
+You can use the web console and command-line management tools to monitor the status and performance of the routers in your router network.
+
+:leveloffset!:

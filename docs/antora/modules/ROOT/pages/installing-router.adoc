@@ -1,0 +1,218 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This assembly is included in the following assemblies:
+//
+// book.adoc
+
+[id='installing-router-{context}']
+= Installing {RouterName}
+
+You can deploy {RouterName} as a single standalone router, or as multiple routers connected together in a router network. Router networks may represent any arbitrary topology, enabling you to design the network to best fit your requirements.
+
+With {RouterName}, the router network topology is independent from the message routing. This means that messaging clients always experience the same message routing behavior regardless of the underlying network topology. Even in a multi-site or hybrid cloud router network, the connected endpoints behave as if they were connected to a single, logical router.
+
+To create the router network topology, complete the following:
+
+. xref:router-deployment-guidelines-{context}[Review the deployment guidelines].
++
+You should understand the different router operating modes you can deploy in your topology, and be aware of security requirements for the interior portion of the router network.
+
+. xref:installing-router-linux-{context}[Install {RouterName} on the host].
++
+If you are creating a router network with multiple routers, repeat this step on each host.
+
+. xref:preparing-router-configurations-{context}[Prepare the router configurations].
++
+After installing {RouterName}, configure it to define how it should connect to other routers and endpoints, and how it should operate.
+
+. xref:starting-router-{context}[Start the routers].
++
+After the routers are configured, start them so that they can connect to each other and begin routing messages.
+
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// Module included in the following assemblies:
+//
+// getting-started.adoc
+
+[id='installing-router-linux-{context}']
+= Installing {RouterName} on {RouterPlatform}
+
+Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-intro.adoc[]
+
+.Procedure
+
+Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-steps.adoc[]
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+// This module is included in the following assemblies:
+//
+// installing-router.adoc
+
+[id='preparing-router-configurations-{context}']
+= Preparing router configurations
+
+After installing {RouterName}, configure it to define how it should connect to other routers and endpoints, and how it should operate. If you are creating a router network, complete this workflow for each router in the network.
+
+.Prerequisites
+
+* {RouterName} is installed on the host.
+
+.Procedure
+
+. xref:configuring-router-properties-{context}[Configure essential router properties].
++
+To participate in a router network, a router must be configured with a unique ID and an operating mode.
+
+. xref:configuring-network-connections-{context}[Configure network connections].
+
+.. Connect the router to any other routers in the router network.
++
+Repeat this step for each additional router to which you want to connect this router.
+
+.. If the router should connect with an AMQP client, configure a client connection.
+
+.. If the router should connect to an external AMQP container (such as a message broker), configure the connection.
+
+. xref:securing-network-connections-{context}[Secure each of the connections that you configured in the previous step].
+
+. (Optional) Configure any additional properties.
++
+These properties should be configured the same way on each router. Therefore, you should only configure each one once, and then copy the configuration to each additional router in the router network.
+
+** xref:configuring-authorization-{context}[Authorization]
++
+If necessary, configure policies to control which messaging resources clients are able to access on the router network.
+
+** xref:configuring-routing-{context}[Routing]
++
+{RouterName} automatically routes messages without any configuration: clients can send messages to the router network, and the router automatically routes them to their destinations. However, you can configure the routing to meet your exact requirements. You can configure the routing patterns to be used for certain addresses, create waypoints and autolinks to route messages through broker queues, and create link routes to connect clients to brokers.
+
+** xref:configuring-logging-{context}[Logging]
++
+You can set the default logging configuration to ensure that events are logged at the correct level for your environment.
+
+. Repeat this workflow for each additional router that you want to add to the router network.
+
+:leveloffset!:
+:leveloffset: +1
+
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+[id='starting-router-{context}']
+= Starting a router
+
+You use the `qdrouterd` command to start a router. You can start a router in the foreground, the background, or as a service.
+
+.Procedure
+
+* Do one of the following:
++
+--
+[cols="30,70"]
+|===
+| To... | Enter this command...
+
+| Start the router in the foreground
+a|
+[source,bash,options="nowrap"]
+----
+$ qdrouterd
+----
+
+| Start the router in the background as a daemon
+a|
+[source,bash,options="nowrap"]
+----
+$ qdrouterd -d
+----
+
+| Start the router as a service
+a|
+Unresolved directive in ../../modules/user-guide/starting-routers.adoc - include::{FragmentDir}/fragment-start-router-service-command.adoc[]
+
+[NOTE]
+====
+If you start the router as a service, the `systemd` `LimitNOFILE` limit affects the number of connections that can be open for the router. If you reach the limit, the router is not able to accept any more connections, and an error message is logged indicating "Too many open files". To avoid reaching this limit, increase the `LimitNOFILE` value for the `systemd` process.
+
+Unresolved directive in ../../modules/user-guide/starting-routers.adoc - include::{FragmentDir}/fragment-systemd-limitnofile-fmi.adoc[]
+====
+
+|===
+--
+
+:leveloffset!:
