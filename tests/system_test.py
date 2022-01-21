@@ -162,20 +162,20 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
                 raise
 
 
-def get_local_host_socket(protocol_family='IPv4'):
-    if protocol_family == 'IPv4':
+def get_local_host_socket(socket_address_family='IPv4'):
+    if socket_address_family == 'IPv4':
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         host = '127.0.0.1'
-    elif protocol_family == 'IPv6':
+    elif socket_address_family == 'IPv6':
         s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         host = '::1'
 
     return s, host
 
 
-def port_available(port, protocol_family='IPv4'):
+def port_available(port, socket_address_family='IPv4'):
     """Return true if connecting to host:port gives 'connection refused'."""
-    s, host = get_local_host_socket(protocol_family)
+    s, host = get_local_host_socket(socket_address_family)
     available = False
     try:
         s.connect((host, port))
@@ -188,7 +188,7 @@ def port_available(port, protocol_family='IPv4'):
     return available
 
 
-def wait_port(port, protocol_family='IPv4', **retry_kwargs):
+def wait_port(port, socket_address_family='IPv4', **retry_kwargs):
     """Wait up to timeout for port (on host) to be connectable.
     Takes same keyword arguments as retry to control the timeout"""
     def check(e):
@@ -201,7 +201,7 @@ def wait_port(port, protocol_family='IPv4', **retry_kwargs):
     def connect():
         # macOS gives EINVAL for all connection attempts after a ECONNREFUSED
         # man 3 connect: "If connect() fails, the state of the socket is unspecified. [...]"
-        s, host = get_local_host_socket(protocol_family)
+        s, host = get_local_host_socket(socket_address_family)
         try:
             s.connect((host, port))
         finally:
@@ -216,8 +216,8 @@ def wait_port(port, protocol_family='IPv4', **retry_kwargs):
 def wait_ports(ports, **retry_kwargs):
     """Wait up to timeout for all ports (on host) to be connectable.
     Takes same keyword arguments as retry to control the timeout"""
-    for port, protocol_family in ports.items():
-        wait_port(port=port, protocol_family=protocol_family, **retry_kwargs)
+    for port, socket_address_family in ports.items():
+        wait_port(port=port, socket_address_family=socket_address_family, **retry_kwargs)
 
 
 def message(**properties):
@@ -571,8 +571,8 @@ class Qdrouterd(Process):
         """
         ports_fam = {}
         for l in self.config.sections('listener'):
-            if l.get('protocolFamily'):
-                ports_fam[l['port']] = l['protocolFamily']
+            if l.get('socketAddressFamily'):
+                ports_fam[l['port']] = l['socketAddressFamily']
             else:
                 ports_fam[l['port']] = 'IPv4'
 
@@ -586,12 +586,12 @@ class Qdrouterd(Process):
     def _cfg_2_host_port(self, c):
         host = c['host']
         port = c['port']
-        protocol_family = c.get('protocolFamily', 'IPv4')
-        if protocol_family == 'IPv6':
+        socket_address_family = c.get('socketAddressFamily', 'IPv4')
+        if socket_address_family == 'IPv6':
             return "[%s]:%s" % (host, port)
-        elif protocol_family == 'IPv4':
+        elif socket_address_family == 'IPv4':
             return "%s:%s" % (host, port)
-        raise Exception("Unknown protocol family: %s" % protocol_family)
+        raise Exception("Unknown socket address family: %s" % socket_address_family)
 
     @property
     def http_addresses(self):
@@ -675,10 +675,10 @@ class Qdrouterd(Process):
             return count == 0
         assert retry(check, **retry_kwargs)
 
-    def get_host(self, protocol_family):
-        if protocol_family == 'IPv4':
+    def get_host(self, socket_address_family):
+        if socket_address_family == 'IPv4':
             return '127.0.0.1'
-        elif protocol_family == 'IPv6':
+        elif socket_address_family == 'IPv6':
             return '::1'
         else:
             return '127.0.0.1'
@@ -692,7 +692,7 @@ class Qdrouterd(Process):
         @param retry_kwargs: keyword args for L{retry}
         """
         for c in self.config.sections('connector'):
-            assert retry(lambda: self.is_connected(port=c['port'], host=self.get_host(c.get('protocolFamily'))),
+            assert retry(lambda: self.is_connected(port=c['port'], host=self.get_host(c.get('socketAddressFamily'))),
                          **retry_kwargs), "Port not connected %s" % c['port']
 
     def wait_ready(self, **retry_kwargs):
@@ -799,7 +799,7 @@ class Tester(object):
     next_port = random.randint(port_range[0], port_range[1])
 
     @classmethod
-    def get_port(cls, protocol_family='IPv4'):
+    def get_port(cls, socket_address_family='IPv4'):
         """Get an unused port"""
         def advance():
             """Advance with wrap-around"""
@@ -807,7 +807,7 @@ class Tester(object):
             if cls.next_port >= cls.port_range[1]:
                 cls.next_port = cls.port_range[0]
         start = cls.next_port
-        while not port_available(cls.next_port, protocol_family):
+        while not port_available(cls.next_port, socket_address_family):
             advance()
             if cls.next_port == start:
                 raise Exception("No available ports in range %s", cls.port_range)

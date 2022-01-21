@@ -112,7 +112,7 @@ class CommandLineTest2(TestCase):
         cls.config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': CommandLineTest2.testname}),
             ('listener', {'port': CommandLineTest2.testport}),
-            ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'output': os.getcwd() + "/" + CommandLineTest2.name + '.log'})
+            ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'outputFile': os.getcwd() + "/" + CommandLineTest2.name + '.log'})
         ])
 
     def run_qdrouterd_as_daemon(self, config_file_name, pid_file_name):

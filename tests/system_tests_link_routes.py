@@ -125,9 +125,8 @@ class LinkRouteTest(TestCase):
                    ('linkRoute', {'pattern': 'a.*.toA.#', 'containerId': 'QDR.A', 'direction': 'out'}),
 
                    # addresses matching pattern 'a.*.toD.#' route to QDR.D
-                   # Dont change dir to direction here so we can make sure that the dir attribute is still working.
-                   ('linkRoute', {'pattern': 'a.*.toD.#', 'containerId': 'QDR.D', 'dir': 'in'}),
-                   ('linkRoute', {'pattern': 'a.*.toD.#', 'containerId': 'QDR.D', 'dir': 'out'})
+                   ('linkRoute', {'pattern': 'a.*.toD.#', 'containerId': 'QDR.D', 'direction': 'in'}),
+                   ('linkRoute', {'pattern': 'a.*.toD.#', 'containerId': 'QDR.D', 'direction': 'out'})
 
                ]
                )

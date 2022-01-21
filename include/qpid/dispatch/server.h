@@ -128,10 +128,10 @@ typedef struct qd_server_config_t {
     char *port;
 
     /**
-     * Protocol family that the socket will use when binding listener or connector.
+     * Socket address family that the socket will use when binding listener or connector.
      * Possible values are IPv4 or IPv6. If not specified, the protocol family will be automatically determined from the address
      */
-    char *protocol_family;
+    char *socket_address_family;
 
     /**
      * Expose simple liveness check.

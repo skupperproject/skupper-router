@@ -147,18 +147,13 @@ class QdSSLUseridTest(TestCase):
                             'password': 'pass:server-password'}),
 
             # should translate a display name
-            # specifying both passwordFile and password, password takes precedence.
             ('sslProfile', {'name': 'server-ssl13',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'uidFormat': '2',
                             'uidNameMappingFile': ssl_profile2_json,
-                            'password': 'server-password',
-                            # If both passwordFile and password are provided, the passwordFile is ignored.
-                            # Here we specify a bad password in the passwordFile and
-                            # it is ignored.
-                            'passwordFile': cls.ssl_file('server-password-file-bad.txt')}),
+                            'password': 'server-password'}),
 
             ('sslProfile', {'name': 'server-ssl14',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
@@ -166,9 +161,7 @@ class QdSSLUseridTest(TestCase):
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'uidFormat': '1',
                             'uidNameMappingFile': ssl_profile1_json,
-                            # Use just the deprecated passwordFile entity to make sure it is backward
-                            # compatible.
-                            'passwordFile': cls.ssl_file('server-password-file.txt')}),
+                            'password': 'file:' + cls.ssl_file('server-password-file.txt')}),
 
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl1', 'authenticatePeer': 'yes',
                           'requireSsl': 'yes', 'saslMechanisms': 'EXTERNAL'}),

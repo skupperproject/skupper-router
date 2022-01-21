@@ -88,7 +88,7 @@ class OpenPropertiesClient(MessagingHandler):
 
     def run(self, host=None, port=None, pf=None):
         if port:
-            wait_port(port, protocol_family=pf)
+            wait_port(port, socket_address_family=pf)
             if pf and pf.lower() == 'ipv6':
                 self._addr = "amqp://[%s]:%s" % (host, port)
             else:
@@ -275,7 +275,7 @@ class OpenPropertiesQdManageTest(TestCase):
 
             client = client_class(router)
             client.run(host=rc.get("host"), port=new_port,
-                       pf=rc.get("protocolFamily", "IPv4"))
+                       pf=rc.get("socketAddressFamily", "IPv4"))
             router.teardown()
 
     def test_01_verify_listener_properties(self):

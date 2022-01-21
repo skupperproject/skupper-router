@@ -310,7 +310,7 @@ class OneRouterTest(TestCase):
         policy_config_path = os.path.join(DIR, 'one-router-policy')
         OneRouterTest.listen_port = cls.tester.get_port()
         config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': 'QDR', 'allowUnsettledMulticast': 'yes'}),
+            ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('policy', {'policyDir': policy_config_path,
                         'enableVhostPolicy': 'true'}),
 
@@ -3507,7 +3507,7 @@ class OneRouterUnavailableCoordinatorTest(TestCase):
         COORDINATOR = "$coordinator"
         long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
         qd_manager = QdManager(self, address=self.address)
-        args = {"prefix": COORDINATOR, "connection": "broker", "dir": "in"}
+        args = {"prefix": COORDINATOR, "connection": "broker", "direction": "in"}
         qd_manager.create(long_type, args)
         link_route_created = False
 

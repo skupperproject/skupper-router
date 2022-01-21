@@ -276,14 +276,12 @@ class MaxMessageSizeBlockOversize(TestCase):
             config = [
                 ('router', {'mode': mode,
                             'id': name,
-                            'allowUnsettledMulticast': 'yes',
                             'workerThreads': W_THREADS}),
                 ('listener', {'role': 'normal',
                               'port': cls.tester.get_port()}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
                 ('policy', {'maxConnections': 100, 'enableVhostPolicy': 'true', 'maxMessageSize': max_size, 'defaultVhost': '$default'}),
                 ('vhost', {'hostname': '$default',
-                           'allowUnknownUser': 'true',
                            'groups': {
                                '$default': {
                                    'users': '*',

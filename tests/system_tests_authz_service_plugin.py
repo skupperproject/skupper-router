@@ -82,13 +82,11 @@ mech_list: SCRAM-SHA-1 PLAIN
         cls.tester.qdrouterd('router', Qdrouterd.Config([
             ('sslProfile', {'name': 'myssl', 'caCertFile': cls.ssl_file('ca-certificate.pem')}),
             ('policy', {'maxConnections': 2, 'policyDir': policy_config_path, 'enableVhostPolicy': 'true'}),
-            # authService attribute has been deprecated. We are using it here to make sure that we are
-            # still backward compatible.
             ('authServicePlugin', {'name': 'myauth', 'sslProfile': 'myssl', 'port': cls.auth_service_port, 'host': 'localhost'}),
             ('listener', {'host': 'localhost', 'port': cls.router_port, 'role': 'normal', 'saslPlugin': 'myauth', 'saslMechanisms': 'SCRAM-SHA-1 PLAIN'}),
             ('router', {'mode': 'standalone', 'id': 'router',
                         'saslConfigName': 'tests-mech-SCRAM',
-                        'saslConfigPath': os.getcwd()})
+                        'saslConfigDir': os.getcwd()})
         ])).wait_ready()
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
@@ -164,13 +162,11 @@ class AuthServicePluginAuthzDeprecatedTest(AuthServicePluginAuthzTest):
         cls.router_port = cls.tester.get_port()
         cls.tester.qdrouterd('router', Qdrouterd.Config([
             ('sslProfile', {'name': 'myssl', 'caCertFile': cls.ssl_file('ca-certificate.pem')}),
-            # authService and authSslProfile attributea have been deprecated.
-            # We are using it here to make sure that we are backward compatible.
-            ('authServicePlugin', {'name': 'myauth', 'authSslProfile': 'myssl', 'authService': 'localhost:%d' % cls.auth_service_port}),
+            ('authServicePlugin', {'name': 'myauth', 'sslProfile': 'myssl', 'host': 'localhost', 'port': cls.auth_service_port}),
             ('listener', {'host': 'localhost', 'port': cls.router_port, 'role': 'normal', 'saslPlugin': 'myauth', 'saslMechanisms': 'SCRAM-SHA-1 PLAIN'}),
             ('router', {'mode': 'standalone', 'id': 'router',
                         'saslConfigName': 'tests-mech-SCRAM',
-                        'saslConfigPath': os.getcwd()})
+                        'saslConfigDir': os.getcwd()})
         ])).wait_ready()
 
 

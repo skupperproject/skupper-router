@@ -25,7 +25,7 @@ from system_test import unittest
 from qpid_dispatch_internal.policy.policy_util import is_ipv6_enabled
 
 
-class ProtocolFamilyTest(TestCase):
+class SocketAddressFamilyTest(TestCase):
     @classmethod
     def setUpClass(cls):
         """
@@ -33,24 +33,22 @@ class ProtocolFamilyTest(TestCase):
         There is a call to wait_router_connected to make sure that the routers are able to communicate with each
         other on ports using the assigned protocol family.
         """
-        super(ProtocolFamilyTest, cls).setUpClass()
+        super(SocketAddressFamilyTest, cls).setUpClass()
 
         def router(name, connection):
 
             config = [
                 ('router', {'mode': 'interior', 'id': 'QDR.%s' % name}),
 
-                # No protocolFamily is specified for this listener.
                 # This will test if the router defaults host to 127.0.0.1 and if the router auto-detects protocol family
-
                 ('listener', {'port': cls.tester.get_port()}),
 
                 # Specify host as 127.0.0.1 and protocol family as IPv4
-                ('listener', {'host': '127.0.0.1', 'protocolFamily': 'IPv4', 'port': cls.tester.get_port()}),
+                ('listener', {'host': '127.0.0.1', 'socketAddressFamily': 'IPv4', 'port': cls.tester.get_port()}),
 
                 # Specify protocol family as IPv4 but don't specify any host
                 # This will test if the router defaults the host field to 127.0.0.1
-                ('listener', {'protocolFamily': 'IPv4', 'port': cls.tester.get_port()}),
+                ('listener', {'socketAddressFamily': 'IPv4', 'port': cls.tester.get_port()}),
 
                 # Specify the host as 127.0.0.1
                 # This will test router's auto-detection of protocol family
@@ -58,7 +56,8 @@ class ProtocolFamilyTest(TestCase):
 
 
                 # Specify host as ::1 and protocol family as IPv6
-                ('listener', {'host': '::1', 'protocolFamily': 'IPv6', 'port': cls.tester.get_port(protocol_family='IPv6')}),
+                ('listener', {'host': '::1', 'socketAddressFamily': 'IPv6',
+                              'port': cls.tester.get_port(socket_address_family='IPv6')}),
 
             ] + connection
 
@@ -73,19 +72,19 @@ class ProtocolFamilyTest(TestCase):
 
         cls.routers = []
 
-        inter_router_port = cls.tester.get_port(protocol_family='IPv6')
-        inter_router_ipv4_port = cls.tester.get_port(protocol_family='IPv4')
+        inter_router_port = cls.tester.get_port(socket_address_family='IPv6')
+        inter_router_ipv4_port = cls.tester.get_port(socket_address_family='IPv4')
 
         router('A',
                [
-                   ('listener', {'host': '::1', 'role': 'inter-router', 'protocolFamily': 'IPv6', 'port': inter_router_port})
+                   ('listener', {'host': '::1', 'role': 'inter-router', 'socketAddressFamily': 'IPv6', 'port': inter_router_port})
                ]
                )
 
         router('B',
                [
                    # Tests an IPv6 connector
-                   ('connector', {'host': '::1', 'role': 'inter-router', 'protocolFamily': 'IPv6', 'port': inter_router_port}),
+                   ('connector', {'host': '::1', 'role': 'inter-router', 'socketAddressFamily': 'IPv6', 'port': inter_router_port}),
                    ('listener', {'host': '127.0.0.1', 'role': 'inter-router', 'port': inter_router_ipv4_port})
                ]
 

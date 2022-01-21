@@ -2,8 +2,8 @@
     ["router", {
 	"id": "dispatch",
 	"saslConfigName": "policy-photoserver-sasl",
-	"saslConfigPath": "${CMAKE_CURRENT_BINARY_DIR}/policy-2",
-	"debugDump": "qddebug.txt"
+	"saslConfigDir": "${CMAKE_CURRENT_BINARY_DIR}/policy-2",
+	"debugDumpFile": "qddebug.txt"
     }],
     ["listener", {
 	"host": "0.0.0.0",

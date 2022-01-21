@@ -117,7 +117,7 @@ class NameCollisionTest(TestCase):
         cls.address = cls.router.addresses[0]
 
     def test_name_collision(self):
-        args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "dir": "in"}
+        args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "direction": "in"}
         # Add autoLink with the same name as the one already present.
         al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
         addr_long_type = 'org.apache.qpid.dispatch.router.config.address'
@@ -133,7 +133,7 @@ class NameCollisionTest(TestCase):
 
         # Try to add duplicate linkRoute and make sure it fails
         args = {"name": "linkRoute", "prefix": "linkRoute",
-                "connection": "broker", "dir": "in"}
+                "connection": "broker", "direction": "in"}
 
         mgmt = QdManager(self, address=self.router.addresses[0])
         test_pass = False
@@ -163,26 +163,26 @@ class NameCollisionTest(TestCase):
         # insert a linkRoute with the name of an existing autoLink and make
         # sure that is ok
         args = {"name": "autoLink", "prefix": "linkRoute",
-                "connection": "broker", "dir": "in"}
+                "connection": "broker", "direction": "in"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(lr_long_type, args)
 
         # insert a linkRoute with the name of an existing addr config and make
         # sure that is ok
         args = {"name": "address", "prefix": "linkRoute",
-                "connection": "broker", "dir": "in"}
+                "connection": "broker", "direction": "in"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(lr_long_type, args)
 
         # insert an autoLink with the name of an existing linkRoute and make
         # sure that is ok
-        args = {"name": "linkRoute", "address": "autoLink1", "connection": "broker", "dir": "in"}
+        args = {"name": "linkRoute", "address": "autoLink1", "connection": "broker", "direction": "in"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(al_long_type, args)
 
         # insert an autoLink with the name of an existing address and make
         # sure that is ok
-        args = {"name": "address", "address": "autoLink1", "connection": "broker", "dir": "in"}
+        args = {"name": "address", "address": "autoLink1", "connection": "broker", "direction": "in"}
         al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(al_long_type, args)
@@ -514,8 +514,10 @@ class AutolinkTest(TestCase):
             # Create a pair of auto-links with a different external address
             # Leave the direction as dir to test backward compatibility.
             #
-            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'dir': 'in'}),
-            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'dir': 'out'}),
+            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2',
+                          'containerId': 'container.4', 'direction': 'in'}),
+            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2',
+                          'containerId': 'container.4', 'direction': 'out'}),
 
             #
             # Note here that the connection is set to a previously declared 'myListener'

@@ -59,7 +59,6 @@ class MulticastLinearTest(TestCase):
             config = [
                 ('router', {'mode': mode,
                             'id': name,
-                            'allowUnsettledMulticast': 'yes',
                             'workerThreads': W_THREADS}),
                 ('listener', {'role': 'normal',
                               'port': cls.tester.get_port(),

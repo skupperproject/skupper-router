@@ -165,15 +165,15 @@ void qd_server_config_free(qd_server_config_t *cf)
     free(cf->port);
     free(cf->host_port);
     free(cf->role);
-    if (cf->http_root_dir)   free(cf->http_root_dir);
-    if (cf->name)            free(cf->name);
-    if (cf->protocol_family) free(cf->protocol_family);
-    if (cf->sasl_username)   free(cf->sasl_username);
-    if (cf->sasl_password)   free(cf->sasl_password);
-    if (cf->sasl_mechanisms) free(cf->sasl_mechanisms);
-    if (cf->ssl_profile)     free(cf->ssl_profile);
-    if (cf->failover_list)   qd_failover_list_free(cf->failover_list);
-    if (cf->log_message)     free(cf->log_message);
+    if (cf->http_root_dir)         free(cf->http_root_dir);
+    if (cf->name)                  free(cf->name);
+    if (cf->socket_address_family) free(cf->socket_address_family);
+    if (cf->sasl_username)         free(cf->sasl_username);
+    if (cf->sasl_password)         free(cf->sasl_password);
+    if (cf->sasl_mechanisms)       free(cf->sasl_mechanisms);
+    if (cf->ssl_profile)           free(cf->ssl_profile);
+    if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
+    if (cf->log_message)           free(cf->log_message);
 
     if (cf->ssl_certificate_file)       free(cf->ssl_certificate_file);
     if (cf->ssl_private_key_file)       free(cf->ssl_private_key_file);
@@ -372,13 +372,13 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
     config->role                 = qd_entity_get_string(entity, "role");              CHECK();
     config->inter_router_cost    = qd_entity_opt_long(entity, "cost", 1);             CHECK();
-    config->protocol_family      = qd_entity_opt_string(entity, "protocolFamily", 0); CHECK();
+    config->socket_address_family      = qd_entity_opt_string(entity, "socketAddressFamily", 0); CHECK();
     config->healthz              = qd_entity_opt_bool(entity, "healthz", true);       CHECK();
     config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
     config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
     config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
     config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", false);   CHECK();
-    config->http = config->http || config->http_root_dir; /* httpRoot implies http */
+    config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
     config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
     config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
     uint64_t ssn_frames          = qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
@@ -395,13 +395,6 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
-
-    char *unused                 = qd_entity_opt_string(entity, "trustedCertsFile", 0);
-    if (unused) {
-        qd_log(qd->connection_manager->log_source, QD_LOG_WARNING,
-               "Configuration listener attribute 'trustedCertsFile' is not used. Specify sslProfile caCertFile instead.");
-        free(unused);
-    }
 
     set_config_host(config, entity);
 
@@ -606,7 +599,6 @@ qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd
     ssl_profile->ssl_certificate_file       = qd_entity_opt_string(entity, "certFile", 0); CHECK();
     ssl_profile->ssl_private_key_file       = qd_entity_opt_string(entity, "privateKeyFile", 0); CHECK();
     ssl_profile->ssl_password               = qd_entity_opt_string(entity, "password", 0); CHECK();
-    char *password_file                     = qd_entity_opt_string(entity, "passwordFile", 0); CHECK();
 
     if (ssl_profile->ssl_password) {
         //
@@ -626,15 +618,6 @@ qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd
             }
         }
     }
-    else if (password_file) {
-        //
-        // Warn the user that the passwordFile attribute has been deprecated.
-        //
-        qd_log(cm->log_source, QD_LOG_WARNING, "Attribute passwordFile of entity sslProfile has been deprecated. Use password field with the file: prefix instead.");
-        qd_set_password_from_file(password_file, &ssl_profile->ssl_password, cm->log_source);
-    }
-
-    free(password_file);
 
     ssl_profile->ssl_ciphers   = qd_entity_opt_string(entity, "ciphers", 0);                   CHECK();
     ssl_profile->ssl_protocols = qd_entity_opt_string(entity, "protocols", 0);                 CHECK();
@@ -681,11 +664,6 @@ qd_config_sasl_plugin_t *qd_dispatch_configure_sasl_plugin(qd_dispatch_t *qd, qd
 
     free(auth_port);
 
-    if (!sasl_plugin->auth_service) {
-        sasl_plugin->auth_service               = qd_entity_opt_string(entity, "authService", 0); CHECK();
-        qd_log(cm->log_source, QD_LOG_WARNING, "Attribute authService of entity authServicePlugin has been deprecated. Use host and port instead.");
-    }
-
     sasl_plugin->sasl_init_hostname         = qd_entity_opt_string(entity, "realm", 0); CHECK();
     sasl_plugin->auth_ssl_profile           = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
 
@@ -700,7 +678,7 @@ qd_config_sasl_plugin_t *qd_dispatch_configure_sasl_plugin(qd_dispatch_t *qd, qd
 
 static void log_config(qd_log_source_t *log, qd_server_config_t *c, const char *what) {
     qd_log(log, QD_LOG_INFO, "Configured %s: %s proto=%s, role=%s%s%s%s",
-           what, c->host_port, c->protocol_family ? c->protocol_family : "any",
+           what, c->host_port, c->socket_address_family ? c->socket_address_family : "any",
            c->role,
            c->http ? ", http" : "",
            c->ssl_profile ? ", sslProfile=":"",

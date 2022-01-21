@@ -72,7 +72,7 @@ sql_select: dummy select
                         'id': 'auth_service',
                         'mode': 'standalone',
                         'saslConfigName': 'tests-mech-PLAIN',
-                        'saslConfigPath': os.getcwd()})
+                        'saslConfigDir': os.getcwd()})
         ])).wait_ready()
 
         cls.router_port = cls.tester.get_port()
@@ -132,12 +132,12 @@ class AuthServicePluginDeprecatedTest(AuthServicePluginTest):
                         'id': 'auth_service',
                         'mode': 'standalone',
                         'saslConfigName': 'tests-mech-PLAIN',
-                        'saslConfigPath': os.getcwd()})
+                        'saslConfigDir': os.getcwd()})
         ])).wait_ready()
 
         cls.router_port = cls.tester.get_port()
         cls.tester.qdrouterd('router', Qdrouterd.Config([
-            ('authServicePlugin', {'name': 'myauth', 'authService': '127.0.0.1:%d' % auth_service_port}),
+            ('authServicePlugin', {'name': 'myauth', 'host': '127.0.0.1', 'port': auth_service_port}),
             ('listener', {'host': '0.0.0.0', 'port': cls.router_port, 'role': 'normal',
                           'saslPlugin': 'myauth', 'saslMechanisms': 'PLAIN'}),
             ('router', {'mode': 'standalone', 'id': 'router'})

@@ -36,7 +36,7 @@ class RouterTest(TestCase):
         def router(name, connection):
 
             config = [
-                ('router', {'mode': 'interior', 'id': name, 'allowUnsettledMulticast': 'yes'}),
+                ('router', {'mode': 'interior', 'id': name}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'role': 'route-container'}),
                 ('linkRoute', {'prefix': 'link', 'direction': 'in', 'containerId': 'LRC'}),

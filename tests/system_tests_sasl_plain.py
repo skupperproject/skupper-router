@@ -94,8 +94,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
-                        # Leave as saslConfigPath for testing backward compatibility
-                        'saslConfigPath': os.getcwd()}),
+                        'saslConfigDir': os.getcwd()}),
         ])
 
         super(RouterTestPlainSaslFailure, cls).router('Y', [
@@ -190,8 +189,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
-                        # Leave as saslConfigPath for testing backward compatibility
-                        'saslConfigPath': os.getcwd()}),
+                        'saslConfigDir': os.getcwd()}),
         ])
 
         super(RouterTestPlainSaslFailureUsingLiteral, cls).router('Y', [
@@ -280,8 +278,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
-                        # Leave as saslConfigPath for testing backward compatibility
-                        'saslConfigPath': os.getcwd()}),
+                        'saslConfigDir': os.getcwd()}),
         ])
 
         super(RouterTestPlainSasl, cls).router('Y', [
@@ -561,7 +558,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
                            'sslProfile': 'client-ssl-profile',
                            # verifyHostName has been deprecated. We are using it here to test
                            # backward compatibility. TODO: should add a specific test.
-                           'verifyHostName': 'yes',
+                           'verifyHostname': 'yes',
                            'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'file:' + cls.sasl_file('password.txt')}),
@@ -638,12 +635,10 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('sslProfile', {'name': 'server-ssl-profile',
-                            # certDb has been deprecated. We are using it here to test backward compatibility.
                             # TODO: should add a specific test, this one presumably doesnt even use it due to not doing client-certificate authentication
-                            'certDb': cls.ssl_file('ca-certificate.pem'),
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
-                            # keyFile has been deprecated. We are using it here to test backward compatibility.
-                            'keyFile': cls.ssl_file('server-private-key.pem'),
+                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'password': 'server-password'}),
             ('router', {'workerThreads': 1,
                         'id': 'QDR.X',

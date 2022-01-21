@@ -417,7 +417,7 @@ class PolicyVhostOverride(TestCase):
         vhoststats = json.loads(self.run_qdmanage('query --type=vhostStats'))
         foundStat = False
         for vhs in vhoststats:
-            if vhs["id"] == "override.host.com":
+            if vhs["hostname"] == "override.host.com":
                 foundStat = True
                 self.assertTrue(vhs["senderDenied"] == 0)
                 self.assertTrue(vhs["receiverDenied"] == 1)
@@ -445,7 +445,7 @@ class PolicyVhostOverride(TestCase):
         vhoststats = json.loads(self.run_qdmanage('query --type=vhostStats'))
         foundStat = False
         for vhs in vhoststats:
-            if vhs["id"] == "override.host.com":
+            if vhs["hostname"] == "override.host.com":
                 foundStat = True
                 self.assertTrue(vhs["senderDenied"] == 1)
                 self.assertTrue(vhs["receiverDenied"] == 1)
@@ -599,7 +599,7 @@ class VhostPolicyNameField(TestCase):
     def id_policy(self):
         return """
 {
-    "id": "dispatch-918",
+    "hostname": "dispatch-918",
     "maxConnections": 50,
     "maxConnectionsPerHost": 20,
     "maxConnectionsPerUser": 8,
@@ -653,7 +653,6 @@ class VhostPolicyNameField(TestCase):
     def both_policy(self):
         return """
 {
-    "id":       "isogyre",
     "hostname": "dispatch-918",
     "maxConnections": 52,
     "maxConnectionsPerHost": 20,
@@ -856,7 +855,7 @@ class PolicyLinkNamePatternTest(TestCase):
     def disallowed_target(self):
         return """
 {
-    "id": "DISPATCH-1993-3",
+    "hostname": "DISPATCH-1993-3",
     "maxConnections": 3,
     "maxConnectionsPerHost": 3,
     "maxConnectionsPerUser": 3,
@@ -884,7 +883,7 @@ class PolicyLinkNamePatternTest(TestCase):
     def disallowed_source_pattern1(self):
         return """
 {
-    "id": "DISPATCH-1993-3",
+    "hostname": "DISPATCH-1993-3",
     "maxConnections": 3,
     "maxConnectionsPerHost": 3,
     "maxConnectionsPerUser": 3,
@@ -911,7 +910,7 @@ class PolicyLinkNamePatternTest(TestCase):
     def disallowed_source_pattern2(self):
         return """
 {
-    "id": "DISPATCH-1993-3",
+    "hostname": "DISPATCH-1993-3",
     "maxConnections": 3,
     "maxConnectionsPerHost": 3,
     "maxConnectionsPerUser": 3,

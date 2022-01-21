@@ -406,35 +406,30 @@
                     "type": "integer",
                     "default": 1,
                     "description": "Interval in seconds between HELLO messages sent to neighbor routers.",
-                    "deprecationName": "helloInterval",
                     "create": true
                 },
                 "helloMaxAgeSeconds": {
                     "type": "integer",
                     "default": 3,
                     "description": "Time in seconds after which a neighbor is declared lost if no HELLO is received.",
-                    "deprecationName": "helloMaxAge",
                     "create": true
                 },
                 "raIntervalSeconds": {
                     "type": "integer",
                     "default": 30,
                     "description": "Interval in seconds between Router-Advertisements sent to all routers in a stable network.",
-                    "deprecationName": "raInterval",
                     "create": true
                 },
                 "raIntervalFluxSeconds": {
                     "type": "integer",
                     "default": 4,
                     "description": "Interval in seconds between Router-Advertisements sent to all routers during topology fluctuations.",
-                    "deprecationName": "raIntervalFlux",
                     "create": true
                 },
                 "remoteLsMaxAgeSeconds": {
                     "type": "integer",
                     "default": 60,
                     "description": "Time in seconds after which link state is declared stale if no RA is received.",
-                    "deprecationName": "remoteLsMaxAge",
                     "create": true
                 },
                 "workerThreads": {
@@ -446,13 +441,11 @@
                 "debugDumpFile": {
                     "type": "path",
                     "description": "The absolute path to the location for the debug dump file. The router writes debug-level information to this file if the logger is not available.",
-                    "deprecationName": "debugDump",
                     "create": true
                 },
                 "saslConfigDir": {
                     "type": "path",
                     "description": "Absolute path to the SASL configuration file.",
-                    "deprecationName": "saslConfigPath",
                     "required": false,
                     "create": true
                 },
@@ -479,13 +472,6 @@
                     "type": "string",
                     "description": "Format string to use for timestamps in logs.",
                     "create": true
-                },
-                "allowUnsettledMulticast": {
-                    "type": "boolean",
-                    "description": "(DEPRECATED) If true, allow senders to send unsettled deliveries to multicast addresses.  These deliveries shall be settled by the ingress router.  If false, unsettled deliveries to multicast addresses shall be rejected.",
-                    "create": true,
-                    "required": false,
-                    "default": false
                 },
                 "defaultDistribution": {
                     "type": ["multicast", "closest", "balanced", "unavailable"],
@@ -646,7 +632,6 @@
                 "caCertFile": {
                     "type": "path",
                     "description": "The absolute path to the database that contains the public certificates of trusted certificate authorities (CA).",
-                    "deprecationName": "certDb",
                     "create": true
                 },
                 "certFile": {
@@ -658,20 +643,12 @@
                 "privateKeyFile": {
                     "type": "path",
                     "description": "The absolute path to the file containing the PEM-formatted private key for the above certificate.",
-                    "deprecationName": "keyFile",
-                    "create": true
-
-                },
-                "passwordFile": {
-                    "type": "path",
-                    "description": "(DEPRECATED) If the above private key is password protected, this is the absolute path to the file containing the password that unlocks the certificate key. This file should be permission protected to limit access. This has been deprecated. Use the file: prefix in the password field to specify the absolute path of the file containing the password. If both password and passwordFile are provided, the passwordFile is ignored",
-                    "deprecated": true,
                     "create": true
 
                 },
                 "password": {
                     "type": "string",
-                    "description": "The password that unlocks the certificate key. You can specify the password by specifying an environment variable that stores the password, a file that stores the password, or by entering the password in clear text. To use an environment variable, specify 'password: env:<var>'. Use this option with caution, because the environment of other processes is visible on certain platforms (for example, ps on certain Unix OSs). To use a file, specify 'password: file:<absolute-path-to-file>'. This option is the most secure, because permissions can be set on the file that contains the password. To specify the password in clear text, specify 'password: pass:<password>', or 'password: literal:<password>', or 'password: <password>'. This option is insecure, so it should only be used if security is not a concern. If both password and passwordFile are provided, the passwordFile is ignored.",
+                    "description": "The password that unlocks the certificate key. You can specify the password by specifying an environment variable that stores the password, a file that stores the password, or by entering the password in clear text. To use an environment variable, specify 'password: env:<var>'. Use this option with caution, because the environment of other processes is visible on certain platforms (for example, ps on certain Unix OSs). To use a file, specify 'password: file:<absolute-path-to-file>'. This option is the most secure, because permissions can be set on the file that contains the password. To specify the password in clear text, specify 'password: pass:<password>', or 'password: literal:<password>', or 'password: <password>'. This option is insecure, so it should only be used if security is not a concern.",
                     "create": true
 
                 },
@@ -683,7 +660,6 @@
                 "uidNameMappingFile": {
                     "type": "string",
                     "description": "The absolute path to the file containing the unique id to display name mapping",
-                    "deprecationName": "displayNameFile",
                     "create": true
                 }
             }
@@ -695,12 +671,6 @@
             "extends": "configurationEntity",
             "operations": ["CREATE", "DELETE"],
             "attributes": {
-                "authService": {
-                    "type": "string",
-                    "description": "(DEPRECATED) Address of a service to delegate authentication to. This attribute has been deprecated. Use the host and port attributes instead.",
-                    "deprecated": true,
-                    "create": true
-                },
                 "host": {
                     "description":"A host name, IPV4 or IPV6 literal, of the service to delegate to.",
                     "type": "string",
@@ -718,14 +688,12 @@
                     "type": "string",
                     "description": "Value to set for hostname field on sasl-init",
                     "required": false,
-                    "deprecationName": "saslInitHostname",
                     "create": true
                 },
                 "sslProfile": {
                     "type": "string",
                     "required": false,
                     "description": "Name of the sslProfile to use for the authentication service.",
-                    "deprecationName": "authSslProfile",
                     "create": true
                 }
             }
@@ -752,7 +720,6 @@
                 "socketAddressFamily": {
                     "type": ["IPv4", "IPv6"],
                     "required": false,
-                    "deprecationName": "protocolFamily",
                     "description": "['IPv4', 'IPv6'] IPv4: Internet Protocol version 4; IPv6: Internet Protocol version 6.  If not specified, the protocol family will be automatically determined from the address.",
                     "create": true
                 },
@@ -810,12 +777,6 @@
                     "description": "yes: Require the use of SSL or TLS on the connection; no: Allow clients to connect without SSL or TLS.",
                     "create": true
                 },
-                "trustedCertsFile": {
-                    "type": "path",
-                    "description": "(DEPRECATED) Use sslProfile caCertFile instead.",
-                    "deprecationName": "trustedCerts",
-                    "create": true
-                },
                 "maxFrameSize": {
                     "type": "integer",
                     "default": 16384,
@@ -871,7 +832,6 @@
                     "type": "string",
                     "create": true,
                     "required": false,
-                    "deprecationName": "failoverList",
                     "description": "A comma-separated list of failover urls to be supplied to connected clients.  Form: [(amqp|amqps|ws|wss)://]host_or_ip[:port]"
                 },
                 "healthz": {
@@ -901,14 +861,12 @@
                 "httpRootDir": {
                     "type": "path",
                     "description": "Absolute path to a directory from which to serve static HTML files. Defaults to the stand-alone console installation directory (typically /usr/share/qpid-dispatch/console).",
-                    "deprecationName": "httpRoot",
                     "create": true
                 },
                 "messageLoggingComponents": {
                     "type": "string",
                     "default": "none",
                     "description": "A comma separated list that indicates which components of the message should be logged. Defaults to 'none' (log nothing). If you want all properties and application properties of the message logged use 'all'. Specific components of the message can be logged by indicating the components via a comma separated list. The components are message-id, user-id, to, subject, reply-to, correlation-id, content-type, content-encoding, absolute-expiry-time, creation-time, group-id, group-sequence, reply-to-group-id, app-properties. The application-data part of the bare message will not be logged. No spaces are allowed",
-                    "deprecationName": "logMessage",
                     "create": true
                 },
                 "policyVhost": {
@@ -944,7 +902,7 @@
                     "create": true
 
                 },
-                "protocolFamily": {
+                "socketAddressFamily": {
                     "type": ["IPv4", "IPv6"],
                     "required": false,
                     "description": "['IPv4', 'IPv6'] IPv4: Internet Protocol version 4; IPv6: Internet Protocol version 6.  If not specified, the protocol family will be automatically determined from the address.",
@@ -1027,7 +985,6 @@
                     "type": "boolean",
                     "default": true,
                     "description": "yes: Ensures that when initiating a connection (as a client) the host name in the URL to which this connector connects to matches the host name in the digital certificate that the peer sends back as part of the SSL connection; no: Does not perform host name verification",
-                    "deprecationName": "verifyHostName",
                     "create": true
                 },
                 "saslUsername": {
@@ -1047,13 +1004,11 @@
                     "type": "string",
                     "default": "none",
                     "description": "A comma separated list that indicates which components of the message should be logged (no spaces allowed between list components). Defaults to 'none' (log nothing). If you want all properties and application properties of the message logged use 'all'. Specific components of the message can be logged by indicating the components via a comma separated list. The components are message-id, user-id, to, subject, reply-to, correlation-id, content-type, content-encoding, absolute-expiry-time, creation-time, group-id, group-sequence, reply-to-group-id, app-properties. The application-data part of the bare message will not be logged. This log message is written to the MESSAGE logging module. In the 'log' entity, set 'module' property to MESSAGE or DEFAULT and 'enable' to trace+ to see this log message",
-                    "deprecationName": "logMessage",
                     "create": true
                 },
                 "failoverUrls": {
                     "type": "string",
                     "description": "A read-only, comma-separated list of failover urls. ",
-                    "deprecationName": "failoverList",
                     "create": false
 
                 },
@@ -1390,19 +1345,16 @@
                 "includeTimestamp": {
                     "type": "boolean",
                     "description": "Include timestamp in log messages.",
-                    "deprecationName": "timestamp",
                     "update": true
                 },
                 "includeSource": {
                     "type": "boolean",
                     "description": "Include source file and line number in log messages.",
-                    "deprecationName": "source",
                     "update": true
                 },
                 "outputFile": {
                     "type": "string",
                     "description": "Where to send log messages. Can be 'stderr', 'stdout', 'syslog' or a file name.",
-                    "deprecationName": "output",
                     "update": true
                 }
             }
@@ -1561,7 +1513,6 @@
                     "type": ["in", "out"],
                     "description": "The permitted direction of links: 'in' means client senders; 'out' means client receivers",
                     "create": true,
-                    "deprecationName": "dir",
                     "required": true
                 },
                 "operStatus": {
@@ -1580,7 +1531,6 @@
                 "address": {
                     "type": "string",
                     "description": "The address of the provisioned object",
-                    "deprecationName": "addr",
                     "create": true,
                     "required": true
                 },
@@ -1588,7 +1538,6 @@
                     "type": ["in", "out"],
                     "description": "The direction of the link to be created.  In means into the router, out means out of the router.",
                     "create": true,
-                    "deprecationName": "dir",
                     "required": true
                 },
                 "phase": {
@@ -1612,7 +1561,6 @@
                 "externalAddress": {
                     "type": "string",
                     "description": "If present, an alternate address of the node on the remote container.  This is used if the node has a different address than the address used internally by the router to route deliveries.",
-                    "deprecationName": "externalAddr",
                     "create": true,
                     "required": false
                 },
@@ -2161,39 +2109,6 @@
             }
         },
 
-        "console": {
-            "description": "(DEPRECATED) Start a websocket/tcp proxy and http file server to serve the web console",
-            "extends": "configurationEntity",
-            "singleton": true,
-            "deprecated": true,
-            "attributes": {
-                "listener": {
-                    "type": "string",
-                    "description": "The name of the listener to send the proxied tcp traffic to."
-                },
-                "wsport": {
-                    "type": "integer",
-                    "description": "port on which to listen for websocket traffic",
-                    "default": 5673
-                },
-                "proxy": {
-                    "type": "string",
-                    "required": true,
-                    "description": "The full path to the proxy program to run."
-                 },
-                "home": {
-                    "type": "string",
-                    "required": true,
-                    "description": "The full path to the html/css/js files for the console."
-                },
-                "args": {
-                    "type": "string",
-                    "description": "Optional args to pass the proxy program for logging, authentication, etc."
-                }
-
-            }
-        },
-
         "policy": {
             "description": "Defines global connection limit",
             "extends": "configurationEntity",
@@ -2266,7 +2181,6 @@
                 "hostname": {
                     "type": "string",
                     "description": "The hostname of the vhost. This vhost policy will be applied to any client connection that is directed to this hostname.",
-                    "deprecationName": "id",
                     "required": true,
                     "create": true
                 },
@@ -2467,10 +2381,6 @@
             "description": "Virtual host connection and access statistics.",
             "extends": "operationalEntity",
             "attributes": {
-                "id": {
-                    "type": "string",
-                    "description": "The vhost name. DEPRECATED - use 'hostname' instead."
-                },
                 "hostname": {
                     "type": "string",
                     "description": "The vhost name."

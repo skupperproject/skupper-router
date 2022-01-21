@@ -490,8 +490,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
         config = [
             ('router', {'mode': 'standalone',
-                        'id': 'TestBadEndpoints',
-                        'allowUnsettledMulticast': 'yes'}),
+                        'id': 'TestBadEndpoints'}),
             ('listener', {'role': 'normal',
                           'port': cls.tester.get_port()}),
             ('httpConnector', {'port': cls.http_server_port,
@@ -730,8 +729,7 @@ class Http1AdaptorQ2Standalone(TestCase):
 
         config = [
             ('router', {'mode': 'standalone',
-                        'id': 'RowdyRoddyRouter',
-                        'allowUnsettledMulticast': 'yes'}),
+                        'id': 'RowdyRoddyRouter'}),
             ('listener', {'role': 'normal',
                           'port': cls.tester.get_port()}),
             ('httpListener', {'port': cls.http_listener_port,

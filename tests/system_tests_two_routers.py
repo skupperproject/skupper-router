@@ -24,7 +24,7 @@ import logging
 from threading import Timer
 from subprocess import PIPE, STDOUT
 from proton import Message, Delivery, symbol, Condition
-from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR, TestTimeout, PollTimeout
+from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, TestTimeout, PollTimeout
 from system_test import AsyncTestReceiver
 from system_test import AsyncTestSender
 from system_test import get_inter_router_links
@@ -49,14 +49,10 @@ class TwoRouterTest(TestCase):
         """Start a router and a messenger"""
         super(TwoRouterTest, cls).setUpClass()
 
-        def router(name, client_server, connection):
-            policy_config_path = os.path.join(DIR, 'two-router-policy')
-
+        def router(name, connection):
             config = [
-                # Use the deprecated attributes helloInterval, raInterval, raIntervalFlux, remoteLsMaxAge
-                # The routers should still start successfully after using these deprecated entities.
-                ('router', {'remoteLsMaxAge': 60, 'helloInterval': 1, 'raInterval': 30, 'raIntervalFlux': 4,
-                            'mode': 'interior', 'id': 'QDR.%s' % name, 'allowUnsettledMulticast': 'yes'}),
+                ('router', {'remoteLsMaxAgeSeconds': 60, 'helloIntervalSeconds': 1, 'raIntervalSeconds': 30,
+                            'raIntervalFluxSeconds': 4, 'mode': 'interior', 'id': 'QDR.%s' % name}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'linkCapacity': 500}),
 
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
@@ -92,11 +88,9 @@ class TwoRouterTest(TestCase):
 
         inter_router_port = cls.tester.get_port()
 
-        router('A', 'server',
-               ('listener', {'role': 'inter-router', 'port': inter_router_port}))
+        router('A', ('listener', {'role': 'inter-router', 'port': inter_router_port}))
 
-        router('B', 'client',
-               ('connector', {'name': 'connectorToA', 'role': 'inter-router', 'port': inter_router_port}))
+        router('B', ('connector', {'name': 'connectorToA', 'role': 'inter-router', 'port': inter_router_port}))
 
         cls.routers[0].wait_router_connected('QDR.B')
         cls.routers[1].wait_router_connected('QDR.A')

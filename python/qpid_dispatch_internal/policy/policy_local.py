@@ -40,7 +40,6 @@ class PolicyKeys(object):
     KW_IGNORED_IDENTITY         = "identity"
     KW_IGNORED_TYPE             = "type"
     KW_VHOST_NAME               = "hostname"
-    KW_VHOST_DEPRECATED_ID      = "id"
 
     # Policy ruleset key words
     KW_MAXCONN                     = "maxConnections"
@@ -547,7 +546,6 @@ class AppStats(object):
         """Refresh management attributes"""
         entitymap = {}
         entitymap[PolicyKeys.KW_VHOST_NAME] =     self.my_id
-        entitymap[PolicyKeys.KW_VHOST_DEPRECATED_ID]  = self.my_id
         entitymap[PolicyKeys.KW_CONNECTIONS_APPROVED] = self.conn_mgr.connections_approved
         entitymap[PolicyKeys.KW_CONNECTIONS_DENIED] =   self.conn_mgr.connections_denied
         entitymap[PolicyKeys.KW_CONNECTIONS_CURRENT] =  self.conn_mgr.connections_active

@@ -697,7 +697,7 @@ class QdstatSslTest(QdstatTestBase):
         cls.strict_port = cls.tester.get_port()
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.B',
-                        'saslConfigPath': os.getcwd(),
+                        'saslConfigDir': os.getcwd(),
                         'workerThreads': 1,
                         'saslConfigName': 'tests-mech-EXTERNAL'}),
             ('sslProfile', {'name': 'server-ssl',
@@ -946,7 +946,7 @@ class QdstatSslNoExternalTest(QdstatTestBase):
         # qdrouterd configuration:
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.C',
-                        'saslConfigPath': os.getcwd(),
+                        'saslConfigDir': os.getcwd(),
                         'workerThreads': 1,
                         'saslConfigName': 'tests-mech-NOEXTERNAL'}),
             ('sslProfile', {'name': 'server-ssl',

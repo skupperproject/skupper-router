@@ -516,7 +516,7 @@ class ExchangeBindingsTest(TestCase):
         def router(self, name, extra_config):
 
             config = [
-                ('router', {'mode': 'interior', 'id': 'QDR.%s' % name, 'allowUnsettledMulticast': 'yes'}),
+                ('router', {'mode': 'interior', 'id': 'QDR.%s' % name}),
                 ('listener', {'port': self.tester.get_port(), 'stripAnnotations': 'no'})
             ] + extra_config
 
@@ -610,8 +610,7 @@ class ExchangeBindingsTest(TestCase):
         """
         MAX_FRAME = 1024
         config = [
-            ('router', {'mode': 'interior', 'id': 'QDR.X',
-                        'allowUnsettledMulticast': 'yes'}),
+            ('router', {'mode': 'interior', 'id': 'QDR.X'}),
             ('listener', {'port': self.tester.get_port(),
                           'stripAnnotations': 'no',
                           'maxFrameSize': MAX_FRAME}),

@@ -1152,9 +1152,7 @@ class Http1OneRouterTestBase(TestCase):
     @classmethod
     def router(cls, name, mode, extra):
         config = [
-            ('router', {'mode': mode,
-                        'id': name,
-                        'allowUnsettledMulticast': 'yes'}),
+            ('router', {'mode': mode, 'id': name}),
             ('listener', {'role': 'normal',
                           'port': cls.tester.get_port()}),
             ('address', {'prefix': 'closest', 'distribution': 'closest'}),
@@ -1183,9 +1181,7 @@ class Http1Edge2EdgeTestBase(TestCase):
     @classmethod
     def router(cls, name, mode, extra):
         config = [
-            ('router', {'mode': mode,
-                        'id': name,
-                        'allowUnsettledMulticast': 'yes'}),
+            ('router', {'mode': mode, 'id': name}),
             ('listener', {'role': 'normal',
                           'port': cls.tester.get_port()}),
             ('address', {'prefix': 'closest', 'distribution': 'closest'}),

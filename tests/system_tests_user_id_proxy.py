@@ -148,8 +148,7 @@ class QdSSLUseridTest(TestCase):
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'uidFormat': '2',
-                            # displayNameFile has been deprecated. We are using it here to test backward compatibility.
-                            'displayNameFile': ssl_profile2_json,
+                            'uidNameMappingFile': ssl_profile2_json,
                             'password': 'server-password'}),
 
             ('sslProfile', {'name': 'server-ssl14',
