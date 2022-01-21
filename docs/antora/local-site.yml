@@ -1,15 +1,15 @@
 runtime:
   cache_dir: ./.cache/antora
 site:
-  title: Artemis
-  url: https://artemis.netlify.app
-  start_page: artemis-docs::index.adoc
+  title: Skupper router
+  url: https://skupper.io
+  start_page: skupper-router::index.adoc
 
 content:
   sources:
-  - url: ../
+  - url: ../../
     branches: HEAD
-    start_path: antora
+    start_path: docs/antora
 ui:
   bundle:
     url: https://github.com/pwright/skupper-docs/raw/main/ui-preview-bundle.zip

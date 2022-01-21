@@ -1,5 +1,5 @@
-name: artemis-docs
-title: Artemis
+name: skupper-router
+title: Skupper router
 version: 'latest'
 start_ROOT: ROOT:index.adoc
 nav:
