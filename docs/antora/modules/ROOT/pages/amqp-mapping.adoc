@@ -24,7 +24,7 @@ under the License
 // overview.adoc
 
 [id='amqp-mapping-{context}']
-= AMQP mapping
+= AMQP mappingF
 
 {RouterName} is an AMQP router and as such, it provides extensions,
 code-points, and semantics for routing over AMQP. This section describes the

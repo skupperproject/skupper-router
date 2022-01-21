@@ -29,7 +29,7 @@ By default, {RouterName} operates in `standalone` mode with a randomly-generated
 
 .Procedure
 
-include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . In the `router` section, specify the mode and ID.
 +

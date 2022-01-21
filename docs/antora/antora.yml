@@ -1,7 +1,7 @@
 name: skupper-router
 title: Skupper router
 version: 'latest'
-start_ROOT: ROOT:index.adoc
+start_ROOT: ROOT:overview.adoc
 nav:
 - modules/ROOT/nav.adoc
 

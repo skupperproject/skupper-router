@@ -421,11 +421,11 @@ If `true`, connections from users in this group are permitted to attach links us
 `sources` | `sourcePattern`::
 A list of AMQP source addresses from which users in this group may receive messages.
 +
-Use `sources` to specify one or more literal addresses. To specify multiple addresses, use a comma-separated list. To prevent users in this group from receiving messages from any addresses, leave this attribute blank. To allow access to an address specific to a particular user, specify the `${user}` token. For more information, see xref:methods-specifying-vhost-policy-source-target-addresses-{context}[].
+Use `sources` to specify one or more literal addresses. To specify multiple addresses, use a comma-separated list. To prevent users in this group from receiving messages from any addresses, leave this attribute blank. To allow access to an address specific to a particular user, specify the `$\{user}` token. For more information, see xref:methods-specifying-vhost-policy-source-target-addresses-{context}[].
 +
 Alternatively, you can use `sourcePattern` to match one or more addresses that correspond to a pattern. A pattern is a sequence of words delimited by either a `.` or `/` character. You can use wildcard characters to represent a word. The  `*` character matches exactly one word, and the `#` character matches any sequence of zero or more words.
 +
-To specify multiple address ranges, use a comma-separated list of address patterns. For more information, see xref:address-pattern-matching-{context}[]. To allow access to address ranges that are specific to a particular user, specify the `${user}` token. For more information, see xref:methods-specifying-vhost-policy-source-target-addresses-{context}[].
+To specify multiple address ranges, use a comma-separated list of address patterns. For more information, see xref:address-pattern-matching-{context}[]. To allow access to address ranges that are specific to a particular user, specify the `$\{user}` token. For more information, see xref:methods-specifying-vhost-policy-source-target-addresses-{context}[].
 
 `targets` | `targetPattern`::
 A list of AMQP target addresses from which users in this group may send messages. You can specify multiple AMQP addresses and use user name substitution and address patterns the same way as with source addresses.
@@ -675,11 +675,11 @@ targets:
 ====
 
 | Allow access to some resources specific to each user
-a| Use the `${user}` username substitution token. You can use this token with `source`, `target`, `sourcePattern`, and `targetPattern`.
+a| Use the `$\{user}` username substitution token. You can use this token with `source`, `target`, `sourcePattern`, and `targetPattern`.
 
 [NOTE]
 ====
-You can only specify the `${user}` token once in an AMQP address name or pattern. If there are multiple tokens in an address, only the leftmost token will be substituted.
+You can only specify the `$\{user}` token once in an AMQP address name or pattern. If there are multiple tokens in an address, only the leftmost token will be substituted.
 ====
 
 .Receive from a user-specific address

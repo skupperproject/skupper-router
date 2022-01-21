@@ -3,7 +3,7 @@ runtime:
 site:
   title: Skupper router
   url: https://skupper.io
-  start_page: skupper-router::index.adoc
+  start_page: skupper-router::overview.adoc
 
 content:
   sources:
