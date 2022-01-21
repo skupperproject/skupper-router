@@ -70,7 +70,7 @@ You can use SSL/TLS to encrypt an incoming connection from a client.
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines the private keys and certificates for client connections, then add one.
 +
@@ -108,7 +108,7 @@ chown qdrouterd /etc/pki/tls/private/tls.key
 ====
 
 //`password`
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+include::partial$fragment-password-description.adoc[]
 --
 
 . Configure the `listener` for this connection to use SSL/TLS to encrypt the connection.
@@ -175,7 +175,7 @@ For more information, see xref:enabling-ssl-tls-encryption-{context}[].
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-client-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure the `listener` for this connection to use SSL/TLS to authenticate the client.
 +
@@ -241,7 +241,7 @@ Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use 
 +
 --
 // Note about searching for an installing SASL plugins.
-Unresolved directive in ../../modules/user-guide/enabling-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+include::partial$fragment-router-sasl-para.adoc[]
 --
 
 .Procedure

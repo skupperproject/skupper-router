@@ -63,7 +63,7 @@ You can connect to an external AMQP container (such as a broker) using one-way S
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-one-way-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines a certificate that can be used to validate the external AMQP container's identity, then add one.
 +
@@ -140,7 +140,7 @@ You can connect to an external AMQP container (such as a broker) using mutual SS
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines the private keys and certificates to connect to the external AMQP container, then add one.
 +
@@ -178,7 +178,7 @@ chown qdrouterd /etc/pki/tls/private/tls.key
 ====
 
 //`password`
-Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+include::partial$fragment-password-description.adoc[]
 --
 
 . Configure the `connector` for this connection to use the `sslProfile` that you created.
@@ -239,12 +239,12 @@ Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use 
 +
 --
 // Note about searching for an installing SASL plugins.
-Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+include::partial$fragment-router-sasl-para.adoc[]
 --
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure the `connector` for this connection to provide user name and password credentials to the external AMQP container.
 +

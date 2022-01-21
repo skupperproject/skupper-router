@@ -122,7 +122,7 @@ chown qdrouterd /etc/pki/tls/private/tls.key
 ====
 
 //`password`
-Unresolved directive in ../../modules/user-guide/securing-connections-between-routers.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+include::partial$fragment-password-description.adoc[]
 --
 
 .. Configure the inter-router `connector` for this connection to use the `sslProfile` that you created.
@@ -249,7 +249,7 @@ You can use SSL/TLS to encrypt an incoming connection from a client.
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines the private keys and certificates for client connections, then add one.
 +
@@ -287,7 +287,7 @@ chown qdrouterd /etc/pki/tls/private/tls.key
 ====
 
 //`password`
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-encryption.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+include::partial$fragment-password-description.adoc[]
 --
 
 . Configure the `listener` for this connection to use SSL/TLS to encrypt the connection.
@@ -354,7 +354,7 @@ For more information, see xref:enabling-ssl-tls-encryption-{context}[].
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/enabling-ssl-tls-client-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure the `listener` for this connection to use SSL/TLS to authenticate the client.
 +
@@ -420,7 +420,7 @@ Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use 
 +
 --
 // Note about searching for an installing SASL plugins.
-Unresolved directive in ../../modules/user-guide/enabling-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+include::partial$fragment-router-sasl-para.adoc[]
 --
 
 .Procedure
@@ -670,7 +670,7 @@ You can connect to an external AMQP container (such as a broker) using one-way S
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-one-way-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines a certificate that can be used to validate the external AMQP container's identity, then add one.
 +
@@ -747,7 +747,7 @@ You can connect to an external AMQP container (such as a broker) using mutual SS
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . If the router does not contain an `sslProfile` that defines the private keys and certificates to connect to the external AMQP container, then add one.
 +
@@ -785,7 +785,7 @@ chown qdrouterd /etc/pki/tls/private/tls.key
 ====
 
 //`password`
-Unresolved directive in ../../modules/user-guide/connecting-using-mutual-ssl-tls-authentication.adoc - include::{FragmentDir}/fragment-password-description.adoc[]
+include::partial$fragment-password-description.adoc[]
 --
 
 . Configure the `connector` for this connection to use the `sslProfile` that you created.
@@ -846,12 +846,12 @@ Cyrus SASL uses plugins to support specific SASL mechanisms. Before you can use 
 +
 --
 // Note about searching for an installing SASL plugins.
-Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-sasl-para.adoc[]
+include::partial$fragment-router-sasl-para.adoc[]
 --
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-using-username-password-authentication.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure the `connector` for this connection to provide user name and password credentials to the external AMQP container.
 +

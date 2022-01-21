@@ -77,13 +77,13 @@ $ qdrouterd -d
 
 | Start the router as a service
 a|
-Unresolved directive in ../../modules/user-guide/starting-routers.adoc - include::{FragmentDir}/fragment-start-router-service-command.adoc[]
+include::partial$fragment-start-router-service-command.adoc[]
 
 [NOTE]
 ====
 If you start the router as a service, the `systemd` `LimitNOFILE` limit affects the number of connections that can be open for the router. If you reach the limit, the router is not able to accept any more connections, and an error message is logged indicating "Too many open files". To avoid reaching this limit, increase the `LimitNOFILE` value for the `systemd` process.
 
-Unresolved directive in ../../modules/user-guide/starting-routers.adoc - include::{FragmentDir}/fragment-systemd-limitnofile-fmi.adoc[]
+include::partial$fragment-systemd-limitnofile-fmi.adoc[]
 ====
 
 |===

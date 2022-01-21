@@ -1,3 +1,4 @@
+include::partial$attributes.adoc[]
 ////
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -388,9 +389,9 @@ address {
 `prefix` | `pattern`::
 The address or group of addresses to which the address settings should be applied. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
 +
-Unresolved directive in ../../modules/user-guide/configuring-address-semantics.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
+include::partial$fragment-prefix-matching-definition.adoc[]
 +
-Unresolved directive in ../../modules/user-guide/configuring-address-semantics.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+include::partial$fragment-pattern-matching-definition.adoc[]
 
 `distribution`:: The message distribution pattern. The default is `balanced`, but you can specify any of the following options:
 +
@@ -608,9 +609,9 @@ address {
 
 `prefix` | `pattern`:: The address prefix or pattern that matches the broker queue to which you want to send messages. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
 +
-Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
+include::partial$fragment-prefix-matching-definition.adoc[]
 +
-Unresolved directive in ../../modules/user-guide/routing-messages-through-broker-queues.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+include::partial$fragment-pattern-matching-definition.adoc[]
 
 `waypoint`:: Set this attribute to `yes` so that the router handles messages sent to this address as a waypoint.
 --
@@ -1113,9 +1114,9 @@ linkRoute {
 
 `prefix` | `pattern`:: The address prefix or pattern that matches the broker queue that should be the destination for routed link-attaches. All messages that match this prefix or pattern will be distributed along the link route. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
 +
-Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
+include::partial$fragment-prefix-matching-definition.adoc[]
 +
-Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+include::partial$fragment-pattern-matching-definition.adoc[]
 
 `connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
 +
@@ -1141,9 +1142,9 @@ linkRoute {
 
 `prefix` | `pattern`:: The address prefix or pattern that matches the broker queue from which you want to receive routed link-attaches. All messages that match this prefix or pattern will be distributed along the link route. You can specify a prefix to match an exact address or beginning segment of an address. Alternatively, you can specify a pattern to match an address using wildcards.
 +
-Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-prefix-matching-definition.adoc[]
+include::partial$fragment-prefix-matching-definition.adoc[]
 +
-Unresolved directive in ../../modules/user-guide/creating-link-route.adoc - include::{FragmentDir}/fragment-pattern-matching-definition.adoc[]
+include::partial$fragment-pattern-matching-definition.adoc[]
 
 `connection` | `containerID`:: How the router should connect to the broker. You can specify either an outgoing connection (`connection`) or the container ID of the broker (`containerID`).
 +

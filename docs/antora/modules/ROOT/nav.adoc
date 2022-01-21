@@ -49,7 +49,7 @@ include::partial$attributes.adoc[]
 * Manage
 ** xref:monitoring-using-web-console.adoc[]
 ** xref:monitoring-using-qdstat.adoc[]
-include::modules/user-guide/managing-using-qdmanage.adoc[]
+** xref:managing-using-qdmanage.adoc[]
 ** xref:troubleshooting.adoc[]
 
 [appendix]

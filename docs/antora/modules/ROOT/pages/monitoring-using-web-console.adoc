@@ -1,3 +1,4 @@
+include::partial$attributes.adoc[]
 ////
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -27,7 +28,7 @@ under the License
 {ConsoleName} is a web console for monitoring the status and performance of {RouterName} router networks.
 
 //.Prerequisites
-Unresolved directive in monitoring-using-web-console.adoc - include::{FragmentDir}/fragment-console-prereq.adoc[]
+include::partial$fragment-console-prereq.adoc[]
 
 :leveloffset: +1
 

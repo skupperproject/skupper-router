@@ -1,3 +1,4 @@
+include::partial$attributes.adoc[]
 ////
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -56,11 +57,11 @@ under the License
 [id='installing-router-linux-{context}']
 = Installing {RouterName} on {RouterPlatform}
 
-Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-intro.adoc[]
+include::partial$fragment-router-install-intro.adoc[]
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/installing-router-linux.adoc - include::{FragmentDir}/fragment-router-install-steps.adoc[]
+include::partial$fragment-router-install-steps.adoc[]
 
 :leveloffset!:
 :!context:

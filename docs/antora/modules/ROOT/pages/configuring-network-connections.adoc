@@ -1,3 +1,5 @@
+include::partial$attributes.adoc[]
+
 ////
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -175,7 +177,7 @@ Instead of configuring a `listener` to listen for connections from the client, y
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/listening-client-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure a `listener` with the `normal` role.
 +
@@ -246,7 +248,7 @@ Instead of configuring a `connector` to initiate connections to the AMQP contain
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/connecting-routers-external-amqp-containers.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Configure a `connector` with the `route-container` role.
 +
@@ -310,7 +312,7 @@ In a complex topology, it can be useful to add metadata to connections so that m
 
 .Procedure
 
-Unresolved directive in ../../modules/user-guide/adding-metadata-to-connections.adoc - include::{FragmentDir}/fragment-router-open-config-file-step.adoc[]
+include::partial$fragment-router-open-config-file-step.adoc[]
 
 . Add arbitrary JSON to the `connector` configuration using the 'openProperties' attribute.
 +

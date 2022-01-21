@@ -1,3 +1,4 @@
+include::partial$attributes.adoc[]
 ////
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -92,7 +93,7 @@ under the License
 
 {RouterName} supports the following industry-recognized standards and network protocols:
 
-Unresolved directive in ../../modules/user-guide/supported-standards-protocols.adoc - include::{FragmentDir}/fragment-supported-standards-protocols-list.adoc[]
+include::partial$fragment-supported-standards-protocols-list.adoc[]
 
 [NOTE]
 ====
@@ -101,7 +102,7 @@ The details of distributed transactions (XA) within AMQP are not provided in the
 
 .Additional resources
 
-Unresolved directive in ../../modules/user-guide/supported-standards-protocols.adoc - include::{FragmentDir}/fragment-supported-standards-additional-resources.adoc[]
+include::partial$fragment-supported-standards-additional-resources.adoc[]
 
 :leveloffset!:
 :leveloffset: +1
