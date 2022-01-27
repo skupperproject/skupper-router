@@ -53,6 +53,7 @@ jobs:
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.37.0
+        python: [/usr/bin/python3-dbg]
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
@@ -69,6 +70,7 @@ jobs:
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DBUILD_TLS=ON
+        -DPython_EXECUTABLE=${{matrix.python}}
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -77,6 +79,7 @@ jobs:
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DSANITIZE_PYTHON=OFF
         -DBUILD_BENCHMARKS=ON
+        -DPython_EXECUTABLE=${{matrix.python}}
 
       CCACHE_BASEDIR: ${{github.workspace}}
       CCACHE_DIR: ${{github.workspace}}/.ccache
@@ -120,18 +123,12 @@ jobs:
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
-      - name: Setup python
-        uses: actions/setup-python@v3
-        with:
-          python-version: 3.6
-          architecture: x64
-
-      - name: Install Python build dependencies
-        run: python -m pip install setuptools wheel tox
-
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev
+          sudo apt update; sudo apt install -y swig python3-dbg libpython3-dbg libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev
+
+      - name: Install Python build dependencies
+        run: ${{matrix.python}} -m pip install setuptools wheel tox
 
       - name: Zero ccache stats
         run: ccache -z
@@ -200,6 +197,7 @@ jobs:
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.37.0
+        python: [/usr/bin/python3-dbg]
         shard: [1, 2]
         shards: [2]
     env:
@@ -211,6 +209,7 @@ jobs:
       LD_LIBRARY_PATH: ${{github.workspace}}/install/lib
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
+      PYTHONTRACEMALLOC: 5
       # this enables colored output
       FORCE_COLOR: 1
       COLUMNS: 160
@@ -226,15 +225,9 @@ jobs:
         with:
           name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}
 
-      - name: Setup python
-        uses: actions/setup-python@v3
-        with:
-          python-version: 3.6
-          architecture: x64
-
       - name: Install Linux runtime/test dependencies
         run: |
-          sudo apt update; sudo apt install -y libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
+          sudo apt update; sudo apt install -y python3-dbg libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
@@ -242,8 +235,11 @@ jobs:
       - name: Install Python runtime/test dependencies
         run: python -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
 
-      - name: install qpid-proton python wheel
-        run: python -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
+      - name: Install Python runtime/test dependencies
+        run: ${{matrix.python}} -m pip install tox quart selectors h2 grpcio protobuf websockets pytest
+
+      - name: Install qpid-proton python wheel
+        run: ${{matrix.python}} -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
 
       - name: CTest
         working-directory: ${{env.RouterBuildDir}}
