@@ -2029,6 +2029,7 @@ class MobileAddressMulticastTest(MessagingHandler):
 
     def on_released(self, event):
         self.n_released += 1
+        self.send_test_message()
 
     def timeout(self):
         if self.dup_msg:
@@ -2143,9 +2144,6 @@ class MobileAddressMulticastTest(MessagingHandler):
             self.receiver2_conn.close()
             self.receiver3_conn.close()
             self.sender_conn.close()
-
-    def on_released(self, event):
-        self.send_test_message()
 
     def run(self):
         Container(self).run()
