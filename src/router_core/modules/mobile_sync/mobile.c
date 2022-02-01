@@ -307,7 +307,7 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         //
         // For an address to be included in the list, it must:
         //   - be a mobile address
-        //   - have at least one local consumer, link-route destination, or exchange
+        //   - have at least one local consumer or link-route destination
         //     _OR_ be in the delete list (because the peers haven't heard of its pending deletion)
         //   - not be in the add list (because the peers haven't heard of its pending addition)
         //
@@ -316,7 +316,7 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         // peer router in the correct state.
         //
         if (qcm_mobile_sync_addr_is_mobile(addr)
-            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0 || !!addr->exchange)
+            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0)
                 || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
             && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
             const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
@@ -334,7 +334,7 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         // This loop uses the same logic as above.
         //
         if (qcm_mobile_sync_addr_is_mobile(addr)
-            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0 || !!addr->exchange)
+            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0)
                 || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
             && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST))
             qd_compose_insert_int(body, addr->treatment);
