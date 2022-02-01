@@ -88,20 +88,7 @@ const char * const QD_AMQPS_PORT_STR = "5671";
 
 const char * const QD_AMQP_DFLT_PROTO = "tcp";
 
-/// Wrapper for getservbyname/getservbyname_r macOS compatibility.
-/// Needed because getservbyname is thread safe on macOS, and getservbyname_r is not defined there.
-static inline int qd_getservbyname(const char *name, const char *proto);
-
-#ifdef __APPLE__
-static inline int qd_getservbyname(const char *name, const char *proto) {
-    struct servent *serv_info = getservbyname(name, proto);
-    if (serv_info) {
-        return ntohs(serv_info->s_port);
-    } else {
-        return -1;
-    }
-}
-#else
+/// Obtains port number from protocol name using getservbyname_r
 static inline int qd_getservbyname(const char *name, const char *proto) {
     struct servent  serv_info;
     struct servent *serv_info_res;
@@ -115,7 +102,6 @@ static inline int qd_getservbyname(const char *name, const char *proto) {
         return -1;
     }
 }
-#endif
 
 int qd_port_int(const char *port_str) {
     char *endptr;

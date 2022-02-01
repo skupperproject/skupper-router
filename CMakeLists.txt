@@ -30,7 +30,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-set(CMAKE_MACOSX_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 
@@ -78,19 +77,8 @@ include(CMakeDependentOption)
 ##
 ## Find dependencies
 ##
-if (NOT APPLE)
-  find_library(rt_lib rt)
-else (NOT APPLE)
-  set(rt "")
-endif (NOT APPLE)
+find_library(rt_lib rt)
 
-# This setting mirrors FindPythonInterp behavior on Windows/macOS, which did not consult registry/frameworks first.
-if (NOT DEFINED Python_FIND_REGISTRY)
-    set(Python_FIND_REGISTRY "LAST")
-endif ()
-if (NOT DEFINED Python_FIND_FRAMEWORK)
-    set(Python_FIND_FRAMEWORK "LAST")
-endif ()
 find_package(Python 3.6.8 REQUIRED COMPONENTS Interpreter Development)
 find_package(Threads REQUIRED)
 find_package(Proton 0.34.0 REQUIRED COMPONENTS Core Proactor)
