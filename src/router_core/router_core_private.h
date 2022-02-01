@@ -39,7 +39,6 @@ typedef struct qdr_link_route_t      qdr_link_route_t;
 typedef struct qdr_auto_link_t       qdr_auto_link_t;
 typedef struct qdr_conn_identifier_t qdr_conn_identifier_t;
 typedef struct qdr_connection_ref_t  qdr_connection_ref_t;
-typedef struct qdr_exchange          qdr_exchange_t;
 typedef struct qdr_edge_t            qdr_edge_t;
 typedef struct qdr_agent_t           qdr_agent_t;
 
@@ -567,11 +566,6 @@ struct qdr_address_t {
     int *outstanding_deliveries;
 
     //
-    // State for "exchange" treatment
-    //
-    qdr_exchange_t *exchange;  // weak ref
-
-    //
     // State for "link balanced" treatment
     //
     char *add_prefix;
@@ -780,8 +774,6 @@ struct qdr_conn_identifier_t {
     qdr_auto_link_list_t       auto_link_refs;
 };
 
-DEQ_DECLARE(qdr_exchange_t, qdr_exchange_list_t);
-
 typedef struct qdr_priority_sheaf_t {
     qdr_link_t *links[QDR_N_PRIORITIES];
     int count;
@@ -897,7 +889,6 @@ struct qdr_core_t {
     uint64_t              next_identifier;
     sys_mutex_t          *id_lock;
 
-    qdr_exchange_list_t   exchanges;
     qdr_forwarder_t      *forwarders[QD_TREATMENT_LINK_BALANCED + 1];
 
     qdr_delivery_cleanup_list_t  delivery_cleanup_list;  ///< List of delivery cleanup items to be processed in an IO thread

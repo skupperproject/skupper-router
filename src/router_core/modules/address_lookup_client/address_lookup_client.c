@@ -400,13 +400,11 @@ static void qdr_link_react_to_first_attach_CT(qdr_core_t       *core,
         // Issue the initial credit only if one of the following
         // holds:
         // - there are destinations for the address
-        // - the address is that of an exchange (no subscribers allowed)
         //
         if (dir == QD_INCOMING
             && (DEQ_SIZE(addr->subscriptions)
                 || DEQ_SIZE(addr->rlinks)
                 || qd_bitmask_cardinality(addr->rnodes)
-                || !!addr->exchange
                 || (!!addr->fallback
                     && (DEQ_SIZE(addr->fallback->subscriptions)
                         || DEQ_SIZE(addr->fallback->rlinks)
