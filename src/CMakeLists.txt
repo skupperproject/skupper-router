@@ -169,24 +169,13 @@ else(USE_LIBNGHTTP2)
   list(APPEND qpid_dispatch_SOURCES adaptors/http2/http2_adaptor_none.c)
 endif(USE_LIBNGHTTP2)
 
-# DISPATCH-654 There are, in fact, no strict-aliasing violations and newer compilers don't complain.
-if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    set_property(
-      SOURCE python_embedded.c router_pynode.c
-      PROPERTY COMPILE_FLAGS -Wno-strict-aliasing)
-endif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-
 if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)
 endif()
 
 add_library(qpid-dispatch OBJECT ${qpid_dispatch_SOURCES})
 target_include_directories(qpid-dispatch PRIVATE ${qpid_dispatch_INCLUDES})
-
-# Workaround. CMake < 3.12 does not allow using object libraries in target_link_libraries;
-#  `ar` on macOS refuses to produce a static library consisting of /dev/null as the only source file.
-add_library(qpid-dispatch-libraries STATIC empty.c)
-target_link_libraries(qpid-dispatch-libraries ${qpid_dispatch_LIBRARIES})
+target_link_libraries(qpid-dispatch PRIVATE ${qpid_dispatch_LIBRARIES})
 
 # check for various function availability
 check_symbol_exists(getrlimit sys/resource.h QD_HAVE_GETRLIMIT)

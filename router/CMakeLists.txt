@@ -32,7 +32,7 @@ set(router_SOURCES
     src/main.c
     )
 
-add_executable(qdrouterd ${router_SOURCES} $<TARGET_OBJECTS:qpid-dispatch>)
-target_link_libraries(qdrouterd qpid-dispatch-libraries)
+add_executable(qdrouterd ${router_SOURCES})
+target_link_libraries(qdrouterd qpid-dispatch)
 
 install(TARGETS qdrouterd RUNTIME DESTINATION sbin)
