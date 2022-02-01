@@ -24,7 +24,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON) # gnu11
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -32,13 +32,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
-
-# https://bugzilla.redhat.com/show_bug.cgi?id=1850174 GCC 4.8 claims to support atomics, but it's missing stdatomic.h
-include(CheckIncludeFile)
-check_include_file("stdatomic.h" HAVE_STDATOMIC_H)
-if (NOT HAVE_STDATOMIC_H)
-    add_definitions(-D__STDC_NO_ATOMICS__)
-endif()
 
 # Set warning compile flags
 set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wno-empty-body -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
