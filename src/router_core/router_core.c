@@ -19,7 +19,6 @@
 
 #include "core_events.h"
 #include "delivery.h"
-#include "exchange_bindings.h"
 #include "route_control.h"
 #include "router_core_private.h"
 
@@ -78,8 +77,6 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     core->router_area         = area;
     core->router_id           = id;
     core->worker_thread_count = qd->thread_count;
-
-    DEQ_INIT(core->exchanges);
 
     //
     // Set up the logging sources for the router core. The core
@@ -185,8 +182,6 @@ void qdr_core_free(qdr_core_t *core)
         DEQ_REMOVE_HEAD(core->auto_links);
         qdr_core_delete_auto_link(core, auto_link);
     }
-
-    qdr_exchange_free_all(core);
 
     qdr_address_t *addr = 0;
     while ( (addr = DEQ_HEAD(core->addrs)) ) {
