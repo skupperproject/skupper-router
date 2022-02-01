@@ -17,38 +17,22 @@
 ## under the License.
 ##
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.20)
 project(qpid-dispatch C CXX)
 
-# This effectively checks for cmake version 3.1 or later
-if (DEFINED CMAKE_C_COMPILE_FEATURES)
-    set(CMAKE_C_STANDARD 11)
-    set(CMAKE_C_STANDARD_REQUIRED ON)
-    set(CMAKE_C_EXTENSIONS ON) # gnu11
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON) # gnu11
 
-    set(CMAKE_CXX_STANDARD 11)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-else()
-    set(C_STANDARD_GNU "-std=gnu11")
-    set(C_STANDARD_Clang "-std=gnu11")
-    set(C_STANDARD_SunPro "-std=c11")
-
-    set(C_STANDARD_FLAGS ${C_STANDARD_${CMAKE_C_COMPILER_ID}})
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_STANDARD_FLAGS}")
-
-    set(CXX_STANDARD_FLAGS "-std=c++11")
-endif()
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CMAKE_MACOSX_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-if (POLICY CMP0069)
-    # INTERPROCEDURAL_OPTIMIZATION is enforced when enabled.
-    cmake_policy (SET CMP0069 NEW)
-endif ()
+set(CMAKE_ENABLE_EXPORTS TRUE)
 
 # https://bugzilla.redhat.com/show_bug.cgi?id=1850174 GCC 4.8 claims to support atomics, but it's missing stdatomic.h
 include(CheckIncludeFile)
@@ -198,11 +182,7 @@ if(QD_ENABLE_ASSERTIONS)
     if(NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG")
         # NOTE: use `add_compile_options` rather than `add_definitions` since
         # `add_definitions` does not support generator expressions.
-        if(${CMAKE_VERSION} VERSION_LESS "3.11.4")
-            add_compile_options(-UNDEBUG)
-        else()
-            add_compile_options($<$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CXX>>:-UNDEBUG>)
-        endif()
+        add_compile_options($<$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CXX>>:-UNDEBUG>)
 
 
         # Also remove /D NDEBUG to avoid MSVC warnings about conflicting defines.

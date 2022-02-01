@@ -39,9 +39,8 @@ add_executable(c-benchmarks
         Socket.cpp Socket.hpp
         SocketException.cpp SocketException.hpp
         TCPSocket.cpp TCPSocket.hpp
-        TCPServerSocket.cpp TCPServerSocket.hpp
-        $<TARGET_OBJECTS:qpid-dispatch>)
-target_link_libraries(c-benchmarks qpid-dispatch-libraries benchmark pthread)
+        TCPServerSocket.cpp TCPServerSocket.hpp)
+target_link_libraries(c-benchmarks qpid-dispatch benchmark pthread)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
