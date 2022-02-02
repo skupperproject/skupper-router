@@ -50,24 +50,12 @@ struct qd_config_ssl_profile_t {
 
 DEQ_DECLARE(qd_config_ssl_profile_t, qd_config_ssl_profile_list_t);
 
-struct qd_config_sasl_plugin_t {
-    DEQ_LINKS(qd_config_sasl_plugin_t);
-    char        *name;
-    char        *auth_service;
-    char        *hostname;
-    char        *sasl_init_hostname;
-    char        *auth_ssl_profile;
-};
-
-DEQ_DECLARE(qd_config_sasl_plugin_t, qd_config_sasl_plugin_list_t);
-
 struct qd_connection_manager_t {
     qd_log_source_t              *log_source;
     qd_server_t                  *server;
     qd_listener_list_t            listeners;
     qd_connector_list_t           connectors;
     qd_config_ssl_profile_list_t  config_ssl_profiles;
-    qd_config_sasl_plugin_list_t  config_sasl_plugins;
 };
 
 const char *qd_log_message_components[] =
@@ -143,21 +131,6 @@ static void qd_set_password_from_file(const char *password_file, char **password
     }
 }
 
-/**
- * Search the list of config_sasl_plugins for an sasl-profile that matches the passed in name
- */
-static qd_config_sasl_plugin_t *qd_find_sasl_plugin(qd_connection_manager_t *cm, char *name)
-{
-    qd_config_sasl_plugin_t *sasl_plugin = DEQ_HEAD(cm->config_sasl_plugins);
-    while (sasl_plugin) {
-        if (strcmp(sasl_plugin->name, name) == 0)
-            return sasl_plugin;
-        sasl_plugin = DEQ_NEXT(sasl_plugin);
-    }
-
-    return 0;
-}
-
 void qd_server_config_free(qd_server_config_t *cf)
 {
     if (!cf) return;
@@ -183,18 +156,6 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
     if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
     if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
-
-    if (cf->sasl_plugin_config.auth_service)               free(cf->sasl_plugin_config.auth_service);
-    if (cf->sasl_plugin_config.hostname)                   free(cf->sasl_plugin_config.hostname);
-    if (cf->sasl_plugin_config.sasl_init_hostname)         free(cf->sasl_plugin_config.sasl_init_hostname);
-    if (cf->sasl_plugin_config.ssl_certificate_file)       free(cf->sasl_plugin_config.ssl_certificate_file);
-    if (cf->sasl_plugin_config.ssl_private_key_file)       free(cf->sasl_plugin_config.ssl_private_key_file);
-    if (cf->sasl_plugin_config.ssl_ciphers)                free(cf->sasl_plugin_config.ssl_ciphers);
-    if (cf->sasl_plugin_config.ssl_protocols)              free(cf->sasl_plugin_config.ssl_protocols);
-    if (cf->sasl_plugin_config.ssl_password)               free(cf->sasl_plugin_config.ssl_password);
-    if (cf->sasl_plugin_config.ssl_trusted_certificate_db) free(cf->sasl_plugin_config.ssl_trusted_certificate_db);
-    if (cf->sasl_plugin_config.ssl_uid_format)             free(cf->sasl_plugin_config.ssl_uid_format);
-    if (cf->sasl_plugin_config.ssl_uid_name_mapping_file)  free(cf->sasl_plugin_config.ssl_uid_name_mapping_file);
 
     memset(cf, 0, sizeof(*cf));
 }
@@ -390,7 +351,6 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
     config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
     config->ssl_profile          = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
-    config->sasl_plugin          = qd_entity_opt_string(entity, "saslPlugin", 0);     CHECK();
     config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
@@ -501,36 +461,6 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
         }
     }
 
-    if (config->sasl_plugin) {
-        qd_config_sasl_plugin_t *sasl_plugin =
-            qd_find_sasl_plugin(qd->connection_manager, config->sasl_plugin);
-        if (sasl_plugin) {
-            config->sasl_plugin_config.auth_service = SSTRDUP(sasl_plugin->auth_service);
-            config->sasl_plugin_config.hostname = SSTRDUP(sasl_plugin->hostname);
-            config->sasl_plugin_config.sasl_init_hostname = SSTRDUP(sasl_plugin->sasl_init_hostname);
-            qd_log(qd->connection_manager->log_source, QD_LOG_INFO, "Using auth service %s from  SASL Plugin %s", config->sasl_plugin_config.auth_service, config->sasl_plugin);
-
-            if (sasl_plugin->auth_ssl_profile) {
-                config->sasl_plugin_config.use_ssl = true;
-                qd_config_ssl_profile_t *auth_ssl_profile =
-                    qd_find_ssl_profile(qd->connection_manager, sasl_plugin->auth_ssl_profile);
-
-                config->sasl_plugin_config.ssl_certificate_file = SSTRDUP(auth_ssl_profile->ssl_certificate_file);
-                config->sasl_plugin_config.ssl_private_key_file = SSTRDUP(auth_ssl_profile->ssl_private_key_file);
-                config->sasl_plugin_config.ssl_ciphers = SSTRDUP(auth_ssl_profile->ssl_ciphers);
-                config->sasl_plugin_config.ssl_protocols = SSTRDUP(auth_ssl_profile->ssl_protocols);
-                config->sasl_plugin_config.ssl_password = SSTRDUP(auth_ssl_profile->ssl_password);
-                config->sasl_plugin_config.ssl_trusted_certificate_db = SSTRDUP(auth_ssl_profile->ssl_trusted_certificate_db);
-                config->sasl_plugin_config.ssl_uid_format = SSTRDUP(auth_ssl_profile->ssl_uid_format);
-                config->sasl_plugin_config.ssl_uid_name_mapping_file = SSTRDUP(auth_ssl_profile->uid_name_mapping_file);
-            } else {
-                config->sasl_plugin_config.use_ssl = false;
-            }
-        } else {
-            qd_error(QD_ERROR_RUNTIME, "Cannot find sasl plugin %s", config->sasl_plugin); CHECK();
-        }
-    }
-
     return QD_ERROR_NONE;
 
   error:
@@ -567,20 +497,6 @@ static bool config_ssl_profile_free(qd_connection_manager_t *cm, qd_config_ssl_p
     free(ssl_profile->ssl_ciphers);
     free(ssl_profile->ssl_protocols);
     free(ssl_profile);
-    return true;
-
-}
-
-static bool config_sasl_plugin_free(qd_connection_manager_t *cm, qd_config_sasl_plugin_t *sasl_plugin)
-{
-    DEQ_REMOVE(cm->config_sasl_plugins, sasl_plugin);
-
-    free(sasl_plugin->name);
-    free(sasl_plugin->auth_service);
-    free(sasl_plugin->hostname);
-    free(sasl_plugin->sasl_init_hostname);
-    free(sasl_plugin->auth_ssl_profile);
-    free(sasl_plugin);
     return true;
 
 }
@@ -631,48 +547,6 @@ qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd
     error:
         qd_log(cm->log_source, QD_LOG_ERROR, "Unable to create ssl profile: %s", qd_error_message());
         config_ssl_profile_free(cm, ssl_profile);
-        return 0;
-}
-
-qd_config_sasl_plugin_t *qd_dispatch_configure_sasl_plugin(qd_dispatch_t *qd, qd_entity_t *entity)
-{
-    qd_error_clear();
-    qd_connection_manager_t *cm = qd->connection_manager;
-
-    qd_config_sasl_plugin_t *sasl_plugin = NEW(qd_config_sasl_plugin_t);
-    ZERO(sasl_plugin);
-    DEQ_ITEM_INIT(sasl_plugin);
-    DEQ_INSERT_TAIL(cm->config_sasl_plugins, sasl_plugin);
-    sasl_plugin->name                       = qd_entity_opt_string(entity, "name", 0); CHECK();
-
-    sasl_plugin->hostname = qd_entity_opt_string(entity, "host", 0);
-    char *auth_port = qd_entity_opt_string(entity, "port", 0);
-
-    if (sasl_plugin->hostname && auth_port) {
-        int strlen_auth_host = strlen(sasl_plugin->hostname);
-        int strlen_auth_port = strlen(auth_port);
-
-        if (strlen_auth_host > 0 && strlen_auth_port > 0) {
-
-            int hplen = strlen_auth_host + strlen_auth_port + 2;
-            if (hplen > 2) {
-                sasl_plugin->auth_service = malloc(hplen);
-                snprintf(sasl_plugin->auth_service, hplen, "%s:%s", sasl_plugin->hostname, auth_port);
-            }
-        }
-    }
-
-    free(auth_port);
-
-    sasl_plugin->sasl_init_hostname         = qd_entity_opt_string(entity, "realm", 0); CHECK();
-    sasl_plugin->auth_ssl_profile           = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
-
-    qd_log(cm->log_source, QD_LOG_INFO, "Created SASL plugin config with name %s", sasl_plugin->name);
-    return sasl_plugin;
-
-    error:
-        qd_log(cm->log_source, QD_LOG_ERROR, "Unable to create SASL plugin config: %s", qd_error_message());
-        config_sasl_plugin_free(cm, sasl_plugin);
         return 0;
 }
 
@@ -918,7 +792,6 @@ qd_connection_manager_t *qd_connection_manager(qd_dispatch_t *qd)
     DEQ_INIT(cm->listeners);
     DEQ_INIT(cm->connectors);
     DEQ_INIT(cm->config_ssl_profiles);
-    DEQ_INIT(cm->config_sasl_plugins);
 
     return cm;
 }
@@ -969,11 +842,6 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
         sslp = DEQ_HEAD(cm->config_ssl_profiles);
     }
 
-    qd_config_sasl_plugin_t *saslp = DEQ_HEAD(cm->config_sasl_plugins);
-    while (saslp) {
-        config_sasl_plugin_free(cm, saslp);
-        saslp = DEQ_HEAD(cm->config_sasl_plugins);
-    }
 
     free(cm);
 }
@@ -1037,13 +905,6 @@ void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl)
     qd_config_ssl_profile_t *ssl_profile = (qd_config_ssl_profile_t*) impl;
     config_ssl_profile_free(qd->connection_manager, ssl_profile);
 }
-
-void qd_connection_manager_delete_sasl_plugin(qd_dispatch_t *qd, void *impl)
-{
-    qd_config_sasl_plugin_t *sasl_plugin = (qd_config_sasl_plugin_t*) impl;
-    config_sasl_plugin_free(qd->connection_manager, sasl_plugin);
-}
-
 
 static void deferred_close(void *context, bool discard) {
     if (!discard) {

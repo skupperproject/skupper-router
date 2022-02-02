@@ -558,12 +558,8 @@ bool qd_policy_open_fetch_settings(
                         settings->spec.maxSenders           = qd_entity_opt_long((qd_entity_t*)upolicy, "maxSenders", 0);
                         settings->spec.maxReceivers         = qd_entity_opt_long((qd_entity_t*)upolicy, "maxReceivers", 0);
                         settings->spec.maxMessageSize       = qd_entity_opt_long((qd_entity_t*)upolicy, "maxMessageSize", 0);
-                        if (!settings->spec.allowAnonymousSender) { //don't override if enabled by authz plugin
-                            settings->spec.allowAnonymousSender = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowAnonymousSender", false);
-                        }
-                        if (!settings->spec.allowDynamicSource) { //don't override if enabled by authz plugin
-                            settings->spec.allowDynamicSource   = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicSource", false);
-                        }
+                        settings->spec.allowAnonymousSender = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowAnonymousSender", false);
+                        settings->spec.allowDynamicSource   = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicSource", false);
                         settings->spec.allowUserIdProxy       = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowUserIdProxy", false);
                         settings->spec.allowDynamicLinkRoutes = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicLinkRoutes", true);
 
@@ -571,12 +567,8 @@ bool qd_policy_open_fetch_settings(
                         // By default, deleting connections are enabled. To disable, set the allowAdminStatusUpdate to false in a policy.
                         //
                         settings->spec.allowAdminStatusUpdate = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowAdminStatusUpdate", true);
-                        if (settings->sources == 0) { //don't override if configured by authz plugin
-                            settings->sources              = qd_entity_get_string((qd_entity_t*)upolicy, "sources");
-                        }
-                        if (settings->targets == 0) { //don't override if configured by authz plugin
-                            settings->targets              = qd_entity_get_string((qd_entity_t*)upolicy, "targets");
-                        }
+                        settings->sources              = qd_entity_get_string((qd_entity_t*)upolicy, "sources");
+                        settings->targets              = qd_entity_get_string((qd_entity_t*)upolicy, "targets");
                         settings->sourcePattern        = qd_entity_get_string((qd_entity_t*)upolicy, "sourcePattern");
                         settings->targetPattern        = qd_entity_get_string((qd_entity_t*)upolicy, "targetPattern");
                         settings->sourceParseTree      = qd_policy_parse_tree(settings->sourcePattern);

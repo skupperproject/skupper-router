@@ -367,20 +367,6 @@ class SslProfileEntity(EntityAdapter):
         return super(SslProfileEntity, self).__str__().replace("Entity(", "SslProfileEntity(")
 
 
-class AuthServicePluginEntity(EntityAdapter):
-    def create(self):
-        return self._qd.qd_dispatch_configure_sasl_plugin(self._dispatch, self)
-
-    def _delete(self):
-        self._qd.qd_connection_manager_delete_sasl_plugin(self._dispatch, self._implementations[0].key)
-
-    def _identifier(self):
-        return self.name
-
-    def __str__(self):
-        return super(AuthServicePluginEntity, self).__str__().replace("Entity(", "AuthServicePluginEntity(")
-
-
 class ConnectionBaseEntity(EntityAdapter):
     """
     Provides validation of the openProperties attribute shared by Listener and

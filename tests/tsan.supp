@@ -59,11 +59,6 @@ race:tsan_reset_delivery_ids
 # DISPATCH-2135
 race:qd_message_Q2_holdoff_disable
 
-# DISPATCH-2137
-race:remote_sasl_process_init
-race:remote_sasl_prepare
-race:notify_downstream
-
 # DISPATCH-2138
 race:qdr_link_inbound_detach_CT
 

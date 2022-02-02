@@ -76,7 +76,6 @@ set(qpid_dispatch_SOURCES
   policy_spec.c
   protocol_adaptor.c
   proton_utils.c
-  remote_sasl.c
   posix/threading.c
   python_embedded.c
   router_agent.c

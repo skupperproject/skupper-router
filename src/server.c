@@ -26,7 +26,6 @@
 #include "dispatch_private.h"
 #include "entity.h"
 #include "policy.h"
-#include "remote_sasl.h"
 #include "server_private.h"
 #include "timer_private.h"
 
@@ -718,42 +717,6 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_sasl_config_name(sasl, ctx->server->sasl_config_name);
         if (config->sasl_mechanisms)
             pn_sasl_allowed_mechs(sasl, config->sasl_mechanisms);
-        if (config->sasl_plugin_config.auth_service) {
-            qd_log(server->log_source, QD_LOG_INFO, "[C%"PRIu64"] Enabling remote authentication service %s", ctx->connection_id, config->sasl_plugin_config.auth_service);
-            pn_ssl_domain_t* plugin_ssl_domain = NULL;
-            if (config->sasl_plugin_config.use_ssl) {
-                plugin_ssl_domain = pn_ssl_domain(PN_SSL_MODE_CLIENT);
-
-                if (config->sasl_plugin_config.ssl_certificate_file) {
-                    if (pn_ssl_domain_set_credentials(plugin_ssl_domain,
-                                                      config->sasl_plugin_config.ssl_certificate_file,
-                                                      config->sasl_plugin_config.ssl_private_key_file,
-                                                      config->sasl_plugin_config.ssl_password)) {
-                        qd_log(server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot set SSL credentials for authentication service", ctx->connection_id);
-                    }
-                }
-                if (config->sasl_plugin_config.ssl_trusted_certificate_db) {
-                    if (pn_ssl_domain_set_trusted_ca_db(plugin_ssl_domain, config->sasl_plugin_config.ssl_trusted_certificate_db)) {
-                        qd_log(server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot set trusted SSL certificate db for authentication service", ctx->connection_id);
-                    } else {
-                        if (pn_ssl_domain_set_peer_authentication(plugin_ssl_domain, PN_SSL_VERIFY_PEER, config->sasl_plugin_config.ssl_trusted_certificate_db)) {
-                            qd_log(server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot set SSL peer verification for authentication service", ctx->connection_id);
-                        }
-                    }
-                }
-                if (config->sasl_plugin_config.ssl_ciphers) {
-                    if (pn_ssl_domain_set_ciphers(plugin_ssl_domain, config->sasl_plugin_config.ssl_ciphers)) {
-                        qd_log(server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot set ciphers for authentication service", ctx->connection_id);
-                    }
-                }
-                if (config->sasl_plugin_config.ssl_protocols) {
-                    if (pn_ssl_domain_set_protocols(plugin_ssl_domain, config->sasl_plugin_config.ssl_protocols)) {
-                        qd_log(server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot set protocols for authentication service", ctx->connection_id);
-                    }
-                }
-            }
-            qdr_use_remote_authentication_service(tport, config->sasl_plugin_config.auth_service, config->sasl_plugin_config.hostname, config->sasl_plugin_config.sasl_init_hostname, plugin_ssl_domain, server->proactor);
-        }
         pn_transport_require_auth(tport, config->requireAuthentication);
         pn_transport_require_encryption(tport, config->requireEncryption);
         pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
@@ -1001,10 +964,6 @@ static void qd_increment_conn_index(qd_connection_t *ctx)
  */
 static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_conn, qd_connection_t *ctx)
 {
-    if (pn_conn && qdr_is_authentication_service_connection(pn_conn)) {
-        qdr_handle_authentication_service_connection_event(e);
-        return true;
-    }
 
     switch (pn_event_type(e)) {
 

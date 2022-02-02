@@ -34,7 +34,7 @@ DUMMY = "org.apache.qpid.dispatch.dummy"
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
-TOTAL_ENTITIES = 32   # for tests that check the total # of entities
+TOTAL_ENTITIES = 31   # for tests that check the total # of entities
 
 
 class QdmanageTest(TestCase):
