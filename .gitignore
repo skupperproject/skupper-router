@@ -14,8 +14,3 @@ tests/policy-1/policy-*.json
 .history/
 .tox
 .vscode
-console/react/node_modules/
-console/react/build/
-console/react/coverage/
-console/react/.prettierrc
-console/react/.prettierignore

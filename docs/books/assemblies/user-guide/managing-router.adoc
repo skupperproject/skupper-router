@@ -26,9 +26,6 @@ under the License
 
 
 
-// Monitoring using the web console
-include::monitoring-using-web-console.adoc[leveloffset=+1]
-
 // Monitoring using qdstat
 include::monitoring-using-qdstat.adoc[leveloffset=+1]
 

@@ -27,7 +27,6 @@ skip_install = True
 [testenv]
 commands = flake8 --count --show-source \
   ${CMAKE_SOURCE_DIR}/python \
-  ${CMAKE_SOURCE_DIR}/console \
   ${CMAKE_SOURCE_DIR}/docs \
   ${CMAKE_SOURCE_DIR}/tests \
   ${CMAKE_SOURCE_DIR}/tools \

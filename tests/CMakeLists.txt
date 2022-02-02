@@ -110,10 +110,6 @@ if(USE_LIBNGHTTP2)
   set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc)
 endif(USE_LIBNGHTTP2)
 
-if(CONSOLE_INSTALL)
-  set(CONSOLE_TEST system_tests_console)
-endif(CONSOLE_INSTALL)
-
 # System test python modules
 foreach(py_test_module
 #   system_tests_broker
@@ -157,7 +153,6 @@ foreach(py_test_module
     system_tests_connector_status
     system_tests_core_endpoint
     ${SYSTEM_TESTS_HTTP}
-    ${CONSOLE_TEST}
     system_tests_priority
     system_tests_core_client
     system_tests_address_lookup
