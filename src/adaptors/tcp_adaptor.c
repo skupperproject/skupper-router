@@ -740,7 +740,6 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                    false,           // strip_annotations_in
                                                    false,           // strip_annotations_out
                                                    250,             // link_capacity
-                                                   0,               // vhost
                                                    0,               // policy_spec
                                                    info,            // connection_info
                                                    0,               // context_binder
@@ -1002,7 +1001,6 @@ static void qdr_tcp_open_server_side_connection(qdr_tcp_connection_t* tc)
                                                    false,           // strip_annotations_in
                                                    false,           // strip_annotations_out
                                                    250,             // link_capacity
-                                                   0,               // vhost
                                                    0,               // policy_spec
                                                    info,            // connection_info
                                                    0,               // context_binder

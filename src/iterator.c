@@ -35,7 +35,6 @@ typedef enum {
 
 typedef enum {
     STATE_AT_PREFIX,
-    STATE_IN_SPACE,
     STATE_IN_BODY
 } view_state_t;
 
@@ -61,10 +60,6 @@ struct qd_iterator_t {
     view_state_t            state;
     unsigned char           prefix;
     unsigned char           prefix_override;
-    const char             *space;
-    int                     space_length;
-    int                     space_cursor;
-    bool                    view_space;
 };
 
 ALLOC_DECLARE(qd_iterator_t);
@@ -140,13 +135,6 @@ static void parse_address_view(qd_iterator_t *iter)
     iter->annotation_length = 1;
 
     if (iter->prefix_override == '\0' && qd_iterator_prefix(iter, "_")) {
-        if (iter->view == ITER_VIEW_ADDRESS_WITH_SPACE) {
-            iter->view_pointer      = save_pointer;
-            iter->view_space        = false;
-            iter->annotation_length = 0;
-            return;
-        }
-
         if (qd_iterator_prefix(iter, "local/")) {
             iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
             iter->state  = STATE_AT_PREFIX;
@@ -209,23 +197,7 @@ static void parse_address_view(qd_iterator_t *iter)
 
     iter->prefix            = iter->prefix_override ? iter->prefix_override : QD_ITER_HASH_PREFIX_MOBILE;
     iter->state             = STATE_AT_PREFIX;
-    iter->view_space        = true;
-    iter->annotation_length = iter->space_length + 1;
-}
-
-
-static void adjust_address_with_space(qd_iterator_t *iter)
-{
-    //
-    // Convert an ADDRESS_HASH view to an ADDRESS_WITH_SPACE view
-    //
-    if (iter->view_space) {
-        iter->annotation_length -= 1;
-        iter->state = iter->space ? STATE_IN_SPACE : STATE_IN_BODY;
-    } else {
-        iter->annotation_length = 0;
-        iter->state = STATE_IN_BODY;
-    }
+    iter->annotation_length = 1;
 }
 
 
@@ -280,7 +252,6 @@ static void view_initialize(qd_iterator_t *iter)
     iter->mode                 = MODE_TO_END;
     iter->annotation_length    = 0;
     iter->annotation_remaining = 0;
-    iter->view_space           = false;
 
     if (iter->view == ITER_VIEW_ALL)
         return;
@@ -368,11 +339,9 @@ static void view_initialize(qd_iterator_t *iter)
     if (iter->view == ITER_VIEW_ADDRESS_NO_HOST)
         return;
 
-    if (iter->view == ITER_VIEW_ADDRESS_HASH || iter->view == ITER_VIEW_ADDRESS_WITH_SPACE) {
+    if (iter->view == ITER_VIEW_ADDRESS_HASH) {
         qd_iterator_remove_trailing_separator(iter);
         parse_address_view(iter);
-        if (iter->view == ITER_VIEW_ADDRESS_WITH_SPACE)
-            adjust_address_with_space(iter);
         return;
     }
 }
@@ -645,14 +614,7 @@ void qd_iterator_reset(qd_iterator_t *iter)
     if (iter) {
         iter->view_pointer         = iter->view_start_pointer;
         iter->annotation_remaining = iter->annotation_length;
-
-        if (iter->view == ITER_VIEW_ADDRESS_WITH_SPACE) {
-            if (iter->space && iter->view_space) {
-                iter->state = STATE_IN_SPACE;
-                iter->space_cursor = 0;
-            }
-        } else
-            iter->state = iter->prefix ? STATE_AT_PREFIX : STATE_IN_BODY;
+        iter->state = iter->prefix ? STATE_AT_PREFIX : STATE_IN_BODY;
     }
 }
 
@@ -703,21 +665,6 @@ void qd_iterator_annotate_prefix(qd_iterator_t *iter, char prefix)
 }
 
 
-void qd_iterator_annotate_space(qd_iterator_t *iter, const char* space, int space_length)
-{
-    if (iter) {
-        iter->space        = space;
-        iter->space_length = space_length;
-        if      (iter->view == ITER_VIEW_ADDRESS_HASH)
-            iter->annotation_length = (iter->view_space ? space_length : 0) + 1;
-        else if (iter->view == ITER_VIEW_ADDRESS_WITH_SPACE) {
-            if (iter->view_space)
-                iter->annotation_length = space_length;
-        }
-    }
-}
-
-
 unsigned char qd_iterator_octet(qd_iterator_t *iter)
 {
     if (!iter)
@@ -749,19 +696,9 @@ unsigned char qd_iterator_octet(qd_iterator_t *iter)
     }
 
     if (iter->state == STATE_AT_PREFIX) {
-        iter->state = (iter->view_space && iter->space) ? STATE_IN_SPACE : STATE_IN_BODY;
-        iter->space_cursor = 0;
+        iter->state = STATE_IN_BODY;
         iter->annotation_remaining--;
         return iter->prefix;
-    }
-
-    if (iter->state == STATE_IN_SPACE) {
-        if (iter->space_cursor == iter->space_length - 1) {
-            iter->state = STATE_IN_BODY;
-            assert(iter->annotation_remaining == 1);
-        }
-        iter->annotation_remaining--;
-        return iter->space[iter->space_cursor++];
     }
 
     assert(false);  // all states checked - cannot get here

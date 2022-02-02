@@ -153,18 +153,8 @@ static qdr_address_t *qdr_lookup_terminus_address_CT(qdr_core_t       *core,
         //
         qd_iterator_t *dnp_address = qdr_terminus_dnp_address(terminus);
         if (dnp_address) {
-            qd_iterator_reset_view(dnp_address, ITER_VIEW_ADDRESS_WITH_SPACE);
-            if (conn->tenant_space)
-                qd_iterator_annotate_space(dnp_address, conn->tenant_space, conn->tenant_space_len);
+            qd_iterator_reset_view(dnp_address, ITER_VIEW_ADDRESS_NO_HOST);
             qd_parse_tree_retrieve_match(core->link_route_tree[dir], dnp_address, (void**) &addr);
-
-            if (addr && conn->tenant_space) {
-                //
-                // If this link is in a tenant space, translate the dnp address to
-                // the fully-qualified view
-                //
-                qdr_terminus_set_dnp_address_iterator(terminus, dnp_address);
-            }
 
             qd_iterator_free(dnp_address);
             *link_route = true;
@@ -217,20 +207,10 @@ static qdr_address_t *qdr_lookup_terminus_address_CT(qdr_core_t       *core,
     // a link-route destination for the address.
     //
     qd_iterator_t *iter = qdr_terminus_get_address(terminus);
-    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_WITH_SPACE);
-    if (conn->tenant_space)
-        qd_iterator_annotate_space(iter, conn->tenant_space, conn->tenant_space_len);
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_NO_HOST);
     qd_parse_tree_retrieve_match(core->link_route_tree[dir], iter, (void**) &addr);
     if (addr) {
         *link_route = true;
-
-        //
-        // If this link is in a tenant space, translate the terminus address to
-        // the fully-qualified view
-        //
-        if (conn->tenant_space) {
-            qdr_terminus_set_address_iterator(terminus, iter);
-        }
         return addr;
     }
 
@@ -468,9 +448,7 @@ static bool qcm_terminus_has_local_link_route(qdr_core_t *core, qdr_connection_t
 {
     qdr_address_t *addr;
     qd_iterator_t *iter = qd_iterator_dup(qdr_terminus_get_address(terminus));
-    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_WITH_SPACE);
-    if (conn->tenant_space)
-        qd_iterator_annotate_space(iter, conn->tenant_space, conn->tenant_space_len);
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_NO_HOST);
     qd_parse_tree_retrieve_match(core->link_route_tree[dir], iter, (void**) &addr);
     qd_iterator_free(iter);
     return addr && (DEQ_SIZE(addr->conns) > 0);

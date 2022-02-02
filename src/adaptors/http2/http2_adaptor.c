@@ -2205,7 +2205,6 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                    false,
                                                    250,
                                                    0,
-                                                   0,
                                                    info,
                                                    0,
                                                    0);
@@ -2455,7 +2454,6 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
                                                    false,
                                                    false,
                                                    250,
-                                                   0,
                                                    0,
                                                    info,
                                                    0,

@@ -79,7 +79,6 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
                                         bool                          strip_annotations_in,
                                         bool                          strip_annotations_out,
                                         int                           link_capacity,
-                                        const char                   *vhost,
                                         const qd_policy_spec_t       *policy_spec,
                                         qdr_connection_info_t        *connection_info,
                                         qdr_connection_bind_context_t context_binder,
@@ -111,13 +110,6 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     conn->work_lock = sys_mutex();
     conn->conn_uptime = core->uptime_ticks;
 
-    if (vhost) {
-        conn->tenant_space_len = strlen(vhost) + 1;
-        conn->tenant_space = (char*) malloc(conn->tenant_space_len + 1);
-        strcpy(conn->tenant_space, vhost);
-        strcat(conn->tenant_space, "/");
-    }
-
     if (context_binder) {
         context_binder(conn, bind_token);
     }
@@ -135,10 +127,10 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
 
     pn_data_format(connection_info->connection_properties, props_str, &props_len);
 
-    qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Connection Opened: dir=%s host=%s vhost=%s encrypted=%s"
+    qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s"
            " auth=%s user=%s container_id=%s props=%s",
            management_id, incoming ? "in" : "out",
-           connection_info->host, vhost ? vhost : "", connection_info->is_encrypted ? connection_info->ssl_proto : "no",
+           connection_info->host, connection_info->is_encrypted ? connection_info->ssl_proto : "no",
            connection_info->is_authenticated ? connection_info->sasl_mechanisms : "no",
            connection_info->user, connection_info->container, props_str);
 
@@ -239,13 +231,6 @@ void *qdr_connection_get_context(const qdr_connection_t *conn)
 {
     return conn ? conn->user_context : NULL;
 }
-
-const char *qdr_connection_get_tenant_space(const qdr_connection_t *conn, int *len)
-{
-    *len = conn ? conn->tenant_space_len : 0;
-    return conn ? conn->tenant_space : 0;
-}
-
 
 void qdr_record_link_credit(qdr_core_t *core, qdr_link_t *link)
 {
@@ -1292,9 +1277,7 @@ qdr_address_config_t *qdr_config_for_address_CT(qdr_core_t *core, qdr_connection
     qdr_address_config_t *addr = 0;
     qd_iterator_view_t old_view = qd_iterator_get_view(iter);
 
-    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_WITH_SPACE);
-    if (conn && conn->tenant_space)
-        qd_iterator_annotate_space(iter, conn->tenant_space, conn->tenant_space_len);
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_NO_HOST);
     qd_parse_tree_retrieve_match(core->addr_parse_tree, iter, (void **) &addr);
     qd_iterator_annotate_prefix(iter, '\0');
     qd_iterator_reset_view(iter, old_view);
@@ -1339,7 +1322,7 @@ qd_address_treatment_t qdr_treatment_for_address_hash_with_default_CT(qdr_core_t
         //
         // Handle the mobile address case
         //
-        qd_iterator_t *config_iter = qd_iterator_string(&copy[1], ITER_VIEW_ADDRESS_WITH_SPACE);
+        qd_iterator_t *config_iter = qd_iterator_string(&copy[1], ITER_VIEW_ADDRESS_NO_HOST);
         qd_parse_tree_retrieve_match(core->addr_parse_tree, config_iter, (void **) &addr);
         if (addr)
             trt = addr->treatment;
@@ -1473,7 +1456,6 @@ static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, boo
 void qdr_connection_free(qdr_connection_t *conn)
 {
     sys_mutex_free(conn->work_lock);
-    free(conn->tenant_space);
     qdr_error_free(conn->error);
     qdr_connection_info_free(conn->connection_info);
     free_qdr_connection_t(conn);

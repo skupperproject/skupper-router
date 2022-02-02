@@ -202,7 +202,6 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ct
                                             false,  // strip annotations in
                                             false,  // strip annotations out
                                             DEFAULT_CAPACITY,
-                                            0,      // vhost
                                             0,      // policy_spec
                                             info,
                                             0,      // bind context

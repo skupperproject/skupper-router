@@ -109,19 +109,12 @@ typedef struct qd_iterator_t qd_iterator_t;
  *      <my_area>/<router>
  *               R^^^^^^^^
  *
- * ITER_VIEW_ADDRESS_WITH_SPACE
- *    Same as ADDRESS_HASH but:
- *      - Does not show the prefix
- *      - Does not hash-ize local and topological addresses
- *      - Does not show namespace on local and topological addresses
- *
  */
 typedef enum {
     ITER_VIEW_ALL,
     ITER_VIEW_ADDRESS_NO_HOST,
     ITER_VIEW_ADDRESS_HASH,
-    ITER_VIEW_NODE_HASH,
-    ITER_VIEW_ADDRESS_WITH_SPACE
+    ITER_VIEW_NODE_HASH
 } qd_iterator_view_t;
 
 
@@ -382,18 +375,6 @@ char* qd_iterator_strncpy(qd_iterator_t *iter, char* buffer, int n);
  * @param prefix A character to use as the prefix of a mobile address view
  */
 void qd_iterator_annotate_prefix(qd_iterator_t *iter, char prefix);
-
-/**
- * Annotate a mobile address view with a tenant namespace.
- *
- * Note that the space string is not copied into the iterator.  It must remain in-place
- * and unchanged for the lifetime of the iterator.
- *
- * @param iter Pointer to an iterator
- * @param space Pointer to the first character of a character string representing a namespace
- * @param space_len The number of characters in the space string
- */
-void qd_iterator_annotate_space(qd_iterator_t *iter, const char* space, int space_len);
 
 
 /** @} */

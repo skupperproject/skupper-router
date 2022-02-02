@@ -430,7 +430,6 @@ static void on_startup(void *context)
                                           false,            // strip_annotations_in
                                           false,            // strip_annotations_out
                                           250,              // link_capacity
-                                          0,                // vhost
                                           0,                // policy_spec
                                           info,             // connection_info
                                           0,                // context_binder

@@ -797,9 +797,6 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
         qdr_link_ref_t *temp_rlink = 0;
         qdr_address_t *addr = link->owning_addr;
         if (!addr && dlv->to_addr) {
-            qdr_connection_t *conn = link->conn;
-            if (conn && conn->tenant_space)
-                qd_iterator_annotate_space(dlv->to_addr, conn->tenant_space, conn->tenant_space_len);
             qd_hash_retrieve(core->addr_hash, dlv->to_addr, (void**) &addr);
 
             if (!addr) {

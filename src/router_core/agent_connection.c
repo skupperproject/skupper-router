@@ -39,16 +39,15 @@
 #define QDR_CONNECTION_SSLCIPHER             12
 #define QDR_CONNECTION_PROPERTIES            13
 #define QDR_CONNECTION_SSLSSF                14
-#define QDR_CONNECTION_TENANT                15
-#define QDR_CONNECTION_TYPE                  16
-#define QDR_CONNECTION_SSL                   17
-#define QDR_CONNECTION_OPENED                18
-#define QDR_CONNECTION_ACTIVE                19
-#define QDR_CONNECTION_ADMIN_STATUS          20
-#define QDR_CONNECTION_OPER_STATUS           21
-#define QDR_CONNECTION_UPTIME_SECONDS        22
-#define QDR_CONNECTION_LAST_DLV_SECONDS      23
-#define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 24
+#define QDR_CONNECTION_TYPE                  15
+#define QDR_CONNECTION_SSL                   16
+#define QDR_CONNECTION_OPENED                17
+#define QDR_CONNECTION_ACTIVE                18
+#define QDR_CONNECTION_ADMIN_STATUS          19
+#define QDR_CONNECTION_OPER_STATUS           20
+#define QDR_CONNECTION_UPTIME_SECONDS        21
+#define QDR_CONNECTION_LAST_DLV_SECONDS      22
+#define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 23
 
 
 const char * const QDR_CONNECTION_DIR_IN  = "in";
@@ -84,7 +83,6 @@ const char *qdr_connection_columns[] =
      "sslCipher",
      "properties",
      "sslSsf",
-     "tenant",
      "type",
      "ssl",
      "opened",
@@ -207,13 +205,6 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
 
     case QDR_CONNECTION_SSLSSF:
         qd_compose_insert_long(body, conn->connection_info->ssl_ssf);
-        break;
-
-    case QDR_CONNECTION_TENANT:
-        if (conn->tenant_space)
-            qd_compose_insert_string(body, conn->tenant_space);
-        else
-            qd_compose_insert_null(body);
         break;
 
     case QDR_CONNECTION_TYPE:
