@@ -566,7 +566,6 @@ bool qd_policy_open_fetch_settings(
                         }
                         settings->spec.allowUserIdProxy       = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowUserIdProxy", false);
                         settings->spec.allowWaypointLinks     = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowWaypointLinks", true);
-                        settings->spec.allowFallbackLinks     = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowFallbackLinks", true);
                         settings->spec.allowDynamicLinkRoutes = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicLinkRoutes", true);
 
                         //
@@ -1050,23 +1049,6 @@ static bool qd_policy_terminus_is_waypoint(pn_terminus_t *term)
 }
 
 
-static bool qd_policy_terminus_is_fallback(pn_terminus_t *term)
-{
-    pn_data_t *cap = pn_terminus_capabilities(term);
-    if (cap) {
-        pn_data_rewind(cap);
-        pn_data_next(cap);
-        if (cap && pn_data_type(cap) == PN_SYMBOL) {
-            pn_bytes_t sym = pn_data_get_symbol(cap);
-            if (strcmp(sym.start, QD_CAPABILITY_FALLBACK) == 0)
-                return true;
-        }
-    }
-
-    return false;
-}
-
-
 bool qd_policy_approve_message_target(qd_iterator_t *address, qd_connection_t *qd_conn)
 {
 #define ON_STACK_SIZE 2048
@@ -1140,17 +1122,6 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
             }
         }
 
-        if (!qd_conn->policy_settings->spec.allowFallbackLinks) {
-            bool fallback = qd_policy_terminus_is_fallback(pn_link_remote_target(pn_link));
-            if (fallback) {
-                qd_log(qd_server_dispatch(qd_conn->server)->policy->log_source, QD_LOG_INFO,
-                       "[C%"PRIu64"] DENY AMQP Attach sender link '%s' for user '%s', rhost '%s', vhost '%s'.  Fallback capability not permitted",
-                       qd_conn->connection_id, target, qd_conn->user_id, hostip, vhost);
-                _qd_policy_deny_amqp_sender_link(pn_link, qd_conn, QD_AMQP_COND_UNAUTHORIZED_ACCESS);
-                return false;
-            }
-        }
-
         lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, target, false);
 
         qd_log(qd_server_dispatch(qd_conn->server)->policy->log_source, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
@@ -1218,17 +1189,6 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
             if (waypoint) {
                 qd_log(qd_server_dispatch(qd_conn->server)->policy->log_source, QD_LOG_INFO,
                        "[C%"PRIu64"] DENY AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s'.  Waypoint capability not permitted",
-                       qd_conn->connection_id, source, qd_conn->user_id, hostip, vhost);
-                _qd_policy_deny_amqp_sender_link(pn_link, qd_conn, QD_AMQP_COND_UNAUTHORIZED_ACCESS);
-                return false;
-            }
-        }
-
-        if (!qd_conn->policy_settings->spec.allowFallbackLinks) {
-            bool fallback = qd_policy_terminus_is_fallback(pn_link_remote_source(pn_link));
-            if (fallback) {
-                qd_log(qd_server_dispatch(qd_conn->server)->policy->log_source, QD_LOG_INFO,
-                       "[C%"PRIu64"] DENY AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s'.  Fallback capability not permitted",
                        qd_conn->connection_id, source, qd_conn->user_id, hostip, vhost);
                 _qd_policy_deny_amqp_sender_link(pn_link, qd_conn, QD_AMQP_COND_UNAUTHORIZED_ACCESS);
                 return false;

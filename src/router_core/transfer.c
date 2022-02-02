@@ -533,8 +533,7 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
 
     if (addr
         && addr == link->owning_addr
-        && qdr_addr_path_count_CT(addr) == 0
-        && (link->fallback || qdr_addr_path_count_CT(addr->fallback) == 0)) {
+        && qdr_addr_path_count_CT(addr) == 0) {
         //
         // We are trying to forward a delivery on an address that has no outbound paths
         // AND the incoming link is targeted (not anonymous).
@@ -583,8 +582,7 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
     if (addr) {
         fanout = qdr_forward_message_CT(core, addr, dlv->msg, dlv, false, link->link_type == QD_LINK_CONTROL);
         if (link->link_type != QD_LINK_CONTROL && link->link_type != QD_LINK_ROUTER) {
-            if (!link->fallback)
-                addr->deliveries_ingress++;
+            addr->deliveries_ingress++;
 
             if (qdr_connection_route_container(link->conn)) {
                 addr->deliveries_ingress_route_container++;
@@ -651,24 +649,6 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
             qdr_address_t *sender_address = core->edge_conn_addr(core->edge_context);
             if (sender_address && sender_address != addr)
                 fanout += qdr_forward_message_CT(core, sender_address, dlv->msg, dlv, false, link->link_type == QD_LINK_CONTROL);
-        }
-    }
-
-    //
-    // If the fanout is still zero, check to see if there is a fallback address and
-    // route via the fallback if present.  Don't do fallback forwarding if this link is
-    // itself associated with a fallback destination.
-    //
-    if (fanout == 0 && !!addr && !!addr->fallback && !link->fallback) {
-        const char          *key      = (const char*) qd_hash_key_by_handle(addr->fallback->hash_handle);
-        qd_composed_field_t *to_field = qd_compose_subfield(0);
-        qd_compose_insert_string(to_field, key + 2);
-        qd_message_set_to_override_annotation(dlv->msg, to_field);
-        qd_message_set_phase_annotation(dlv->msg, key[1] - '0');
-        fanout = qdr_forward_message_CT(core, addr->fallback, dlv->msg, dlv, false, link->link_type == QD_LINK_CONTROL);
-        if (fanout > 0) {
-            addr->deliveries_redirected++;
-            core->deliveries_redirected++;
         }
     }
 
@@ -758,7 +738,7 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
 
     link->total_deliveries++;
 
-    if (link->link_type == QD_LINK_ENDPOINT && !link->fallback)
+    if (link->link_type == QD_LINK_ENDPOINT)
         core->deliveries_ingress++;
 
     //
@@ -1002,7 +982,7 @@ void qdr_drain_inbound_undelivered_CT(qdr_core_t *core, qdr_link_t *link, qdr_ad
  */
 void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr)
 {
-    if (qdr_addr_path_count_CT(addr) == 1 || (!!addr->fallback && qdr_addr_path_count_CT(addr->fallback) == 1)) {
+    if (qdr_addr_path_count_CT(addr) == 1) {
         qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);
         while (ref) {
             qdr_link_t *link = ref->link;
@@ -1020,9 +1000,6 @@ void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr)
 
             ref = DEQ_NEXT(ref);
         }
-
-        if (!!addr->fallback_for)
-            qdr_addr_start_inlinks_CT(core, addr->fallback_for);
     }
 }
 

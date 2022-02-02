@@ -504,7 +504,7 @@ int qdr_forward_multicast_CT(qdr_core_t      *core,
                     DEQ_INSERT_TAIL(deliver_info_list, deliver_info);
 
                     fanout++;
-                    if (out_link->link_type != QD_LINK_CONTROL && out_link->link_type != QD_LINK_ROUTER && !out_link->fallback) {
+                    if (out_link->link_type != QD_LINK_CONTROL && out_link->link_type != QD_LINK_ROUTER) {
                         addr->deliveries_egress++;
                         core->deliveries_egress++;
                     }
@@ -687,10 +687,8 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
                 DEQ_INSERT_TAIL(addr->rlinks, link_ref);
             }
 
-            if (!out_link->fallback) {
-                addr->deliveries_egress++;
-                core->deliveries_egress++;
-            }
+            addr->deliveries_egress++;
+            core->deliveries_egress++;
 
             if (qdr_connection_route_container(out_link->conn)) {
                 core->deliveries_egress_route_container++;
@@ -923,10 +921,8 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                 core->deliveries_transit++;
         }
         else {
-            if (!chosen_link->fallback) {
-                addr->deliveries_egress++;
-                core->deliveries_egress++;
-            }
+            addr->deliveries_egress++;
+            core->deliveries_egress++;
 
             if (qdr_connection_route_container(chosen_link->conn)) {
                 core->deliveries_egress_route_container++;

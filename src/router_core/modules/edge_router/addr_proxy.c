@@ -92,24 +92,11 @@ static qdr_terminus_t *qdr_terminus_normal(const char *addr)
 }
 
 
-static void set_fallback_capability(qdr_terminus_t *term)
-{
-    qdr_terminus_add_capability(term, QD_CAPABILITY_FALLBACK);
-}
-
-
 static void set_waypoint_capability(qdr_terminus_t *term, char phase_char, qd_direction_t dir, int in_phase, int out_phase)
 {
-    int  phase    = (int) (phase_char - '0');
-    bool fallback = phase_char == QD_ITER_HASH_PHASE_FALLBACK;
+    int  phase = (int) (phase_char - '0');
     char cap[16];
     char suffix[3];
-
-    if (fallback) {
-        strncpy(cap, QD_CAPABILITY_FALLBACK, 15);
-        qdr_terminus_add_capability(term, cap);
-        return;
-    }
 
     //
     // For links that are outgoing on the in_phase or incoming on the out_phase, don't set the
@@ -146,10 +133,7 @@ static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t
         qdr_terminus_t *term = qdr_terminus_normal(key + 2);
         const char     *key  = (char*) qd_hash_key_by_handle(addr->hash_handle);
 
-        if (key[1] == QD_ITER_HASH_PHASE_FALLBACK) {
-            set_fallback_capability(term);
-
-        } else if (addr->config && addr->config->out_phase > 0) {
+        if (addr->config && addr->config->out_phase > 0) {
             //
             // If this address is configured as multi-phase, we may need to
             // add waypoint capabilities to the terminus.
@@ -187,12 +171,8 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
         // for the address (see on_transfer below).
         //
         qdr_terminus_t *term = qdr_terminus_normal(key + 2);
-        const char     *key  = (char*) qd_hash_key_by_handle(addr->hash_handle);
 
-        if (key[1] == QD_ITER_HASH_PHASE_FALLBACK) {
-            set_fallback_capability(term);
-
-        } else if (addr->config && addr->config->out_phase > 0) {
+        if (addr->config && addr->config->out_phase > 0) {
             //
             // If this address is configured as multi-phase, we may need to
             // add waypoint capabilities to the terminus.
@@ -351,12 +331,6 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
 
                     if (add) {
                         add_outlink(ap, key, addr);
-
-                        //
-                        // If the address has a fallback address, add an outlink for that as well
-                        //
-                        if (!!addr->fallback)
-                            add_outlink(ap, key, addr->fallback);
                     }
                 }
             }

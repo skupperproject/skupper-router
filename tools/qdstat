@@ -368,7 +368,6 @@ class BusManager(object):
                 rows.append(('Deliveries Delayed > 1sec',  PlainNum(router.deliveriesDelayed1Sec)))
                 rows.append(('Deliveries Delayed > 10sec', PlainNum(router.deliveriesDelayed10Sec)))
                 rows.append(('Deliveries Stuck > 10sec',   PlainNum(router.deliveriesStuck)))
-                rows.append(('Deliveries to Fallback',     PlainNum(router.deliveriesRedirectedToFallback)))
                 try:
                     rows.append(('Links Blocked', PlainNum(router.linksBlocked)))
                 except:
@@ -568,7 +567,7 @@ class BusManager(object):
 
         rows = []
         cols = ('distribution', 'inProcess', 'subscriberCount', 'remoteCount',
-                'containerCount', 'deliveriesIngress', 'deliveriesEgress', 'deliveriesRedirectedToFallback',
+                'containerCount', 'deliveriesIngress', 'deliveriesEgress',
                 'deliveriesTransit', 'deliveriesToContainer', 'deliveriesFromContainer', 'name', 'priority')
 
         objects = self.query('org.apache.qpid.dispatch.router.address', cols, limit=self.opts.limit)
@@ -593,7 +592,6 @@ class BusManager(object):
         heads.append(Header("in", Header.COMMAS))
         heads.append(Header("out", Header.COMMAS))
         heads.append(Header("thru", Header.COMMAS))
-        heads.append(Header("fallback", Header.COMMAS))
         if self.opts.verbose:
             heads.append(Header("to-proc", Header.COMMAS))
             heads.append(Header("from-proc", Header.COMMAS))
@@ -613,10 +611,6 @@ class BusManager(object):
             row.append(PlainNum(addr.deliveriesIngress))
             row.append(PlainNum(addr.deliveriesEgress))
             row.append(PlainNum(addr.deliveriesTransit))
-            try:
-                row.append(PlainNum(addr.deliveriesRedirectedToFallback))
-            except:
-                row.append("-")
             if self.opts.verbose:
                 row.append(PlainNum(addr.deliveriesToContainer))
                 row.append(PlainNum(addr.deliveriesFromContainer))
@@ -902,7 +896,6 @@ class BusManager(object):
         heads.append(Header("allowWaypointLinks"))
         heads.append(Header("allowDynamicLinkRoutes"))
         heads.append(Header("allowAdminStatusUpdate"))
-        heads.append(Header("allowFallbackLinks"))
         rows = []
         for vhost in vhosts:
             groups = vhost["groups"]
@@ -927,7 +920,6 @@ class BusManager(object):
                     row.append(self.showNodefaultBool(group, "allowWaypointLinks", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowDynamicLinkRoutes", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowAdminStatusUpdate", vg_schema))
-                    row.append(self.showNodefaultBool(group, "allowFallbackLinks", vg_schema))
                     rows.append(tuple(row))
         disp.formattedTable("Vhost Groups", heads, rows)
 

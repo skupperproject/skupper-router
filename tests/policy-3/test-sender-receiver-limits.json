@@ -109,7 +109,6 @@
           "maxSenders":            3,
           "maxReceivers":          5,
           "allowWaypointLinks": true,
-          "allowFallbackLinks": false,
           "sources": "*",
           "targets": "*"
         }
@@ -132,7 +131,6 @@
           "maxSenders":            3,
           "maxReceivers":          5,
           "allowWaypointLinks": false,
-          "allowFallbackLinks": true,
           "sources": "*",
           "targets": "*"
         }
