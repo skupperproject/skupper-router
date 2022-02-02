@@ -48,7 +48,6 @@ const unsigned char *link_route_entity_type        = (unsigned char*) "org.apach
 const unsigned char *auto_link_entity_type         = (unsigned char*) "org.apache.qpid.dispatch.router.config.autoLink";
 const unsigned char *address_entity_type           = (unsigned char*) "org.apache.qpid.dispatch.router.address";
 const unsigned char *link_entity_type              = (unsigned char*) "org.apache.qpid.dispatch.router.link";
-const unsigned char *console_entity_type           = (unsigned char*) "org.apache.qpid.dispatch.console";
 const unsigned char *router_entity_type            = (unsigned char*) "org.apache.qpid.dispatch.router";
 const unsigned char *connection_entity_type        = (unsigned char*) "org.apache.qpid.dispatch.connection";
 const unsigned char *tcp_connection_entity_type    = (unsigned char*) "org.apache.qpid.dispatch.tcpConnection";
@@ -439,8 +438,6 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
         *entity_type = QD_ROUTER_CONFIG_AUTO_LINK;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), router_entity_type))
         *entity_type = QD_ROUTER_ROUTER;
-    else if (qd_iterator_equal(qd_parse_raw(parsed_field), console_entity_type))
-        *entity_type = QD_ROUTER_FORBIDDEN;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), connection_entity_type))
         *entity_type = QD_ROUTER_CONNECTION;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), tcp_connection_entity_type))

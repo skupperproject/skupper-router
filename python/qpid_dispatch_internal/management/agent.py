@@ -73,10 +73,9 @@ from cProfile import Profile
 from io import StringIO
 
 from ctypes import c_void_p, py_object, c_long
-from subprocess import Popen
 
 import qpid_dispatch_site
-from ..dispatch import IoAdapter, LogAdapter, LOG_INFO, LOG_WARNING, LOG_DEBUG, LOG_ERROR, TREATMENT_ANYCAST_CLOSEST
+from ..dispatch import IoAdapter, LogAdapter, LOG_INFO, LOG_DEBUG, LOG_ERROR, TREATMENT_ANYCAST_CLOSEST
 from qpid_dispatch.management.error import ManagementError, OK, CREATED, NO_CONTENT, STATUS_TEXT, \
     BadRequestStatus, InternalServerErrorStatus, NotImplementedStatus, NotFoundStatus
 from qpid_dispatch.management.entity import camelcase
@@ -469,47 +468,6 @@ class AutoLinkEntity(EntityAdapter):
 
     def __str__(self):
         return super(AutoLinkEntity, self).__str__().replace("Entity(", "AutoLinkEntity(")
-
-
-class ConsoleEntity(EntityAdapter):
-    def __str__(self):
-        return super(ConsoleEntity, self).__str__().replace("Entity(", "ConsoleEntity(")
-
-    def create(self):
-        # if a named listener is present, use its host:port
-        self._agent.log(LOG_WARNING, "Console entity is deprecated: Use http:yes on listener entity instead")
-        name = self.attributes.get('listener')
-        if name:
-            listeners = self._agent.find_entity_by_type("listener")
-            for listener in listeners:
-                if listener.name == name:
-                    try:
-                        # required
-                        host   = listener.attributes['host']
-                        port   = listener.attributes['port']
-                        # optional
-                        wsport = self.attributes.get('wsport')
-                        home   = self.attributes.get('home')
-                        args   = self.attributes.get('args')
-
-                        pargs = []
-                        pargs.append(self.attributes['proxy'])
-                        if args:
-                            # Replace any $port|$host|$wsport|$home
-                            dargs = {'$port': port, '$host': host}
-                            if wsport:
-                                dargs['$wsport'] = wsport
-                            if home:
-                                dargs['$home'] = home
-                            for k, v in dargs.items():
-                                args = args.replace(k, str(v))
-                            pargs += args.split()
-
-                        # run the external program
-                        Popen(pargs)
-                    except:
-                        self._agent.log(LOG_ERROR, "Can't parse console entity: %s" % (format_exc()))
-                    break
 
 
 class DummyEntity(EntityAdapter):

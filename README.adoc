@@ -308,9 +308,6 @@ Other options include `Debug` (disables optimizations) and `Coverage`.
 |`-DQD_ENABLE_ASSERTIONS=`
 |Seting this to `ON` enables asserts irrespective of `CMAKE_BUILD_TYPE`.
 
-|`-DCONSOLE_INSTALL=`
-|Web console will not be built if this is set to `OFF`.
-
 |`-DRUNTIME_CHECK=`
 |Enables C/C++ runtime checkers.See "Run Time Validation" chapter above.
 

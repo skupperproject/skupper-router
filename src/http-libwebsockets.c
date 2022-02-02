@@ -335,7 +335,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     m->mountpoint = "/";    /* URL mount point */
     m->mountpoint_len = strlen(m->mountpoint); /* length of the mountpoint */
     m->origin = (config->http_root_dir && *config->http_root_dir) ? /* File system root */
-        config->http_root_dir : QPID_CONSOLE_STAND_ALONE_INSTALL_DIR;
+        config->http_root_dir : QPID_DISPATCH_HTTP_ROOT_DIR;
     m->def = "index.html";  /* Default file name */
     m->origin_protocol = LWSMPRO_FILE; /* mount type is a directory in a filesystem */
     m->extra_mimetypes = mime_types;

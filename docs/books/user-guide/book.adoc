@@ -47,7 +47,6 @@ include::assemblies/user-guide/configuring-routing.adoc[leveloffset=+1]
 
 [id='management']
 = Manage
-include::assemblies/user-guide/monitoring-using-web-console.adoc[leveloffset=+1]
 include::assemblies/user-guide/monitoring-using-qdstat.adoc[leveloffset=+1]
 include::modules/user-guide/managing-using-qdmanage.adoc[leveloffset=+1]
 include::assemblies/user-guide/troubleshooting.adoc[leveloffset=+1]

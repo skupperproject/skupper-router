@@ -26,9 +26,6 @@ under the License
 
 {RouterName} provides both graphical and CLI tools for monitoring and managing a router network.
 
-{RouterLongName} Console::
-A web console for monitoring the layout and health of the router network.
-
 qdstat::
 A command-line tool for monitoring the status of a router in the router network. Using this tool, you can view the following information about a router:
 

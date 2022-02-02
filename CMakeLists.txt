@@ -158,10 +158,7 @@ set(DOC_INSTALL_DIR ${SHARE_INSTALL_DIR}/doc CACHE PATH "Documentation directory
 set(QD_DOC_INSTALL_DIR ${SHARE_INSTALL_DIR}/doc/qpid-dispatch CACHE PATH "Qpid Dispatch documentation directory")
 set(MAN_INSTALL_DIR share/man CACHE PATH "Manpage directory")
 set(QPID_DISPATCH_HOME_INSTALLED ${CMAKE_INSTALL_PREFIX}/${QPID_DISPATCH_HOME})
-
-set(CONSOLE_BASE_INSTALL_DIR "share/qpid-dispatch/console")
-set(CONSOLE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CONSOLE_BASE_INSTALL_DIR}")
-set(CONSOLE_STAND_ALONE_INSTALL_DIR "${CONSOLE_INSTALL_DIR}")
+set(QPID_DISPATCH_HTML_DIR ${CMAKE_INSTALL_PREFIX}/share/qpid-dispatch/html CACHE PATH "Qpid Dispatch HTML directory")
 
 set(RUN ${Python_EXECUTABLE} ${CMAKE_BINARY_DIR}/run.py)
 
@@ -247,6 +244,7 @@ install(FILES ${headers} DESTINATION ${INCLUDE_INSTALL_DIR}/qpid/dispatch)
 install(FILES include/qpid/dispatch.h DESTINATION ${INCLUDE_INSTALL_DIR}/qpid)
 install(FILES etc/qdrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/qpid-dispatch)
 install(FILES etc/sasl2/qdrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/sasl2)
+install(FILES share/index.html DESTINATION ${QPID_DISPATCH_HTML_DIR})
 
 
 # Tools
@@ -275,7 +273,6 @@ endif(NOT UNITTEST_MISSING)
 add_subdirectory(python)
 add_subdirectory(router)
 add_subdirectory(docs)
-add_subdirectory(console)
 
 # reconfigure.in is a workaround to force cmake re-configuration. For example,
 # we use GLOB to collect .h files for install and apidoc, so if you _remove_ a

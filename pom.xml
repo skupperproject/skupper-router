@@ -122,6 +122,7 @@
                       <exclude>tools/scraper/test_data/**</exclude>
                       <exclude>**/doctest.h</exclude>
                       <exclude>**/*_pb2*</exclude>
+                      <exclude>share/index.html</exclude>
                 </excludes>
         </configuration>            
             </plugin>

@@ -482,7 +482,7 @@
                 },
                 "metadata": {
                     "type": "string",
-                    "description": "Optional metadata text to describe or label this router. This text does not affect the function of the router, but it can be used by external tools (such as the console or orchestration software) to control how the router is displayed.",
+                    "description": "Optional metadata text to describe or label this router. This text does not affect the function of the router, but it can be used by external tools (such as orchestration software) to control how the router is displayed.",
                     "create": true,
                     "required": false
                 },
@@ -815,7 +815,7 @@
                 },
                 "httpRootDir": {
                     "type": "path",
-                    "description": "Absolute path to a directory from which to serve static HTML files. Defaults to the stand-alone console installation directory (typically /usr/share/qpid-dispatch/console).",
+                    "description": "Absolute path to a directory from which to serve static HTML files (typically /usr/share/qpid-dispatch/html).",
                     "create": true
                 },
                 "messageLoggingComponents": {

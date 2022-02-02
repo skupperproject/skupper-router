@@ -51,7 +51,6 @@ jobs:
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DCMAKE_C_FLAGS=-DQD_MEMORY_DEBUG
-        -DCONSOLE_INSTALL=OFF
         -DUSE_BWRAP=ON
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DSANITIZE_3RD_PARTY=ON
@@ -155,7 +154,6 @@ jobs:
             --exclude '*.o' \
             --exclude '*.pyc' \
             --exclude '.git' \
-            --exclude='skupper-router/build/console' \
             skupper-router \
             install \
             qpid-proton/build/python/pkgs
@@ -322,7 +320,6 @@ jobs:
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DPython_EXECUTABLE=/usr/bin/python3
-        -DCONSOLE_INSTALL=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
 
       CCACHE_BASEDIR: ${{github.workspace}}
@@ -488,7 +485,6 @@ jobs:
       RouterCMakeExtraArgs: >
         -GNinja
         -DDOC_XMLLINT=ON
-        -DCONSOLE_INSTALL=OFF
     steps:
 
       - uses: actions/checkout@v2
@@ -542,30 +538,6 @@ jobs:
         with:
           name: book.pdf
           path: ${{github.workspace}}/docs/books/user-guide/book.pdf
-
-  console-test:
-    name: Console Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: cd console/react && npm ci
-
-      - name: Run Tests
-        run: cd console/react && npm run test
-
-  console-eslint:
-    name: Console ESLint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: cd console/react && npm ci
-
-      - name: Run ESLint
-        run: cd console/react && npx eslint --max-warnings 0 .
 
   rat_check:
     name: RAT Check
