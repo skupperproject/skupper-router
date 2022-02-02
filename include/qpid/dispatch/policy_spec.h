@@ -33,7 +33,6 @@ typedef struct {
     bool      allowAnonymousSender;
     bool      allowUserIdProxy;
     bool      allowWaypointLinks;
-    bool      allowFallbackLinks;
     bool      allowDynamicLinkRoutes;
     bool      allowAdminStatusUpdate;
     bool      outgoingConnection;

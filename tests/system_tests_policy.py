@@ -490,11 +490,6 @@ class PolicyTerminusCapabilities(TestCase):
         self.assertRaises(LinkDetached, br1.create_receiver, address="ok1", options=Capabilities('qd.waypoint_1'))
         br1.close()
 
-    def test_forbid_fallback(self):
-        br1 = BlockingConnection(self.router.addresses[0])
-        self.assertRaises(LinkDetached, br1.create_receiver, address="ok2", options=Capabilities('qd.fallback'))
-        br1.close()
-
 
 class InterrouterLinksAllowed(TestCase):
 
