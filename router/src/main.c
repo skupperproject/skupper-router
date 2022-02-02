@@ -67,12 +67,7 @@ static void signal_handler(int signum)
 static void check(int fd) {
     if (qd_error_code()) {
         qd_log(log_source, QD_LOG_CRITICAL, "Router start-up failed: %s", qd_error_message());
-        #ifdef __sun
-        FILE *file = fdopen(fd, "a+");
-        fprintf(file, "%s: %s\n", argv0, qd_error_message());
-        #else
         dprintf(fd, "%s: %s\n", argv0, qd_error_message());
-        #endif
         close(fd);
         exit(1);
     }
@@ -103,12 +98,7 @@ static void main_process(const char *config_path, const char *python_pkgdir, boo
     signal(SIGINT,  signal_handler);
 
     if (fd > 2) {               /* Daemon mode, fd is one end of a pipe not stdout or stderr */
-        #ifdef __sun
-        const char * okResult = "ok";
-        write(fd, okResult, (strlen(okResult)+1));
-        #else
         dprintf(fd, "ok"); // Success signal
-        #endif
         close(fd);
     }
 
