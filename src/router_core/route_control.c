@@ -253,13 +253,12 @@ static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr
             if (al->external_addr) {
                 qdr_terminus_set_address(term, al->external_addr);
                 if (key)
-                    al->internal_addr = &key[2];
+                    al->internal_addr = &key[1];
             } else
-                qdr_terminus_set_address(term, &key[2]); // truncate the "Mp" annotation (where p = phase)
+                qdr_terminus_set_address(term, &key[1]); // truncate the "M" annotation
             al->link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, al->dir, source, target,
                                           QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
             al->link->auto_link = al;
-            al->link->phase     = al->phase;
             al->state = QDR_AUTO_LINK_STATE_ATTACHING;
         }
         else {
@@ -293,7 +292,6 @@ static void qdr_auto_link_deactivate_CT(qdr_core_t *core, qdr_auto_link_t *al, q
     if (al->link) {
         qdr_link_outbound_detach_CT(core, al->link, 0, QDR_CONDITION_NONE, true);
         al->link->auto_link = 0;
-        al->link->phase     = 0;
         al->link            = 0;
     }
 
@@ -477,7 +475,6 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
                                             qd_iterator_t       *name,
                                             qd_parsed_field_t   *addr_field,
                                             qd_direction_t       dir,
-                                            int                  phase,
                                             qd_parsed_field_t   *container_field,
                                             qd_parsed_field_t   *connection_field,
                                             qd_parsed_field_t   *external_addr)
@@ -491,17 +488,14 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
     al->identity      = qdr_identifier(core);
     al->name          = name ? (char*) qd_iterator_copy(name) : 0;
     al->dir           = dir;
-    al->phase         = phase;
     al->state         = QDR_AUTO_LINK_STATE_INACTIVE;
     al->external_addr = external_addr ? (char*) qd_iterator_copy(qd_parse_raw(external_addr)) : 0;
 
     //
     // Find or create an address for the auto_link destination
     //
-    char phase_char = phase + '0';
     qd_iterator_t *iter = qd_parse_raw(addr_field);
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    qd_iterator_annotate_phase(iter, phase_char);
 
     qd_hash_retrieve(core->addr_hash, iter, (void*) &al->addr);
     if (!al->addr) {

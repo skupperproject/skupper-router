@@ -940,9 +940,9 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     //
     // Subscribe to receive messages sent to the 'qdrouter.ma' addresses
     //
-    msync->message_sub1 = qdr_core_subscribe(core, "qdrouter.ma", 'L', '0',
+    msync->message_sub1 = qdr_core_subscribe(core, "qdrouter.ma", 'L',
                                              QD_TREATMENT_MULTICAST_ONCE, true, qcm_mobile_sync_on_message_CT, msync);
-    msync->message_sub2 = qdr_core_subscribe(core, "qdrouter.ma", 'T', '0',
+    msync->message_sub2 = qdr_core_subscribe(core, "qdrouter.ma", 'T',
                                              QD_TREATMENT_MULTICAST_ONCE, true, qcm_mobile_sync_on_message_CT, msync);
 
     //

@@ -94,7 +94,7 @@ typedef struct qd_iterator_t qd_iterator_t;
  *     amqp:/_topo/all/all/<local>
  *                        L^^^^^^^
  *     amqp:/<mobile>
- *         M0^^^^^^^^
+ *          M^^^^^^^^
  *     amqp:/_edge/<my-router>/<local>
  *                            L^^^^^^^
  *     amqp:/_edge/<router>/<local>
@@ -111,7 +111,7 @@ typedef struct qd_iterator_t qd_iterator_t;
  *
  * ITER_VIEW_ADDRESS_WITH_SPACE
  *    Same as ADDRESS_HASH but:
- *      - Does not show the prefix/phase
+ *      - Does not show the prefix
  *      - Does not hash-ize local and topological addresses
  *      - Does not show namespace on local and topological addresses
  *
@@ -376,14 +376,6 @@ char* qd_iterator_strncpy(qd_iterator_t *iter, char* buffer, int n);
  */
 
 /**
- * Set the phase character to annotate a mobile address view.
- *
- * @param iter Pointer to an iterator
- * @param phase A character used to annotate a mobile address view
- */
-void qd_iterator_annotate_phase(qd_iterator_t *iter, char phase);
-
-/**
  * Override the prefix character for a mobile address view.
  *
  * @param iter Pointer to an iterator
@@ -423,14 +415,14 @@ uint32_t qd_iterator_hash_view(qd_iterator_t *iter);
 /**
  * Generate a series of hash values for a segmented view.  For example, consider the following view:
  *
- *    "M0policy/org.apache.qpid"
+ *    "Mpolicy/org.apache.qpid"
  *
  * The hash values computed will be for the following strings:
  *
- *    "M0policy/org.apache.qpid"
- *    "M0policy/org.apache"
- *    "M0policy/org"
- *    "M0policy"
+ *    "Mpolicy/org.apache.qpid"
+ *    "Mpolicy/org.apache"
+ *    "Mpolicy/org"
+ *    "Mpolicy"
  *
  * These hash values and the sub-views associated with them shall be stored in the iterator.
  *

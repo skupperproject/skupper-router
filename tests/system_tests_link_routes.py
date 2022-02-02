@@ -320,9 +320,9 @@ class LinkRouteTest(TestCase):
                                                    attribute_names=['id']).results[0][0])
 
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.dev').deliveriesEgress)
+                                            name='Morg.apache.dev').deliveriesEgress)
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.dev').deliveriesIngress)
+                                            name='Morg.apache.dev').deliveriesIngress)
 
         # There should be 4 links -
         # 1. outbound receiver link on org.apache.dev
@@ -364,10 +364,10 @@ class LinkRouteTest(TestCase):
         # Make sure that the router node acting as the broker (QDR.A) had one message routed through it. This confirms
         # that the message was link routed
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.dev.1').deliveriesEgress)
+                                            name='Morg.apache.dev.1').deliveriesEgress)
 
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.dev.1').deliveriesIngress)
+                                            name='Morg.apache.dev.1').deliveriesIngress)
 
         blocking_connection.close()
 
@@ -405,10 +405,10 @@ class LinkRouteTest(TestCase):
         # Make sure that the router node acting as the broker (QDR.A) had one message routed through it. This confirms
         # that the message was link routed
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache').deliveriesEgress)
+                                            name='Morg.apache').deliveriesEgress)
 
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache').deliveriesIngress)
+                                            name='Morg.apache').deliveriesIngress)
 
         blocking_connection.close()
 
@@ -421,7 +421,7 @@ class LinkRouteTest(TestCase):
 
         """
         hello_pattern = "Hello Pattern!"
-        route = 'M0' + test_address
+        route = 'M' + test_address
 
         # Connect to the two 'waypoints', ensure the route is not present on
         # either
@@ -576,10 +576,10 @@ class LinkRouteTest(TestCase):
         # Make sure that the router node acting as the broker (QDR.A) had one message routed through it. This confirms
         # that the message was link routed
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.1').deliveriesEgress)
+                                            name='Morg.apache.1').deliveriesEgress)
 
         self.assertEqual(1, local_node.read(type='org.apache.qpid.dispatch.router.address',
-                                            name='M0org.apache.1').deliveriesIngress)
+                                            name='Morg.apache.1').deliveriesIngress)
 
         blocking_connection.close()
 
@@ -1376,13 +1376,13 @@ class TerminusAddrTest(MessagingHandler):
             link_dir_index = out.attribute_names.index("linkDir")
             owning_addr_index = out.attribute_names.index("owningAddr")
 
-            # Make sure that the owningAddr M0pulp.task.terminusTestReceiver shows up on both in and out.
-            # The 'out' link is on address M0pulp.task.terminusTestReceiver outgoing from the router B to the receiver
-            # The 'in' link is on address M0pulp.task.terminusTestReceiver incoming from router C to router B
+            # Make sure that the owningAddr Mpulp.task.terminusTestReceiver shows up on both in and out.
+            # The 'out' link is on address Mpulp.task.terminusTestReceiver outgoing from the router B to the receiver
+            # The 'in' link is on address Mpulp.task.terminusTestReceiver incoming from router C to router B
             for result in out.results:
-                if result[link_dir_index] == 'in' and result[owning_addr_index] == 'M0pulp.task.terminusTestReceiver':
+                if result[link_dir_index] == 'in' and result[owning_addr_index] == 'Mpulp.task.terminusTestReceiver':
                     self.in_receiver_found = True
-                if result[link_dir_index] == 'out' and result[owning_addr_index] == 'M0pulp.task.terminusTestReceiver':
+                if result[link_dir_index] == 'out' and result[owning_addr_index] == 'Mpulp.task.terminusTestReceiver':
                     self.out_receiver_found = True
 
         if event.sender == self.sender:
@@ -1394,13 +1394,13 @@ class TerminusAddrTest(MessagingHandler):
             link_dir_index = out.attribute_names.index("linkDir")
             owning_addr_index = out.attribute_names.index("owningAddr")
 
-            # Make sure that the owningAddr M0pulp.task.terminusTestSender shows up on both in and out.
-            # The 'in' link is on address M0pulp.task.terminusTestSender incoming from sender to router
-            # The 'out' link is on address M0pulp.task.terminusTestSender outgoing from router C to router B
+            # Make sure that the owningAddr Mpulp.task.terminusTestSender shows up on both in and out.
+            # The 'in' link is on address Mpulp.task.terminusTestSender incoming from sender to router
+            # The 'out' link is on address Mpulp.task.terminusTestSender outgoing from router C to router B
             for result in out.results:
-                if result[link_dir_index] == 'in' and result[owning_addr_index] == 'M0pulp.task.terminusTestSender':
+                if result[link_dir_index] == 'in' and result[owning_addr_index] == 'Mpulp.task.terminusTestSender':
                     self.in_sender_found = True
-                if result[link_dir_index] == 'out' and result[owning_addr_index] == 'M0pulp.task.terminusTestSender':
+                if result[link_dir_index] == 'out' and result[owning_addr_index] == 'Mpulp.task.terminusTestSender':
                     self.out_sender_found = True
 
         # Shutdown the connections only if the on_link_opened has been called for sender and receiver links.

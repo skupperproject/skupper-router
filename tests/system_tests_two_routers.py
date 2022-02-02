@@ -1473,10 +1473,7 @@ class CustomTimeout(object):
     def addr_text(self, addr):
         if not addr:
             return ""
-        if addr[0] == 'M':
-            return addr[2:]
-        else:
-            return addr[1:]
+        return addr[1:]
 
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address1, timeout=TIMEOUT)

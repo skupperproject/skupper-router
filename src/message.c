@@ -1100,8 +1100,6 @@ void qd_message_free(qd_message_t *in_msg)
             qd_iterator_free(content->ma_field_iter_in);
         if (content->ma_pf_ingress)
             qd_parse_free(content->ma_pf_ingress);
-        if (content->ma_pf_phase)
-            qd_parse_free(content->ma_pf_phase);
         if (content->ma_pf_to_override)
             qd_parse_free(content->ma_pf_to_override);
         if (content->ma_pf_trace)
@@ -1143,7 +1141,6 @@ qd_message_t *qd_message_copy(qd_message_t *in_msg)
     qd_buffer_list_clone(&copy->ma_to_override, &msg->ma_to_override);
     qd_buffer_list_clone(&copy->ma_trace, &msg->ma_trace);
     qd_buffer_list_clone(&copy->ma_ingress, &msg->ma_ingress);
-    copy->ma_phase = msg->ma_phase;
     copy->strip_annotations_in  = msg->strip_annotations_in;
 
     copy->content = content;
@@ -1180,7 +1177,6 @@ void qd_message_message_annotations(qd_message_t *in_msg)
         msg->strip_annotations_in,
         content->ma_field_iter_in,
         &content->ma_pf_ingress,
-        &content->ma_pf_phase,
         &content->ma_pf_to_override,
         &content->ma_pf_trace,
         &ma_pf_stream,
@@ -1196,11 +1192,6 @@ void qd_message_message_annotations(qd_message_t *in_msg)
         cf->offset = uab->cursor - qd_buffer_base(uab->buffer);
         cf->length = uab->remaining;
         cf->parsed = true;
-    }
-
-    // extract phase
-    if (content->ma_pf_phase) {
-        content->ma_int_phase = qd_parse_as_int(content->ma_pf_phase);
     }
 
     if (ma_pf_stream) {
@@ -1226,18 +1217,6 @@ void qd_message_set_to_override_annotation(qd_message_t *in_msg, qd_composed_fie
     qd_buffer_list_free_buffers(&msg->ma_to_override);
     qd_compose_take_buffers(to_field, &msg->ma_to_override);
     qd_compose_free(to_field);
-}
-
-void qd_message_set_phase_annotation(qd_message_t *in_msg, int phase)
-{
-    qd_message_pvt_t *msg = (qd_message_pvt_t*) in_msg;
-    msg->ma_phase = phase;
-}
-
-int qd_message_get_phase_annotation(const qd_message_t *in_msg)
-{
-    qd_message_pvt_t *msg = (qd_message_pvt_t*) in_msg;
-    return msg->ma_phase;
 }
 
 void qd_message_set_stream_annotation(qd_message_t *in_msg, bool stream)
@@ -1707,7 +1686,6 @@ static void compose_message_annotations_v1(qd_message_pvt_t *msg, qd_buffer_list
     if (!DEQ_IS_EMPTY(msg->ma_to_override) ||
         !DEQ_IS_EMPTY(msg->ma_trace) ||
         !DEQ_IS_EMPTY(msg->ma_ingress) ||
-        msg->ma_phase != 0 ||
         IS_ATOMIC_FLAG_SET(&msg->content->ma_stream)) {
 
         if (!map_started) {
@@ -1730,12 +1708,6 @@ static void compose_message_annotations_v1(qd_message_pvt_t *msg, qd_buffer_list
         if (!DEQ_IS_EMPTY(msg->ma_ingress)) {
             qd_compose_insert_symbol(field, QD_MA_INGRESS);
             qd_compose_insert_buffers(field, &msg->ma_ingress);
-            field_count++;
-        }
-
-        if (msg->ma_phase != 0) {
-            qd_compose_insert_symbol(field, QD_MA_PHASE);
-            qd_compose_insert_int(field, msg->ma_phase);
             field_count++;
         }
 
@@ -2898,12 +2870,6 @@ qd_parsed_field_t *qd_message_get_ingress(qd_message_t *msg)
 }
 
 
-qd_parsed_field_t *qd_message_get_phase(qd_message_t *msg)
-{
-    return ((qd_message_pvt_t*) msg)->content->ma_pf_phase;
-}
-
-
 qd_parsed_field_t *qd_message_get_to_override(qd_message_t *msg)
 {
     return ((qd_message_pvt_t*)msg)->content->ma_pf_to_override;
@@ -2915,11 +2881,6 @@ qd_parsed_field_t *qd_message_get_trace(qd_message_t *msg)
     return ((qd_message_pvt_t*) msg)->content->ma_pf_trace;
 }
 
-
-int qd_message_get_phase_val(qd_message_t *msg)
-{
-    return ((qd_message_pvt_t*) msg)->content->ma_int_phase;
-}
 
 int qd_message_is_streaming(qd_message_t *msg)
 {

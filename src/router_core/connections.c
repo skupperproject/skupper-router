@@ -538,12 +538,6 @@ qd_direction_t qdr_link_direction(const qdr_link_t *link)
 }
 
 
-int qdr_link_phase(const qdr_link_t *link)
-{
-    return link ? link->phase : 0;
-}
-
-
 const char *qdr_link_internal_address(const qdr_link_t *link)
 {
     return link && link->auto_link ? link->auto_link->internal_addr : 0;
@@ -628,9 +622,9 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
     link->name = (char*) malloc(strlen(name) + 1);
 
     if (terminus_addr) {
-         char *term_addr = malloc((strlen(terminus_addr) + 3) * sizeof(char));
+         char *term_addr = malloc((strlen(terminus_addr) + 2) * sizeof(char));
          term_addr[0] = '\0';
-         strcat(term_addr, "M0");
+         strcat(term_addr, "M");
          strcat(term_addr, terminus_addr);
          link->terminus_addr = term_addr;
     }
@@ -1345,7 +1339,7 @@ qd_address_treatment_t qdr_treatment_for_address_hash_with_default_CT(qdr_core_t
         //
         // Handle the mobile address case
         //
-        qd_iterator_t *config_iter = qd_iterator_string(&copy[2], ITER_VIEW_ADDRESS_WITH_SPACE);
+        qd_iterator_t *config_iter = qd_iterator_string(&copy[1], ITER_VIEW_ADDRESS_WITH_SPACE);
         qd_parse_tree_retrieve_match(core->addr_parse_tree, config_iter, (void **) &addr);
         if (addr)
             trt = addr->treatment;

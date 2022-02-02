@@ -288,7 +288,6 @@ qd_parsed_field_t *qd_parse_value_by_key(qd_parsed_field_t *field, const char *k
  * @param strip_annotations_in strip inbound annotations
  * @param ma_iter_in Field iterator for the annotation map field being parsed.
  * @param ma_ingress returned parsed field: ingress
- * @param ma_phase returned parsed field: phase
  * @param ma_to_override returned parsed field: override
  * @param ma_trace returned parsed field: trace
  * @param blob_pointer returned buffer pointer to user's annotation blob
@@ -298,7 +297,6 @@ void qd_parse_annotations(
     bool                   strip_annotations_in,
     qd_iterator_t         *ma_iter_in,
     qd_parsed_field_t    **ma_ingress,
-    qd_parsed_field_t    **ma_phase,
     qd_parsed_field_t    **ma_to_override,
     qd_parsed_field_t    **ma_trace,
     qd_parsed_field_t    **ma_stream,
@@ -312,7 +310,6 @@ typedef enum {
     QD_MAE_INGRESS,
     QD_MAE_TRACE,
     QD_MAE_TO,
-    QD_MAE_PHASE,
     QD_MAE_STREAM,
     QD_MAE_NONE
 } qd_ma_enum_t;

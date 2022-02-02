@@ -413,10 +413,6 @@ class RouterNode(object):
 
     def _logify(self, addr):
         cls   = addr[0]
-        phase = None
-        if cls == 'M':
-            phase = addr[1]
-            return "%s;class=%c;phase=%c" % (addr[2:], cls, phase)
         return "%s;class=%c" % (addr[1:], cls)
 
     def set_link_id(self, link_id):

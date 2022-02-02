@@ -644,7 +644,7 @@ class Qdrouterd(Process):
         def check():
             # TODO aconway 2014-06-12: this should be a request by name, not a query.
             # Need to rationalize addresses in management attributes.
-            # endswith check is because of M0/L/R prefixes
+            # endswith check is because of M/L/R prefixes
             addrs = self.management.query(
                 type='org.apache.qpid.dispatch.router.address',
                 attribute_names=['name', 'subscriberCount', 'remoteCount', 'containerCount']).get_entities()

@@ -163,7 +163,6 @@ foreach(py_test_module
     system_tests_priority
     system_tests_core_client
     system_tests_address_lookup
-    system_tests_multi_phase
     system_tests_multicast
     system_tests_router_mesh
     system_tests_stuck_deliveries

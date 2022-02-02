@@ -891,7 +891,7 @@ class Agent(object):
         """Register the management address to receive management requests"""
         self.entities.refresh_from_c()
         self.log(LOG_INFO, "Activating management agent on %s" % address)
-        self.io = IoAdapter(self.receive, address, 'L', '0', TREATMENT_ANYCAST_CLOSEST)
+        self.io = IoAdapter(self.receive, address, 'L', TREATMENT_ANYCAST_CLOSEST)
 
     def entity_class(self, entity_type):
         """Return the class that implements entity_type"""

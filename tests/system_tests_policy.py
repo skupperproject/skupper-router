@@ -485,11 +485,6 @@ class PolicyTerminusCapabilities(TestCase):
 
         cls.router = cls.tester.qdrouterd('PolicyTerminusCapabilities', config, wait=True)
 
-    def test_forbid_waypoint(self):
-        br1 = BlockingConnection(self.router.addresses[1])
-        self.assertRaises(LinkDetached, br1.create_receiver, address="ok1", options=Capabilities('qd.waypoint_1'))
-        br1.close()
-
 
 class InterrouterLinksAllowed(TestCase):
 
@@ -1613,8 +1608,6 @@ class ConnectorPolicySrcTgt(TestCase):
                            'host': '127.0.0.1', 'role': 'normal',
                            'port': cls.remoteListenerPort, 'policyVhost': 'test'
                            }),
-            # Set up the prefix 'node' as a prefix for waypoint addresses
-            ('address',  {'prefix': 'node', 'waypoint': 'yes'}),
             # Create a pair of default auto-links for 'node.1'
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'in'}),
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'out'}),
@@ -1670,12 +1663,6 @@ class ConnectorPolicySrcTgt(TestCase):
         res = cpc.try_anonymous_sender()
         self.assertFalse(res)
 
-        # waypoint links should be disallowed
-        res = cpc.try_sender("node.1")
-        self.assertFalse(res)
-        res = cpc.try_receiver("node.1")
-        self.assertFalse(res)
-
 
 class ConnectorPolicyNSndrRcvr(TestCase):
     """
@@ -1701,8 +1688,6 @@ class ConnectorPolicyNSndrRcvr(TestCase):
                            'host': '127.0.0.1', 'role': 'normal',
                            'port': cls.remoteListenerPort, 'policyVhost': 'test'
                            }),
-            # Set up the prefix 'node' as a prefix for waypoint addresses
-            ('address',  {'prefix': 'node', 'waypoint': 'yes'}),
             # Create a pair of default auto-links for 'node.1'
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'in'}),
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'out'}),
@@ -1714,8 +1699,7 @@ class ConnectorPolicyNSndrRcvr(TestCase):
                         'targets': '*',
                         'maxSenders': cls.MAX_SENDERS,
                         'maxReceivers': cls.MAX_RECEIVERS,
-                        'allowAnonymousSender': True,
-                        'allowWaypointLinks': True
+                        'allowAnonymousSender': True
                     }
                 }
             })
@@ -1740,14 +1724,8 @@ class ConnectorPolicyNSndrRcvr(TestCase):
         res = cpc.try_anonymous_sender()     # sender 1
         self.assertTrue(res)
 
-        # waypoint links should be allowed
-        res = cpc.try_sender("node.1")       # sender 2
-        self.assertTrue(res)
-        res = cpc.try_receiver("node.1")     # receiver 1
-        self.assertTrue(res)
-
         addr = "vermillion"
-        for i in range(self.MAX_SENDERS - 2):
+        for i in range(self.MAX_SENDERS - 1):
             try:
                 res = cpc.try_sender(addr)
             except:
@@ -1760,7 +1738,7 @@ class ConnectorPolicyNSndrRcvr(TestCase):
             self.assertFalse(res)
 
         # receivers that should work
-        for i in range(self.MAX_RECEIVERS - 1):
+        for i in range(self.MAX_RECEIVERS - 0):
             res = cpc.try_receiver(addr)
             self.assertTrue(res)
 
@@ -1945,7 +1923,6 @@ class PolicyVhostAlias(TestCase):
                                    'sources': '*',
                                    'targets': '*',
                                    'allowAnonymousSender': 'true',
-                                   'allowWaypointLinks': 'true',
                                    'allowDynamicSource': 'true'
                                }
                            }
@@ -2003,7 +1980,6 @@ class PolicyVhostMultiTenantBlankHostname(TestCase):
                                    'sources': '*',
                                    'targets': '*',
                                    'allowAnonymousSender': 'true',
-                                   'allowWaypointLinks': 'true',
                                    'allowDynamicSource': 'true'
                                }
                            }

@@ -316,7 +316,6 @@ static qd_iterator_t *router_annotate_message(qd_router_t   *router,
     qd_parsed_field_t *trace   = qd_message_get_trace(msg);
     qd_parsed_field_t *ingress = qd_message_get_ingress(msg);
     qd_parsed_field_t *to      = qd_message_get_to_override(msg);
-    qd_parsed_field_t *phase   = qd_message_get_phase(msg);
 
     //
     // QD_MA_TRACE:
@@ -371,14 +370,6 @@ static qd_iterator_t *router_annotate_message(qd_router_t   *router,
         qd_composed_field_t *to_field = qd_compose_subfield(0);
         qd_compose_insert_string_iterator(to_field, qd_parse_raw(to));
         qd_message_set_to_override_annotation(msg, to_field);
-    }
-
-    //
-    // QD_MA_PHASE:
-    // Preserve the existing value.
-    //
-    if (phase) {
-        qd_message_set_phase_annotation(msg, qd_message_get_phase_val(msg));
     }
 
     //
@@ -789,7 +780,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
 
     if (anonymous_link) {
         qd_iterator_t *addr_iter = 0;
-        int phase = 0;
 
         //
         // If the message has delivery annotations, get the to-override field from the annotations.
@@ -797,7 +787,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         qd_parsed_field_t *ma_to = qd_message_get_to_override(msg);
         if (ma_to) {
             addr_iter = qd_iterator_dup(qd_parse_raw(ma_to));
-            phase = qd_message_get_phase_annotation(msg);
         }
 
         //
@@ -822,8 +811,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         if (addr_iter) {
             if (!conn->policy_settings || qd_policy_approve_message_target(addr_iter, conn)) {
                 qd_iterator_reset_view(addr_iter, ITER_VIEW_ADDRESS_HASH);
-                if (phase > 0)
-                    qd_iterator_annotate_phase(addr_iter, '0' + (char) phase);
                 delivery = qdr_link_deliver_to(rlink, msg, ingress_iter, addr_iter, pn_delivery_settled(pnd),
                                                link_exclusions, ingress_index,
                                                pn_delivery_remote_state(pnd),
@@ -870,9 +857,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
             } else
                 qd_compose_insert_string(to_override, term_addr);
             qd_message_set_to_override_annotation(msg, to_override);
-            int phase = qdr_link_phase(rlink);
-            if (phase != 0)
-                qd_message_set_phase_annotation(msg, phase);
         }
         delivery = qdr_link_deliver(rlink, msg, ingress_iter, pn_delivery_settled(pnd), link_exclusions, ingress_index,
                                     pn_delivery_remote_state(pnd),

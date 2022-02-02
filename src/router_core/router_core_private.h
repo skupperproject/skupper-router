@@ -160,7 +160,6 @@ struct qdr_action_t {
         struct {
             qdr_field_t            *address;
             char                    address_class;
-            char                    address_phase;
             qd_address_treatment_t  treatment;
             qdr_subscription_t     *subscription;
             qd_message_t           *message;
@@ -441,7 +440,6 @@ struct qdr_link_t {
     int                      attach_count;       ///< 1 or 2 depending on the state of the lifecycle
     int                      detach_count;       ///< 0, 1, or 2 depending on the state of the lifecycle
     qdr_address_t           *owning_addr;        ///< [ref] Address record that owns this link
-    int                      phase;
     qdr_link_t              *connected_link;     ///< [ref] If this is a link-route, reference the connected link
     qdrc_endpoint_t         *core_endpoint;      ///< [ref] Set if this link terminates on an in-core endpoint
     qdr_link_ref_t          *ref[QDR_LINK_LIST_CLASSES];  ///< Pointers to containing reference objects
@@ -599,10 +597,8 @@ struct qdr_address_config_t {
     char                   *pattern;
     bool                    is_prefix;
     qd_address_treatment_t  treatment;
-    int                     in_phase;
-    int                     out_phase;
     int                     priority;
-    qd_hash_handle_t        *hash_handle;
+    qd_hash_handle_t       *hash_handle;
 };
 
 DEQ_DECLARE(qdr_address_config_t, qdr_address_config_list_t);
@@ -742,7 +738,6 @@ struct qdr_auto_link_t {
     qdr_address_t         *addr;
     char                  *external_addr;
     const char            *internal_addr;
-    int                    phase;
     int                    retry_attempts;
     qd_direction_t         dir;
     qdr_conn_identifier_t *conn_id;

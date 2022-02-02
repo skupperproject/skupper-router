@@ -36,13 +36,11 @@ ALLOC_DEFINE(qdrc_endpoint_t);
 
 void qdrc_endpoint_bind_mobile_address_CT(qdr_core_t           *core,
                                           const char           *address,
-                                          char                  phase,
                                           qdrc_endpoint_desc_t *desc,
                                           void                 *bind_context)
 {
     qdr_address_t *addr = 0;
     qd_iterator_t *iter = qd_iterator_string(address, ITER_VIEW_ADDRESS_HASH);
-    qd_iterator_annotate_phase(iter, phase);
 
     qd_hash_retrieve(core->addr_hash, iter, (void*) &addr);
     if (!addr) {

@@ -362,8 +362,7 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param role The configured role of this connection
  * @param cost If the role is inter_router, this is the configured cost for the connection.
  * @param management_id - A unique identifier that is used in management and logging operations.
- * @param label Optional label provided in the connection's configuration.  This is used to 
- *        correlate the connection with waypoints and link-route destinations that use the connection.
+ * @param label Optional label provided in the connection's configuration.
  * @param strip_annotations_in True if configured to remove annotations on inbound messages.
  * @param strip_annotations_out True if configured to remove annotations on outbound messages.
  * @param policy_allow_dynamic_link_routes True if this connection is allowed by policy to create link route destinations.
@@ -533,17 +532,6 @@ void qdr_terminus_add_capability(qdr_terminus_t *term, const char *capability);
 bool qdr_terminus_has_capability(qdr_terminus_t *term, const char *capability);
 
 /**
- * qdr_terminus_waypoint_capability
- *
- * If the terminus has a waypoint capability, return the ordinal of the
- * waypoint.  If not, return zero.
- *
- * @param term A qdr_terminus pointer returned by qdr_terminus()
- * @return 1..9 if the terminus has waypoint capability, 0 otherwise
- */
-int qdr_terminus_waypoint_capability(qdr_terminus_t *term);
-
-/**
  * qdr_terminus_is_anonymous
  *
  * Indicate whether this terminus represents an anonymous endpoint.
@@ -696,17 +684,6 @@ qd_link_type_t qdr_link_type(const qdr_link_t *link);
  * @return Link-direction
  */
 qd_direction_t qdr_link_direction(const qdr_link_t *link);
-
-/**
- * qdr_link_phase
- *
- * If this link is associated with an auto_link, return the address phase.  Otherwise
- * return zero.
- *
- * @param link Link object
- * @return 0 or the phase of the link's auto_link.
- */
-int qdr_link_phase(const qdr_link_t *link);
 
 /**
  * qdr_link_internal_address

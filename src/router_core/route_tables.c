@@ -138,7 +138,6 @@ void qdr_core_route_table_handlers(qdr_core_t              *core,
 qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
                                        const char             *address,
                                        char                    aclass,
-                                       char                    phase,
                                        qd_address_treatment_t  treatment,
                                        bool                    in_core,
                                        qdr_receive_t           on_message,
@@ -154,7 +153,6 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
     qdr_action_t *action = qdr_action(qdr_subscribe_CT, "subscribe");
     action->args.io.address       = qdr_field(address);
     action->args.io.address_class = aclass;
-    action->args.io.address_phase = phase;
     action->args.io.subscription  = sub;
     action->args.io.treatment     = treatment;
     qdr_action_enqueue(core, action);
@@ -644,7 +642,6 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
 
     if (!discard) {
         char aclass         = action->args.io.address_class;
-        char phase          = action->args.io.address_phase;
         qdr_address_t *addr = 0;
 
         char *astring = (char*) qd_iterator_copy(address->iterator);
@@ -652,8 +649,6 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
         free(astring);
 
         qd_iterator_annotate_prefix(address->iterator, aclass);
-        if (aclass == 'M')
-            qd_iterator_annotate_phase(address->iterator, phase);
         qd_iterator_reset_view(address->iterator, ITER_VIEW_ADDRESS_HASH);
 
         qd_hash_retrieve(core->addr_hash, address->iterator, (void**) &addr);

@@ -34,7 +34,7 @@ DUMMY = "org.apache.qpid.dispatch.dummy"
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
-TOTAL_ENTITIES = 33   # for tests that check the total # of entities
+TOTAL_ENTITIES = 32   # for tests that check the total # of entities
 
 
 class QdmanageTest(TestCase):
@@ -319,10 +319,9 @@ class QdmanageTest(TestCase):
 
     def test_create_address(self):
         long_type = 'org.apache.qpid.dispatch.router.config.address'
-        create_command = 'CREATE --type=' + long_type + ' pattern="a.b.#" ingressPhase=5 egressPhase=6'
+        create_command = 'CREATE --type=' + long_type + ' pattern="a.b.#"'
         output = json.loads(self.run_qdmanage(create_command))
-        self.assertEqual(output['egressPhase'], 6)
-        self.assertEqual(output['ingressPhase'], 5)
+        self.assertEqual(output['pattern'], '"a.b.#"')
 
     def test_check_link_route_name(self):
         long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
@@ -345,18 +344,6 @@ class QdmanageTest(TestCase):
         self.assertEqual(output[0]['name'], "test-auto-link")
         self.assertEqual(output[0]['direction'], "out")
         self.assertEqual(output[0]['addr'], "mnop")
-
-    def test_create_auto_link_with_phase(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
-        create_command = 'CREATE --type=' + long_type + ' address=xyz containerId=id1 direction=out phase=2'
-        output = json.loads(self.run_qdmanage(create_command))
-        self.assertEqual(output['phase'], 2)
-
-    def test_create_auto_link_with_dir(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
-        create_command = 'CREATE --type=' + long_type + ' address=defgh containerId=id2 direction=out phase=2'
-        output = json.loads(self.run_qdmanage(create_command))
-        self.assertEqual(output['direction'], 'out')
 
     def test_create_link_route_with_dir(self):
         long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'

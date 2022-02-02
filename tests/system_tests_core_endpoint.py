@@ -42,7 +42,7 @@ class RouterTest(TestCase):
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-                ('address', {'prefix': '0.0.0.0/queue', 'waypoint': 'yes'}),
+                ('address', {'prefix': '0.0.0.0/queue'}),
                 connection
             ]
 

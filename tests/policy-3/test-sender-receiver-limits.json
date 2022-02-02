@@ -108,7 +108,6 @@
           "maxSessions":           2,
           "maxSenders":            3,
           "maxReceivers":          5,
-          "allowWaypointLinks": true,
           "sources": "*",
           "targets": "*"
         }
@@ -130,7 +129,6 @@
           "maxSessions":           2,
           "maxSenders":            3,
           "maxReceivers":          5,
-          "allowWaypointLinks": false,
           "sources": "*",
           "targets": "*"
         }

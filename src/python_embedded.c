@@ -674,12 +674,10 @@ static int IoAdapter_init(IoAdapter *self, PyObject *args, PyObject *kwds)
 {
     PyObject *addr;
     char aclass    = 'L';
-    char phase     = '0';
     int  treatment = QD_TREATMENT_ANYCAST_CLOSEST;
 
     const char *aclass_str = NULL;
-    const char *phase_str = NULL;
-    if (!PyArg_ParseTuple(args, "OO|ssi", &self->handler, &addr, &aclass_str, &phase_str, &treatment))
+    if (!PyArg_ParseTuple(args, "OO|si", &self->handler, &addr, &aclass_str, &treatment))
         return -1;
     if (aclass_str) {
         if (strlen(aclass_str) != 1 || !isalpha(*aclass_str)) {
@@ -687,13 +685,6 @@ static int IoAdapter_init(IoAdapter *self, PyObject *args, PyObject *kwds)
             return -1;
         }
         aclass = *aclass_str;
-    }
-    if (phase_str) {
-        if (strlen(phase_str) != 1 || !isdigit(*phase_str)) {
-            PyErr_SetString(PyExc_TypeError, "Phase not a single numeric character");
-            return -1;
-        }
-        phase = *phase_str;
     }
     if (!PyCallable_Check(self->handler)) {
         PyErr_SetString(PyExc_TypeError, "IoAdapter.__init__ handler is not callable");
@@ -709,7 +700,7 @@ static int IoAdapter_init(IoAdapter *self, PyObject *args, PyObject *kwds)
     char *address = py_string_2_c(addr);
     if (!address) return -1;
     qd_error_clear();
-    self->sub = qdr_core_subscribe(self->core, address, aclass, phase, treatment,
+    self->sub = qdr_core_subscribe(self->core, address, aclass, treatment,
                                    false, qd_io_rx_handler, self);
     free(address);
     if (qd_error_code()) {

@@ -1421,25 +1421,6 @@
                     "required": false,
                     "default": "balanced"
                 },
-                "waypoint": {
-                    "type": "boolean",
-                    "description": "Designates this address space as being used for waypoints.  This will cause the proper address-phasing to be used.",
-                    "create": true,
-                    "required": false,
-                    "default": false
-                },
-                "ingressPhase": {
-                    "type": "integer",
-                    "description": "Advanced - Override the ingress phase for this address",
-                    "create": true,
-                    "required": false
-                },
-                "egressPhase": {
-                    "type": "integer",
-                    "description": "Advanced - Override the egress phase for this address",
-                    "create": true,
-                    "required": false
-                },
                 "priority": {
                     "type": "integer",
                     "description": "All messages sent to this address which lack an intrinsic priority will be assigned this priority.",
@@ -1512,7 +1493,7 @@
         },
 
         "router.config.autoLink": {
-            "description": "Entity type for configuring auto-links.  Auto-links are links whose lifecycle is managed by the router.  These are typically used to attach to waypoints on remote containers (brokers, etc.).",
+            "description": "Entity type for configuring auto-links.  Auto-links are links whose lifecycle is managed by the router.",
             "extends": "configurationEntity",
             "operations": ["CREATE", "DELETE"],
             "attributes": {
@@ -1527,12 +1508,6 @@
                     "description": "The direction of the link to be created.  In means into the router, out means out of the router.",
                     "create": true,
                     "required": true
-                },
-                "phase": {
-                    "type": "integer",
-                    "description": "The address phase for this link.  Defaults to '0' for 'out' links and '1' for 'in' links.",
-                    "create": true,
-                    "required": false
                 },
                 "containerId": {
                     "type": "string",
@@ -2194,13 +2169,6 @@
                     "type": "boolean",
                     "description": "Whether this connection is allowed to send messages with a user ID that is different than the connection's authenticated user name.",
                     "default": false,
-                    "required": false,
-                    "create": true
-                },
-                "allowWaypointLinks": {
-                    "type": "boolean",
-                    "description": "Whether this connection is allowed to claim 'waypoint.N' capability for attached links.  This allows endpoints to act as waypoints without needing auto-links.",
-                    "default": true,
                     "required": false,
                     "create": true
                 },

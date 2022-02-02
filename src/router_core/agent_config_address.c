@@ -29,11 +29,8 @@
 #define QDR_CONFIG_ADDRESS_TYPE          2
 #define QDR_CONFIG_ADDRESS_PREFIX        3
 #define QDR_CONFIG_ADDRESS_DISTRIBUTION  4
-#define QDR_CONFIG_ADDRESS_WAYPOINT      5
-#define QDR_CONFIG_ADDRESS_IN_PHASE      6
-#define QDR_CONFIG_ADDRESS_OUT_PHASE     7
-#define QDR_CONFIG_ADDRESS_PATTERN       8
-#define QDR_CONFIG_ADDRESS_PRIORITY      9
+#define QDR_CONFIG_ADDRESS_PATTERN       5
+#define QDR_CONFIG_ADDRESS_PRIORITY      6
 
 const char *qdr_config_address_columns[] =
     {"name",
@@ -41,9 +38,6 @@ const char *qdr_config_address_columns[] =
      "type",
      "prefix",
      "distribution",
-     "waypoint",
-     "ingressPhase",
-     "egressPhase",
      "pattern",
      "priority",
      0};
@@ -111,18 +105,6 @@ static void qdr_config_address_insert_column_CT(qdr_address_config_t *addr, int 
         else
             qd_compose_insert_null(body);
 
-        break;
-
-    case QDR_CONFIG_ADDRESS_WAYPOINT:
-        qd_compose_insert_bool(body, addr->in_phase == 0 && addr->out_phase == 1);
-        break;
-
-    case QDR_CONFIG_ADDRESS_IN_PHASE:
-        qd_compose_insert_int(body, addr->in_phase);
-        break;
-
-    case QDR_CONFIG_ADDRESS_OUT_PHASE:
-        qd_compose_insert_int(body, addr->out_phase);
         break;
 
     case QDR_CONFIG_ADDRESS_PRIORITY:
@@ -368,15 +350,9 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         qd_parsed_field_t *prefix_field    = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_PREFIX]);
         qd_parsed_field_t *pattern_field   = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_PATTERN]);
         qd_parsed_field_t *distrib_field   = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_DISTRIBUTION]);
-        qd_parsed_field_t *waypoint_field  = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_WAYPOINT]);
-        qd_parsed_field_t *in_phase_field  = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_IN_PHASE]);
-        qd_parsed_field_t *out_phase_field = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_OUT_PHASE]);
         qd_parsed_field_t *priority_field  = qd_parse_value_by_key(in_body, qdr_config_address_columns[QDR_CONFIG_ADDRESS_PRIORITY]);
 
-        bool waypoint  = waypoint_field  ? qd_parse_as_bool(waypoint_field)  : false;
-        long in_phase  = in_phase_field  ? qd_parse_as_long(in_phase_field)  : -1;
-        long out_phase = out_phase_field ? qd_parse_as_long(out_phase_field) : -1;
-        long priority  = priority_field  ? qd_parse_as_long(priority_field)  : -1;
+        long priority = priority_field  ? qd_parse_as_long(priority_field)  : -1;
 
         //
         // Either a prefix or a pattern field is mandatory.  Prefix and pattern
@@ -403,25 +379,6 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (!pattern) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = msg;
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
-            break;
-        }
-
-        //
-        // Handle the address-phasing logic.  If the phases are provided, use them.  Otherwise
-        // use the waypoint flag to set the most common defaults.
-        //
-        if (in_phase == -1 && out_phase == -1) {
-            in_phase  = 0;
-            out_phase = waypoint ? 1 : 0;
-        }
-
-        //
-        // Validate the phase values
-        //
-        if (in_phase < 0 || in_phase > 9 || out_phase < 0 || out_phase > 9) {
-            query->status = QD_AMQP_BAD_REQUEST;
-            query->status.description = "Phase values must be between 0 and 9";
             qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
             break;
         }
@@ -469,8 +426,6 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         addr->name      = name ? (char*) qd_iterator_copy(name) : 0;
         addr->identity  = qdr_identifier(core);
         addr->treatment = qdra_address_treatment_CT(distrib_field);
-        addr->in_phase  = in_phase;
-        addr->out_phase = out_phase;
         addr->is_prefix = !!prefix_field;
         addr->pattern   = pattern;
         addr->priority  = priority;

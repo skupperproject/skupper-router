@@ -161,10 +161,10 @@ void qdr_agent_free(qdr_agent_t *agent)
 void qdr_agent_setup_subscriptions(qdr_agent_t *agent, qdr_core_t *core)
 {
 
-    agent->subscription_mobile = qdr_core_subscribe(core, "$management", 'M', '0',
+    agent->subscription_mobile = qdr_core_subscribe(core, "$management", 'M',
                                                     QD_TREATMENT_ANYCAST_CLOSEST, false,
                                                     qdr_management_agent_on_message, core);
-    agent->subscription_local = qdr_core_subscribe(core, "$management", 'L', '0',
+    agent->subscription_local = qdr_core_subscribe(core, "$management", 'L',
                                                    QD_TREATMENT_ANYCAST_CLOSEST, false,
                                                    qdr_management_agent_on_message, core);
 }

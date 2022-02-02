@@ -122,7 +122,6 @@ typedef uint64_t (*qdr_receive_t) (void *context, qd_message_t *msg, int link_ma
  * @param core Pointer to the core module
  * @param address The address of messages to be received
  * @param aclass Address class character
- * @param phase Address phase character ('0' .. '9')
  * @param treatment Treatment for the address if it be being created as a side effect of this call
  * @param in_core True iff the handler is to be run in the context of the core thread
  * @param on_message The handler function
@@ -132,7 +131,6 @@ typedef uint64_t (*qdr_receive_t) (void *context, qd_message_t *msg, int link_ma
 qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
                                        const char             *address,
                                        char                    aclass,
-                                       char                    phase,
                                        qd_address_treatment_t  treatment,
                                        bool                    in_core,
                                        qdr_receive_t           on_message,

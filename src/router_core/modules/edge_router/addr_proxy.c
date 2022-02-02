@@ -92,55 +92,10 @@ static qdr_terminus_t *qdr_terminus_normal(const char *addr)
 }
 
 
-static void set_waypoint_capability(qdr_terminus_t *term, char phase_char, qd_direction_t dir, int in_phase, int out_phase)
-{
-    int  phase = (int) (phase_char - '0');
-    char cap[16];
-    char suffix[3];
-
-    //
-    // For links that are outgoing on the in_phase or incoming on the out_phase, don't set the
-    // waypoint capability.  These links will behave like normal client links.
-    //
-    if ((dir == QD_OUTGOING && phase == in_phase) ||
-        (dir == QD_INCOMING && phase == out_phase))
-        return;
-
-    //
-    // If the phase is outside the range of in_phase..out_phase, don't do anything.  This is a
-    // misconfiguration.
-    //
-    if (phase < in_phase || phase > out_phase)
-        return;
-
-    //
-    // In all remaining cases, the new links are acting as waypoints.
-    //
-    int ordinal = phase + (dir == QD_OUTGOING ? 0 : 1);
-
-    strncpy(cap, QD_CAPABILITY_WAYPOINT_DEFAULT, 15);
-    suffix[0] = '.';
-    suffix[1] = '0' + ordinal;
-    suffix[2] = '\0';
-    strcat(cap, suffix);
-    qdr_terminus_add_capability(term, cap);
-}
-
-
 static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr)
 {
     if (addr->edge_inlink == 0) {
-        qdr_terminus_t *term = qdr_terminus_normal(key + 2);
-        const char     *key  = (char*) qd_hash_key_by_handle(addr->hash_handle);
-
-        if (addr->config && addr->config->out_phase > 0) {
-            //
-            // If this address is configured as multi-phase, we may need to
-            // add waypoint capabilities to the terminus.
-            //
-            if (key[0] == QD_ITER_HASH_PREFIX_MOBILE)
-                set_waypoint_capability(term, key[1], QD_INCOMING, addr->config->in_phase, addr->config->out_phase);
-        }
+        qdr_terminus_t *term = qdr_terminus_normal(key + 1);
 
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_INCOMING,
                                               term, qdr_terminus_normal(0), QD_SSN_ENDPOINT,
@@ -170,17 +125,7 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
         // happen later when the interior tells us that there are upstream destinations
         // for the address (see on_transfer below).
         //
-        qdr_terminus_t *term = qdr_terminus_normal(key + 2);
-
-        if (addr->config && addr->config->out_phase > 0) {
-            //
-            // If this address is configured as multi-phase, we may need to
-            // add waypoint capabilities to the terminus.
-            //
-            const char *key = (char*) qd_hash_key_by_handle(addr->hash_handle);
-            if (key[0] == QD_ITER_HASH_PREFIX_MOBILE)
-                set_waypoint_capability(term, key[1], QD_OUTGOING, addr->config->in_phase, addr->config->out_phase);
-        }
+        qdr_terminus_t *term = qdr_terminus_normal(key + 1);
 
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_OUTGOING,
                                               qdr_terminus_normal(0), term, QD_SSN_ENDPOINT,

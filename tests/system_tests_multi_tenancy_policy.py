@@ -18,7 +18,7 @@
 #
 
 from proton import Message
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, PollTimeout, Logger
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, PollTimeout
 from proton.handlers import MessagingHandler
 from proton.reactor import Container, DynamicNodeProperties
 from qpid_dispatch_internal.compat import UNICODE
@@ -42,14 +42,9 @@ class RouterMultitenantPolicyTest(TestCase):
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'role': 'route-container'}),
                 ('linkRoute', {'prefix': 'hosted-group-1/link', 'direction': 'in', 'containerId': 'LRC'}),
                 ('linkRoute', {'prefix': 'hosted-group-1/link', 'direction': 'out', 'containerId': 'LRC'}),
-                ('autoLink', {'address': 'hosted-group-1/queue.waypoint', 'containerId': 'ALC', 'direction': 'in'}),
-                ('autoLink', {'address': 'hosted-group-1/queue.waypoint', 'containerId': 'ALC', 'direction': 'out'}),
-                ('autoLink', {'address': 'hosted-group-1/queue.ext', 'containerId': 'ALCE', 'direction': 'in', 'externalAddress': 'EXT'}),
-                ('autoLink', {'address': 'hosted-group-1/queue.ext', 'containerId': 'ALCE', 'direction': 'out', 'externalAddress': 'EXT'}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-                ('address', {'prefix': 'hosted-group-1/queue', 'waypoint': 'yes'}),
                 ('policy', {'enableVhostPolicy': 'true'}),
                 ('vhost', {'hostname': 'hosted-group-1',
                            'allowUnknownUser': 'true',
@@ -90,7 +85,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "anything/addr_01",
                                    "anything/addr_01",
                                    self.routers[0].addresses[0],
-                                   "M0anything/addr_01")
+                                   "Manything/addr_01")
         test.run()
         self.assertIsNone(test.error)
 
@@ -100,7 +95,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "addr_02",
                                    "hosted-group-1/addr_02",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_02")
+                                   "Mhosted-group-1/addr_02")
         test.run()
         self.assertIsNone(test.error)
 
@@ -110,7 +105,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "hosted-group-1/addr_03",
                                    "addr_03",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_03")
+                                   "Mhosted-group-1/addr_03")
         test.run()
         self.assertIsNone(test.error)
 
@@ -120,7 +115,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "addr_04",
                                    "addr_04",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_04")
+                                   "Mhosted-group-1/addr_04")
         test.run()
         self.assertIsNone(test.error)
 
@@ -130,7 +125,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "hosted-group-1/addr_05",
                                    "hosted-group-1/addr_05",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_05")
+                                   "Mhosted-group-1/addr_05")
         test.run()
         self.assertIsNone(test.error)
 
@@ -140,7 +135,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "addr_06",
                                    "hosted-group-1/addr_06",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_06")
+                                   "Mhosted-group-1/addr_06")
         test.run()
         self.assertIsNone(test.error)
 
@@ -150,7 +145,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "hosted-group-1/addr_07",
                                    "addr_07",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_07")
+                                   "Mhosted-group-1/addr_07")
         test.run()
         self.assertIsNone(test.error)
 
@@ -160,7 +155,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                    "addr_08",
                                    "addr_08",
                                    self.routers[0].addresses[0],
-                                   "M0hosted-group-1/addr_08")
+                                   "Mhosted-group-1/addr_08")
         test.run()
         self.assertIsNone(test.error)
 
@@ -170,7 +165,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "anything/addr_09",
                                        "anything/addr_09",
                                        self.routers[0].addresses[0],
-                                       "M0anything/addr_09")
+                                       "Manything/addr_09")
         test.run()
         self.assertIsNone(test.error)
 
@@ -180,7 +175,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "addr_10",
                                        "hosted-group-1/addr_10",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_10")
+                                       "Mhosted-group-1/addr_10")
         test.run()
         self.assertIsNone(test.error)
 
@@ -190,7 +185,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "hosted-group-1/addr_11",
                                        "addr_11",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_11")
+                                       "Mhosted-group-1/addr_11")
         test.run()
         self.assertIsNone(test.error)
 
@@ -200,7 +195,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "addr_12",
                                        "addr_12",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_12")
+                                       "Mhosted-group-1/addr_12")
         test.run()
         self.assertIsNone(test.error)
 
@@ -210,7 +205,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "anything/addr_13",
                                        "anything/addr_13",
                                        self.routers[0].addresses[0],
-                                       "M0anything/addr_13")
+                                       "Manything/addr_13")
         test.run()
         self.assertIsNone(test.error)
 
@@ -220,7 +215,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "addr_14",
                                        "hosted-group-1/addr_14",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_14")
+                                       "Mhosted-group-1/addr_14")
         test.run()
         self.assertIsNone(test.error)
 
@@ -230,7 +225,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "hosted-group-1/addr_15",
                                        "addr_15",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_15")
+                                       "Mhosted-group-1/addr_15")
         test.run()
         self.assertIsNone(test.error)
 
@@ -240,7 +235,7 @@ class RouterMultitenantPolicyTest(TestCase):
                                        "addr_16",
                                        "addr_16",
                                        self.routers[0].addresses[0],
-                                       "M0hosted-group-1/addr_16")
+                                       "Mhosted-group-1/addr_16")
         test.run()
         self.assertIsNone(test.error)
 
@@ -362,98 +357,6 @@ class RouterMultitenantPolicyTest(TestCase):
                                    self.routers[1].addresses[0],
                                    "Laddr_28")
         test.run()
-        self.assertIsNone(test.error)
-
-    def test_29_one_router_waypoint_no_tenant(self):
-        test = WaypointTest(self.routers[0].addresses[0],
-                            self.routers[0].addresses[2],
-                            "hosted-group-1/queue.waypoint",
-                            "hosted-group-1/queue.waypoint")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_30_one_router_waypoint(self):
-        test = WaypointTest(self.routers[0].addresses[1],
-                            self.routers[0].addresses[2],
-                            "queue.waypoint",
-                            "hosted-group-1/queue.waypoint")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_31_two_router_waypoint_no_tenant(self):
-        test = WaypointTest(self.routers[0].addresses[0],
-                            self.routers[1].addresses[2],
-                            "hosted-group-1/queue.waypoint",
-                            "hosted-group-1/queue.waypoint")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_32_two_router_waypoint(self):
-        test = WaypointTest(self.routers[0].addresses[1],
-                            self.routers[1].addresses[2],
-                            "queue.waypoint",
-                            "hosted-group-1/queue.waypoint")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_33_one_router_waypoint_no_tenant_external_addr(self):
-        test = WaypointTest(self.routers[0].addresses[0],
-                            self.routers[0].addresses[2],
-                            "hosted-group-1/queue.ext",
-                            "EXT",
-                            "ALCE")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_34_one_router_waypoint_external_addr(self):
-        test = WaypointTest(self.routers[0].addresses[1],
-                            self.routers[0].addresses[2],
-                            "queue.ext",
-                            "EXT",
-                            "ALCE")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_35_two_router_waypoint_no_tenant_external_addr(self):
-        test = WaypointTest(self.routers[0].addresses[0],
-                            self.routers[1].addresses[2],
-                            "hosted-group-1/queue.ext",
-                            "EXT",
-                            "ALCE")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
-        self.assertIsNone(test.error)
-
-    def test_36_two_router_waypoint_external_addr(self):
-        test = WaypointTest(self.routers[0].addresses[1],
-                            self.routers[1].addresses[2],
-                            "queue.ext",
-                            "EXT",
-                            "ALCE")
-        test.run()
-        # Dump the logger output only if there is a test error, otherwise dont bother
-        if test.error:
-            test.logger.dump()
         self.assertIsNone(test.error)
 
 
@@ -806,128 +709,6 @@ class LinkRouteTest(MessagingHandler):
     def run(self):
         container = Container(self)
         container.container_id = 'LRC'
-        container.run()
-
-
-class WaypointTest(MessagingHandler):
-    def __init__(self, first_host, second_host, first_address, second_address, container_id="ALC"):
-        super(WaypointTest, self).__init__()
-        self.first_host     = first_host
-        self.second_host    = second_host
-        self.first_address  = first_address
-        self.second_address = second_address
-        self.container_id   = container_id
-        self.logger = Logger(title="WaypointTest")
-
-        self.first_conn        = None
-        self.second_conn       = None
-        self.error             = None
-        self.first_sender      = None
-        self.first_sender_created = False
-        self.first_sender_link_opened = False
-        self.first_receiver    = None
-        self.first_receiver_created    = False
-        self.waypoint_sender   = None
-        self.waypoint_receiver = None
-        self.waypoint_queue    = []
-        self.waypoint_sender_opened = False
-        self.waypoint_receiver_opened = False
-        self.firsts_created = False
-
-        self.count  = 10
-        self.n_sent = 0
-        self.n_rcvd = 0
-        self.n_waypoint_rcvd = 0
-        self.n_thru = 0
-        self.outs = None
-
-    def timeout(self):
-        self.error = "Timeout Expired: n_sent=%d n_rcvd=%d n_thru=%d n_waypoint_rcvd=%d" % (self.n_sent, self.n_rcvd, self.n_thru, self.n_waypoint_rcvd)
-        self.first_conn.close()
-        self.second_conn.close()
-        self.logger.dump()
-
-    def fail(self, text):
-        self.error = text
-        self.second_conn.close()
-        self.first_conn.close()
-        self.timer.cancel()
-        self.outs = "n_sent=%d n_rcvd=%d n_thru=%d n_waypoint_rcvd=%d" % (self.n_sent, self.n_rcvd, self.n_thru, self.n_waypoint_rcvd)
-        print(self.outs)
-
-    def send_client(self):
-        while self.first_sender.credit > 0 and self.n_sent < self.count:
-            self.n_sent += 1
-            m = Message(body="Message %d of %d" % (self.n_sent, self.count))
-            self.first_sender.send(m)
-
-    def send_waypoint(self):
-        self.logger.log("send_waypoint called")
-        while self.waypoint_sender.credit > 0 and len(self.waypoint_queue) > 0:
-            self.n_thru += 1
-            m = self.waypoint_queue.pop()
-            self.waypoint_sender.send(m)
-            self.logger.log("waypoint_sender message sent")
-        else:
-            self.logger.log("waypoint_sender did not sent - credit = %s, len(self.waypoint_queue) = %s" % (str(self.waypoint_sender.credit), str(len(self.waypoint_queue))))
-
-    def on_start(self, event):
-        self.timer       = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.first_conn  = event.container.connect(self.first_host)
-        self.second_conn = event.container.connect(self.second_host)
-
-    def on_link_flow(self, event):
-        if event.sender == self.waypoint_sender and self.first_sender_link_opened and not self.first_sender_created:
-            self.first_sender_created = True
-            self.first_sender = event.container.create_sender(self.first_conn, self.first_address)
-
-    def on_link_opened(self, event):
-        if event.receiver == self.waypoint_receiver and not self.first_sender_link_opened:
-            self.first_sender_link_opened = True
-
-    def on_link_opening(self, event):
-        if event.sender and not self.waypoint_sender:
-            self.waypoint_sender = event.sender
-            if event.sender.remote_source.address == self.second_address:
-                event.sender.source.address = self.second_address
-                event.sender.open()
-                self.waypoint_sender_opened = True
-            else:
-                self.fail("Incorrect address on incoming sender: got %s, expected %s" %
-                          (event.sender.remote_source.address, self.second_address))
-
-        elif event.receiver and not self.waypoint_receiver:
-            self.waypoint_receiver = event.receiver
-            if event.receiver.remote_target.address == self.second_address:
-                event.receiver.target.address = self.second_address
-                event.receiver.open()
-                self.waypoint_receiver_opened = True
-            else:
-                self.fail("Incorrect address on incoming receiver: got %s, expected %s" %
-                          (event.receiver.remote_target.address, self.second_address))
-
-        if self.waypoint_sender_opened and self.waypoint_receiver_opened and not self.first_receiver_created:
-            self.first_receiver_created = True
-            self.first_receiver = event.container.create_receiver(self.first_conn, self.first_address)
-
-    def on_sendable(self, event):
-        if event.sender == self.first_sender:
-            self.send_client()
-
-    def on_message(self, event):
-        if event.receiver == self.first_receiver:
-            self.n_rcvd += 1
-            if self.n_rcvd == self.count and self.n_thru == self.count:
-                self.fail(None)
-        elif event.receiver == self.waypoint_receiver:
-            self.n_waypoint_rcvd += 1
-            m = Message(body=event.message.body)
-            self.waypoint_queue.append(m)
-            self.send_waypoint()
-
-    def run(self):
-        container = Container(self)
-        container.container_id = self.container_id
         container.run()
 
 

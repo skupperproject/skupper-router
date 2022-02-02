@@ -401,7 +401,7 @@ static void qdrc_edge_address_tracking_init_CT(qdr_core_t *core, void **module_c
     context->addr_tracking_endpoint.on_first_attach  = qdrc_address_endpoint_first_attach;
     context->addr_tracking_endpoint.on_first_detach  = qdrc_address_endpoint_on_first_detach;
     context->addr_tracking_endpoint.on_cleanup  = qdrc_address_endpoint_cleanup;
-    qdrc_endpoint_bind_mobile_address_CT(core, QD_TERMINUS_EDGE_ADDRESS_TRACKING, '0', &context->addr_tracking_endpoint, context);
+    qdrc_endpoint_bind_mobile_address_CT(core, QD_TERMINUS_EDGE_ADDRESS_TRACKING, &context->addr_tracking_endpoint, context);
 
     //
     // Subscribe to address and link events.
