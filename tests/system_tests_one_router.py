@@ -1603,6 +1603,7 @@ class MulticastUnsettled (MessagingHandler) :
         self.bail("Timeout Expired")
 
     def on_start(self, event):
+        print(self.addr)
         self.recv_conn = event.container.connect(self.addr)
         for i in range(self.n_receivers) :
             rcvr = event.container.create_receiver(self.recv_conn, self.addr, name="receiver_" + str(i))
@@ -1635,7 +1636,7 @@ class MulticastUnsettled (MessagingHandler) :
         event.delivery.settle()
         for i in range(self.n_receivers) :
             if event.receiver == self.receivers[i] :
-                # Body conetnts of the messages count from 0 ... n,
+                # Body contents of the messages count from 0 ... n,
                 # so the contents of this message should be same as
                 # the current number of messages received by this receiver.
                 if self.n_received[i] != event.message.body :
@@ -1894,7 +1895,7 @@ class UsettledUndeliverable (MessagingHandler) :
         self.send_conn = event.container.connect(self.addr)
         self.sender    = event.container.create_sender(self.send_conn, self.addr)
         # Uh-oh. We are not creating a receiver!
-        self.test_timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.test_timer = event.reactor.schedule(5.0, TestTimeout(self))
 
     def on_sendable(self, event) :
         while self.n_sent < self.n_messages :
@@ -2612,6 +2613,10 @@ class UnavailableBase(MessagingHandler):
         self.passed = False
         self.timer = None
         self.link_name = "test_link"
+
+    def timeout(self):
+        self.conn.close()
+        self.link_error = True
 
     def check_if_done(self):
         if self.link_error and self.link_closed:

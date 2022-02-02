@@ -816,13 +816,6 @@
                     "required": false,
                     "description": "The capacity of links within this connection, in terms of message deliveries.  The capacity is the number of messages that can be in-flight concurrently for each link."
                 },
-                "multiTenant": {
-                    "type": "boolean",
-                    "create": true,
-                    "required": false,
-                    "default": false,
-                    "description": "If true, apply multi-tenancy to endpoints connected at this listener.  The address space is defined by the virtual host (hostname field in the Open)."
-                },
                 "failoverUrls": {
                     "type": "string",
                     "create": true,
@@ -1876,10 +1869,6 @@
                 "sslSsf": {
                     "description": "SSL strength factor in effect",
                     "type": "integer"
-                },
-                "tenant": {
-                    "description": "If multi-tenancy is on for this connection, the tenant space in effect",
-                    "type": "string"
                 },
                 "uptimeSeconds": {
                     "type": "integer",

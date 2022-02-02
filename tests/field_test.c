@@ -191,33 +191,10 @@ static char *test_trim(void *context)
     }
 
     qd_iterator_reset(iter);
-    qd_iterator_annotate_space(iter, "my_space.", 9);
-    qd_iterator_trim_view(iter, 17);
-
-    if (!qd_iterator_equal(iter, (unsigned char*) "Mmy_space.testing")) {
-        qd_iterator_free(iter);
-        return "Trim on ITER_VIEW_ADDRESS_HASH (with space 1) failed";
-    }
-
-    qd_iterator_reset(iter);
-    qd_iterator_trim_view(iter, 9);
-    if (!qd_iterator_equal(iter, (unsigned char*) "Mmy_space")) {
-        qd_iterator_free(iter);
-        return "Trim on ITER_VIEW_ADDRESS_HASH (in space 1) failed";
-    }
-
-    qd_iterator_reset(iter);
     qd_iterator_trim_view(iter, 1);
     if (!qd_iterator_equal(iter, (unsigned char*) "M")) {
         qd_iterator_free(iter);
         return "Trim on ITER_VIEW_ADDRESS_HASH (in annotation 1) failed";
-    }
-
-    qd_iterator_reset(iter);
-    qd_iterator_trim_view(iter, 1);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M")) {
-        qd_iterator_free(iter);
-        return "Trim on ITER_VIEW_ADDRESS_HASH (in annotation 2) failed";
     }
 
     qd_iterator_free(iter);
@@ -433,72 +410,6 @@ static char* test_view_address_hash_edge(void *context)
 }
 
 
-static char* test_view_address_with_space(void *context)
-{
-    struct {const char *addr; const char *view;} cases[] = {
-    {"amqp:/_local/my-addr/sub",                "_local/my-addr/sub"},
-    {"amqp:/_local/my-addr",                    "_local/my-addr"},
-    {"amqp:/_topo/area/router/local/sub",       "_topo/area/router/local/sub"},
-    {"amqp:/_topo/my-area/router/local/sub",    "_topo/my-area/router/local/sub"},
-    {"amqp:/_topo/my-area/my-router/local/sub", "_topo/my-area/my-router/local/sub"},
-    {"amqp:/_topo/area/all/local/sub",          "_topo/area/all/local/sub"},
-    {"amqp:/_topo/my-area/all/local/sub",       "_topo/my-area/all/local/sub"},
-    {"amqp:/_topo/all/all/local/sub",           "_topo/all/all/local/sub"},
-    {"amqp://host:port/_local/my-addr",         "_local/my-addr"},
-    {"_topo/area/router/my-addr",               "_topo/area/router/my-addr"},
-    {"_topo/my-area/router/my-addr",            "_topo/my-area/router/my-addr"},
-    {"_topo/my-area/my-router/my-addr",         "_topo/my-area/my-router/my-addr"},
-    {"_topo/my-area/router",                    "_topo/my-area/router"},
-    {"amqp:/mobile",                            "space/mobile"},
-    {"mobile",                                  "space/mobile"},
-    {"/mobile",                                 "space/mobile"},
-
-    // Re-run the above tests to make sure trailing dots are ignored.
-    {"amqp:/_local/my-addr/sub.",                "_local/my-addr/sub"},
-    {"amqp:/_local/my-addr.",                    "_local/my-addr"},
-    {"amqp:/_topo/area/router/local/sub.",       "_topo/area/router/local/sub"},
-    {"amqp:/_topo/my-area/router/local/sub.",    "_topo/my-area/router/local/sub"},
-    {"amqp:/_topo/my-area/my-router/local/sub.", "_topo/my-area/my-router/local/sub"},
-    {"amqp:/_topo/area/all/local/sub.",          "_topo/area/all/local/sub"},
-    {"amqp:/_topo/my-area/all/local/sub.",       "_topo/my-area/all/local/sub"},
-    {"amqp:/_topo/all/all/local/sub.",           "_topo/all/all/local/sub"},
-    {"amqp://host:port/_local/my-addr.",         "_local/my-addr"},
-    {"_topo/area/router/my-addr.",               "_topo/area/router/my-addr"},
-    {"_topo/my-area/router/my-addr.",            "_topo/my-area/router/my-addr"},
-    {"_topo/my-area/my-router/my-addr.",         "_topo/my-area/my-router/my-addr"},
-    {"_topo/my-area/router.",                    "_topo/my-area/router"},
-    {"_topo/my-area/router:",                    "_topo/my-area/router:"},
-
-    {0, 0}
-    };
-    int idx;
-
-    for (idx = 0; cases[idx].addr; idx++) {
-        qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_WITH_SPACE);
-        qd_iterator_annotate_space(iter, "space/", 6);
-        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
-        qd_iterator_free(iter);
-        if (ret) return ret;
-    }
-
-    for (idx = 0; cases[idx].addr; idx++) {
-        qd_buffer_list_t chain;
-        DEQ_INIT(chain);
-        build_buffer_chain(&chain, cases[idx].addr, 3);
-        qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0,
-                                                 strlen(cases[idx].addr),
-                                                 ITER_VIEW_ADDRESS_WITH_SPACE);
-        qd_iterator_annotate_space(iter, "space/", 6);
-        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
-        release_buffer_chain(&chain);
-        qd_iterator_free(iter);
-        if (ret) return ret;
-    }
-
-    return 0;
-}
-
-
 static char* test_view_address_hash_override(void *context)
 {
     struct {const char *addr; const char *view;} cases[] = {
@@ -513,31 +424,6 @@ static char* test_view_address_hash_override(void *context)
     for (idx = 0; cases[idx].addr; idx++) {
         qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
         qd_iterator_annotate_prefix(iter, 'C');
-        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
-        qd_iterator_free(iter);
-        if (ret) return ret;
-    }
-
-    return 0;
-}
-
-
-static char* test_view_address_hash_with_space(void *context)
-{
-    struct {const char *addr; const char *view;} cases[] = {
-    {"amqp:/link-target",                    "Mtest.vhost.link-target"},
-    {"amqp:/domain/link-target",             "Mtest.vhost.domain/link-target"},
-    {"domain/link-target",                   "Mtest.vhost.domain/link-target"},
-    {"bbc79fb3-e1fd-4a08-92b2-9a2de232b558", "Mtest.vhost.bbc79fb3-e1fd-4a08-92b2-9a2de232b558"},
-    {"_topo/my-area/router/address",         "Rrouter"},
-    {"_topo/my-area/my-router/address",      "Laddress"},
-    {0, 0}
-    };
-    int idx;
-
-    for (idx = 0; cases[idx].addr; idx++) {
-        qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_space(iter, "test.vhost.", 11);
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         qd_iterator_free(iter);
         if (ret) return ret;
@@ -1032,81 +918,6 @@ static char *test_prefix_hash(void *context)
 }
 
 
-static char *test_prefix_hash_with_space(void *context)
-{
-    static char error[200];
-    char *entries[] = {"space.an_entry_with_no_separators",   //  0
-                       "space.dot.separated.pattern.one",     //  1
-                       "space.dot.separated.pattern.two",     //  2
-                       "space.dot.separated.",                //  3
-                       "space.dot",                           //  4
-                       "space.slash",                         //  5
-                       "space.slash/delimited",               //  6
-                       "space.slash/delimited/first",         //  7
-                       "space.slash/delimited/second",        //  8
-                       "space.mixed.set/of/delimiters.one",   //  9
-                       "space.mixed.set/of/delimiters.two",   // 10
-                       "space.mixed.set/of/delimiters/three", // 11
-                       "space.mixed.set",                     // 12
-                       0};
-    struct { char* pattern; int entry; } patterns[] = {{"an_entry_with_no_separators", 0},
-                                                       {"dot.separated.pattern.one", 1},
-                                                       {"dot.separated.pattern.two", 2},
-                                                       {"dot.separated.pattern.three", 3},
-                                                       {"dot.separated.other.pattern", 3},
-                                                       {"dot.differentiated/other", 4},
-                                                       {"slash/other", 5},
-                                                       {"slash/delimited/first", 7},
-                                                       {"slash/delimited/second", 8},
-                                                       {"slash/delimited/third", 6},
-                                                       {"mixed.other", -1},
-                                                       {"mixed.set/other", 12},
-                                                       {"mixed.set/of/delimiters.one/queue", 9},
-                                                       {"mixed.set/of/delimiters.one.queue", 9},
-                                                       {"mixed.set.of/delimiters.one.queue", 12},
-                                                       {"other.thing.entirely", -1},
-                                                       {0, 0}};
-
-    qd_hash_t *hash = qd_hash(10, 32, 0);
-    long idx = 0;
-
-    //
-    // Insert the entries into the hash table
-    //
-    while (entries[idx]) {
-        qd_iterator_t *iter = qd_iterator_string(entries[idx], ITER_VIEW_ADDRESS_HASH);
-        qd_hash_insert(hash, iter, (void*) (idx + 1), 0);
-        qd_iterator_free(iter);
-        idx++;
-    }
-
-    //
-    // Test the patterns
-    //
-    idx = 0;
-    while (patterns[idx].pattern) {
-        qd_iterator_t *iter = qd_iterator_string(patterns[idx].pattern, ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_space(iter, "space.", 6);
-        void *ptr;
-        qd_hash_retrieve_prefix(hash, iter, &ptr);
-        int position = (int) ((long) ptr);
-        position--;
-        if (position != patterns[idx].entry) {
-            snprintf(error, 200, "Pattern: '%s', expected %d, got %d",
-                     patterns[idx].pattern, patterns[idx].entry, position);
-            qd_iterator_free(iter);
-            qd_hash_free(hash);
-            return error;
-        }
-        qd_iterator_free(iter);
-        idx++;
-    }
-
-    qd_hash_free(hash);
-    return 0;
-}
-
-
 static char *test_iterator_copy_octet(void *context)
 {
     // verify qd_iterator_ncopy_octets()
@@ -1150,9 +961,7 @@ int field_tests(void)
     TEST_CASE(test_trim, 0);
     TEST_CASE(test_sub_iterator, 0);
     TEST_CASE(test_view_address_hash, 0);
-    TEST_CASE(test_view_address_with_space, 0);
     TEST_CASE(test_view_address_hash_override, 0);
-    TEST_CASE(test_view_address_hash_with_space, 0);
     TEST_CASE(test_view_node_hash, 0);
     TEST_CASE(test_field_advance_string, 0);
     TEST_CASE(test_field_advance_buffer, 0);
@@ -1166,7 +975,6 @@ int field_tests(void)
     TEST_CASE(test_qd_hash_retrieve_prefix_separator_exact_match_dot_at_end, 0);
     TEST_CASE(test_qd_hash_retrieve_prefix_separator_exact_match_dot_at_end_1, 0);
     TEST_CASE(test_prefix_hash, 0);
-    TEST_CASE(test_prefix_hash_with_space, 0);
     TEST_CASE(test_iterator_copy_octet, 0);
 
     qd_iterator_set_address(true, "my-area", "my-router");

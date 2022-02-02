@@ -368,7 +368,6 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param policy_allow_dynamic_link_routes True if this connection is allowed by policy to create link route destinations.
  * @param policy_allow_admin_status_update True if this connection is allowed to modify admin_status on other connections.
  * @param link_capacity The capacity, in deliveries, for links in this connection.
- * @param vhost If non-null, this is the vhost of the connection to be used for multi-tenancy.
  * @return Pointer to a connection object that can be used to refer to this connection over its lifetime.
  */
 qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
@@ -382,7 +381,6 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
                                         bool                           strip_annotations_in,
                                         bool                           strip_annotations_out,
                                         int                            link_capacity,
-                                        const char                    *vhost,
                                         const qd_policy_spec_t        *policy_spec,
                                         qdr_connection_info_t         *connection_info,
                                         qdr_connection_bind_context_t  context_binder,

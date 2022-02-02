@@ -252,7 +252,6 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
                                             qdr_connection_role_t  *role,
                                             int                    *cost,
                                             const char            **name,
-                                            bool                   *multi_tenant,
                                             bool                   *strip_annotations_in,
                                             bool                   *strip_annotations_out,
                                             int                    *link_capacity)
@@ -285,8 +284,6 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
                 strncmp("connector/", *name, 10) == 0)
                 *name = 0;
         }
-
-        *multi_tenant = cf ? cf->multi_tenant : false;
     }
 }
 
@@ -657,10 +654,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     // If the user is not allowed to proxy the user_id then the message user_id
     // must be blank or it must be equal to the connection user name.
     //
-    bool              check_user   = false;
-    qdr_connection_t *qdr_conn     = (qdr_connection_t*) qd_connection_get_context(conn);
-    int               tenant_space_len;
-    const char       *tenant_space = qdr_connection_get_tenant_space(qdr_conn, &tenant_space_len);
+    bool check_user = false;
     if (conn->policy_settings)
         check_user = !conn->policy_settings->spec.allowUserIdProxy;
 
@@ -794,18 +788,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         //
         if (!addr_iter) {
             addr_iter = qd_message_field_iterator(msg, QD_FIELD_TO);
-
-            //
-            // If the address came from the TO field and we need to apply a tenant-space,
-            // set the to-override with the annotated address.
-            //
-            if (addr_iter && tenant_space) {
-                qd_iterator_reset_view(addr_iter, ITER_VIEW_ADDRESS_WITH_SPACE);
-                qd_iterator_annotate_space(addr_iter, tenant_space, tenant_space_len);
-                qd_composed_field_t *to_override = qd_compose_subfield(0);
-                qd_compose_insert_string_iterator(to_override, addr_iter);
-                qd_message_set_to_override_annotation(msg, to_override);
-            }
         }
 
         if (addr_iter) {
@@ -849,13 +831,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
 
         if (term_addr) {
             qd_composed_field_t *to_override = qd_compose_subfield(0);
-            if (tenant_space) {
-                qd_iterator_t *aiter = qd_iterator_string(term_addr, ITER_VIEW_ADDRESS_WITH_SPACE);
-                qd_iterator_annotate_space(aiter, tenant_space, tenant_space_len);
-                qd_compose_insert_string_iterator(to_override, aiter);
-                qd_iterator_free(aiter);
-            } else
-                qd_compose_insert_string(to_override, term_addr);
+            qd_compose_insert_string(to_override, term_addr);
             qd_message_set_to_override_annotation(msg, to_override);
         }
         delivery = qdr_link_deliver(rlink, msg, ingress_iter, pn_delivery_settled(pnd), link_exclusions, ingress_index,
@@ -1212,9 +1188,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     int                    cost = 1;
     int                    link_capacity = 1;
     const char            *name = 0;
-    bool                   multi_tenant = false;
     bool                   streaming_links = false;
-    const char            *vhost = 0;
     char                   rversion[128];
     uint64_t               connection_id = qd_connection_connection_id(conn);
     pn_connection_t       *pn_conn = qd_connection_pn(conn);
@@ -1255,7 +1229,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         host = qd_connection_name(conn);
 
 
-    qd_router_connection_get_config(conn, &role, &cost, &name, &multi_tenant,
+    qd_router_connection_get_config(conn, &role, &cost, &name,
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
     // check offered capabilities for streaming link support
@@ -1331,12 +1305,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         }
     }
 
-
-    if (multi_tenant)
-        vhost = (conn->policy_settings && conn->policy_settings->vhost_name) ?
-                conn->policy_settings->vhost_name :
-                pn_connection_remote_hostname(pn_conn);
-
     char proto[50];
     memset(proto, 0, 50);
     char cipher[50];
@@ -1383,7 +1351,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           conn->strip_annotations_in,
                           conn->strip_annotations_out,
                           link_capacity,
-                          vhost,
                           !!conn->policy_settings ? &conn->policy_settings->spec : 0,
                           connection_info,
                           bind_connection_context,
@@ -1391,9 +1358,9 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
     if (conn->connector) {
         char conn_msg[300];
-        qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection Opened: dir=%s host=%s vhost=%s encrypted=%s"
+        qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s"
                 " auth=%s user=%s container_id=%s",
-                connection_id, inbound ? "in" : "out", host, vhost ? vhost : "", encrypted ? proto : "no",
+                connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
                         authenticated ? mech : "no", (char*) user, container);
         sys_mutex_lock(conn->connector->lock);
         strcpy(conn->connector->conn_msg, conn_msg);

@@ -324,7 +324,6 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             false,  // strip annotations in
                                             false,  // strip annotations out
                                             DEFAULT_CAPACITY,
-                                            0,      // vhost
                                             0,      // policy_spec
                                             info,
                                             0,      // bind context

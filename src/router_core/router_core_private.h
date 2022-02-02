@@ -658,8 +658,6 @@ struct qdr_connection_t {
     sys_mutex_t                *work_lock;
     qdr_link_ref_list_t         links;
     qdr_link_ref_list_t         links_with_work[QDR_N_PRIORITIES];
-    char                       *tenant_space;
-    int                         tenant_space_len;
     qdr_connection_info_t      *connection_info;
     void                       *user_context; /* Updated from IO thread, use work_lock */
     qdr_link_route_list_t       conn_link_routes;  // connection scoped link routes
