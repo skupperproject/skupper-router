@@ -468,7 +468,6 @@ struct qdr_link_t {
     bool                     edge;              ///< True if this link is in an edge-connection
     bool                     processing;        ///< True if an IO thread is currently handling this link
     bool                     ready_to_free;     ///< True if the core thread wanted to clean up the link but it was processing
-    bool                     fallback;          ///< True if this link is attached to a fallback destination for an address
     bool                     streaming;         ///< True if this link can be reused for streaming msgs
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     terminus_survives_disconnect;
@@ -549,12 +548,6 @@ struct qdr_address_t {
     uint32_t sync_mask;
 
     //
-    // State for tracking fallback destinations for undeliverable deliveries
-    //
-    qdr_address_t *fallback;     ///< Pointer to this address's fallback destination
-    qdr_address_t *fallback_for; ///< Pointer to the address that this is a fallback for
-
-    //
     // State for "closest" treatment
     //
     qd_bitmask_t *closest_remotes;
@@ -597,7 +590,6 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
 void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
 void qdr_core_bind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn);
 void qdr_core_unbind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn);
-void qdr_setup_fallback_address_CT(qdr_core_t *core, qdr_address_t *addr);
 
 struct qdr_address_config_t {
     DEQ_LINKS(qdr_address_config_t);
@@ -605,7 +597,6 @@ struct qdr_address_config_t {
     uint64_t                identity;
     uint32_t                ref_count;
     char                   *pattern;
-    bool                    fallback;
     bool                    is_prefix;
     qd_address_treatment_t  treatment;
     int                     in_phase;
@@ -759,7 +750,6 @@ struct qdr_auto_link_t {
     qdr_auto_link_state_t  state;
     qdr_core_timer_t      *retry_timer; // If the auto link attach fails or gets disconnected, this timer retries the attach.
     char                  *last_error;
-    bool                   fallback;   // True iff this auto-link attaches to a fallback destination for an address.
     qd_hash_handle_t      *hash_handle;
 };
 
