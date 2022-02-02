@@ -345,7 +345,6 @@ static void _address_lookup_init_CT(qdr_core_t *core, void **module_context)
     //
     qdrc_endpoint_bind_mobile_address_CT(core,
                                          QD_TERMINUS_ADDRESS_LOOKUP,
-                                         '0', // phase
                                          &_endpoint_handlers,
                                          &_server_state);
     *module_context = &_server_state;

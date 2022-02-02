@@ -188,16 +188,6 @@ void qd_message_set_trace_annotation(qd_message_t *msg, qd_composed_field_t *tra
 void qd_message_set_to_override_annotation(qd_message_t *msg, qd_composed_field_t *to_field);
 
 /**
- * Set a phase for the phase annotation in the message.
- *
- * @param msg Pointer to an outgoing message.
- * @param phase The phase of the address for the outgoing message.
- *
- */
-void qd_message_set_phase_annotation(qd_message_t *msg, int phase);
-int  qd_message_get_phase_annotation(const qd_message_t *msg);
-
-/**
  * Indicate whether message should be considered to be streaming.
  *
  * @param msg Pointer to an outgoing message.
@@ -460,14 +450,6 @@ qd_log_source_t* qd_message_log_source();
 qd_parsed_field_t *qd_message_get_ingress(qd_message_t *msg);
 
 /**
- * Accessor for message field phase
- * 
- * @param msg A pointer to the message
- * @return the parsed field
- */
-qd_parsed_field_t *qd_message_get_phase(qd_message_t *msg);
-
-/**
  * Accessor for message field to_override
  * 
  * @param msg A pointer to the message
@@ -482,14 +464,6 @@ qd_parsed_field_t *qd_message_get_to_override(qd_message_t *msg);
  * @return the parsed field
  */
 qd_parsed_field_t *qd_message_get_trace(qd_message_t *msg);
-
-/**
- * Accessor for message field phase
- * 
- * @param msg A pointer to the message
- * @return the phase as an integer
- */
-int                qd_message_get_phase_val  (qd_message_t *msg);
 
 /**
  * Should the message be discarded.

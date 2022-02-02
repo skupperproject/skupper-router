@@ -148,13 +148,11 @@ typedef struct qdrc_endpoint_desc_t {
  *
  * @param core Pointer to the core object
  * @param address The address as a null-terminated character string
- * @param phase The phase of the address (typically '0')
  * @param desc The descriptor for this core endpoint containing all callbacks
  * @param bind_context An opaque context that will be included in the call to on_first_attach
  */
 void qdrc_endpoint_bind_mobile_address_CT(qdr_core_t           *core,
                                           const char           *address,
-                                          char                  phase,
                                           qdrc_endpoint_desc_t *desc,
                                           void                 *bind_context);
 

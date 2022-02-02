@@ -35,7 +35,6 @@ typedef enum {
 
 typedef enum {
     STATE_AT_PREFIX,
-    STATE_AT_PHASE,
     STATE_IN_SPACE,
     STATE_IN_BODY
 } view_state_t;
@@ -62,7 +61,6 @@ struct qd_iterator_t {
     view_state_t            state;
     unsigned char           prefix;
     unsigned char           prefix_override;
-    unsigned char           phase;
     const char             *space;
     int                     space_length;
     int                     space_cursor;
@@ -212,7 +210,7 @@ static void parse_address_view(qd_iterator_t *iter)
     iter->prefix            = iter->prefix_override ? iter->prefix_override : QD_ITER_HASH_PREFIX_MOBILE;
     iter->state             = STATE_AT_PREFIX;
     iter->view_space        = true;
-    iter->annotation_length = iter->space_length + (iter->prefix == QD_ITER_HASH_PREFIX_MOBILE ? 2 : 1);
+    iter->annotation_length = iter->space_length + 1;
 }
 
 
@@ -222,7 +220,7 @@ static void adjust_address_with_space(qd_iterator_t *iter)
     // Convert an ADDRESS_HASH view to an ADDRESS_WITH_SPACE view
     //
     if (iter->view_space) {
-        iter->annotation_length -= iter->prefix == QD_ITER_HASH_PREFIX_MOBILE ? 2 : 1;
+        iter->annotation_length -= 1;
         iter->state = iter->space ? STATE_IN_SPACE : STATE_IN_BODY;
     } else {
         iter->annotation_length = 0;
@@ -592,7 +590,6 @@ qd_iterator_t* qd_iterator_string(const char *text, qd_iterator_view_t view)
     ZERO(iter);
     iter->start_pointer.cursor    = (unsigned char*) text;
     iter->start_pointer.remaining = strlen(text);
-    iter->phase                   = '0';
 
     qd_iterator_reset_view(iter, view);
 
@@ -609,7 +606,6 @@ qd_iterator_t* qd_iterator_binary(const char *text, int length, qd_iterator_view
     ZERO(iter);
     iter->start_pointer.cursor    = (unsigned char*) text;
     iter->start_pointer.remaining = length;
-    iter->phase                   = '0';
 
     qd_iterator_reset_view(iter, view);
 
@@ -627,7 +623,6 @@ qd_iterator_t *qd_iterator_buffer(qd_buffer_t *buffer, int offset, int length, q
     iter->start_pointer.buffer    = buffer;
     iter->start_pointer.cursor    = qd_buffer_base(buffer) + offset;
     iter->start_pointer.remaining = length;
-    iter->phase                   = '0';
 
     qd_iterator_reset_view(iter, view);
 
@@ -680,13 +675,6 @@ qd_iterator_view_t qd_iterator_get_view(const qd_iterator_t *iter)
 }
 
 
-void qd_iterator_annotate_phase(qd_iterator_t *iter, char phase)
-{
-    if (iter)
-        iter->phase = phase;
-}
-
-
 void qd_iterator_trim_view(qd_iterator_t *iter, int length)
 {
     if (!iter)
@@ -721,7 +709,7 @@ void qd_iterator_annotate_space(qd_iterator_t *iter, const char* space, int spac
         iter->space        = space;
         iter->space_length = space_length;
         if      (iter->view == ITER_VIEW_ADDRESS_HASH)
-            iter->annotation_length = (iter->view_space ? space_length : 0) + (iter->prefix == QD_ITER_HASH_PREFIX_MOBILE ? 2 : 1);
+            iter->annotation_length = (iter->view_space ? space_length : 0) + 1;
         else if (iter->view == ITER_VIEW_ADDRESS_WITH_SPACE) {
             if (iter->view_space)
                 iter->annotation_length = space_length;
@@ -761,17 +749,10 @@ unsigned char qd_iterator_octet(qd_iterator_t *iter)
     }
 
     if (iter->state == STATE_AT_PREFIX) {
-        iter->state = iter->prefix == QD_ITER_HASH_PREFIX_MOBILE ? STATE_AT_PHASE : (iter->view_space && iter->space) ? STATE_IN_SPACE : STATE_IN_BODY;
-        iter->space_cursor = 0;
-        iter->annotation_remaining--;
-        return iter->prefix;
-    }
-
-    if (iter->state == STATE_AT_PHASE) {
         iter->state = (iter->view_space && iter->space) ? STATE_IN_SPACE : STATE_IN_BODY;
         iter->space_cursor = 0;
         iter->annotation_remaining--;
-        return iter->phase;
+        return iter->prefix;
     }
 
     if (iter->state == STATE_IN_SPACE) {
@@ -811,7 +792,6 @@ qd_iterator_t *qd_iterator_sub(const qd_iterator_t *iter, uint32_t length)
     sub->view                    = iter->view;
     sub->mode                    = iter->mode;
     sub->state                   = STATE_IN_BODY;
-    sub->phase                   = '0';
 
     return sub;
 }

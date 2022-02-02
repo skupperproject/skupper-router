@@ -33,14 +33,13 @@
 #define QDR_CONFIG_AUTO_LINK_ADDR          4
 #define QDR_CONFIG_AUTO_LINK_DIRECTION     5
 #define QDR_CONFIG_AUTO_LINK_DIR           6
-#define QDR_CONFIG_AUTO_LINK_PHASE         7
-#define QDR_CONFIG_AUTO_LINK_CONNECTION    8
-#define QDR_CONFIG_AUTO_LINK_CONTAINER_ID  9
-#define QDR_CONFIG_AUTO_LINK_EXT_ADDRESS   10
-#define QDR_CONFIG_AUTO_LINK_EXT_ADDR      11
-#define QDR_CONFIG_AUTO_LINK_LINK_REF      12
-#define QDR_CONFIG_AUTO_LINK_OPER_STATUS   13
-#define QDR_CONFIG_AUTO_LINK_LAST_ERROR    14
+#define QDR_CONFIG_AUTO_LINK_CONNECTION    7
+#define QDR_CONFIG_AUTO_LINK_CONTAINER_ID  8
+#define QDR_CONFIG_AUTO_LINK_EXT_ADDRESS   9
+#define QDR_CONFIG_AUTO_LINK_EXT_ADDR      10
+#define QDR_CONFIG_AUTO_LINK_LINK_REF      11
+#define QDR_CONFIG_AUTO_LINK_OPER_STATUS   12
+#define QDR_CONFIG_AUTO_LINK_LAST_ERROR    13
 
 const char *qdr_config_auto_link_columns[] =
     {"name",
@@ -50,7 +49,6 @@ const char *qdr_config_auto_link_columns[] =
      "addr",
      "direction",
      "dir",
-     "phase",
      "connection",
      "containerId",
      "externalAddress",
@@ -96,7 +94,7 @@ static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, 
     case QDR_CONFIG_AUTO_LINK_ADDRESS:
         key = (const char*) qd_hash_key_by_handle(al->addr->hash_handle);
         if (key && key[0] == 'M')
-            qd_compose_insert_string(body, &key[2]);
+            qd_compose_insert_string(body, &key[1]);
         else
             qd_compose_insert_null(body);
         break;
@@ -105,10 +103,6 @@ static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, 
     case QDR_CONFIG_AUTO_LINK_DIRECTION:
         text = al->dir == QD_INCOMING ? "in" : "out";
         qd_compose_insert_string(body, text);
-        break;
-
-    case QDR_CONFIG_AUTO_LINK_PHASE:
-        qd_compose_insert_int(body, al->phase);
         break;
 
     case QDR_CONFIG_AUTO_LINK_CONNECTION:
@@ -412,7 +406,6 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
             if (dir_field)
                 qd_log(core->agent_log, QD_LOG_WARNING, "The 'dir' attribute of autoLink has been deprecated. Use 'direction' instead");
         }
-        qd_parsed_field_t *phase_field      = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_PHASE]);
         qd_parsed_field_t *connection_field = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_CONNECTION]);
         qd_parsed_field_t *container_field  = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_CONTAINER_ID]);
 
@@ -451,25 +444,9 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         }
 
         //
-        // Use the specified phase if present.  Otherwise default based on the direction:
-        // Phase 0 for outgoing links and phase 1 for incoming links.
-        //
-        long phase = phase_field ? qd_parse_as_long(phase_field) : (dir == QD_OUTGOING ? 0 : 1);
-
-        //
-        // Validate the phase
-        //
-        if (phase < 0 || phase > 9) {
-            query->status = QD_AMQP_BAD_REQUEST;
-            query->status.description = "autoLink phase must be between 0 and 9";
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_AUTOLINK_TYPE, query->status.description);
-            break;
-        }
-
-        //
         // The request is good.  Create the entity.
         //
-        al = qdr_route_add_auto_link_CT(core, name, addr_field, dir, phase, container_field, connection_field, external_addr);
+        al = qdr_route_add_auto_link_CT(core, name, addr_field, dir, container_field, connection_field, external_addr);
 
         //
         // Compose the result map for the response.

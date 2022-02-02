@@ -237,33 +237,17 @@ static qdr_address_t *qdr_lookup_terminus_address_CT(qdr_core_t       *core,
     //
     // There was no match for a link-route destination, look for a message-route address.
     //
-    int  in_phase  = 0;
-    int  out_phase = 0;
-    char addr_phase;
     int  priority  = -1;
     qd_address_treatment_t  treat       = core->qd->default_treatment;
     qdr_address_config_t   *addr_config = qdr_config_for_address_CT(core, conn, iter);
 
     if (addr_config) {
-        in_phase  = addr_config->in_phase;
-        out_phase = addr_config->out_phase;
-        priority  = addr_config->priority;
-        treat     = addr_config->treatment;
-    }
-
-    //
-    // If the terminus has a waypoint capability, override the configured phases and use the waypoint phases.
-    //
-    int waypoint_ordinal = qdr_terminus_waypoint_capability(terminus);
-    if (waypoint_ordinal > 0) {
-        in_phase  = waypoint_ordinal;
-        out_phase = waypoint_ordinal - 1;
+        priority = addr_config->priority;
+        treat    = addr_config->treatment;
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
     qd_iterator_annotate_prefix(iter, '\0'); // Cancel previous override
-    addr_phase = dir == QD_INCOMING ? in_phase + '0' : out_phase + '0';
-    qd_iterator_annotate_phase(iter, addr_phase);
 
     qd_hash_retrieve(core->addr_hash, iter, (void**) &addr);
 

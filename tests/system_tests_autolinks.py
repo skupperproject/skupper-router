@@ -25,7 +25,6 @@ from system_test import unittest
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from subprocess import PIPE, STDOUT
-from qpid_dispatch.management.client import Node
 from system_test import QdManager
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
@@ -107,9 +106,7 @@ class NameCollisionTest(TestCase):
                            'prefix': 'linkRoute',
                            'connection': 'brokerConnection',
                            'direction': 'in'}),
-            ('address',   {'name': 'address',
-                           'prefix': 'address.1',
-                           'waypoint': 'yes'}),
+            ('address',   {'name': 'address', 'prefix': 'address.1'}),
         ])
 
         cls.router = cls.tester.qdrouterd(name, config)
@@ -144,8 +141,7 @@ class NameCollisionTest(TestCase):
                 test_pass = True
         self.assertTrue(test_pass)
 
-        args = {"name": "address", "prefix": "address.1",
-                "waypoint": "yes"}
+        args = {"name": "address", "prefix": "address.1"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         test_pass = False
         try:
@@ -189,15 +185,13 @@ class NameCollisionTest(TestCase):
 
         # insert an address with the name of an existing autoLink and make
         # sure that is ok
-        args = {"name": "autoLink", "prefix": "address.2",
-                "waypoint": "yes"}
+        args = {"name": "autoLink", "prefix": "address.2"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(addr_long_type, args)
 
         # insert an autoLink with the name of an existing linkRoute and make
         # sure that is ok
-        args = {"name": "linkRoute", "prefix": "address.3",
-                "waypoint": "yes"}
+        args = {"name": "linkRoute", "prefix": "address.3"}
         mgmt = QdManager(self, address=self.router.addresses[0])
         mgmt.create(addr_long_type, args)
 
@@ -355,118 +349,6 @@ class AutoLinkRetryTest(TestCase):
         self.assertTrue(self.success)
 
 
-class WaypointReceiverPhaseTest(TestCase):
-    inter_router_port = None
-
-    @classmethod
-    def router(cls, name, config):
-        config = Qdrouterd.Config(config)
-
-        cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
-
-    @classmethod
-    def setUpClass(cls):
-        super(WaypointReceiverPhaseTest, cls).setUpClass()
-
-        cls.routers = []
-
-        cls.inter_router_port = cls.tester.get_port()
-        cls.inter_router_port_1 = cls.tester.get_port()
-        cls.backup_port = cls.tester.get_port()
-        cls.backup_url = 'amqp://0.0.0.0:' + str(cls.backup_port)
-
-        WaypointReceiverPhaseTest.router('A', [
-            ('router', {'mode': 'interior', 'id': 'A'}),
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port()}),
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.inter_router_port}),
-            ('autoLink', {'address': '0.0.0.0/queue.ext', 'direction': 'in', 'externalAddress': 'EXT'}),
-            ('autoLink', {'address': '0.0.0.0/queue.ext', 'direction': 'out', 'externalAddress': 'EXT'}),
-            ('address', {'prefix': '0.0.0.0/queue', 'waypoint': 'yes'}),
-
-        ])
-
-        WaypointReceiverPhaseTest.router('B',
-                                         [
-                                             ('router', {'mode': 'interior', 'id': 'B'}),
-                                             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port()}),
-                                             ('connector', {'name': 'connectorToB', 'role': 'inter-router',
-                                                            'port': cls.inter_router_port}),
-                                             ('address', {'prefix': '0.0.0.0/queue', 'waypoint': 'yes'}),
-                                         ])
-
-        cls.routers[1].wait_router_connected('A')
-
-    def test_two_router_waypoint_no_tenant_external_addr_phase(self):
-        """
-        Attaches two receiver each to one router with an autoLinked address and makes sure that the phase
-        on both receivers is set to 1
-        :return:
-        """
-        test = WaypointTest(self.routers[0].addresses[0], self.routers[1].addresses[0], "0.0.0.0/queue.ext")
-        test.run()
-        self.assertIsNone(test.error)
-
-
-class WaypointTest(MessagingHandler):
-    def __init__(self, first_host, second_host, dest):
-        super(WaypointTest, self).__init__()
-        self.first_host = first_host
-        self.second_host = second_host
-        self.first_conn = None
-        self.second_conn = None
-        self.error = None
-        self.timer = None
-        self.receiver1 = None
-        self.receiver2 = None
-        self.dest = dest
-        self.receiver1_phase = False
-        self.receiver2_phase = False
-
-    def timeout(self):
-        self.error = "The phase on the receiver links were not set to 1"
-        self.first_conn.close()
-        self.second_conn.close()
-
-    def on_start(self, event):
-        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.first_conn = event.container.connect(self.first_host)
-        self.second_conn = event.container.connect(self.second_host)
-        self.receiver1 = event.container.create_receiver(self.first_conn, self.dest, name="AAA")
-        self.receiver2 = event.container.create_receiver(self.second_conn, self.dest, name="BBB")
-
-    def on_link_opened(self, event):
-        if event.receiver == self.receiver1:
-            local_node = Node.connect(self.first_host, timeout=TIMEOUT)
-            out = local_node.query(type='org.apache.qpid.dispatch.router.link')
-            link_type_index = out.attribute_names.index('linkType')
-            link_dir_index = out.attribute_names.index('linkDir')
-            owning_addr_index = out.attribute_names.index('owningAddr')
-            link_name_index = out.attribute_names.index('linkName')
-
-            for result in out.results:
-                if result[link_type_index] == "endpoint" and result[link_dir_index] == "out" and result[link_name_index] == 'AAA' and result[owning_addr_index] == 'M10.0.0.0/queue.ext':
-                    self.receiver1_phase = True
-        elif event.receiver == self.receiver2:
-            local_node = Node.connect(self.second_host, timeout=TIMEOUT)
-            out = local_node.query(type='org.apache.qpid.dispatch.router.link')
-            link_type_index = out.attribute_names.index('linkType')
-            link_dir_index = out.attribute_names.index('linkDir')
-            owning_addr_index = out.attribute_names.index('owningAddr')
-            link_name_index = out.attribute_names.index('linkName')
-
-            for result in out.results:
-                if result[link_type_index] == "endpoint" and result[link_dir_index] == "out" and result[link_name_index] == 'BBB' and result[owning_addr_index] == 'M10.0.0.0/queue.ext':
-                    self.receiver2_phase = True
-
-        if self.receiver1_phase and self.receiver2_phase:
-            self.first_conn.close()
-            self.second_conn.close()
-            self.timer.cancel()
-
-    def run(self):
-        Container(self).run()
-
-
 class AutolinkTest(TestCase):
     """System tests involving a single router"""
     @classmethod
@@ -494,30 +376,17 @@ class AutolinkTest(TestCase):
             ('listener', {'role': 'route-container', 'name': 'myListener', 'port': cls.tester.get_port()}),
 
             #
-            # Set up the prefix 'node' as a prefix for waypoint addresses
-            #
-            ('address', {'prefix': 'node', 'waypoint': 'yes'}),
-
-            #
             # Create a pair of default auto-links for 'node.1'
             #
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'in'}),
             ('autoLink', {'address': 'node.1', 'containerId': 'container.1', 'direction': 'out'}),
 
             #
-            # Create a pair of auto-links on non-default phases for container-to-container transfers
-            #
-            ('autoLink', {'address': 'xfer.2', 'containerId': 'container.2', 'direction': 'in',  'phase': '4'}),
-            ('autoLink', {'address': 'xfer.2', 'containerId': 'container.3', 'direction': 'out', 'phase': '4'}),
-
-            #
             # Create a pair of auto-links with a different external address
             # Leave the direction as dir to test backward compatibility.
             #
-            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2',
-                          'containerId': 'container.4', 'direction': 'in'}),
-            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2',
-                          'containerId': 'container.4', 'direction': 'out'}),
+            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'direction': 'in'}),
+            ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'direction': 'out'}),
 
             #
             # Note here that the connection is set to a previously declared 'myListener'
@@ -565,16 +434,6 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
-    def test_02_autolink_credit(self):
-        """
-        Create a normal connection and a sender to the autolink address.  Then create the route-container
-        connection and ensure that the on_sendable did not arrive until after the autolinks were created.
-        """
-        test = AutolinkCreditTest(self.normal_address, self.route_address)
-        test.run()
-        self.assertIsNone(test.error)
-        self.assertTrue(test.autolink_count_ok)
-
     def test_03_autolink_sender(self):
         """
         Create a route-container connection and a normal sender.  Ensure that messages sent on the sender
@@ -590,37 +449,6 @@ class AutolinkTest(TestCase):
         self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
         self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 0)
         self.assertEqual(output[0]['deliveriesTransit'], 0)
-
-        self.assertEqual(output[0]['deliveriesIngress'], 277)
-        self.assertEqual(output[0]['deliveriesEgress'], 276)
-
-    def test_04_autolink_receiver(self):
-        """
-        Create a route-container connection and a normal receiver.  Ensure that messages sent from the
-        route-container are received by the receiver and that settlement propagates back to the sender.
-        """
-        test = AutolinkReceiverTest('container.1', self.normal_address, self.route_address, 'node.1', 'node.1')
-        test.run()
-        self.assertIsNone(test.error)
-
-        long_type = 'org.apache.qpid.dispatch.router'
-        query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
-        self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
-        self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 275)
-        self.assertEqual(output[0]['deliveriesTransit'], 0)
-
-        self.assertEqual(output[0]['deliveriesIngress'], 553)
-        self.assertEqual(output[0]['deliveriesEgress'], 552)
-
-    def test_05_inter_container_transfer(self):
-        """
-        Create a route-container connection and a normal receiver.  Ensure that messages sent from the
-        route-container are received by the receiver and that settlement propagates back to the sender.
-        """
-        test = InterContainerTransferTest(self.normal_address, self.route_address)
-        test.run()
-        self.assertIsNone(test.error)
 
     def test_06_manage_autolinks(self):
         """
@@ -648,15 +476,6 @@ class AutolinkTest(TestCase):
         link are received by the route container and that settlement propagates back to the sender.
         """
         test = AutolinkSenderTest('container.4', self.normal_address, self.route_address, 'node.2', 'ext.2')
-        test.run()
-        self.assertIsNone(test.error)
-
-    def test_09_autolink_receiver_with_ext_addr(self):
-        """
-        Create a route-container connection and a normal receiver.  Ensure that messages sent from the
-        route-container are received by the receiver and that settlement propagates back to the sender.
-        """
-        test = AutolinkReceiverTest('container.4', self.normal_address, self.route_address, 'node.2', 'ext.2')
         test.run()
         self.assertIsNone(test.error)
 
@@ -791,63 +610,6 @@ class AutolinkAttachTest(MessagingHandler):
         container.run()
 
 
-class AutolinkCreditTest(MessagingHandler):
-    def __init__(self, normal_address, route_address):
-        super(AutolinkCreditTest, self).__init__(prefetch=0)
-        self.normal_address = normal_address
-        self.route_address  = route_address
-        self.dest           = 'node.1'
-        self.normal_conn    = None
-        self.route_conn     = None
-        self.error          = None
-        self.last_action    = "None"
-        self.autolink_count_ok = False
-
-    def timeout(self):
-        self.error = "Timeout Expired: last_action=%s" % self.last_action
-        if self.normal_conn:
-            self.normal_conn.close()
-        if self.route_conn:
-            self.route_conn.close()
-
-    def on_start(self, event):
-        self.timer       = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.normal_conn = event.container.connect(self.normal_address)
-        self.sender      = event.container.create_sender(self.normal_conn, self.dest)
-        self.last_action = "Attached normal sender"
-
-        local_node = Node.connect(self.normal_address, timeout=TIMEOUT)
-        res = local_node.query(type='org.apache.qpid.dispatch.router')
-        results = res.results[0]
-        attribute_names = res.attribute_names
-        if 8 == results[attribute_names.index('autoLinkCount')]:
-            self.autolink_count_ok = True
-
-    def on_link_opening(self, event):
-        if event.sender:
-            event.sender.source.address = event.sender.remote_source.address
-        if event.receiver:
-            event.receiver.target.address = event.receiver.remote_target.address
-
-    def on_link_opened(self, event):
-        if event.sender == self.sender:
-            self.route_conn = event.container.connect(self.route_address)
-            self.last_action = "Opened route connection"
-
-    def on_sendable(self, event):
-        if event.sender == self.sender:
-            if self.last_action != "Opened route connection":
-                self.error = "Events out of sequence:  last_action=%s" % self.last_action
-            self.timer.cancel()
-            self.route_conn.close()
-            self.normal_conn.close()
-
-    def run(self):
-        container = Container(self)
-        container.container_id = 'container.1'
-        container.run()
-
-
 class AutolinkSenderTest(MessagingHandler):
     def __init__(self, cid, normal_address, route_address, addr, ext_addr):
         super(AutolinkSenderTest, self).__init__()
@@ -889,73 +651,6 @@ class AutolinkSenderTest(MessagingHandler):
             self.normal_conn = event.container.connect(self.normal_address)
             self.sender      = event.container.create_sender(self.normal_conn, self.dest)
             self.last_action = "Attached normal sender"
-
-    def on_sendable(self, event):
-        if event.sender == self.sender:
-            while self.n_sent < self.count and event.sender.credit > 0:
-                msg = Message(body="AutoLinkTest")
-                self.sender.send(msg)
-                self.n_sent += 1
-
-    def on_message(self, event):
-        self.n_received += 1
-        self.accept(event.delivery)
-
-    def on_settled(self, event):
-        self.n_settled += 1
-        if self.n_settled == self.count:
-            self.timer.cancel()
-            self.normal_conn.close()
-            self.route_conn.close()
-
-    def run(self):
-        container = Container(self)
-        container.container_id = self.cid
-        container.run()
-
-
-class AutolinkReceiverTest(MessagingHandler):
-    def __init__(self, cid, normal_address, route_address, addr, ext_addr):
-        super(AutolinkReceiverTest, self).__init__()
-        self.cid            = cid
-        self.normal_address = normal_address
-        self.route_address  = route_address
-        self.dest           = addr
-        self.ext_addr       = ext_addr
-        self.count          = 275
-        self.normal_conn    = None
-        self.route_conn     = None
-        self.error          = None
-        self.last_action    = "None"
-        self.n_sent         = 0
-        self.n_received     = 0
-        self.n_settled      = 0
-
-    def timeout(self):
-        self.error = "Timeout Expired: last_action=%s n_sent=%d n_received=%d n_settled=%d" % \
-                     (self.last_action, self.n_sent, self.n_received, self.n_settled)
-        if self.normal_conn:
-            self.normal_conn.close()
-        if self.route_conn:
-            self.route_conn.close()
-
-    def on_start(self, event):
-        self.timer       = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.route_conn  = event.container.connect(self.route_address)
-        self.last_action = "Connected route container"
-
-    def on_link_opening(self, event):
-        if event.sender:
-            event.sender.source.address = event.sender.remote_source.address
-            self.sender = event.sender
-        if event.receiver:
-            event.receiver.target.address = event.receiver.remote_target.address
-
-    def on_link_opened(self, event):
-        if event.sender and not self.normal_conn:
-            self.normal_conn = event.container.connect(self.normal_address)
-            self.receiver    = event.container.create_receiver(self.normal_conn, self.dest)
-            self.last_action = "Attached normal receiver"
 
     def on_sendable(self, event):
         if event.sender == self.sender:
@@ -1056,62 +751,6 @@ class AutolinkMultipleReceiverUsingMyListenerTest(MessagingHandler):
             self.normal_conn.close()
             self.route_conn1.close()
             self.route_conn2.close()
-
-    def run(self):
-        container = Container(self)
-        container.run()
-
-
-class InterContainerTransferTest(MessagingHandler):
-    def __init__(self, normal_address, route_address):
-        super(InterContainerTransferTest, self).__init__()
-        self.normal_address = normal_address
-        self.route_address  = route_address
-        self.count          = 275
-        self.conn_1         = None
-        self.conn_2         = None
-        self.error          = None
-        self.n_sent         = 0
-        self.n_received     = 0
-        self.n_settled      = 0
-
-    def timeout(self):
-        self.error = "Timeout Expired:  n_sent=%d n_received=%d n_settled=%d" % \
-                     (self.n_sent, self.n_received, self.n_settled)
-        self.conn_1.close()
-        self.conn_2.close()
-
-    def on_start(self, event):
-        self.timer  = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        event.container.container_id = 'container.2'
-        self.conn_1 = event.container.connect(self.route_address)
-        event.container.container_id = 'container.3'
-        self.conn_2 = event.container.connect(self.route_address)
-
-    def on_link_opening(self, event):
-        if event.sender:
-            event.sender.source.address = event.sender.remote_source.address
-            self.sender = event.sender
-        if event.receiver:
-            event.receiver.target.address = event.receiver.remote_target.address
-
-    def on_sendable(self, event):
-        if event.sender == self.sender:
-            while self.n_sent < self.count and event.sender.credit > 0:
-                msg = Message(body="AutoLinkTest")
-                self.sender.send(msg)
-                self.n_sent += 1
-
-    def on_message(self, event):
-        self.n_received += 1
-        self.accept(event.delivery)
-
-    def on_settled(self, event):
-        self.n_settled += 1
-        if self.n_settled == self.count:
-            self.timer.cancel()
-            self.conn_1.close()
-            self.conn_2.close()
 
     def run(self):
         container = Container(self)

@@ -248,15 +248,11 @@ class BusManager(object):
 
     def _addr_summary(self, addr):
         cls   = self._addr_class(addr)
-        phase = self._addr_phase(addr)
         text  = self._addr_text(addr)
         if cls == '-':
             return "-"
         if cls == 'M':
-            if phase == '0':
-                return text
-            else:
-                return "%s:%s" % (phase, text)
+            return text
         return "%s:%s" % (cls, text)
 
     def _addr_class(self, addr):
@@ -283,17 +279,8 @@ class BusManager(object):
     def _addr_text(self, addr):
         if not addr:
             return ""
-        if addr[0] == 'M':
-            return addr[2:]
         else:
             return addr[1:]
-
-    def _addr_phase(self, addr):
-        if not addr:
-            return ""
-        if addr[0] == 'M':
-            return addr[1]
-        return ''
 
     def _identity_clean(self, identity, router_id=None):
         if router_id:
@@ -396,7 +383,6 @@ class BusManager(object):
         heads.append(Header("peer"))
         heads.append(Header("class"))
         heads.append(Header("addr"))
-        heads.append(Header("phs"))
         heads.append(Header("cap", Header.PLAIN_NUM))
 
         rows = []
@@ -468,7 +454,6 @@ class BusManager(object):
             row.append(link.peer)
             row.append(self._addr_class(link.owningAddr))
             row.append(self._addr_text(link.owningAddr))
-            row.append(self._addr_phase(link.owningAddr))
             row.append(link.capacity)
             if has_priority:
                 row.append(link.priority)
@@ -562,7 +547,6 @@ class BusManager(object):
         heads = []
         heads.append(Header("class"))
         heads.append(Header("addr"))
-        heads.append(Header("phs"))
         heads.append(Header("distrib"))
 
         rows = []
@@ -600,7 +584,6 @@ class BusManager(object):
             row = []
             row.append(self._addr_class(addr.name))
             row.append(self._addr_text(addr.name))
-            row.append(self._addr_phase(addr.name))
             row.append(addr.distribution)
             if has_priority:
                 row.append(PlainNum(addr.priority) if addr.priority >= 0 else "-")
@@ -625,13 +608,12 @@ class BusManager(object):
         heads = []
         heads.append(Header("addr"))
         heads.append(Header("dir"))
-        heads.append(Header("phs"))
         heads.append(Header("extAddr"))
         heads.append(Header("link"))
         heads.append(Header("status"))
         heads.append(Header("lastErr"))
         rows = []
-        cols = ('address', 'direction', 'phase', 'externalAddress', 'linkRef', 'operStatus', 'lastError')
+        cols = ('address', 'direction', 'externalAddress', 'linkRef', 'operStatus', 'lastError')
 
         objects = self.query('org.apache.qpid.dispatch.router.config.autoLink', cols, limit=self.opts.limit)
 
@@ -647,7 +629,6 @@ class BusManager(object):
             row = []
             row.append(al.address)
             row.append(al.direction)
-            row.append(PlainNum(al.phase))
             row.append(al.externalAddress)
             row.append(al.linkRef)
             row.append(al.operStatus)
@@ -893,7 +874,6 @@ class BusManager(object):
         heads.append(Header("allowDynamicSource"))
         heads.append(Header("allowAnonymousSender"))
         heads.append(Header("allowUserIdProxy"))
-        heads.append(Header("allowWaypointLinks"))
         heads.append(Header("allowDynamicLinkRoutes"))
         heads.append(Header("allowAdminStatusUpdate"))
         rows = []
@@ -917,7 +897,6 @@ class BusManager(object):
                     row.append(self.showNodefaultBool(group, "allowDynamicSource", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowAnonymousSender", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowUserIdProxy", vg_schema))
-                    row.append(self.showNodefaultBool(group, "allowWaypointLinks", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowDynamicLinkRoutes", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowAdminStatusUpdate", vg_schema))
                     rows.append(tuple(row))

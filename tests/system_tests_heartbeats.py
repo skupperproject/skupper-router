@@ -43,9 +43,7 @@ class RouterTest(TestCase):
         def router(name, mode, extra=None):
             config = [
                 ('router', {'mode': mode, 'id': name, "helloMaxAgeSeconds": '10'}),
-                ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
-                ('address', {'prefix': 'queue', 'waypoint': 'yes'}),
-                ('address', {'prefix': 'multi', 'ingressPhase': '0', 'egressPhase': '9'})
+                ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'})
             ]
 
             if extra:

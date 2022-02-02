@@ -411,7 +411,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->echo_node->desc     = &descriptor;
     DEQ_INIT(module->echo_node->in_links);
     DEQ_INIT(module->echo_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, echo_address, '0', &descriptor, module->echo_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, echo_address, &descriptor, module->echo_node);
 
     module->deny_node->core     = core;
     module->deny_node->module   = module;
@@ -419,7 +419,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->deny_node->desc     = &descriptor;
     DEQ_INIT(module->deny_node->in_links);
     DEQ_INIT(module->deny_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, deny_address, '0', &descriptor, module->deny_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, deny_address, &descriptor, module->deny_node);
 
     module->sink_node->core     = core;
     module->sink_node->module   = module;
@@ -427,7 +427,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->sink_node->desc     = &descriptor;
     DEQ_INIT(module->sink_node->in_links);
     DEQ_INIT(module->sink_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, sink_address, '0', &descriptor, module->sink_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, sink_address, &descriptor, module->sink_node);
 
     module->source_node->core     = core;
     module->source_node->module   = module;
@@ -435,7 +435,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->source_node->desc     = &descriptor;
     DEQ_INIT(module->source_node->in_links);
     DEQ_INIT(module->source_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, source_address, '0', &descriptor, module->source_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, source_address, &descriptor, module->source_node);
 
     module->source_ps_node->core     = core;
     module->source_ps_node->module   = module;
@@ -443,7 +443,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->source_ps_node->desc     = &descriptor;
     DEQ_INIT(module->source_ps_node->in_links);
     DEQ_INIT(module->source_ps_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, source_ps_address, '0', &descriptor, module->source_ps_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, source_ps_address, &descriptor, module->source_ps_node);
 
     module->discard_node->core     = core;
     module->discard_node->module   = module;
@@ -451,7 +451,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->discard_node->desc     = &descriptor;
     DEQ_INIT(module->discard_node->in_links);
     DEQ_INIT(module->discard_node->out_links);
-    qdrc_endpoint_bind_mobile_address_CT(core, discard_address, '0', &descriptor, module->discard_node);
+    qdrc_endpoint_bind_mobile_address_CT(core, discard_address, &descriptor, module->discard_node);
 
     return module;
 }

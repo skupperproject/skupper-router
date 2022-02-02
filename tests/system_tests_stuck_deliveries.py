@@ -361,7 +361,7 @@ class RxLinkCreditTest(MessagingHandler):
                 # 10Credits
                 #
                 for link in response.results:
-                    if 'M0' + self.addr == link.owningAddr:
+                    if 'M' + self.addr == link.owningAddr:
                         if link.creditAvailable == 10:
                             self.receiver.flow(10)
                             self.stage = 4
@@ -373,7 +373,7 @@ class RxLinkCreditTest(MessagingHandler):
                 # 20Credits
                 #
                 for link in response.results:
-                    if 'M0' + self.addr == link.owningAddr:
+                    if 'M' + self.addr == link.owningAddr:
                         if link.creditAvailable == 20:
                             self.fail(None)
                             return
@@ -484,7 +484,7 @@ class TxLinkCreditTest(MessagingHandler):
                 # 250Credits
                 #
                 for link in response.results:
-                    if 'M0' + self.addr == link.owningAddr:
+                    if 'M' + self.addr == link.owningAddr:
                         if link.creditAvailable == 250:
                             self.fail(None)
                             return

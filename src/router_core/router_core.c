@@ -522,7 +522,7 @@ qdr_address_t *qdr_add_mobile_address_CT(qdr_core_t *core, const char *prefix, c
         addr_string = (char*) malloc(len);
     }
 
-    snprintf(addr_string, len, "%s%s%s", edge ? "H" : "M0", prefix, address);
+    snprintf(addr_string, len, "%s%s%s", edge ? "H" : "M", prefix, address);
     iter = qd_iterator_string(addr_string, ITER_VIEW_ALL);
 
     qd_hash_retrieve(core->addr_hash, iter, (void**) &addr);
@@ -663,10 +663,7 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
 
 void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link)
 {
-    const char *key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
     link->owning_addr = addr;
-    if (key && (*key == QD_ITER_HASH_PREFIX_MOBILE))
-        link->phase = (int) (key[1] - '0');
 
     //
     // If this link is configured as no-route, don't create any functional linkage between the

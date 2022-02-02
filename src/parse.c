@@ -775,7 +775,6 @@ const char *qd_parse_annotations_v1(
     bool                   strip_anno_in,
     qd_iterator_t         *ma_iter_in,
     qd_parsed_field_t    **ma_ingress,
-    qd_parsed_field_t    **ma_phase,
     qd_parsed_field_t    **ma_to_override,
     qd_parsed_field_t    **ma_trace,
     qd_parsed_field_t    **ma_stream,
@@ -796,8 +795,7 @@ const char *qd_parse_annotations_v1(
     // define a shorthand name for the qd message annotation key prefix length
 #define QMPL QD_MA_PREFIX_LEN
 
-    // trace, phase, and class keys are all the same length
-    assert(QD_MA_TRACE_LEN == QD_MA_PHASE_LEN);
+    // trace and class keys are all the same length
     assert(QD_MA_TRACE_LEN == QD_MA_CLASS_LEN);
     
     qd_parsed_turbo_t *anno;
@@ -842,9 +840,6 @@ const char *qd_parse_annotations_v1(
                 case QD_MA_TRACE_LEN:
                     if (memcmp(QD_MA_TRACE + QMPL,  dp, QD_MA_TRACE_LEN - QMPL) == 0) {
                         ma_type = QD_MAE_TRACE;
-                    } else
-                    if (memcmp(QD_MA_PHASE + QMPL,  dp, QD_MA_PHASE_LEN - QMPL) == 0) {
-                        ma_type = QD_MAE_PHASE;
                     }
                     break;
                 case QD_MA_INGRESS_LEN:
@@ -889,9 +884,6 @@ const char *qd_parse_annotations_v1(
                     case QD_MAE_TO:
                         *ma_to_override = val_field;
                         break;
-                    case QD_MAE_PHASE:
-                        *ma_phase = val_field;
-                        break;
                     case QD_MAE_STREAM:
                         *ma_stream = val_field;
                         break;
@@ -927,7 +919,6 @@ void qd_parse_annotations(
     bool                   strip_annotations_in,
     qd_iterator_t         *ma_iter_in,
     qd_parsed_field_t    **ma_ingress,
-    qd_parsed_field_t    **ma_phase,
     qd_parsed_field_t    **ma_to_override,
     qd_parsed_field_t    **ma_trace,
     qd_parsed_field_t    **ma_stream,
@@ -935,7 +926,6 @@ void qd_parse_annotations(
     uint32_t              *blob_item_count)
 {
     *ma_ingress             = 0;
-    *ma_phase               = 0;
     *ma_to_override         = 0;
     *ma_trace               = 0;
     ZERO(blob_pointer);
@@ -968,7 +958,7 @@ void qd_parse_annotations(
 
     qd_iterator_free(raw_iter);
 
-    (void) qd_parse_annotations_v1(strip_annotations_in, ma_iter_in, ma_ingress, ma_phase,
+    (void) qd_parse_annotations_v1(strip_annotations_in, ma_iter_in, ma_ingress,
                                     ma_to_override, ma_trace, ma_stream,
                                     blob_pointer, blob_item_count);
 

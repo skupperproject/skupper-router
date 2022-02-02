@@ -156,7 +156,6 @@ static void _heartbeat_server_init_CT(qdr_core_t *core, void **module_context)
     //
     qdrc_endpoint_bind_mobile_address_CT(core,
                                          QD_TERMINUS_HEARTBEAT,
-                                         '0', // phase
                                          &_endpoint_handlers,
                                          &_server_state);
     _server_state.timer = qdr_core_timer_CT(core, on_timer, 0);

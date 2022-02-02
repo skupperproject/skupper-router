@@ -204,7 +204,7 @@ class QdstatTest(QdstatTestBase):
 
     def test_address_priority_csv(self):
         HEADER_ROW = 4
-        PRI_COL = 4
+        PRI_COL = 3
         out = self.run_qdstat(['--address', "--csv"])
         lines = out.split("\n")
 
@@ -583,7 +583,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
     def test_link_priority_csv(self):
         HEADER_ROW = 4
         TYPE_COL = 0
-        PRI_COL = 9
+        PRI_COL = 8
         out = self.run_qdstat(['--links', '--csv'])
         lines = out.split("\n")
 
@@ -592,7 +592,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
 
         # see if the header line has the word priority in it
         header_line = lines[HEADER_ROW].split(',')
-        self.assertTrue(header_line[PRI_COL] == '"pri"')
+        self.assertEqual(header_line[PRI_COL], '"pri"')
 
         # extract the number in the priority column of every inter-router link
         priorities = {}

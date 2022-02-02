@@ -110,7 +110,6 @@ extern const char * const QD_MA_PREFIX;
 extern const char * const QD_MA_INGRESS;  ///< Ingress Router
 extern const char * const QD_MA_TRACE;    ///< Trace
 extern const char * const QD_MA_TO;       ///< To-Override
-extern const char * const QD_MA_PHASE;    ///< Phase for override address
 extern const char * const QD_MA_CLASS;    ///< Message-Class
 extern const char * const QD_MA_STREAM;   ///< Indicate streaming message
 
@@ -118,7 +117,6 @@ extern const char * const QD_MA_STREAM;   ///< Indicate streaming message
 #define QD_MA_INGRESS_LEN (16)
 #define QD_MA_TRACE_LEN   (14)
 #define QD_MA_TO_LEN      (11)
-#define QD_MA_PHASE_LEN   (14)
 #define QD_MA_CLASS_LEN   (14)
 #define QD_MA_STREAM_LEN  (15)
 
@@ -138,17 +136,6 @@ extern const char * const QD_CAPABILITY_STREAMING_LINKS;
 extern const char * const QD_CAPABILITY_ROUTER_CONTROL;
 extern const char * const QD_CAPABILITY_ROUTER_DATA;
 extern const char * const QD_CAPABILITY_EDGE_DOWNLINK;
-extern const char * const QD_CAPABILITY_WAYPOINT_DEFAULT;
-extern const char * const QD_CAPABILITY_WAYPOINT1;
-extern const char * const QD_CAPABILITY_WAYPOINT2;
-extern const char * const QD_CAPABILITY_WAYPOINT3;
-extern const char * const QD_CAPABILITY_WAYPOINT4;
-extern const char * const QD_CAPABILITY_WAYPOINT5;
-extern const char * const QD_CAPABILITY_WAYPOINT6;
-extern const char * const QD_CAPABILITY_WAYPOINT7;
-extern const char * const QD_CAPABILITY_WAYPOINT8;
-extern const char * const QD_CAPABILITY_WAYPOINT9;
-extern const char * const QD_CAPABILITY_FALLBACK;
 /// @}
 
 /** @name Dynamic Node Properties */

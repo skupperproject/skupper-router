@@ -70,7 +70,7 @@ static char* test_view_global_dns(void *context)
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0global/sub")) {
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mglobal/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_HASH failed";
     }
@@ -96,7 +96,7 @@ static char* test_view_global_non_dns(void *context)
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0global/sub")) {
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mglobal/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_HASH failed";
     }
@@ -122,7 +122,7 @@ static char* test_view_global_no_host(void *context)
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0global/sub")) {
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mglobal/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_HASH failed";
     }
@@ -148,7 +148,7 @@ static char* test_view_global_no_host_slash(void *context)
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0global/sub")) {
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mglobal/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_HASH failed";
     }
@@ -184,31 +184,31 @@ static char *test_trim(void *context)
     }
 
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
-    qd_iterator_trim_view(iter, 9);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0testing")) {
+    qd_iterator_trim_view(iter, 8);
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mtesting")) {
         qd_iterator_free(iter);
         return "Trim on ITER_VIEW_ADDRESS_HASH failed";
     }
 
     qd_iterator_reset(iter);
     qd_iterator_annotate_space(iter, "my_space.", 9);
-    qd_iterator_trim_view(iter, 18);
+    qd_iterator_trim_view(iter, 17);
 
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0my_space.testing")) {
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mmy_space.testing")) {
         qd_iterator_free(iter);
         return "Trim on ITER_VIEW_ADDRESS_HASH (with space 1) failed";
     }
 
     qd_iterator_reset(iter);
-    qd_iterator_trim_view(iter, 10);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0my_space")) {
+    qd_iterator_trim_view(iter, 9);
+    if (!qd_iterator_equal(iter, (unsigned char*) "Mmy_space")) {
         qd_iterator_free(iter);
         return "Trim on ITER_VIEW_ADDRESS_HASH (in space 1) failed";
     }
 
     qd_iterator_reset(iter);
-    qd_iterator_trim_view(iter, 2);
-    if (!qd_iterator_equal(iter, (unsigned char*) "M0")) {
+    qd_iterator_trim_view(iter, 1);
+    if (!qd_iterator_equal(iter, (unsigned char*) "M")) {
         qd_iterator_free(iter);
         return "Trim on ITER_VIEW_ADDRESS_HASH (in annotation 1) failed";
     }
@@ -331,9 +331,9 @@ static char* test_view_address_hash(void *context)
     {"_topo/my-area/router/my-addr",            "Rrouter"},
     {"_topo/my-area/my-router/my-addr",         "Lmy-addr"},
     {"_topo/my-area/router",                    "Rrouter"},
-    {"amqp:/mobile",                            "M1mobile"},
-    {"mobile",                                  "M1mobile"},
-    {"/mobile",                                 "M1mobile"},
+    {"amqp:/mobile",                            "Mmobile"},
+    {"mobile",                                  "Mmobile"},
+    {"/mobile",                                 "Mmobile"},
     {"amqp:/_edge/router/sub",                  "Hrouter"},
     {"_edge/router/sub",                        "Hrouter"},
 
@@ -359,7 +359,6 @@ static char* test_view_address_hash(void *context)
 
     for (idx = 0; cases[idx].addr; idx++) {
         qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         qd_iterator_free(iter);
         if (ret) return ret;
@@ -372,7 +371,6 @@ static char* test_view_address_hash(void *context)
         qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0,
                                                  strlen(cases[idx].addr),
                                                  ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         release_buffer_chain(&chain);
         qd_iterator_free(iter);
@@ -399,9 +397,9 @@ static char* test_view_address_hash_edge(void *context)
     {"_topo/my-area/router/my-addr",            "L_edge"},
     {"_topo/my-area/my-router/my-addr",         "Lmy-addr"},
     {"_topo/my-area/router",                    "L_edge"},
-    {"amqp:/mobile",                            "M1mobile"},
-    {"mobile",                                  "M1mobile"},
-    {"/mobile",                                 "M1mobile"},
+    {"amqp:/mobile",                            "Mmobile"},
+    {"mobile",                                  "Mmobile"},
+    {"/mobile",                                 "Mmobile"},
     {"amqp:/_edge/router/sub",                  "L_edge"},
     {"_edge/router/sub",                        "L_edge"},
     {"amqp:/_edge/my-router/sub",               "Lsub"},
@@ -413,7 +411,6 @@ static char* test_view_address_hash_edge(void *context)
 
     for (idx = 0; cases[idx].addr; idx++) {
         qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         qd_iterator_free(iter);
         if (ret) return ret;
@@ -426,7 +423,6 @@ static char* test_view_address_hash_edge(void *context)
         qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0,
                                                  strlen(cases[idx].addr),
                                                  ITER_VIEW_ADDRESS_HASH);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         release_buffer_chain(&chain);
         qd_iterator_free(iter);
@@ -480,7 +476,6 @@ static char* test_view_address_with_space(void *context)
     for (idx = 0; cases[idx].addr; idx++) {
         qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_WITH_SPACE);
         qd_iterator_annotate_space(iter, "space/", 6);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         qd_iterator_free(iter);
         if (ret) return ret;
@@ -494,7 +489,6 @@ static char* test_view_address_with_space(void *context)
                                                  strlen(cases[idx].addr),
                                                  ITER_VIEW_ADDRESS_WITH_SPACE);
         qd_iterator_annotate_space(iter, "space/", 6);
-        qd_iterator_annotate_phase(iter, '1');
         char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
         release_buffer_chain(&chain);
         qd_iterator_free(iter);
@@ -531,10 +525,10 @@ static char* test_view_address_hash_override(void *context)
 static char* test_view_address_hash_with_space(void *context)
 {
     struct {const char *addr; const char *view;} cases[] = {
-    {"amqp:/link-target",                    "M0test.vhost.link-target"},
-    {"amqp:/domain/link-target",             "M0test.vhost.domain/link-target"},
-    {"domain/link-target",                   "M0test.vhost.domain/link-target"},
-    {"bbc79fb3-e1fd-4a08-92b2-9a2de232b558", "M0test.vhost.bbc79fb3-e1fd-4a08-92b2-9a2de232b558"},
+    {"amqp:/link-target",                    "Mtest.vhost.link-target"},
+    {"amqp:/domain/link-target",             "Mtest.vhost.domain/link-target"},
+    {"domain/link-target",                   "Mtest.vhost.domain/link-target"},
+    {"bbc79fb3-e1fd-4a08-92b2-9a2de232b558", "Mtest.vhost.bbc79fb3-e1fd-4a08-92b2-9a2de232b558"},
     {"_topo/my-area/router/address",         "Rrouter"},
     {"_topo/my-area/my-router/address",      "Laddress"},
     {0, 0}
