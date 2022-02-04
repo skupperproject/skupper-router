@@ -20,10 +20,11 @@
 from time import sleep
 
 from proton import Message, Delivery
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, TestTimeout
-from system_test import unittest, Logger
 from proton.handlers import MessagingHandler
 from proton.reactor import Container, LinkOption, ApplicationEvent, EventInjector
+
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, TestTimeout
+from system_test import unittest, Logger
 
 
 # ------------------------------------------------
@@ -31,7 +32,7 @@ from proton.reactor import Container, LinkOption, ApplicationEvent, EventInjecto
 # ------------------------------------------------
 
 
-class AddressCheckResponse(object):
+class AddressCheckResponse:
     """
     Convenience class for the responses returned by an AddressChecker.
     """
@@ -49,7 +50,7 @@ class AddressCheckResponse(object):
             (self.status_code, self.status_description, self.attrs)
 
 
-class AddressChecker (object):
+class AddressChecker:
     """
     Format address-query messages and parse the responses.
     """
@@ -70,7 +71,7 @@ class AddressChecker (object):
         return Message(properties=ap, reply_to=self.reply_addr)
 
 
-class AddressCheckerTimeout (object):
+class AddressCheckerTimeout:
     def __init__(self, parent):
         self.parent = parent
 
@@ -78,7 +79,7 @@ class AddressCheckerTimeout (object):
         self.parent.address_check_timeout()
 
 
-class DistributionSkipMapper(object):
+class DistributionSkipMapper:
     # 1 means skip that test.
     skip = {'test_01': 0,
             'test_02': 0,
@@ -704,11 +705,11 @@ class DistributionTests (TestCase):
 
     @unittest.skipIf(DistributionSkipMapper.skip['test_16'], 'Test skipped during development.')
     def test_16_linkroute_linear_all_local(self):
-        name = 'test_16'
         """
         This test should route all senders' link-attaches
         to the local containers on router A.
         """
+        name = 'test_16'
 
         addr_suffix = "addr_16"
 
@@ -791,11 +792,11 @@ class DistributionTests (TestCase):
 
     @unittest.skipIf(DistributionSkipMapper.skip['test_17'], 'Test skipped during development.')
     def test_17_linkroute_linear_all_B(self):
-        name = 'test_17'
         """
         This test should route all senders' link-attaches
         to the remote connections on router B.
         """
+        name = 'test_17'
 
         addr_suffix = "addr_17"
 
@@ -878,11 +879,11 @@ class DistributionTests (TestCase):
 
     @unittest.skipIf(DistributionSkipMapper.skip['test_18'], 'Test skipped during development.')
     def test_18_linkroute_linear_all_C(self):
-        name = 'test_18'
         """
         This test should route all senders' link-attaches
         to the remote connections on router C.
         """
+        name = 'test_18'
 
         addr_suffix = "addr_18"
 
@@ -965,13 +966,13 @@ class DistributionTests (TestCase):
 
     @unittest.skipIf(DistributionSkipMapper.skip['test_19'], 'Test skipped during development.')
     def test_19_linkroute_linear_kill(self):
-        name = 'test_19'
         """
         Start out as usual, making four senders and seeing their link-attaches
         routed to router A (local). But then kill the two route-container
         connections to router A, and make four more senders.  Their link-attaches
         should get routed to router B.
         """
+        name = 'test_19'
 
         addr_suffix = "addr_19"
 
