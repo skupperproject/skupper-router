@@ -19,9 +19,8 @@ under the License
 
 = Router Message Annotations
 
-This document describes the structure and meaning of the router meta
-data included in messages passed between router nodes (interior and
-edge).
+This document describes the implementation of the meta-data included
+in messages passed between router nodes (interior and edge).
 
 == Description
 
@@ -31,21 +30,21 @@ forwarding path for various reasons.  Currently this information
 includes:
 
 * The identifier for the ingress router (the router attached to the
-sending endpoint).
+original sending endpoint).
 
 * The trace list: an ordered list of router identifiers. This list
 reflects the path the message has travelled in the router network. The
 first entry on the list is the ingress router *(Q: can we use this*
 *instead of a dedicated ingress entry field?)*.  The current router identifier
 is added to the end of this list before the message is forwarded to
-the next hop router.
+a next hop router.
 
 * A destination address.  This optional field overrides the value of
-the to field in the message properties (if present).
+the *to* field in the message properties section.
 
-* A flag that indicates that the message is classified as a streaming
-message. This provides a hint to the downstream router to avoid
-unnecessary buffering of the message before forwarding it.
+* A flag that indicates that the message is classified as
+a *streaming message*. This provides a hint to the downstream router
+to avoid unnecessary buffering of the message before forwarding it.
 
 == Implementation Goals
 
@@ -73,13 +72,14 @@ version 1.
 == Encoding
 
 Router annotations will be encoded as a custom section in the
-message. This section will appear prior to the header section.
+message. This section will appear as the first section of the message
+(prior to the header section).
 
-In order to avoid colliding with described types defined by the AMQP
+In order to avoid conflicts with the described types defined by the AMQP
 specification, skupper-router will reserve a numeric domain
 identifier.  The value for this domain will be *0xFFFFFFFF*.
 
-This value for the section identifier will be *0x2000*.
+The value for the new section identifier will be *0x2000*.
 
 The definition of this custom section follows:
 
