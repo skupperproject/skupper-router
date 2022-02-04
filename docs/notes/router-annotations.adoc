@@ -1,0 +1,128 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+= Router Message Annotations
+
+This document describes the structure and meaning of the router meta
+data included in messages passed between router nodes (interior and
+edge).
+
+== Description
+
+Each message passed between routers includes meta-data used to
+communicate per-message state. This data is used by routers along the
+forwarding path for various reasons.  Currently this information
+includes:
+
+* The identifier for the ingress router (the router attached to the
+sending endpoint).
+
+* The trace list: an ordered list of router identifiers. This list
+reflects the path the message has travelled in the router network. The
+first entry on the list is the ingress router *(Q: can we use this*
+*instead of a dedicated ingress entry field?)*.  The current router identifier
+is added to the end of this list before the message is forwarded to
+the next hop router.
+
+* A destination address.  This optional field overrides the value of
+the to field in the message properties (if present).
+
+* A flag that indicates that the message is classified as a streaming
+message. This provides a hint to the downstream router to avoid
+unnecessary buffering of the message before forwarding it.
+
+== Implementation Goals
+
+The implemention should prioritize minimizing the overhead of parsing
+and composing the per-message meta-data. This is necessary because
+each router along the forwarding path needs to read, process and
+update the meta data on the fly.
+
+This implementation should also provide the means for extending or
+modifying the meta-data definition in a backward compatible way.
+
+== Versioning
+
+The router will advertise the version of the meta data it supports to
+its peer when the connection is established.  This is done by
+including a version number in the properties field of the Open
+performative. In the case where peers advertise different versions,
+the numerically lower version will be used by both routers.
+
+The open property map key for the version is
+*"qd.annotations-version"*.
+The value is encoded as a signed integer. This document defines
+version 1.
+
+== Encoding
+
+Router annotations will be encoded as a custom section in the
+message. This section will appear prior to the header section.
+
+In order to avoid colliding with described types defined by the AMQP
+specification, skupper-router will reserve a numeric domain
+identifier.  The value for this domain will be *0xFFFFFFFF*.
+
+This value for the section identifier will be *0x2000*.
+
+The definition of this custom section follows:
+
+ <type name="skupper-router-annotations" class="composite" source="list" provides="section">
+    <descriptor name="skupper:router-annotations" code="0xFFFFFFFF:0x00002000"/>
+    <field name="flags" type="ubyte" default="0" mandatory="true"/>
+    <field name="to-override" type="str32-utf8" mandatory="false"/>
+    <field name="ingress-router" type="str8-utf8" mandatory="true"/>
+    <field name="trace" type="list" mandatory="true"/>
+ </type>
+
+* The flags field is used for passing boolean flags.  The least
+significant bit (bit 0) is used for the streaming flag.  All other
+bits are reserved and initialized to zero on ingress
+
+* Entries on the trace list are restricted to the *str8-utf8* type.
+
+== Extensions
+
+It should be possible to extend the router-annotations in the future
+without requiring a version bump. The following rules will ensure
+this:
+
+* The unreserved bits in the flags field MUST be forwarded without
+modification. In other words a router must not reset any reserved
+fields that have been set to one by the upstream router(s).
+
+* New fields may be added to the definition IF:
+** The new fields are appended to the existing definition AND
+** It is safe for intermediate routers to ignore these fields
+
+* Routers must forward any extra fields appearing at the end of the
+  list beyond those described above. These extra fields must be NOT be
+  modified.
+
+== Section Inclusion/Removal
+
+* By default the new router message annotation section MUST NOT be
+  present in messages arriving from non-router endpoints. Such
+  messages must be *REJECTED* by the router.  It should be possible to
+  disable this rule for debug and testing purposes via configuration.
+
+* The router message annotation MUST be removed when sending a message
+  over a non-inter-router/edge connection. It should be possible to
+  disable this rule for debug and testing purposes via configuration.
+
