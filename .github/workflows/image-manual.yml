@@ -1,0 +1,59 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Manual skupper-router image build
+on:
+  workflow_dispatch:
+    inputs:
+      protonSourceUrl:
+        description: 'Qpid Proton source code url that returns a tar ball for a given branch'
+        required: true
+        default: 'http://github.com/apache/qpid-proton/archive/main.tar.gz'
+      dockerTag:
+        description: 'Docker tag to use for the skupper-router image'
+        required: true
+        default: 'custom'
+jobs:
+  build-manual:
+    name: Build and publish skupper-router image
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          # validate DOCKER_TAG
+          [[ ! "${DOCKER_TAG}" =~ ^[a-z0-9][a-z0-9.-]+[a-z0-9]$ ]] && echo "invalid tag - it must begin and end with letter or digit and contains - and ." && exit 1
+          protected=(latest nightly master)
+          for ptag in ${protected[@]}; do
+            if [[ "${ptag}" = "${DOCKER_TAG}" ]]; then
+              echo "${ptag} cannot be used (protected tag)"
+              exit 1
+            fi
+          done
+        env:
+          DOCKER_TAG: '${{github.event.inputs.dockerTag}}'
+      - uses: actions/checkout@v2
+      - run: |
+          # build, run tests and if all worked publish a custom image
+          . ./.github/scripts/common.sh
+          export PROJECT_TAG="${DOCKER_TAG}"
+          ./.github/scripts/image.sh
+        env:
+          DOCKER_USER: '${{ secrets.DOCKER_USER }}'
+          DOCKER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          PROTON_SOURCE_URL: '${{github.event.inputs.protonSourceUrl}}'
+          DOCKER_TAG: '${{github.event.inputs.dockerTag}}'

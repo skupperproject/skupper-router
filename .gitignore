@@ -1,10 +1,17 @@
 build
+staging
 install
+proton_build
+proton_install
+qpid-proton-src
+qpid-proton.tar.gz
+*-image.tar.gz
 *.pyc
 *.pyo
 .cproject
 .project
 .pydevproject
+target/
 tests/system_test.dir/
 tests/policy-1/policy-*.json
 *.iml
