@@ -1774,8 +1774,8 @@ class ThreeAck(MessagingHandler):
 
 
 class TwoRouterConnection(TestCase):
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.success = False
         self.timer_delay = 4
         self.max_attempts = 2

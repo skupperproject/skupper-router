@@ -62,8 +62,8 @@ class ConnectorStatusTest(TestCase):
         cls.routers[0].wait_ports()
         cls.routers[1].wait_ports()
 
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.success = False
         self.timer_delay = 2
         self.max_attempts = 5

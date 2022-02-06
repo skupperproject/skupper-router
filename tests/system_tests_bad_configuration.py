@@ -37,11 +37,8 @@ class RouterTestBadConfiguration(TestCase):
     process.
     """
     @classmethod
-    def setUpClass(cls):
-        """
-        Set up router instance configuration to be used for testing.
-        :return:
-        """
+    def setUpClass(cls) -> None:
+        """Set up router instance configuration to be used for testing."""
         super(RouterTestBadConfiguration, cls).setUpClass()
         cls.name = "test-router"
         cls.unresolvable_host_name = 'unresolvable.host.name'
@@ -61,19 +58,23 @@ class RouterTestBadConfiguration(TestCase):
         except OSError:
             pass
 
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.error_caught = False
         self.timer_delay = 0.2
         self.max_attempts = 100
         self.attempts_made = 0
+
         self.schedule_timer()
 
-    def schedule_timer(self):
+        # Wait till error is found or timed out waiting for it.
+        while self.waiting_for_error():
+            pass
+
+    def schedule_timer(self) -> None:
         """
         Schedules a timer triggers wait_for_unresolvable_host after
         timer_delay has been elapsed.
-        :return:
         """
         Timer(self.timer_delay, self.wait_for_unresolvable_host).start()
 
@@ -85,23 +86,20 @@ class RouterTestBadConfiguration(TestCase):
         """
         Returns the address that can be used along with qdmanage
         to query the running instance of the dispatch router.
-        :return:
         """
         return self.router.addresses[0]
 
-    def waiting_for_error(self):
+    def waiting_for_error(self) -> bool:
         """
         Returns True if max_attempts not yet reached and error is still not found.
-        :return: bool
         """
         return not self.error_caught and self.attempts_made < self.max_attempts
 
-    def wait_for_unresolvable_host(self):
+    def wait_for_unresolvable_host(self) -> None:
         """
         Wait for error to show up in the logs based on pre-defined max_attempts
         and timer_delay. If error is not caught within max_attempts * timer_delay
         then it stops scheduling new attempts.
-        :return:
         """
         try:
             # mode 'r' and 't' are defaults
@@ -125,22 +123,11 @@ class RouterTestBadConfiguration(TestCase):
                 self.attempts_made += 1
                 self.schedule_timer()
 
-    def setUp(self):
-        """
-        Causes tests to wait till timer has found the expected error or
-        after it times out.
-        :return:
-        """
-        # Wait till error is found or timed out waiting for it.
-        while self.waiting_for_error():
-            pass
-
     def test_unresolvable_host_caught(self):
         """
         Validate if the error message stating host is unresolvable is printed
         to the router log.
         It expects that the error can be caught in the logs.
-        :return:
         """
         self.assertTrue(self.error_caught)
 
@@ -171,9 +158,6 @@ class RouterTestIdFailCtrlChar(TestCase):
     def setUpClass(cls):
         super(RouterTestIdFailCtrlChar, cls).setUpClass()
         cls.name = "test-router-ctrl-char"
-
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
 
     @classmethod
     def tearDownClass(cls):
@@ -213,9 +197,6 @@ class RouterTestIdFailWhiteSpace(TestCase):
     def setUpClass(cls):
         super(RouterTestIdFailWhiteSpace, cls).setUpClass()
         cls.name = "test-router-ctrl-char"
-
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
 
     @classmethod
     def tearDownClass(cls):

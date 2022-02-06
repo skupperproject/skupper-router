@@ -97,8 +97,8 @@ class EdgeRouterTest(TestCase):
         cls.skip = {'test_01' : 0
                     }
 
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.success = False
         self.timer_delay = 2
         self.max_attempts = 3

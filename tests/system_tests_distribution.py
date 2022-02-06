@@ -118,7 +118,7 @@ class DistributionSkipMapper:
 #     Setup
 # ================================================================
 
-class DistributionTests (TestCase):
+class DistributionTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
