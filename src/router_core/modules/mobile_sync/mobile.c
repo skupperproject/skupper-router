@@ -31,7 +31,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#define PROTOCOL_VERSION 1
+#define PROTOCOL_VERSION 2
 static const char *OPCODE     = "opcode";
 static const char *MAR        = "MAR";
 static const char *MAU        = "MAU";
@@ -39,7 +39,6 @@ static const char *ID         = "id";
 static const char *PV         = "pv";
 static const char *AREA       = "area";
 static const char *MOBILE_SEQ = "mobile_seq";
-static const char *HINTS      = "hints";
 static const char *ADD        = "add";
 static const char *DEL        = "del";
 static const char *EXIST      = "exist";
@@ -128,7 +127,7 @@ static bool qcm_mobile_sync_addr_is_mobile(qdr_address_t *addr)
 }
 
 
-qdr_node_t *qdc_mobile_sync_router_by_id(qdrm_mobile_sync_t *msync, qd_parsed_field_t *id_field)
+static qdr_node_t *qcm_mobile_sync_router_by_id(qdrm_mobile_sync_t *msync, qd_parsed_field_t *id_field)
 {
     if (!id_field)
         return 0;
@@ -191,6 +190,58 @@ static qd_composed_field_t *qcm_mobile_sync_message_headers(const char *address,
 }
 
 
+/**
+ * An address descriptor is a list with positional identification of values.
+ *   Position    Value
+ *   ================================
+ *    0          Address hash key
+ *    1          Treatment value
+ *    2          Local in-link count
+ *    3          Local out-link capacity
+ */
+static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, qd_composed_field_t *field, bool is_added)
+{
+    const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
+
+    qd_compose_start_list(field);
+    qd_compose_insert_string(field, hash_key);
+    if (is_added) {
+        qd_compose_insert_int(field, addr->treatment);
+        qd_compose_insert_int(field, DEQ_SIZE(addr->inlinks));
+    }
+    qd_compose_end_list(field);
+}
+
+
+static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *field, int *treatment, int *inlink_count)
+{
+    qd_iterator_t *iter = 0;
+
+    if (!qd_parse_is_list(field)) {
+        return iter;
+    }
+
+    size_t count = qd_parse_sub_count(field);
+    if (count > 0) {
+        qd_parsed_field_t *hash_key = qd_parse_sub_value(field, 0);
+        if (hash_key == 0) {
+            return iter;
+        }
+        iter = qd_parse_raw(hash_key);
+    }
+
+    if (count > 1) {
+        *treatment = qd_parse_as_int(qd_parse_sub_value(field, 1));
+    }
+
+    if (count > 2) {
+        *inlink_count = qd_parse_as_int(qd_parse_sub_value(field, 2));
+    }
+
+    return iter;
+}
+
+
 static void qcm_mobile_sync_compose_diff_addr_list(qdrm_mobile_sync_t *msync, qd_composed_field_t *field, bool is_added)
 {
     qdr_address_list_t *list = is_added ? &msync->added_addrs : &msync->deleted_addrs;
@@ -198,8 +249,7 @@ static void qcm_mobile_sync_compose_diff_addr_list(qdrm_mobile_sync_t *msync, qd
     qd_compose_start_list(field);
     qdr_address_t *addr = DEQ_HEAD(*list);
     while (addr) {
-        const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-        qd_compose_insert_string(field, hash_key);
+        qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
         if (is_added) {
             DEQ_REMOVE_HEAD_N(SYNC_ADD, *list);
             BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
@@ -209,18 +259,6 @@ static void qcm_mobile_sync_compose_diff_addr_list(qdrm_mobile_sync_t *msync, qd
             qcm_mobile_sync_stop_tracking(msync->core, addr);
         }
         addr = DEQ_HEAD(*list);
-    }
-    qd_compose_end_list(field);
-}
-
-
-static void qcm_mobile_sync_compose_diff_hint_list(qdrm_mobile_sync_t *msync, qd_composed_field_t *field)
-{
-    qd_compose_start_list(field);
-    qdr_address_t *addr = DEQ_HEAD(msync->added_addrs);
-    while (addr) {
-        qd_compose_insert_int(field, addr->treatment);
-        addr = DEQ_NEXT_N(SYNC_ADD, addr);
     }
     qd_compose_end_list(field);
 }
@@ -262,9 +300,6 @@ static qd_message_t *qcm_mobile_sync_compose_differential_mau(qdrm_mobile_sync_t
 
     qd_compose_insert_symbol(body, MOBILE_SEQ);
     qd_compose_insert_long(body, msync->mobile_seq);
-
-    qd_compose_insert_symbol(body, HINTS);
-    qcm_mobile_sync_compose_diff_hint_list(msync, body);
 
     qd_compose_insert_symbol(body, ADD);
     qcm_mobile_sync_compose_diff_addr_list(msync, body, true);
@@ -312,32 +347,15 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         //   - not be in the add list (because the peers haven't heard of its pending addition)
         //
         // Note that in the two add/del list cases, we are reporting information that is not currently
-        // accurate.  In these cases, a differentiao MAU will be sent very shortly that will put the
+        // accurate.  In these cases, a differential MAU will be sent very shortly that will put the
         // peer router in the correct state.
         //
         if (qcm_mobile_sync_addr_is_mobile(addr)
             && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0)
                 || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
             && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
-            const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-            qd_compose_insert_string(body, hash_key);
+            qcm_mobile_sync_compose_addr_descriptor(addr, body, true);
         }
-        addr = DEQ_NEXT(addr);
-    }
-    qd_compose_end_list(body);
-
-    qd_compose_insert_symbol(body, HINTS);
-    qd_compose_start_list(body);
-    addr = DEQ_HEAD(msync->core->addrs);
-    while (!!addr) {
-        //
-        // This loop uses the same logic as above.
-        //
-        if (qcm_mobile_sync_addr_is_mobile(addr)
-            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0)
-                || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
-            && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST))
-            qd_compose_insert_int(body, addr->treatment);
         addr = DEQ_NEXT(addr);
     }
     qd_compose_end_list(body);
@@ -449,7 +467,7 @@ static void qcm_mobile_sync_on_mar_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
         qd_parsed_field_t *version_field  = qd_parse_value_by_key(body, PV);
         uint32_t           version        = version_field ? qd_parse_as_uint(version_field) : 0;
 
-        qdr_node_t *router = qdc_mobile_sync_router_by_id(msync, id_field);
+        qdr_node_t *router = qcm_mobile_sync_router_by_id(msync, id_field);
         if (!!router) {
             if (version > PROTOCOL_VERSION) {
                 if (!BIT_IS_SET(router->sync_mask, ADDR_SYNC_ROUTER_VERSION_LOGGED)) {
@@ -497,7 +515,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
         qd_parsed_field_t *version_field    = qd_parse_value_by_key(body, PV);
         uint32_t           version          = version_field ? qd_parse_as_uint(version_field) : 0;
 
-        qdr_node_t *router = qdc_mobile_sync_router_by_id(msync, id_field);
+        qdr_node_t *router = qcm_mobile_sync_router_by_id(msync, id_field);
         if (!!router) {
             const char *router_id = (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1;
 
@@ -513,15 +531,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             qd_parsed_field_t *add_field   = qd_parse_value_by_key(body, ADD);
             qd_parsed_field_t *del_field   = qd_parse_value_by_key(body, DEL);
             qd_parsed_field_t *exist_field = qd_parse_value_by_key(body, EXIST);
-            qd_parsed_field_t *hints_field = qd_parse_value_by_key(body, HINTS);
-            uint32_t           hints_count = 0;
             qdr_address_t     *addr;
-
-            //
-            // Validate the fields and determine what kind of MAU we've received.
-            //
-            if (!!hints_field && qd_parse_is_list(hints_field))
-                hints_count = qd_parse_sub_count(hints_field);
 
             //
             // Validate the exist, add, and del fields.  They must, if they exist, be lists.
@@ -553,18 +563,6 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             BIT_CLEAR(router->sync_mask, ADDR_SYNC_ROUTER_MA_REQUESTED);
             router->mobile_seq = mobile_seq;
 
-            //
-            // Check the exist/add list size against the hints-list size.  If they are not
-            // exactly equal, ignore the hints.
-            //
-            if (!!exist_field) {
-                if (hints_count != qd_parse_sub_count(exist_field))
-                    hints_count = 0;
-            } else {
-                if (hints_count != qd_parse_sub_count(add_field))
-                    hints_count = 0;
-            }
-
             qd_log(msync->log, QD_LOG_DEBUG, "Received MAU (%s) from %s, mobile_seq=%"PRIu64,
                    !!exist_field ? "absolute" : "differential", router_id, mobile_seq);
 
@@ -585,16 +583,15 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             //
             // Run through the add/exist list (depending on which we have) and lookup/add the
             // addresses, associating them with the sending router.  Clear the to-delete bits
-            // on every address touched.  If hints are available, use them for addresses that
-            // are newly created.
+            // on every address touched.
             //
             qd_parsed_field_t *field      = !!exist_field ? exist_field : add_field;
             qd_parsed_field_t *addr_field = qd_field_first_child(field);
-            qd_parsed_field_t *hint_field = !!hints_count ? qd_field_first_child(hints_field) : 0;
             while (addr_field) {
-                qd_iterator_t *iter = qd_parse_raw(addr_field);
+                int            treatment_hint;
+                int            inlink_count;
+                qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count);
                 qdr_address_t *addr = 0;
-                int treatment_hint = !!hint_field ? qd_parse_as_int(hint_field) : -1;
 
                 do {
                     qd_hash_retrieve(msync->core->addr_hash, iter, (void**) &addr);
@@ -605,6 +602,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                                                                            iter,
                                                                            qcm_mobile_sync_default_treatment(msync->core, treatment_hint),
                                                                            &addr_config);
+                        qd_log(msync->log, QD_LOG_DEBUG, "Treatment: %d", treatment);
                         addr = qdr_address_CT(msync->core, treatment, addr_config);
                         if (!addr) {
                             qd_log(msync->log, QD_LOG_CRITICAL, "map_destination: ignored");
@@ -631,7 +629,11 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         router->ref_count++;
                         addr->cost_epoch--;
                         qdr_addr_start_inlinks_CT(msync->core, addr);
-       
+
+                        qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' added to address '%s', treatment: %d",
+                        (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                        (const char*) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
+
                         //
                         // Raise an address event if this is the first destination for the address
                         //
@@ -643,7 +645,6 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                 } while (false);
 
                 addr_field = qd_field_next_child(addr_field);
-                hint_field = !!hint_field ? qd_field_next_child(hint_field) : 0;
             }
 
             //
@@ -653,7 +654,9 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             if (!!del_field) {
                 addr_field = qd_field_first_child(del_field);
                 while (!!addr_field) {
-                    qd_iterator_t *iter = qd_parse_raw(addr_field);
+                    int            treatment_hint;
+                    int            inlink_count;
+                    qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count);
                     qdr_address_t *addr = 0;
 
                     qd_hash_retrieve(msync->core->addr_hash, iter, (void**) &addr);
@@ -662,6 +665,10 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                             qd_bitmask_clear_bit(addr->rnodes, router->mask_bit);
                             router->ref_count--;
                             addr->cost_epoch--;
+
+                            qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
+                            (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                            (const char*) qd_hash_key_by_handle(addr->hash_handle));
 
                             //
                             // Raise an address event if this was the last destination for the address
@@ -692,6 +699,10 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         qd_bitmask_clear_bit(addr->rnodes, router->mask_bit);
                         router->ref_count--;
                         addr->cost_epoch--;
+
+                        qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
+                        (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                        (const char*) qd_hash_key_by_handle(addr->hash_handle));
 
                         //
                         // Raise an address event if this was the last destination for the address
