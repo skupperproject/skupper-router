@@ -130,7 +130,6 @@ foreach(py_test_module
     system_tests_qdmanage
     system_tests_qdstat
     system_tests_sasl_plain
-    system_tests_user_id
     system_tests_user_id_proxy
     system_tests_two_routers
     system_tests_interior_sync_up

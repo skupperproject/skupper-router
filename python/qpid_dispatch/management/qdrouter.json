@@ -646,16 +646,6 @@
                     "description": "The password that unlocks the certificate key. You can specify the password by specifying an environment variable that stores the password, a file that stores the password, or by entering the password in clear text. To use an environment variable, specify 'password: env:<var>'. Use this option with caution, because the environment of other processes is visible on certain platforms (for example, ps on certain Unix OSs). To use a file, specify 'password: file:<absolute-path-to-file>'. This option is the most secure, because permissions can be set on the file that contains the password. To specify the password in clear text, specify 'password: pass:<password>', or 'password: literal:<password>', or 'password: <password>'. This option is insecure, so it should only be used if security is not a concern.",
                     "create": true
 
-                },
-                "uidFormat": {
-                    "type": "string",
-                    "description": "A list of x509 client certificate fields that will be used to build a string that will uniquely identify the client certificate owner. For e.g. a value of 'cou' indicates that the uid will consist of c - common name concatenated with o - organization-company name concatenated with u - organization unit; or a value of 'o2' indicates that the uid will consist of o (organization name) concatenated with 2 (the sha256 fingerprint of the entire certificate) . Allowed values can be any combination of 'c'( ISO3166 two character country code), 's'(state or province), 'l'(Locality; generally - city), 'o'(Organization - Company Name), 'u'(Organization Unit - typically certificate type or brand), 'n'(CommonName - typically a user name for client certificates) and '1'(sha1 certificate fingerprint, as displayed in the fingerprints section when looking at a certificate with say a web browser is the hash of the entire certificate) and 2 (sha256 certificate fingerprint) and 5 (sha512 certificate fingerprint). The user identifier (uid) that is generated based on the uidFormat is a string which has a semi-colon as a separator between the components",
-                    "create": true
-                },
-                "uidNameMappingFile": {
-                    "type": "string",
-                    "description": "The absolute path to the file containing the unique id to display name mapping",
-                    "create": true
                 }
             }
         },

@@ -172,7 +172,7 @@ struct qd_connection_t {
     void                            *user_context;
     void                            *link_context; // Context shared by this connection's links
     uint64_t                        connection_id; // A unique identifier for the qd_connection_t. The underlying pn_connection already has one but it is long and clunky.
-    const char                      *user_id; // A unique identifier for the user on the connection. This is currently populated  from the client ssl cert. See ssl_uid_format in server.h for more info
+    const char                      *user_id; // A unique identifier for the user on the connection.
     bool                            free_user_id;
     qd_policy_settings_t            *policy_settings;
     int                             n_sessions;

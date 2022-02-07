@@ -300,10 +300,6 @@ def configure_dispatch(dispatch, lib_handle, filename):
     qd.qd_router_setup_late(dispatch)  # Actions requiring active management agent.
     agent.activate("$_management_internal")
 
-    from qpid_dispatch_internal.display_name.display_name import DisplayNameService
-    displayname_service = DisplayNameService()
-    qd.qd_dispatch_register_display_name_service(dispatch, displayname_service)
-
     # Configure policy and policy manager before vhosts
     policyDir           = config.by_type('policy')[0]['policyDir']
     policyDefaultVhost  = config.by_type('policy')[0]['defaultVhost']
@@ -322,11 +318,6 @@ def configure_dispatch(dispatch, lib_handle, filename):
              "vhost", "httpListener", "httpConnector", "tcpListener", "tcpConnector":
         for a in config.by_type(t):
             configure(a)
-            if t == "sslProfile":
-                display_file_name = a.get('uidNameMappingFile')
-                if display_file_name:
-                    ssl_profile_name = a.get('name')
-                    displayname_service.add(ssl_profile_name, display_file_name)
 
     # Configure remaining types except for connector and listener
     for e in config.entities:

@@ -228,12 +228,12 @@ class QdmanageTest(TestCase):
     def test_get_ssl_profile_type_attributes(self):
         out = json.loads(self.run_qdmanage('get-attributes --type=org.apache.qpid.dispatch.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 11)
+        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 9)
 
     def test_get_ssl_profile_attributes(self):
         out = json.loads(self.run_qdmanage('get-attributes org.apache.qpid.dispatch.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 11)
+        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 9)
 
     def test_get_ssl_profile_type_operations(self):
         out = json.loads(self.run_qdmanage('get-operations --type=org.apache.qpid.dispatch.sslProfile'))

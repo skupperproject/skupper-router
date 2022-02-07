@@ -50,7 +50,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '1',
                             'password': 'server-password'}),
 
             # sha256
@@ -58,7 +57,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '2',
                             'password': 'server-password'}),
 
             # sha512
@@ -66,7 +64,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '5',
                             'password': 'server-password'}),
 
             # sha256 combination
@@ -74,7 +71,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '2noucs',
                             'password': 'server-password'}),
 
             # sha1 combination
@@ -82,7 +78,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '1cs',
                             'password': 'server-password'}),
 
             # sha512 combination
@@ -90,7 +85,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': 'cs5',
                             'password': 'server-password'}),
 
             # no fingerprint field
@@ -98,7 +92,6 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': 'nsuco',
                             'password': 'server-password'}),
 
             # no fingerprint field variation
@@ -106,40 +99,30 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': 'scounl',
                             'password': 'server-password'}),
 
-            # no uidFormat
             ('sslProfile', {'name': 'server-ssl9',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'password': 'server-password'}),
 
-            # one component of uidFormat is invalid (x), the unrecognized component will be ignored,
-            # this will be treated like 'uidFormat': '1'
             ('sslProfile', {'name': 'server-ssl10',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '1x',
-                            'uidNameMappingFile': ssl_profile2_json,
                             'password': 'server-password'}),
 
-            # All components in the uidFormat are unrecognized, pn_get_transport_user will be returned
             ('sslProfile', {'name': 'server-ssl11',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': 'abxd',
                             'password': 'server-password'}),
 
             ('sslProfile', {'name': 'server-ssl12',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '1',
-                            'uidNameMappingFile': ssl_profile1_json,
                             'password': 'server-password'}),
 
             # should translate a display name
@@ -147,16 +130,12 @@ class QdSSLUseridTest(TestCase):
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '2',
-                            'uidNameMappingFile': ssl_profile2_json,
                             'password': 'server-password'}),
 
             ('sslProfile', {'name': 'server-ssl14',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'uidFormat': '1',
-                            'uidNameMappingFile': ssl_profile1_json,
                             'password': 'server-password'}),
 
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl1', 'authenticatePeer': 'yes',

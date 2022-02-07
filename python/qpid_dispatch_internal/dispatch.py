@@ -88,8 +88,6 @@ class QdDll(ctypes.PyDLL):
         self._prototype(self.qd_dispatch_policy_host_pattern_remove, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_lookup, c_char_p, [self.qd_dispatch_p, py_object])
 
-        self._prototype(self.qd_dispatch_register_display_name_service, None, [self.qd_dispatch_p, py_object])
-
         self._prototype(self.qd_dispatch_set_agent, None, [self.qd_dispatch_p, py_object])
 
         self._prototype(self.qd_router_setup_late, None, [self.qd_dispatch_p])

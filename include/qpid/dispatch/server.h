@@ -246,33 +246,9 @@ typedef struct qd_server_config_t {
     char *ssl_private_key_file;
 
     /**
-     * Holds the list of component fields of the client certificate from which a unique identifier is constructed.
-     * For e.g, this field could have the format of 'cou' indicating that the uid will consist of
-     * c - common name concatenated with o - organization-company name concatenated with u - organization unit
-     * Allowed components are
-     * Allowed values can be any combination of comma separated
-     * 'c'( ISO3166 two character country code),
-     * 's'(state or province),
-     * 'l'(Locality; generally - city),
-     * 'o'(Organization - Company Name),
-     * 'u'(Organization Unit - typically certificate type or brand),
-     * 'n'(CommonName - typically a user name for client certificates) and
-     * '1'(sha1 certificate fingerprint, the fingerprint, as displayed in the fingerprints section when looking at a certificate
-     *  with say a web browser is the hash of the entire certificate in DER form)
-     * '2'(sha256 certificate fingerprint)
-     * '5'(sha512 certificate fingerprint)
-     */
-    char *ssl_uid_format;
-
-    /**
      * The name of the related ssl profile.
      */
     char *ssl_profile;
-
-    /**
-     * Full path to the file that contains the uid to display name mapping.
-     */
-    char *ssl_uid_name_mapping_file;
 
     /**
      * The password used to sign the private key, or NULL if the key is not protected.
@@ -468,10 +444,6 @@ void *qd_connection_get_link_context(qd_connection_t *conn);
 
 /**
  * Sets the user id on the connection.
- * If the sasl mech is EXTERNAL, set the user_id on the connection as the concatenated
- * list of fields specified in the uidFormat field of qdrouter.json
- * If no uidFormat is specified, the user is set to the pn_transport_user
- *
  * @param conn Connection object
  */
 void qd_connection_set_user(qd_connection_t *conn);
@@ -576,14 +548,6 @@ bool qd_listener_listen(qd_listener_t *l);
  * Initiate an outgoing connection. Returns true if successful.
  */
 bool qd_connector_connect(qd_connector_t *ct);
-
-/**
- * Store address of display name service py object for C code use
- *
- * @param qd The dispatch handle returned by qd_dispatch.
- * @param display_name_service address of python object
- */
-qd_error_t qd_register_display_name_service(qd_dispatch_t *qd, void *display_name_service);
 
 /**
  * Get the name of the connection, based on its IP address.
