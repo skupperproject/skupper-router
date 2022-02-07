@@ -193,7 +193,7 @@ class RejectHigherVersionMARTest(MessagingHandler):
 
             mar = Message(address='_topo/0/%s/qdrouter.ma' % rid,
                           properties={'opcode': 'MAR'},
-                          body={'id': 'TEST', 'pv': int32(2), 'area': '0', 'have_seq': int32(0)})
+                          body={'id': 'TEST', 'pv': int32(3), 'area': '0', 'have_seq': int32(0)})
             dlv = self.sender.send(mar)
             dlv.settle()
             self.mar_count += 1
