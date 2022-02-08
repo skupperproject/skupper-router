@@ -538,7 +538,7 @@ static bool traverse_field(unsigned char **cursor, qd_buffer_t **buffer, qd_fiel
             return false;
         consume |= ((int) octet) << 8;
 
-        // Fall through to the next case...
+        // fallthrough
 
     case 0xA0 :
     case 0xC0 :
@@ -745,7 +745,7 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
             return QD_SECTION_NEED_MORE;
         consume |= ((uint32_t) octet) << 8;
 
-        // Fall through to the next case...
+        // fallthrough
 
     case 0xA0:
     case 0xC0:
@@ -2105,7 +2105,7 @@ static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *conte
         if (rc != QD_MESSAGE_DEPTH_OK || depth == QD_DEPTH_MESSAGE_ANNOTATIONS)
             break;
 
-        // fallthough
+        // fallthrough
 
     case QD_DEPTH_PROPERTIES:
         //

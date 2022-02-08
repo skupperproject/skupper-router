@@ -1797,7 +1797,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
 
         case QD_LINK_ROUTER:
             qdr_attach_link_data_CT(core, conn, link);
-            // fall-through:
+            // fallthrough
         case QD_LINK_CONTROL:
             qdr_link_outbound_second_attach_CT(core, link, source, target);
             qdr_link_issue_credit_CT(core, link, link->capacity, false);
@@ -1922,7 +1922,7 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
 
         case QD_LINK_ROUTER:
             qdr_attach_link_data_CT(core, conn, link);
-            // fall-through
+            // fallthrough
         case QD_LINK_CONTROL:
             qdr_link_issue_credit_CT(core, link, link->capacity, false);
             break;
