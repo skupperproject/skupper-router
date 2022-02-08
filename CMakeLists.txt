@@ -34,8 +34,8 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 
 # Set warning compile flags
-set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
-set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Wno-sign-compare -Wno-gnu-statement-expression)
+set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
+set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-gnu-statement-expression)
 
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
 add_compile_options(${C_WARNING_FLAGS})
