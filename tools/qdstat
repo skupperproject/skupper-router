@@ -334,7 +334,6 @@ class BusManager:
         except Exception:
             pass
         rows.append(('Area',          router.area))
-        rows.append(('Link Routes',   PlainNum(router.linkRouteCount)))
         rows.append(('Auto Links',    PlainNum(router.autoLinkCount)))
         rows.append(('Links',         PlainNum(router.linkCount)))
         rows.append(('Nodes',         PlainNum(router.nodeCount)))
@@ -551,7 +550,7 @@ class BusManager:
 
         rows = []
         cols = ('distribution', 'inProcess', 'subscriberCount', 'remoteCount',
-                'containerCount', 'deliveriesIngress', 'deliveriesEgress',
+                'deliveriesIngress', 'deliveriesEgress',
                 'deliveriesTransit', 'deliveriesToContainer', 'deliveriesFromContainer', 'name', 'priority')
 
         objects = self.query('org.apache.qpid.dispatch.router.address', cols, limit=self.opts.limit)
@@ -589,7 +588,7 @@ class BusManager:
                 row.append(PlainNum(addr.priority) if addr.priority >= 0 else "-")
             if self.opts.verbose:
                 row.append(PlainNum(addr.inProcess))
-            row.append(PlainNum(addr.containerCount) if addr.name[0] in 'CDEF' else PlainNum(addr.subscriberCount))
+            row.append(PlainNum(addr.subscriberCount))
             row.append(PlainNum(addr.remoteCount))
             row.append(PlainNum(addr.deliveriesIngress))
             row.append(PlainNum(addr.deliveriesEgress))
@@ -637,52 +636,6 @@ class BusManager:
 
         title = "AutoLinks"
         sorter = Sorter(heads, rows, 'addr', 0, True)
-        dispRows = sorter.getSorted()
-        disp.formattedTable(title, heads, dispRows)
-
-    def displayLinkRoutes(self, show_date_id=True):
-        disp = Display(prefix="  ", bodyFormat=self.bodyFormat)
-        heads = []
-        heads.append(Header("address"))
-        heads.append(Header("dir"))
-        heads.append(Header("distrib"))
-        heads.append(Header("status"))
-        rows = []
-        cols = ('prefix', 'direction', 'distribution', 'operStatus', 'pattern', 'addExternalPrefix', 'delExternalPrefix')
-
-        link_routes = self.query('org.apache.qpid.dispatch.router.config.linkRoute', cols, limit=self.opts.limit)
-
-        have_add_del_prefix = False
-
-        if not link_routes:
-            if show_date_id:
-                self.display_datetime_router_id()
-            print("Link Routes")
-            print("No Link Routes found")
-            return
-
-        if show_date_id:
-            self.display_datetime_router_id()
-
-        for link_route in link_routes:
-            row = []
-            row.append(link_route.prefix if link_route.prefix else link_route.pattern)
-            row.append(link_route.direction)
-            row.append(link_route.distribution)
-            row.append(link_route.operStatus)
-            try:
-                if link_route.addExternalPrefix or link_route.delExternalPrefix:
-                    row.append(link_route.addExternalPrefix)
-                    row.append(link_route.delExternalPrefix)
-                    have_add_del_prefix = True
-            except KeyError:
-                pass  # added post 1.1.0
-            rows.append(row)
-        title = "Link Routes"
-        if have_add_del_prefix:
-            heads.append(Header("add-ext-prefix"))
-            heads.append(Header("del-ext-prefix"))
-        sorter = Sorter(heads, rows, 'address', 0, True)
         dispRows = sorter.getSorted()
         disp.formattedTable(title, heads, dispRows)
 
@@ -874,7 +827,6 @@ class BusManager:
         heads.append(Header("allowDynamicSource"))
         heads.append(Header("allowAnonymousSender"))
         heads.append(Header("allowUserIdProxy"))
-        heads.append(Header("allowDynamicLinkRoutes"))
         heads.append(Header("allowAdminStatusUpdate"))
         rows = []
         for vhost in vhosts:
@@ -897,7 +849,6 @@ class BusManager:
                     row.append(self.showNodefaultBool(group, "allowDynamicSource", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowAnonymousSender", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowUserIdProxy", vg_schema))
-                    row.append(self.showNodefaultBool(group, "allowDynamicLinkRoutes", vg_schema))
                     row.append(self.showNodefaultBool(group, "allowAdminStatusUpdate", vg_schema))
                     rows.append(tuple(row))
         disp.formattedTable("Vhost Groups", heads, rows)
@@ -996,8 +947,6 @@ class BusManager:
         self.displayConnections(show_date_id=False)
         print("")
         self.displayAutolinks(show_date_id=False)
-        print("")
-        self.displayLinkRoutes(show_date_id=False)
         print("")
         self.displayGeneral(show_date_id=False)
         print("")

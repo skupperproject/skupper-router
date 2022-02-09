@@ -113,9 +113,6 @@ endif(USE_LIBNGHTTP2)
 # System test python modules
 foreach(py_test_module
 #   system_tests_broker
-    system_tests_link_routes
-    system_tests_link_routes_add_external_prefix
-    system_tests_link_route_credit
     system_tests_autolinks
     system_tests_drain
     system_tests_management
@@ -142,7 +139,6 @@ foreach(py_test_module
     system_tests_topology
     system_tests_topology_disposition
     system_tests_topology_addition
-    system_tests_disallow_link_resumable_link_route
     system_tests_delivery_counts
     system_tests_cmdline_parsing
     system_tests_bad_configuration
@@ -153,7 +149,6 @@ foreach(py_test_module
     ${SYSTEM_TESTS_HTTP}
     system_tests_priority
     system_tests_core_client
-    system_tests_address_lookup
     system_tests_multicast
     system_tests_router_mesh
     system_tests_stuck_deliveries

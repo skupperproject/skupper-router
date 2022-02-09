@@ -475,7 +475,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         qdr_agent_enqueue_response_CT(core, query);
     } else {
         if (query->status.status / 100 > 2)
-            qd_log(core->log, QD_LOG_ERROR, "Error configuring linkRoute: %s", query->status.description);
+            qd_log(core->log, QD_LOG_ERROR, "Error configuring autoLink: %s", query->status.description);
         qdr_query_free(query);
     }
 }

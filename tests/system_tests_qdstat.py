@@ -80,8 +80,6 @@ class QdstatTest(QdstatTestBase):
                                  out, flags=re.DOTALL) is not None, out)
         self.assertTrue(re.match(r"(.*)\bAuto Links\b[ \t]+\b0\b(.*)",
                                  out, flags=re.DOTALL) is not None, out)
-        self.assertTrue(re.match(r"(.*)\bLink Routes\b[ \t]+\b0\b(.*)",
-                                 out, flags=re.DOTALL) is not None, out)
         self.assertTrue(re.match(r"(.*)\bWorker Threads\b[ \t]+\b1\b(.*)",
                                  out, flags=re.DOTALL) is not None, out)
         self.assertTrue(re.match(r"(.*)\bRouter Id\b[ \t]+\bQDR.A\b(.*)",
@@ -99,7 +97,6 @@ class QdstatTest(QdstatTestBase):
         self.assertIn('"Worker Threads","1"', out)
         self.assertIn('"Nodes","0"', out)
         self.assertIn('"Auto Links","0"', out)
-        self.assertIn('"Link Routes","0"', out)
         self.assertIn('"Router Id","QDR.A"', out)
         self.assertIn('"Mode","standalone"', out)
         self.assertEqual(out.count("QDR.A"), 2)
@@ -637,7 +634,6 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         self.assertTrue(out.count('Router Addresses') == 1)
         self.assertTrue(out.count('Connections') == 6)
         self.assertTrue(out.count('AutoLinks') == 2)
-        self.assertTrue(out.count('Link Routes') == 3)
         self.assertTrue(out.count('Router Statistics') == 1)
         self.assertTrue(out.count('Memory Pools') == 1)
 
@@ -655,7 +651,6 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         self.assertTrue(out.count('Router Addresses') == 2)
         self.assertTrue(out.count('Connections') == 12)
         self.assertTrue(out.count('AutoLinks') == 4)
-        self.assertTrue(out.count('Link Routes') == 6)
         self.assertTrue(out.count('Router Statistics') == 2)
         self.assertTrue(out.count('Memory Pools') == 2)
 

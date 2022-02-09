@@ -21,7 +21,6 @@ import os
 import re
 from subprocess import PIPE
 from time import sleep
-from threading import Event
 from threading import Timer
 
 from proton import Message
@@ -32,15 +31,11 @@ from proton.utils import BlockingConnection
 from qpid_dispatch.management.client import Node
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, MgmtMsgProxy, TestTimeout
-from system_test import AsyncTestReceiver
-from system_test import AsyncTestSender
 from system_test import Logger
 from system_test import QdManager
 from system_test import unittest
 from system_test import Process
-from system_tests_link_routes import ConnLinkRouteService
 from test_broker import FakeBroker
-from test_broker import FakeService
 
 
 class AddrTimer:
@@ -66,8 +61,6 @@ class EdgeRouterTest(TestCase):
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'role': 'route-container'}),
-                ('linkRoute', {'prefix': '0.0.0.0/link', 'direction': 'in', 'containerId': 'LRC'}),
-                ('linkRoute', {'prefix': '0.0.0.0/link', 'direction': 'out', 'containerId': 'LRC'}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
@@ -251,8 +244,6 @@ class RouterTest(TestCase):
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'role': 'route-container'}),
-                ('linkRoute', {'prefix': '0.0.0.0/link', 'direction': 'in', 'containerId': 'LRC'}),
-                ('linkRoute', {'prefix': '0.0.0.0/link', 'direction': 'out', 'containerId': 'LRC'}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
@@ -1236,7 +1227,6 @@ class RouterTest(TestCase):
         self.assertIn("Router Addresses", outs)
         self.assertIn("Connections", outs)
         self.assertIn("AutoLinks", outs)
-        self.assertEqual(outs.count("Link Routes"), 2)
         self.assertIn("Auto Links", outs)
         self.assertIn("Router Statistics", outs)
         self.assertIn("Router Id                        EA1", outs)
@@ -1258,7 +1248,6 @@ class RouterTest(TestCase):
         self.assertIn("Connections", outs)
         self.assertIn("AutoLinks", outs)
         self.assertIn("Auto Links", outs)
-        self.assertEqual(outs.count("Link Routes"), 2)
         self.assertIn("Router Statistics", outs)
         self.assertIn("Router Id                        EA1", outs)
 
@@ -1284,7 +1273,6 @@ class RouterTest(TestCase):
         self.assertEqual(outs.count("Router Links"), 2)
         self.assertEqual(outs.count("Router Addresses"), 2)
         self.assertEqual(outs.count("Connections"), 12)
-        self.assertEqual(outs.count("Link Routes"), 4)
         self.assertEqual(outs.count("Router Statistics"), 2)
         self.assertEqual(outs.count("Memory Pools"), 2)
 
@@ -1311,7 +1299,6 @@ class RouterTest(TestCase):
         self.assertEqual(outs.count("Router Links"), 1)
         self.assertEqual(outs.count("Router Addresses"), 1)
         self.assertEqual(outs.count("Router Statistics"), 1)
-        self.assertEqual(outs.count("Link Routes"), 2)
 
         has_error = False
         try:
@@ -1508,494 +1495,6 @@ class RouterTest(TestCase):
                 eb2_conn_found = True
 
         self.assertTrue(int_a_inter_router_conn_found and eb1_conn_found and eb2_conn_found)
-
-
-class LinkRouteProxyTest(TestCase):
-    """
-    Test edge router's ability to proxy configured and connection-scoped link
-    routes into the interior
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        """Start a router"""
-        super(LinkRouteProxyTest, cls).setUpClass()
-
-        def router(name, mode, extra):
-            config = [
-                ('router', {'mode': mode, 'id': name, "helloMaxAgeSeconds": '10'}),
-                ('listener', {'role': 'normal', 'port': cls.tester.get_port()})
-            ]
-
-            if extra:
-                config.extend(extra)
-            config = Qdrouterd.Config(config)
-            cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
-            return cls.routers[-1]
-
-        # configuration:
-        # two edge routers connected via 2 interior routers.
-        #
-        #  +-------+    +---------+    +---------+    +-------+
-        #  |  EA1  |<==>|  INT.A  |<==>|  INT.B  |<==>|  EB1  |
-        #  +-------+    +---------+    +---------+    +-------+
-
-        cls.routers = []
-
-        interrouter_port = cls.tester.get_port()
-        cls.INTA_edge_port   = cls.tester.get_port()
-        cls.INTB_edge_port   = cls.tester.get_port()
-
-        router('INT.A', 'interior',
-               [('listener', {'role': 'inter-router', 'port': interrouter_port}),
-                ('listener', {'role': 'edge', 'port': cls.INTA_edge_port})])
-        cls.INT_A = cls.routers[0]
-        cls.INT_A.listener = cls.INT_A.addresses[0]
-
-        router('INT.B', 'interior',
-               [('connector', {'name': 'connectorToA', 'role': 'inter-router',
-                               'port': interrouter_port}),
-                ('listener', {'role': 'edge', 'port': cls.INTB_edge_port})])
-        cls.INT_B = cls.routers[1]
-        cls.INT_B.listener = cls.INT_B.addresses[0]
-
-        router('EA1', 'edge',
-               [('listener', {'name': 'rc', 'role': 'route-container',
-                              'port': cls.tester.get_port()}),
-                ('connector', {'name': 'uplink', 'role': 'edge',
-                               'port': cls.INTA_edge_port}),
-                ('linkRoute', {'prefix': 'CfgLinkRoute1', 'containerId': 'FakeBroker', 'direction': 'in'}),
-                ('linkRoute', {'prefix': 'CfgLinkRoute1', 'containerId': 'FakeBroker', 'direction': 'out'})])
-        cls.EA1 = cls.routers[2]
-        cls.EA1.listener = cls.EA1.addresses[0]
-        cls.EA1.route_container = cls.EA1.addresses[1]
-
-        router('EB1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge',
-                               'port': cls.INTB_edge_port}),
-                ('listener', {'name': 'rc', 'role': 'route-container',
-                              'port': cls.tester.get_port()}),
-                ('linkRoute', {'pattern': '*.cfg.pattern.#', 'containerId': 'FakeBroker', 'direction': 'in'}),
-                ('linkRoute', {'pattern': '*.cfg.pattern.#', 'containerId': 'FakeBroker', 'direction': 'out'})])
-        cls.EB1 = cls.routers[3]
-        cls.EB1.listener = cls.EB1.addresses[0]
-        cls.EB1.route_container = cls.EB1.addresses[1]
-
-        cls.INT_A.wait_router_connected('INT.B')
-        cls.INT_B.wait_router_connected('INT.A')
-        cls.EA1.wait_connectors()
-        cls.EB1.wait_connectors()
-
-        cls.CFG_LINK_ROUTE_TYPE = 'org.apache.qpid.dispatch.router.config.linkRoute'
-        cls.CONN_LINK_ROUTE_TYPE = 'org.apache.qpid.dispatch.router.connection.linkRoute'
-        cls.CONNECTOR_TYPE = 'org.apache.qpid.dispatch.connector'
-
-        cls.skip = {'test_01' : 0,
-                    'test_02' : 0,
-                    'test_03' : 0,
-                    'test_50' : 0,
-                    'test_51' : 0,
-                    'test_52' : 0
-                    }
-
-    def _get_address(self, router, address):
-        """Lookup address in route table"""
-        a_type = 'org.apache.qpid.dispatch.router.address'
-        addrs = router.management.query(a_type).get_dicts()
-        return [a for a in addrs if address in a['name']]
-
-    def _wait_address_gone(self, router, address):
-        """Block until address is removed from the route table"""
-        while self._get_address(router, address):
-            sleep(0.1)
-
-    def _test_traffic(self, sender, receiver, address, count=5, message=None, logger=None):
-        """Generate message traffic between two normal clients"""
-        error = None
-        if logger:
-            logger.log("_test_traffic begin")
-        tr = AsyncTestReceiver(receiver, address, print_to_console=True)
-        if logger:
-            logger.log("_test_traffic AsyncTestReceiver created")
-        ts = AsyncTestSender(sender, address, count,
-                             message=message, print_to_console=True)
-        if logger:
-            logger.log("_test_traffic AsyncTestSender created")
-        ts.wait()  # wait until all sent
-        if logger:
-            logger.log("_test_traffic sender wait done")
-        for i in range(count):
-            try:
-                tr.queue.get()
-            except AsyncTestReceiver.Empty:
-                error = "Sender Stats=" + ts.get_msg_stats() + "\n Receiver Queue Stats=" + tr.get_queue_stats()
-        tr.stop()
-        if logger:
-            logger.log("_test_traffic receiver queue get done")
-        if error:
-            tr.dump_log()
-            ts.dump_log()
-        return error
-
-    def test_01_immediate_detach_reattach(self):
-        """
-        Have a service for a link routed address abruptly detach
-        in response to an incoming link attach
-
-        The attaching client from EB1 will get an attach response then an
-        immediate detach.  The client will immediately re-establish the link.
-        """
-        if self.skip['test_01']:
-            self.skipTest("Test skipped during development.")
-
-        class AttachDropper(FakeService):
-            def __init__(self, *args, **kwargs):
-                super(AttachDropper, self).__init__(*args, **kwargs)
-                self.link_dropped = Event()
-
-            def on_link_remote_open(self, event):
-                # drop it
-                event.link.close()
-                event.connection.close()
-                self.link_dropped.set()
-
-        ad = AttachDropper(self.EA1.route_container)
-        # wait for both in and out link route addresses to propagate
-        self.INT_B.wait_address("CfgLinkRoute1", count=2)
-
-        # create a consumer, do not wait for link to open, reattach
-        # on received detach
-        rx = AsyncTestReceiver(self.EB1.listener, 'CfgLinkRoute1/foo',
-                               wait=False, recover_link=True)
-        ad.link_dropped.wait(timeout=TIMEOUT)
-        ad.join()  # wait for thread exit
-
-        # wait until prefix addresses are removed
-        self._wait_address_gone(self.INT_B, "CfgLinkRoute1")
-        rx.stop()
-
-        # now attach a working service to the same address,
-        # make sure it all works
-        fs = FakeService(self.EA1.route_container)
-        self.INT_B.wait_address("CfgLinkRoute1", count=2)
-        rx = AsyncTestReceiver(self.EB1.listener, 'CfgLinkRoute1/foo',
-                               wait=False, recover_link=True)
-        tx = AsyncTestSender(self.EA1.listener, 'CfgLinkRoute1/foo',
-                             message=Message(body="HEY HO LET'S GO!"))
-        tx.wait()
-
-        msg = rx.queue.get()
-        self.assertTrue(msg.body == "HEY HO LET'S GO!")
-        rx.stop()
-        fs.join()
-        self.assertEqual(1, fs.in_count)
-        self.assertEqual(1, fs.out_count)
-
-        # wait until addresses are cleaned up
-        self._wait_address_gone(self.INT_A, "CfgLinkRoute1")
-        self._wait_address_gone(self.INT_B, "CfgLinkRoute1")
-
-    def test_02_thrashing_link_routes(self):
-        """
-        Rapidly add and delete link routes at the edge
-        """
-        if self.skip['test_02'] :
-            self.skipTest("Test skipped during development.")
-
-        # activate the pre-configured link routes
-        ea1_mgmt = self.EA1.management
-        fs = FakeService(self.EA1.route_container)
-        self.INT_B.wait_address("CfgLinkRoute1", count=2)
-
-        for i in range(10):
-            lr1 = ea1_mgmt.create(type=self.CFG_LINK_ROUTE_TYPE,
-                                  name="TestLRout%d" % i,
-                                  attributes={'pattern': 'Test/*/%d/#' % i,
-                                              'containerId': 'FakeBroker',
-                                              'direction': 'out'})
-            lr2 = ea1_mgmt.create(type=self.CFG_LINK_ROUTE_TYPE,
-                                  name="TestLRin%d" % i,
-                                  attributes={'pattern': 'Test/*/%d/#' % i,
-                                              'containerId': 'FakeBroker',
-                                              'direction': 'in'})
-            # verify that they are correctly propagated (once)
-            if i == 9:
-                self.INT_B.wait_address("Test/*/9/#", count=2)
-            lr1.delete()
-            lr2.delete()
-
-        fs.join()
-        self._wait_address_gone(self.INT_B, "CfgLinkRoute1")
-
-    def _validate_topology(self, router, expected_links, address):
-        """
-        query existing links and verify they are set up as expected
-        """
-        mgmt = QdManager(self, address=router)
-        # fetch all the connections
-        cl = mgmt.query('org.apache.qpid.dispatch.connection')
-        # map them by their identity
-        conns = dict([(c['identity'], c) for c in cl])
-
-        # now fetch all links for the address
-        ll = mgmt.query('org.apache.qpid.dispatch.router.link')
-        test_links = [l for l in ll if
-                      l.get('owningAddr', '').find(address) != -1]
-        self.assertEqual(len(expected_links), len(test_links))
-
-        for elink in expected_links:
-            matches = [l for l in test_links
-                       if (l['linkDir'] == elink[0]
-                           and
-                           conns[l['connectionId']]['container'] == elink[1]
-                           and
-                           conns[l['connectionId']]['role'] == elink[2])]
-            self.assertEqual(len(matches), 1, msg=matches)
-
-    def test_03_interior_conn_lost(self):
-        """
-        What happens when the interior connection bounces?
-        """
-        if self.skip['test_03'] :
-            self.skipTest("Test skipped during development.")
-
-        config = Qdrouterd.Config([('router', {'mode': 'edge',
-                                               'id': 'Edge1'}),
-                                   ('listener', {'role': 'normal',
-                                                 'port': self.tester.get_port()}),
-                                   ('listener', {'name': 'rc',
-                                                 'role': 'route-container',
-                                                 'port': self.tester.get_port()}),
-                                   ('linkRoute', {'pattern': 'Edge1/*',
-                                                  'containerId': 'FakeBroker',
-                                                  'direction': 'in'}),
-                                   ('linkRoute', {'pattern': 'Edge1/*',
-                                                  'containerId': 'FakeBroker',
-                                                  'direction': 'out'})])
-        er = self.tester.qdrouterd('Edge1', config, wait=True)
-
-        # activate the link routes before the connection exists
-        fs = FakeService(er.addresses[1])
-        er.wait_address("Edge1/*", count=2)
-
-        # create the connection to interior
-        er_mgmt = er.management
-        ctor = er_mgmt.create(type=self.CONNECTOR_TYPE,
-                              name='toA',
-                              attributes={'role': 'edge',
-                                          'port': self.INTA_edge_port})
-        self.INT_B.wait_address("Edge1/*", count=2)
-
-        # delete it, and verify the routes are removed
-        ctor.delete()
-        self._wait_address_gone(self.INT_B, "Edge1/*")
-
-        # now recreate and verify routes re-appear
-        ctor = er_mgmt.create(type=self.CONNECTOR_TYPE,
-                              name='toA',
-                              attributes={'role': 'edge',
-                                          'port': self.INTA_edge_port})
-        self.INT_B.wait_address("Edge1/*", count=2)
-        out = self._test_traffic(self.INT_B.listener,
-                                 self.INT_B.listener,
-                                 "Edge1/One",
-                                 count=5)
-        fs.join()
-
-        try:
-            self.assertIsNone(out, out)
-            self.assertEqual(5, fs.in_count)
-            self.assertEqual(5, fs.out_count)
-        except AssertionError:
-            fs.dump_log()
-            raise
-
-        er.teardown()
-        self._wait_address_gone(self.INT_B, "Edge1/*")
-
-    def test_50_link_topology(self):
-        """
-        Verify that the link topology that results from activating a link route
-        and sending traffic is correct
-        """
-        if self.skip['test_50'] :
-            self.skipTest("Test skipped during development.")
-
-        fs = FakeService(self.EA1.route_container)
-        self.INT_B.wait_address("CfgLinkRoute1", count=2)
-
-        # create a sender on one edge and the receiver on another
-        bc_b = BlockingConnection(self.EB1.listener, timeout=TIMEOUT)
-        erx = bc_b.create_receiver(address="CfgLinkRoute1/buhbye", credit=10)
-        bc_a = BlockingConnection(self.EA1.listener, timeout=TIMEOUT)
-        etx = bc_a.create_sender(address="CfgLinkRoute1/buhbye")
-
-        etx.send(Message(body="HI THERE"), timeout=TIMEOUT)
-        self.assertEqual("HI THERE", erx.receive(timeout=TIMEOUT).body)
-        erx.accept()
-
-        # expect the following links have been established for the
-        # "CfgLinkRoute1/buhbye" address:
-
-        # EA1
-        #   1 out link to   INT.A       (connection role: edge)
-        #   1 in  link from bc_a        (normal)
-        #   1 in  link from FakeBroker  (route-container)
-        #   1 out link to   FakeBroker  (route-container)
-        # INT.A
-        #   1 in  link from EA1         (edge)
-        #   1 out link to   INT.B       (inter-router)
-        # INT.B
-        #   1 out link to   EB1         (edge)
-        #   1 in  link from INT.A       (inter-router)
-        # EB1
-        #   1 out link to   bc_b        (normal)
-        #   1 in  link from INT.B       (edge)
-
-        expect = {
-            self.EA1.listener: [
-                ('in',  bc_a.container.container_id, 'normal'),
-                ('in',  'FakeBroker', 'route-container'),
-                ('out', 'FakeBroker', 'route-container'),
-                ('out', 'INT.A',      'edge')],
-            self.INT_A.listener: [
-                ('in',  'EA1',        'edge'),
-                ('out', 'INT.B',      'inter-router')],
-            self.INT_B.listener: [
-                ('in',  'INT.A',      'inter-router'),
-                ('out', 'EB1',        'edge')],
-            self.EB1.listener: [
-                ('in',  'INT.B',      'edge'),
-                ('out', bc_b.container.container_id, 'normal')]
-        }
-        for router, expected_links in expect.items():
-            self._validate_topology(router, expected_links,
-                                    'CfgLinkRoute1/buhbye')
-
-        fs.join()
-        self.assertEqual(1, fs.in_count)
-        self.assertEqual(1, fs.out_count)
-
-        bc_a.close()
-        bc_b.close()
-
-    def test_51_link_route_proxy_configured(self):
-        """
-        Activate the configured link routes via a FakeService, verify proxies
-        created by passing traffic from/to and interior router
-        """
-        if self.skip['test_51'] :
-            self.skipTest("Test skipped during development.")
-
-        self.INT_B.wait_address_unsubscribed("CfgLinkRoute1")
-
-        # We are logging each step of this test as we go. The log statements will print to console
-        logger = Logger(title="test_51_link_route_proxy_configured",
-                        print_to_console=True)
-        test_msg = Message(body="test_51_link_route_proxy_configured")
-
-        fs = FakeService(self.EA1.route_container)
-
-        logger.log("test_51_link_route_proxy_configured Created FakeService")
-
-        self.INT_B.wait_address("CfgLinkRoute1", count=2)
-
-        logger.log("test_51_link_route_proxy_configured Wait done on CfgLinkRoute1")
-
-        out = self._test_traffic(self.INT_B.listener,
-                                 self.INT_B.listener,
-                                 "CfgLinkRoute1/hi",
-                                 count=5,
-                                 message=test_msg,
-                                 logger=logger)
-
-        logger.log("test_51_link_route_proxy_configured _test_traffic done on CfgLinkRoute1/hi")
-
-        fs.join()
-
-        logger.log("test_51_link_route_proxy_configured _test_traffic first join() completed")
-
-        try:
-            self.assertIsNone(out, out)
-            self.assertEqual(5, fs.in_count)
-            self.assertEqual(5, fs.out_count)
-        except AssertionError:
-            fs.dump_log()
-            raise
-
-        # now that FakeService is gone, the link route should no longer be
-        # active:
-        self._wait_address_gone(self.INT_A, "CfgLinkRoute1")
-
-        logger.log("test_51_link_route_proxy_configured CfgLinkRoute1 _wait_address_gone")
-
-        # repeat test, but this time with patterns:
-
-        fs = FakeService(self.EB1.route_container)
-        self.INT_A.wait_address("*.cfg.pattern.#", count=2)
-
-        logger.log("test_51_link_route_proxy_configured wait_address pattern *.cfg.pattern.#")
-
-        out = self._test_traffic(self.INT_A.listener,
-                                 self.INT_A.listener,
-                                 "MATCH.cfg.pattern",
-                                 count=5,
-                                 message=test_msg)
-
-        logger.log("test_51_link_route_proxy_configured _test_traffic MATCH.cfg.pattern")
-
-        fs.join()
-
-        logger.log("test_51_link_route_proxy_configured _test_traffic second join() completed")
-
-        self.assertIsNone(out, out)
-        self.assertEqual(5, fs.in_count)
-        self.assertEqual(5, fs.out_count)
-
-        self._wait_address_gone(self.INT_A, "*.cfg.pattern.#")
-        logger.log("test_51_link_route_proxy_configured *.cfg.pattern.# _wait_address_gone")
-
-    def test_52_conn_link_route_proxy(self):
-        """
-        Test connection scoped link routes by connecting a fake service to the
-        Edge via the route-container connection.  Have the fake service
-        configured some link routes.  Then have clients on the interior
-        exchange messages via the fake service.
-        """
-        if self.skip['test_52'] :
-            self.skipTest("Test skipped during development.")
-
-        fs = ConnLinkRouteService(self.EA1.route_container,
-                                  container_id="FakeService",
-                                  config=[("ConnLinkRoute1",
-                                           {"pattern": "Conn/*/One",
-                                            "direction": "out"}),
-                                          ("ConnLinkRoute2",
-                                           {"pattern": "Conn/*/One",
-                                            "direction": "in"})])
-        self.assertEqual(2, len(fs.values))
-
-        self.INT_B.wait_address("Conn/*/One", count=2)
-        self.assertEqual(2, len(self._get_address(self.INT_A, "Conn/*/One")))
-
-        # between interiors
-        out = self._test_traffic(self.INT_B.listener,
-                                 self.INT_A.listener,
-                                 "Conn/BLAB/One",
-                                 count=5)
-        self.assertIsNone(out, out)
-
-        # edge to edge
-        out = self._test_traffic(self.EB1.listener,
-                                 self.EA1.listener,
-                                 "Conn/BLECH/One",
-                                 count=5)
-        self.assertIsNone(out, out)
-        fs.join()
-        self.assertEqual(10, fs.in_count)
-        self.assertEqual(10, fs.out_count)
-
-        self._wait_address_gone(self.INT_A, "Conn/*/One")
 
 
 class ConnectivityTest(MessagingHandler):
@@ -3007,11 +2506,7 @@ class StreamingMessageTest(TestCase):
                                'role': 'route-container',
                                'host': '127.0.0.1',
                                'port': cls.tester.get_port(),
-                               'saslMechanisms': 'ANONYMOUS'}),
-                ('linkRoute', {'pattern': 'MyLinkRoute.#', 'containerId':
-                               'FakeBroker', 'direction': 'in'}),
-                ('linkRoute', {'pattern': 'MyLinkRoute.#', 'containerId':
-                               'FakeBroker', 'direction': 'out'})
+                               'saslMechanisms': 'ANONYMOUS'})
                 ])
         cls.EB1 = cls.routers[3]
         cls.EB1.listener = cls.EB1.addresses[0]
@@ -3045,9 +2540,6 @@ class StreamingMessageTest(TestCase):
     def _start_broker_EB1(self):
         # start a new broker on EB1
         fake_broker = FakeBroker(self.EB1.route_container)
-        # wait until the link route appears on the interior routers
-        self.INT_B.wait_address("MyLinkRoute", count=2)
-        self.INT_A.wait_address("MyLinkRoute", count=2)
         return fake_broker
 
     def spawn_receiver(self, router, count, address, expect=None):
@@ -3092,39 +2584,6 @@ class StreamingMessageTest(TestCase):
                "-P", str(pause_ms)]
         env = dict(os.environ, PN_TRACE_FRM="1")
         return self.popen(cmd, expect=expect, env=env)
-
-    def test_01_streaming_link_route(self):
-        """
-        Verify that a streaming message can be delivered over a link route
-        """
-        fake_broker = self._start_broker_EB1()
-
-        rx = self.spawn_receiver(self.EB1, count=1,
-                                 address="MyLinkRoute/test-address")
-
-        # sender a streaming message, "-sx" causes the sender to generate a
-        # large streaming message
-        tx = self.spawn_sender(self.EA1, count=1,
-                               address="MyLinkRoute/test-address",
-                               expect=Process.EXIT_OK,
-                               size="-sx")
-
-        out_text, out_error = tx.communicate(timeout=TIMEOUT)
-        if tx.returncode:
-            raise Exception("Sender failed: %s %s" % (out_text, out_error))
-
-        out_text, out_error = rx.communicate(timeout=TIMEOUT)
-        if rx.returncode:
-            raise Exception("Receiver failed: %s %s" % (out_text, out_error))
-
-        fake_broker.join()
-        self.assertEqual(1, fake_broker.in_count)
-        self.assertEqual(1, fake_broker.out_count)
-
-        # cleanup - not EB1 since MyLinkRoute is configured
-        self._wait_address_gone(self.EA1, "MyLinkRoute")
-        self._wait_address_gone(self.INT_A, "MyLinkRoute")
-        self._wait_address_gone(self.INT_B, "MyLinkRoute")
 
     def _streaming_test(self, address):
 
@@ -3220,39 +2679,6 @@ class StreamingMessageTest(TestCase):
         self._wait_address_gone(self.EB1,  "balanced/test-address")
         self._wait_address_gone(self.INT_A,  "balanced/test-address")
         self._wait_address_gone(self.INT_B,  "balanced/test-address")
-
-    def test_10_streaming_link_route_parallel(self):
-        """
-        Ensure that a streaming message sent across a link route does not block other
-        clients sending to the same container address.
-        """
-
-        fake_broker = self._start_broker_EB1()
-
-        clogger = self.spawn_clogger(self.EA1,
-                                     count=1,
-                                     address="MyLinkRoute/clogger",
-                                     size=self.BODY_MAX,
-                                     pause_ms=100,
-                                     expect=self.SIG_TERM)
-        sleep(0.5)  # allow clogger to set up streaming links
-
-        # start a sender in parallel
-        tx = self.spawn_sender(self.EA1, count=100, address="MyLinkRoute/clogger")
-        out_text, out_error = tx.communicate(timeout=TIMEOUT)
-        if tx.returncode:
-            raise Exception("Sender failed: %s %s" % (out_text, out_error))
-
-        clogger.terminate()
-        clogger.wait()
-
-        fake_broker.join()
-        self.assertEqual(100, fake_broker.in_count)
-
-        # cleanup - not EB1 since MyLinkRoute is configured
-        self._wait_address_gone(self.EA1, "MyLinkRoute")
-        self._wait_address_gone(self.INT_A, "MyLinkRoute")
-        self._wait_address_gone(self.INT_B, "MyLinkRoute")
 
     def test_11_streaming_closest_parallel(self):
         """

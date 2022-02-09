@@ -35,7 +35,6 @@ typedef struct qdr_node_t            qdr_node_t;
 typedef struct qdr_router_ref_t      qdr_router_ref_t;
 typedef struct qdr_link_ref_t        qdr_link_ref_t;
 typedef struct qdr_forwarder_t       qdr_forwarder_t;
-typedef struct qdr_link_route_t      qdr_link_route_t;
 typedef struct qdr_auto_link_t       qdr_auto_link_t;
 typedef struct qdr_conn_identifier_t qdr_conn_identifier_t;
 typedef struct qdr_connection_ref_t  qdr_connection_ref_t;
@@ -47,7 +46,6 @@ ALLOC_DECLARE(qdr_address_config_t);
 ALLOC_DECLARE(qdr_node_t);
 ALLOC_DECLARE(qdr_router_ref_t);
 ALLOC_DECLARE(qdr_link_ref_t);
-ALLOC_DECLARE(qdr_link_route_t);
 ALLOC_DECLARE(qdr_auto_link_t);
 ALLOC_DECLARE(qdr_conn_identifier_t);
 ALLOC_DECLARE(qdr_connection_ref_t);
@@ -62,22 +60,12 @@ ALLOC_DECLARE(qdr_link_t);
 qdr_forwarder_t *qdr_forwarder_CT(qdr_core_t *core, qd_address_treatment_t treatment);
 int qdr_forward_message_CT(qdr_core_t *core, qdr_address_t *addr, qd_message_t *msg, qdr_delivery_t *in_delivery,
                            bool exclude_inprocess, bool control);
-bool qdr_forward_attach_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *in_link, qdr_terminus_t *source,
-                           qdr_terminus_t *target);
-void qdr_forward_link_direct_CT(qdr_core_t       *core,
-                                qdr_connection_t *conn,
-                                qdr_link_t       *in_link,
-                                qdr_terminus_t   *source,
-                                qdr_terminus_t   *target,
-                                char             *strip,
-                                char             *insert);
 
 typedef enum {
     QDR_CONDITION_NO_ROUTE_TO_DESTINATION,
     QDR_CONDITION_ROUTED_LINK_LOST,
     QDR_CONDITION_FORBIDDEN,
     QDR_CONDITION_WRONG_ROLE,
-    QDR_CONDITION_COORDINATOR_PRECONDITION_FAILED,
     QDR_CONDITION_INVALID_LINK_EXPIRATION,
     QDR_CONDITION_NONE
 } qdr_condition_t;
@@ -521,7 +509,6 @@ struct qdr_address_t {
     DEQ_LINKS(qdr_address_t);
     qdr_address_config_t      *config;
     qdr_subscription_list_t    subscriptions; ///< In-process message subscribers
-    qdr_connection_ref_list_t  conns;         ///< Local Connections for route-destinations
     qdr_link_ref_list_t        rlinks;        ///< Locally-Connected Consumers
     qdr_link_ref_list_t        inlinks;       ///< Locally-Connected Producers
     qd_bitmask_t              *rnodes;        ///< Bitmask of remote routers with connected consumers
@@ -586,8 +573,6 @@ qdr_address_t *qdr_add_mobile_address_CT(qdr_core_t *core, const char* prefix, c
 void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr);
 void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
 void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
-void qdr_core_bind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn);
-void qdr_core_unbind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn);
 
 struct qdr_address_config_t {
     DEQ_LINKS(qdr_address_config_t);
@@ -633,9 +618,6 @@ struct qdr_connection_info_t {
 
 ALLOC_DECLARE(qdr_connection_info_t);
 
-DEQ_DECLARE(qdr_link_route_t, qdr_link_route_list_t);
-
-
 struct qdr_connection_t {
     DEQ_LINKS(qdr_connection_t);
     DEQ_LINKS_N(ACTIVATE, qdr_connection_t);
@@ -660,7 +642,6 @@ struct qdr_connection_t {
     qdr_link_ref_list_t         links_with_work[QDR_N_PRIORITIES];
     qdr_connection_info_t      *connection_info;
     void                       *user_context; /* Updated from IO thread, use work_lock */
-    qdr_link_route_list_t       conn_link_routes;  // connection scoped link routes
     qd_conn_oper_status_t       oper_status;
     qd_conn_admin_status_t      admin_status;
     qdr_error_t                *error;
@@ -674,33 +655,6 @@ struct qdr_connection_t {
 
 DEQ_DECLARE(qdr_connection_t, qdr_connection_list_t);
 
-#define QDR_IS_LINK_ROUTE_PREFIX(p) ((p) == QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_IN || (p) == QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_OUT)
-#define QDR_IS_LINK_ROUTE(p) ((p) == QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_IN || (p) == QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_OUT || QDR_IS_LINK_ROUTE_PREFIX(p))
-#define QDR_LINK_ROUTE_DIR(p) (((p) == QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_IN || (p) == QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_IN) ? QD_INCOMING : QD_OUTGOING)
-#define QDR_LINK_ROUTE_HASH(dir, is_prefix) \
-    (((dir) == QD_INCOMING)                 \
-     ? ((is_prefix) ? QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_IN  : QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_IN)    \
-     : ((is_prefix) ? QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_OUT : QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_OUT))
-
-struct qdr_link_route_t {
-    DEQ_LINKS(qdr_link_route_t);
-    DEQ_LINKS_N(REF, qdr_link_route_t);
-    uint64_t                identity;
-    char                   *name;
-    qdr_address_t          *addr;
-    qd_direction_t          dir;
-    qdr_conn_identifier_t  *conn_id;
-    qd_address_treatment_t  treatment;
-    bool                    active;
-    bool                    is_prefix;
-    char                   *pattern;
-    char                   *add_prefix;
-    char                   *del_prefix;
-    qdr_connection_t       *parent_conn;
-    qd_hash_handle_t       *hash_handle;
-};
-
-void qdr_core_delete_link_route(qdr_core_t *core, qdr_link_route_t *lr);
 void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);
 
 // Core timer related field/data structures
@@ -753,7 +707,6 @@ struct qdr_conn_identifier_t {
     qd_hash_handle_t          *connection_hash_handle;
     qd_hash_handle_t          *container_hash_handle;
     qdr_connection_ref_list_t  connection_refs;
-    qdr_link_route_list_t      link_route_refs;
     qdr_auto_link_list_t       auto_link_refs;
 };
 
@@ -843,16 +796,14 @@ struct qdr_core_t {
     int               worker_thread_count;
 
     qdr_address_config_list_t  addr_config;
-    // Hash to hold names of address configs, link routes and auto links.
-    // address config prefix = 'C', auto link prefix = 'A', link route prefix = 'L'
+    // Hash to hold names of address configs and auto links.
+    // address config prefix = 'C', auto link prefix = 'A'
     qd_hash_t                 *addr_lr_al_hash;
     qdr_auto_link_list_t       auto_links;
-    qdr_link_route_list_t      link_routes;
     qd_hash_t                 *conn_id_hash;
     qdr_address_list_t         addrs;
     qd_hash_t                 *addr_hash;
     qd_parse_tree_t           *addr_parse_tree;
-    qd_parse_tree_t           *link_route_tree[2];   // QD_INCOMING, QD_OUTGOING
     qdr_address_t             *hello_addr;
     qdr_address_t             *router_addr_L;
     qdr_address_t             *routerma_addr_L;
@@ -872,7 +823,7 @@ struct qdr_core_t {
     uint64_t              next_identifier;
     sys_mutex_t          *id_lock;
 
-    qdr_forwarder_t      *forwarders[QD_TREATMENT_LINK_BALANCED + 1];
+    qdr_forwarder_t      *forwarders[QD_TREATMENT_UNAVAILABLE];
 
     qdr_delivery_cleanup_list_t  delivery_cleanup_list;  ///< List of delivery cleanup items to be processed in an IO thread
 
@@ -904,7 +855,6 @@ struct qdr_terminus_t {
     pn_expiry_policy_t      expiry_policy;
     pn_seconds_t            timeout;
     bool                    dynamic;
-    bool                    coordinator;
     pn_distribution_mode_t  distribution_mode;
     pn_data_t              *properties;
     pn_data_t              *filter;

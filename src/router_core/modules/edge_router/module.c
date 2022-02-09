@@ -21,9 +21,6 @@
 
 #include "addr_proxy.h"
 #include "connection_manager.h"
-#include "edge_mgmt.h"
-#include "link_route_proxy.h"
-
 
 typedef struct {
     qdr_core_t            *core;
@@ -45,8 +42,6 @@ static void qcm_edge_router_init_CT(qdr_core_t *core, void **module_context)
     edge->core = core;
     edge->conn_mgr   = qcm_edge_conn_mgr(core);
     edge->addr_proxy = qcm_edge_addr_proxy(core);
-    qcm_edge_mgmt_init_CT(core);
-    qcm_edge_link_route_init_CT(core);
     // TODO - Add initialization of other edge-router functions here
     *module_context = edge;
 }
@@ -58,8 +53,6 @@ static void qcm_edge_router_final_CT(void *module_context)
 
     qcm_edge_conn_mgr_final(edge->conn_mgr);
     qcm_edge_addr_proxy_final(edge->addr_proxy);
-    qcm_edge_mgmt_final_CT(edge->core);
-    qcm_edge_link_route_final_CT(edge->core);
     // TODO - Add finalization of other edge-router functions here
     free(edge);
 }

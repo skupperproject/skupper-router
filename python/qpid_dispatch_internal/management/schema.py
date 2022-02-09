@@ -487,7 +487,7 @@ class EntityType:
                         value = attributes.get(deprecation_name)
                         if value is not None:
                             # Both name and deprecation name have values
-                            # For example, both dir and direction of linkRoute have been specified, This is
+                            # For example, both dir and direction have been specified, This is
                             # illegal. Just fail.
                             raise ValidationError("Both '%s' and '%s' cannot be specified for entity '%s'" %
                                                   (deprecation_name, attr.name, self.short_name))

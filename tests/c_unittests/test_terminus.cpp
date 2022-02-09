@@ -76,22 +76,6 @@ TEST_CASE("test_safe_snprintf") {
 }
 
 TEST_CASE("test_qdr_terminus_format") {
-    SUBCASE("coordinator") {
-        const int   SIZE = 128;
-        const char *EXPECTED = "{<coordinator>}";
-        const int   EXPECTED_LEN = strlen(EXPECTED);
-
-        size_t size = SIZE;
-        char   output[SIZE];
-
-        qdr_terminus_t t;
-        t.coordinator = true;
-
-        qdr_terminus_format(&t, output, &size);
-        CHECK(output == EXPECTED);
-        CHECK(size == SIZE - EXPECTED_LEN);
-    }
-
     SUBCASE("empty") {
         char   output[3];
         size_t size = 3;

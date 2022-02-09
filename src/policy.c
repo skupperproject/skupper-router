@@ -561,7 +561,6 @@ bool qd_policy_open_fetch_settings(
                         settings->spec.allowAnonymousSender = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowAnonymousSender", false);
                         settings->spec.allowDynamicSource   = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicSource", false);
                         settings->spec.allowUserIdProxy       = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowUserIdProxy", false);
-                        settings->spec.allowDynamicLinkRoutes = qd_entity_opt_bool((qd_entity_t*)upolicy, "allowDynamicLinkRoutes", true);
 
                         //
                         // By default, deleting connections are enabled. To disable, set the allowAdminStatusUpdate to false in a policy.

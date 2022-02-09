@@ -104,17 +104,6 @@ static int qdr_forward_message_null_CT(qdr_core_t      *core,
 }
 
 
-static bool qdr_forward_attach_null_CT(qdr_core_t     *core,
-                                       qdr_address_t  *addr,
-                                       qdr_link_t     *link,
-                                       qdr_terminus_t *source,
-                                       qdr_terminus_t *target)
-{
-    qd_log(core->log, QD_LOG_CRITICAL, "NULL Attach Forwarder Invoked");
-    return false;
-}
-
-
 static void qdr_forward_find_closest_remotes_CT(qdr_core_t *core, qdr_address_t *addr)
 {
     qdr_node_t *rnode       = DEQ_HEAD(core->routers);
@@ -935,150 +924,15 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
     return 0;
 }
 
-bool qdr_forward_link_balanced_CT(qdr_core_t     *core,
-                                  qdr_address_t  *addr,
-                                  qdr_link_t     *in_link,
-                                  qdr_terminus_t *source,
-                                  qdr_terminus_t *target)
-{
-    qdr_connection_ref_t *conn_ref = DEQ_HEAD(addr->conns);
-    qdr_connection_t     *conn     = 0;
-    char                 *strip    = 0;
-    char                 *insert   = 0;
-
-    //
-    // Check for locally connected containers that can handle this link attach.
-    //
-    if (conn_ref) {
-        conn = conn_ref->conn;
-        qdr_terminus_t *remote_terminus = in_link->link_direction == QD_OUTGOING ? source : target;
-        if (addr->del_prefix) {
-            insert = strdup(addr->del_prefix);
-            qdr_terminus_strip_address_prefix(remote_terminus, addr->del_prefix);
-        }
-        if (addr->add_prefix) {
-            strip = strdup(addr->add_prefix);
-            qdr_terminus_insert_address_prefix(remote_terminus, addr->add_prefix);
-        }
-
-        //
-        // If there are more than one local connections available for handling this link,
-        // rotate the list so the attaches are balanced across the containers.
-        //
-        if (DEQ_SIZE(addr->conns) > 1) {
-            DEQ_REMOVE_HEAD(addr->conns);
-            DEQ_INSERT_TAIL(addr->conns, conn_ref);
-        }
-    } else {
-        //
-        // Look for a next-hop we can use to forward the link-attach.
-        //
-        if (addr->cost_epoch != core->cost_epoch) {
-            addr->next_remote = -1;
-            addr->cost_epoch  = core->cost_epoch;
-        }
-
-        if (addr->next_remote < 0) {
-            qd_bitmask_first_set(addr->rnodes, &addr->next_remote);
-        }
-
-        if (addr->next_remote >= 0) {
-
-            qdr_node_t *rnode = core->routers_by_mask_bit[addr->next_remote];
-
-            if (rnode) {
-                //
-                // Advance the addr->next_remote so there will be link balance across containers
-                //
-                _qdbm_next(addr->rnodes, &addr->next_remote);
-                if (addr->next_remote == -1)
-                    qd_bitmask_first_set(addr->rnodes, &addr->next_remote);
-
-                int conn_bit = (rnode->next_hop) ? rnode->next_hop->conn_mask_bit : rnode->conn_mask_bit;
-                conn = (conn_bit >= 0) ? core->rnode_conns_by_mask_bit[conn_bit] : 0;
-            }
-        }
-    }
-
-    if (conn) {
-        qdr_forward_link_direct_CT(core, conn, in_link, source, target, strip, insert);
-        return true;
-    }
-
-    free(insert);
-    free(strip);
-    return false;
-}
-
-
-void qdr_forward_link_direct_CT(qdr_core_t       *core,
-                                qdr_connection_t *conn,
-                                qdr_link_t       *in_link,
-                                qdr_terminus_t   *source,
-                                qdr_terminus_t   *target,
-                                char             *strip,
-                                char             *insert)
-{
-    qdr_link_t *out_link = new_qdr_link_t();
-    ZERO(out_link);
-    out_link->core           = core;
-    out_link->identity       = qdr_identifier(core);
-    out_link->conn           = conn;
-    out_link->conn_id        = conn->identity;
-    out_link->link_type      = QD_LINK_ENDPOINT;
-    out_link->link_direction = qdr_link_direction(in_link) == QD_OUTGOING ? QD_INCOMING : QD_OUTGOING;
-    out_link->admin_enabled  = true;
-    out_link->attach_count   = 1;
-    out_link->core_ticks     = conn->core->uptime_ticks;
-    out_link->zero_credit_time = core->uptime_ticks;
-    out_link->strip_annotations_in  = conn->strip_annotations_in;
-    out_link->strip_annotations_out = conn->strip_annotations_out;
-    out_link->priority       = in_link->priority;
-
-    if (strip) {
-        out_link->strip_prefix = strip;
-    }
-    if (insert) {
-        out_link->insert_prefix = insert;
-    }
-
-    out_link->oper_status    = QDR_LINK_OPER_DOWN;
-
-    out_link->name = strdup(in_link->disambiguated_name ? in_link->disambiguated_name : in_link->name);
-
-    out_link->connected_link = in_link;
-    in_link->connected_link  = out_link;
-
-    DEQ_INSERT_TAIL(core->open_links, out_link);
-    qdr_add_link_ref(&conn->links, out_link, QDR_LINK_LIST_CLASS_CONNECTION);
-
-    qdr_connection_work_t *work = new_qdr_connection_work_t();
-    ZERO(work);
-    work->work_type = QDR_CONNECTION_WORK_FIRST_ATTACH;
-    work->link      = out_link;
-    work->source    = source;
-    work->target    = target;
-    work->ssn_class = QD_SSN_LINK_ROUTE;
-
-    qdr_connection_enqueue_work_CT(core, conn, work);
-
-    if (qdr_link_direction(in_link) == QD_OUTGOING && in_link->credit_to_core > 0) {
-        qdr_link_issue_credit_CT(core, out_link, in_link->credit_stored, in_link->drain_mode);
-        in_link->credit_stored = 0;
-    }
-}
-
-
 //==================================================================================
 // In-Thread API Functions
 //==================================================================================
 
-qdr_forwarder_t *qdr_new_forwarder(qdr_forward_message_t fm, qdr_forward_attach_t fa, bool bypass_valid_origins)
+qdr_forwarder_t *qdr_new_forwarder(qdr_forward_message_t fm, bool bypass_valid_origins)
 {
     qdr_forwarder_t *forw = NEW(qdr_forwarder_t);
 
     forw->forward_message      = fm ? fm : qdr_forward_message_null_CT;
-    forw->forward_attach       = fa ? fa : qdr_forward_attach_null_CT;
     forw->bypass_valid_origins = bypass_valid_origins;
 
     return forw;
@@ -1090,21 +944,16 @@ void qdr_forwarder_setup_CT(qdr_core_t *core)
     //
     // Create message forwarders
     //
-    core->forwarders[QD_TREATMENT_MULTICAST_FLOOD]  = qdr_new_forwarder(qdr_forward_multicast_CT, 0, true);
-    core->forwarders[QD_TREATMENT_MULTICAST_ONCE]   = qdr_new_forwarder(qdr_forward_multicast_CT, 0, false);
-    core->forwarders[QD_TREATMENT_ANYCAST_CLOSEST]  = qdr_new_forwarder(qdr_forward_closest_CT,   0, false);
-    core->forwarders[QD_TREATMENT_ANYCAST_BALANCED] = qdr_new_forwarder(qdr_forward_balanced_CT,  0, false);
-
-    //
-    // Create link forwarders
-    //
-    core->forwarders[QD_TREATMENT_LINK_BALANCED] = qdr_new_forwarder(0, qdr_forward_link_balanced_CT, false);
+    core->forwarders[QD_TREATMENT_MULTICAST_FLOOD]  = qdr_new_forwarder(qdr_forward_multicast_CT, true);
+    core->forwarders[QD_TREATMENT_MULTICAST_ONCE]   = qdr_new_forwarder(qdr_forward_multicast_CT, false);
+    core->forwarders[QD_TREATMENT_ANYCAST_CLOSEST]  = qdr_new_forwarder(qdr_forward_closest_CT,   false);
+    core->forwarders[QD_TREATMENT_ANYCAST_BALANCED] = qdr_new_forwarder(qdr_forward_balanced_CT,  false);
 }
 
 
 qdr_forwarder_t *qdr_forwarder_CT(qdr_core_t *core, qd_address_treatment_t treatment)
 {
-    if (treatment <= QD_TREATMENT_LINK_BALANCED)
+    if (treatment <= QD_TREATMENT_ANYCAST_BALANCED)
         return core->forwarders[treatment];
     return 0;
 }
@@ -1117,14 +966,5 @@ int qdr_forward_message_CT(qdr_core_t *core, qdr_address_t *addr, qd_message_t *
     if (addr->forwarder)
         fanout = addr->forwarder->forward_message(core, addr, msg, in_delivery, exclude_inprocess, control);
     return fanout;
-}
-
-
-bool qdr_forward_attach_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *in_link,
-                           qdr_terminus_t *source, qdr_terminus_t *target)
-{
-    if (addr->forwarder)
-        return addr->forwarder->forward_attach(core, addr, in_link, source, target);
-    return false;
 }
 

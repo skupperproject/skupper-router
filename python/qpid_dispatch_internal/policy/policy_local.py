@@ -52,7 +52,6 @@ class PolicyKeys:
     KW_ALLOW_DYNAMIC_SRC         = "allowDynamicSource"
     KW_ALLOW_ANONYMOUS_SENDER    = "allowAnonymousSender"
     KW_ALLOW_USERID_PROXY        = "allowUserIdProxy"
-    KW_ALLOW_DYNAMIC_LINK_ROUTES = "allowDynamicLinkRoutes"
     KW_ALLOW_ADMIN_STATUS_UPDATE = "allowAdminStatusUpdate"
     KW_SOURCES                   = "sources"
     KW_TARGETS                   = "targets"
@@ -136,7 +135,6 @@ class PolicyCompiler:
         PolicyKeys.KW_ALLOW_DYNAMIC_SRC,
         PolicyKeys.KW_ALLOW_ANONYMOUS_SENDER,
         PolicyKeys.KW_ALLOW_USERID_PROXY,
-        PolicyKeys.KW_ALLOW_DYNAMIC_LINK_ROUTES,
         PolicyKeys.KW_ALLOW_ADMIN_STATUS_UPDATE,
         PolicyKeys.KW_SOURCES,
         PolicyKeys.KW_TARGETS,
@@ -241,7 +239,6 @@ class PolicyCompiler:
         policy_out[PolicyKeys.KW_ALLOW_DYNAMIC_SRC] = False
         policy_out[PolicyKeys.KW_ALLOW_ANONYMOUS_SENDER] = False
         policy_out[PolicyKeys.KW_ALLOW_USERID_PROXY] = False
-        policy_out[PolicyKeys.KW_ALLOW_DYNAMIC_LINK_ROUTES] = True
         policy_out[PolicyKeys.KW_ALLOW_ADMIN_STATUS_UPDATE] = True
         policy_out[PolicyKeys.KW_SOURCES] = ''
         policy_out[PolicyKeys.KW_TARGETS] = ''
@@ -290,7 +287,6 @@ class PolicyCompiler:
             elif key in [PolicyKeys.KW_ALLOW_ANONYMOUS_SENDER,
                          PolicyKeys.KW_ALLOW_DYNAMIC_SRC,
                          PolicyKeys.KW_ALLOW_USERID_PROXY,
-                         PolicyKeys.KW_ALLOW_DYNAMIC_LINK_ROUTES,
                          PolicyKeys.KW_ALLOW_ADMIN_STATUS_UPDATE
                          ]:
                 if isinstance(val, str) and val.lower() in ['true', 'false']:

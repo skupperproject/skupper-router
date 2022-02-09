@@ -105,7 +105,7 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     qd_dispatch_set_router_area(qd, strdup("0"));
     qd_dispatch_set_router_id(qd, strdup("0"));
     qd->router_mode = QD_ROUTER_MODE_ENDPOINT;
-    qd->default_treatment   = QD_TREATMENT_LINK_BALANCED;
+    qd->default_treatment   = QD_TREATMENT_ANYCAST_BALANCED;
     qd->test_hooks          = test_hooks;
 
     qd_python_initialize(qd, python_pkgdir);
@@ -213,7 +213,6 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     }
 
     qd->thread_count = qd_entity_opt_long(entity, "workerThreads", 4); QD_ERROR_RET();
-    qd->allow_resumable_link_route = qd_entity_opt_bool(entity, "allowResumableLinkRoute", true); QD_ERROR_RET();
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
     qd->metadata = qd_entity_opt_string(entity, "metadata", 0); QD_ERROR_RET();
@@ -238,12 +237,6 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
 qd_error_t qd_dispatch_configure_address(qd_dispatch_t *qd, qd_entity_t *entity) {
     if (!qd->router) return qd_error(QD_ERROR_NOT_FOUND, "No router available");
     qd_router_configure_address(qd->router, entity);
-    return qd_error_code();
-}
-
-qd_error_t qd_dispatch_configure_link_route(qd_dispatch_t *qd, qd_entity_t *entity) {
-    if (!qd->router) return qd_error(QD_ERROR_NOT_FOUND, "No router available");
-    qd_router_configure_link_route(qd->router, entity);
     return qd_error_code();
 }
 

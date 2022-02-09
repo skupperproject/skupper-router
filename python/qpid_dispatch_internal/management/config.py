@@ -67,8 +67,6 @@ class Config:
             s[1] = dict((camelcase(k), v) for k, v in s[1].items())
             if s[0] == "address":
                 s[0] = "router.config.address"
-            if s[0] == "linkRoute":
-                s[0] = "router.config.linkRoute"
             if s[0] == "autoLink":
                 s[0] = "router.config.autoLink"
             if s[0] == "exchange":
@@ -317,7 +315,7 @@ def configure_dispatch(dispatch, lib_handle, filename):
 
     # Configure a block of types
     for t in "sslProfile", "authServicePlugin", \
-             "router.config.address", "router.config.linkRoute", "router.config.autoLink", \
+             "router.config.address", "router.config.autoLink", \
              "router.config.exchange", "router.config.binding", \
              "vhost", "httpListener", "httpConnector", "tcpListener", "tcpConnector":
         for a in config.by_type(t):

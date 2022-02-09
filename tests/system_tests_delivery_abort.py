@@ -23,7 +23,7 @@ from proton.reactor import Container
 
 from qpid_dispatch_internal.compat import BINARY
 
-from system_test import Logger, TestCase, Qdrouterd, main_module, unittest, TIMEOUT, TestTimeout, PollTimeout
+from system_test import Logger, TestCase, Qdrouterd, main_module, unittest, TIMEOUT, TestTimeout
 
 
 class RouterTest(TestCase):
@@ -41,8 +41,6 @@ class RouterTest(TestCase):
                 ('router', {'mode': 'interior', 'id': name}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no', 'role': 'route-container'}),
-                ('linkRoute', {'prefix': 'link', 'direction': 'in', 'containerId': 'LRC'}),
-                ('linkRoute', {'prefix': 'link', 'direction': 'out', 'containerId': 'LRC'}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
@@ -74,22 +72,6 @@ class RouterTest(TestCase):
         test = MessageRouteTruncateTest(self.routers[0].addresses[0],
                                         self.routers[1].addresses[0],
                                         "addr_02")
-        test.run()
-        self.assertIsNone(test.error)
-
-    def test_03_link_route_truncated_one_router(self):
-        test = LinkRouteTruncateTest(self.routers[0].addresses[0],
-                                     self.routers[0].addresses[1],
-                                     "link.addr_03",
-                                     self.routers[0].addresses[0])
-        test.run()
-        self.assertIsNone(test.error)
-
-    def test_04_link_route_truncated_two_routers(self):
-        test = LinkRouteTruncateTest(self.routers[1].addresses[0],
-                                     self.routers[0].addresses[1],
-                                     "link.addr_04",
-                                     self.routers[1].addresses[0])
         test.run()
         self.assertIsNone(test.error)
 
@@ -246,125 +228,6 @@ class MessageRouteTruncateTest(MessagingHandler):
 
     def run(self):
         Container(self).run()
-
-
-class LinkRouteTruncateTest(MessagingHandler):
-    def __init__(self, sender_host, receiver_host, address, query_host):
-        super(LinkRouteTruncateTest, self).__init__()
-        self.sender_host      = sender_host
-        self.receiver_host    = receiver_host
-        self.address          = address
-        self.query_host       = query_host
-
-        self.sender_conn   = None
-        self.receiver_conn = None
-        self.query_conn    = None
-        self.error         = None
-        self.sender1       = None
-        self.receiver      = None
-        self.poll_timer    = None
-        self.streaming     = False
-        self.delivery      = None
-        self.data          = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
-        self.long_data     = ""
-
-        self.sent_stream   = 0
-        self.program       = ['Send_Short_1', 'Send_Long_Truncated']
-        self.result        = []
-        self.expected_result = ['Send_Short_1', 'Aborted_Delivery']
-
-    def timeout(self):
-        self.error = "Timeout Expired - Unprocessed Ops: %r, Result: %r" % (self.program, self.result)
-        self.sender_conn.close()
-        self.receiver_conn.close()
-        self.query_conn.close()
-        if self.poll_timer:
-            self.poll_timer.cancel()
-
-    def on_start(self, event):
-        self.timer          = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.sender_conn    = event.container.connect(self.sender_host)
-        self.receiver_conn  = event.container.connect(self.receiver_host)
-        self.query_conn     = event.container.connect(self.query_host)
-        self.reply_receiver = event.container.create_receiver(self.query_conn, dynamic=True)
-        self.agent_sender   = event.container.create_sender(self.query_conn, "$management")
-
-    def setup_first_links(self, event):
-        self.sender1 = event.container.create_sender(self.sender_conn, self.address, name="S1")
-
-    def stream(self):
-        self.sender1.stream(BINARY(self.long_data))
-        self.sent_stream += len(self.long_data)
-        if self.sent_stream >= 1000000:
-            self.streaming = False
-            self.sender1.close()
-
-    def send(self):
-        next_op = self.program.pop(0) if len(self.program) > 0 else None
-        if next_op == 'Send_Short_1':
-            m = Message(body="%s" % next_op)
-            self.sender1.send(m)
-        elif next_op == 'Send_Long_Truncated':
-            for i in range(100):
-                self.long_data += self.data
-            self.delivery  = self.sender1.delivery(self.sender1.delivery_tag())
-            self.streaming = True
-            self.stream()
-
-    def poll_timeout(self):
-        self.poll()
-
-    def poll(self):
-        request = self.proxy.read_address('Clink')
-        self.agent_sender.send(request)
-
-    def on_sendable(self, event):
-        if event.sender == self.sender1 and len(self.program) > 0 and self.program[0] == 'Send_Short_1':
-            self.send()
-        if event.sender == self.sender1 and self.streaming:
-            self.stream()
-
-    def on_link_opening(self, event):
-        if event.receiver:
-            self.receiver = event.receiver
-            event.receiver.target.address = self.address
-            event.receiver.open()
-
-    def on_link_opened(self, event):
-        if event.receiver == self.reply_receiver:
-            self.proxy = RouterProxy(self.reply_receiver.remote_source.address)
-            self.poll()
-
-    def on_message(self, event):
-        if event.receiver == self.reply_receiver:
-            response = self.proxy.response(event.message)
-            if response.status_code == 200 and (response.remoteCount + response.containerCount) > 0:
-                if self.poll_timer:
-                    self.poll_timer.cancel()
-                    self.poll_timer = None
-                self.setup_first_links(event)
-            else:
-                self.poll_timer = event.reactor.schedule(0.25, PollTimeout(self))
-            return
-
-        m = event.message
-        self.result.append(m.body)
-        if m.body == 'Send_Short_1':
-            self.send()
-
-    def on_aborted(self, event):
-        self.result.append('Aborted_Delivery')
-        if self.result != self.expected_result:
-            self.error = "Expected: %r, Actual: %r" % (self.expected_result, self.result)
-        self.sender_conn.close()
-        self.receiver_conn.close()
-        self.query_conn.close()
-        self.timer.cancel()
-
-    def run(self):
-        container = Container(self)
-        container.container_id = "LRC"
-        container.run()
 
 
 class MessageRouteAbortTest(MessagingHandler):
