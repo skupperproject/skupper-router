@@ -631,13 +631,11 @@ class Qdrouterd(Process):
         except:
             return False
 
-    def wait_address(self, address, subscribers=0, remotes=0, containers=0,
-                     count=1, **retry_kwargs):
+    def wait_address(self, address, subscribers=0, remotes=0, count=1, **retry_kwargs):
         """
         Wait for an address to be visible on the router.
         @keyword subscribers: Wait till subscriberCount >= subscribers
         @keyword remotes: Wait till remoteCount >= remotes
-        @keyword containers: Wait till containerCount >= remotes
         @keyword count: Wait until >= count matching addresses are found
         @param retry_kwargs: keyword args for L{retry}
         """
@@ -647,14 +645,13 @@ class Qdrouterd(Process):
             # endswith check is because of M/L/R prefixes
             addrs = self.management.query(
                 type='org.apache.qpid.dispatch.router.address',
-                attribute_names=['name', 'subscriberCount', 'remoteCount', 'containerCount']).get_entities()
+                attribute_names=['name', 'subscriberCount', 'remoteCount']).get_entities()
 
             addrs = [a for a in addrs if a['name'].endswith(address)]
 
             return (len(addrs) >= count
                     and addrs[0]['subscriberCount'] >= subscribers
-                    and addrs[0]['remoteCount'] >= remotes
-                    and addrs[0]['containerCount'] >= containers)
+                    and addrs[0]['remoteCount'] >= remotes)
         assert retry(check, **retry_kwargs)
 
     def wait_address_unsubscribed(self, address, **retry_kwargs):
@@ -670,7 +667,6 @@ class Qdrouterd(Process):
             for a in rc:
                 count += a['subscriberCount']
                 count += a['remoteCount']
-                count += a['containerCount']
 
             return count == 0
         assert retry(check, **retry_kwargs)
@@ -1244,27 +1240,9 @@ class MgmtMsgProxy:
         ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router.link'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
-    def query_link_routes(self):
-        ap = {'operation': 'QUERY',
-              'type': 'org.apache.qpid.dispatch.router.config.linkRoute'}
-        return Message(properties=ap, reply_to=self.reply_addr)
-
     def query_addresses(self):
         ap = {'operation': 'QUERY',
               'type': 'org.apache.qpid.dispatch.router.address'}
-        return Message(properties=ap, reply_to=self.reply_addr)
-
-    def create_link_route(self, name, kwargs):
-        ap = {'operation': 'CREATE',
-              'type': 'org.apache.qpid.dispatch.router.config.linkRoute',
-              'name': name}
-        return Message(properties=ap, reply_to=self.reply_addr,
-                       body=kwargs)
-
-    def delete_link_route(self, name):
-        ap = {'operation': 'DELETE',
-              'type': 'org.apache.qpid.dispatch.router.config.linkRoute',
-              'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def create_connector(self, name, **kwargs):
@@ -1277,30 +1255,6 @@ class MgmtMsgProxy:
     def delete_connector(self, name):
         ap = {'operation': 'DELETE',
               'type': 'org.apache.qpid.dispatch.connector',
-              'name': name}
-        return Message(properties=ap, reply_to=self.reply_addr)
-
-    def query_conn_link_routes(self):
-        ap = {'operation': 'QUERY',
-              'type': 'org.apache.qpid.dispatch.router.connection.linkRoute'}
-        return Message(properties=ap, reply_to=self.reply_addr)
-
-    def create_conn_link_route(self, name, kwargs):
-        ap = {'operation': 'CREATE',
-              'type': 'org.apache.qpid.dispatch.router.connection.linkRoute',
-              'name': name}
-        return Message(properties=ap, reply_to=self.reply_addr,
-                       body=kwargs)
-
-    def delete_conn_link_route(self, name):
-        ap = {'operation': 'DELETE',
-              'type': 'org.apache.qpid.dispatch.router.connection.linkRoute',
-              'name': name}
-        return Message(properties=ap, reply_to=self.reply_addr)
-
-    def read_conn_link_route(self, name):
-        ap = {'operation': 'READ',
-              'type': 'org.apache.qpid.dispatch.router.connection.linkRoute',
               'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 

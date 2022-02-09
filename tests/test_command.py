@@ -53,7 +53,6 @@ class FakeBusManager:
     def displayVhostgroups(self): pass
     def displayVhoststats(self): pass
     def displayAutolinks(self): pass
-    def displayLinkRoutes(self): pass
     def displayLog(self): pass
     def show_all(self): pass
 
@@ -70,7 +69,7 @@ class TestParseArgsQdstat(unittest.TestCase):
 
     def test_parse_args_qdstat_mutually_exclusive(self):
         options1 = ["-g", "-c",
-                    "-l", "-n", "-e", "-a", "-m", "--autolinks", "--linkroutes", "--log",
+                    "-l", "-n", "-e", "-a", "-m", "--autolinks", "--log",
                     "--all-entities"]
         options2 = ["-r", "--all-routers"]
 
@@ -95,7 +94,6 @@ class TestParseArgsQdstat(unittest.TestCase):
                     ("-a", FBM.displayAddresses.__name__),
                     ("-m", FBM.displayMemory.__name__),
                     ("--autolinks", FBM.displayAutolinks.__name__),
-                    ("--linkroutes", FBM.displayLinkRoutes.__name__),
                     ("--log", FBM.displayLog.__name__),
                     ("--all-entities", FBM.show_all.__name__),
                     ]

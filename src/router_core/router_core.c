@@ -152,32 +152,13 @@ void qdr_core_free(qdr_core_t *core)
     //
     // Free the core resources
     //
-    for (int i = 0; i <= QD_TREATMENT_LINK_BALANCED; ++i) {
+    for (int i = 0; i <= QD_TREATMENT_ANYCAST_BALANCED; ++i) {
         if (core->forwarders[i]) {
             free(core->forwarders[i]);
         }
     }
 
-    qdr_link_route_t *link_route = 0;
-    while ( (link_route = DEQ_HEAD(core->link_routes))) {
-        DEQ_REMOVE_HEAD(core->link_routes);
-        qdr_core_delete_link_route(core, link_route);
-    }
-
-    //
-    // The connection based link routes need to be removed before we call
-    // qdr_core_remove_address(addr) on all core->addrs
-    //
-    qdr_connection_t *conn = DEQ_HEAD(core->open_connections);
-    while (conn) {
-        while ((link_route = DEQ_HEAD(conn->conn_link_routes))) {
-            DEQ_REMOVE_HEAD(conn->conn_link_routes);
-            qdr_core_delete_link_route(core, link_route);
-        }
-        conn = DEQ_NEXT(conn);
-    }
-
-    qdr_auto_link_t *auto_link = 0;
+   qdr_auto_link_t *auto_link = 0;
     while ( (auto_link = DEQ_HEAD(core->auto_links))) {
         DEQ_REMOVE_HEAD(core->auto_links);
         qdr_core_delete_auto_link(core, auto_link);
@@ -196,8 +177,6 @@ void qdr_core_free(qdr_core_t *core)
     qd_hash_free(core->addr_lr_al_hash);
 
     qd_parse_tree_free(core->addr_parse_tree);
-    qd_parse_tree_free(core->link_route_tree[QD_INCOMING]);
-    qd_parse_tree_free(core->link_route_tree[QD_OUTGOING]);
 
     qdr_node_t *rnode = 0;
     while ( (rnode = DEQ_HEAD(core->routers)) ) {
@@ -287,7 +266,7 @@ void qdr_core_free(qdr_core_t *core)
         cleanup = DEQ_HEAD(core->delivery_cleanup_list);
     }
 
-    conn = DEQ_HEAD(core->open_connections);
+    qdr_connection_t *conn = DEQ_HEAD(core->open_connections);
     while (conn) {
         DEQ_REMOVE_HEAD(core->open_connections);
 
@@ -563,27 +542,6 @@ bool qdr_is_addr_treatment_multicast(qdr_address_t *addr)
     return false;
 }
 
-void qdr_core_delete_link_route(qdr_core_t *core, qdr_link_route_t *lr)
-{
-    if (lr->conn_id) {
-        DEQ_REMOVE_N(REF, lr->conn_id->link_route_refs, lr);
-        qdr_route_check_id_for_deletion_CT(core, lr->conn_id);
-    }
-
-    if (lr->addr) {
-        if (--lr->addr->ref_count == 0) {
-            qdr_check_addr_CT(core, lr->addr);
-        }
-    }
-
-    free(lr->add_prefix);
-    free(lr->del_prefix);
-    free(lr->name);
-    free(lr->pattern);
-    qd_hash_handle_free(lr->hash_handle);
-    free_qdr_link_route_t(lr);
-}
-
 void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al)
 {
     if (al->conn_id) {
@@ -619,12 +577,6 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
     // Remove the address from the list, hash index, and parse tree
     DEQ_REMOVE(core->addrs, addr);
     if (addr->hash_handle) {
-        const char *a_str = (const char *)qd_hash_key_by_handle(addr->hash_handle);
-        if (a_str && QDR_IS_LINK_ROUTE(a_str[0])) {
-            qd_iterator_t *iter = qd_iterator_string(a_str, ITER_VIEW_ALL);
-            qdr_link_route_unmap_pattern_CT(core, iter);
-            qd_iterator_free(iter);
-        }
         qd_hash_remove_by_handle(core->addr_hash, addr->hash_handle);
         qd_hash_handle_free(addr->hash_handle);
     }
@@ -647,12 +599,6 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
     }
     else if (addr->treatment == QD_TREATMENT_ANYCAST_BALANCED) {
         free(addr->outstanding_deliveries);
-    }
-
-    qdr_connection_ref_t *cr = DEQ_HEAD(addr->conns);
-    while (cr) {
-        qdr_del_connection_ref(&addr->conns, cr->conn);
-        cr = DEQ_HEAD(addr->conns);
     }
 
     free(addr->add_prefix);
@@ -719,24 +665,6 @@ void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_
             else if (DEQ_SIZE(addr->inlinks) == 1)
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ONE_SOURCE, addr);
         }
-    }
-}
-
-
-void qdr_core_bind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn)
-{
-    qdr_add_connection_ref(&addr->conns, conn);
-    if (DEQ_SIZE(addr->conns) == 1) {
-        qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_BECAME_LOCAL_DEST, addr);
-    }
-}
-
-
-void qdr_core_unbind_address_conn_CT(qdr_core_t *core, qdr_address_t *addr, qdr_connection_t *conn)
-{
-    qdr_del_connection_ref(&addr->conns, conn);
-    if (DEQ_IS_EMPTY(addr->conns)) {
-        qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST, addr);
     }
 }
 
@@ -929,7 +857,6 @@ static void qdr_global_stats_request_CT(qdr_core_t *core, qdr_action_t *action, 
         stats->links = DEQ_SIZE(core->open_links);
         stats->routers = DEQ_SIZE(core->routers);
         stats->connections = DEQ_SIZE(core->open_connections);
-        stats->link_routes = DEQ_SIZE(core->link_routes);
         stats->auto_links = DEQ_SIZE(core->auto_links);
         stats->presettled_deliveries = core->presettled_deliveries;
         stats->dropped_presettled_deliveries = core->dropped_presettled_deliveries;

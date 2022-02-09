@@ -454,14 +454,6 @@ class AddressEntity(EntityAdapter):
         return super(AddressEntity, self).__str__().replace("Entity(", "AddressEntity(")
 
 
-class LinkRouteEntity(EntityAdapter):
-    def create(self):
-        self._qd.qd_dispatch_configure_link_route(self._dispatch, self)
-
-    def __str__(self):
-        return super(LinkRouteEntity, self).__str__().replace("Entity(", "LinkRouteEntity(")
-
-
 class AutoLinkEntity(EntityAdapter):
     def create(self):
         self._qd.qd_dispatch_configure_auto_link(self._dispatch, self)

@@ -516,7 +516,6 @@ static int stats_get_connections(qdr_global_stats_t *stats) { return stats->conn
 static int stats_get_links(qdr_global_stats_t *stats) { return stats->links; }
 static int stats_get_addrs(qdr_global_stats_t *stats) { return stats->addrs; }
 static int stats_get_routers(qdr_global_stats_t *stats) { return stats->routers; }
-static int stats_get_link_routes(qdr_global_stats_t *stats) { return stats->link_routes; }
 static int stats_get_auto_links(qdr_global_stats_t *stats) { return stats->auto_links; }
 static int stats_get_presettled_deliveries(qdr_global_stats_t *stats) { return stats->presettled_deliveries; }
 static int stats_get_dropped_presettled_deliveries(qdr_global_stats_t *stats) { return stats->dropped_presettled_deliveries; }
@@ -577,7 +576,6 @@ static struct metric_definition metrics[] = {
     {"qdr_links_total", "gauge", stats_get_links},
     {"qdr_addresses_total", "gauge", stats_get_addrs},
     {"qdr_routers_total", "gauge", stats_get_routers},
-    {"qdr_link_routes_total", "gauge", stats_get_link_routes},
     {"qdr_auto_links_total", "gauge", stats_get_auto_links},
     {"qdr_presettled_deliveries_total", "counter", stats_get_presettled_deliveries},
     {"qdr_dropped_presettled_deliveries_total", "counter", stats_get_dropped_presettled_deliveries},

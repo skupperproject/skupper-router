@@ -36,7 +36,7 @@ DUMMY = "org.apache.qpid.dispatch.dummy"
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
-TOTAL_ENTITIES = 31   # for tests that check the total # of entities
+TOTAL_ENTITIES = 29   # for tests that check the total # of entities
 
 
 class QdmanageTest(TestCase):
@@ -63,7 +63,6 @@ class QdmanageTest(TestCase):
 
             ('connector', {'role': 'inter-router', 'port': cls.inter_router_port}),
             ('address', {'name': 'test-address', 'prefix': 'abcd', 'distribution': 'multicast'}),
-            ('linkRoute', {'name': 'test-link-route', 'prefix': 'xyz', 'direction': 'in'}),
             ('autoLink', {'name': 'test-auto-link', 'address': 'mnop', 'direction': 'out'}),
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl'}),
             ('address', {'name': 'pattern-address', 'pattern': 'a/*/b/#/c', 'distribution': 'closest'}),
@@ -210,10 +209,6 @@ class QdmanageTest(TestCase):
 
     def test_get_attributes(self):
         out = json.loads(self.run_qdmanage("get-attributes"))
-        self.assertEqual(len(out), 28)
-
-    def test_get_attributes(self):
-        out = json.loads(self.run_qdmanage("get-attributes"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
 
     def test_get_operations(self):
@@ -325,20 +320,6 @@ class QdmanageTest(TestCase):
         output = json.loads(self.run_qdmanage(create_command))
         self.assertEqual(output['pattern'], '"a.b.#"')
 
-    def test_check_link_route_name(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
-        query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
-        self.assertEqual(output[0]['name'], "test-link-route")
-        self.assertEqual(output[0]['direction'], "in")
-        self.assertEqual(output[0]['prefix'], "xyz")
-
-    def test_specify_container_id_connection_link_route(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
-        create_command = 'CREATE --type=' + long_type + ' prefix=abc containerId=id1 connection=conn1 direction=out'
-        output = self.run_qdmanage(create_command, expect=Process.EXIT_FAIL)
-        self.assertIn("Both connection and containerId cannot be specified", output)
-
     def test_check_auto_link_name(self):
         long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
         query_command = 'QUERY --type=' + long_type
@@ -346,12 +327,6 @@ class QdmanageTest(TestCase):
         self.assertEqual(output[0]['name'], "test-auto-link")
         self.assertEqual(output[0]['direction'], "out")
         self.assertEqual(output[0]['addr'], "mnop")
-
-    def test_create_link_route_with_dir(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
-        create_command = 'CREATE --type=' + long_type + ' pattern=mnb direction=out'
-        output = json.loads(self.run_qdmanage(create_command))
-        self.assertEqual(output['direction'], 'out')
 
     def test_specify_container_id_connection_auto_link(self):
         long_type = 'org.apache.qpid.dispatch.router.config.autoLink'

@@ -68,8 +68,6 @@ class DrainSupportTest(TestCase):
             ('connector', {'name': 'broker1-conn', 'role': 'route-container',
                            'host': '0.0.0.0', 'port': broker_listener_port,
                            'saslMechanisms': 'ANONYMOUS'}),
-            ('linkRoute', {'prefix': 'abc', 'direction': 'out', 'connection': 'broker1-conn'}),
-            ('linkRoute', {'prefix': 'abc', 'direction': 'in', 'connection': 'broker1-conn'}),
         ])
 
         cls.router = cls.tester.qdrouterd(name, config, wait=False)
@@ -99,11 +97,6 @@ class DrainSupportTest(TestCase):
 
     def test_drain_support_5_drain_then_more_messages_local(self):
         drain_support = DrainMessagesMoreHandler(self.address, "org.apache.dev")
-        drain_support.run()
-        self.assertEqual(drain_support.error, None)
-
-    def test_drain_support_5_drain_then_more_messages_routed(self):
-        drain_support = DrainMessagesMoreHandler(self.address, "abc")
         drain_support.run()
         self.assertEqual(drain_support.error, None)
 

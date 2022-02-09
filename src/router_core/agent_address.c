@@ -29,19 +29,18 @@
 #define QDR_ADDRESS_IN_PROCESS                          5
 #define QDR_ADDRESS_SUBSCRIBER_COUNT                    6
 #define QDR_ADDRESS_REMOTE_COUNT                        7
-#define QDR_ADDRESS_CONTAINER_COUNT                     8
-#define QDR_ADDRESS_REMOTE_HOST_ROUTERS                 9
-#define QDR_ADDRESS_DELIVERIES_INGRESS                 10
-#define QDR_ADDRESS_DELIVERIES_EGRESS                  11
-#define QDR_ADDRESS_DELIVERIES_TRANSIT                 12
-#define QDR_ADDRESS_DELIVERIES_TO_CONTAINER            13
-#define QDR_ADDRESS_DELIVERIES_FROM_CONTAINER          14
-#define QDR_ADDRESS_DELIVERIES_EGRESS_ROUTE_CONTAINER  15
-#define QDR_ADDRESS_DELIVERIES_INGRESS_ROUTE_CONTAINER 16
-#define QDR_ADDRESS_TRANSIT_OUTSTANDING                17
-#define QDR_ADDRESS_TRACKED_DELIVERIES                 18
-#define QDR_ADDRESS_PRIORITY                           19
-#define QDR_ADDRESS_DELIVERIES_REDIRECTED              20
+#define QDR_ADDRESS_REMOTE_HOST_ROUTERS                 8
+#define QDR_ADDRESS_DELIVERIES_INGRESS                  9
+#define QDR_ADDRESS_DELIVERIES_EGRESS                  10
+#define QDR_ADDRESS_DELIVERIES_TRANSIT                 11
+#define QDR_ADDRESS_DELIVERIES_TO_CONTAINER            12
+#define QDR_ADDRESS_DELIVERIES_FROM_CONTAINER          13
+#define QDR_ADDRESS_DELIVERIES_EGRESS_ROUTE_CONTAINER  14
+#define QDR_ADDRESS_DELIVERIES_INGRESS_ROUTE_CONTAINER 15
+#define QDR_ADDRESS_TRANSIT_OUTSTANDING                16
+#define QDR_ADDRESS_TRACKED_DELIVERIES                 17
+#define QDR_ADDRESS_PRIORITY                           18
+#define QDR_ADDRESS_DELIVERIES_REDIRECTED              19
 
 const char *qdr_address_columns[] =
     {"name",
@@ -52,7 +51,6 @@ const char *qdr_address_columns[] =
      "inProcess",
      "subscriberCount",
      "remoteCount",
-     "containerCount",
      "remoteHostRouters",
      "deliveriesIngress",
      "deliveriesEgress",
@@ -93,7 +91,6 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
             case QD_TREATMENT_MULTICAST_ONCE:   qd_compose_insert_string(body, "multicast");    break;
             case QD_TREATMENT_ANYCAST_CLOSEST:  qd_compose_insert_string(body, "closest");      break;
             case QD_TREATMENT_ANYCAST_BALANCED: qd_compose_insert_string(body, "balanced");     break;
-            case QD_TREATMENT_LINK_BALANCED:    qd_compose_insert_string(body, "linkBalanced"); break;
             case QD_TREATMENT_UNAVAILABLE:      qd_compose_insert_string(body, "unavailable");  break;
         }
         break;
@@ -109,10 +106,6 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
 
     case QDR_ADDRESS_REMOTE_COUNT:
         qd_compose_insert_uint(body, qd_bitmask_cardinality(addr->rnodes));
-        break;
-
-    case QDR_ADDRESS_CONTAINER_COUNT:
-        qd_compose_insert_uint(body, DEQ_SIZE(addr->conns));
         break;
 
     case QDR_ADDRESS_REMOTE_HOST_ROUTERS: {

@@ -13,7 +13,7 @@
 2018-10-15 10:57:32.152471 -0400 AGENT (debug) Add entity: LogEntity(identity=log/ROUTER_CORE, module=ROUTER_CORE, name=log/ROUTER_CORE, type=org.apache.qpid.dispatch.log)
 2018-10-15 10:57:32.152716 -0400 AGENT (debug) Add entity: LogEntity(identity=log/ROUTER, module=ROUTER, name=log/ROUTER, type=org.apache.qpid.dispatch.log)
 2018-10-15 10:57:32.152958 -0400 AGENT (debug) Add entity: LogEntity(identity=log/AUTHSERVICE, module=AUTHSERVICE, name=log/AUTHSERVICE, type=org.apache.qpid.dispatch.log)
-2018-10-15 10:57:32.336561 -0400 AGENT (debug) Add entity: RouterEntity(allowResumableLinkRoute=True, allowUnsettledMulticast=False, area=0, defaultDistribution=balanced, helloIntervalSeconds=1, helloMaxAgeSeconds=3, hostName=taj.localdomain, id=central-qdr-green, mode=interior, raIntervalFluxSeconds=4, raIntervalSeconds=30, remoteLsMaxAgeSeconds=60, saslConfigName=qdrouterd, type=org.apache.qpid.dispatch.router, workerThreads=4)
+2018-10-15 10:57:32.336561 -0400 AGENT (debug) Add entity: RouterEntity(allowUnsettledMulticast=False, area=0, defaultDistribution=balanced, helloIntervalSeconds=1, helloMaxAgeSeconds=3, hostName=taj.localdomain, id=central-qdr-green, mode=interior, raIntervalFluxSeconds=4, raIntervalSeconds=30, remoteLsMaxAgeSeconds=60, saslConfigName=qdrouterd, type=org.apache.qpid.dispatch.router, workerThreads=4)
 2018-10-15 10:57:32.337966 -0400 SERVER (warning) HTTP support is not available
 2018-10-15 10:57:32.338005 -0400 SERVER (info) Container Name: central-qdr-green
 2018-10-15 10:57:32.338082 -0400 CONTAINER (trace) Container Initialized
@@ -59,7 +59,7 @@
 2018-10-15 10:59:07.457704 -0400 AGENT (debug) Add entity: LogEntity(identity=log/ROUTER_CORE, module=ROUTER_CORE, name=log/ROUTER_CORE, type=org.apache.qpid.dispatch.log)
 2018-10-15 10:59:07.457951 -0400 AGENT (debug) Add entity: LogEntity(identity=log/ROUTER, module=ROUTER, name=log/ROUTER, type=org.apache.qpid.dispatch.log)
 2018-10-15 10:59:07.458187 -0400 AGENT (debug) Add entity: LogEntity(identity=log/AUTHSERVICE, module=AUTHSERVICE, name=log/AUTHSERVICE, type=org.apache.qpid.dispatch.log)
-2018-10-15 10:59:07.583032 -0400 AGENT (debug) Add entity: RouterEntity(allowResumableLinkRoute=True, allowUnsettledMulticast=False, area=0, defaultDistribution=balanced, helloIntervalSeconds=1, helloMaxAgeSeconds=3, hostName=taj.localdomain, id=central-qdr-green, mode=interior, raIntervalFluxSeconds=4, raIntervalSeconds=30, remoteLsMaxAgeSeconds=60, saslConfigName=qdrouterd, type=org.apache.qpid.dispatch.router, workerThreads=4)
+2018-10-15 10:59:07.583032 -0400 AGENT (debug) Add entity: RouterEntity(allowUnsettledMulticast=False, area=0, defaultDistribution=balanced, helloIntervalSeconds=1, helloMaxAgeSeconds=3, hostName=taj.localdomain, id=central-qdr-green, mode=interior, raIntervalFluxSeconds=4, raIntervalSeconds=30, remoteLsMaxAgeSeconds=60, saslConfigName=qdrouterd, type=org.apache.qpid.dispatch.router, workerThreads=4)
 2018-10-15 10:59:07.584383 -0400 SERVER (warning) HTTP support is not available
 2018-10-15 10:59:07.584421 -0400 SERVER (info) Container Name: central-qdr-green
 2018-10-15 10:59:07.584498 -0400 CONTAINER (trace) Container Initialized

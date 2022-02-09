@@ -1238,11 +1238,6 @@ void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t
             work->error = qdr_error("qd:connection-role", "Link attach forbidden on inter-router connection");
             break;
 
-        case QDR_CONDITION_COORDINATOR_PRECONDITION_FAILED:
-            work->error = qdr_error(QD_AMQP_COND_PRECONDITION_FAILED, "The router can't coordinate transactions by itself, a "
-                                                            "linkRoute to a coordinator must be configured to use transactions.");
-            break;
-
         case QDR_CONDITION_INVALID_LINK_EXPIRATION:
             work->error = qdr_error("qd:link-expiration", "Requested link expiration not allowed");
             break;
@@ -1311,14 +1306,7 @@ qd_address_treatment_t qdr_treatment_for_address_hash_with_default_CT(qdr_core_t
 
     qd_iterator_strncpy(iter, copy, length + 1);
 
-    if (QDR_IS_LINK_ROUTE(copy[0]))
-        //
-        // Handle the link-route address case
-        // TODO - put link-routes into the config table with a different prefix from 'Z'
-        //
-        trt = QD_TREATMENT_LINK_BALANCED;
-
-    else if (copy[0] == QD_ITER_HASH_PREFIX_MOBILE) {
+    if (copy[0] == QD_ITER_HASH_PREFIX_MOBILE) {
         //
         // Handle the mobile address case
         //
@@ -1715,9 +1703,9 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         return;
     }
 
-    qd_direction_t  dir         = action->args.connection.dir;
-    qdr_terminus_t *source      = action->args.connection.source;
-    qdr_terminus_t *target      = action->args.connection.target;
+    qd_direction_t  dir    = action->args.connection.dir;
+    qdr_terminus_t *source = action->args.connection.source;
+    qdr_terminus_t *target = action->args.connection.target;
 
     //
     // Start the attach count.

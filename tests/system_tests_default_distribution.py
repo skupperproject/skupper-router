@@ -77,7 +77,6 @@ class DefaultDistributionTest(TestCase):
         self.assertIn("Connections                      1", out)
         self.assertIn("Nodes                            0", out)
         self.assertIn("Auto Links                       0", out)
-        self.assertIn("Link Routes                      0", out)
         self.assertIn("Router Id                        QDR", out)
         self.assertIn("Mode                             standalone", out)
 

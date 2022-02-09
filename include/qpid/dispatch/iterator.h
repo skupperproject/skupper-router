@@ -52,10 +52,6 @@ typedef struct qd_iterator_t qd_iterator_t;
 #define QD_ITER_HASH_PREFIX_AREA                  'A'
 #define QD_ITER_HASH_PREFIX_ROUTER                'R'
 #define QD_ITER_HASH_PREFIX_MOBILE                'M'
-#define QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_IN     'C'
-#define QD_ITER_HASH_PREFIX_LINKROUTE_ADDR_OUT    'D'
-#define QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_IN  'E'
-#define QD_ITER_HASH_PREFIX_LINKROUTE_PATTERN_OUT 'F'
 #define QD_ITER_HASH_PREFIX_GLOBAL_PLACEHOLDER    'G'
 #define QD_ITER_HASH_PREFIX_EDGE_SUMMARY          'H'
 

@@ -35,28 +35,27 @@
 #define QDR_ROUTER_ADDR_COUNT                          8
 #define QDR_ROUTER_LINK_COUNT                          9
 #define QDR_ROUTER_NODE_COUNT                          10
-#define QDR_ROUTER_LINK_ROUTE_COUNT                    11
-#define QDR_ROUTER_AUTO_LINK_COUNT                     12
-#define QDR_ROUTER_CONNECTION_COUNT                    13
-#define QDR_ROUTER_PRESETTLED_DELIVERIES               14
-#define QDR_ROUTER_DROPPED_PRESETTLED_DELIVERIES       15
-#define QDR_ROUTER_ACCEPTED_DELIVERIES                 16
-#define QDR_ROUTER_REJECTED_DELIVERIES                 17
-#define QDR_ROUTER_RELEASED_DELIVERIES                 18
-#define QDR_ROUTER_MODIFIED_DELIVERIES                 19
-#define QDR_ROUTER_DELAYED_1SEC                        20
-#define QDR_ROUTER_DELAYED_10SEC                       21
-#define QDR_ROUTER_DELIVERIES_STUCK                    22
-#define QDR_ROUTER_DELIVERIES_INGRESS                  23
-#define QDR_ROUTER_DELIVERIES_EGRESS                   24
-#define QDR_ROUTER_DELIVERIES_TRANSIT                  25
-#define QDR_ROUTER_DELIVERIES_INGRESS_ROUTE_CONTAINER  26
-#define QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER   27
-#define QDR_ROUTER_DELIVERIES_REDIRECTED               28
-#define QDR_ROUTER_LINKS_BLOCKED                       29
-#define QDR_ROUTER_UPTIME_SECONDS                      30
-#define QDR_ROUTER_MEMORY_USAGE                        31
-#define QDR_ROUTER_WORKER_THREADS                      32
+#define QDR_ROUTER_AUTO_LINK_COUNT                     11
+#define QDR_ROUTER_CONNECTION_COUNT                    12
+#define QDR_ROUTER_PRESETTLED_DELIVERIES               13
+#define QDR_ROUTER_DROPPED_PRESETTLED_DELIVERIES       14
+#define QDR_ROUTER_ACCEPTED_DELIVERIES                 15
+#define QDR_ROUTER_REJECTED_DELIVERIES                 16
+#define QDR_ROUTER_RELEASED_DELIVERIES                 17
+#define QDR_ROUTER_MODIFIED_DELIVERIES                 18
+#define QDR_ROUTER_DELAYED_1SEC                        19
+#define QDR_ROUTER_DELAYED_10SEC                       20
+#define QDR_ROUTER_DELIVERIES_STUCK                    21
+#define QDR_ROUTER_DELIVERIES_INGRESS                  22
+#define QDR_ROUTER_DELIVERIES_EGRESS                   23
+#define QDR_ROUTER_DELIVERIES_TRANSIT                  24
+#define QDR_ROUTER_DELIVERIES_INGRESS_ROUTE_CONTAINER  25
+#define QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER   26
+#define QDR_ROUTER_DELIVERIES_REDIRECTED               27
+#define QDR_ROUTER_LINKS_BLOCKED                       28
+#define QDR_ROUTER_UPTIME_SECONDS                      29
+#define QDR_ROUTER_MEMORY_USAGE                        30
+#define QDR_ROUTER_WORKER_THREADS                      31
 
 const char *qdr_router_columns[] =
     {"name",
@@ -70,7 +69,6 @@ const char *qdr_router_columns[] =
      "addrCount",
      "linkCount",
      "nodeCount",
-     "linkRouteCount",
      "autoLinkCount",
      "connectionCount",
      "presettledDeliveries",
@@ -155,10 +153,6 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
 
     case QDR_ROUTER_CONNECTION_COUNT:
         qd_compose_insert_ulong(body, DEQ_SIZE(core->open_connections));
-        break;
-
-    case QDR_ROUTER_LINK_ROUTE_COUNT:
-        qd_compose_insert_ulong(body, DEQ_SIZE(core->link_routes));
         break;
 
     case QDR_ROUTER_AUTO_LINK_COUNT:

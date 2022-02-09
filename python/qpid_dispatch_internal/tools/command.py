@@ -155,9 +155,6 @@ def _qdstat_add_display_args(parser, BusManager):
     display.add_argument("--autolinks", action="store_const", dest="show",
                          help="Show Auto Links",
                          const=BusManager.displayAutolinks.__name__)
-    display.add_argument("--linkroutes", action="store_const", dest="show",
-                         help="Show Link Routes",
-                         const=BusManager.displayLinkRoutes.__name__)
     display.add_argument("--vhosts", action="store_const", dest="show",
                          help="Show Vhosts",
                          const=BusManager.displayVhosts.__name__)
@@ -193,7 +190,7 @@ def _qdstat_parser(BusManager):
 
     # This limit can be used to limit the number of output rows and
     # can be used in conjunction with options
-    # like -c, -l, -a, --autolinks, --linkroutes and --log.
+    # like -c, -l, -a, --autolinks, and --log.
     # By default, the limit is not set, which means the limit is unlimited.
     parser.add_argument("--limit", help="Limit number of output rows. Unlimited if limit is zero or if limit not specified", type=int, default=None)
     parser.add_argument("--csv", help="Render tabular output in csv format", action="store_true")

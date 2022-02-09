@@ -179,7 +179,6 @@ pn_data_t *qdr_error_info(const qdr_error_t *err);
  */
 typedef enum {
     QD_ROUTER_CONFIG_ADDRESS,
-    QD_ROUTER_CONFIG_LINK_ROUTE,
     QD_ROUTER_CONFIG_AUTO_LINK,
     QD_ROUTER_CONNECTION,
     QD_ROUTER_TCP_CONNECTION,
@@ -187,8 +186,7 @@ typedef enum {
     QD_ROUTER_ROUTER,
     QD_ROUTER_LINK,
     QD_ROUTER_ADDRESS,
-    QD_ROUTER_FORBIDDEN,
-    QD_ROUTER_CONN_LINK_ROUTE
+    QD_ROUTER_FORBIDDEN
 } qd_router_entity_type_t;
 
 typedef struct qdr_query_t qdr_query_t;
@@ -317,7 +315,6 @@ typedef struct {
     size_t links;
     size_t addrs;
     size_t routers;
-    size_t link_routes;
     size_t auto_links;
     size_t presettled_deliveries;
     size_t dropped_presettled_deliveries;

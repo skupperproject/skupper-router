@@ -32,17 +32,10 @@ typedef int (*qdr_forward_message_t) (qdr_core_t      *core,
                                       bool             exclude_inprocess,
                                       bool             control);
 
-typedef bool (*qdr_forward_attach_t) (qdr_core_t     *core,
-                                      qdr_address_t  *addr,
-                                      qdr_link_t     *link,
-                                      qdr_terminus_t *source,
-                                      qdr_terminus_t *target);
-
 struct qdr_forwarder_t {
     qdr_forward_message_t forward_message;
-    qdr_forward_attach_t  forward_attach;
     bool                  bypass_valid_origins;
 };
 
-qdr_forwarder_t *qdr_new_forwarder(qdr_forward_message_t fm, qdr_forward_attach_t fa, bool bypass_valid_origins);
+qdr_forwarder_t *qdr_new_forwarder(qdr_forward_message_t fm, bool bypass_valid_origins);
 #endif

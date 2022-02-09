@@ -111,9 +111,7 @@ class MulticastLinearTest(TestCase):
                [('listener', {'name': 'rc', 'role': 'route-container',
                               'port': cls.tester.get_port()}),
                 ('connector', {'name': 'uplink', 'role': 'edge',
-                               'port': cls.INTA_edge_port}),
-                ('linkRoute', {'prefix': 'CfgLinkRoute1', 'containerId': 'FakeBroker', 'direction': 'in'}),
-                ('linkRoute', {'prefix': 'CfgLinkRoute1', 'containerId': 'FakeBroker', 'direction': 'out'})])
+                               'port': cls.INTA_edge_port})])
         cls.EA1 = cls.routers[2]
         cls.EA1.listener = cls.EA1.addresses[0]
         cls.EA1.route_container = cls.EA1.addresses[1]
@@ -124,9 +122,7 @@ class MulticastLinearTest(TestCase):
                                'port': cls.INTB_edge_port,
                                'maxFrameSize': 1024}),
                 ('listener', {'name': 'rc', 'role': 'route-container',
-                              'port': cls.tester.get_port()}),
-                ('linkRoute', {'pattern': '*.cfg.pattern.#', 'containerId': 'FakeBroker', 'direction': 'in'}),
-                ('linkRoute', {'pattern': '*.cfg.pattern.#', 'containerId': 'FakeBroker', 'direction': 'out'})])
+                              'port': cls.tester.get_port()})])
         cls.EB1 = cls.routers[3]
         cls.EB1.listener = cls.EB1.addresses[0]
         cls.EB1.route_container = cls.EB1.addresses[1]

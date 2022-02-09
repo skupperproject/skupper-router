@@ -104,10 +104,6 @@ class NameCollisionTest(TestCase):
                           'address': 'autoLink1',
                           'connection': 'brokerConnection',
                           'direction': 'in'}),
-            ('linkRoute', {'name': 'linkRoute',
-                           'prefix': 'linkRoute',
-                           'connection': 'brokerConnection',
-                           'direction': 'in'}),
             ('address',   {'name': 'address', 'prefix': 'address.1'}),
         ])
 
@@ -120,7 +116,6 @@ class NameCollisionTest(TestCase):
         # Add autoLink with the same name as the one already present.
         al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
         addr_long_type = 'org.apache.qpid.dispatch.router.config.address'
-        lr_long_type = 'org.apache.qpid.dispatch.router.config.linkRoute'
         mgmt = QdManager(self, address=self.router.addresses[0])
         test_pass = False
         try:
@@ -129,73 +124,6 @@ class NameCollisionTest(TestCase):
             if "BadRequestStatus: Name conflicts with an existing entity" in str(e):
                 test_pass = True
         self.assertTrue(test_pass)
-
-        # Try to add duplicate linkRoute and make sure it fails
-        args = {"name": "linkRoute", "prefix": "linkRoute",
-                "connection": "broker", "direction": "in"}
-
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        test_pass = False
-        try:
-            mgmt.create(lr_long_type, args)
-        except Exception as e:
-            if "BadRequestStatus: Name conflicts with an existing entity" in str(e):
-                test_pass = True
-        self.assertTrue(test_pass)
-
-        args = {"name": "address", "prefix": "address.1"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        test_pass = False
-        try:
-            mgmt.create(addr_long_type, args)
-        except Exception as e:
-            if "BadRequestStatus: Name conflicts with an existing entity" in str(e):
-                test_pass = True
-        self.assertTrue(test_pass)
-
-        # The linkRoutes, autoLinks and addrConfigs share the same hashtable
-        # but with a prefix.
-        # The following tests make sure that same names used on
-        # different entities are allowed.
-
-        # insert a linkRoute with the name of an existing autoLink and make
-        # sure that is ok
-        args = {"name": "autoLink", "prefix": "linkRoute",
-                "connection": "broker", "direction": "in"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(lr_long_type, args)
-
-        # insert a linkRoute with the name of an existing addr config and make
-        # sure that is ok
-        args = {"name": "address", "prefix": "linkRoute",
-                "connection": "broker", "direction": "in"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(lr_long_type, args)
-
-        # insert an autoLink with the name of an existing linkRoute and make
-        # sure that is ok
-        args = {"name": "linkRoute", "address": "autoLink1", "connection": "broker", "direction": "in"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(al_long_type, args)
-
-        # insert an autoLink with the name of an existing address and make
-        # sure that is ok
-        args = {"name": "address", "address": "autoLink1", "connection": "broker", "direction": "in"}
-        al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(al_long_type, args)
-
-        # insert an address with the name of an existing autoLink and make
-        # sure that is ok
-        args = {"name": "autoLink", "prefix": "address.2"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(addr_long_type, args)
-
-        # insert an autoLink with the name of an existing linkRoute and make
-        # sure that is ok
-        args = {"name": "linkRoute", "prefix": "address.3"}
-        mgmt = QdManager(self, address=self.router.addresses[0])
-        mgmt.create(addr_long_type, args)
 
 
 class DetachAfterAttachTest(TestCase):

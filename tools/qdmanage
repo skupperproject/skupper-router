@@ -113,7 +113,7 @@ class QdManage():
         if type in ('link', 'node'):
             return self.prefix + "router." + type
 
-        if type in ('linkRoute', 'address', 'autoLink'):
+        if type in ('address', 'autoLink'):
             return self.prefix + "router.config." + type
 
         return self.prefix + type

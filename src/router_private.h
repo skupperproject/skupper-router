@@ -41,7 +41,6 @@ qd_error_t qd_router_python_setup(qd_router_t *router);
 void qd_router_python_free(qd_router_t *router);
 qd_error_t qd_pyrouter_tick(qd_router_t *router);
 qd_error_t qd_router_configure_address(qd_router_t *router, qd_entity_t *entity);
-qd_error_t qd_router_configure_link_route(qd_router_t *router, qd_entity_t *entity);
 qd_error_t qd_router_configure_auto_link(qd_router_t *router, qd_entity_t *entity);
 
 void qd_router_configure_free(qd_router_t *router);

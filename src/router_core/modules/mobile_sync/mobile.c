@@ -110,8 +110,6 @@ static qd_address_treatment_t qcm_mobile_sync_default_treatment(qdr_core_t *core
         return QD_TREATMENT_ANYCAST_CLOSEST;
     case QD_TREATMENT_ANYCAST_BALANCED:
         return QD_TREATMENT_ANYCAST_BALANCED;
-    case QD_TREATMENT_LINK_BALANCED:
-        return QD_TREATMENT_LINK_BALANCED;
     case QD_TREATMENT_UNAVAILABLE:
         return QD_TREATMENT_UNAVAILABLE;
     default:
@@ -123,7 +121,7 @@ static qd_address_treatment_t qcm_mobile_sync_default_treatment(qdr_core_t *core
 static bool qcm_mobile_sync_addr_is_mobile(qdr_address_t *addr)
 {
     const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-    return !!strchr("MCDEFH", hash_key[0]);
+    return !!strchr("MH", hash_key[0]);
 }
 
 
@@ -216,26 +214,27 @@ static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, q
 static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *field, int *treatment, int *inlink_count)
 {
     qd_iterator_t *iter = 0;
+    if (qd_parse_is_list(field)) {
+        size_t count = qd_parse_sub_count(field);
+        for (size_t i = 0; i < count; i++) {
+            switch (i) {
+            case 0: {
+                qd_parsed_field_t *hash_key = qd_parse_sub_value(field, i);
+                if (!!hash_key) {
+                    iter = qd_parse_raw(hash_key);
+                }
+                break;
+            }
 
-    if (!qd_parse_is_list(field)) {
-        return iter;
-    }
+            case 1:
+                *treatment = qd_parse_as_int(qd_parse_sub_value(field, i));
+                break;
 
-    size_t count = qd_parse_sub_count(field);
-    if (count > 0) {
-        qd_parsed_field_t *hash_key = qd_parse_sub_value(field, 0);
-        if (hash_key == 0) {
-            return iter;
+            case 2:
+                *inlink_count = qd_parse_as_int(qd_parse_sub_value(field, i));
+                break;
+            }
         }
-        iter = qd_parse_raw(hash_key);
-    }
-
-    if (count > 1) {
-        *treatment = qd_parse_as_int(qd_parse_sub_value(field, 1));
-    }
-
-    if (count > 2) {
-        *inlink_count = qd_parse_as_int(qd_parse_sub_value(field, 2));
     }
 
     return iter;
@@ -351,8 +350,7 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         // peer router in the correct state.
         //
         if (qcm_mobile_sync_addr_is_mobile(addr)
-            && ((DEQ_SIZE(addr->rlinks) > 0 || DEQ_SIZE(addr->conns) > 0)
-                || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
+            && (DEQ_SIZE(addr->rlinks) > 0 || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
             && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
             qcm_mobile_sync_compose_addr_descriptor(addr, body, true);
         }
@@ -587,7 +585,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             //
             qd_parsed_field_t *field      = !!exist_field ? exist_field : add_field;
             qd_parsed_field_t *addr_field = qd_field_first_child(field);
-            while (addr_field) {
+            while (!!addr_field) {
                 int            treatment_hint;
                 int            inlink_count;
                 qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count);
@@ -612,15 +610,6 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         qd_hash_insert(msync->core->addr_hash, iter, addr, &addr->hash_handle);
                         DEQ_ITEM_INIT(addr);
                         DEQ_INSERT_TAIL(msync->core->addrs, addr);
-
-                        //
-                        // if the address is a link route, add the pattern to the wildcard
-                        // address parse tree
-                        //
-                        const char *a_str = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-                        if (QDR_IS_LINK_ROUTE(a_str[0])) {
-                            qdr_link_route_map_pattern_CT(msync->core, iter, addr);
-                        }
                     }
 
                     BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_TO_BE_DELETED);

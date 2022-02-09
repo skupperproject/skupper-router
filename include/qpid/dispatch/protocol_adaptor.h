@@ -365,8 +365,6 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param label Optional label provided in the connection's configuration.
  * @param strip_annotations_in True if configured to remove annotations on inbound messages.
  * @param strip_annotations_out True if configured to remove annotations on outbound messages.
- * @param policy_allow_dynamic_link_routes True if this connection is allowed by policy to create link route destinations.
- * @param policy_allow_admin_status_update True if this connection is allowed to modify admin_status on other connections.
  * @param link_capacity The capacity, in deliveries, for links in this connection.
  * @return Pointer to a connection object that can be used to refer to this connection over its lifetime.
  */
@@ -538,15 +536,6 @@ bool qdr_terminus_has_capability(qdr_terminus_t *term, const char *capability);
  * @return true iff the terminus is anonymous
  */
 bool qdr_terminus_is_anonymous(qdr_terminus_t *term);
-
-/**
- * qdr_terminus_is_coordinator
- *
- * Indicates if the terminus is a coordinator.
- * @param term A qdr_terminus pointer returned by qdr_terminus()
- * @return true iff the terminus is a coordinator
- */
-bool qdr_terminus_is_coordinator(qdr_terminus_t *term);
 
 /**
  * qdr_terminus_set_dynamic
