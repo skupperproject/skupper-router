@@ -16,20 +16,23 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
+import logging
 import socket
 import uuid
-from threading import Thread
-
-from time import sleep
+import weakref
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
 from http.client import HTTPException
+from threading import Thread
+from time import sleep
+
+from typing import List, Any, Tuple, Mapping
 
 from system_test import TestCase, TIMEOUT, Logger, Qdrouterd, unittest
 from system_test import curl_available, run_curl
 
 
-TEST_SERVER_ERROR = "TestServer failed to start due to port %s already in use issue"
 CURL_VERSION = (7, 47, 0)   # minimum required
 
 
@@ -129,14 +132,34 @@ class RequestHandler10(RequestHandler):
 
 
 class MyHTTPServer(HTTPServer):
-    """
-    Adds a switch to the HTTPServer to allow it to exit gracefully
-    """
+    """Adds a switch to the HTTPServer to allow it to exit gracefully"""
 
     def __init__(self, addr, handler_cls, testcases):
+        super().__init__(addr, handler_cls)
+        self._client_sockets: List[socket.socket] = []
+
+        self.server_killed = False
         self.system_tests = testcases
         self.request_count = 0
-        super().__init__(addr, handler_cls)
+
+    def get_request(self) -> Tuple[socket.socket, Any]:
+        """Remember the client socket"""
+        sock, addr = super().get_request()
+        self._client_sockets.append(sock)
+        return sock, addr
+
+    def shutdown_request(self, request: socket.socket) -> None:
+        """Forget the client socket"""
+        self._client_sockets.remove(request)
+        super().shutdown_request(request)  # type: ignore[misc]  # error: "shutdown_request" undefined in superclass
+
+    def force_disconnect_clients(self) -> None:
+        """Shutdown the remembered sockets
+
+        https://stackoverflow.com/questions/70916335/how-do-i-forcibly-disconnect-all-currently-connected-clients-to-my-tcp-or-http-s
+        """
+        for client in self._client_sockets:
+            client.shutdown(socket.SHUT_RDWR)
 
 
 class ThreadedTestClient:
@@ -209,31 +232,34 @@ class ThreadedTestClient:
 
 
 class TestServer:
-    """
-    A HTTPServer running in a separate thread
-    """
+    """A HTTPServer running in a separate thread"""
     __test__ = False
+    _active_servers: Mapping[int, 'TestServer'] = weakref.WeakValueDictionary()
 
     @classmethod
     def new_server(cls, server_port, client_port, tests, handler_cls=None):
-        num_attempts = 0
-        max_attempts = 4
-        while num_attempts < max_attempts:
-            try:
-                # Create an instance of TestServer. This might fail because the port has
-                # not been relinquished yet. Try for a max of 4 seconds before giving up.
-                server11 = TestServer(server_port=server_port,
-                                      client_port=client_port,
-                                      tests=tests,
-                                      handler_cls=handler_cls)
-                # Return the successfully created server.
-                return server11
-            except OSError:
-                # TestServer creation failed. Try again in one second, for a max of 4 seconds.
-                num_attempts += 1
-                sleep(1)
+        """Repeatedly tries to create a new server.
 
-        return None
+        Always use this factory method, otherwise the mechanism
+        to kill leaked servers will not work.
+        """
+        exc = None
+        for _ in range(2):
+            try:
+                server = TestServer(server_port=server_port,
+                                    client_port=client_port,
+                                    tests=tests,
+                                    handler_cls=handler_cls)
+                cls._active_servers[server_port] = server
+                return server
+            except OSError as e:
+                previous_server = cls._active_servers.get(server_port)
+                if previous_server:
+                    logging.log(logging.WARNING, f"TestServer on port {server_port} was not wait()'ed before")
+                    previous_server.wait(timeout=1)  # die quickly, we don't have a whole day
+                exc = e  # remember the exception
+        else:
+            raise RuntimeError(f"TestServer failed to start due to port {server_port} already in use issue") from exc
 
     def __init__(self, server_port, client_port, tests, handler_cls=None):
         self._logger = Logger(title="TestServer", print_to_console=False)
@@ -246,6 +272,8 @@ class TestServer:
         self._server.timeout = TIMEOUT
         self._thread = Thread(target=self._run)
         self._thread.start()
+
+        self.request_count = 0
 
     def _run(self):
         self._logger.log("TestServer listening on %s:%s" % self._server_addr)
@@ -261,11 +289,17 @@ class TestServer:
 
     def wait(self, timeout=TIMEOUT):
         self._logger.log("TestServer %s:%s shutting down" % self._server_addr)
-        self.request_count = 0
 
         self._send_shutdown_request()
         self._thread.join(timeout=timeout)
+        if self._thread.is_alive():
+            logging.log(logging.WARNING, "Failed to shutdown test http.server gracefully")
+            self._server.server_killed = True
+            self._force_disconnect_clients()
+            self._thread.join(timeout=timeout)
+        assert not self._thread.is_alive(), "TestServer thread has leaked"
         self._server.server_close()
+
         self.request_count = self._server.request_count
         self._server = None
 
@@ -288,6 +322,10 @@ class TestServer:
             assert body == b'Server Closed', f"Unexpectedly, response was {body}"
         finally:
             client.close()
+
+    def _force_disconnect_clients(self):
+        """Shutdowns the client socket in the http.server"""
+        self._server.force_disconnect_clients()
 
 
 def http1_ping(sport, cport):
@@ -493,10 +531,8 @@ class CommonHttp1Edge2EdgeTest:
         }
 
         server11 = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11)
-        self.assertIsNotNone(server11, TEST_SERVER_ERROR % self.http_server11_port)
         server10 = TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
                                          handler_cls=RequestHandler10)
-        self.assertIsNotNone(server10, TEST_SERVER_ERROR % self.http_server10_port)
         self.EA2.wait_connectors()
 
         repeat_ct = 10
@@ -543,10 +579,9 @@ class CommonHttp1Edge2EdgeTest:
                  ),
             ]
         }
+
         server = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS)
         try:
-            self.assertIsNotNone(server, TEST_SERVER_ERROR % self.http_server11_port)
-
             self.EA2.wait_connectors()
 
             client = ThreadedTestClient(TESTS,
@@ -578,7 +613,6 @@ class CommonHttp1Edge2EdgeTest:
         # bring up the server and send some requests. This will cause the
         # router to grant credit for clients
         server = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % self.http_server11_port)
         self.EA2.wait_connectors()
 
         client = ThreadedTestClient(TESTS,
@@ -601,7 +635,6 @@ class CommonHttp1Edge2EdgeTest:
         # that occurrs to prevent client messages from being released with 503
         # status.
         server = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % self.http_server11_port)
 
         client.wait()
         self.assertIsNone(client.error)
@@ -628,7 +661,6 @@ class CommonHttp1Edge2EdgeTest:
         # bring up the server and send some requests. This will cause the
         # router to grant credit for clients
         server = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % self.http_server11_port)
 
         self.EA2.wait_connectors()
 
@@ -662,8 +694,6 @@ class CommonHttp1Edge2EdgeTest:
         # ensure links recover once the server re-appears
         server = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS)
         try:
-            self.assertIsNotNone(server, TEST_SERVER_ERROR % self.http_server11_port)
-
             self.EA2.wait_connectors()
 
             client = ThreadedTestClient(TESTS, self.http_listener11_port)
@@ -737,10 +767,8 @@ class CommonHttp1Edge2EdgeTest:
             ],
         }
         server11 = TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11)
-        self.assertIsNotNone(server11, TEST_SERVER_ERROR % self.http_server11_port)
         server10 = TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
                                          handler_cls=RequestHandler10)
-        self.assertIsNotNone(server10, TEST_SERVER_ERROR % self.http_server10_port)
 
         self.EA2.wait_connectors()
 
@@ -1254,9 +1282,9 @@ class Http1ClientCloseTestsMixIn:
         }
         TESTS.update(PING)
 
-        server = TestServer(server_port=server_port,
-                            client_port=client_port,
-                            tests=TESTS)
+        server = TestServer.new_server(server_port=server_port,
+                                       client_port=client_port,
+                                       tests=TESTS)
         #
         # ensure the server has fully connected
         #
@@ -1338,9 +1366,9 @@ class Http1ClientCloseTestsMixIn:
         }
         TESTS.update(PING)
 
-        server = TestServer(server_port=server_port,
-                            client_port=client_port,
-                            tests=TESTS)
+        server = TestServer.new_server(server_port=server_port,
+                                       client_port=client_port,
+                                       tests=TESTS)
         #
         # ensure the server has fully connected
         #
@@ -1408,7 +1436,6 @@ class Http1CurlTestsMixIn:
         }
 
         server = TestServer.new_server(server_port, port, CURL_TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % server_port)
 
         get_url = "http://%s:%s/GET/curl_get" % (host, port)
         head_url = "http://%s:%s/HEAD/curl_head" % (host, port)
@@ -1467,7 +1494,6 @@ class Http1CurlTestsMixIn:
         }
 
         server = TestServer.new_server(server_port, port, CURL_TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % server_port)
 
         put_url = "http://%s:%s/PUT/curl_put" % (host, port)
         head_url = "http://%s:%s/HEAD/curl_head" % (host, port)
@@ -1526,7 +1552,6 @@ class Http1CurlTestsMixIn:
         }
 
         server = TestServer.new_server(server_port, port, CURL_TESTS)
-        self.assertIsNotNone(server, TEST_SERVER_ERROR % server_port)
 
         post_url = "http://%s:%s/POST/curl_post" % (host, port)
         get_url = "http://%s:%s/GET/curl_get" % (host, port)
