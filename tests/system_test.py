@@ -173,7 +173,7 @@ def get_local_host_socket(socket_address_family='IPv4'):
     return s, host
 
 
-def port_refuses_connection(port, socket_address_family='IPv4'):
+def check_port_refuses_connection(port, socket_address_family='IPv4'):
     """Return true if connecting to host:port gives 'connection refused'."""
     s, host = get_local_host_socket(socket_address_family)
     try:
@@ -186,7 +186,7 @@ def port_refuses_connection(port, socket_address_family='IPv4'):
     return False
 
 
-def port_permits_binding(port, socket_address_family='IPv4'):
+def check_port_permits_binding(port, socket_address_family='IPv4'):
     """Return true if binding to the port succeeds."""
     s, _ = get_local_host_socket(socket_address_family)
     host = ""
@@ -201,9 +201,10 @@ def port_permits_binding(port, socket_address_family='IPv4'):
     return True
 
 
-def port_available(port, socket_address_family='IPv4'):
+def is_port_available(port, socket_address_family='IPv4'):
     """Return true if a new server will be able to bind to the port."""
-    return port_refuses_connection(port, socket_address_family) and port_permits_binding(port, socket_address_family)
+    return (check_port_refuses_connection(port, socket_address_family)
+            and check_port_permits_binding(port, socket_address_family))
 
 
 def wait_port(port, socket_address_family='IPv4', **retry_kwargs):
@@ -821,7 +822,7 @@ class Tester:
             if cls.next_port >= cls.port_range[1]:
                 cls.next_port = cls.port_range[0]
         start = cls.next_port
-        while not port_available(cls.next_port, socket_address_family):
+        while not is_port_available(cls.next_port, socket_address_family):
             advance()
             if cls.next_port == start:
                 raise Exception("No available ports in range %s", cls.port_range)
