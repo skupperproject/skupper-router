@@ -77,6 +77,9 @@ race:^qd_message_send$
 # DISPATCH-2245
 race:^qdr_link_process_deliveries$
 
+# ISSUE-65
+race: ^qdr_delivery_continue_CT$
+
 #
 # External libraries
 #
