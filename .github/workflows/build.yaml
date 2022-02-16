@@ -89,9 +89,9 @@ jobs:
           cache-name: cache-ccache
         with:
           path: .ccache
-          key: ${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+          key: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
           restore-keys: |
-            ${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}
+            ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}
 
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
@@ -373,9 +373,9 @@ jobs:
           cache-name: cache-ccache
         with:
           path: .ccache
-          key: ${{ matrix.container }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+          key: ${{ github.workflow }}-${{ matrix.container }}-${{ matrix.containerTag }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
           restore-keys: |
-            ${{ matrix.container }}-${{ matrix.runtimeCheck }}-${{ env.cache-name }}
+            ${{ github.workflow }}-${{ matrix.container }}-${{ matrix.containerTag }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}
 
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "{InstallPrefix}"
