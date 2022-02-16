@@ -97,7 +97,7 @@ static char *get_type_info(qd_iterator_t *iter, uint8_t *tag, uint32_t *size, ui
         *size += ((unsigned int) qd_iterator_octet(iter)) << 16;
         *size += ((unsigned int) qd_iterator_octet(iter)) << 8;
         *length_of_size = 3;
-        // fall through to the next case
+        // fallthrough
 
     case 0xA0:
     case 0xC0:
@@ -119,7 +119,7 @@ static char *get_type_info(qd_iterator_t *iter, uint8_t *tag, uint32_t *size, ui
         *count += ((unsigned int) qd_iterator_octet(iter)) << 16;
         *count += ((unsigned int) qd_iterator_octet(iter)) << 8;
         *length_of_count = 3;
-        // fall through to the next case
+        // fallthrough
 
     case 0xC0:
     case 0xE0:
@@ -398,16 +398,16 @@ uint64_t qd_parse_as_ulong(qd_parsed_field_t *field)
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 48;
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 40;
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 32;
-        // Fall Through...
+        // fallthrough
 
     case QD_AMQP_UINT:
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 24;
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 16;
-        // Fall Through...
+        // fallthrough
 
     case QD_AMQP_USHORT:
         result |= ((uint64_t) qd_iterator_octet(field->raw_iter)) << 8;
-        // Fall Through...
+        // fallthrough
 
     case QD_AMQP_BOOLEAN:
     case QD_AMQP_UBYTE:

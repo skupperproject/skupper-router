@@ -769,6 +769,7 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
         if (stats->context->callback_completed) {
             free(stats->context);
         }
+        return 0;
     }
 
     default:
@@ -826,6 +827,7 @@ static int callback_healthz(struct lws *wsi, enum lws_callback_reasons reason,
         if (stats->context->callback_completed) {
             free(stats->context);
         }
+        return 0;
     }
 
     default:

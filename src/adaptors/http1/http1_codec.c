@@ -1420,7 +1420,7 @@ const char *h1_codec_request_state_target(const h1_codec_request_state_t *hrs)
     return hrs->target;
 }
 
-const uint32_t h1_codec_request_state_response_code(const h1_codec_request_state_t *hrs)
+uint32_t h1_codec_request_state_response_code(const h1_codec_request_state_t *hrs)
 {
     return hrs->response_code;
 }
