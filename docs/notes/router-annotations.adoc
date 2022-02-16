@@ -29,8 +29,8 @@ communicate per-message state. This data is used by routers along the
 forwarding path for various reasons.  Currently this information
 includes:
 
-* The identifier for the ingress router (the router attached to the
-original sending endpoint).
+* The identifier for the ingress interior router. This is the first
+non-edge router the message encounters along the forwarding path.
 
 * The trace list: an ordered list of router identifiers. This list
 reflects the path the message has travelled in the router network. The
