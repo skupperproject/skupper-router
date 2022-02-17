@@ -502,7 +502,7 @@ static bool config_ssl_profile_free(qd_connection_manager_t *cm, qd_config_ssl_p
 }
 
 
-qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity)
+QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_error_clear();
     qd_connection_manager_t *cm = qd->connection_manager;
@@ -560,7 +560,7 @@ static void log_config(qd_log_source_t *log, qd_server_config_t *c, const char *
 }
 
 
-qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
     qd_listener_t *li = qd_server_listener(qd->server);
@@ -589,7 +589,7 @@ qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *en
 }
 
 
-qd_error_t qd_entity_refresh_listener(qd_entity_t* entity, void *impl)
+QD_EXPORT qd_error_t qd_entity_refresh_listener(qd_entity_t* entity, void *impl)
 {
     return QD_ERROR_NONE;
 }
@@ -738,7 +738,7 @@ qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl)
 }
 
 
-qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
     qd_connector_t *ct = qd_server_connector(qd->server);
@@ -850,7 +850,7 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
 /** NOTE: non-static qd_connection_manager_* functions are called from the python agent */
 
 
-void qd_connection_manager_start(qd_dispatch_t *qd)
+QD_EXPORT void qd_connection_manager_start(qd_dispatch_t *qd)
 {
     static bool first_start = true;
     qd_listener_t  *li = DEQ_HEAD(qd->connection_manager->listeners);
@@ -884,7 +884,7 @@ void qd_connection_manager_start(qd_dispatch_t *qd)
 }
 
 
-void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *impl)
+QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *impl)
 {
     qd_listener_t *li = (qd_listener_t*) impl;
     if (li) {
@@ -900,7 +900,7 @@ void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *impl)
 }
 
 
-void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl)
+QD_EXPORT void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl)
 {
     qd_config_ssl_profile_t *ssl_profile = (qd_config_ssl_profile_t*) impl;
     config_ssl_profile_free(qd->connection_manager, ssl_profile);
@@ -916,7 +916,7 @@ static void deferred_close(void *context, bool discard) {
 // threading: called by management thread while I/O thread may be
 // referencing the qd_connector_t via the qd_connection_t
 //
-void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *impl)
+QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *impl)
 {
     qd_connector_t *ct = (qd_connector_t*) impl;
     if (ct) {
