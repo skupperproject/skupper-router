@@ -434,172 +434,168 @@ static char* test_parse_router_annotations(void *context)
     char *error = 0;
     qd_buffer_list_t blist = DEQ_EMPTY;
 
-    // Test: empty RA
-    qd_message_t *msg = generate_ra_test_message(0, 0, 0, 0);
-    error = (char*) qd_message_parse_router_annotations(msg);
-    if (error) {
-        goto exit;
-    }
+    qd_message_t *msg = 0;
+    {
+        // Test: empty RA
+        msg = generate_ra_test_message(0, 0, 0, 0);
+        error = (char*) qd_message_parse_router_annotations(msg);
+        if (error) {
+            goto exit;
+        }
 
-    // validate sections parsed correctly:
+        // validate sections parsed correctly:
 
-    if (((qd_message_pvt_t*) msg)->ra_flags != 0) {
-        error = "Test0: Invalid RA flags";
-        goto exit;
-    }
+        if (((qd_message_pvt_t*) msg)->ra_flags != 0) {
+            error = "Test0: Invalid RA flags";
+            goto exit;
+        }
 
-    if (qd_message_is_streaming(msg)) {
-        error = "Test0: streaming not expected";
-        goto exit;
-    }
+        if (qd_message_is_streaming(msg)) {
+            error = "Test0: streaming not expected";
+            goto exit;
+        }
 
-    qd_parsed_field_t *pf_trace = qd_message_get_trace(msg);
-    if (!pf_trace) {
-        error = "Test0: trace not found!";
-        goto exit;
-    }
-    if (qd_parse_sub_count(pf_trace) != 0) {
-        error = "Test0: trace list not empty";
-        goto exit;
-    }
+        qd_parsed_field_t *pf_trace = qd_message_get_trace(msg);
+        if (!pf_trace) {
+            error = "Test0: trace not found!";
+            goto exit;
+        }
+        if (qd_parse_sub_count(pf_trace) != 0) {
+            error = "Test0: trace list not empty";
+            goto exit;
+        }
 
-    if (qd_message_get_to_override(msg) != 0) {
-        error = "Test0: expected no to override";
-        goto exit;
-    }
+        if (qd_message_get_to_override(msg) != 0) {
+            error = "Test0: expected no to override";
+            goto exit;
+        }
 
-    if (qd_message_get_ingress_router(msg)) {
-        error = "Test0: expected no ingress!";
-        goto exit;
-    }
+        if (qd_message_get_ingress_router(msg)) {
+            error = "Test0: expected no ingress!";
+            goto exit;
+        }
 
-    // set values and compose:
+        // set values and compose:
 
-    qd_message_set_streaming_annotation(msg);
-    qd_message_set_to_override_annotation(msg, "to/override");
+        qd_message_set_streaming_annotation(msg);
+        qd_message_set_to_override_annotation(msg, "to/override");
 
-    uint32_t len = _compose_router_annotations((qd_message_pvt_t*) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
-    if (len == 0) {
-        error = "Test1: failed to compose 1";
-        goto exit;
-    }
+        uint32_t len = _compose_router_annotations((qd_message_pvt_t*) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
+        if (len == 0) {
+            error = "Test1: failed to compose 1";
+            goto exit;
+        }
 
-    qd_message_free(msg);
+        qd_message_free(msg);
 
-    msg = qd_message();
-    qd_message_content_t *content = MSG_CONTENT(msg);
-    DEQ_APPEND(content->buffers, blist);
-    SET_ATOMIC_FLAG(&content->receive_complete);
+        msg = qd_message();
+        qd_message_content_t *content = MSG_CONTENT(msg);
+        DEQ_APPEND(content->buffers, blist);
+        SET_ATOMIC_FLAG(&content->receive_complete);
 
-    // parse updated values
+        // parse updated values
 
-    error = (char*) qd_message_parse_router_annotations(msg);
-    if (error) {
-        goto exit;
-    }
+        error = (char*) qd_message_parse_router_annotations(msg);
+        if (error) {
+            goto exit;
+        }
 
-    // validate
+        // validate
 
-    if (!qd_message_is_streaming(msg)) {
-        error = "Test1: streaming expected";
-        goto exit;
-    }
+        if (!qd_message_is_streaming(msg)) {
+            error = "Test1: streaming expected";
+            goto exit;
+        }
 
-    qd_parsed_field_t *pf_to = qd_message_get_to_override(msg);
-    if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char*) "to/override")) {
-        error = "Test1: to override not found!";
-        goto exit;
-    }
+        qd_parsed_field_t *pf_to = qd_message_get_to_override(msg);
+        if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char*) "to/override")) {
+            error = "Test1: to override not found!";
+            goto exit;
+        }
 
-    // expected _compose_router_annotations to update trace an ingress properly
+        // expected _compose_router_annotations to update trace an ingress properly
 
-    qd_parsed_field_t *pf_ingress = qd_message_get_ingress_router(msg);
-    if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char*) "0/UnitTestRouter")) {
-        error = "Test1: ingress router not found!";
-        goto exit;
-    }
+        qd_parsed_field_t *pf_ingress = qd_message_get_ingress_router(msg);
+        if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char*) "0/UnitTestRouter")) {
+            error = "Test1: ingress router not found!";
+            goto exit;
+        }
 
-    pf_trace = qd_message_get_trace(msg);
-    if (!pf_trace || qd_parse_sub_count(pf_trace) != 1) {
-        error = "Test1: trace list not found!";
-        goto exit;
-    }
-    pf_trace = qd_parse_sub_value(pf_trace, 0);
-    if (!pf_trace || !qd_iterator_equal(qd_parse_raw(pf_trace), (const unsigned char*) "0/UnitTestRouter")) {
-        error = "Test1: invalid trace list";
-        goto exit;
-    }
+        pf_trace = qd_message_get_trace(msg);
+        if (!pf_trace || qd_parse_sub_count(pf_trace) != 1) {
+            error = "Test1: trace list not found!";
+            goto exit;
+        }
+        pf_trace = qd_parse_sub_value(pf_trace, 0);
+        if (!pf_trace || !qd_iterator_equal(qd_parse_raw(pf_trace), (const unsigned char*) "0/UnitTestRouter")) {
+            error = "Test1: invalid trace list";
+            goto exit;
+        }
 
-    qd_message_free(msg);
+        qd_message_free(msg);
 
-    // Test: populated RA
-    const char *dummy_trace[] = {
-        "0/OneReallyVeryLongRouterId",
-        "0/AnotherShorterRouterId",
-        0
-    };
-    msg = generate_ra_test_message(MSG_FLAG_STREAMING,
-                                   "to/override/address",
-                                   "0/AnIngressRouter",
-                                   dummy_trace);
-    error = (char*) qd_message_parse_router_annotations(msg);
-    if (error) {
-        goto exit;
-    }
+        // Test: populated RA
+        const char *dummy_trace[] = {"0/OneReallyVeryLongRouterId", "0/AnotherShorterRouterId", 0};
+        msg   = generate_ra_test_message(MSG_FLAG_STREAMING, "to/override/address", "0/AnIngressRouter", dummy_trace);
+        error = (char *) qd_message_parse_router_annotations(msg);
+        if (error) {
+            goto exit;
+        }
 
-    if (!qd_message_is_streaming(msg)) {
-        error = "Test2: streaming expected";
-        goto exit;
-    }
-    pf_to = qd_message_get_to_override(msg);
-    if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char*) "to/override/address")) {
-        error = "Test2: invalid to override!";
-        goto exit;
-    }
-    pf_ingress = qd_message_get_ingress_router(msg);
-    if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char*) "0/AnIngressRouter")) {
-        error = "Test2: invalid ingress router!";
-        goto exit;
-    }
-    pf_trace = qd_message_get_trace(msg);
-    if (!pf_trace || qd_parse_sub_count(pf_trace) != 2) {
-        error = "Test2: invalid trace list!";
-        goto exit;
-    }
-    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 0)), (const unsigned char*) dummy_trace[0])) {
-        error = "Test2: invalid trace list index 0";
-        goto exit;
-    }
-    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 1)), (const unsigned char*) dummy_trace[1])) {
-        error = "Test2: invalid trace list index 1";
-        goto exit;
-    }
+        if (!qd_message_is_streaming(msg)) {
+            error = "Test2: streaming expected";
+            goto exit;
+        }
+        pf_to = qd_message_get_to_override(msg);
+        if (!pf_to || !qd_iterator_equal(qd_parse_raw(pf_to), (const unsigned char *) "to/override/address")) {
+            error = "Test2: invalid to override!";
+            goto exit;
+        }
+        pf_ingress = qd_message_get_ingress_router(msg);
+        if (!pf_ingress || !qd_iterator_equal(qd_parse_raw(pf_ingress), (const unsigned char *) "0/AnIngressRouter")) {
+            error = "Test2: invalid ingress router!";
+            goto exit;
+        }
+        pf_trace = qd_message_get_trace(msg);
+        if (!pf_trace || qd_parse_sub_count(pf_trace) != 2) {
+            error = "Test2: invalid trace list!";
+            goto exit;
+        }
+        if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 0)), (const unsigned char *) dummy_trace[0])) {
+            error = "Test2: invalid trace list index 0";
+            goto exit;
+        }
+        if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 1)), (const unsigned char *) dummy_trace[1])) {
+            error = "Test2: invalid trace list index 1";
+            goto exit;
+        }
 
-    // re-compose & parse, check trace list for local router id
-    len = _compose_router_annotations((qd_message_pvt_t*) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
-    if (len == 0) {
-        error = "Test3: failed to compose 2";
-        goto exit;
+        // re-compose & parse, check trace list for local router id
+        len = _compose_router_annotations((qd_message_pvt_t *) msg, QD_MESSAGE_RA_STRIP_NONE, &blist);
+        if (len == 0) {
+            error = "Test3: failed to compose 2";
+            goto exit;
+        }
+        qd_message_free(msg);
+        msg     = qd_message();
+        content = MSG_CONTENT(msg);
+        DEQ_APPEND(content->buffers, blist);
+        SET_ATOMIC_FLAG(&content->receive_complete);
+        error = (char *) qd_message_parse_router_annotations(msg);
+        if (error) {
+            goto exit;
+        }
+        pf_trace = qd_message_get_trace(msg);
+        if (!pf_trace || qd_parse_sub_count(pf_trace) != 3) {
+            error = "Test3: invalid trace list!";
+            goto exit;
+        }
+        if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 2)),
+                               (const unsigned char *) "0/UnitTestRouter")) {
+            error = "Test2: invalid trace list index 1";
+            goto exit;
+        }
     }
-    qd_message_free(msg);
-    msg = qd_message();
-    content = MSG_CONTENT(msg);
-    DEQ_APPEND(content->buffers, blist);
-    SET_ATOMIC_FLAG(&content->receive_complete);
-    error = (char*) qd_message_parse_router_annotations(msg);
-    if (error) {
-        goto exit;
-    }
-    pf_trace = qd_message_get_trace(msg);
-    if (!pf_trace || qd_parse_sub_count(pf_trace) != 3) {
-        error = "Test3: invalid trace list!";
-        goto exit;
-    }
-    if (!qd_iterator_equal(qd_parse_raw(qd_parse_sub_value(pf_trace, 2)), (const unsigned char*) "0/UnitTestRouter")) {
-        error = "Test2: invalid trace list index 1";
-        goto exit;
-    }
-
 
 exit:
 
@@ -725,18 +721,20 @@ static char *test_incomplete_annotations(void *context)
     // section header but not the whole section
 
     msg = qd_message();
-    qd_message_content_t *content = MSG_CONTENT(msg);
-    set_content(content, buffer, 100);
-    CLEAR_ATOMIC_FLAG(&content->receive_complete);   // more data coming!
-    if (qd_message_check_depth(msg, QD_DEPTH_MESSAGE_ANNOTATIONS) != QD_MESSAGE_DEPTH_INCOMPLETE) {
-        result = "Error: incomplete message was not detected!";
-        goto exit;
-    }
+    {
+        qd_message_content_t *content = MSG_CONTENT(msg);
+        set_content(content, buffer, 100);
+        CLEAR_ATOMIC_FLAG(&content->receive_complete);   // more data coming!
+        if (qd_message_check_depth(msg, QD_DEPTH_MESSAGE_ANNOTATIONS) != QD_MESSAGE_DEPTH_INCOMPLETE) {
+            result = "Error: incomplete message was not detected!";
+            goto exit;
+        }
 
-    // now complete the message
-    set_content(content, &buffer[100], encode_len - 100);
-    if (qd_message_check_depth(msg, QD_DEPTH_MESSAGE_ANNOTATIONS) != QD_MESSAGE_DEPTH_OK) {
-        result = "Error: expected message to be valid!";
+        // now complete the message
+        set_content(content, &buffer[100], encode_len - 100);
+        if (qd_message_check_depth(msg, QD_DEPTH_MESSAGE_ANNOTATIONS) != QD_MESSAGE_DEPTH_OK) {
+            result = "Error: expected message to be valid!";
+        }
     }
 
 exit:
@@ -753,88 +751,90 @@ static char *test_check_weird_messages(void *context)
     char *result = 0;
     qd_message_t *msg = qd_message();
 
-    // case 1:
-    // delivery annotations with empty map
-    unsigned char da_map[] = {0x00, 0x80,
-                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x71,
-                              0xc1, 0x01, 0x00};
-    // first test an incomplete pattern:
-    set_content(MSG_CONTENT(msg), da_map, 4);
-    CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
-    qd_message_depth_status_t mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
-    if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
-        result = "Expected INCOMPLETE status";
-        goto exit;
-    }
+    {
+        // case 1:
+        // delivery annotations with empty map
+        unsigned char da_map[] = {0x00, 0x80,
+                                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x71,
+                                  0xc1, 0x01, 0x00};
+        // first test an incomplete pattern:
+        set_content(MSG_CONTENT(msg), da_map, 4);
+        CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
+        qd_message_depth_status_t mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
+        if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
+            result = "Expected INCOMPLETE status";
+            goto exit;
+        }
 
-    // full pattern, but no tag
-    set_content(MSG_CONTENT(msg), &da_map[4], 6);
-    CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
-    mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
-    if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
-        result = "Expected INCOMPLETE status";
-        goto exit;
-    }
+        // full pattern, but no tag
+        set_content(MSG_CONTENT(msg), &da_map[4], 6);
+        CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
+        mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
+        if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
+            result = "Expected INCOMPLETE status";
+            goto exit;
+        }
 
-    // add tag, but incomplete field:
-    set_content(MSG_CONTENT(msg), &da_map[10], 1);
-    CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
-    mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
-    if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
-        result = "Expected INCOMPLETE status";
-        goto exit;
-    }
+        // add tag, but incomplete field:
+        set_content(MSG_CONTENT(msg), &da_map[10], 1);
+        CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
+        mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
+        if (mc != QD_MESSAGE_DEPTH_INCOMPLETE) {
+            result = "Expected INCOMPLETE status";
+            goto exit;
+        }
 
-    // and finish up
-    set_content(MSG_CONTENT(msg), &da_map[11], 2);
-    mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
-    if (mc != QD_MESSAGE_DEPTH_OK) {
-        result = "Expected OK status";
-        goto exit;
-    }
+        // and finish up
+        set_content(MSG_CONTENT(msg), &da_map[11], 2);
+        mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS);
+        if (mc != QD_MESSAGE_DEPTH_OK) {
+            result = "Expected OK status";
+            goto exit;
+        }
 
-    // case 2: negative test - detect invalid tag
-    unsigned char bad_hdr[] = {0x00, 0x53, 0x70, 0xC1};  // 0xc1 == map, not list!
-    qd_message_free(msg);
-    msg = qd_message();
-    set_content(MSG_CONTENT(msg), bad_hdr, sizeof(bad_hdr));
-    CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
-    mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS); // looking _past_ header!
-    if (mc != QD_MESSAGE_DEPTH_INVALID) {
-        result = "Bad tag not detected!";
-        goto exit;
-    }
+        // case 2: negative test - detect invalid tag
+        unsigned char bad_hdr[] = {0x00, 0x53, 0x70, 0xC1};  // 0xc1 == map, not list!
+        qd_message_free(msg);
+        msg = qd_message();
+        set_content(MSG_CONTENT(msg), bad_hdr, sizeof(bad_hdr));
+        CLEAR_ATOMIC_FLAG(&(MSG_CONTENT(msg)->receive_complete));
+        mc = qd_message_check_depth(msg, QD_DEPTH_DELIVERY_ANNOTATIONS); // looking _past_ header!
+        if (mc != QD_MESSAGE_DEPTH_INVALID) {
+            result = "Bad tag not detected!";
+            goto exit;
+        }
 
-    // case 3: check the valid body types
-    unsigned char body_bin[] = {0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x75,
-                                0xA0, 0x03, 0x00, 0x01, 0x02};
-    qd_message_free(msg);
-    msg = qd_message();
-    set_content(MSG_CONTENT(msg), body_bin, sizeof(body_bin));
-    mc = qd_message_check_depth(msg, QD_DEPTH_ALL); // looking _past_ header!
-    if (mc != QD_MESSAGE_DEPTH_OK) {
-        result = "Expected OK bin body";
-        goto exit;
-    }
+        // case 3: check the valid body types
+        unsigned char body_bin[] = {0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x75,
+                                    0xA0, 0x03, 0x00, 0x01, 0x02};
+        qd_message_free(msg);
+        msg = qd_message();
+        set_content(MSG_CONTENT(msg), body_bin, sizeof(body_bin));
+        mc = qd_message_check_depth(msg, QD_DEPTH_ALL); // looking _past_ header!
+        if (mc != QD_MESSAGE_DEPTH_OK) {
+            result = "Expected OK bin body";
+            goto exit;
+        }
 
-    unsigned char body_seq[] = {0x00, 0x53, 0x76, 0x45};
-    qd_message_free(msg);
-    msg = qd_message();
-    set_content(MSG_CONTENT(msg), body_seq, sizeof(body_seq));
-    mc = qd_message_check_depth(msg, QD_DEPTH_BODY);
-    if (mc != QD_MESSAGE_DEPTH_OK) {
-        result = "Expected OK seq body";
-        goto exit;
-    }
+        unsigned char body_seq[] = {0x00, 0x53, 0x76, 0x45};
+        qd_message_free(msg);
+        msg = qd_message();
+        set_content(MSG_CONTENT(msg), body_seq, sizeof(body_seq));
+        mc = qd_message_check_depth(msg, QD_DEPTH_BODY);
+        if (mc != QD_MESSAGE_DEPTH_OK) {
+            result = "Expected OK seq body";
+            goto exit;
+        }
 
-    unsigned char body_value[] = {0x00, 0x53, 0x77, 0x51, 0x99};
-    qd_message_free(msg);
-    msg = qd_message();
-    set_content(MSG_CONTENT(msg), body_value, sizeof(body_value));
-    mc = qd_message_check_depth(msg, QD_DEPTH_BODY);
-    if (mc != QD_MESSAGE_DEPTH_OK) {
-        result = "Expected OK value body";
-        goto exit;
+        unsigned char body_value[] = {0x00, 0x53, 0x77, 0x51, 0x99};
+        qd_message_free(msg);
+        msg = qd_message();
+        set_content(MSG_CONTENT(msg), body_value, sizeof(body_value));
+        mc = qd_message_check_depth(msg, QD_DEPTH_BODY);
+        if (mc != QD_MESSAGE_DEPTH_OK) {
+            result = "Expected OK value body";
+            goto exit;
+        }
     }
 
 exit:
@@ -1165,76 +1165,77 @@ static char *test_check_stream_data_append(void * context)
     // "forward" the message
     out_msg = qd_message_copy(msg);
 
-    // walk the data streams...
-    int bd_count = 0;
-    int body_buffers = 0;
-    qd_message_stream_data_t *stream_data = 0;
-    bool done = false;
-    int footer_found = 0;
-    while (!done) {
-        switch (qd_message_next_stream_data(out_msg, &stream_data)) {
-        case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
-        case QD_MESSAGE_STREAM_DATA_INVALID:
-        case QD_MESSAGE_STREAM_DATA_ABORTED:
-            result = "Next body data failed to get next body data";
-            goto exit;
-        case QD_MESSAGE_STREAM_DATA_NO_MORE:
-            done = true;
-            break;
-        case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
-            bd_count += 1;
-            footer_found += 1;
-            qd_message_stream_data_release(stream_data);
-            break;
-        case QD_MESSAGE_STREAM_DATA_BODY_OK:
-            bd_count += 1;
-            // qd_message_stream_data_append() breaks the buffer list up into
-            // smaller lists that are no bigger than QD_QLIMIT_Q2_LOWER buffers
-            // long
-            body_buffers += qd_message_stream_data_buffer_count(stream_data);
-            if (qd_message_stream_data_buffer_count(stream_data) >= QD_QLIMIT_Q2_LOWER) {
-                result = "Body data list length too long!";
+    {
+        // walk the data streams...
+        int bd_count = 0;
+        int body_buffers = 0;
+        qd_message_stream_data_t *stream_data = 0;
+        bool done = false;
+        int footer_found = 0;
+        while (!done) {
+            switch (qd_message_next_stream_data(out_msg, &stream_data)) {
+            case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
+            case QD_MESSAGE_STREAM_DATA_INVALID:
+            case QD_MESSAGE_STREAM_DATA_ABORTED:    result = "Next body data failed to get next body data";
                 goto exit;
+            case QD_MESSAGE_STREAM_DATA_NO_MORE:
+                done = true;
+                break;
+            case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
+                bd_count += 1;
+                footer_found += 1;
+                qd_message_stream_data_release(stream_data);
+                break;
+            case QD_MESSAGE_STREAM_DATA_BODY_OK:
+                bd_count += 1;
+                // qd_message_stream_data_append() breaks the buffer list up into
+                // smaller lists that are no bigger than QD_QLIMIT_Q2_LOWER buffers
+                // long
+                body_buffers += qd_message_stream_data_buffer_count(stream_data);
+                if (qd_message_stream_data_buffer_count(stream_data) >= QD_QLIMIT_Q2_LOWER) {
+                    result = "Body data list length too long!";
+                    goto exit;
+                }
+                qd_message_stream_data_release(stream_data);
+                break;
             }
-            qd_message_stream_data_release(stream_data);
-            break;
         }
-    }
 
-    // verify:
+        // verify:
 
-    if (body_bufct != body_buffers) {
-        result = "Not all body data buffers were decoded!";
-        goto exit;
-    }
+        if (body_bufct != body_buffers) {
+            result = "Not all body data buffers were decoded!";
+            goto exit;
+        }
 
-    if (footer_found != 1) {
-        result = "I ordered a side of 'footer' with that message!";
-        goto exit;
-    }
+        if (footer_found != 1) {
+            result = "I ordered a side of 'footer' with that message!";
+            goto exit;
+        }
 
-    // +2 for 1 extra 5 buffers and 1 for footer
-    if (bd_count != (body_bufct / QD_QLIMIT_Q2_LOWER) + 2) {
-        result = "Unexpected count of body data sections!";
-        goto exit;
-    }
+        // +2 for 1 extra 5 buffers and 1 for footer
+        if (bd_count != (body_bufct / QD_QLIMIT_Q2_LOWER) + 2) {
+            result = "Unexpected count of body data sections!";
+            goto exit;
+        }
 
-    // expect: free all the body and footer buffers except for the very last
-    // buffer.  Remember kids: perfect is good, but done is better.
-    if (DEQ_SIZE(MSG_CONTENT(out_msg)->buffers) != base_bufct + 1) {
-        result = "Possible buffer leak detected!";
-        goto exit;
-    }
+        // expect: free all the body and footer buffers except for the very last
+        // buffer.  Remember kids: perfect is good, but done is better.
+        if (DEQ_SIZE(MSG_CONTENT(out_msg)->buffers) != base_bufct + 1) {
+            result = "Possible buffer leak detected!";
+            goto exit;
+        }
 
-    // and Q2 should be unblocked
-    if (qd_message_is_Q2_blocked(msg)) {
-        result = "Q2 expected to be unblocked!";
-        goto exit;
-    }
+        // and Q2 should be unblocked
+        if (qd_message_is_Q2_blocked(msg)) {
+            result = "Q2 expected to be unblocked!";
+            goto exit;
+        }
 
-    if (unblock_called != 1) {
-        result = "Q2 unblock handler not called!";
-        goto exit;
+        if (unblock_called != 1) {
+            result = "Q2 unblock handler not called!";
+            goto exit;
+        }
     }
 
 
@@ -1406,83 +1407,87 @@ static char *test_check_stream_data_footer(void *context)
     qd_message_compose_2(in_msg, field, false);
     qd_compose_free(field);
 
-    // snapshot the message buffer count to use as a baseline
-    const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
+    {
+        // snapshot the message buffer count to use as a baseline
+        const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
 
-    // Append a footer
-    bool q2_blocked;
-    field = qd_compose(QD_PERFORMATIVE_FOOTER, 0);
-    qd_compose_start_map(field);
-    qd_compose_insert_symbol(field, "Key1");
-    qd_compose_insert_string(field, "Value1");
-    qd_compose_insert_symbol(field, "Key2");
-    qd_compose_insert_string(field, "Value2");
-    qd_compose_end_map(field);
-    qd_message_extend(in_msg, field, &q2_blocked);
-    qd_compose_free(field);
+        // Append a footer
+        bool q2_blocked;
+        field = qd_compose(QD_PERFORMATIVE_FOOTER, 0);
+        qd_compose_start_map(field);
+        qd_compose_insert_symbol(field, "Key1");
+        qd_compose_insert_string(field, "Value1");
+        qd_compose_insert_symbol(field, "Key2");
+        qd_compose_insert_string(field, "Value2");
+        qd_compose_end_map(field);
+        qd_message_extend(in_msg, field, &q2_blocked);
+        qd_compose_free(field);
 
-    qd_message_set_receive_complete(in_msg);
 
-    // "fan out" the message
-    out_msg1 = qd_message_copy(in_msg);
-    qd_message_add_fanout(out_msg1);
-    out_msg2 = qd_message_copy(in_msg);
-    qd_message_add_fanout(out_msg2);
 
-    qd_message_stream_data_t *stream_data = 0;
-    bool done = false;
-    bool footer = false;
-    while (!done) {
-        switch (qd_message_next_stream_data(out_msg1, &stream_data)) {
-        case QD_MESSAGE_STREAM_DATA_NO_MORE:
-            done = true;
-            break;
-        case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
-            footer = true;
-            qd_message_stream_data_release(stream_data);
-            break;
-        case QD_MESSAGE_STREAM_DATA_BODY_OK:
-            result = "Unexpected body data present";
-            goto exit;
-        default:
-            result = "Next body data failed to get next body data";
+        qd_message_set_receive_complete(in_msg);
+
+        // "fan out" the message
+        out_msg1 = qd_message_copy(in_msg);
+        qd_message_add_fanout(out_msg1);
+        out_msg2 = qd_message_copy(in_msg);
+        qd_message_add_fanout(out_msg2);
+
+        qd_message_stream_data_t *stream_data = 0;
+        bool done = false;
+        bool footer = false;
+        while (!done) {
+            switch (qd_message_next_stream_data(out_msg1, &stream_data)) {
+            case QD_MESSAGE_STREAM_DATA_NO_MORE:
+                done = true;
+                break;
+            case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
+                footer = true;
+                qd_message_stream_data_release(stream_data);
+                break;
+            case QD_MESSAGE_STREAM_DATA_BODY_OK:
+                result = "Unexpected body data present";
+                goto exit;
+            default:
+                result = "Next body data failed to get next body data";
+                goto exit;
+            }
+        }
+        if (!footer) {
+            result = "No footer found in out_msg1";
             goto exit;
         }
-    }
-    if (!footer) {
-        result = "No footer found in out_msg1";
-        goto exit;
-    }
 
-    done = false;
-    footer = false;
-    while (!done) {
-        switch (qd_message_next_stream_data(out_msg2, &stream_data)) {
-        case QD_MESSAGE_STREAM_DATA_NO_MORE:
-            done = true;
-            break;
-        case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
-            footer = true;
-            qd_message_stream_data_release(stream_data);
-            break;
-        case QD_MESSAGE_STREAM_DATA_BODY_OK:
-            result = "Unexpected body data present";
-            goto exit;
-        default:
-            result = "Next body data failed to get next body data";
+        done = false;
+        footer = false;
+        while (!done) {
+            switch (qd_message_next_stream_data(out_msg2, &stream_data)) {
+            case QD_MESSAGE_STREAM_DATA_NO_MORE:
+                done = true;
+                break;
+            case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
+                footer = true;
+                qd_message_stream_data_release(stream_data);
+                break;
+            case QD_MESSAGE_STREAM_DATA_BODY_OK:
+                result = "Unexpected body data present";
+                goto exit;
+            default:
+                result = "Next body data failed to get next body data";
+                goto exit;
+            }
+        }
+        if (!footer) {
+            result = "No footer found in out_msg2";
             goto exit;
         }
-    }
-    if (!footer) {
-        result = "No footer found in out_msg2";
-        goto exit;
-    }
 
-    // expect: all but the last body buffer is freed:
-    if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1
-        || DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
-        result = "Possible buffer leak detected!";
-        goto exit;
+        // expect: all but the last body buffer is freed:
+        if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1
+            || DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
+            result = "Possible buffer leak detected!";
+            goto exit;
+        }
     }
 
 exit:
@@ -1623,54 +1628,56 @@ static char *test_q2_callback_on_disable(void *context)
     qd_message_set_q2_unblocked_handler(msg, q2_unblocked_handler, unblock_arg);
     qd_message_Q2_holdoff_disable(msg);
 
-    if (unblock_called != 0) {
-        result = "Unexpected call to Q2 unblock handler!";
-        goto exit;
-    }
+    {
+        if (unblock_called != 0) {
+            result = "Unexpected call to Q2 unblock handler!";
+            goto exit;
+        }
 
-    qd_message_free(msg);
+        qd_message_free(msg);
 
-    // now try it again with a message with Q2 active
+        // now try it again with a message with Q2 active
 
-    msg = qd_message();
+        msg = qd_message();
 
-    unblock_arg.ptr = (void*) &unblock_called;
-    qd_message_set_q2_unblocked_handler(msg, q2_unblocked_handler, unblock_arg);
+        unblock_arg.ptr = (void*) &unblock_called;
+        qd_message_set_q2_unblocked_handler(msg, q2_unblocked_handler, unblock_arg);
 
-    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
-    qd_compose_start_list(field);
-    qd_compose_insert_bool(field, 0);     // durable
-    qd_compose_insert_null(field);        // priority
-    qd_compose_end_list(field);
-    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
-    qd_compose_start_list(field);
-    qd_compose_insert_ulong(field, 666);    // message-id
-    qd_compose_insert_null(field);                 // user-id
-    qd_compose_insert_string(field, "/whereevah"); // to
-    qd_compose_insert_string(field, "my-subject");  // subject
-    qd_compose_insert_string(field, "/reply-to");   // reply-to
-    qd_compose_end_list(field);
+        qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+        qd_compose_start_list(field);
+        qd_compose_insert_bool(field, 0);     // durable
+        qd_compose_insert_null(field);        // priority
+        qd_compose_end_list(field);
+        field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+        qd_compose_start_list(field);
+        qd_compose_insert_ulong(field, 666);    // message-id
+        qd_compose_insert_null(field);                 // user-id
+        qd_compose_insert_string(field, "/whereevah"); // to
+        qd_compose_insert_string(field, "my-subject");  // subject
+        qd_compose_insert_string(field, "/reply-to");   // reply-to
+        qd_compose_end_list(field);
 
-    qd_message_compose_2(msg, field, false);
-    qd_compose_free(field);
+        qd_message_compose_2(msg, field, false);
+        qd_compose_free(field);
 
-    // grow message until Q2 activates
+        // grow message until Q2 activates
 
-    bool blocked = false;
-    uint8_t data[1000] = {0};
-    while (!blocked) {
-        qd_buffer_list_t bin_data = DEQ_EMPTY;
-        qd_buffer_list_append(&bin_data, data, sizeof(data));
-        qd_message_stream_data_append(msg, &bin_data, &blocked);
-    }
+        bool blocked = false;
+        uint8_t data[1000] = {0};
+        while (!blocked) {
+            qd_buffer_list_t bin_data = DEQ_EMPTY;
+            qd_buffer_list_append(&bin_data, data, sizeof(data));
+            qd_message_stream_data_append(msg, &bin_data, &blocked);
+        }
 
-    // now ensure callback is made
+        // now ensure callback is made
 
-    qd_message_Q2_holdoff_disable(msg);
+        qd_message_Q2_holdoff_disable(msg);
 
-    if (unblock_called != 1) {
-        result = "Failed to invoke unblock handler";
-        goto exit;
+        if (unblock_called != 1) {
+            result = "Failed to invoke unblock handler";
+            goto exit;
+        }
     }
 
 
@@ -1719,42 +1726,44 @@ static char *test_q2_ignore_headers(void *context)
         DEQ_APPEND(content->buffers, field_buffers);
     }
 
-    // validate the message - this will mark the buffers that contain header
-    // data
-    if (qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES) != QD_MESSAGE_DEPTH_OK) {
-        result = "Unexpected depth check failure";
-        goto exit;
-    }
+    {
+        // validate the message - this will mark the buffers that contain header
+        // data
+        if (qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES) != QD_MESSAGE_DEPTH_OK) {
+            result = "Unexpected depth check failure";
+            goto exit;
+        }
 
-    const size_t header_ct = DEQ_SIZE(content->buffers);
-    assert(header_ct);
-    assert(!_Q2_holdoff_should_block_LH(content));
+        const size_t header_ct = DEQ_SIZE(content->buffers);
+        assert(header_ct);
+        assert(!_Q2_holdoff_should_block_LH(content));
 
-    // Now append buffers until Q2 blocks
-    while (!_Q2_holdoff_should_block_LH(content)) {
-        qd_buffer_t *buffy = qd_buffer();
-        qd_buffer_insert(buffy, qd_buffer_capacity(buffy));
-        DEQ_INSERT_TAIL(content->buffers, buffy);
-    }
+        // Now append buffers until Q2 blocks
+        while (!_Q2_holdoff_should_block_LH(content)) {
+            qd_buffer_t *buffy = qd_buffer();
+            qd_buffer_insert(buffy, qd_buffer_capacity(buffy));
+            DEQ_INSERT_TAIL(content->buffers, buffy);
+        }
 
-    // expect: Q2 blocking activates when the non-header buffer count exceeds QD_QLIMIT_Q2_UPPER
-    if (DEQ_SIZE(content->buffers) - header_ct < QD_QLIMIT_Q2_UPPER) {
-        result = "Wrong buffer length for Q2 activate!";
-        goto exit;
-    }
+        // expect: Q2 blocking activates when the non-header buffer count exceeds QD_QLIMIT_Q2_UPPER
+        if (DEQ_SIZE(content->buffers) - header_ct < QD_QLIMIT_Q2_UPPER) {
+            result = "Wrong buffer length for Q2 activate!";
+            goto exit;
+        }
 
-    // now remove buffers until Q2 is relieved
+        // now remove buffers until Q2 is relieved
 
-    while (!_Q2_holdoff_should_unblock_LH(content)) {
-        qd_buffer_t *buffy = DEQ_TAIL(content->buffers);
-        DEQ_REMOVE_TAIL(content->buffers);
-        qd_buffer_free(buffy);
-    }
+        while (!_Q2_holdoff_should_unblock_LH(content)) {
+            qd_buffer_t *buffy = DEQ_TAIL(content->buffers);
+            DEQ_REMOVE_TAIL(content->buffers);
+            qd_buffer_free(buffy);
+        }
 
-    // expect: Q2 deactivates when the non-header buffer count falls below QD_QLIMIT_Q2_LOWER
-    if (DEQ_SIZE(content->buffers) - header_ct > QD_QLIMIT_Q2_LOWER) {
-        result = "Wrong buffer length for Q2 deactivate!";
-        goto exit;
+        // expect: Q2 deactivates when the non-header buffer count falls below QD_QLIMIT_Q2_LOWER
+        if (DEQ_SIZE(content->buffers) - header_ct > QD_QLIMIT_Q2_LOWER) {
+            result = "Wrong buffer length for Q2 deactivate!";
+            goto exit;
+        }
     }
 
 exit:
@@ -1773,123 +1782,123 @@ static char *test_check_stream_data_partial(void *context)
     qd_message_t *out_msg1 = 0;
     qd_message_t *out_msg2 = 0;
 
-    // simulate building a message as an adaptor would:
-    in_msg = qd_message();
-    qd_message_content_t *content = MSG_CONTENT(in_msg);
-    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
-    qd_compose_start_list(field);
-    qd_compose_insert_bool(field, 0);     // durable
-    qd_compose_insert_null(field);        // priority
-    qd_compose_end_list(field);
-    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
-    qd_compose_start_list(field);
-    qd_compose_insert_ulong(field, 666);    // message-id
-    qd_compose_insert_null(field);                 // user-id
-    qd_compose_insert_string(field, "/whereevah"); // to
-    qd_compose_insert_string(field, "my-subject");  // subject
-    qd_compose_insert_string(field, "/reply-to");   // reply-to
-    qd_compose_end_list(field);
+    {
+        // simulate building a message as an adaptor would:
+        in_msg                        = qd_message();
+        qd_message_content_t *content = MSG_CONTENT(in_msg);
+        qd_composed_field_t *field    = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+        qd_compose_start_list(field);
+        qd_compose_insert_bool(field, 0);  // durable
+        qd_compose_insert_null(field);     // priority
+        qd_compose_end_list(field);
+        field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+        qd_compose_start_list(field);
+        qd_compose_insert_ulong(field, 666);            // message-id
+        qd_compose_insert_null(field);                  // user-id
+        qd_compose_insert_string(field, "/whereevah");  // to
+        qd_compose_insert_string(field, "my-subject");  // subject
+        qd_compose_insert_string(field, "/reply-to");   // reply-to
+        qd_compose_end_list(field);
 
-    qd_message_compose_2(in_msg, field, false);
-    qd_compose_free(field);
+        qd_message_compose_2(in_msg, field, false);
+        qd_compose_free(field);
 
-    // snapshot the message buffer count to use as a baseline
-    const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
+        // snapshot the message buffer count to use as a baseline
+        const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
 
-    // "fan out" the message
-    out_msg1 = qd_message_copy(in_msg);
-    qd_message_add_fanout(out_msg1);
-    out_msg2 = qd_message_copy(in_msg);
-    qd_message_add_fanout(out_msg2);
+        // "fan out" the message
+        out_msg1 = qd_message_copy(in_msg);
+        qd_message_add_fanout(out_msg1);
+        out_msg2 = qd_message_copy(in_msg);
+        qd_message_add_fanout(out_msg2);
 
-    // add a complete body data section
-    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
-    memset(buffer, '1', 15);
-    qd_compose_insert_binary(field, buffer, 15);
-    qd_message_extend(in_msg, field, 0);
-    qd_compose_free(field);
+        // add a complete body data section
+        field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
+        memset(buffer, '1', 15);
+        qd_compose_insert_binary(field, buffer, 15);
+        qd_message_extend(in_msg, field, 0);
+        qd_compose_free(field);
 
-    // encoded body section:
-    const uint8_t section[] = {0x00, 0x53, 0x75};
-    const uint8_t body[] = {0xA0, 5, 1, 2, 3, 4, 5};
+        // encoded body section:
+        const uint8_t section[] = {0x00, 0x53, 0x75};
+        const uint8_t body[]    = {0xA0, 5, 1, 2, 3, 4, 5};
 
-    // append only part of the body section:
-    qd_buffer_list_t blist = DEQ_EMPTY;
-    qd_buffer_list_append(&blist, section, 3);
-    for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf))
-        qd_buffer_set_fanout(bf, content->fanout);
-    DEQ_APPEND(content->buffers, blist);
+        // append only part of the body section:
+        qd_buffer_list_t blist = DEQ_EMPTY;
+        qd_buffer_list_append(&blist, section, 3);
+        for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf)) qd_buffer_set_fanout(bf, content->fanout);
+        DEQ_APPEND(content->buffers, blist);
 
-    qd_message_stream_data_t *sdata = 0;
-    qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg1, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
-        result = "Did not get first body data entry!";
-        goto exit;
-    }
-    qd_message_stream_data_release(sdata);
-
-    rc = qd_message_next_stream_data(out_msg1, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_INCOMPLETE) {
-        result = "Expected incomplete next body data entry!";
-        goto exit;
-    }
-
-    // append the remainder to complete this section
-    qd_buffer_list_append(&blist, body, 7);
-    for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf))
-        qd_buffer_set_fanout(bf, content->fanout);
-    DEQ_APPEND(content->buffers, blist);
-
-    // add another complete body data section
-    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
-    memset(buffer, '1', 15);
-    qd_compose_insert_binary(field, buffer, 15);
-    qd_message_extend(in_msg, field, 0);
-    qd_compose_free(field);
-    SET_ATOMIC_FLAG(&content->receive_complete);
-
-    rc = qd_message_next_stream_data(out_msg1, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
-        result = "Did not get second body data entry!";
-        goto exit;
-    }
-    qd_message_stream_data_release(sdata);
-
-    rc = qd_message_next_stream_data(out_msg1, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
-        result = "Did not get last body data entry!";
-        goto exit;
-    }
-    qd_message_stream_data_release(sdata);
-
-    rc = qd_message_next_stream_data(out_msg1, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
-        result = "Did not get NO MORE!";
-        goto exit;
-    }
-
-    int i = 0;
-    rc = qd_message_next_stream_data(out_msg2, &sdata);
-    while (rc == QD_MESSAGE_STREAM_DATA_BODY_OK) {
-        ++i;
+        qd_message_stream_data_t *sdata    = 0;
+        qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg1, &sdata);
+        if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+            result = "Did not get first body data entry!";
+            goto exit;
+        }
         qd_message_stream_data_release(sdata);
-        rc = qd_message_next_stream_data(out_msg2, &sdata);
-    }
 
-    if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
-        result = "Did not get NO MORE for msg2!";
-        goto exit;
-    }
+        rc = qd_message_next_stream_data(out_msg1, &sdata);
+        if (rc != QD_MESSAGE_STREAM_DATA_INCOMPLETE) {
+            result = "Expected incomplete next body data entry!";
+            goto exit;
+        }
 
-    if (i != 3) {
-        result = "Did not get 3 sections for msg2!";
-        goto exit;
-    }
+        // append the remainder to complete this section
+        qd_buffer_list_append(&blist, body, 7);
+        for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf)) qd_buffer_set_fanout(bf, content->fanout);
+        DEQ_APPEND(content->buffers, blist);
 
-    if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1
-        || DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
-        result = "Possible buffer leak detected!";
-        goto exit;
+        // add another complete body data section
+        field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
+        memset(buffer, '1', 15);
+        qd_compose_insert_binary(field, buffer, 15);
+        qd_message_extend(in_msg, field, 0);
+        qd_compose_free(field);
+        SET_ATOMIC_FLAG(&content->receive_complete);
+
+        rc = qd_message_next_stream_data(out_msg1, &sdata);
+        if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+            result = "Did not get second body data entry!";
+            goto exit;
+        }
+        qd_message_stream_data_release(sdata);
+
+        rc = qd_message_next_stream_data(out_msg1, &sdata);
+        if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+            result = "Did not get last body data entry!";
+            goto exit;
+        }
+        qd_message_stream_data_release(sdata);
+
+        rc = qd_message_next_stream_data(out_msg1, &sdata);
+        if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
+            result = "Did not get NO MORE!";
+            goto exit;
+        }
+
+        int i = 0;
+        rc    = qd_message_next_stream_data(out_msg2, &sdata);
+        while (rc == QD_MESSAGE_STREAM_DATA_BODY_OK) {
+            ++i;
+            qd_message_stream_data_release(sdata);
+            rc = qd_message_next_stream_data(out_msg2, &sdata);
+        }
+
+        if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
+            result = "Did not get NO MORE for msg2!";
+            goto exit;
+        }
+
+        if (i != 3) {
+            result = "Did not get 3 sections for msg2!";
+            goto exit;
+        }
+
+        if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1 ||
+            DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
+            result = "Possible buffer leak detected!";
+            goto exit;
+        }
     }
 
 exit:
@@ -1898,7 +1907,6 @@ exit:
     qd_message_free(out_msg2);
     return result;
 }
-
 // Verify that aborted messages are detected by the data stream parser
 //
 static char *test_check_stream_data_aborted_body(void *context)

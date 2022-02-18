@@ -445,53 +445,56 @@ static char *test_compose_buffer_field(void *context)
         goto exit;
     }
 
-    qd_parsed_field_t *pvalue = qd_parse_value_by_key(pmap, "key1");
-    if (!pvalue || qd_parse_as_uint(pvalue) != 10) {
-        error = "Failed to parse key1";
-        goto exit;
-    }
+    {
+        qd_parsed_field_t *pvalue = qd_parse_value_by_key(pmap, "key1");
+        if (!pvalue || qd_parse_as_uint(pvalue) != 10) {
+            error = "Failed to parse key1";
+            goto exit;
+        }
 
-    pvalue = qd_parse_value_by_key(pmap, "key3");
-    if (!pvalue || qd_parse_as_uint(pvalue) != 99) {
-        error = "Failed to parse key3";
-        goto exit;
-    }
+        pvalue = qd_parse_value_by_key(pmap, "key3");
+        if (!pvalue || qd_parse_as_uint(pvalue) != 99) {
+            error = "Failed to parse key3";
+            goto exit;
+        }
 
-    qd_parsed_field_t *plist = qd_parse_value_by_key(pmap, "key2");
-    if (!plist || !qd_parse_is_list(plist)) {
-        error = "Failed to parse key2";
-        goto exit;
-    }
+        qd_parsed_field_t *plist = qd_parse_value_by_key(pmap, "key2");
+        if (!plist || !qd_parse_is_list(plist)) {
+            error = "Failed to parse key2";
+            goto exit;
+        }
 
-    if (qd_parse_sub_count(plist) != 3) {
-        error = "Invalid list count";
-        goto exit;
-    }
+        if (qd_parse_sub_count(plist) != 3) {
+            error = "Invalid list count";
+            goto exit;
+        }
 
-    pvalue = qd_parse_sub_value(plist, 0);
-    if (!pvalue || qd_parse_as_ulong(pvalue) != 66) {
-        error = "Invalid element 0";
-        goto exit;
-    }
+        pvalue = qd_parse_sub_value(plist, 0);
+        if (!pvalue || qd_parse_as_ulong(pvalue) != 66) {
+            error = "Invalid element 0";
+            goto exit;
+        }
 
-    pvalue = qd_parse_sub_value(plist, 1);
-    if (!pvalue) {
-        error = "Missing list element 1";
-        goto exit;
-    }
+        pvalue = qd_parse_sub_value(plist, 1);
+        if (!pvalue) {
+            error = "Missing list element 1";
+            goto exit;
+        }
 
-    qd_iterator_t *citer = qd_parse_raw(pvalue);
-    if (!citer || !qd_iterator_equal(citer, (const unsigned char*) "abcde")) {
-        error = "Invalid element 1";
-        goto exit;
-    }
+        {
+            qd_iterator_t *citer = qd_parse_raw(pvalue);
+            if (!citer || !qd_iterator_equal(citer, (const unsigned char *) "abcde")) {
+                error = "Invalid element 1";
+                goto exit;
+            }
+        }
 
-    pvalue = qd_parse_sub_value(plist, 2);
-    if (!pvalue || !qd_parse_is_list(pvalue) || qd_parse_sub_count(pvalue) != 0) {
-        error = "Invalid element 2";
-        goto exit;
+        pvalue = qd_parse_sub_value(plist, 2);
+        if (!pvalue || !qd_parse_is_list(pvalue) || qd_parse_sub_count(pvalue) != 0) {
+            error = "Invalid element 2";
+            goto exit;
+        }
     }
-
 
 exit:
 

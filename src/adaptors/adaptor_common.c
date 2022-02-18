@@ -70,9 +70,11 @@ qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *enti
     if (config->backlog <= 0 || config->backlog > SOMAXCONN)
         config->backlog = SOMAXCONN;
 
-    int hplen = strlen(config->host) + strlen(config->port) + 2;
-    config->host_port = malloc(hplen);
-    snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
+    {
+        int hplen         = strlen(config->host) + strlen(config->port) + 2;
+        config->host_port = malloc(hplen);
+        snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
+    }
 
     return QD_ERROR_NONE;
 

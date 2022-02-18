@@ -93,7 +93,7 @@ static qd_error_t qd_load_http_adaptor_config(qd_http_adaptor_config_t *config, 
     CHECK();
     if (strcmp(version_str, "HTTP2") == 0) {
         config->http_version = HTTP2;
-    } else if (strcmp(version_str, "HTTP1") == 0) {
+    } else if (strcmp(version_str, "HTTP1") == 0){
         config->http_version = HTTP1;
     } else {
         qd_error(QD_ERROR_CONFIG, "Invalid value for HTTP version: %s, expected 'HTTP1' or 'HTTP2'", version_str);

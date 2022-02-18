@@ -313,95 +313,101 @@ static int is_ipv6_address(qd_http_server_t *hs, const char* host, const char* p
     return result;
 }
 
-static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
+static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs)
+{
     log_init();                 /* Update log flags at each listener */
 
     qd_server_config_t *config = &hl->listener->config;
+    {
+        int port = qd_port_int(config->port);
+        if (port < 0) {
+            qd_log(LOG_HTTP, QD_LOG_ERROR, "HTTP listener %s has invalid port %s",
+                   config->host_port, config->port);
+            goto error;
+        }
+        struct lws_http_mount *m = &hl->mount;
+        m->mountpoint = "/";    /* URL mount point */
+        m->mountpoint_len = strlen(m->mountpoint); /* length of the mountpoint */
+        m->origin = (config->http_root_dir && *config->http_root_dir) ? /* File system root */
+            config->http_root_dir : QPID_DISPATCH_HTTP_ROOT_DIR;
+        m->def = "index.html";  /* Default file name */
+        m->origin_protocol = LWSMPRO_FILE; /* mount type is a directory in a filesystem */
+        m->extra_mimetypes = mime_types;
+        struct lws_http_mount *tail = m;
+        if (config->metrics) {
+            struct lws_http_mount *metrics = &hl->metrics;
+            tail->mount_next = metrics;
+            tail = metrics;
+            metrics->mountpoint = "/metrics";
+            metrics->mountpoint_len = strlen(metrics->mountpoint);
+            metrics->origin_protocol = LWSMPRO_CALLBACK;
+            metrics->protocol = "http";
+            metrics->origin = IGNORED;
+        }
+        if (config->healthz) {
+            struct lws_http_mount *healthz = &hl->healthz;
+            tail->mount_next = healthz;
+            healthz->mountpoint = "/healthz";
+            healthz->mountpoint_len = strlen(healthz->mountpoint);
+            healthz->origin_protocol = LWSMPRO_CALLBACK;
+            healthz->protocol = "healthz";
+            healthz->origin = IGNORED;
+        }
 
-    int port = qd_port_int(config->port);
-    if (port < 0) {
-        qd_log(LOG_HTTP, QD_LOG_ERROR, "HTTP listener %s has invalid port %s", config->host_port,
-               config->port);
-        goto error;
-    }
-    struct lws_http_mount *m = &hl->mount;
-    m->mountpoint = "/";    /* URL mount point */
-    m->mountpoint_len = strlen(m->mountpoint); /* length of the mountpoint */
-    m->origin = (config->http_root_dir && *config->http_root_dir) ? /* File system root */
-        config->http_root_dir : QPID_DISPATCH_HTTP_ROOT_DIR;
-    m->def = "index.html";  /* Default file name */
-    m->origin_protocol = LWSMPRO_FILE; /* mount type is a directory in a filesystem */
-    m->extra_mimetypes = mime_types;
-    struct lws_http_mount *tail = m;
-    if (config->metrics) {
-        struct lws_http_mount *metrics = &hl->metrics;
-        tail->mount_next = metrics;
-        tail = metrics;
-        metrics->mountpoint = "/metrics";
-        metrics->mountpoint_len = strlen(metrics->mountpoint);
-        metrics->origin_protocol = LWSMPRO_CALLBACK;
-        metrics->protocol = "http";
-        metrics->origin = IGNORED;
-    }
-    if (config->healthz) {
-        struct lws_http_mount *healthz = &hl->healthz;
-        tail->mount_next = healthz;
-        healthz->mountpoint = "/healthz";
-        healthz->mountpoint_len = strlen(healthz->mountpoint);
-        healthz->origin_protocol = LWSMPRO_CALLBACK;
-        healthz->protocol = "healthz";
-        healthz->origin = IGNORED;
-    }
+        struct lws_context_creation_info info = {0};
+        info.mounts = m;
+        info.port = port;
+        info.protocols = protocols;
+        info.keepalive_timeout = 1;
+        info.ssl_cipher_list = CIPHER_LIST;
+        info.options |= LWS_SERVER_OPTION_VALIDATE_UTF8;
+        if (!is_ipv6_address(hs, strlen(config->host) == 0 ? 0 : config->host, config->port)) {
+            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
+            info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
+        }
+        if (config->ssl_profile) {
+            info.ssl_cert_filepath = config->ssl_certificate_file;
+            info.ssl_private_key_filepath = config->ssl_private_key_file;
+            info.ssl_private_key_password = config->ssl_password;
+            info.ssl_ca_filepath = config->ssl_trusted_certificate_db;
+            info.ssl_cipher_list = config->ssl_ciphers;
 
-    struct lws_context_creation_info info = {0};
-    info.mounts = m;
-    info.port = port;
-    info.protocols = protocols;
-    info.keepalive_timeout = 1;
-    info.ssl_cipher_list = CIPHER_LIST;
-    info.options |= LWS_SERVER_OPTION_VALIDATE_UTF8;
-    if (!is_ipv6_address(hs, strlen(config->host) == 0 ? 0 : config->host, config->port)) {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
-        info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
-    }
-    if (config->ssl_profile) {
-        info.ssl_cert_filepath = config->ssl_certificate_file;
-        info.ssl_private_key_filepath = config->ssl_private_key_file;
-        info.ssl_private_key_password = config->ssl_password;
-        info.ssl_ca_filepath = config->ssl_trusted_certificate_db;
-        info.ssl_cipher_list = config->ssl_ciphers;
+            info.options |=
+                LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
 
-        info.options |=
-            LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
-            (config->ssl_required ? 0 : LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT | LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER) |
-            ((config->requireAuthentication && info.ssl_ca_filepath) ? LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT : 0);
-    }
-    info.vhost_name = hl->listener->config.host_port;
-    info.finalize = finalize_http;
-    info.finalize_arg = hl;
-    hl->vhost = lws_create_vhost(hs->context, &info);
-    if (!hl->vhost) {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
-        goto error;
-    }
+                (config->ssl_required ? 0 : LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT | LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER) |
 
-    /* Store hl pointer in vhost */
-    void *vp = lws_protocol_vh_priv_zalloc(hl->vhost, &protocols[0], sizeof(hl));
-    memcpy(vp, &hl, sizeof(hl));
+                ((config->requireAuthentication && info.ssl_ca_filepath) ? LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT : 0);
+        }
+        info.vhost_name = hl->listener->config.host_port;
 
-    if (port == 0) {
-        // If a 0 (zero) is specified for a port, get the actual listening port from the listener.
-        const int resolved_port = lws_get_vhost_port(hl->vhost);
-        assert(resolved_port != -1); // already checked the vhost is successfully started
-        if (config->name)
-            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
+        info.finalize = finalize_http;
+        info.finalize_arg = hl;
+
+        hl->vhost = lws_create_vhost(hs->context, &info);
+        if (!hl->vhost) {
+            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
+            goto error;
+        }
+
+        /* Store hl pointer in vhost */
+        void *vp = lws_protocol_vh_priv_zalloc(hl->vhost, &protocols[0], sizeof(hl));
+        memcpy(vp, &hl, sizeof(hl));
+
+        if (port == 0) {
+            // If a 0 (zero) is specified for a port, get the actual listening port from the listener.
+            const int resolved_port = lws_get_vhost_port(hl->vhost);
+            assert(resolved_port != -1); // already checked the vhost is successfully started
+            if (config->name)
+                qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
                    config->name);
-        else
-            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d", config->host, resolved_port);
-    } else {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s", config->host_port);
+            else
+                qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d", config->host, resolved_port);
+        } else {
+            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s", config->host_port);
+        }
+        return;
     }
-    return;
 
   error:
     if (hl->listener->exit_on_error) {

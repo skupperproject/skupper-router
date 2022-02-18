@@ -155,7 +155,7 @@ static void on_conn_event(void             *context,
     qcm_heartbeat_edge_t *client = (qcm_heartbeat_edge_t*) context;
 
     switch (event_type) {
-    case QDRC_EVENT_CONN_EDGE_ESTABLISHED:
+    case QDRC_EVENT_CONN_EDGE_ESTABLISHED: {
         client->edge_conn   = conn;
         client->link_credit = 0;
 
@@ -167,6 +167,7 @@ static void on_conn_event(void             *context,
         client->endpoint = qdrc_endpoint_create_link_CT(client->core, client->edge_conn, QD_OUTGOING,
                                                         0, target, &descriptor, client);
         break;
+    }
 
     case QDRC_EVENT_CONN_EDGE_LOST:
         client->edge_conn   = 0;

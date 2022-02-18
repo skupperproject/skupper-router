@@ -1588,117 +1588,122 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
     assert(!hreq->base.lib_rs);
     assert(qd_message_check_depth(msg, QD_DEPTH_PROPERTIES) == QD_MESSAGE_DEPTH_OK);
 
-    // method is passed in the SUBJECT field
-    qd_iterator_t *method_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
-    if (!method_iter) {
-        return PN_REJECTED;
-    }
+    {
+        // method is passed in the SUBJECT field
+        qd_iterator_t *method_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
+        if (!method_iter) {
+            return PN_REJECTED;
+        }
 
-    method_str = (char*) qd_iterator_copy(method_iter);
-    qd_iterator_free(method_iter);
-    if (!method_str || *method_str == 0) {
-        outcome = PN_REJECTED;
+        method_str = (char*) qd_iterator_copy(method_iter);
+        qd_iterator_free(method_iter);
+        if (!method_str || *method_str == 0) {
+            outcome = PN_REJECTED;
         goto exit;
     }
 
-    // target, version info and other headers are in the app properties
-    qd_iterator_t *app_props_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
-    if (!app_props_iter) {
-        outcome = PN_REJECTED;
-        goto exit;
-    }
+        // target, version info and other headers are in the app properties
+        qd_iterator_t *app_props_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
+        if (!app_props_iter) {
+            outcome = PN_REJECTED;
+            goto exit;
+        }
 
-    app_props = qd_parse(app_props_iter);
-    qd_iterator_free(app_props_iter);
-    if (!app_props) {
-        outcome = PN_REJECTED;
-        goto exit;
-    }
+        app_props = qd_parse(app_props_iter);
+        qd_iterator_free(app_props_iter);
+        if (!app_props) {
+            outcome = PN_REJECTED;
+            goto exit;
+        }
 
-    qd_parsed_field_t *ref = qd_parse_value_by_key(app_props, PATH_PROP_KEY);
-    target_str = (char*) qd_iterator_copy(qd_parse_raw(ref));
-    if (!target_str || *target_str == 0) {
-        outcome = PN_REJECTED;
-        goto exit;
-    }
+        qd_parsed_field_t *ref = qd_parse_value_by_key(app_props, PATH_PROP_KEY);
+        target_str = (char*) qd_iterator_copy(qd_parse_raw(ref));
+        if (!target_str || *target_str == 0) {
+            outcome = PN_REJECTED;
+            goto exit;
+        }
 
-    // Pull the version info from the app properties (e.g. "1.1")
-    ref = qd_parse_value_by_key(app_props, VERSION_PROP_KEY);
-    if (ref) {  // optional
-        char *version_str = (char*) qd_iterator_copy(qd_parse_raw(ref));
-        if (version_str)
-            sscanf(version_str, "%"SCNu32".%"SCNu32, &major, &minor);
-        free(version_str);
-    }
 
-    // done copying and converting!
+        // Pull the version info from the app properties (e.g. "1.1")
+        ref = qd_parse_value_by_key(app_props, VERSION_PROP_KEY);
+        if (ref) {  // optional
+            char *version_str = (char*) qd_iterator_copy(qd_parse_raw(ref));
+            if (version_str)
+                sscanf(version_str, "%"SCNu32".%"SCNu32, &major, &minor);
+            free(version_str);
+        }
 
-    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
-           "[C%" PRIu64 "][L%" PRIu64 "] Encoding request method=%s target=%s", hconn->conn_id, hconn->out_link_id,
-           method_str, target_str);
+        // done copying and converting!
 
-    hreq->base.lib_rs = h1_codec_tx_request(hconn->http_conn, method_str, target_str, major, minor);
-    if (!hreq->base.lib_rs) {
-        outcome = PN_REJECTED;
-        goto exit;
-    }
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
+               "[C%"PRIu64"][L%"PRIu64"] Encoding request method=%s target=%s",
+               hconn->conn_id, hconn->out_link_id, method_str, target_str);
 
-    h1_codec_request_state_set_context(hreq->base.lib_rs, (void*) hreq);
+        hreq->base.lib_rs = h1_codec_tx_request(hconn->http_conn, method_str, target_str, major, minor);
+        if (!hreq->base.lib_rs) {
+            outcome = PN_REJECTED;
+            goto exit;
+        }
 
-    // now send all headers in app properties
-    qd_parsed_field_t *key = qd_field_first_child(app_props);
-    bool ok = true;
-    while (ok && key) {
-        qd_parsed_field_t *value = qd_field_next_child(key);
-        if (!value)
-            break;
+        h1_codec_request_state_set_context(hreq->base.lib_rs, (void*) hreq);
 
-        qd_iterator_t *i_key = qd_parse_raw(key);
-        if (!i_key)
-            break;
-
-        if (hconn->cfg.host_override && qd_iterator_equal(i_key, (const unsigned char*) HOST_KEY)) {
-            //if host override option is in use, write the configured
-            //value rather than that submitted by client
-            char *header_key = (char*) qd_iterator_copy(i_key);
-            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
-                   "[C%" PRIu64 "][L%" PRIu64 "] Encoding request header %s:%s", hconn->conn_id, hconn->out_link_id,
-                   header_key, hconn->cfg.host_override);
-
-            ok = !h1_codec_tx_add_header(hreq->base.lib_rs, header_key, hconn->cfg.host_override);
-
-            free(header_key);
-
-        } else if (!qd_iterator_prefix(i_key, ":")) {
-
-            // ignore the special headers added by the mapping
-            qd_iterator_t *i_value = qd_parse_raw(value);
-            if (!i_value)
+        // now send all headers in app properties
+        qd_parsed_field_t *key = qd_field_first_child(app_props);
+        bool ok = true;
+        while (ok && key) {
+            qd_parsed_field_t *value = qd_field_next_child(key);
+            if (!value)
                 break;
 
-            char *header_key = (char*) qd_iterator_copy(i_key);
-            char *header_value = (char*) qd_iterator_copy(i_value);
+            qd_iterator_t *i_key = qd_parse_raw(key);
+            if (!i_key)
+                break;
 
-            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
-                   "[C%" PRIu64 "][L%" PRIu64 "] Encoding request header %s:%s", hconn->conn_id, hconn->out_link_id,
-                   header_key, header_value);
+            if (hconn->cfg.host_override && qd_iterator_equal(i_key, (const unsigned char*) HOST_KEY)) {
+                //if host override option is in use, write the configured
+                //value rather than that submitted by client
+                char *header_key = (char*) qd_iterator_copy(i_key);
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
+                       "[C%"PRIu64"][L%"PRIu64"] Encoding request header %s:%s",
+                       hconn->conn_id, hconn->out_link_id,
+                       header_key, hconn->cfg.host_override);
 
-            ok = !h1_codec_tx_add_header(hreq->base.lib_rs, header_key, header_value);
+                ok = !h1_codec_tx_add_header(hreq->base.lib_rs, header_key, hconn->cfg.host_override);
 
-            free(header_key);
-            free(header_value);
-        } else if (qd_iterator_equal(i_key, (const unsigned char *) QD_AP_FLOW_ID)) {
+                free(header_key);
+
+            } else if (!qd_iterator_prefix(i_key, ":")) {
+
+                // ignore the special headers added by the mapping
+                qd_iterator_t *i_value = qd_parse_raw(value);
+                if (!i_value)
+                    break;
+
+                char *header_key = (char*) qd_iterator_copy(i_key);
+                char *header_value = (char*) qd_iterator_copy(i_value);
+
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
+                       "[C%"PRIu64"][L%"PRIu64"] Encoding request header %s:%s",
+                       hconn->conn_id, hconn->out_link_id,
+                       header_key, header_value);
+
+                ok = !h1_codec_tx_add_header(hreq->base.lib_rs, header_key, header_value);
+
+                free(header_key);
+                free(header_value);
+            } else if (qd_iterator_equal(i_key, (const unsigned char *) QD_AP_FLOW_ID)) {
             //
             // Get the vanflow id from the message and set that as the van counterflow.
             //
             vflow_set_ref_from_parsed(hreq->base.vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, value);
         }
 
-        key = qd_field_next_child(value);
-    }
+            key = qd_field_next_child(value);
+        }
 
-    if (!ok)
-        outcome = PN_REJECTED;
+        if (!ok)
+            outcome = PN_REJECTED;
+    }
 
 exit:
 

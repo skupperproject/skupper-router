@@ -128,7 +128,7 @@ static char *test_buffer_list_append(void *context)
 
 static char *test_buffer_field(void *context)
 {
-    char *result = 0;
+    char *result                   = 0;
     static const uint8_t data1[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
     static const uint8_t data2[10] = {0xF9, 0xF8, 0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0};
     qd_buffer_list_t list;
@@ -152,14 +152,14 @@ static char *test_buffer_field(void *context)
 
     // verify octet read
 
-    bfield.buffer = DEQ_HEAD(list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
+    bfield.buffer    = DEQ_HEAD(list);
+    bfield.cursor    = qd_buffer_base(bfield.buffer);
     bfield.remaining = 2000;
 
-    int total_octets = 0;
+    int total_octets       = 0;
     size_t expected_length = 2000;
-    uint8_t next_octet = 0;
-    uint8_t octet = 0xFF;
+    uint8_t next_octet     = 0;
+    uint8_t octet          = 0xFF;
     while (qd_buffer_field_octet(&bfield, &octet)) {
         total_octets += 1;
         expected_length -= 1;
@@ -189,176 +189,185 @@ static char *test_buffer_field(void *context)
 
     // verify advance
 
-    bfield.buffer = DEQ_HEAD(list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
-    bfield.remaining = 2000;
+    {
+        bfield.buffer    = DEQ_HEAD(list);
+        bfield.cursor    = qd_buffer_base(bfield.buffer);
+        bfield.remaining = 2000;
 
-    size_t amount = qd_buffer_field_advance(&bfield, 2);
-    if (amount != 2) {
-        result = "advance 2 failed";
-        goto exit;
-    }
+        size_t amount = qd_buffer_field_advance(&bfield, 2);
+        if (amount != 2) {
+            result = "advance 2 failed";
+            goto exit;
+        }
 
-    if (!qd_buffer_field_octet(&bfield, &octet) || octet != 2) {
-        result = "expected to advance to '2'";
-        goto exit;
-    }
+        if (!qd_buffer_field_octet(&bfield, &octet) || octet != 2) {
+            result = "expected to advance to '2'";
+            goto exit;
+        }
 
-    amount = qd_buffer_field_advance(&bfield, 1995);
-    if (amount != 1995) {
-        result = "advance 1995 failed";
-        goto exit;
-    }
+        amount = qd_buffer_field_advance(&bfield, 1995);
+        if (amount != 1995) {
+            result = "advance 1995 failed";
+            goto exit;
+        }
 
-    if (bfield.remaining != 2) {
-        result = "expected 2 last octets";
-        goto exit;
-    }
+        if (bfield.remaining != 2) {
+            result = "expected 2 last octets";
+            goto exit;
+        }
 
-    if (!qd_buffer_field_octet(&bfield, &octet) || octet != 0xF1) {
-        result = "expected to advance to '0xF1'";
-        goto exit;
-    }
+        if (!qd_buffer_field_octet(&bfield, &octet) || octet != 0xF1) {
+            result = "expected to advance to '0xF1'";
+            goto exit;
+        }
 
-    amount = qd_buffer_field_advance(&bfield, 3);
-    if (amount != 1 || bfield.remaining != 0) {
-        result = "failed to advance to end of field";
-        goto exit;
-    }
+        amount = qd_buffer_field_advance(&bfield, 3);
+        if (amount != 1 || bfield.remaining != 0) {
+            result = "failed to advance to end of field";
+            goto exit;
+        }
 
-    // verify ncopy
+        // verify ncopy
 
-    bfield.buffer = DEQ_HEAD(list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
-    bfield.remaining = 2000;
+        bfield.buffer    = DEQ_HEAD(list);
+        bfield.cursor    = qd_buffer_base(bfield.buffer);
+        bfield.remaining = 2000;
 
-    uint8_t dest[10];
-    amount = qd_buffer_field_ncopy(&bfield, dest, 5);
-    if (amount != 5) {
-        result = "failed to ncopy 5";
-        goto exit;
-    }
-    if (memcmp(dest, data1, 5)) {
-        result = "ncopy 5 failed";
-        goto exit;
-    }
-    amount = qd_buffer_field_ncopy(&bfield, dest, 10);
-    if (amount != 10) {
-        result = "failed to ncopy 10";
-        goto exit;
-    }
-    if (memcmp(dest, &data1[5], 5) || memcmp(&dest[5], &data2[0], 5)) {
-        result = "ncopy 10 failed";
-        goto exit;
-    }
-    amount = qd_buffer_field_advance(&bfield, 1980);
-    if (amount != 1980) {
-        result = "advance 1980 failed";
-        goto exit;
-    }
-    amount = qd_buffer_field_ncopy(&bfield, dest, 10);
-    if (amount != 5) {
-        result = "ncopy expected 5 failed";
-        goto exit;
-    }
-    if (memcmp(dest, &data2[5], 5) || bfield.remaining != 0) {
-        result = "ncopy at end failed";
-        goto exit;
+        uint8_t dest[10];
+        amount = qd_buffer_field_ncopy(&bfield, dest, 5);
+        if (amount != 5) {
+            result = "failed to ncopy 5";
+            goto exit;
+        }
+        if (memcmp(dest, data1, 5)) {
+            result = "ncopy 5 failed";
+            goto exit;
+        }
+        amount = qd_buffer_field_ncopy(&bfield, dest, 10);
+        if (amount != 10) {
+            result = "failed to ncopy 10";
+            goto exit;
+        }
+        if (memcmp(dest, &data1[5], 5) || memcmp(&dest[5], &data2[0], 5)) {
+            result = "ncopy 10 failed";
+            goto exit;
+        }
+        amount = qd_buffer_field_advance(&bfield, 1980);
+        if (amount != 1980) {
+            result = "advance 1980 failed";
+            goto exit;
+        }
+        amount = qd_buffer_field_ncopy(&bfield, dest, 10);
+        if (amount != 5) {
+            result = "ncopy expected 5 failed";
+            goto exit;
+        }
+        if (memcmp(dest, &data2[5], 5) || bfield.remaining != 0) {
+            result = "ncopy at end failed";
+            goto exit;
+        }
     }
 
     // verify equal
 
-    bfield.buffer = DEQ_HEAD(list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
+    bfield.buffer    = DEQ_HEAD(list);
+    bfield.cursor    = qd_buffer_base(bfield.buffer);
     bfield.remaining = 2000;
 
-    const uint8_t pattern[] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\xF9\xF8\xF7\xF6\xF5\xF4\xF3\xF2\xF1\xF0";
-    const uint8_t pattern_bad[] = "\xF9\xF8\xF7\xF6\xF5\xF4\xF3\xF2\xF1\xF0\xAA";
-    if (qd_buffer_field_equal(&bfield, (uint8_t*) "\x00\x01\x03", 3)) {
-        result = "expected equal 3 to fail";
-        goto exit;
-    }
-    if (bfield.remaining != 2000) {
-        result = "do not advance on failed equal";
-        goto exit;
-    }
-    if (!qd_buffer_field_equal(&bfield, pattern, 20)) {
-        result = "expected pattern match";
-        goto exit;
-    }
-    if (bfield.remaining != 1980) {
-        result = "match did not advance";
-        goto exit;
-    }
-    (void)qd_buffer_field_advance(&bfield, 1960);
-    if (!qd_buffer_field_equal(&bfield, pattern, 10)) {
-        result = "expected sub pattern match";
-        goto exit;
-    }
-    if (qd_buffer_field_equal(&bfield, pattern_bad, 11)) {
-        result = "did not expect sub pattern match";
-        goto exit;
-    }
-    if (bfield.remaining != 10) {
-        result = "mismatch advanced";
-        goto exit;
-    }
-    if (!qd_buffer_field_equal(&bfield, &pattern[10], 9 )) {
-        result = "expected end sub pattern match";
-        goto exit;
-    }
+    {
+        const uint8_t pattern[] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\xF9\xF8\xF7\xF6\xF5\xF4\xF3\xF2\xF1\xF0";
+        const uint8_t pattern_bad[] = "\xF9\xF8\xF7\xF6\xF5\xF4\xF3\xF2\xF1\xF0\xAA";
+        if (qd_buffer_field_equal(&bfield, (uint8_t *) "\x00\x01\x03", 3)) {
+            result = "expected equal 3 to fail";
+            goto exit;
+        }
+        if (bfield.remaining != 2000) {
+            result = "do not advance on failed equal";
+            goto exit;
+        }
+        if (!qd_buffer_field_equal(&bfield, pattern, 20)) {
+            result = "expected pattern match";
+            goto exit;
+        }
+        if (bfield.remaining != 1980) {
+            result = "match did not advance";
+            goto exit;
+        }
+        (void) qd_buffer_field_advance(&bfield, 1960);
+        if (!qd_buffer_field_equal(&bfield, pattern, 10)) {
+            result = "expected sub pattern match";
+            goto exit;
+        }
+        if (qd_buffer_field_equal(&bfield, pattern_bad, 11)) {
+            result = "did not expect sub pattern match";
+            goto exit;
+        }
+        if (bfield.remaining != 10) {
+            result = "mismatch advanced";
+            goto exit;
+        }
+        if (!qd_buffer_field_equal(&bfield, &pattern[10], 9)) {
+            result = "expected end sub pattern match";
+            goto exit;
+        }
 
-    if (!qd_buffer_field_octet(&bfield, &octet) || octet != 0xF0) {
-        result = "failed to octet read the extra trailing octet in the pattern";
+        if (!qd_buffer_field_octet(&bfield, &octet) || octet != 0xF0) {
+            result = "failed to octet read the extra trailing octet in the pattern";
+        }
     }
 
     // verify buffer list append
 
-    bfield.buffer = DEQ_HEAD(list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
+    bfield.buffer    = DEQ_HEAD(list);
+    bfield.cursor    = qd_buffer_base(bfield.buffer);
     bfield.remaining = 2000;
 
-    qd_buffer_field_t saved_bfield = bfield;
-    qd_buffer_t *bptr = 0;
+    {
+        qd_buffer_field_t saved_bfield = bfield;
+        qd_buffer_t *bptr              = 0;
 
-    qd_buffer_list_append_field(&other_list, &bfield);
-    if (bfield.remaining) {
-        result = "expected to append 2000 octets";
-        goto exit;
-    }
-    bptr = DEQ_HEAD(other_list);
-    uint32_t cmp_count = 0;
-    while (bptr) {
-        if (!qd_buffer_field_equal(&saved_bfield, qd_buffer_base(bptr), qd_buffer_size(bptr))) {
-            result = "expected list and buffers to be equal";
+        qd_buffer_list_append_field(&other_list, &bfield);
+        if (bfield.remaining) {
+            result = "expected to append 2000 octets";
             goto exit;
         }
-        cmp_count += qd_buffer_size(bptr);
-        bptr = DEQ_NEXT(bptr);
-    }
 
-    if (saved_bfield.remaining != 0) {
-        result = "expected saved_bfield to be empty";
-        goto exit;
-    }
+        bptr               = DEQ_HEAD(other_list);
+        uint32_t cmp_count = 0;
+        while (bptr) {
+            if (!qd_buffer_field_equal(&saved_bfield, qd_buffer_base(bptr), qd_buffer_size(bptr))) {
+                result = "expected list and buffers to be equal";
+                goto exit;
+            }
+            cmp_count += qd_buffer_size(bptr);
+            bptr = DEQ_NEXT(bptr);
+        }
 
-    if (cmp_count != 2000) {
-        result = "did not compare 2000 octets";
-        goto exit;
+        if (saved_bfield.remaining != 0) {
+            result = "expected saved_bfield to be empty";
+            goto exit;
+        }
+
+        if (cmp_count != 2000) {
+            result = "did not compare 2000 octets";
+            goto exit;
+        }
     }
 
     qd_buffer_list_free_buffers(&other_list);
 
-    const char *append_str = "abcdefghijklmnopqrstuvwxyz";
-    qd_buffer_list_append(&other_list, (const uint8_t *)append_str, strlen(append_str));
+    {
+        const char *append_str = "abcdefghijklmnopqrstuvwxyz";
+        qd_buffer_list_append(&other_list, (const uint8_t *) append_str, strlen(append_str));
 
-    bfield.buffer = DEQ_HEAD(other_list);
-    bfield.cursor = qd_buffer_base(bfield.buffer);
-    bfield.remaining = strlen(append_str);
+        bfield.buffer    = DEQ_HEAD(other_list);
+        bfield.cursor    = qd_buffer_base(bfield.buffer);
+        bfield.remaining = strlen(append_str);
 
-    if (!qd_buffer_field_equal(&bfield, (const uint8_t*) append_str, strlen(append_str))) {
-        result = "expected to equal append_str";
-        goto exit;
+        if (!qd_buffer_field_equal(&bfield, (const uint8_t *) append_str, strlen(append_str))) {
+            result = "expected to equal append_str";
+            goto exit;
+        }
     }
 
 exit:

@@ -295,10 +295,10 @@ static char *test_integer_conversion(void *context)
 
 static char *test_map(void *context)
 {
-    qd_iterator_t     *val_iter = 0;
-    qd_iterator_t     *typed_iter = 0;
-    qd_iterator_t     *key_iter = 0;
-    static char error[1000] = "";
+    qd_iterator_t *val_iter   = 0;
+    qd_iterator_t *typed_iter = 0;
+    qd_iterator_t *key_iter   = 0;
+    static char error[1000]   = "";
     const uint8_t data[] =
         "\xd1\x00\x00\x00\x43\x00\x00\x00\x08"    // map32, 8 items
         "\xa3\x05\x66irst\xa1\x0evalue_of_first"  // (23) "first":"value_of_first"
@@ -311,8 +311,8 @@ static char *test_map(void *context)
     qd_buffer_list_t buflist = DEQ_EMPTY;
     qd_buffer_list_append(&buflist, data, sizeof(data));
 
-    qd_iterator_t     *data_iter = qd_iterator_buffer(DEQ_HEAD(buflist), 0, sizeof(data), ITER_VIEW_ALL);
-    qd_parsed_field_t *field     = qd_parse(data_iter);
+    qd_iterator_t *data_iter = qd_iterator_buffer(DEQ_HEAD(buflist), 0, sizeof(data), ITER_VIEW_ALL);
+    qd_parsed_field_t *field = qd_parse(data_iter);
     qd_iterator_free(data_iter);
 
     if (!qd_parse_ok(field)) {
@@ -325,133 +325,135 @@ static char *test_map(void *context)
         goto exit;
     }
 
-    uint32_t count = qd_parse_sub_count(field);
-    if (count != 4) {
-        snprintf(error, 1000, "Expected sub-count==4, got %"PRIu32, count);
-        goto exit;
-    }
+    {
+        uint32_t count = qd_parse_sub_count(field);
+        if (count != 4) {
+            snprintf(error, 1000, "Expected sub-count==4, got %" PRIu32, count);
+            goto exit;
+        }
 
-    // Validate "first":"value_of_first"
+        // Validate "first":"value_of_first"
 
-    qd_parsed_field_t *key_field  = qd_parse_sub_key(field, 0);
-    key_iter   = qd_parse_raw(key_field);
-    typed_iter = qd_parse_typed(key_field);
-    if (!qd_iterator_equal(key_iter, (unsigned char*) "first")) {
-        unsigned char     *result   = qd_iterator_copy(key_iter);
-        snprintf(error, 1000, "First key: expected 'first', got '%s'", result);
-        free (result);
-        goto exit;
-    }
+        qd_parsed_field_t *key_field = qd_parse_sub_key(field, 0);
+        key_iter                     = qd_parse_raw(key_field);
+        typed_iter                   = qd_parse_typed(key_field);
+        if (!qd_iterator_equal(key_iter, (unsigned char *) "first")) {
+            unsigned char *result = qd_iterator_copy(key_iter);
+            snprintf(error, 1000, "First key: expected 'first', got '%s'", result);
+            free(result);
+            goto exit;
+        }
 
-    if (!qd_iterator_equal(typed_iter, (unsigned char*) "\xa3\x05\x66irst"))
-        return "Incorrect typed iterator on first-key";
+        if (!qd_iterator_equal(typed_iter, (unsigned char *) "\xa3\x05\x66irst"))
+            return "Incorrect typed iterator on first-key";
 
-    qd_parsed_field_t *val_field = qd_parse_sub_value(field, 0);
-    val_iter  = qd_parse_raw(val_field);
-    typed_iter = qd_parse_typed(val_field);
-    if (!qd_iterator_equal(val_iter, (unsigned char*) "value_of_first")) {
-        unsigned char     *result   = qd_iterator_copy(val_iter);
-        snprintf(error, 1000, "First value: expected 'value_of_first', got '%s'", result);
-        free (result);
-        goto exit;
-    }
+        qd_parsed_field_t *val_field = qd_parse_sub_value(field, 0);
+        val_iter                     = qd_parse_raw(val_field);
+        typed_iter                   = qd_parse_typed(val_field);
+        if (!qd_iterator_equal(val_iter, (unsigned char *) "value_of_first")) {
+            unsigned char *result = qd_iterator_copy(val_iter);
+            snprintf(error, 1000, "First value: expected 'value_of_first', got '%s'", result);
+            free(result);
+            goto exit;
+        }
 
-    if (!qd_iterator_equal(typed_iter, (unsigned char*) "\xa1\x0evalue_of_first"))
-        return "Incorrect typed iterator on first-key";
+        if (!qd_iterator_equal(typed_iter, (unsigned char *) "\xa1\x0evalue_of_first"))
+            return "Incorrect typed iterator on first-key";
 
-    // Validate "second:32"
+        // Validate "second:32"
 
-    key_field = qd_parse_sub_key(field, 1);
-    key_iter  = qd_parse_raw(key_field);
-    if (!qd_iterator_equal(key_iter, (unsigned char*) "second")) {
-        unsigned char     *result   = qd_iterator_copy(key_iter);
-        snprintf(error, 1000, "Second key: expected 'second', got '%s'", result);
-        free (result);
-        goto exit;
-    }
+        key_field = qd_parse_sub_key(field, 1);
+        key_iter  = qd_parse_raw(key_field);
+        if (!qd_iterator_equal(key_iter, (unsigned char *) "second")) {
+            unsigned char *result = qd_iterator_copy(key_iter);
+            snprintf(error, 1000, "Second key: expected 'second', got '%s'", result);
+            free(result);
+            goto exit;
+        }
 
-    val_field = qd_parse_sub_value(field, 1);
-    if (qd_parse_as_uint(val_field) != 32) {
-        snprintf(error, 1000, "Second value: expected 32, got %"PRIu32, qd_parse_as_uint(val_field));
-        goto exit;
-    }
+        val_field = qd_parse_sub_value(field, 1);
+        if (qd_parse_as_uint(val_field) != 32) {
+            snprintf(error, 1000, "Second value: expected 32, got %" PRIu32, qd_parse_as_uint(val_field));
+            goto exit;
+        }
 
-    // Validate "third":true
+        // Validate "third":true
 
-    key_field = qd_parse_sub_key(field, 2);
-    key_iter  = qd_parse_raw(key_field);
-    if (!qd_iterator_equal(key_iter, (unsigned char*) "third")) {
-        unsigned char     *result   = qd_iterator_copy(key_iter);
-        snprintf(error, 1000, "Third key: expected 'third', got '%s'", result);
-        free (result);
-        goto exit;
-    }
+        key_field = qd_parse_sub_key(field, 2);
+        key_iter  = qd_parse_raw(key_field);
+        if (!qd_iterator_equal(key_iter, (unsigned char *) "third")) {
+            unsigned char *result = qd_iterator_copy(key_iter);
+            snprintf(error, 1000, "Third key: expected 'third', got '%s'", result);
+            free(result);
+            goto exit;
+        }
 
-    val_field = qd_parse_sub_value(field, 2);
-    if (!qd_parse_as_bool(val_field)) {
-        snprintf(error, 1000, "Third value: expected true");
-        goto exit;
-    }
+        val_field = qd_parse_sub_value(field, 2);
+        if (!qd_parse_as_bool(val_field)) {
+            snprintf(error, 1000, "Third value: expected true");
+            goto exit;
+        }
 
-    // Validate 32768:"!+!+!+!+"
+        // Validate 32768:"!+!+!+!+"
 
-    uint8_t octet;
-    uint8_t ncopy_buf[8];
+        uint8_t octet;
+        uint8_t ncopy_buf[8];
 
-    key_field = qd_parse_sub_key(field, 3);
-    typed_iter = qd_parse_typed(key_field);
+        key_field  = qd_parse_sub_key(field, 3);
+        typed_iter = qd_parse_typed(key_field);
 
-    octet = qd_iterator_octet(typed_iter);
-    if (octet != (uint8_t)0x80) {
-        snprintf(error, sizeof(error), "4th Key not ulong type");
-        goto exit;
-    }
-    if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 8) != 8) {
-        snprintf(error, sizeof(error), "4th Key incorrect length");
-        goto exit;
-    }
-    if (memcmp(ncopy_buf, "\x00\x00\x00\x00\x00\x00\x80\x00", 8) != 0) {
-        snprintf(error, sizeof(error), "4th key encoding value incorrect");
-        goto exit;
-    }
-    if (qd_parse_as_ulong(key_field) != 32768) {
-        snprintf(error, sizeof(error), "4th key value not 32768");
-        goto exit;
-    }
+        octet = qd_iterator_octet(typed_iter);
+        if (octet != (uint8_t) 0x80) {
+            snprintf(error, sizeof(error), "4th Key not ulong type");
+            goto exit;
+        }
+        if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 8) != 8) {
+            snprintf(error, sizeof(error), "4th Key incorrect length");
+            goto exit;
+        }
+        if (memcmp(ncopy_buf, "\x00\x00\x00\x00\x00\x00\x80\x00", 8) != 0) {
+            snprintf(error, sizeof(error), "4th key encoding value incorrect");
+            goto exit;
+        }
+        if (qd_parse_as_ulong(key_field) != 32768) {
+            snprintf(error, sizeof(error), "4th key value not 32768");
+            goto exit;
+        }
 
-    val_field = qd_parse_sub_value(field, 3);
-    val_iter = qd_parse_raw(val_field);
-    typed_iter = qd_parse_typed(val_field);
+        val_field  = qd_parse_sub_value(field, 3);
+        val_iter   = qd_parse_raw(val_field);
+        typed_iter = qd_parse_typed(val_field);
 
-    octet = qd_iterator_octet(typed_iter);
-    if (octet != (uint8_t)0xb0) {
-        snprintf(error, sizeof(error), "4th Value not vbin32 type: 0x%X", (unsigned int)octet);
-        goto exit;
-    }
-    if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 4) != 4) {
-        snprintf(error, sizeof(error), "4th Value incorrect length");
-        goto exit;
-    }
-    if (memcmp(ncopy_buf, "\x00\x00\x00\x08", 4) != 0) {
-        snprintf(error, sizeof(error), "4th Value encoding incorrect");
-        goto exit;
-    }
+        octet = qd_iterator_octet(typed_iter);
+        if (octet != (uint8_t) 0xb0) {
+            snprintf(error, sizeof(error), "4th Value not vbin32 type: 0x%X", (unsigned int) octet);
+            goto exit;
+        }
+        if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 4) != 4) {
+            snprintf(error, sizeof(error), "4th Value incorrect length");
+            goto exit;
+        }
+        if (memcmp(ncopy_buf, "\x00\x00\x00\x08", 4) != 0) {
+            snprintf(error, sizeof(error), "4th Value encoding incorrect");
+            goto exit;
+        }
 
-    if (qd_iterator_octet(val_iter) != '!' || qd_iterator_octet(val_iter) != '+') {
-        snprintf(error, sizeof(error), "4th Value [0-1] incorrect");
-        goto exit;
-    }
-    if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 4) != 4) {
-        snprintf(error, sizeof(error), "4th Value sub-copy failed");
-        goto exit;
-    }
-    if (memcmp(ncopy_buf, "!+!+", 4) != 0) {
-        snprintf(error, sizeof(error), "4th Value sub-copy incorrect");
-        goto exit;
-    }
-    if (qd_iterator_octet(val_iter) != '!' || qd_iterator_octet(val_iter) != '+') {
-        snprintf(error, sizeof(error), "4th Value [6-7] incorrect");
-        goto exit;
+        if (qd_iterator_octet(val_iter) != '!' || qd_iterator_octet(val_iter) != '+') {
+            snprintf(error, sizeof(error), "4th Value [0-1] incorrect");
+            goto exit;
+        }
+        if (qd_iterator_ncopy_octets(typed_iter, ncopy_buf, 4) != 4) {
+            snprintf(error, sizeof(error), "4th Value sub-copy failed");
+            goto exit;
+        }
+        if (memcmp(ncopy_buf, "!+!+", 4) != 0) {
+            snprintf(error, sizeof(error), "4th Value sub-copy incorrect");
+            goto exit;
+        }
+        if (qd_iterator_octet(val_iter) != '!' || qd_iterator_octet(val_iter) != '+') {
+            snprintf(error, sizeof(error), "4th Value [6-7] incorrect");
+            goto exit;
+        }
     }
 
 
@@ -576,41 +578,43 @@ static char *test_tracemask(void *context)
         sprintf(error, "(A) Expected ingress index of 0, got %d", ingress);
         goto cleanup;
     }
-    int total = 0;
-    int bit, c;
-    for (QD_BITMASK_EACH(bm, bit, c)) {
-        total += bit;
-    }
-    if (total != 17) {
-        sprintf(error, "Expected total bit value of 17, got %d", total);
-        goto cleanup;
-    }
+    {
+        int total = 0;
+        int bit, c;
+        for (QD_BITMASK_EACH(bm, bit, c)) {
+            total += bit;
+        }
+        if (total != 17) {
+            sprintf(error, "Expected total bit value of 17, got %d", total);
+            goto cleanup;
+        }
 
-    qd_bitmask_free(bm);
-    bm = 0;
-    qd_tracemask_del_router(tm, 3);
-    qd_tracemask_remove_link(tm, 0);
+        qd_bitmask_free(bm);
+        bm = 0;
+        qd_tracemask_del_router(tm, 3);
+        qd_tracemask_remove_link(tm, 0);
 
-    ingress = -1;
-    bm = qd_tracemask_create(tm, pf, &ingress);
-    qd_parse_free(pf);
-    pf = 0;
-    if (qd_bitmask_cardinality(bm) != 1) {
-        sprintf(error, "Expected cardinality of 1, got %d", qd_bitmask_cardinality(bm));
-        goto cleanup;
-    }
-    if (ingress != 0) {
-        sprintf(error, "(B) Expected ingress index of 0, got %d", ingress);
-        goto cleanup;
-    }
+        ingress = -1;
+        bm = qd_tracemask_create(tm, pf, &ingress);
+        qd_parse_free(pf);
+        pf = 0;
+        if (qd_bitmask_cardinality(bm) != 1) {
+            sprintf(error, "Expected cardinality of 1, got %d", qd_bitmask_cardinality(bm));
+            goto cleanup;
+        }
+        if (ingress != 0) {
+            sprintf(error, "(B) Expected ingress index of 0, got %d", ingress);
+            goto cleanup;
+        }
 
-    total = 0;
-    for (QD_BITMASK_EACH(bm, bit, c)) {
-        total += bit;
-    }
-    if (total != 3) {
-        sprintf(error, "Expected total bit value of 3, got %d", total);
-        // fallthrough
+        total = 0;
+        for (QD_BITMASK_EACH(bm, bit, c)) {
+            total += bit;
+        }
+        if (total != 3) {
+            sprintf(error, "Expected total bit value of 3, got %d", total);
+            // fallthrough
+        }
     }
 
 cleanup:
@@ -645,69 +649,69 @@ static char *test_field_api(void *context)
                                              qd_buffer_list_length(&blist),
                                              ITER_VIEW_ALL);
 
-    qd_parsed_field_t *parsed = qd_parse(iter);
-    if (!parsed || qd_parse_sub_count(parsed) != 3) {
-        result = "failed to parse";
-        goto exit;
-    }
+    qd_parsed_field_t *parsed = 0;
+    {
+        parsed = qd_parse(iter);
+        if (!parsed || qd_parse_sub_count(parsed) != 3) {
+            result = "failed to parse";
+            goto exit;
+        }
 
-    qd_buffer_field_t typed = qd_parse_typed_field(parsed);
-    uint8_t octet;
-    if (!qd_buffer_field_octet(&typed, &octet)) {
-        result = "qd_parse_typed_field: no tag";
-        goto exit;
-    }
+        qd_buffer_field_t typed = qd_parse_typed_field(parsed);
+        uint8_t octet;
+        if (!qd_buffer_field_octet(&typed, &octet)) {
+            result = "qd_parse_typed_field: no tag";
+            goto exit;
+        }
 
-    if (octet != qd_parse_tag(parsed)) {
-        result = "qd_parse_typed_field: wrong tag";
-        goto exit;
-    }
+        if (octet != qd_parse_tag(parsed)) {
+            result = "qd_parse_typed_field: wrong tag";
+            goto exit;
+        }
 
-    // check the list content
+        // check the list content
 
-    qd_parsed_field_t *sub = qd_parse_sub_value(parsed, 0);
-    typed = qd_parse_typed_field(sub);
-    qd_buffer_field_t raw = qd_parse_raw_field(sub);
-    if (!qd_buffer_field_octet(&typed, &octet)
-        || octet != qd_parse_tag(sub)) {
-        result = "sub 0: failed typed";
-        goto exit;
-    }
-    if (!qd_buffer_field_equal(&raw, (uint8_t*) "STR8-UTF8", strlen("STR8-UTF8"))) {
-        result = "sub 0: failed raw";
-        goto exit;
-    }
+        qd_parsed_field_t *sub = qd_parse_sub_value(parsed, 0);
+        typed                  = qd_parse_typed_field(sub);
+        qd_buffer_field_t raw  = qd_parse_raw_field(sub);
+        if (!qd_buffer_field_octet(&typed, &octet) || octet != qd_parse_tag(sub)) {
+            result = "sub 0: failed typed";
+            goto exit;
+        }
+        if (!qd_buffer_field_equal(&raw, (uint8_t *) "STR8-UTF8", strlen("STR8-UTF8"))) {
+            result = "sub 0: failed raw";
+            goto exit;
+        }
 
-    sub = qd_parse_sub_value(parsed, 1);
-    typed = qd_parse_typed_field(sub);
-    raw = qd_parse_raw_field(sub);
-    if (!qd_buffer_field_octet(&typed, &octet)
-        || octet != qd_parse_tag(sub)) {
-        result = "sub 1: failed typed";
-        goto exit;
-    }
-    if (octet != QD_AMQP_UINT || raw.remaining != 4) {
-        result = "sub 1: unexpected type";
-        goto exit;
-    }
-    uint32_t uint_read;
-    if (!qd_buffer_field_uint32(&raw, &uint_read) || uint_read != uint_val) {
-        result = "sub 1: uint32 failed";
-        goto exit;
-    }
+        sub   = qd_parse_sub_value(parsed, 1);
+        typed = qd_parse_typed_field(sub);
+        raw   = qd_parse_raw_field(sub);
+        if (!qd_buffer_field_octet(&typed, &octet) || octet != qd_parse_tag(sub)) {
+            result = "sub 1: failed typed";
+            goto exit;
+        }
+        if (octet != QD_AMQP_UINT || raw.remaining != 4) {
+            result = "sub 1: unexpected type";
+            goto exit;
+        }
+        uint32_t uint_read;
+        if (!qd_buffer_field_uint32(&raw, &uint_read) || uint_read != uint_val) {
+            result = "sub 1: uint32 failed";
+            goto exit;
+        }
 
-    sub = qd_parse_sub_value(parsed, 2);
-    typed = qd_parse_typed_field(sub);
-    raw = qd_parse_raw_field(sub);
-    if (!qd_buffer_field_octet(&typed, &octet)
-        || octet != qd_parse_tag(sub)) {
-        result = "sub 2: failed typed";
-        goto exit;
-    }
+        sub   = qd_parse_sub_value(parsed, 2);
+        typed = qd_parse_typed_field(sub);
+        raw   = qd_parse_raw_field(sub);
+        if (!qd_buffer_field_octet(&typed, &octet) || octet != qd_parse_tag(sub)) {
+            result = "sub 2: failed typed";
+            goto exit;
+        }
 
-    if (raw.remaining != 0) {
-        result = "sub 2: non-empty null raw value";
-        goto exit;
+        if (raw.remaining != 0) {
+            result = "sub 2: non-empty null raw value";
+            goto exit;
+        }
     }
 
 exit:

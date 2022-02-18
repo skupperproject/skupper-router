@@ -182,57 +182,59 @@ static char *test_iter_bad(void *context)
     if (!hash)
         return "hash table allocation failed";
 
-    for (int i = 0; i < key_count; ++i) {
-        const unsigned char *key = keys[i];
-        qd_hash_handle_t **handle = &handles[i];
+    {
+        for (int i = 0; i < key_count; ++i) {
+            const unsigned char *key = keys[i];
+            qd_hash_handle_t **handle = &handles[i];
 
-        i_key = qd_iterator_string((const char *)key, ITER_VIEW_ALL);
-        if (qd_hash_insert(hash, i_key, (void *)key, handle) != QD_ERROR_NONE) {
-            result = "hash table insert failed";
+            i_key = qd_iterator_string((const char *)key, ITER_VIEW_ALL);
+            if (qd_hash_insert(hash, i_key, (void *)key, handle) != QD_ERROR_NONE) {
+                result = "hash table insert failed";
+                goto done;
+            }
+
+            if (strcmp((const char *) qd_hash_key_by_handle(*handle), (const char *)key) != 0) {
+                result = "hash handle key did not match";
+                goto done;
+            }
+            qd_iterator_free(i_key);
+            i_key = 0;
+        }
+
+        if (qd_hash_size(hash) != key_count) {
+            result = "hash size is incorrect";
             goto done;
         }
 
-        if (strcmp((const char *) qd_hash_key_by_handle(*handle), (const char *)key) != 0) {
-            result = "hash handle key did not match";
+        i_key = qd_iterator_string((const char *) "I DO NOT EXIST", ITER_VIEW_ALL);
+        void *value = (void *) i_key;  // just a non-zero value
+
+        //  key not found
+        qd_hash_retrieve(hash, i_key, &value);  // does not return error code, but sets value to 0
+        if (value != 0) {
+            result = "expected hash retrieve to find nothing";
             goto done;
         }
+
+        // remove should return error
+        if (qd_hash_remove(hash, i_key) != QD_ERROR_NOT_FOUND) {
+            result = "expected hash remove to fail (not found)";
+            goto done;
+        }
+
         qd_iterator_free(i_key);
         i_key = 0;
-    }
 
-    if (qd_hash_size(hash) != key_count) {
-        result = "hash size is incorrect";
-        goto done;
-    }
+        // cleanup
 
-    i_key = qd_iterator_string((const char *)"I DO NOT EXIST", ITER_VIEW_ALL);
-    void *value = (void *)i_key;   // just a non-zero value
-
-    //  key not found
-    qd_hash_retrieve(hash, i_key, &value);   // does not return error code, but sets value to 0
-    if (value != 0) {
-        result = "expected hash retrieve to find nothing";
-        goto done;
-    }
-
-    // remove should return error
-    if (qd_hash_remove(hash, i_key) != QD_ERROR_NOT_FOUND) {
-        result = "expected hash remove to fail (not found)";
-        goto done;
-    }
-
-    qd_iterator_free(i_key);
-    i_key = 0;
-
-    // cleanup
-
-    for (int i = 0; i < key_count; ++i) {
-        const unsigned char *key = keys[i];
-        if (qd_hash_remove_str(hash, key) != QD_ERROR_NONE) {
-            result = "str key remove failed";
-            goto done;
+        for (int i = 0; i < key_count; ++i) {
+            const unsigned char *key = keys[i];
+            if (qd_hash_remove_str(hash, key) != QD_ERROR_NONE) {
+                result = "str key remove failed";
+                goto done;
+            }
+            qd_hash_handle_free(handles[i]);
         }
-        qd_hash_handle_free(handles[i]);
     }
 
 done:
@@ -272,32 +274,34 @@ static char *test_str_bad(void *context)
         goto done;
     }
 
-    const unsigned char *key = (const unsigned char *) "I DO NOT EXIST";
-    void *value = (void *)key;   // just a non-zero value
+    {
+        const unsigned char *key = (const unsigned char *) "I DO NOT EXIST";
+        void *value = (void *)key;   // just a non-zero value
 
-    //  key not found
-    qd_hash_retrieve_str(hash, key, &value);   // does not return error code, but sets value to 0
-    if (value != 0) {
-        result = "expected hash retrieve to find nothing";
-        goto done;
-    }
-
-    // remove should return error
-    if (qd_hash_remove_str(hash, key) != QD_ERROR_NOT_FOUND) {
-        result = "expected hash remove to fail (not found)";
-        goto done;
-    }
-
-    // cleanup
-
-    for (int i = 0; i < key_count; ++i) {
-        key = keys[i];
-
-        if (qd_hash_remove_str(hash, key) != QD_ERROR_NONE) {
-            result = "str key remove failed";
+        //  key not found
+        qd_hash_retrieve_str(hash, key, &value);  // does not return error code, but sets value to 0
+        if (value != 0) {
+            result = "expected hash retrieve to find nothing";
             goto done;
         }
-        qd_hash_handle_free(handles[i]);
+
+        // remove should return error
+        if (qd_hash_remove_str(hash, key) != QD_ERROR_NOT_FOUND) {
+            result = "expected hash remove to fail (not found)";
+            goto done;
+        }
+
+        // cleanup
+
+        for (int i = 0; i < key_count; ++i) {
+            key = keys[i];
+
+            if (qd_hash_remove_str(hash, key) != QD_ERROR_NONE) {
+                result = "str key remove failed";
+                goto done;
+            }
+            qd_hash_handle_free(handles[i]);
+        }
     }
 
 done:

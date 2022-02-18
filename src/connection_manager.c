@@ -314,17 +314,19 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
 {
     qd_error_clear();
 
-    bool authenticatePeer   = qd_entity_opt_bool(entity, "authenticatePeer",  false);    CHECK();
-    bool verifyHostname     = qd_entity_opt_bool(entity, "verifyHostname",    true);     CHECK();
-    bool requireEncryption  = qd_entity_opt_bool(entity, "requireEncryption", false);    CHECK();
-    bool requireSsl         = qd_entity_opt_bool(entity, "requireSsl",        false);    CHECK();
+    {
+        bool authenticatePeer   = qd_entity_opt_bool(entity, "authenticatePeer",  false);    CHECK();
+        bool verifyHostname     = qd_entity_opt_bool(entity, "verifyHostname",    true);     CHECK();
+        bool requireEncryption  = qd_entity_opt_bool(entity, "requireEncryption", false);    CHECK();
+        bool requireSsl         = qd_entity_opt_bool(entity, "requireSsl",        false);    CHECK();
 
-    ZERO(config);
-    config->log_message          = qd_entity_opt_string(entity, "messageLoggingComponents", 0);     CHECK();
-    config->log_bits             = populate_log_message(config);
-    config->port                 = qd_entity_get_string(entity, "port");              CHECK();
-    config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
-    long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
+        ZERO(config);
+        config->log_message          = qd_entity_opt_string(entity, "messageLoggingComponents", 0);     CHECK();
+        config->log_bits             = populate_log_message(config);
+        config->port                 = qd_entity_get_string(entity, "port");              CHECK();
+        config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
+
+        long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
 
     if (!role_override) {
         config->role = qd_entity_get_string(entity, "role"); CHECK();
@@ -343,31 +345,30 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     }
 
     config->inter_router_cost = inter_router_cost;
-    config->socket_address_family      = qd_entity_opt_string(entity, "socketAddressFamily", 0); CHECK();
-    config->healthz              = qd_entity_opt_bool(entity, "healthz", true);       CHECK();
-    config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
-    config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
-    config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
-    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
-    config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
-    config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
-    config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
-    uint64_t ssn_frames          = qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
-    config->idle_timeout_seconds = qd_entity_get_long(entity, "idleTimeoutSeconds");  CHECK();
-    if (is_listener) {
-        config->initial_handshake_timeout_seconds = qd_entity_get_long(entity, "initialHandshakeTimeoutSeconds");  CHECK();
-    }
-    config->sasl_username        = qd_entity_opt_string(entity, "saslUsername", 0);   CHECK();
-    config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
-    config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
-    config->ssl_profile          = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
-    config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
-    config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
-    config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
-    config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
+        config->socket_address_family      = qd_entity_opt_string(entity, "socketAddressFamily", 0); CHECK();
+        config->healthz              = qd_entity_opt_bool(entity, "healthz", true);       CHECK();
+        config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
+        config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
+        config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
+        config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
+        config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
+        config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
+        config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
+        uint64_t ssn_frames          = qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
+        config->idle_timeout_seconds = qd_entity_get_long(entity, "idleTimeoutSeconds");  CHECK();
+        if (is_listener) {
+            config->initial_handshake_timeout_seconds = qd_entity_get_long(entity, "initialHandshakeTimeoutSeconds");  CHECK();
+        }
+        config->sasl_username        = qd_entity_opt_string(entity, "saslUsername", 0);   CHECK();
+        config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
+        config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
+        config->ssl_profile          = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
+        config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
+        config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
+        config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
+        config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
 
-
-    if (strcmp(config->role, "inter-router") == 0) {
+        if (strcmp(config->role, "inter-router") == 0) {
         // For inter-router connections only, the dataConnectionCount defaults to "auto",
         // which means it will be determined as a function of the number of worker threads.
         config->data_connection_count = strdup(qd->data_connection_count);
@@ -382,110 +383,111 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
 
     set_config_host(config, entity);
 
-    if (config->sasl_password) {
-        //
-        //Process the sasl password field and set the right values based on prefixes.
-        //
-        char *actual_pass = 0;
-        bool is_file_path = 0;
-        qd_config_process_password(&actual_pass, config->sasl_password, &is_file_path, false);
-        if (actual_pass) {
-            if (is_file_path) {
-                   qd_set_password_from_file(actual_pass, &config->sasl_password);
-                   free(actual_pass);
-            }
-            else {
-                free(config->sasl_password);
-                config->sasl_password = actual_pass;
+        if (config->sasl_password) {
+            //
+            //Process the sasl password field and set the right values based on prefixes.
+            //
+            char *actual_pass = 0;
+            bool is_file_path = 0;
+            qd_config_process_password(&actual_pass, config->sasl_password, &is_file_path, false);
+            if (actual_pass) {
+                if (is_file_path) {
+                    qd_set_password_from_file(actual_pass, &config->sasl_password);
+                    free(actual_pass);
+                }
+                else {
+                    free(config->sasl_password);
+                    config->sasl_password = actual_pass;
+                }
             }
         }
-    }
 
-    //
-    // Handle the defaults for various settings
-    //
-    if (config->link_capacity == 0)
-        config->link_capacity = 250;
+        //
+        // Handle the defaults for various settings
+        //
+        if (config->link_capacity == 0)
+            config->link_capacity = 250;
 
-    if (config->max_sessions == 0 || config->max_sessions > 32768)
-        // Proton disallows > 32768
-        config->max_sessions = 32768;
+        if (config->max_sessions == 0 || config->max_sessions > 32768)
+            // Proton disallows > 32768
+            config->max_sessions = 32768;
 
-    if (config->max_frame_size < QD_AMQP_MIN_MAX_FRAME_SIZE)
-        // Silently promote the minimum max-frame-size
-        // Proton will do this but the number is needed for the
-        // incoming capacity calculation.
-        config->max_frame_size = QD_AMQP_MIN_MAX_FRAME_SIZE;
+        if (config->max_frame_size < QD_AMQP_MIN_MAX_FRAME_SIZE)
+            // Silently promote the minimum max-frame-size
+            // Proton will do this but the number is needed for the
+            // incoming capacity calculation.
+            config->max_frame_size = QD_AMQP_MIN_MAX_FRAME_SIZE;
 
-    //
-    // Given session frame count and max frame size, compute session incoming_capacity
-    //   On 64-bit systems the capacity has no practical limit.
-    //   On 32-bit systems the largest default capacity is half the process address space.
-    //
-    bool is_64bit = sizeof(size_t) == 8;
+        //
+        // Given session frame count and max frame size, compute session incoming_capacity
+        //   On 64-bit systems the capacity has no practical limit.
+        //   On 32-bit systems the largest default capacity is half the process address space.
+        //
+        bool is_64bit = sizeof(size_t) == 8;
 #define MAX_32BIT_CAPACITY ((size_t)(2147483647))
-    if (ssn_frames == 0) {
-        config->incoming_capacity = is_64bit ? MAX_32BIT_CAPACITY * (size_t)config->max_frame_size : MAX_32BIT_CAPACITY;
-    } else {
-        // Limited incoming frames.
-        if (is_64bit) {
-            // Specify this to proton by setting capacity to be
-            // the product (max_frame_size * ssn_frames).
-            config->incoming_capacity = (size_t)config->max_frame_size * (size_t)ssn_frames;
+        if (ssn_frames == 0) {
+            config->incoming_capacity = is_64bit ? MAX_32BIT_CAPACITY * (size_t)config->max_frame_size : MAX_32BIT_CAPACITY;
         } else {
-            // 32-bit systems have an upper bound to the capacity
-            uint64_t max_32bit_capacity = (uint64_t)MAX_32BIT_CAPACITY;
-            uint64_t capacity     = (uint64_t)config->max_frame_size * (uint64_t)ssn_frames;
-            if (capacity <= max_32bit_capacity) {
-                config->incoming_capacity = (size_t)capacity;
+            // Limited incoming frames.
+            if (is_64bit) {
+                // Specify this to proton by setting capacity to be
+                // the product (max_frame_size * ssn_frames).
+                config->incoming_capacity = (size_t)config->max_frame_size * (size_t)ssn_frames;
             } else {
-                config->incoming_capacity = MAX_32BIT_CAPACITY;
-                uint64_t actual_frames = max_32bit_capacity / (uint64_t)config->max_frame_size;
+                // 32-bit systems have an upper bound to the capacity
+                uint64_t max_32bit_capacity = (uint64_t)MAX_32BIT_CAPACITY;
+                uint64_t capacity     = (uint64_t)config->max_frame_size * (uint64_t)ssn_frames;
+                if (capacity <= max_32bit_capacity) {
+                    config->incoming_capacity = (size_t)capacity;
+                } else {
+                    config->incoming_capacity = MAX_32BIT_CAPACITY;
+                    uint64_t actual_frames = max_32bit_capacity / (uint64_t)config->max_frame_size;
 
-                qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
-                       "Server configuration for I/O adapter entity name:'%s', host:'%s', port:'%s', "
-                       "requested maxSessionFrames truncated from %" PRId64 " to %" PRId64,
-                       config->name, config->host, config->port, ssn_frames, actual_frames);
+                    qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
+                        "Server configuration for I/O adapter entity name:'%s', host:'%s', port:'%s', "
+                        "requested maxSessionFrames truncated from %"PRId64" to %"PRId64,
+                        config->name, config->host, config->port, ssn_frames, actual_frames);
+                }
             }
         }
-    }
 
-    //
-    // For now we are hardwiring this attribute to true.  If there's an outcry from the
-    // user community, we can revisit this later.
-    //
-    config->allowInsecureAuthentication = true;
-    config->verify_host_name = verifyHostname;
+        //
+        // For now we are hardwiring this attribute to true.  If there's an outcry from the
+        // user community, we can revisit this later.
+        //
+        config->allowInsecureAuthentication = true;
+        config->verify_host_name = verifyHostname;
 
-    char *stripAnnotations  = qd_entity_opt_string(entity, "stripAnnotations", 0);
-    load_strip_annotations(config, stripAnnotations);
-    free(stripAnnotations);
-    stripAnnotations = 0;
-    CHECK();
+        char *stripAnnotations  = qd_entity_opt_string(entity, "stripAnnotations", 0);
+        load_strip_annotations(config, stripAnnotations);
+        free(stripAnnotations);
+        stripAnnotations = 0;
+        CHECK();
 
-    config->requireAuthentication = authenticatePeer;
-    config->requireEncryption     = requireEncryption || requireSsl;
+        config->requireAuthentication = authenticatePeer;
+        config->requireEncryption     = requireEncryption || requireSsl;
 
-    if (config->ssl_profile) {
-        config->ssl_required = requireSsl;
-        config->ssl_require_peer_authentication = config->sasl_mechanisms &&
-            strstr(config->sasl_mechanisms, "EXTERNAL") != 0;
+        if (config->ssl_profile) {
+            config->ssl_required = requireSsl;
+            config->ssl_require_peer_authentication = config->sasl_mechanisms &&
+                strstr(config->sasl_mechanisms, "EXTERNAL") != 0;
 
-        qd_config_ssl_profile_t *ssl_profile =
-            qd_find_ssl_profile(qd->connection_manager, config->ssl_profile);
-        if (ssl_profile) {
-            config->ssl_certificate_file = SSTRDUP(ssl_profile->ssl_certificate_file);
-            config->ssl_private_key_file = SSTRDUP(ssl_profile->ssl_private_key_file);
-            config->ssl_ciphers = SSTRDUP(ssl_profile->ssl_ciphers);
-            config->ssl_protocols = SSTRDUP(ssl_profile->ssl_protocols);
-            config->ssl_password = SSTRDUP(ssl_profile->ssl_password);
-            config->ssl_trusted_certificate_db = SSTRDUP(ssl_profile->ssl_trusted_certificate_db);
-            config->ssl_uid_format = SSTRDUP(ssl_profile->ssl_uid_format);
-            config->ssl_uid_name_mapping_file = SSTRDUP(ssl_profile->uid_name_mapping_file);
+            qd_config_ssl_profile_t *ssl_profile =
+                qd_find_ssl_profile(qd->connection_manager, config->ssl_profile);
+            if (ssl_profile) {
+                config->ssl_certificate_file = SSTRDUP(ssl_profile->ssl_certificate_file);
+                config->ssl_private_key_file = SSTRDUP(ssl_profile->ssl_private_key_file);
+                config->ssl_ciphers = SSTRDUP(ssl_profile->ssl_ciphers);
+                config->ssl_protocols = SSTRDUP(ssl_profile->ssl_protocols);
+                config->ssl_password = SSTRDUP(ssl_profile->ssl_password);
+                config->ssl_trusted_certificate_db = SSTRDUP(ssl_profile->ssl_trusted_certificate_db);
+                config->ssl_uid_format = SSTRDUP(ssl_profile->ssl_uid_format);
+                config->ssl_uid_name_mapping_file = SSTRDUP(ssl_profile->uid_name_mapping_file);
+            }
         }
-    }
 
-    return QD_ERROR_NONE;
+        return QD_ERROR_NONE;
+    }
 
   error:
     qd_server_config_free(config);

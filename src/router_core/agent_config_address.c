@@ -584,34 +584,36 @@ char *qdra_config_address_validate_pattern_CT(qd_parsed_field_t *pattern_field,
     }
 
     buf = (char *)qd_iterator_copy(p_iter);
-    char *begin = buf;
-    // strip leading token separators
-    // note: see parse_tree.c for acceptable separator characters
-    while (*begin && strchr("./", *begin))
-        begin++;
+    {
+        char *begin = buf;
+        // strip leading token separators
+        // note: see parse_tree.c for acceptable separator characters
+        while (*begin && strchr("./", *begin))
+            begin++;
 
-    // strip trailing separators
-    while (*begin) {
-        char *end = &begin[strlen(begin) - 1];
-        if (!strchr("./", *end))
-            break;
-        *end = 0;
-    }
+        // strip trailing separators
+        while (*begin) {
+            char *end = &begin[strlen(begin) - 1];
+            if (!strchr("./", *end))
+                break;
+            *end = 0;
+        }
 
-    if (*begin == 0) {
-        *error = ((is_prefix)
-                  ? "Prefix invalid - no tokens"
-                  : "Pattern invalid - no tokens");
-        goto exit;
-    }
+        if (*begin == 0) {
+            *error = ((is_prefix)
+                      ? "Prefix invalid - no tokens"
+                      : "Pattern invalid - no tokens");
+            goto exit;
+        }
 
-    if (is_prefix) {
-        // convert a prefix match into a valid pattern by appending "/#"
-        pattern = malloc(strlen(begin) + 3);
-        strcpy(pattern, begin);
-        strcat(pattern, "/#");
-    } else {
-        pattern = strdup(begin);
+        if (is_prefix) {
+            // convert a prefix match into a valid pattern by appending "/#"
+            pattern = malloc(strlen(begin) + 3);
+            strcpy(pattern, begin);
+            strcat(pattern, "/#");
+        } else {
+            pattern = strdup(begin);
+        }
     }
 
 exit:
