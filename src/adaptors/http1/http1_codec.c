@@ -125,6 +125,70 @@ DEQ_DECLARE(h1_codec_request_state_t, h1_codec_request_state_list_t);
 ALLOC_DECLARE(h1_codec_request_state_t);
 ALLOC_DEFINE(h1_codec_request_state_t);
 
+// Decoder for current incoming msg.
+//
+// incoming: holds the raw data received by the proactor from this
+// connection.
+//
+// read_ptr: points to the next octet to be decoded on the incoming buffer
+// list. Remaining is the length of the raw data to be decoded.
+//
+// body_ptr: points to the first unconsumed octet of the message
+// body. Remaining is the number of octets that may be consumed.
+// Invariant: body_ptr.buffer always points to the incoming.head as body
+// data is being parsed.
+//
+struct decoder_t {
+    qd_buffer_list_t   incoming;
+    qd_buffer_field_t  read_ptr;
+    qd_buffer_field_t  body_ptr;
+
+    h1_codec_request_state_t *hrs;            // current request/response
+    http1_msg_state_t       state;
+    scratch_memory_t        scratch;
+
+    // decode errors are sticky: cleared on h1_codec_connection_rx_close()
+    const char             *error_msg;
+    int                     error;
+
+    intmax_t               content_length;
+    http1_chunk_state_t    chunk_state;
+    uint64_t               chunk_length;
+
+    bool is_request;
+    bool is_chunked;
+    bool is_http10;
+
+    // decoded headers
+    bool hdr_transfer_encoding;
+    bool hdr_content_length;
+    bool hdr_conn_close;      // Connection: close
+    bool hdr_conn_keep_alive;  // Connection: keep-alive
+};
+
+// Encoder for current outgoing msg.
+// outgoing: holds the encoded data that needs to be sent to proactor for
+// sending out this connection
+// write_ptr: points to the first empty octet to be written to by the
+// encoder.
+// Note that the outgoing list and the write_ptr are only used for the
+// start line and headers.  Body content buffer chains are past directly to
+// the connection without encoding.
+//
+struct encoder_t {
+    qd_buffer_list_t       outgoing;
+    buffer_write_ptr_t  write_ptr;
+    h1_codec_request_state_t *hrs;           // current request/response state
+
+    bool headers_sent;  // true after all headers have been sent
+    bool is_request;
+    bool is_chunked;
+
+    char *boundary_marker;//used for multipart content
+
+    // headers provided
+    bool hdr_content_length;
+};
 
 // The HTTP/1.1 connection
 //
@@ -135,70 +199,8 @@ struct h1_codec_connection_t {
     // in-progress response is at head
     h1_codec_request_state_list_t hrs_queue;
 
-    // Decoder for current incoming msg.
-    //
-    // incoming: holds the raw data received by the proactor from this
-    // connection.
-    //
-    // read_ptr: points to the next octet to be decoded on the incoming buffer
-    // list. Remaining is the length of the raw data to be decoded.
-    //
-    // body_ptr: points to the first unconsumed octet of the message
-    // body. Remaining is the number of octets that may be consumed.
-    // Invariant: body_ptr.buffer always points to the incoming.head as body
-    // data is being parsed.
-    //
-    struct decoder_t {
-        qd_buffer_list_t   incoming;
-        qd_buffer_field_t  read_ptr;
-        qd_buffer_field_t  body_ptr;
-
-        h1_codec_request_state_t *hrs;            // current request/response
-        http1_msg_state_t       state;
-        scratch_memory_t        scratch;
-
-        // decode errors are sticky: cleared on h1_codec_connection_rx_close()
-        const char             *error_msg;
-        int                     error;
-
-        intmax_t               content_length;
-        http1_chunk_state_t    chunk_state;
-        uint64_t               chunk_length;
-
-        bool is_request;
-        bool is_chunked;
-        bool is_http10;
-
-        // decoded headers
-        bool hdr_transfer_encoding;
-        bool hdr_content_length;
-        bool hdr_conn_close;      // Connection: close
-        bool hdr_conn_keep_alive;  // Connection: keep-alive
-    } decoder;
-
-    // Encoder for current outgoing msg.
-    // outgoing: holds the encoded data that needs to be sent to proactor for
-    // sending out this connection
-    // write_ptr: points to the first empty octet to be written to by the
-    // encoder.
-    // Note that the outgoing list and the write_ptr are only used for the
-    // start line and headers.  Body content buffer chains are past directly to
-    // the connection without encoding.
-    //
-    struct encoder_t {
-        qd_buffer_list_t          outgoing;
-        buffer_write_ptr_t        write_ptr;
-        h1_codec_request_state_t *hrs;           // current request/response state
-
-        bool headers_sent;  // true after all headers have been sent
-        bool is_request;
-        bool is_chunked;
-
-        char *boundary_marker;//used for multipart content
-
-        // headers provided
-        bool hdr_content_length;
-    } encoder;
+    struct decoder_t decoder;
+    struct encoder_t encoder;
 
     h1_codec_config_t config;
 };

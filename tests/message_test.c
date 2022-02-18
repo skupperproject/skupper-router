@@ -182,11 +182,11 @@ static char* test_receive_from_messenger(void *context)
 static char* test_message_properties(void *context)
 {
     pn_atom_t id = {.type = PN_STRING,
-                    .u.as_bytes.start = "messageId",
-                    .u.as_bytes.size = 9};
+                    .u = {.as_bytes = {.size = 9,
+                                       .start = "messageId"}}};
     pn_atom_t cid = {.type = PN_STRING,
-                     .u.as_bytes.start = "correlationId",
-                     .u.as_bytes.size = 13};
+                     .u = {.as_bytes = {.size = 13,
+                                        .start = "correlationId"}}};
     const char *subject = "A Subject";
     pn_message_t *pn_msg = pn_message();
     pn_message_set_id(pn_msg, id);

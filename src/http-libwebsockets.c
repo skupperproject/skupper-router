@@ -192,8 +192,9 @@ static int handle_events(connection_t* c) {
 }
 
 /* The server has a bounded, thread-safe queue for external work */
+enum work_type_t { W_NONE, W_LISTEN, W_CLOSE, W_WAKE, W_STOP, W_HANDLE_STATS };
 typedef struct work_t {
-    enum { W_NONE, W_LISTEN, W_CLOSE, W_WAKE, W_STOP, W_HANDLE_STATS } type;
+    enum work_type_t type;
     void *value;
 } work_t;
 
