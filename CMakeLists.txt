@@ -79,6 +79,12 @@ message(STATUS "Found Proton: ${Proton_LIBRARIES} (found version \"${Proton_VERS
 ## Optional dependencies
 ##
 
+OPTION(BUILD_AS_CXX "Enable building C code with C++ compiler" OFF)
+if(BUILD_AS_CXX)
+    add_compile_options(-w -Wno-write-strings -Wno-literal-suffix -fpermissive -Wno-error=literal-suffix)
+    add_definitions("-DQD_BUILD_AS_CXX")
+endif()
+
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
 
@@ -240,3 +246,10 @@ add_subdirectory(docs)
 # That will force automatic re-configure and everybody will be happy.
 #
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/reconfigure.in ${CMAKE_CURRENT_BINARY_DIR}/reconfigure)
+
+if(BUILD_AS_CXX)
+    file(GLOB_RECURSE CFILES "*.c")
+    set_source_files_properties(${CFILES}
+            DIRECTORY src tests router
+            PROPERTIES LANGUAGE CXX)
+endif()

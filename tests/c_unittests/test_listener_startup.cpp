@@ -25,7 +25,7 @@
 #include <regex>
 #include <thread>
 
-extern "C" {
+QD_TEST_EXTERN_C {
 qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity);
 void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *impl);
 }

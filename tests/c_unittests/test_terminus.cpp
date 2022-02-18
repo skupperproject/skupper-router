@@ -18,9 +18,10 @@
  */
 
 #include "qdr_doctest.hpp"
+#include "helpers.hpp"
 #include "cpp_stub.h"
 
-extern "C" {
+QD_TEST_EXTERN_C {
 #include "qpid/dispatch/router_core.h"
 
 #include <../src/router_core/router_core_private.h>
