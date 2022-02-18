@@ -33,7 +33,7 @@
 #include <csignal>
 #include <iostream>
 
-extern "C" {
+QD_TEST_EXTERN_C {
 #include "entity_cache.h"
 #include "log_private.h"
 #include "parse_tree.h"

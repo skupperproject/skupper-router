@@ -18,8 +18,9 @@
  */
 
 #include "qdr_doctest.hpp"
+#include "helpers.hpp"
 
-extern "C" {
+QD_TEST_EXTERN_C {
 #include "qpid/dispatch/internal/symbolization.h"
 }
 

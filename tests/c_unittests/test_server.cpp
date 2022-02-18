@@ -27,7 +27,7 @@
 #include <string>
 using std::string_literals::operator""s;
 
-extern "C" {
+QD_TEST_EXTERN_C {
 double testonly_normalize_memory_size(const uint64_t bytes, const char **suffix);
 }
 

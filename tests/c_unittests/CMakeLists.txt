@@ -28,6 +28,12 @@ if(NOT dw_lib)
     add_compile_definitions("QD_SKIP_LIBDW_TESTS")
 endif()
 
+if(BUILD_AS_CXX)
+    file(GLOB_RECURSE CFILES "*.c")
+    set_source_files_properties(${CFILES}
+            PROPERTIES LANGUAGE CXX)
+endif()
+
 add_library(static_accessors_server_c SHARED
         static_accessors_server_c.c)
 target_compile_options(static_accessors_server_c PRIVATE -fvisibility=hidden)
