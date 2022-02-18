@@ -359,11 +359,6 @@ QD_EXPORT qd_error_t qd_entity_refresh_sslProfile(qd_entity_t* entity, void *imp
     return QD_ERROR_NONE;
 }
 
-qd_error_t qd_entity_refresh_authServicePlugin(qd_entity_t* entity, void *impl)
-{
-    return QD_ERROR_NONE;
-}
-
 
 static qd_error_t listener_setup_ssl(qd_connection_t *ctx, const qd_server_config_t *config, pn_transport_t *tport)
 {

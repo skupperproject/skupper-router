@@ -314,10 +314,10 @@ def configure_dispatch(dispatch, lib_handle, filename):
     agent.policy.set_max_message_size(maxMessageSize)
 
     # Configure a block of types
-    for t in "sslProfile", "authServicePlugin", \
-             "router.config.address", "router.config.autoLink", \
-             "router.config.exchange", "router.config.binding", \
-             "vhost", "httpListener", "httpConnector", "tcpListener", "tcpConnector":
+    for t in ("sslProfile",
+              "router.config.address", "router.config.autoLink",
+              "router.config.exchange", "router.config.binding",
+              "vhost", "httpListener", "httpConnector", "tcpListener", "tcpConnector"):
         for a in config.by_type(t):
             configure(a)
             if t == "sslProfile":
