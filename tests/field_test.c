@@ -490,24 +490,24 @@ static char* test_view_node_hash(void *context)
 
 static char *field_advance_test(void *context,
                                 qd_iterator_t *iter,
-                                const unsigned char *template,
+                                const unsigned char *template_,
                                 int increment)
 {
-    const unsigned char *original = template;
-    while (*template) {
+    const unsigned char *original = template_;
+    while (*template_) {
         // since qd_iterator_equal() resets the iterator to its original
         // view, we need to snapshot the iterator at the current point:
         qd_iterator_t *raw = qd_iterator_sub(iter, qd_iterator_remaining(iter));
-        if (!qd_iterator_equal(raw, (unsigned char*) template)) {
+        if (!qd_iterator_equal(raw, (unsigned char*) template_)) {
 
             snprintf(fail_text, FAIL_TEXT_SIZE,
                      "Field advance failed.  Expected '%s'",
-                     (char *)template );
+                     (char *)template_ );
             qd_iterator_free(raw);
             return fail_text;
         }
         qd_iterator_advance(iter, increment);
-        template += increment;
+        template_ += increment;
         qd_iterator_free(raw);
     }
     if (!qd_iterator_end(iter))
@@ -531,10 +531,10 @@ static char *field_advance_test(void *context,
 
 static char* test_field_advance_string(void *context)
 {
-    const char *template = "abcdefghijklmnopqrstuvwxyz";
-    qd_iterator_t *iter = qd_iterator_string(template, ITER_VIEW_ALL);
+    const char *template_ = "abcdefghijklmnopqrstuvwxyz";
+    qd_iterator_t *iter = qd_iterator_string(template_, ITER_VIEW_ALL);
     return field_advance_test(context, iter,
-                              (const unsigned char*)template, 2);
+                              (const unsigned char*)template_, 2);
 }
 
 
@@ -542,10 +542,10 @@ static char* test_field_advance_buffer(void *context)
 {
     qd_buffer_list_t chain;
     DEQ_INIT(chain);
-    const unsigned char *template = (unsigned char *)"AAABBB";
-    build_buffer_chain(&chain, (const char *)template, 3);
+    const unsigned char *template_ = (unsigned char *)"AAABBB";
+    build_buffer_chain(&chain, (const char *)template_, 3);
     qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0, 6, ITER_VIEW_ALL);
-    char *ret = field_advance_test(context, iter, template, 1);
+    char *ret = field_advance_test(context, iter, template_, 1);
     release_buffer_chain(&chain);
     return ret;
 }

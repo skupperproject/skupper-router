@@ -544,7 +544,7 @@ static void _vflow_create_router_record(void)
 {
     vflow_record_t *router = vflow_start_record(VFLOW_RECORD_ROUTER, 0);
 
-    const char *namespace  = getenv("POD_NAMESPACE");
+    const char *namespace_  = getenv("POD_NAMESPACE");
     const char *image_name = getenv("APPLICATION_NAME");
     const char *version    = getenv("VERSION");
 
@@ -563,8 +563,8 @@ static void _vflow_create_router_record(void)
         vflow_set_string(router, VFLOW_ATTRIBUTE_HOST_NAME, state->hostname);
     }
 
-    if (!!namespace) {
-        vflow_set_string(router, VFLOW_ATTRIBUTE_NAMESPACE, namespace);
+    if (!!namespace_) {
+        vflow_set_string(router, VFLOW_ATTRIBUTE_NAMESPACE, namespace_);
     }
 
     if (!!image_name) {
