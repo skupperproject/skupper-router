@@ -92,11 +92,11 @@ void qd_http_connector_decref(qd_http_connector_t* c);
 
 QD_EXPORT qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_entity_t *entity);
 QD_EXPORT void qd_dispatch_delete_http_listener(qd_dispatch_t *qd, void *impl);
-qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl);
+QD_EXPORT qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl);
 
 QD_EXPORT qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_entity_t *entity);
 QD_EXPORT void qd_dispatch_delete_http_connector(qd_dispatch_t *qd, void *impl);
-qd_error_t qd_entity_refresh_httpConnector(qd_entity_t* entity, void *impl);
+QD_EXPORT qd_error_t qd_entity_refresh_httpConnector(qd_entity_t* entity, void *impl);
 
 // Management interfaces for retrieval of HttpRequestInfo entities
 void qdra_http_request_info_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);

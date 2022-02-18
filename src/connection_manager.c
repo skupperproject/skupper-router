@@ -636,7 +636,7 @@ static int get_failover_info_length(qd_failover_item_list_t   conn_info_list)
  * the order that they appear in the list.
  *
  */
-qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl)
+QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl)
 {
     qd_connector_t *connector = (qd_connector_t*) impl;
 

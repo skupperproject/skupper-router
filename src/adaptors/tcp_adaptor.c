@@ -1259,7 +1259,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
     }
 }
 
-qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
 {
     qd_tcp_listener_t *listener = (qd_tcp_listener_t*)impl;
 
@@ -1339,7 +1339,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
     }
 }
 
-qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
 {
     qd_tcp_connector_t *connector = (qd_tcp_connector_t*)impl;
 

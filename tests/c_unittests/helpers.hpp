@@ -57,7 +57,7 @@ extern "C" {
 #include <router_core/router_core_private.h>
 
 // declarations that don't have .h file
-void qd_router_setup_late(qd_dispatch_t *qd);
+QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd);
 }
 
 // low-level router initialization
