@@ -1900,7 +1900,7 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
         // Handle incoming link cases
         //
         switch (link->link_type) {
-        case QD_LINK_ENDPOINT:
+        case QD_LINK_ENDPOINT: {
             if (link->auto_link) {
                 //
                 // This second-attach is the completion of an auto-link.  If the attach
@@ -1919,7 +1919,7 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
             if (!addr || (DEQ_SIZE(addr->subscriptions) || DEQ_SIZE(addr->rlinks) || qd_bitmask_cardinality(addr->rnodes)))
                 qdr_link_issue_credit_CT(core, link, link->capacity, false);
             break;
-
+        }
         case QD_LINK_ROUTER:
             qdr_attach_link_data_CT(core, conn, link);
             // fallthrough

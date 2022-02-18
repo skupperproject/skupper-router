@@ -601,7 +601,7 @@ static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *c
     qd_log(tc->module->core->log, QD_LOG_TRACE, "client test on conn event");
 
     switch (type) {
-    case QDRC_EVENT_CONN_OPENED:
+    case QDRC_EVENT_CONN_OPENED: {
         qd_log(tc->module->core->log, QD_LOG_TRACE, "client test conn open");
         if (tc->conn)  // already have a conn, ignore
             return;
@@ -626,6 +626,7 @@ static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *c
             assert(tc->core_client);
         }
         break;
+    }
     case QDRC_EVENT_CONN_CLOSED:
         qd_log(tc->module->core->log, QD_LOG_TRACE, "client test conn closed");
         if (tc->conn == conn) {
