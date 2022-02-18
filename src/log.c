@@ -182,6 +182,12 @@ typedef enum {DEFAULT, NONE, TRACE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICA
 #define MAX_VALID_LEVEL_INDEX CRITICAL
 #define N_LEVEL_INDICES (MAX_VALID_LEVEL_INDEX - MIN_VALID_LEVEL_INDEX + 1)
 #define LEVEL_INDEX(LEVEL) ((LEVEL) - TRACE)
+#ifdef __cplusplus
+inline level_index_t& operator++(level_index_t& state) {
+    state = static_cast<level_index_t>( static_cast<int>(state) + 1 );
+    return state;
+}
+#endif
 
 struct qd_log_source_t {
     DEQ_LINKS(qd_log_source_t);
