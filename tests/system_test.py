@@ -29,8 +29,10 @@ Features:
 """
 
 import errno
+import logging
 import sys
 import time
+from typing import List, Optional, Tuple
 
 import __main__
 import os
@@ -1359,19 +1361,22 @@ class Logger:
     """
     Record an event log for a self test.
     May print per-event or save events to be printed later.
+    Pytest will automatically collect the logs and will dump them for a failed test
     Optional file opened in 'append' mode to which each log line is written.
     """
 
     def __init__(self,
-                 title="Logger",
-                 print_to_console=False,
-                 save_for_dump=True,
-                 ofilename=None):
+                 title: str = "Logger",
+                 print_to_console: bool = False,
+                 save_for_dump: bool = True,
+                 python_log_level: Optional[int] = logging.DEBUG,
+                 ofilename: Optional[str] = None) -> None:
         self.title = title
         self.print_to_console = print_to_console
         self.save_for_dump = save_for_dump
-        self.logs = []
+        self.python_log_level = python_log_level
         self.ofilename = ofilename
+        self.logs: List[Tuple[Timestamp, str]] = []
 
     def log(self, msg):
         ts = Timestamp()
@@ -1380,6 +1385,8 @@ class Logger:
         if self.print_to_console:
             print("%s %s" % (ts, msg))
             sys.stdout.flush()
+        if self.python_log_level is not None:
+            logging.log(self.python_log_level, f"{ts} {self.title}: {msg}")
         if self.ofilename is not None:
             with open(self.ofilename, 'a') as f_out:
                 f_out.write("%s %s\n" % (ts, msg))
