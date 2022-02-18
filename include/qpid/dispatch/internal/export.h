@@ -19,5 +19,11 @@
 
 /// @cond INTERNAL
 
+#ifdef __cplusplus
+#define QD_EXTERN_C extern "C"
+#else
+#define QD_EXTERN_C
+#endif
+
 /// import/export macros
-#define QD_EXPORT __attribute__((visibility("default"))) __attribute__((used))
+#define QD_EXPORT QD_EXTERN_C __attribute__((visibility("default"))) __attribute__((used))
