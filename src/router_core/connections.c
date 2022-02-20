@@ -42,7 +42,7 @@ static void qdr_link_detach_sent(qdr_link_t *link);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
 
-ALLOC_DEFINE(qdr_connection_t);
+ALLOC_DEFINE_SAFE(qdr_connection_t);
 ALLOC_DEFINE(qdr_connection_work_t);
 
 //==================================================================================

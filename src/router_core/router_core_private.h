@@ -51,10 +51,10 @@ ALLOC_DECLARE(qdr_router_ref_t);
 ALLOC_DECLARE(qdr_link_ref_t);
 ALLOC_DECLARE(qdr_auto_link_t);
 ALLOC_DECLARE(qdr_conn_identifier_t);
-ALLOC_DECLARE(qdr_connection_ref_t);
+ALLOC_DECLARE_SAFE(qdr_connection_ref_t);
 
-ALLOC_DECLARE(qdr_connection_t);
-ALLOC_DECLARE(qdr_link_t);
+ALLOC_DECLARE_SAFE(qdr_connection_t);
+ALLOC_DECLARE_SAFE(qdr_link_t);
 
 #include "core_attach_address_lookup.h"
 #include "core_events.h"

@@ -108,7 +108,10 @@ static inline void *qd_alloc_deref_safe_ptr(const qd_alloc_safe_ptr_t *sp)
 #define ALLOC_DECLARE(T) \
     extern __thread qd_alloc_pool_t *__local_pool_##T; \
     T *new_##T(void);    \
-    void free_##T(T *p); \
+    void free_##T(T *p)
+
+#define ALLOC_DECLARE_SAFE(T) \
+    ALLOC_DECLARE(T); \
     typedef qd_alloc_safe_ptr_t T##_sp; \
     void set_safe_ptr_##T(T *p, T##_sp *sp); \
     T *safe_deref_##T(T##_sp sp); \
@@ -123,15 +126,21 @@ static inline void *qd_alloc_deref_safe_ptr(const qd_alloc_safe_ptr_t *sp)
     __thread qd_alloc_pool_t *__local_pool_##T = 0;                     \
     T *new_##T(void) { return (T*) qd_alloc(&__desc_##T, &__local_pool_##T); }  \
     void free_##T(T *p) { qd_dealloc(&__desc_##T, &__local_pool_##T, (char*) p); } \
+    qd_alloc_stats_t *alloc_stats_##T(void) { return __desc_##T.stats; } \
+    void *unused##T
+
+#define ALLOC_DEFINE_CONFIG_SAFE(T,S,A,C)                                \
+    ALLOC_DEFINE_CONFIG(T,S,A,C); \
     void set_safe_ptr_##T(T *p, T##_sp *sp) { qd_alloc_set_safe_ptr(sp, (void*)p); } \
     T *safe_deref_##T(T##_sp sp) { return (T*) qd_alloc_deref_safe_ptr((qd_alloc_safe_ptr_t*) &(sp)); } \
-    qd_alloc_stats_t *alloc_stats_##T(void) { return __desc_##T.stats; } \
     void *unused##T
 
 /**
  * Define functions new_T and alloc_T
  */
 #define ALLOC_DEFINE(T) ALLOC_DEFINE_CONFIG(T, sizeof(T), 0, 0)
+
+#define ALLOC_DEFINE_SAFE(T) ALLOC_DEFINE_CONFIG_SAFE(T, sizeof(T), 0, 0)
 
 void qd_alloc_initialize(void);
 void qd_alloc_debug_dump(const char *file);
