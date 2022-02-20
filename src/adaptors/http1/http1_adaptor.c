@@ -58,7 +58,7 @@
 
 
 ALLOC_DEFINE(qdr_http1_out_data_t);
-ALLOC_DEFINE(qdr_http1_connection_t);
+ALLOC_DEFINE_SAFE(qdr_http1_connection_t);
 
 
 qdr_http1_adaptor_t *qdr_http1_adaptor;

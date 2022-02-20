@@ -218,7 +218,7 @@ static inline void qd_http2_buffer_insert(qd_http2_buffer_t *buf, size_t len)
     assert(buf->size <= QD_HTTP2_BUFFER_SIZE + HTTP2_DATA_FRAME_HEADER_LENGTH);
 }
 
-ALLOC_DECLARE(qdr_http2_stream_data_t);
+ALLOC_DECLARE_SAFE(qdr_http2_stream_data_t);
 ALLOC_DECLARE(qdr_http2_connection_t);
 ALLOC_DECLARE(qd_http2_buffer_t);
 

@@ -49,7 +49,7 @@ static const int BACKLOG = 50;  /* Listening backlog */
 #define WRITE_BUFFERS 4
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
 
-ALLOC_DEFINE(qdr_http2_stream_data_t);
+ALLOC_DEFINE_SAFE(qdr_http2_stream_data_t);
 ALLOC_DEFINE(qdr_http2_connection_t);
 ALLOC_DEFINE(qd_http2_buffer_t);
 
