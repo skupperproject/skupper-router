@@ -137,8 +137,8 @@ struct qdr_tcp_connection_t {
 };
 
 DEQ_DECLARE(qdr_tcp_connection_t, qdr_tcp_connection_list_t);
-ALLOC_DECLARE(qdr_tcp_connection_t);
-ALLOC_DEFINE(qdr_tcp_connection_t);
+ALLOC_DECLARE_SAFE(qdr_tcp_connection_t);
+ALLOC_DEFINE_SAFE(qdr_tcp_connection_t);
 ALLOC_DEFINE(qd_tcp_adaptor_config_t);
 
 typedef struct qdr_tcp_adaptor_t {

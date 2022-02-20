@@ -48,7 +48,7 @@ const char *CONTENT_ENCODING = "content-encoding";
 #define WRITE_BUFFERS 4
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
 
-ALLOC_DEFINE(qdr_http2_stream_data_t);
+ALLOC_DEFINE_SAFE(qdr_http2_stream_data_t);
 ALLOC_DEFINE(qdr_http2_connection_t);
 
 typedef struct qdr_http2_adaptor_t {

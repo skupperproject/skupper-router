@@ -173,7 +173,7 @@ struct qd_message_pvt_t {
     sys_atomic_t                   send_complete;   // Message has been been completely sent
 };
 
-ALLOC_DECLARE(qd_message_t);
+ALLOC_DECLARE_SAFE(qd_message_t);
 ALLOC_DECLARE(qd_message_content_t);
 
 #define MSG_CONTENT(m)     (((qd_message_pvt_t*) m)->content)

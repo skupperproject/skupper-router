@@ -187,7 +187,7 @@ struct qdr_http1_connection_t {
     bool output_closed;
     bool input_closed;
 };
-ALLOC_DECLARE(qdr_http1_connection_t);
+ALLOC_DECLARE_SAFE(qdr_http1_connection_t);
 
 // special AMQP application properties keys for HTTP1 metadata headers
 // ':' prefix is illegal for HTTP headers, ensures no collisions with
