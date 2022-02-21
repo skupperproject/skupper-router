@@ -25,43 +25,79 @@
 How does the router shut down when interrupted with ctrl-C ?
 
 
-. ctrl-c is caught by server.c::handle().
-  it comes packaged by proton as PN_PROACTOR_INTERRUPT.
-  handle() sends it back through proton 
-  with pn_proactor_interrupt()
-  to interrupt the next thread, and then returns false.
+. main_process() +
+  is in its call to qd_server_run()
+
+.. qd_server_run() +
+   has called thread_run() once for each worker thread,
+   including itself as one of the worker threads.
+
+... thread_run() +
+    is in a loop processing batches of events, calling 
+    handle() on each event.
+
+.... handle() +
+     receives a Proton event of type PN_PROACTOR_INTERRUPT.
+     It calls pn_proactor_interrupt() to interrupt the next
+     thread, and then returns 'false'.
+
+... thread_run() receives false return from handle(), indicating
+    that the thread is no longer running. It drops out of the 
+    running loop. If there is a connection, it calls 
+    qd_conn_event_batch_complete() with last arg false, indicating that 
+    the connection has not closed. It then calls pn_proactor_done()
+    and returns, to be joined by qd_server_run().
+
+.... qd_conn_event_batch_complete() frees the connection's free_link_session_list,
+     along with the pn_link and pn_session of every qd session on the list.
+     Because the connection was not closed, it calls the writable_handler()
+     one more time, then returns.
 
 
-. The false return from handle() is received by thread_run().
-  If there is a container, thread_run() calls 
-  qd_conn_event_batch_complete() to let the container know 
-  that the work batch is finished.
+.. qd_server_run() +
+   after joining and freeing all worker threads, logs Shut
+   Down notice, and returns.
 
-.. qd_conn_event_batch_complete() loops through the 
-   free_link_session_list for this container. 
-   If the connection is not already closed, it frees 
-   each session's pn_link and pn_session, if they exist.
+. main_process() +
+  nulls out and dispatch pointer, and calls qd_dispatch_free().
+  It then flushes any remaining content in stdout, disables its 
+  SIGINT handler, and sends SIGINT 
+  to itsel, terminating the qdrouterd process.
 
+.. qd_dispatch_free() +
+   calls qd_http_server_free(), qd_connection_manager_free(), qd_policy_free(), qd_router_free(), qd_container_free(), qd_server_free(), qd_log_finalize(), qd_alloc_finalize(), qd_python_finalize(). It sets the router ID and Area NULL, calls qd_iterator_finalize(), frees allocated fields in the qd_dispatch_t structure, and frees the structure.
 
-. Once all threads have exited from thread_run(), 
-  qd_server_run() logs a "Shut Down" message, and returns to 
-  main_process() in main.c .
+... qd_http_server_free() +
+    text
 
+... qd_connection_manager_free() +
+    text
 
-. main_process() sets to NULL the dispatch pointer that 
-  everybody was using, and then frees the structure.
+... qd_policy_free() +
+    text
 
+... qd_router_free() +
+    text
 
-. main_process() flushes stdout.
+... qd_container_free() +
+    text
 
+... qd_server_free() +
+    text
 
-. If the router kill was caused by a SIGINT, main_process()
-  cancels its handler of that signal, and then sends the 
-  signal to itself, ending the process.
-  If there was no SIGINT, it just exits, ending the process.
+... qd_log_finalize() +
+    text
 
+... qd_alloc_finalize() +
+    text
 
-. Silence descends, like the falling snow.
+... qd_python_finalize() +
+    text
+
+... qd_iterator_finalize() +
+    text
+
+    
 
 
 
