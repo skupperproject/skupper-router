@@ -17,9 +17,16 @@
 # under the License.
 #
 
-FROM fedora:34 as builder
+FROM registry.access.redhat.com/ubi8/ubi:latest as builder
 
-RUN dnf -y install gcc gcc-c++ make cmake cyrus-sasl-devel cyrus-sasl-plain cyrus-sasl-gssapi cyrus-sasl-md5 openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
+RUN dnf -y --setopt=tsflags=nodocs install \
+      http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-4.el8.noarch.rpm \
+      http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-stream-repos-8-4.el8.noarch.rpm \
+ && dnf -y --setopt=tsflags=nodocs install epel-release \
+ && dnf config-manager --set-enabled powertools \
+ && dnf clean all
+
+RUN dnf -y --setopt=tsflags=nodocs install gcc gcc-c++ make cmake cyrus-sasl-devel cyrus-sasl-plain cyrus-sasl-gssapi cyrus-sasl-md5 openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
 WORKDIR /build
 COPY . .
 ENV PROTON_VERSION=0.36.0
@@ -27,10 +34,18 @@ ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-http://archive.apache.org/dist/qpid/p
 RUN .github/scripts/compile.sh
 
 
-FROM fedora:34
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+RUN dnf -y --setopt=tsflags=nodocs update \
+ && dnf -y --setopt=tsflags=nodocs install \
+      http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-4.el8.noarch.rpm \
+      http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-stream-repos-8-4.el8.noarch.rpm \
+ && dnf -y --setopt=tsflags=nodocs install epel-release \
+ && dnf config-manager --set-enabled powertools \
+ && dnf clean all
 
 # gdb and valgrind are part of final image as they can be used as debug options for Skupper
-RUN dnf -y install glibc cyrus-sasl-lib libuuid openssl gettext hostname iputils libwebsockets-devel libnghttp2 gdb valgrind && dnf -y update && dnf clean all
+RUN dnf -y --setopt=tsflags=nodocs install glibc cyrus-sasl-lib libuuid openssl gettext hostname iputils libwebsockets-devel libnghttp2 gdb valgrind && dnf clean all
 
 WORKDIR /
 COPY --from=builder /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /
