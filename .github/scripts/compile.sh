@@ -42,13 +42,19 @@ tar -zxf qpid-proton.tar.gz -C qpid-proton-src --strip-components 1
 do_patch "patches/proton" qpid-proton-src
 
 cd proton_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BINDINGS=python -DCMAKE_INSTALL_PREFIX=/usr -DSYSINSTALL_PYTHON=ON -DSSL_IMPL=openssl $WORKING/qpid-proton-src/ \
-    && make \
-    && make DESTDIR=$WORKING/proton_install install \
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_LINKTIME_OPTIMIZATION=ON \
+  -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
+  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/qpid-proton-src/ \
+    && VERBOSE=1 make DESTDIR=$WORKING/proton_install install \
     && tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr \
-    && make install
+    && VERBOSE=1 make install
 cd $WORKING/build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_LIBWEBSOCKETS=ON -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
-    && make  \
-    && make DESTDIR=$WORKING/staging/ install \
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+  -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
+  -DBUILD_TESTING=OFF \
+  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
+    && VERBOSE=1 make DESTDIR=$WORKING/staging/ install \
     && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc
