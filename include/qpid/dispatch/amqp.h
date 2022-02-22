@@ -126,6 +126,11 @@ extern const int          QD_MA_N_KEYS;       ///< number of router annotation k
 extern const int          QD_MA_FILTER_LEN;   ///< size of annotation filter buffer
 /// @}
 
+/** @name Application Propertiy Names */
+/// @{
+extern const char * const QD_AP_FLOW_ID;  ///< Flow-ID for correlating flow and counter-flow records
+/// @}
+
 /** @name Container Capabilities */
 /// @{
 extern const char * const QD_CAPABILITY_ANONYMOUS_RELAY;
