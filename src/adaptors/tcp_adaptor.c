@@ -23,6 +23,7 @@
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/codec.h>
@@ -52,8 +53,6 @@ const size_t TCP_BUFFER_SIZE = 16384*2;
 ALLOC_DEFINE(qd_tcp_listener_t);
 ALLOC_DEFINE(qd_tcp_connector_t);
 ALLOC_DEFINE(qd_tcp_bridge_t);
-
-static const char *AP_FLOW_ID = "flowid";
 
 #define WRITE_BUFFERS 12
 
@@ -371,7 +370,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         //
         props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, props);
         qd_compose_start_map(props);
-        qd_compose_insert_symbol(props, AP_FLOW_ID);
+        qd_compose_insert_symbol(props, QD_AP_FLOW_ID);
         plog_serialize_identity(conn->plog, props);
         qd_compose_end_map(props);
 
@@ -1625,7 +1624,7 @@ static void qdr_associate_plog_flows(qdr_tcp_connection_t *tc, qd_message_t *msg
                     break;
                 }
                 qd_iterator_t *key_iter = qd_parse_raw(key);
-                if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char*) AP_FLOW_ID)) {
+                if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char*) QD_AP_FLOW_ID)) {
                     id_value = qd_parse_sub_value(ap, i);
                     break;
                 }

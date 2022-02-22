@@ -236,7 +236,7 @@ qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, const qd_ht
                hconn->conn_id, hconn->cfg.host_port);
 
         c->plog = plog_start_record(PLOG_RECORD_CONNECTOR, 0);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "tcp");
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "http1");
         plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config.name);
         plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config.host);
         plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config.port);

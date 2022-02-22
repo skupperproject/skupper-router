@@ -18,10 +18,7 @@
  */
 
 #include "http_common.h"
-
 #include <proton/listener.h>
-#include "qpid/dispatch/protocol_log.h"
-
 #include <stdio.h>
 
 ALLOC_DECLARE(qd_http_listener_t);
