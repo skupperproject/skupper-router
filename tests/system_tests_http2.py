@@ -974,15 +974,17 @@ class Http2Q2OneRouterTest(Http2TestBase):
         blocked = "q2 is blocked"
         unblocked = "q2 is unblocked"
         with open(self.router_qdra.logfile_path, 'r') as router_log:
-            log_lines = router_log.read().split("\n")
-            for log_line in log_lines:
+            for line_no, log_line in enumerate(router_log, start=1):
                 if unblocked in log_line:
                     num_unblocked += 1
+                    unblock_line = line_no
                 elif blocked in log_line:
+                    block_line = line_no
                     num_blocked += 1
-
         self.assertGreater(num_blocked, 0)
         self.assertGreater(num_unblocked, 0)
+        self.assertGreaterEqual(num_unblocked, num_blocked)
+        self.assertGreater(unblock_line, block_line)
 
 
 class Http2Q2TwoRouterTest(Http2TestBase):
@@ -1041,12 +1043,14 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         blocked = "q2 is blocked"
         unblocked = "q2 is unblocked"
         with open(self.router_qdra.logfile_path, 'r') as router_log:
-            log_lines = router_log.read().split("\n")
-            for log_line in log_lines:
+            for line_no, log_line in enumerate(router_log, start=1):
                 if unblocked in log_line:
                     num_unblocked += 1
+                    unblock_line = line_no
                 elif blocked in log_line:
+                    block_line = line_no
                     num_blocked += 1
-
         self.assertGreater(num_blocked, 0)
         self.assertGreater(num_unblocked, 0)
+        self.assertGreaterEqual(num_unblocked, num_blocked)
+        self.assertGreater(unblock_line, block_line)

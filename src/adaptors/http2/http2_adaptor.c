@@ -560,10 +560,11 @@ static int on_data_chunk_recv_callback(nghttp2_session *session,
         qd_message_stream_data_append(stream_data->message, &buffers, &q2_blocked2);
         stream_data->body_data_added_to_msg = true;
         qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 DATA on_data_chunk_recv_callback qd_compose_insert_binary_buffers into stream_data->message", conn->conn_id, stream_id);
-        conn->q2_blocked = conn->q2_blocked || q2_blocked1 || q2_blocked2;
 
-        if (conn->q2_blocked) {
+        if ((q2_blocked1 || q2_blocked2) && !conn->q2_blocked) {
+            conn->q2_blocked = true;
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is blocked on this connection", conn->conn_id);
+
         }
     }
     else {
@@ -851,11 +852,10 @@ static bool compose_and_deliver(qdr_http2_connection_t *conn, qdr_http2_stream_d
                 qd_message_stream_data_append(stream_data->message, &stream_data->body_buffers, &q2_blocked);
                 stream_data->body_data_added_to_msg = true;
             }
-
-            conn->q2_blocked = conn->q2_blocked || q2_blocked;
-    		if (conn->q2_blocked) {
-    			qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is blocked on this connection", conn->conn_id);
-    		}
+            if (q2_blocked && !conn->q2_blocked) {
+                conn->q2_blocked = true;
+                qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is blocked on this connection", conn->conn_id);
+            }
         }
         else {
             if (DEQ_SIZE(stream_data->body_buffers) > 0) {
@@ -879,10 +879,10 @@ static bool compose_and_deliver(qdr_http2_connection_t *conn, qdr_http2_stream_d
                 	qd_message_stream_data_append(stream_data->message, &stream_data->body_buffers, &q2_blocked);
                 }
                 stream_data->body_data_added_to_msg = true;
-                conn->q2_blocked = conn->q2_blocked || q2_blocked;
-        		if (conn->q2_blocked) {
-        			qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is blocked on this connection", conn->conn_id);
-        		}
+                if (q2_blocked && !conn->q2_blocked) {
+                    conn->q2_blocked = true;
+                    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is blocked on this connection", conn->conn_id);
+                }
             }
             else {
                 if (stream_data->footer_properties) {
