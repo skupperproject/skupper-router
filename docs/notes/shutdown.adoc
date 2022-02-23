@@ -1,0 +1,133 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+
+
+== qdrouterd shutdown procedure
+
+
+How does the router shut down when interrupted with ctrl-C ?
+
+
+. main_process() +
+  is in its call to qd_server_run()
+
+.. qd_server_run() +
+   has called thread_run() once for each worker thread,
+   including itself as one of the worker threads.
+
+... thread_run() +
+    is in a loop processing batches of events, calling 
+    handle() on each event.
+
+.... handle() +
+     receives a Proton event of type PN_PROACTOR_INTERRUPT.
+     It calls pn_proactor_interrupt() to interrupt the next
+     thread, and then returns 'false'.
+
+... thread_run() receives false return from handle(), indicating
+    that the thread is no longer running. It drops out of the 
+    running loop. If there is a connection, it calls 
+    qd_conn_event_batch_complete() with last arg false, indicating that 
+    the connection has not closed. It then calls pn_proactor_done()
+    and returns, to be joined by qd_server_run().
+
+.... qd_conn_event_batch_complete() frees the connection's free_link_session_list,
+     along with the pn_link and pn_session of every qd session on the list.
+     Because the connection was not closed, it calls the writable_handler()
+     one more time, then returns.
+
+
+.. qd_server_run() +
+   after joining and freeing all worker threads, logs Shut
+   Down notice, and returns.
+
+. main_process() +
+  nulls out and dispatch pointer, and calls qd_dispatch_free().
+  It then flushes any remaining content in stdout, disables its 
+  SIGINT handler, and sends SIGINT 
+  to itsel, terminating the qdrouterd process.
+
+.. qd_dispatch_free() +
+   calls more freeing functions (see below). Sets the router ID and Area NULL, frees allocated fields in the qd_dispatch_t structure, and frees the structure.
+
+... qd_http_server_free() +
+    stops the server, destroys its work queue, frees its Libwebsockets context, and frees the server structure.
+
+... qd_connection_manager_free() +
+    cleans up and closes list of listeners. Goes through list of connectors, decrefs each, sets state to CXTR_STATE_DELETED, and turns off timer on each. Goes through list of SSL profiles, and frees each.
+
+... qd_policy_free() +
+    frees policy data structures and locks.
+
+... qd_router_free() +
+    nulls out router ID and Area, frees router data structures and some globals, and calls many more freeing functions (see below).
+
+.... qdr_core_free() +
+     Stops and joins the thread, tells adapters to clean up, cleans up forwarders, autolinks, addresses, configs, routers, open links, the work list, the action list, the delivery cleanup list, open connections, their work lists, and their streaming links. Frees the management agent, allocated fields of the core structure, and finally the core structure itself.
+
+..... qdr_adaptors_finalize() +
+      Finalizes adaptor modules (calls on_final function for each adaptor) and frees the default AMQP adaptor, which is not a module.
+
+..... qdr_core_remove_address_config() +
+      removes the address from the core list, and removes its iterator pattern from the core address parse tree.
+
+..... qdr_router_node_free() +
+      frees the given node's allocated fields, zeroes out its position in the core's routers_by_mask_bit array, and increments the core cost_epoch.
+
+..... qdr_link_cleanup_deliveries_CT() +
+      frees everything in the link's undelivered, unsettled, and settled lists. For each undelivered outgoing multicast delivery, tells the incoming peer that it has been released and settled.
+
+..... qdr_modules_finalize() +
+      calls on_final method for each module.
+
+..... qd_message_free() +
+      frees all message buffer lists, make sure that any outstanding stream data ites associated with this message have already been released, and clears Q2 holdoff if enough buffers have been released.
+
+..... qdr_route_check_id_for_deletion_CT() +
+      removes this connection identifier from the hash index, if it has no open connection and no routes refer to it.
+
+
+
+.... qd_timer_free +
+     makes sure that the timer has not already been deleted. If the timer is still running, and if it is being run by another thread, then wait until the timer has completed. Then decref it and set its state to DELETED.
+
+.... qd_router_configure_free() +
+     NOOP
+
+.... qd_router_python_free +
+     NOOP
+
+... qd_container_free() +
+    cleans up and deletes all the container's qd_links and nodes, all the types in the types list, all allocated fields, and the container struct itself.
+
+... qd_server_free() +
+    For every connection in the server, clean up its pn_connection, discard any pending deferred calls it has, and free its policy settings. If it has a connector, free that too. Call pn_proactor_free(), free remaining locks, and free the qd_server structure itself.
+
+... qd_log_finalize() +
+    frees all sources, sinks, and entries.
+
+... qd_alloc_finalize() +
+    All allocated items should have been released by now, and there should be only a single thread running. No locking will be done. Clean up all items on the types list. Reclaim the items on the global free pool. Reclaim items on thread pools. Check stats to detect allocated items that have not been freed.
+
+
+    
+
+
+
