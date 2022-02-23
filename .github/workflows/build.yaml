@@ -182,8 +182,7 @@ jobs:
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
-      # TODO(DISPATCH-2078) re-enable system_tests_authz_service_plugin when the GHA failure is understood and fixed
-      RouterCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
+      RouterCTestExtraArgs: ""
       LD_LIBRARY_PATH: ${{github.workspace}}/install/lib
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
@@ -301,8 +300,7 @@ jobs:
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
-      # TODO(DISPATCH-2078) re-enable system_tests_authz_service_plugin when the GHA failure is understood and fixed
-      RouterCTestExtraArgs: "-E 'system_tests_authz_service_plugin'"
+      RouterCTestExtraArgs: ""
 
       # TODO(DISPATCH-2144) use -DPython_EXECUTABLE=/usr/bin/python3-debug when issue is fixed,
       #  as that allows for -DSANITIZE_3RD_PARTY=ON on Fedora
