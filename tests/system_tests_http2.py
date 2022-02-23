@@ -21,7 +21,7 @@ import os
 import sys
 import hashlib
 import unittest
-from subprocess import PIPE
+from subprocess import PIPE, TimeoutExpired
 from time import sleep
 
 import system_test
@@ -254,8 +254,7 @@ class CommonHttp2Tests:
 
         # Add back the listener and run a curl command to make sure that the newly added listener is
         # back up and running.
-        create_result = qd_manager.create("org.apache.qpid.dispatch.httpListener", self.http_listener_props)
-        sleep(2)
+        qd_manager.create("org.apache.qpid.dispatch.httpListener", self.http_listener_props)
         out = self.run_curl(client_addr)
         self.assertIn(ret_string, out)
 
@@ -297,15 +296,16 @@ class CommonHttp2Tests:
                 break
         self.assertFalse(http_server_conn_found)
 
-        sleep(2)
-
         # Now, run a curl client GET request with a timeout
         request_timed_out = False
-        try:
-            out = self.run_curl(client_addr, timeout=5)
-            print(out)
-        except Exception as e:
-            request_timed_out = True
+        for n in range(3):
+            try:
+                out = self.run_curl(client_addr, timeout=2)
+                print(out)
+                sleep(0.5)
+            except TimeoutExpired:
+                request_timed_out = True
+                break
 
         self.assertTrue(request_timed_out)
 
@@ -319,7 +319,7 @@ class CommonHttp2Tests:
             connections = qd_manager.query('org.apache.qpid.dispatch.connection')
             tries += 1
             if len(connections) < 2:
-                sleep(2)
+                sleep(1)
             else:
                 conn_present = True
         self.assertTrue(conn_present)
@@ -548,8 +548,6 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         cls.router_qdra.wait_router_connected('QDR.B')
         cls.router_qdrb.wait_router_connected('QDR.A')
 
-        sleep(2)
-
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_000_stats(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
@@ -649,7 +647,6 @@ class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
 
         cls.router_qdrb = cls.tester.qdrouterd("interior-router", config_qdrb, wait=True)
         cls.router_qdra = cls.tester.qdrouterd("edge-router", config_edgea)
-        sleep(3)
 
 
 class Http2TestInteriorEdgeRouter(Http2TestBase, CommonHttp2Tests):
@@ -692,7 +689,6 @@ class Http2TestInteriorEdgeRouter(Http2TestBase, CommonHttp2Tests):
 
         cls.router_qdra = cls.tester.qdrouterd("interior-router", config_qdra, wait=True)
         cls.router_qdrb = cls.tester.qdrouterd("edge-router", config_edge)
-        sleep(3)
 
 
 class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
@@ -765,7 +761,6 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         cls.router_qdrc = cls.tester.qdrouterd("interior-router", config_qdrc, wait=True)
         cls.router_qdra = cls.tester.qdrouterd("edge-router-a", config_edgea, wait=True)
         cls.router_qdrb = cls.tester.qdrouterd("edge-router-b", config_edgeb, wait=True)
-        sleep(3)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_check_connector_delete(self):
@@ -786,7 +781,6 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         # Now delete the httpConnector on the edge router config_edgea
         qd_manager = QdManager(self, address=self.router_qdra.addresses[0])
         qd_manager.delete("org.apache.qpid.dispatch.httpConnector", name=self.edge_a_http_connector_name)
-        sleep(2)
 
         # now check the interior router for the examples address. Since the httpConnector on one of the
         # edge routers was deleted, the proxy link on that edge router must be gone leaving us with just one proxy
@@ -804,7 +798,6 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         # Now delete the httpConnector on the edge router config_edgeb
         qd_manager = QdManager(self, address=self.router_qdrb.addresses[0])
         qd_manager.delete("org.apache.qpid.dispatch.httpConnector", name=self.edge_b_http_connector_name)
-        sleep(2)
 
         # Now, run a curl client GET request with a timeout.
         # Since both connectors on both edge routers are gone, the curl client will time out
@@ -812,7 +805,7 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         # router to create an AMQP message because there is no destination for the router address.
         request_timed_out = False
         try:
-            out = self.run_curl(address, args=["--head"], timeout=3)
+            out = self.run_curl(address, args=["--head"], timeout=2)
             print(out)
         except Exception as e:
             request_timed_out = True
@@ -878,7 +871,6 @@ class Http2TestEdgeToEdgeViaInteriorRouter(Http2TestBase, CommonHttp2Tests):
                                                 wait=True)
         cls.router_qdra = cls.tester.qdrouterd("edge-router-a", config_edge_a)
         cls.router_qdrb = cls.tester.qdrouterd("edge-router-b", config_edge_b)
-        sleep(5)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
