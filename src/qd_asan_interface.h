@@ -48,6 +48,10 @@
 
 #if QD_HAS_ADDRESS_SANITIZER
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void __asan_poison_memory_region(void const volatile *addr, size_t size);
 void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 
@@ -58,8 +62,7 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 ///
 /// \param addr Start of memory region.
 /// \param size Size of memory region.
-#define ASAN_POISON_MEMORY_REGION(addr, size) \
-  __asan_poison_memory_region((addr), (size))
+#define ASAN_POISON_MEMORY_REGION(addr, size) __asan_poison_memory_region((addr), (size))
 
 /// Marks a memory region as addressable.
 ///
@@ -68,8 +71,11 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 ///
 /// \param addr Start of memory region.
 /// \param size Size of memory region.
-#define ASAN_UNPOISON_MEMORY_REGION(addr, size) \
-  __asan_unpoison_memory_region((addr), (size))
+#define ASAN_UNPOISON_MEMORY_REGION(addr, size) __asan_unpoison_memory_region((addr), (size))
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
 
 #else  // QD_HAS_ADDRESS_SANITIZER
 
