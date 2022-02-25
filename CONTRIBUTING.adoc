@@ -1,3 +1,22 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
 Whenever you want to commit a change to the skupper-router repo, please first create a PR so it can be reviewed and approved by others.
 When creating a PR, please use the following commit message pattern
 
@@ -24,6 +43,5 @@ The following things happen when using the "Squash and merge" button to commit y
 
 For porting upstream qpid-dispatch issues to skupper-router you might use the standard `DISPATCH-XXXX: <Commit message>`  in your commit message but make sure you commit your change via the Github "Squash and merge" button.
 
-Please pull up any open PR on the skupper-router (for example - https://github.com/skupperproject/skupper-router/pull/80 ) and make sure you see the "Squash and merge" button.
+Please pull up any open PR on the skupper-router and make sure you see the "Squash and merge" button.
 Merge commits are not allowed on skupper-router.
-  
