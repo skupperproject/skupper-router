@@ -33,6 +33,7 @@ import builtins
 import ctypes
 import sys
 from ctypes import c_char_p, c_long, py_object
+from types import ModuleType
 
 
 class CError(Exception):
@@ -48,7 +49,7 @@ class QdDll(ctypes.PyDLL):
     internally makes python calls.
     """
 
-    def __init__(self, handle):
+    def __init__(self, handle: int) -> None:
         super(QdDll, self).__init__("qpid-dispatch", handle=handle)
 
         # Types
@@ -133,13 +134,13 @@ class QdDll(ctypes.PyDLL):
 FORBIDDEN = ["proton"]
 
 
-def check_forbidden():
+def check_forbidden() -> None:
     bad = set(FORBIDDEN) & set(sys.modules)
     if bad:
         raise ImportError("Forbidden modules loaded: '%s'." % "', '".join(bad))
 
 
-def import_check(name, *args, **kw):
+def import_check(name: str, *args, **kw) -> ModuleType:
     if name in FORBIDDEN:
         raise ImportError("Python code running inside a dispatch router cannot import '%s', use the 'dispatch' module for internal messaging" % name)
     return builtin_import(name, *args, **kw)

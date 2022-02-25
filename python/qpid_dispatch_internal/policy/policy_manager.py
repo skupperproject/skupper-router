@@ -20,9 +20,13 @@
 """Entity implementing the glue between the policy engine and the rest of the system."""
 
 import traceback
+from typing import TYPE_CHECKING
 
 from .policy_local import PolicyLocal
 from ..dispatch import LogAdapter, LOG_INFO, LOG_TRACE, LOG_DEBUG, LOG_ERROR, LOG_WARNING
+
+if TYPE_CHECKING:
+    from ..management.agent import Agent
 
 
 class PolicyManager:
@@ -30,7 +34,7 @@ class PolicyManager:
 
     """
 
-    def __init__(self, agent):
+    def __init__(self, agent: 'Agent') -> None:
         """
         """
         self._agent = agent
@@ -42,14 +46,14 @@ class PolicyManager:
         info = traceback.extract_stack(limit=2)[0]  # Caller frame info
         self.log_adapter.log(level, text, info[0], info[1])
 
-    def _log(self, level, text):
+    def _log(self, level: int, text: str) -> None:
         info = traceback.extract_stack(limit=3)[0]  # Caller's caller frame info
         self.log_adapter.log(level, text, info[0], info[1])
 
     def log_debug(self, text):
         self._log(LOG_DEBUG, text)
 
-    def log_info(self, text):
+    def log_info(self, text: str) -> None:
         self._log(LOG_INFO, text)
 
     def log_trace(self, text):
@@ -67,7 +71,7 @@ class PolicyManager:
     def get_use_hostname_patterns(self):
         return self._use_hostname_patterns
 
-    def set_use_hostname_patterns(self, v):
+    def set_use_hostname_patterns(self, v: bool) -> None:
         self._use_hostname_patterns = v
         self._policy_local.use_hostname_patterns = v
 
@@ -104,7 +108,7 @@ class PolicyManager:
     #
     # Management interface to set the default vhost
     #
-    def set_default_vhost(self, name):
+    def set_default_vhost(self, name: str) -> None:
         """
         Set default application
         @param name:
@@ -160,7 +164,7 @@ class PolicyManager:
         """
         self._policy_local.close_connection(conn_id)
 
-    def set_max_message_size(self, size):
+    def set_max_message_size(self, size: int) -> None:
         """
         Policy has set global maxMessageSize.
         :param size:

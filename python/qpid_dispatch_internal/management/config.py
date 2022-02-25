@@ -24,10 +24,15 @@ import json
 import re
 import os
 import traceback
+from typing import Any, Dict, Iterable, List, Optional, Union, TYPE_CHECKING, TextIO
+
 from qpid_dispatch.management.entity import camelcase
 
 from ..dispatch import QdDll
 from .qdrouter import QdSchema
+
+if TYPE_CHECKING:
+    from .schema import EntityType
 
 try:
     from ..dispatch import LogAdapter, LOG_WARNING, LOG_ERROR
@@ -40,7 +45,12 @@ except ImportError:
 class Config:
     """Load config entities from qdrouterd.conf and validated against L{QdSchema}."""
 
-    def __init__(self, filename=None, schema=QdSchema(), raw_json=False):
+    def __init__(
+            self,
+            filename: Optional[str] = None,
+            schema: QdSchema = QdSchema(),
+            raw_json: bool = False
+    ) -> None:
         self.schema = schema
         self.config_types = [et for et in schema.entity_types.values()
                              if schema.is_configuration(et)]
@@ -53,7 +63,7 @@ class Config:
                 raise Exception("Cannot load configuration file %s: %s"
                                 % (filename, e))
         else:
-            self.entities = []
+            self.entities: List[Dict[str, Any]] = []
 
     def _log(self, level, text):
         if self._log_adapter is not None:
@@ -61,7 +71,7 @@ class Config:
             self._log_adapter.log(level, text, info[0], info[1])
 
     @staticmethod
-    def transform_sections(sections):
+    def transform_sections(sections: List[Any]) -> None:
         for s in sections:
             s[0] = camelcase(s[0])
             s[1] = dict((camelcase(k), v) for k, v in s[1].items())
@@ -74,7 +84,7 @@ class Config:
             if s[0] == "binding":
                 s[0] = "router.config.binding"
 
-    def _parse(self, lines):
+    def _parse(self, lines: Iterable[str]) -> List[Any]:
         """
         Parse config file format into a section list
 
@@ -215,10 +225,14 @@ class Config:
         Config.transform_sections(sections)
         return sections
 
-    def get_config_types(self):
+    def get_config_types(self) -> List['EntityType']:
         return self.config_types
 
-    def load(self, source, raw_json=False):
+    def load(
+            self,
+            source: Union[str, TextIO, List[str]],
+            raw_json: bool = False
+    ) -> None:
         """
         Load a configuration file.
         @param source: A file name, open file object or iterable list of lines
@@ -238,15 +252,15 @@ class Config:
             self.schema.validate_all(entities)
             self.entities = entities
 
-    def by_type(self, entity_type):
+    def by_type(self, entity_type: str) -> List[Union[Dict[str, Any], Any]]:
         """Return entities of given type"""
         entity_type = self.schema.long_name(entity_type)
         return [e for e in self.entities if e['type'] == entity_type]
 
-    def remove(self, entity):
+    def remove(self, entity: Dict[str, Any]) -> None:
         self.entities.remove(entity)
 
-    def dump_json(self, title, js_text):
+    def dump_json(self, title: str, js_text: str) -> None:
         # Function for config file parse failure logging.
         # js_text is the pre-processed config-format json string or the
         # raw json-format string that was presented to the json interpreter.
@@ -260,14 +274,19 @@ class Config:
 
 
 class PolicyConfig(Config):
-    def __init__(self, filename=None, schema=QdSchema(), raw_json=False):
+    def __init__(
+            self,
+            filename: Optional[str] = None,
+            schema: QdSchema = QdSchema(),
+            raw_json: bool = False
+    ) -> None:
         super(PolicyConfig, self).__init__(filename, schema, raw_json)
 
-    def get_config_types(self):
+    def get_config_types(self) -> List[Any]:
         return [s for s in self.config_types if 'policy' in s.name]
 
 
-def configure_dispatch(dispatch, lib_handle, filename):
+def configure_dispatch(dispatch: int, lib_handle: int, filename: str) -> None:
     """Called by C router code to load configuration file and do configuration"""
     qd = QdDll(lib_handle)
     dispatch = qd.qd_dispatch_p(dispatch)

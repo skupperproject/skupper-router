@@ -26,6 +26,7 @@ the file name which contains a mapping of user identifiers to user names.
 
 import json
 import traceback
+from typing import Dict
 
 from qpid_dispatch_internal import dispatch
 
@@ -47,10 +48,10 @@ class SSLProfile:
 
 class DisplayNameService:
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(DisplayNameService, self).__init__()
         # profile_dict will be a mapping from ssl_profile_name to the SSLProfile object
-        self.profile_dict = {}
+        self.profile_dict: Dict[str, SSLProfile] = {}
         self.io_adapter = None
         self.log_adapter = dispatch.LogAdapter("DISPLAYNAME")
 

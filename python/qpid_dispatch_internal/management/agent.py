@@ -823,7 +823,7 @@ class Agent:
         info = traceback.extract_stack(limit=2)[0]  # Caller frame info
         self.log_adapter.log(level, text, info[0], info[1])
 
-    def activate(self, address):
+    def activate(self, address: str) -> None:
         """Register the management address to receive management requests"""
         self.entities.refresh_from_c()
         self.log(LOG_INFO, "Activating management agent on %s" % address)

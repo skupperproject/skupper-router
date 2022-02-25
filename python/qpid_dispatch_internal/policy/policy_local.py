@@ -20,7 +20,12 @@
 """Entity implementing the business logic of user connection/access policy."""
 
 import json
+from typing import Any, Dict, List, Union, TYPE_CHECKING
+
 from .policy_util import PolicyError, HostStruct, HostAddr, PolicyAppConnectionMgr, is_ipv6_enabled
+
+if TYPE_CHECKING:
+    from .policy_manager import PolicyManager
 
 
 class PolicyKeys:
@@ -142,24 +147,30 @@ class PolicyCompiler:
         PolicyKeys.KW_TARGET_PATTERN
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Create a validator
         """
         pass
 
-    def validateNumber(self, val, v_min, v_max, errors):
+    def validateNumber(
+            self,
+            val: int,
+            v_min: int,
+            v_max: int,
+            errors: List[str]
+    ) -> bool:
         """
         Range check a numeric int policy value
         @param[in] val policy value to check
-        @param[in] v_min minumum value
+        @param[in] v_min minimum value
         @param[in] v_max maximum value. zero disables check
         @param[out] errors failure message
         @return v_min <= val <= v_max
         """
         try:
             v_int = int(val)
-        except Exception as e:
+        except ValueError as e:
             errors.append("Value '%s' does not resolve to an integer." % val)
             return False
         if v_int < v_min:
@@ -170,7 +181,15 @@ class PolicyCompiler:
             return False
         return True
 
-    def compile_connection_group(self, vhostname, groupname, val, list_out, warnings, errors):
+    def compile_connection_group(
+            self,
+            vhostname: str,
+            groupname: str,
+            val: Union[str, List[str]],
+            list_out: List[HostAddr],
+            warnings: List[str],
+            errors: List[str]
+    ) -> bool:
         """
         Handle an ingressHostGroups submap.
         Each origin value is verified. On a successful run the submap
@@ -208,7 +227,15 @@ class PolicyCompiler:
                 return False
         return True
 
-    def compile_app_settings(self, vhostname, usergroup, policy_in, policy_out, warnings, errors):
+    def compile_app_settings(
+            self,
+            vhostname: str,
+            usergroup: str,
+            policy_in: Dict[str, Any],
+            policy_out: Dict[str, Any],
+            warnings: List[str],
+            errors: List[str]
+    ) -> bool:
         """
         Compile a vhostUserGroupSettings schema from processed json format to local internal format.
         @param[in] name vhost name
@@ -247,7 +274,7 @@ class PolicyCompiler:
         policy_out[PolicyKeys.KW_MAXCONNPERHOST] = None  # optional group limit
         policy_out[PolicyKeys.KW_MAXCONNPERUSER] = None
 
-        cerror = []
+        cerror: List[str] = []
         user_sources = False
         user_targets = False
         user_src_pattern = False
@@ -278,9 +305,9 @@ class PolicyCompiler:
                     return False
                 policy_out[key] = int(val)
             elif key == PolicyKeys.KW_REMOTE_HOSTS:
-                # Conection groups are lists of IP addresses that need to be
+                # Connection groups are lists of IP addresses that need to be
                 # converted into binary structures for comparisons.
-                val_out = []
+                val_out: List[HostAddr] = []
                 if not self.compile_connection_group(vhostname, usergroup, val, val_out, warnings, errors):
                     return False
                 policy_out[key] = val_out
@@ -386,7 +413,14 @@ class PolicyCompiler:
 
         return True
 
-    def compile_access_ruleset(self, name, policy_in, policy_out, warnings, errors):
+    def compile_access_ruleset(
+            self,
+            name: str,
+            policy_in: Dict[str, Any],
+            policy_out: Dict[Any, Any],
+            warnings: List[Any],
+            errors: List[Any]
+    ) -> bool:
         """
         Compile a vhost schema from processed json format to local internal format.
         @param[in] name vhost name
@@ -399,7 +433,7 @@ class PolicyCompiler:
                   warnings[] may contain info and errors[0] will hold the
                   description of why the policy was rejected.
         """
-        cerror = []
+        cerror: List[Any] = []
         # rulesets may not come through standard config so make nice defaults
         policy_out[PolicyKeys.KW_MAXCONN] = 65535
         policy_out[PolicyKeys.KW_MAXCONNPERHOST] = 65535
@@ -460,7 +494,7 @@ class PolicyCompiler:
                                   (name, key, type(val)))
                     return False
                 for skey, sval in val.items():
-                    newsettings = {}
+                    newsettings: Dict[Any, Any] = {}
                     if not self.compile_app_settings(name, skey, sval, newsettings, warnings, errors):
                         return False
                     policy_out[key][skey] = {}
@@ -500,7 +534,12 @@ class AppStats:
     Maintain live state and statistics for an vhost.
     """
 
-    def __init__(self, id, manager, ruleset):
+    def __init__(
+            self,
+            id: str,
+            manager: 'PolicyManager',
+            ruleset: Dict[str, Any]
+    ) -> None:
         self.my_id = id
         self._manager = manager
         self.conn_mgr = PolicyAppConnectionMgr(
@@ -534,16 +573,24 @@ class AppStats:
         self._manager.get_agent().qd.qd_dispatch_policy_c_counts_refresh(self._cstats, entitymap)
         attributes.update(entitymap)
 
-    def can_connect(self, conn_id, user, host, diags, group_max_conn_user, group_max_conn_host):
+    def can_connect(
+            self,
+            conn_id: str,
+            user: str,
+            host: str,
+            diags: List[Any],
+            group_max_conn_user: None,
+            group_max_conn_host: None
+    ) -> bool:
         return self.conn_mgr.can_connect(conn_id, user, host, diags, group_max_conn_user, group_max_conn_host)
 
     def disconnect(self, conn_id, user, host):
         self.conn_mgr.disconnect(conn_id, user, host)
 
-    def count_other_denial(self):
+    def count_other_denial(self) -> None:
         self.conn_mgr.count_other_denial()
 
-    def get_cstats(self):
+    def get_cstats(self) -> int:
         return self._cstats
 
 #
@@ -551,7 +598,13 @@ class AppStats:
 
 
 class ConnectionFacts:
-    def __init__(self, user, host, app, conn_name):
+    def __init__(
+            self,
+            user: str,
+            host: str,
+            app: str,
+            conn_name: str
+    ) -> None:
         self.user = user
         self.host = host
         self.app = app
@@ -566,7 +619,7 @@ class PolicyLocal:
     The local policy database.
     """
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'PolicyManager') -> None:
         """
         Create instance
         @params manager policy manager class
@@ -580,7 +633,7 @@ class PolicyLocal:
         #  val : ruleset for this app
         # created by configuration
         # augmented by policy compiler
-        self.rulesetdb = {}
+        self.rulesetdb: Dict[str, Dict[str, Any]] = {}
 
         # settingsdb is a map
         #  key : <vhost name>
@@ -588,12 +641,12 @@ class PolicyLocal:
         #   key : <user group name>
         #   val : settings to use for user's connection
         # created by configuration
-        self.settingsdb = {}
+        self.settingsdb: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
         # statsdb is a map
         #  key : <vhost name>
         #  val : AppStats object
-        self.statsdb = {}
+        self.statsdb: Dict[str, AppStats] = {}
 
         # _policy_compiler is a function
         #  validates incoming policy and readies it for internal use
@@ -604,7 +657,7 @@ class PolicyLocal:
         #  val : ConnectionFacts
         # Entries created as connection AMQP Opens arrive
         # Entries destroyed as sockets closed
-        self._connections = {}
+        self._connections: Dict[int, ConnectionFacts] = {}
 
         # _default_vhost is a string
         #  holds the name of the vhost to use when the
@@ -623,19 +676,22 @@ class PolicyLocal:
         # _vhost_aliases is a map
         #  key : alias vhost name
         #  val : actual vhost to which alias refers
-        self._vhost_aliases = {}
+        self._vhost_aliases: Dict[str, str] = {}
     #
     # Service interfaces
     #
 
-    def create_ruleset(self, attributes):
+    def create_ruleset(
+            self,
+            attributes: Dict[str, Any]
+    ) -> None:
         """
         Create or update named policy ruleset.
         @param[in] attributes: from config
         """
-        warnings = []
-        diag = []
-        candidate = {}
+        warnings: List[str] = []
+        diag: List[str] = []
+        candidate: Dict[str, Any] = {}
         name = attributes[PolicyKeys.KW_VHOST_NAME]
         result = self._policy_compiler.compile_access_ruleset(name, attributes, candidate, warnings, diag)
 
@@ -678,7 +734,7 @@ class PolicyLocal:
             tnames.append(name)
             tnames += candidate[PolicyKeys.KW_VHOST_ALIASES]
             # create a list of names to undo in case a subsequent name does not work
-            snames = []
+            snames: List[str] = []
             for tname in tnames:
                 if not agent.qd.qd_dispatch_policy_host_pattern_add(agent.dispatch, tname):
                     # undo the snames list
@@ -733,7 +789,7 @@ class PolicyLocal:
         """
         return list(self.rulesetdb.keys())
 
-    def set_default_vhost(self, name):
+    def set_default_vhost(self, name: str) -> None:
         """
         Set the default vhost name.
         @param name: the name of the default vhost
@@ -742,7 +798,7 @@ class PolicyLocal:
         self._default_vhost = name
         self._manager.log_info("Policy fallback defaultVhost is defined: '%s'" % name)
 
-    def default_vhost_enabled(self):
+    def default_vhost_enabled(self) -> bool:
         """
         The default vhost is enabled if the name is not blank and
         the vhost is defined in rulesetdb.
@@ -753,7 +809,7 @@ class PolicyLocal:
     #
     # Runtime query interface
     #
-    def lookup_vhost_alias(self, vhost_in):
+    def lookup_vhost_alias(self, vhost_in: str) -> str:
         """
         Resolve given vhost name to vhost settings name.
         If the incoming name is a vhost hostname then return the same name.
@@ -773,7 +829,14 @@ class PolicyLocal:
             vhost = self._default_vhost if self.default_vhost_enabled() else ""
         return vhost
 
-    def lookup_user(self, user, rhost, vhost_in, conn_name, conn_id):
+    def lookup_user(
+            self,
+            user: str,
+            rhost: str,
+            vhost_in: str,
+            conn_name: str,
+            conn_id: int
+    ) -> str:
         """
         Lookup function called from C.
         Determine if a user on host accessing vhost through AMQP Open is allowed
@@ -850,7 +913,7 @@ class PolicyLocal:
             # Extract optional usergroup connection counts
             group_max_conn_user = groupsettings.get(PolicyKeys.KW_MAXCONNPERUSER)
             group_max_conn_host = groupsettings.get(PolicyKeys.KW_MAXCONNPERHOST)
-            diags = []
+            diags: List[str] = []
             if not stats.can_connect(conn_name, user, rhost, diags, group_max_conn_user, group_max_conn_host):
                 for diag in diags:
                     self._manager.log_info(
@@ -872,7 +935,12 @@ class PolicyLocal:
             # return failure
             return ""
 
-    def lookup_settings(self, vhost_in, groupname, upolicy):
+    def lookup_settings(
+            self,
+            vhost_in: str,
+            groupname: str,
+            upolicy: Dict[Any, Any]
+    ) -> bool:
         """
         Given a settings name, return the aggregated policy blob.
         @param[in] vhost_in: vhost user is accessing
@@ -933,7 +1001,7 @@ class PolicyLocal:
             self._manager.log_trace(
                 "Policy internal error closing connection id %s. %s" % (conn_id, str(e)))
 
-    def set_max_message_size(self, size):
+    def set_max_message_size(self, size: int) -> None:
         """
         record max message size from policy config object
         :param size:
@@ -944,7 +1012,7 @@ class PolicyLocal:
 
     #
     #
-    def test_load_config(self):
+    def test_load_config(self) -> None:
         """
         Test function to load a policy.
         @return:
