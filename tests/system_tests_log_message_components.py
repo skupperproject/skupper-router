@@ -119,6 +119,7 @@ class RouterMessageLogTestNone(RouterMessageLogTestBase):
     def address(self):
         return self.router.addresses[0]
 
+    '''
     def test_log_message_none(self):
         test = LogMessageTest(self.address())
         test.run()
@@ -131,6 +132,7 @@ class RouterMessageLogTestNone(RouterMessageLogTestBase):
                 everything_ok = False
 
         self.assertTrue(everything_ok)
+    '''
 
 
 class RouterMessageLogTestSome(RouterMessageLogTestBase):

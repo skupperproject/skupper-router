@@ -658,8 +658,10 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
                                                     bool                  dup_ok,
                                                     bool                  protect_buffer)
 {
-    if (!*cursor || !can_advance(cursor, buffer))
+    if (!*cursor || !can_advance(cursor, buffer)) {
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 1 returning QD_SECTION_NEED_MORE");
         return QD_SECTION_NEED_MORE;
+    }
 
     qd_buffer_t   *test_buffer   = *buffer;
     unsigned char *test_cursor   = *cursor;
@@ -671,8 +673,10 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
         test_cursor++;
         if (test_cursor == end_of_buffer) {
             test_buffer = test_buffer->next;
-            if (test_buffer == 0)
+            if (test_buffer == 0) {
+                qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 2 returning QD_SECTION_NEED_MORE");
                 return QD_SECTION_NEED_MORE;
+            }
             test_cursor = qd_buffer_base(test_buffer);
             end_of_buffer = test_cursor + qd_buffer_size(test_buffer);
         }
@@ -709,15 +713,19 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     unsigned char tag;
     unsigned char octet;
 
-    if (!next_octet(&test_cursor, &test_buffer, &tag))
+    if (!next_octet(&test_cursor, &test_buffer, &tag)) {
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 3 returning QD_SECTION_NEED_MORE");
         return QD_SECTION_NEED_MORE;
+    }
 
     unsigned char tag_subcat = tag & 0xF0;
 
     // if there is no more data the only valid data type is a null type (0x40),
     // size is implied as 0
-    if (!can_advance(&test_cursor, &test_buffer) && tag_subcat != 0x40)
+    if (!can_advance(&test_cursor, &test_buffer) && tag_subcat != 0x40) {
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 4 returning QD_SECTION_NEED_MORE");
         return QD_SECTION_NEED_MORE;
+    }
 
     switch (tag_subcat) {
         // fixed sizes:
@@ -733,16 +741,22 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     case 0xF0:
         // uint32_t size field:
         pre_consume += 3;
-        if (!next_octet(&test_cursor, &test_buffer, &octet))
+        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 5 returning QD_SECTION_NEED_MORE");
             return QD_SECTION_NEED_MORE;
+        }
         consume |= ((uint32_t) octet) << 24;
 
-        if (!next_octet(&test_cursor, &test_buffer, &octet))
+        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 6 returning QD_SECTION_NEED_MORE");
             return QD_SECTION_NEED_MORE;
+        }
         consume |= ((uint32_t) octet) << 16;
 
-        if (!next_octet(&test_cursor, &test_buffer, &octet))
+        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 7 returning QD_SECTION_NEED_MORE");
             return QD_SECTION_NEED_MORE;
+        }
         consume |= ((uint32_t) octet) << 8;
 
         // fallthrough
@@ -752,8 +766,10 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     case 0xE0:
         // uint8_t size field
         pre_consume += 1;
-        if (!next_octet(&test_cursor, &test_buffer, &octet))
+        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 8 returning QD_SECTION_NEED_MORE");
             return QD_SECTION_NEED_MORE;
+        }
         consume |= (uint32_t) octet;
         break;
     }
@@ -761,6 +777,7 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     location->length = pre_consume + consume;
     if (consume) {
         if (!advance(&test_cursor, &test_buffer, consume)) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE");
             return QD_SECTION_NEED_MORE;  // whole section not fully received
         }
     }
@@ -1507,6 +1524,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
     if (!qd_link_is_q2_limit_unbounded(qdl) && !msg->content->disable_q2_holdoff) {
         if (msg->content->q2_input_holdoff) {
             UNLOCK(msg->content->lock);
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_receive content->q2_input_holdoff is true 1, DEQ_SIZE(msg->content->buffers)=%zu, returning", DEQ_SIZE(msg->content->buffers));
             return (qd_message_t*)msg;
         }
     }
@@ -1578,7 +1596,8 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
                     if (!qd_link_is_q2_limit_unbounded(qdl)) {
                         content->q2_input_holdoff = true;
                         UNLOCK(content->lock);
-                        break;
+                        qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_receive content->q2_input_holdoff = true DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(msg->content->buffers));
+                        return (qd_message_t*)msg;
                     }
                 }
                 UNLOCK(content->lock);
@@ -2056,7 +2075,11 @@ static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *conte
 
     qd_buffer_t *buffer  = DEQ_HEAD(content->buffers);
     if (!buffer) {
-        return IS_ATOMIC_FLAG_SET(&content->receive_complete) ? QD_MESSAGE_DEPTH_INVALID : QD_MESSAGE_DEPTH_INCOMPLETE;
+        qd_message_depth_status_t status = IS_ATOMIC_FLAG_SET(&content->receive_complete) ? QD_MESSAGE_DEPTH_INVALID : QD_MESSAGE_DEPTH_INCOMPLETE;
+        if (status == QD_MESSAGE_DEPTH_INCOMPLETE) {
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_check_LH returning QD_MESSAGE_DEPTH_INCOMPLETE");
+        }
+        return status;
     }
 
     if (content->parse_buffer == 0) {
@@ -2639,6 +2662,7 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
             // no buffers to free
             DEQ_REMOVE(pvt->stream_data_list, stream_data);
             free_qd_message_stream_data_t(stream_data);
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release 1 DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(content->buffers));
             return;
         }
         start_buf = DEQ_NEXT(start_buf);
@@ -2683,21 +2707,24 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
     //
     // it is possible that we've freed enough buffers to clear Q2 holdoff
     //
+    bool should_unblock = _Q2_holdoff_should_unblock_LH(content);
     if (content->q2_input_holdoff
         && was_blocked
-        && _Q2_holdoff_should_unblock_LH(content)) {
+        && should_unblock) {
         content->q2_input_holdoff = false;
         q2_unblock = content->q2_unblocker;
-        qd_log(qd_message_log_source(), QD_LOG_WARNING, "Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, _Q2_holdoff_should_unblock_LH(content));
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "Setting q2_unblock");
     }
     else {
-        qd_log(qd_message_log_source(), QD_LOG_WARNING, "Not Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, _Q2_holdoff_should_unblock_LH(content));
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "Not Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, should_unblock);
     }
 
     UNLOCK(content->lock);
 
     DEQ_REMOVE(pvt->stream_data_list, stream_data);
     free_qd_message_stream_data_t(stream_data);
+
+    qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release 2 DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(content->buffers));
 
     if (q2_unblock.handler)
         q2_unblock.handler(q2_unblock.context);
@@ -2709,6 +2736,8 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
     qd_message_pvt_t         *msg         = (qd_message_pvt_t*) in_msg;
     qd_message_content_t     *content     = msg->content;
     qd_message_stream_data_t *stream_data = 0;
+
+    qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_next_stream_data DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(msg->content->buffers));
 
     *out_stream_data = 0;
     if (!msg->body_cursor) {
@@ -2806,6 +2835,10 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
         result = IS_ATOMIC_FLAG_SET(&msg->content->receive_complete) ?
             QD_MESSAGE_STREAM_DATA_NO_MORE : QD_MESSAGE_STREAM_DATA_INCOMPLETE;
         break;
+    }
+
+    if (result == QD_MESSAGE_STREAM_DATA_INCOMPLETE) {
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_next_stream_data QD_MESSAGE_STREAM_DATA_INCOMPLETE DEQ_SIZE(msg->stream_data_list)=%zu", DEQ_SIZE(msg->stream_data_list));
     }
 
     UNLOCK(content->lock);

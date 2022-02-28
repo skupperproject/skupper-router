@@ -505,7 +505,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
                                                   py_string='python3',
                                                   server_file="http2_server.py")
-        name = "http2-test-router"
+        name_a = "http2-test-router-a"
         inter_router_port = cls.tester.get_port()
         cls.http_listener_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'
@@ -532,6 +532,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
             'protocolVersion': 'HTTP2',
             'name': cls.connector_name
         }
+        name_b = "http2-test-router-b"
         config_qdrb = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR.B'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
@@ -542,8 +543,8 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
 
         ])
 
-        cls.router_qdra = cls.tester.qdrouterd(name, config_qdra, wait=True)
-        cls.router_qdrb = cls.tester.qdrouterd(name, config_qdrb, wait=True)
+        cls.router_qdra = cls.tester.qdrouterd(name_a, config_qdra, wait=True)
+        cls.router_qdrb = cls.tester.qdrouterd(name_b, config_qdrb, wait=True)
 
         cls.router_qdra.wait_router_connected('QDR.B')
         cls.router_qdrb.wait_router_connected('QDR.A')
