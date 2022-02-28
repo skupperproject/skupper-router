@@ -648,6 +648,7 @@ static int send_data_callback(nghttp2_session *session,
                 stream_data->footer_stream_data_iter = stream_data->curr_stream_data_iter;
             }
             else {
+                qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] send_data_callback calling qd_message_stream_data_release", conn->conn_id, stream_data->stream_id);
                 qd_message_stream_data_release(stream_data->curr_stream_data);
                 qd_iterator_free(stream_data->curr_stream_data_iter);
             }

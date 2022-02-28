@@ -2688,6 +2688,10 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
         && _Q2_holdoff_should_unblock_LH(content)) {
         content->q2_input_holdoff = false;
         q2_unblock = content->q2_unblocker;
+        qd_log(qd_message_log_source(), QD_LOG_WARNING, "Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, _Q2_holdoff_should_unblock_LH(content));
+    }
+    else {
+        qd_log(qd_message_log_source(), QD_LOG_WARNING, "Not Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, _Q2_holdoff_should_unblock_LH(content));
     }
 
     UNLOCK(content->lock);
@@ -2924,7 +2928,9 @@ bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content)
 {
     const size_t buff_ct = DEQ_SIZE(content->buffers);
     assert(buff_ct >= content->protected_buffers);
-    return content->disable_q2_holdoff || (buff_ct - content->protected_buffers) < QD_QLIMIT_Q2_LOWER;
+    bool ret_val = content->disable_q2_holdoff || (buff_ct - content->protected_buffers) < QD_QLIMIT_Q2_LOWER;
+    qd_log(qd_message_log_source(), QD_LOG_TRACE, "_Q2_holdoff_should_unblock_LH buff_ct=%zu, content->protected_buffers=%zu", buff_ct, content->protected_buffers);
+    return ret_val;
 }
 
 
