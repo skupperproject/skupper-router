@@ -45,7 +45,7 @@ RUN dnf -y --setopt=tsflags=nodocs update \
  && dnf clean all
 
 # gdb and valgrind are part of final image as they can be used as debug options for Skupper
-RUN dnf -y --setopt=tsflags=nodocs install glibc cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl gettext hostname iputils libwebsockets-devel libnghttp2 gdb valgrind && dnf clean all
+RUN dnf -y --setopt=tsflags=nodocs install glibc cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl gettext hostname iputils python3 libwebsockets-devel libnghttp2 gdb valgrind && dnf clean all
 
 WORKDIR /
 COPY --from=builder /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /
