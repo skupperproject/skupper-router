@@ -344,7 +344,6 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         name = "http2-test-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
@@ -427,7 +426,6 @@ class Http2TestOneEdgeRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
@@ -465,7 +463,6 @@ class Http2TestOneInteriorRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
@@ -503,7 +500,6 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         name = "http2-test-router"
         inter_router_port = cls.tester.get_port()
@@ -625,7 +621,6 @@ class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         inter_router_port = cls.tester.get_port()
         config_edgea = Qdrouterd.Config([
@@ -667,7 +662,6 @@ class Http2TestInteriorEdgeRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         inter_router_port = cls.tester.get_port()
         config_edge = Qdrouterd.Config([
@@ -715,7 +709,6 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
         inter_router_port = cls.tester.get_port()
         cls.edge_a_connector_name = 'connectorFromEdgeAToIntA'
@@ -835,7 +828,6 @@ class Http2TestEdgeToEdgeViaInteriorRouter(Http2TestBase, CommonHttp2Tests):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_server.py")
 
         cls.connector_name = 'connectorToBeDeleted'
@@ -896,7 +888,6 @@ class Http2TestGoAway(Http2TestBase):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="hyperh2_server.py")
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
@@ -939,7 +930,6 @@ class Http2Q2OneRouterTest(Http2TestBase):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_slow_q2_server.py")
         name = "http2-test-router"
         cls.connector_name = 'connectorToServer'
@@ -997,7 +987,6 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
                                                   listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  py_string='python3',
                                                   server_file="http2_slow_q2_server.py")
         qdr_a = "QDR.A"
         inter_router_port = cls.tester.get_port()

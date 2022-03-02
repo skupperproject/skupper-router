@@ -353,18 +353,17 @@ class Http2Server(HttpServer):
     """A HTTP2 Server that will respond to requests made via the router."""
 
     def __init__(self, name=None, listen_port=None, wait=True,
-                 py_string='python3', perform_teardown=True, cl_args=None,
+                 perform_teardown=True, cl_args=None,
                  server_file=None,
                  expect=Process.RUNNING):
         self.name = name
         self.listen_port = listen_port
         self.ports_family = {self.listen_port: 'IPv4'}
-        self.py_string = py_string
         self.cl_args = cl_args
         self.perform_teardown = perform_teardown
         self.server_file = server_file
         self._wait_ready = False
-        self.args = ['/usr/bin/env', self.py_string, os.path.join(os.path.dirname(os.path.abspath(__file__)), self.server_file)]
+        self.args = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), self.server_file)]
         if self.cl_args:
             self.args += self.cl_args
         super(Http2Server, self).__init__(self.args, name=name, expect=expect)
