@@ -81,8 +81,8 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 #endif  // QD_HAS_ADDRESS_SANITIZER
 
 // https://github.com/google/sanitizers/wiki/AddressSanitizer#turning-off-instrumentation
-
-#if QD_HAS_ADDRESS_SANITIZER
+#if QD_HAS_ADDRESS_SANITIZER || QD_HAS_THREAD_SANITIZER
+// note: tsan can also detect some invalid memory accesses and that will crash the binary
 # define ATTRIBUTE_NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address)) __attribute__((no_sanitize("address")))
 #else
 # define ATTRIBUTE_NO_SANITIZE_ADDRESS

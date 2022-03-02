@@ -31,6 +31,16 @@
 # This file updates the QDROUTERD_RUNNER and CMAKE_C_FLAGS
 # appropriately for use when running the ctest suite.
 
+# Disabling memory pool turns use-after-poison asan warnings into use-after-free warnings. The latter come with
+# a freeing stacktrace that makes them easier to triage.
+#
+# Safe pointers require memory pool to work (memory may never be relinquished to the OS, otherwise safe pointers may
+# break). Therefore, only disable memory pool for special debugging purposes. Sanitizers minimize memory reuse and
+# make it significantly less likely that a safe pointer breaks.
+set(QD_DISABLE_MEMORY_POOL OFF CACHE STRING "Disables memory pool. Should be only used with asan or msan RUNTIME_CHECK")
+if (QD_DISABLE_MEMORY_POOL)
+  add_definitions(-DQD_DISABLE_MEMORY_POOL)
+endif()
 
 # Valgrind configuration
 #
