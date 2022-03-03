@@ -777,7 +777,7 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     location->length = pre_consume + consume;
     if (consume) {
         if (!advance(&test_cursor, &test_buffer, consume)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE");
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE pre_consume=%i, consume=%zu", pre_consume, consume);
             return QD_SECTION_NEED_MORE;  // whole section not fully received
         }
     }
@@ -1597,7 +1597,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
                         content->q2_input_holdoff = true;
                         UNLOCK(content->lock);
                         qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_receive content->q2_input_holdoff = true DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(msg->content->buffers));
-                        return (qd_message_t*)msg;
+                        break;
                     }
                 }
                 UNLOCK(content->lock);
