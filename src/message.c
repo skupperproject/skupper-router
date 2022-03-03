@@ -777,7 +777,7 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     location->length = pre_consume + consume;
     if (consume) {
         if (!advance(&test_cursor, &test_buffer, consume)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE pre_consume=%i, consume=%zu", pre_consume, consume);
+            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE pre_consume=%i, consume=%zu, location->length=%zu", pre_consume, consume, location->length);
             return QD_SECTION_NEED_MORE;  // whole section not fully received
         }
     }
