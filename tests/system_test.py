@@ -875,6 +875,8 @@ class Tester:
 class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-methods
     """A TestCase that sets up its own working directory and is also a Tester."""
 
+    tester: Tester
+
     def __init__(self, test_method):
         unittest.TestCase.__init__(self, test_method)
         Tester.__init__(self, self.id())
