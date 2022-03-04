@@ -28,6 +28,8 @@ Features:
 - Sundry other tools.
 """
 
+import fcntl
+import pathlib
 from typing import Callable
 
 import errno
@@ -762,12 +764,18 @@ class Tester:
     # The root directory for Tester directories, under top_dir
     root_dir = os.path.abspath(__name__ + '.dir')
 
+    # Minimum and maximum port number for free port searches
+    port_range = (20000, 30000)
+
     def __init__(self, id):
         """
         @param id: module.class.method or False if no directory should be created
         """
         self.directory = os.path.join(self.root_dir, *id.split('.')) if id else None
         self.cleanup_list = []
+
+        self.port_file = pathlib.Path(self.top_dir, "next_port.lock").open("a+t")
+        self.cleanup(self.port_file)
 
     def rmtree(self):
         """Remove old test class results directory"""
@@ -779,6 +787,46 @@ class Tester:
         if self.directory:
             os.makedirs(self.directory)
             os.chdir(self.directory)
+
+    def _next_port(self) -> int:
+        """Reads and increments value stored in self.port_file, under an exclusive file lock.
+
+        When a lock cannot be acquired immediately, fcntl.lockf blocks.
+
+        Failure possibilities:
+            File locks may not work correctly on network filesystems. We still should be no worse off than we were.
+
+            This method always unlocks the lock file, so it should not ever deadlock other tests running in parallel.
+            Even if that happened, the lock is unlocked by the OS when the file is closed, which happens automatically
+            when the process that opened and locked it ends.
+
+            Invalid content in the self.port_file will break this method. Manual intervention is then required.
+        """
+        try:
+            fcntl.flock(self.port_file, fcntl.LOCK_EX)
+
+            # read old value
+            self.port_file.seek(0, os.SEEK_END)
+            if self.port_file.tell() != 0:
+                self.port_file.seek(0)
+                port = int(self.port_file.read())
+            else:
+                # file is empty
+                port = random.randint(self.port_range[0], self.port_range[1])
+
+            next_port = port + 1
+            if next_port >= self.port_range[1]:
+                next_port = self.port_range[0]
+
+            # write new value
+            self.port_file.seek(0)
+            self.port_file.truncate(0)
+            self.port_file.write(str(next_port))
+            self.port_file.flush()
+
+            return port
+        finally:
+            fcntl.flock(self.port_file, fcntl.LOCK_UN)
 
     def teardown(self):
         """Clean up (tear-down, stop or close) objects recorded via cleanup()"""
@@ -813,24 +861,14 @@ class Tester:
     def http2server(self, *args, **kwargs):
         return self.cleanup(Http2Server(*args, **kwargs))
 
-    port_range = (20000, 30000)
-    next_port = random.randint(port_range[0], port_range[1])
-
-    @classmethod
-    def get_port(cls, socket_address_family='IPv4'):
+    def get_port(self, socket_address_family: str = 'IPv4') -> int:
         """Get an unused port"""
-        def advance():
-            """Advance with wrap-around"""
-            cls.next_port += 1
-            if cls.next_port >= cls.port_range[1]:
-                cls.next_port = cls.port_range[0]
-        start = cls.next_port
-        while not is_port_available(cls.next_port, socket_address_family):
-            advance()
-            if cls.next_port == start:
-                raise Exception("No available ports in range %s", cls.port_range)
-        p = cls.next_port
-        advance()
+        p = self._next_port()
+        start = p
+        while not is_port_available(p, socket_address_family):
+            p = self._next_port()
+            if p == start:
+                raise Exception("No available ports in range %s", self.port_range)
         return p
 
 
