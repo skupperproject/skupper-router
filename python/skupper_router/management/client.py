@@ -39,7 +39,7 @@ class Entity(EntityBase):
 
     Attribute access:
     - via index operator: entity['foo']
-    - as python attributes: entity.foo (only if attribute name is a legal python identitfier)
+    - as python attributes: entity.foo (only if attribute name is a legal python identifier)
 
     @ivar attributes: Map of attribute values for this entity.
     """
@@ -167,10 +167,10 @@ class Node:
 
     def request(self, body=None, **properties):
         """
-        Make a L{proton.Message} containining a management request.
+        Make a L{proton.Message} containing a management request.
         @param body: The request body, a dict or list.
         @param properties: Keyword arguments for application-properties of the request.
-        @return: L{proton.Message} containining the management request.
+        @return: L{proton.Message} containing the management request.
         """
         if self.locales:
             properties.setdefault('locales', self.locales)
@@ -180,7 +180,7 @@ class Node:
         return request
 
     def node_request(self, body=None, **properties):
-        """Construct a request for the managment node itself"""
+        """Construct a request for the management node itself"""
         return self.request(body, name=self.name, type=self.type, **properties)
 
     def call(self, request, expect=error.OK):

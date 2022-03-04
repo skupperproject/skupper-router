@@ -151,7 +151,7 @@ class OversizeMessageTransferTest(MessagingHandler):
     def on_start(self, event):
         self.logger.log("on_start")
 
-        self.logger.log("on_start: secheduling reactor timeout")
+        self.logger.log("on_start: scheduling reactor timeout")
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
 
         self.logger.log("Waiting for router network to stabilize")
