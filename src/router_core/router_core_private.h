@@ -56,6 +56,7 @@ ALLOC_DECLARE(qdr_link_t);
 #include "core_attach_address_lookup.h"
 #include "core_events.h"
 #include "core_link_endpoint.h"
+#include "address_watch.h"
 
 qdr_forwarder_t *qdr_forwarder_CT(qdr_core_t *core, qd_address_treatment_t treatment);
 int qdr_forward_message_CT(qdr_core_t *core, qdr_address_t *addr, qd_message_t *msg, qdr_delivery_t *in_delivery,
@@ -146,13 +147,16 @@ struct qdr_action_t {
         // Arguments for in-process messaging
         //
         struct {
-            qdr_field_t            *address;
-            char                    address_class;
-            qd_address_treatment_t  treatment;
-            qdr_subscription_t     *subscription;
-            qd_message_t           *message;
-            bool                    exclude_inprocess;
-            bool                    control;
+            qdr_field_t                *address;
+            char                        address_class;
+            qd_address_treatment_t      treatment;
+            qdr_subscription_t         *subscription;
+            qd_message_t               *message;
+            bool                        exclude_inprocess;
+            bool                        control;
+            qdr_address_watch_update_t  watch_handler;
+            void                       *context;
+            uint32_t                    value32_1;
         } io;
 
         //
@@ -227,10 +231,15 @@ struct qdr_general_work_t {
     void                        *on_message_context;
     uint64_t                     in_conn_id;
     uint64_t                     mobile_seq;
+    uint32_t                     local_consumers;
+    uint32_t                     in_proc_consumers;
+    uint32_t                     remote_consumers;
+    uint32_t                     local_producers;
     const qd_policy_spec_t      *policy_spec;
     qdr_delivery_t              *delivery;
     qdr_delivery_cleanup_list_t  delivery_cleanup_list;
     qdr_global_stats_handler_t   stats_handler;
+    qdr_address_watch_update_t   watch_handler;
     void                        *context;
 };
 
@@ -803,6 +812,7 @@ struct qdr_core_t {
     qd_hash_t                 *conn_id_hash;
     qdr_address_list_t         addrs;
     qd_hash_t                 *addr_hash;
+    qdr_address_watch_list_t   addr_watches;
     qd_parse_tree_t           *addr_parse_tree;
     qdr_address_t             *hello_addr;
     qdr_address_t             *router_addr_L;

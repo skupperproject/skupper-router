@@ -230,6 +230,11 @@ void qdr_core_free(qdr_core_t *core)
     // this must happen after qdrc_endpoint_do_cleanup_CT calls
     qdr_modules_finalize(core);
 
+    //
+    // Remove any left-over address watches
+    //
+    qdr_address_watch_shutdown(core);
+
     // discard any left over actions
 
     qdr_action_list_t  action_list;
@@ -327,6 +332,11 @@ void qdr_router_node_free(qdr_core_t *core, qdr_node_t *rnode)
     core->cost_epoch++;
     free(rnode->wire_address_ma);
     free_qdr_node_t(rnode);
+}
+
+bool qdr_core_test_hooks_enabled(const qdr_core_t *core)
+{
+    return core->qd->test_hooks;
 }
 
 ALLOC_DECLARE(qdr_field_t);
@@ -582,13 +592,6 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
     if (config && --config->ref_count == 0)
         free_address_config(config);
 
-    // Remove the address from the list, hash index, and parse tree
-    DEQ_REMOVE(core->addrs, addr);
-    if (addr->hash_handle) {
-        qd_hash_remove_by_handle(core->addr_hash, addr->hash_handle);
-        qd_hash_handle_free(addr->hash_handle);
-    }
-
     // Free resources associated with this address
 
     DEQ_APPEND(addr->rlinks, addr->inlinks);
@@ -599,6 +602,19 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
         link->owning_addr = 0;
         qdr_del_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
         lref = DEQ_HEAD(addr->rlinks);
+    }
+
+    //
+    // Trigger an address watch to show the address has no more endpoints.
+    //
+    qd_bitmask_clear_all(addr->rnodes);
+    qdr_trigger_address_watch_CT(core, addr);
+
+    // Remove the address from the list, hash index, and parse tree
+    DEQ_REMOVE(core->addrs, addr);
+    if (addr->hash_handle) {
+        qd_hash_remove_by_handle(core->addr_hash, addr->hash_handle);
+        qd_hash_handle_free(addr->hash_handle);
     }
 
     qd_bitmask_free(addr->rnodes);
@@ -645,6 +661,8 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
         else if (DEQ_SIZE(addr->inlinks) == 2)
             qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_TWO_SOURCE, addr);
     }
+
+    qdr_trigger_address_watch_CT(core, addr);
 }
 
 
@@ -674,6 +692,8 @@ void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ONE_SOURCE, addr);
         }
     }
+
+    qdr_trigger_address_watch_CT(core, addr);
 }
 
 
