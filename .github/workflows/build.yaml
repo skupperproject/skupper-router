@@ -47,6 +47,7 @@ jobs:
         -DBUILD_TESTING=OFF
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
+        -DBUILD_TLS=ON
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -314,6 +315,7 @@ jobs:
         -DBUILD_TESTING=OFF
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
+        -DBUILD_TLS=ON
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache

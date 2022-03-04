@@ -68,7 +68,7 @@ echo "Current proton commit: $(git --git-dir=qpid-proton rev-parse HEAD) (${PROT
 
 mkdir qpid-proton/build
 pushd qpid-proton/build
-  cmake .. -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DBUILD_BINDINGS=python
+  cmake .. -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DBUILD_BINDINGS=python -DBUILD_TLS=ON
   cmake --build . --target install -- -j $NPROC
 popd
 
