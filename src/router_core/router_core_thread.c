@@ -175,10 +175,8 @@ void qdr_adaptors_finalize(qdr_core_t *core)
     //
     qdrc_adaptor_t *adaptor = DEQ_TAIL(registered_adaptors);
     while (adaptor) {
-        DEQ_REMOVE(registered_adaptors, adaptor);
         adaptor->on_final(adaptor->context);
-        free(adaptor);
-        adaptor = DEQ_TAIL(registered_adaptors);
+        adaptor = DEQ_PREV(adaptor);
     }
 
     // release the default AMQP adaptor (it is not a module)
