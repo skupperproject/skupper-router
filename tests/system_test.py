@@ -30,7 +30,7 @@ Features:
 
 import fcntl
 import pathlib
-from typing import Callable
+from typing import Callable, TextIO
 
 import errno
 import logging
@@ -715,12 +715,40 @@ class Qdrouterd(Process):
             assert retry(lambda: self.is_connected(port=c['port'], host=self.get_host(c.get('socketAddressFamily'))),
                          **retry_kwargs), "Port not connected %s" % c['port']
 
+    def wait_startup_message(self, **retry_kwargs):
+        """Wait for router startup message to be printed into logfile
+
+        This ensures that the router installs its signal handlers, avoiding
+        a router failure with return code -15 upon premature SIGTERM (DISPATCH-1689)
+
+        e.g. 2022-03-03 19:08:13.608655 +0100 SERVER (notice) Operational, 4 Threads Running (process ID 2190110)
+        """
+        def _is_startup_line_present(f: TextIO) -> bool:
+            for line in f:
+                m = re.search(r'SERVER \(notice\) Operational, (\d+) Threads Running \(process ID (\d+)\)', line)
+                if m:
+                    return True
+            return False
+
+        logfile_path = self.logfile_path
+        # system_tests_log_level_update filters SERVER module logs to a separate file
+        server_log = [l for l in self.config if (l[0] == 'log' and l[1]['module'] == 'SERVER')]
+        if server_log:
+            logfile_path = os.path.join(self.outdir, server_log[0][1].get('outputFile'))
+
+        assert retry(lambda: pathlib.Path(logfile_path).is_file(), **retry_kwargs), \
+            f"Router logfile {logfile_path} does not exist or is not a file"
+        with open(logfile_path, 'rt') as router_log:
+            assert retry(lambda: _is_startup_line_present(router_log), **retry_kwargs),\
+                "Router startup line not present in router log"
+
     def wait_ready(self, **retry_kwargs):
         """Wait for ports and connectors to be ready"""
         if not self._wait_ready:
             self._wait_ready = True
             self.wait_ports(**retry_kwargs)
             self.wait_connectors(**retry_kwargs)
+            self.wait_startup_message(**retry_kwargs)
         return self
 
     def is_router_connected(self, router_id, **retry_kwargs):
@@ -748,6 +776,7 @@ class Qdrouterd(Process):
 
     @property
     def logfile_path(self):
+        """Path to a DEFAULT logfile"""
         return os.path.join(self.outdir, self.logfile)
 
 
