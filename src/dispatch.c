@@ -124,7 +124,7 @@ qd_error_t qd_dispatch_load_config(qd_dispatch_t *qd, const char *config_path)
         return qd_error(QD_ERROR_RUNTIME, "Failed to dlopen the current executable");
 
     qd_python_lock_state_t lock_state = qd_python_lock();
-    PyObject *module = PyImport_ImportModule("qpid_dispatch_internal.management.config");
+    PyObject *module = PyImport_ImportModule("skupper_router_internal.management.config");
     PyObject *configure_dispatch = module ? PyObject_GetAttrString(module, "configure_dispatch") : NULL;
     Py_XDECREF(module);
     PyObject *result = configure_dispatch ? PyObject_CallFunction(configure_dispatch, "(NNs)", PyLong_FromVoidPtr(qd),
@@ -221,7 +221,7 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
         qd->sasl_config_path = qd_entity_opt_string(entity, "saslConfigDir", 0); QD_ERROR_RET();
     }
     if (! qd->sasl_config_name) {
-        qd->sasl_config_name = qd_entity_opt_string(entity, "saslConfigName", "qdrouterd"); QD_ERROR_RET();
+        qd->sasl_config_name = qd_entity_opt_string(entity, "saslConfigName", "skrouterd"); QD_ERROR_RET();
     }
 
     char *dump_file = qd_entity_opt_string(entity, "debugDumpFile", 0); QD_ERROR_RET();
@@ -378,7 +378,7 @@ qdr_core_t* qd_dispatch_router_core(qd_dispatch_t *qd) {
 
 /* qd_router_memory_usage
  *
- * Return the amount of memory currently provisioned by the qdrouterd process.
+ * Return the amount of memory currently provisioned by the router process.
  * This includes data, stack, and code memory.  On systems supporting virtual
  * memory this value may be larger than the physical RAM available on the
  * platform.

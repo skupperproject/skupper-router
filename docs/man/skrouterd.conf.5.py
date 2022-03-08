@@ -18,7 +18,7 @@
 #
 
 """
-Generate the qdrouterd.conf. man page from the qdrouterd management schema.
+Generate the skrouterd.conf. man page from the skrouterd management schema.
 """
 
 from __future__ import unicode_literals
@@ -27,11 +27,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import sys
-from qpid_dispatch_internal.management.qdrouter import QdSchema
-from qpid_dispatch_internal.management.schema_doc import SchemaWriter
+from skupper_router_internal.management.qdrouter import QdSchema
+from skupper_router_internal.management.schema_doc import SchemaWriter
 
-CONNECTOR = 'org.apache.qpid.dispatch.connector'
-LISTENER = 'org.apache.qpid.dispatch.listener'
+CONNECTOR = 'io.skupper.router.connector'
+LISTENER = 'io.skupper.router.listener'
 
 # avoid writing these config entity types to the man file, they are not allowed
 # in the configuration file and are only supported at run time via management
@@ -54,18 +54,18 @@ class ManPageWriter(SchemaWriter):
 
     def man_page(self):
         self.writeln(r"""
-qdrouterd.conf(5)
+skrouterd.conf(5)
 =================
 :doctype: manpage
 
 NAME
 ----
-qdrouterd.conf - configuration file for the dispatch router.
+skrouterd.conf - configuration file for the Skupper Router.
 
 SYNOPSIS
 --------
-Provides the initial configuration when 'qdrouterd(8)' starts. The configuration
-of a running router can be modified using 'qdmanage(8)'.
+Provides the initial configuration when 'skrouterd(8)' starts. The configuration
+of a running router can be modified using 'skmanage(8)'.
 
 
 DESCRIPTION
@@ -151,9 +151,9 @@ listener {
 SEE ALSO
 --------
 
-*qdrouterd(8)*, *qdmanage(8)*
+*skrouterd(8)*, *skmanage(8)*
 
-http://qpid.apache.org/components/dispatch-router
+https://github.com/skupperproject/skupper-router
 """)
 
 

@@ -92,7 +92,7 @@ class RouterTestBadConfiguration(TestCase):
 
     def address(self):
         """
-        Returns the address that can be used along with qdmanage
+        Returns the address that can be used along with skmanage
         to query the running instance of the dispatch router.
         """
         return self.router.addresses[0]
@@ -139,14 +139,14 @@ class RouterTestBadConfiguration(TestCase):
         """
         self.assertTrue(self.error_caught)
 
-    def test_qdmanage_query(self):
+    def test_skmanage_query(self):
         """
         Attempts to query the router after the error (or timeout) has occurred.
         It expects a successful query response to be returned by the router.
         :return:
         """
         p = self.popen(
-            ['qdmanage', '-b', self.address(), 'query', '--type=router', '--timeout', str(TIMEOUT)],
+            ['skmanage', '-b', self.address(), 'query', '--type=router', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_OK,
             universal_newlines=True)
         out = p.communicate()[0]
@@ -183,7 +183,7 @@ class RouterTestIdFailCtrlChar(TestCase):
             router_conf.write("}")
         lib_include_path = os.path.join(os.environ["QPID_DISPATCH_HOME"], "python")
         p = self.popen(
-            ['qdrouterd', '-c', conf_path, '-I', lib_include_path],
+            ['skrouterd', '-c', conf_path, '-I', lib_include_path],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
             universal_newlines=True)
         out = p.communicate(timeout=5)[0]
@@ -222,7 +222,7 @@ class RouterTestIdFailWhiteSpace(TestCase):
             router_conf.write("}")
         lib_include_path = os.path.join(os.environ["QPID_DISPATCH_HOME"], "python")
         p = self.popen(
-            ['qdrouterd', '-c', conf_path, '-I', lib_include_path],
+            ['skrouterd', '-c', conf_path, '-I', lib_include_path],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
             universal_newlines=True)
         out = p.communicate(timeout=5)[0]

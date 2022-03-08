@@ -28,7 +28,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton.utils import BlockingConnection
 
-from qpid_dispatch.management.client import Node
+from skupper_router.management.client import Node
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, MgmtMsgProxy, TestTimeout
 from system_test import Logger
@@ -104,16 +104,16 @@ class EdgeRouterTest(TestCase):
         self.max_attempts = 3
         self.attempts = 0
 
-    def run_qdstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None):
         p = self.popen(
-            ['qdstat', '--bus', str(address or self.router.addresses[0]),
+            ['skstat', '--bus', str(address or self.router.addresses[0]),
              '--timeout', str(TIMEOUT)] + args,
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out,
                              re.I), "Can't find '%s' in '%s'" % (
@@ -129,39 +129,39 @@ class EdgeRouterTest(TestCase):
 
         return False
 
-    def run_int_b_edge_qdstat(self):
-        outs = self.run_qdstat(['--edge'],
+    def run_int_b_edge_skstat(self):
+        outs = self.run_skstat(['--edge'],
                                address=self.routers[2].addresses[0])
         lines = outs.split("\n")
         for line in lines:
             if "INT.B" in line and "yes" in line:
                 self.success = True
 
-    def run_int_a_edge_qdstat(self):
-        outs = self.run_qdstat(['--edge'],
+    def run_int_a_edge_skstat(self):
+        outs = self.run_skstat(['--edge'],
                                address=self.routers[2].addresses[0])
         lines = outs.split("\n")
         for line in lines:
             if "INT.A" in line and "yes" in line:
                 self.success = True
 
-    def schedule_int_a_qdstat_test(self):
+    def schedule_int_a_skstat_test(self):
         if self.attempts < self.max_attempts:
             if not self.success:
-                Timer(self.timer_delay, self.run_int_a_edge_qdstat).start()
+                Timer(self.timer_delay, self.run_int_a_edge_skstat).start()
                 self.attempts += 1
 
-    def schedule_int_b_qdstat_test(self):
+    def schedule_int_b_skstat_test(self):
         if self.attempts < self.max_attempts:
             if not self.success:
-                Timer(self.timer_delay, self.run_int_b_edge_qdstat).start()
+                Timer(self.timer_delay, self.run_int_b_edge_skstat).start()
                 self.attempts += 1
 
     def test_01_active_flag(self):
         """
         In this test, we have one edge router connected to two interior
         routers. One connection is to INT.A and another connection is to
-        INT.B . But only one of these connections is active. We use qdstat
+        INT.B . But only one of these connections is active. We use skstat
         to make sure that only one of these connections is active.
         Then we kill the router with the active connection and make sure
         that the other connection is now the active one
@@ -170,7 +170,7 @@ class EdgeRouterTest(TestCase):
             self.skipTest("Test skipped during development.")
 
         success = False
-        outs = self.run_qdstat(['--edge'],
+        outs = self.run_skstat(['--edge'],
                                address=self.routers[0].addresses[0])
         lines = outs.split("\n")
         for line in lines:
@@ -180,7 +180,7 @@ class EdgeRouterTest(TestCase):
             self.fail("Active edge connection not found not found for "
                       "interior router")
 
-        outs = self.run_qdstat(['--edge'],
+        outs = self.run_skstat(['--edge'],
                                address=self.routers[2].addresses[0])
         conn_map_edge = dict()
         #
@@ -208,7 +208,7 @@ class EdgeRouterTest(TestCase):
             # if the other connection becomes active
             #
             EdgeRouterTest.routers[0].teardown()
-            self.schedule_int_b_qdstat_test()
+            self.schedule_int_b_skstat_test()
 
             while not self.can_terminate():
                 pass
@@ -221,7 +221,7 @@ class EdgeRouterTest(TestCase):
             # if the other connection becomes active
             #
             EdgeRouterTest.routers[1].teardown()
-            self.schedule_int_a_qdstat_test()
+            self.schedule_int_a_skstat_test()
 
             while not self.can_terminate():
                 pass
@@ -1189,38 +1189,38 @@ class RouterTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
-    def run_qdstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None):
         if args:
-            popen_arg = ['qdstat', '--bus', str(address or self.router.addresses[0]),
+            popen_arg = ['skstat', '--bus', str(address or self.router.addresses[0]),
                          '--timeout', str(TIMEOUT)] + args
         else:
-            popen_arg = ['qdstat', '--bus',
+            popen_arg = ['skstat', '--bus',
                          str(address or self.router.addresses[0]),
                          '--timeout', str(TIMEOUT)]
 
         p = self.popen(popen_arg,
-                       name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+                       name='skstat-' + self.id(), stdout=PIPE, expect=None,
                        universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out,
                              re.I), "Can't find '%s' in '%s'" % (
                 regexp, out)
         return out
 
-    def test_68_edge_qdstat_all_routers(self):
-        # Connects to an edge router and runs "qdstat --all-routers"
-        # "qdstat --all-routers" is same as "qdstat --all-routers --g"
-        # Connecting to an edge router and running "qdstat --all-routers""will only yield the
+    def test_68_edge_skstat_all_routers(self):
+        # Connects to an edge router and runs "skstat --all-routers"
+        # "skstat --all-routers" is same as "skstat --all-routers --g"
+        # Connecting to an edge router and running "skstat --all-routers""will only yield the
         # summary statistics of the edge router. It will not show statistics of the interior routers.
-        outs = self.run_qdstat(['--all-routers'],
+        outs = self.run_skstat(['--all-routers'],
                                address=self.routers[2].addresses[0])
         self.assertIn("Router Id                        EA1", outs)
 
-        outs = self.run_qdstat(['--all-routers', '--all-entities'],
+        outs = self.run_skstat(['--all-routers', '--all-entities'],
                                address=self.routers[2].addresses[0])
         # Check if each entity  section is showing
         self.assertIn("Router Links", outs)
@@ -1233,14 +1233,14 @@ class RouterTest(TestCase):
 
         self.assertIn("Memory Pools", outs)
 
-        outs = self.run_qdstat(['-c', '--all-routers'],
+        outs = self.run_skstat(['-c', '--all-routers'],
                                address=self.routers[2].addresses[0])
 
         # Verify that the the edhe uplink connection is showing
         self.assertIn("INT.A", outs)
         self.assertNotIn("inter-router", outs)
 
-        outs = self.run_qdstat(['--all-entities'],
+        outs = self.run_skstat(['--all-entities'],
                                address=self.routers[2].addresses[0])
         # Check if each entity  section is showing
         self.assertIn("Router Links", outs)
@@ -1253,22 +1253,22 @@ class RouterTest(TestCase):
 
         self.assertIn("Memory Pools", outs)
 
-    def test_69_interior_qdstat_all_routers(self):
-        # Connects to an interior router and runs "qdstat --all-routers"
-        # "qdstat --all-routers" is same as "qdstat --all-routers --all-entities"
-        # Connecting to an interior router and running "qdstat --all-routers""will yield the
+    def test_69_interior_skstat_all_routers(self):
+        # Connects to an interior router and runs "skstat --all-routers"
+        # "skstat --all-routers" is same as "skstat --all-routers --all-entities"
+        # Connecting to an interior router and running "skstat --all-routers""will yield the
         # summary statistics of all the interior routers.
-        outs = self.run_qdstat(['--all-routers'],
+        outs = self.run_skstat(['--all-routers'],
                                address=self.routers[0].addresses[0])
         self.assertEqual(outs.count("Router Statistics"), 2)
 
-        outs = self.run_qdstat(['--all-routers', '-nv'],
+        outs = self.run_skstat(['--all-routers', '-nv'],
                                address=self.routers[0].addresses[0])
         # 5 occurences including section headers
         self.assertEqual(outs.count("INT.A"), 5)
         self.assertEqual(outs.count("INT.B"), 5)
 
-        outs = self.run_qdstat(['--all-routers', '--all-entities'],
+        outs = self.run_skstat(['--all-routers', '--all-entities'],
                                address=self.routers[0].addresses[0])
         self.assertEqual(outs.count("Router Links"), 2)
         self.assertEqual(outs.count("Router Addresses"), 2)
@@ -1276,25 +1276,25 @@ class RouterTest(TestCase):
         self.assertEqual(outs.count("Router Statistics"), 2)
         self.assertEqual(outs.count("Memory Pools"), 2)
 
-        outs = self.run_qdstat(['--all-routers', '-nv'],
+        outs = self.run_skstat(['--all-routers', '-nv'],
                                address=self.routers[0].addresses[0])
         # 5 occurrences including section headers
         self.assertEqual(outs.count("INT.A"), 5)
         self.assertEqual(outs.count("INT.B"), 5)
 
-        outs = self.run_qdstat(['-c', '--all-routers'],
+        outs = self.run_skstat(['-c', '--all-routers'],
                                address=self.routers[0].addresses[0])
         self.assertEqual(outs.count("INT.A"), 2)
         self.assertEqual(outs.count("INT.B"), 2)
 
-        outs = self.run_qdstat(['-l', '--all-routers'],
+        outs = self.run_skstat(['-l', '--all-routers'],
                                address=self.routers[0].addresses[0])
 
         # Two edge-downlinks from each interior to the two edges, 4 in total.
         self.assertEqual(outs.count("edge-downlink"), 4)
 
         # Gets all entity information of the interior router
-        outs = self.run_qdstat(['--all-entities'],
+        outs = self.run_skstat(['--all-entities'],
                                address=self.routers[0].addresses[0])
         self.assertEqual(outs.count("Router Links"), 1)
         self.assertEqual(outs.count("Router Addresses"), 1)
@@ -1303,7 +1303,7 @@ class RouterTest(TestCase):
         has_error = False
         try:
             # You cannot combine --all-entities  with -c
-            outs = self.run_qdstat(['-c', '--all-entities'],
+            outs = self.run_skstat(['-c', '--all-entities'],
                                    address=self.routers[0].addresses[0])
         except Exception as e:
             if "error: argument --all-entities: not allowed with argument -c/--connections" in str(e):
@@ -1313,7 +1313,7 @@ class RouterTest(TestCase):
 
         has_error = False
         try:
-            outs = self.run_qdstat(['-r', 'INT.A', '--all-routers'],
+            outs = self.run_skstat(['-r', 'INT.A', '--all-routers'],
                                    address=self.routers[0].addresses[0])
         except Exception as e:
             if "error: argument --all-routers: not allowed with argument -r/--router" in str(e):
@@ -1321,15 +1321,15 @@ class RouterTest(TestCase):
 
         self.assertTrue(has_error)
 
-    def test_70_qdstat_edge_router_option(self):
-        # Tests the --edge-router (-d) option of qdstat
+    def test_70_skstat_edge_router_option(self):
+        # Tests the --edge-router (-d) option of skstat
         # The goal of this test is to connect to any router in the
         # network (interior or edge) and ask for details about a specific edge router
         # You could not do that before DISPATCH-1580
 
-        # Makes a connection to an interior router INT.A and runs qdstat
+        # Makes a connection to an interior router INT.A and runs skstat
         # asking for all connections of an edge router EA1
-        outs = self.run_qdstat(['-d', 'EA1', '-c'],
+        outs = self.run_skstat(['-d', 'EA1', '-c'],
                                address=self.routers[0].addresses[0])
         parts = outs.split("\n")
         conn_found = False
@@ -1340,9 +1340,9 @@ class RouterTest(TestCase):
 
         self.assertTrue(conn_found)
 
-        # Makes a connection to an edge router and runs qdstat
+        # Makes a connection to an edge router and runs skstat
         # asking for all connections of an edge router EA1
-        outs = self.run_qdstat(['-d', 'EA1', '-c'],
+        outs = self.run_skstat(['-d', 'EA1', '-c'],
                                address=self.routers[2].addresses[0])
         parts = outs.split("\n")
         conn_found = False
@@ -1353,11 +1353,11 @@ class RouterTest(TestCase):
 
         self.assertTrue(conn_found)
 
-        # Makes a connection to an interior router INT.B and runs qdstat
+        # Makes a connection to an interior router INT.B and runs skstat
         # asking for all connections of an edge router EA1. The interior
         # router INT.B is connected to edge router EA1 indirectly via
         # interior router INT.A
-        outs = self.run_qdstat(['--edge-router', 'EA1', '-c'],
+        outs = self.run_skstat(['--edge-router', 'EA1', '-c'],
                                address=self.routers[1].addresses[0])
         parts = outs.split("\n")
         conn_found = False
@@ -1368,25 +1368,25 @@ class RouterTest(TestCase):
 
         self.assertTrue(conn_found)
 
-    def test_71_qdmanage_edge_router_option(self):
-        # Makes a connection to an interior router INT.A and runs qdstat
+    def test_71_skmanage_edge_router_option(self):
+        # Makes a connection to an interior router INT.A and runs skstat
         # asking for all connections of an edge router EA1
         mgmt = QdManager(address=self.routers[0].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
-        outs = mgmt.query('org.apache.qpid.dispatch.connection')
+        outs = mgmt.query('io.skupper.router.connection')
         for out in outs:
             if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
                 conn_found = True
                 break
         self.assertTrue(conn_found)
 
-        # Makes a connection to an edge router and runs qdstat
+        # Makes a connection to an edge router and runs skstat
         # asking for all connections of an edge router EA1
         mgmt = QdManager(address=self.routers[2].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
-        outs = mgmt.query('org.apache.qpid.dispatch.connection')
+        outs = mgmt.query('io.skupper.router.connection')
 
         for out in outs:
             if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
@@ -1394,14 +1394,14 @@ class RouterTest(TestCase):
                 break
         self.assertTrue(conn_found)
 
-        # Makes a connection to an interior router INT.B and runs qdstat
+        # Makes a connection to an interior router INT.B and runs skstat
         # asking for all connections of an edge router EA1. The interior
         # router INT.B is connected to edge router EA1 indirectly via
         # interior router INT.A
         mgmt = QdManager(address=self.routers[1].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
-        outs = mgmt.query('org.apache.qpid.dispatch.connection')
+        outs = mgmt.query('io.skupper.router.connection')
 
         for out in outs:
             if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
@@ -1409,11 +1409,11 @@ class RouterTest(TestCase):
                 break
         self.assertTrue(conn_found)
 
-    def test_72_qdstat_query_interior_from_edge(self):
+    def test_72_skstat_query_interior_from_edge(self):
 
         # Connect to Edge Router EA1 and query the connections on
         # Interior Router INT.A
-        outs = self.run_qdstat(['-r', 'INT.A', '-c'],
+        outs = self.run_skstat(['-r', 'INT.A', '-c'],
                                address=self.routers[2].addresses[0])
 
         # The Interior Router INT.A is connected to two edge routers
@@ -1438,7 +1438,7 @@ class RouterTest(TestCase):
         # EA1 via INT.A
         # We will connect to edge router EA1 (which has an edge
         # uplink to INT.A) and query for connections on INT.B
-        outs = self.run_qdstat(['-r', 'INT.B', '-c'],
+        outs = self.run_skstat(['-r', 'INT.B', '-c'],
                                address=self.routers[2].addresses[0])
 
         eb1_conn_found = False
@@ -1455,14 +1455,14 @@ class RouterTest(TestCase):
 
         self.assertTrue(eb1_conn_found and eb2_conn_found and int_a_inter_router_conn_found)
 
-    def test_73_qdmanage_query_interior_from_edge(self):
+    def test_73_skmanage_query_interior_from_edge(self):
         # The Interior Router INT.A is connected to two edge routers
         # EA1 and EA2 and is also connected to another interior router INT.B
         # We will connect to edge router EA1 (which has an edge
         # uplink to INT.A) and query for connections on INT.A
         mgmt = QdManager(address=self.routers[2].addresses[0],
                          router_id='INT.A')
-        outs = mgmt.query('org.apache.qpid.dispatch.connection')
+        outs = mgmt.query('io.skupper.router.connection')
         ea1_conn_found = False
         ea2_conn_found = False
         int_b_inter_router_conn_found = False
@@ -1482,7 +1482,7 @@ class RouterTest(TestCase):
         # uplink to INT.A) and query for connections on INT.B
         mgmt = QdManager(address=self.routers[2].addresses[0],
                          router_id='INT.B')
-        outs = mgmt.query('org.apache.qpid.dispatch.connection')
+        outs = mgmt.query('io.skupper.router.connection')
         eb1_conn_found = False
         eb2_conn_found = False
         int_a_inter_router_conn_found = False
@@ -2281,7 +2281,7 @@ class MobileAddressEventTest(MessagingHandler):
 
     def check_address(self):
         local_node = Node.connect(self.interior_host, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router.address')
+        outs = local_node.query(type='io.skupper.router.router.address')
         remote_count = outs.attribute_names.index("remoteCount")
         subs_count = outs.attribute_names.index("subscriberCount")
         found = False
@@ -2526,7 +2526,7 @@ class StreamingMessageTest(TestCase):
 
     def _get_address(self, router, address):
         """Lookup address in route table"""
-        a_type = 'org.apache.qpid.dispatch.router.address'
+        a_type = 'io.skupper.router.router.address'
         addrs = router.management.query(a_type).get_dicts()
         return [a for a in addrs if address in a['name']]
 

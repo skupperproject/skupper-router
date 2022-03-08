@@ -26,7 +26,7 @@ import os
 import traceback
 from typing import Any, Dict, Iterable, List, Optional, Union, TYPE_CHECKING, TextIO
 
-from qpid_dispatch.management.entity import camelcase
+from skupper_router.management.entity import camelcase
 
 from ..dispatch import QdDll
 from .qdrouter import QdSchema
@@ -43,7 +43,7 @@ except ImportError:
 
 
 class Config:
-    """Load config entities from qdrouterd.conf and validated against L{QdSchema}."""
+    """Load config entities from skrouterd.conf and validated against L{QdSchema}."""
 
     def __init__(
             self,
@@ -317,7 +317,7 @@ def configure_dispatch(dispatch: int, lib_handle: int, filename: str) -> None:
     qd.qd_router_setup_late(dispatch)  # Actions requiring active management agent.
     agent.activate("$_management_internal")
 
-    from qpid_dispatch_internal.display_name.display_name import DisplayNameService
+    from skupper_router_internal.display_name.display_name import DisplayNameService
     displayname_service = DisplayNameService()
     qd.qd_dispatch_register_display_name_service(dispatch, displayname_service)
 
@@ -347,7 +347,7 @@ def configure_dispatch(dispatch: int, lib_handle: int, filename: str) -> None:
 
     # Configure remaining types except for connector and listener
     for e in config.entities:
-        if not e['type'] in ['org.apache.qpid.dispatch.connector', 'org.apache.qpid.dispatch.listener']:
+        if not e['type'] in ['io.skupper.router.connector', 'io.skupper.router.listener']:
             configure(e)
 
     # Load the vhosts from the .json files in policyDir

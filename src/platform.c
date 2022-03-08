@@ -72,7 +72,7 @@ uintmax_t qd_platform_memory_size(void)
         fclose(minfo_fp);
     }
 
-    // and if qdrouterd is running within a container check the cgroups memory
+    // and if the router is running within a container check the cgroups memory
     // controller. Hard and soft memory limits can be set.
 
     uintmax_t climit = UINTMAX_MAX;

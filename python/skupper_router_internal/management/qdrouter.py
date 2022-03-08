@@ -38,13 +38,13 @@ class QdSchema(schema.Schema):
 
     def __init__(self) -> None:
         """Load schema."""
-        qd_schema = get_data('qpid_dispatch.management', 'qdrouter.json')
+        qd_schema = get_data('skupper_router.management', 'skrouter.json')
         if not qd_schema:
-            raise ValueError("Failed to load data file qdrouter.json")
+            raise ValueError("Failed to load data file skrouter.json")
         try:
             super(QdSchema, self).__init__(**json.loads(qd_schema, object_pairs_hook=OrderedDict))
         except Exception as e:
-            raise ValueError("Invalid schema qdrouter.json: %s" % e)
+            raise ValueError("Invalid schema skrouter.json: %s" % e)
         self.configuration_entity = self.entity_type(self.CONFIGURATION_ENTITY)
         self.operational_entity = self.entity_type(self.OPERATIONAL_ENTITY)
 

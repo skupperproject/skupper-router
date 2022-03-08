@@ -741,9 +741,9 @@ class MaxMessageSizeBlockOversize(TestCase):
         cls.EA1.wait_connectors()
         cls.EB1.wait_connectors()
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] +
+            ['skmanage'] +
             cmd.split(' ') +
             ['--bus',
              address or self.address(),

@@ -39,7 +39,7 @@ add_executable(c_unittests
         test_listener_startup.cpp
         test_router_startup.cpp
         test_terminus.cpp)
-target_link_libraries(c_unittests cpp-stub pthread qpid-dispatch)
+target_link_libraries(c_unittests cpp-stub pthread skupper-router)
 
 file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf

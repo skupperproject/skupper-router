@@ -63,11 +63,11 @@ class AddressChecker:
         return AddressCheckResponse(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def make_address_query(self, name):
-        ap = {'operation': 'READ', 'type': 'org.apache.qpid.dispatch.router.address', 'name': name}
+        ap = {'operation': 'READ', 'type': 'io.skupper.router.router.address', 'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def make_addresses_query(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router.address'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.address'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
 

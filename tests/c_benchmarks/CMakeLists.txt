@@ -40,7 +40,7 @@ add_executable(c-benchmarks
         SocketException.cpp SocketException.hpp
         TCPSocket.cpp TCPSocket.hpp
         TCPServerSocket.cpp TCPServerSocket.hpp)
-target_link_libraries(c-benchmarks qpid-dispatch benchmark pthread)
+target_link_libraries(c-benchmarks skupper-router benchmark pthread)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 

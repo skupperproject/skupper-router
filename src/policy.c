@@ -81,7 +81,7 @@ static const char * const POLICY_VHOST_GROUP = "$connector";
 
 static void hostname_tree_free(qd_parse_tree_t *hostname_tree);
 
-// Imported qpid_dispatch_internal.policy.policy_manager python module
+// Imported skupper_router_internal.policy.policy_manager python module
 static PyObject * module = 0;
 
 ALLOC_DEFINE(qd_policy_settings_t);
@@ -151,7 +151,7 @@ void qd_policy_free(qd_policy_t *policy)
 
 qd_error_t qd_entity_configure_policy(qd_policy_t *policy, qd_entity_t *entity)
 {
-    module = PyImport_ImportModule("qpid_dispatch_internal.policy.policy_manager");
+    module = PyImport_ImportModule("skupper_router_internal.policy.policy_manager");
     if (!module) {
         qd_log(policy->log_source, QD_LOG_CRITICAL, "Required internal policy manager python module did not load. Shutting down.");
         exit(1);
@@ -221,7 +221,7 @@ qd_error_t qd_policy_c_counts_refresh(long ccounts, qd_entity_t *entity)
 }
 
 
-/** Update the statistics in qdrouterd.conf["policy"]
+/** Update the statistics in skrouterd.conf["policy"]
  * @param[in] entity pointer to the policy management object
  **/
 QD_EXPORT qd_error_t qd_entity_refresh_policy(qd_entity_t* entity, void *unused) {

@@ -114,7 +114,7 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         qd_compose_insert_string(body, "1");
         break;
     case QDR_ROUTER_TYPE:
-        qd_compose_insert_string(body, "org.apache.qpid.dispatch.router");
+        qd_compose_insert_string(body, "io.skupper.router.router");
         break;
 
     case QDR_ROUTER_MODE:

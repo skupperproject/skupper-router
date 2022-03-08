@@ -28,22 +28,22 @@ from proton.utils import BlockingConnection
 from system_test import main_module, TIMEOUT, TestCase, Qdrouterd, DIR
 
 
-class QdstatTestBase(TestCase):
-    """Define run_qdstat for use with all tests"""
+class SkstatTestBase(TestCase):
+    """Define run_skstat for use with all tests"""
 
-    def run_qdstat(self, args, address=None, regex=None):
+    def run_skstat(self, args, address=None, regex=None):
         if args is None:
             args = []
-        args = ['qdstat',
+        args = ['skstat',
                 '--bus', str(address or self.address()),
                 '--timeout', str(TIMEOUT)] + args
 
-        p = self.popen(args, name='qdstat-' + self.id(), stdout=PIPE,
+        p = self.popen(args, name='skstat-' + self.id(), stdout=PIPE,
                        expect=None, universal_newlines=True)
         out, err = p.communicate()
 
         if p.returncode != 0:
-            raise RuntimeError("qdstat failed: %s (%s, %s)" % (p.returncode,
+            raise RuntimeError("skstat failed: %s (%s, %s)" % (p.returncode,
                                                                out, err))
         if regex is not None:
             pattern = re.compile(regex, re.I)
@@ -56,11 +56,11 @@ class QdstatTestBase(TestCase):
         return self.router.addresses[0]
 
 
-class QdstatTest(QdstatTestBase):
-    """Test qdstat tool output"""
+class SkstatTest(SkstatTestBase):
+    """Test skstat tool output"""
     @classmethod
     def setUpClass(cls):
-        super(QdstatTest, cls).setUpClass()
+        super(SkstatTest, cls).setUpClass()
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.A', 'workerThreads': 1}),
             ('listener', {'port': cls.tester.get_port()}),
@@ -68,10 +68,10 @@ class QdstatTest(QdstatTestBase):
         cls.router = cls.tester.qdrouterd('test-router', config)
 
     def test_help(self):
-        self.run_qdstat(['--help'], regex=r'Usage: qdstat')
+        self.run_skstat(['--help'], regex=r'Usage: skstat')
 
     def test_general(self):
-        out = self.run_qdstat(['--general'],
+        out = self.run_skstat(['--general'],
                               regex=r'(?s)Router Statistics.*Mode\s*Standalone')
 
         self.assertTrue(re.match(r"(.*)\bConnections\b[ \t]+\b1\b(.*)",
@@ -90,7 +90,7 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(out.count("QDR.A"), 2)
 
     def test_general_csv(self):
-        out = self.run_qdstat(['--general', '--csv'],
+        out = self.run_skstat(['--general', '--csv'],
                               regex=r'(?s)Router Statistics.*Mode","Standalone')
 
         self.assertIn('"Connections","1"', out)
@@ -102,57 +102,57 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(out.count("QDR.A"), 2)
 
     def test_connections(self):
-        self.run_qdstat(['--connections'], regex=r'host.*container.*role')
-        outs = self.run_qdstat(['--connections'], regex=r'no-auth')
-        outs = self.run_qdstat(['--connections'], regex=r'QDR.A')
+        self.run_skstat(['--connections'], regex=r'host.*container.*role')
+        outs = self.run_skstat(['--connections'], regex=r'no-auth')
+        outs = self.run_skstat(['--connections'], regex=r'QDR.A')
 
     def test_connections_csv(self):
-        self.run_qdstat(['--connections', "--csv"], regex=r'host.*container.*role')
-        outs = self.run_qdstat(['--connections'], regex=r'no-auth')
-        outs = self.run_qdstat(['--connections'], regex=r'QDR.A')
+        self.run_skstat(['--connections', "--csv"], regex=r'host.*container.*role')
+        outs = self.run_skstat(['--connections'], regex=r'no-auth')
+        outs = self.run_skstat(['--connections'], regex=r'QDR.A')
 
     def test_links(self):
-        self.run_qdstat(['--links'], regex=r'QDR.A')
-        out = self.run_qdstat(['--links'], regex=r'endpoint.*out.*local.*temp.')
+        self.run_skstat(['--links'], regex=r'QDR.A')
+        out = self.run_skstat(['--links'], regex=r'endpoint.*out.*local.*temp.')
         parts = out.split("\n")
         self.assertEqual(len(parts), 9)
 
     def test_links_csv(self):
-        self.run_qdstat(['--links', "--csv"], regex=r'QDR.A')
-        out = self.run_qdstat(['--links'], regex=r'endpoint.*out.*local.*temp.')
+        self.run_skstat(['--links', "--csv"], regex=r'QDR.A')
+        out = self.run_skstat(['--links'], regex=r'endpoint.*out.*local.*temp.')
         parts = out.split("\n")
         self.assertEqual(len(parts), 9)
 
     def test_links_with_limit(self):
-        out = self.run_qdstat(['--links', '--limit=1'])
+        out = self.run_skstat(['--links', '--limit=1'])
         parts = out.split("\n")
         self.assertEqual(len(parts), 8)
 
     def test_links_with_limit_csv(self):
-        out = self.run_qdstat(['--links', '--limit=1', "--csv"])
+        out = self.run_skstat(['--links', '--limit=1', "--csv"])
         parts = out.split("\n")
         self.assertEqual(len(parts), 7)
 
     def test_nodes(self):
-        self.run_qdstat(['--nodes'], regex=r'No Router List')
+        self.run_skstat(['--nodes'], regex=r'No Router List')
 
     def test_nodes_csv(self):
-        self.run_qdstat(['--nodes', "--csv"], regex=r'No Router List')
+        self.run_skstat(['--nodes', "--csv"], regex=r'No Router List')
 
     def test_address(self):
-        out = self.run_qdstat(['--address'], regex=r'QDR.A')
-        out = self.run_qdstat(['--address'], regex=r'\$management')
+        out = self.run_skstat(['--address'], regex=r'QDR.A')
+        out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
         self.assertEqual(len(parts), 12)
 
     def test_address_csv(self):
-        out = self.run_qdstat(['--address'], regex=r'QDR.A')
-        out = self.run_qdstat(['--address'], regex=r'\$management')
+        out = self.run_skstat(['--address'], regex=r'QDR.A')
+        out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
         self.assertEqual(len(parts), 12)
 
-    def test_qdstat_no_args(self):
-        outs = self.run_qdstat(args=None)
+    def test_skstat_no_args(self):
+        outs = self.run_skstat(args=None)
         self.assertIn("Presettled Count", outs)
         self.assertIn("Dropped Presettled Count", outs)
         self.assertIn("Accepted Count", outs)
@@ -163,8 +163,8 @@ class QdstatTest(QdstatTestBase):
         self.assertIn("Ingress Count", outs)
         self.assertIn("Uptime", outs)
 
-    def test_qdstat_no_other_args_csv(self):
-        outs = self.run_qdstat(["--csv"])
+    def test_skstat_no_other_args_csv(self):
+        outs = self.run_skstat(["--csv"])
         self.assertIn("Presettled Count", outs)
         self.assertIn("Dropped Presettled Count", outs)
         self.assertIn("Accepted Count", outs)
@@ -176,7 +176,7 @@ class QdstatTest(QdstatTestBase):
         self.assertIn("Uptime", outs)
 
     def test_address_priority(self):
-        out = self.run_qdstat(['--address'])
+        out = self.run_skstat(['--address'])
         lines = out.split("\n")
 
         # make sure the output contains a header line
@@ -204,7 +204,7 @@ class QdstatTest(QdstatTestBase):
     def test_address_priority_csv(self):
         HEADER_ROW = 4
         PRI_COL = 3
-        out = self.run_qdstat(['--address', "--csv"])
+        out = self.run_skstat(['--address', "--csv"])
         lines = out.split("\n")
 
         # make sure the output contains a header line
@@ -229,41 +229,41 @@ class QdstatTest(QdstatTestBase):
                 self.assertTrue(priority <= 9, "Priority was greater than 9")
 
     def test_address_with_limit(self):
-        out = self.run_qdstat(['--address', '--limit=1'])
+        out = self.run_skstat(['--address', '--limit=1'])
         parts = out.split("\n")
         self.assertEqual(len(parts), 8)
 
     def test_address_with_limit_csv(self):
-        out = self.run_qdstat(['--address', '--limit=1', '--csv'])
+        out = self.run_skstat(['--address', '--limit=1', '--csv'])
         parts = out.split("\n")
         self.assertEqual(len(parts), 7)
 
     def test_memory(self):
-        out = self.run_qdstat(['--memory'])
+        out = self.run_skstat(['--memory'])
         self.assertIn("QDR.A", out)
         self.assertIn("UTC", out)
         regexp = r'qdr_address_t\s+[0-9]+'
         assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
 
     def test_memory_csv(self):
-        out = self.run_qdstat(['--memory', '--csv'])
+        out = self.run_skstat(['--memory', '--csv'])
         self.assertIn("QDR.A", out)
         self.assertIn("UTC", out)
         regexp = r'qdr_address_t","[0-9]+'
         assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
 
     def test_policy(self):
-        out = self.run_qdstat(['--policy'])
+        out = self.run_skstat(['--policy'])
         self.assertIn("Maximum Concurrent Connections", out)
         self.assertIn("Total Denials", out)
 
     def test_policy_csv(self):
-        out = self.run_qdstat(['-p', "--csv"])
+        out = self.run_skstat(['-p', "--csv"])
         self.assertIn("Maximum Concurrent Connections", out)
         self.assertIn("Total Denials", out)
 
     def test_log(self):
-        self.run_qdstat(['--log', '--limit=5'], regex=r'AGENT \(debug\).*GET-LOG')
+        self.run_skstat(['--log', '--limit=5'], regex=r'AGENT \(debug\).*GET-LOG')
 
     def test_yy_query_many_links(self):
         # This test will fail without the fix for DISPATCH-974
@@ -285,11 +285,11 @@ class QdstatTest(QdstatTestBase):
             if count == COUNT:
                 break
 
-        # Now we run qdstat command and check if we got back details
+        # Now we run skstat command and check if we got back details
         # about all the 10000 links
         # We do not specify the limit which means unlimited
         # which means get everything that is there.
-        outs = self.run_qdstat(['--links'])
+        outs = self.run_skstat(['--links'])
         out_list = outs.split("\n")
 
         out_links = 0
@@ -303,8 +303,8 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(in_links, COUNT)
         self.assertEqual(out_links, COUNT)
 
-        # Run qdstat with a limit more than 10,000
-        outs = self.run_qdstat(['--links', '--limit=15000'])
+        # Run skstat with a limit more than 10,000
+        outs = self.run_skstat(['--links', '--limit=15000'])
         out_list = outs.split("\n")
 
         out_links = 0
@@ -318,8 +318,8 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(in_links, COUNT)
         self.assertEqual(out_links, COUNT)
 
-        # Run qdstat with a limit less than 10,000
-        outs = self.run_qdstat(['--links', '--limit=2000'])
+        # Run skstat with a limit less than 10,000
+        outs = self.run_skstat(['--links', '--limit=2000'])
         out_list = outs.split("\n")
 
         links = 0
@@ -329,9 +329,9 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 2000)
 
-        # Run qdstat with a limit less than 10,000
+        # Run skstat with a limit less than 10,000
         # repeat with --csv
-        outs = self.run_qdstat(['--links', '--limit=2000', '--csv'])
+        outs = self.run_skstat(['--links', '--limit=2000', '--csv'])
         out_list = outs.split("\n")
 
         links = 0
@@ -341,9 +341,9 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 2000)
 
-        # Run qdstat with a limit of 700 because 700
+        # Run skstat with a limit of 700 because 700
         # is the maximum number of rows we get per request
-        outs = self.run_qdstat(['--links', '--limit=700'])
+        outs = self.run_skstat(['--links', '--limit=700'])
         out_list = outs.split("\n")
 
         links = 0
@@ -353,10 +353,10 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 700)
 
-        # Run qdstat with a limit of 700 because 700
+        # Run skstat with a limit of 700 because 700
         # is the maximum number of rows we get per request
         # repeat with --csv
-        outs = self.run_qdstat(['--links', '--limit=700', '--csv'])
+        outs = self.run_skstat(['--links', '--limit=700', '--csv'])
         out_list = outs.split("\n")
 
         links = 0
@@ -366,10 +366,10 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 700)
 
-        # Run qdstat with a limit of 500 because 700
+        # Run skstat with a limit of 500 because 700
         # is the maximum number of rows we get per request
         # and we want to try something less than 700
-        outs = self.run_qdstat(['--links', '--limit=500'])
+        outs = self.run_skstat(['--links', '--limit=500'])
         out_list = outs.split("\n")
 
         links = 0
@@ -379,11 +379,11 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 500)
 
-        # Run qdstat with a limit of 500 because 700
+        # Run skstat with a limit of 500 because 700
         # is the maximum number of rows we get per request
         # and we want to try something less than 700
         # repeat with --csv
-        outs = self.run_qdstat(['--links', '--limit=500', '--csv'])
+        outs = self.run_skstat(['--links', '--limit=500', '--csv'])
         out_list = outs.split("\n")
 
         links = 0
@@ -393,9 +393,9 @@ class QdstatTest(QdstatTestBase):
 
         self.assertEqual(links, 500)
 
-        # DISPATCH-1485. Try to run qdstat with a limit=0. Without the fix for DISPATCH-1485
+        # DISPATCH-1485. Try to run skstat with a limit=0. Without the fix for DISPATCH-1485
         # this following command will hang and the test will fail.
-        outs = self.run_qdstat(['--links', '--limit=0'])
+        outs = self.run_skstat(['--links', '--limit=0'])
         out_list = outs.split("\n")
 
         links = 0
@@ -404,10 +404,10 @@ class QdstatTest(QdstatTestBase):
                 links += 1
         self.assertEqual(links, COUNT * 2)
 
-        # DISPATCH-1485. Try to run qdstat with a limit=0. Without the fix for DISPATCH-1485
+        # DISPATCH-1485. Try to run skstat with a limit=0. Without the fix for DISPATCH-1485
         # this following command will hang and the test will fail.
         # repeat with --csv
-        outs = self.run_qdstat(['--links', '--limit=0', '--csv'])
+        outs = self.run_skstat(['--links', '--limit=0', '--csv'])
         out_list = outs.split("\n")
 
         links = 0
@@ -417,7 +417,7 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(links, COUNT * 2)
 
         # This test would fail without the fix for DISPATCH-974
-        outs = self.run_qdstat(['--address'])
+        outs = self.run_skstat(['--address'])
         out_list = outs.split("\n")
 
         sender_addresses = 0
@@ -432,9 +432,9 @@ class QdstatTest(QdstatTestBase):
         self.assertEqual(receiver_addresses, COUNT)
 
         # Test if there is a non-zero uptime for the router in the output of
-        # qdstat -g
+        # skstat -g
         non_zero_seconds = False
-        outs = self.run_qdstat(args=None)
+        outs = self.run_skstat(args=None)
         parts = outs.split("\n")
         for part in parts:
             if "Uptime" in part:
@@ -452,11 +452,11 @@ class QdstatTest(QdstatTestBase):
         c.close()
 
 
-class QdstatTestVhostPolicy(QdstatTestBase):
-    """Test qdstat-with-policy tool output"""
+class SkstatTestVhostPolicy(SkstatTestBase):
+    """Test skstat-with-policy tool output"""
     @classmethod
     def setUpClass(cls):
-        super(QdstatTestVhostPolicy, cls).setUpClass()
+        super(SkstatTestVhostPolicy, cls).setUpClass()
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.A', 'workerThreads': 1}),
             ('listener', {'port': cls.tester.get_port()}),
@@ -486,49 +486,49 @@ class QdstatTestVhostPolicy(QdstatTestBase):
         cls.router = cls.tester.qdrouterd('test-router', config)
 
     def test_vhost(self):
-        out = self.run_qdstat(['--vhosts'])
+        out = self.run_skstat(['--vhosts'])
         self.assertIn("Vhosts", out)
         self.assertIn("allowUnknownUser", out)
 
     def test_vhost_csv(self):
-        out = self.run_qdstat(['--vhosts', '--csv'])
+        out = self.run_skstat(['--vhosts', '--csv'])
         self.assertIn("Vhosts", out)
         self.assertIn("allowUnknownUser", out)
 
     def test_vhostgroups(self):
-        out = self.run_qdstat(['--vhostgroups'])
+        out = self.run_skstat(['--vhostgroups'])
         self.assertIn("Vhost Groups", out)
         self.assertIn("allowAdminStatusUpdate", out)
         self.assertIn("Vhost '$default' UserGroup '$default'", out)
         self.assertIn("Vhost '$default' UserGroup 'HGCrawler'", out)
 
     def test_vhostgroups_csv(self):
-        out = self.run_qdstat(['--vhostgroups', '--csv'])
+        out = self.run_skstat(['--vhostgroups', '--csv'])
         self.assertIn("Vhost Groups", out)
         self.assertIn("allowAdminStatusUpdate", out)
         self.assertIn("Vhost '$default' UserGroup '$default'", out)
         self.assertIn("Vhost '$default' UserGroup 'HGCrawler'", out)
 
     def test_vhoststats(self):
-        out = self.run_qdstat(['--vhoststats'])
+        out = self.run_skstat(['--vhoststats'])
         self.assertIn("Vhost Stats", out)
         self.assertIn("maxMessageSizeDenied", out)
         self.assertIn("Vhost User Stats", out)
         self.assertIn("remote hosts", out)
 
     def test_vhoststats_csv(self):
-        out = self.run_qdstat(['--vhoststats', '--csv'])
+        out = self.run_skstat(['--vhoststats', '--csv'])
         self.assertIn("Vhost Stats", out)
         self.assertIn("maxMessageSizeDenied", out)
         self.assertIn("Vhost User Stats", out)
         self.assertIn("remote hosts", out)
 
 
-class QdstatLinkPriorityTest(QdstatTestBase):
+class SkstatLinkPriorityTest(SkstatTestBase):
     """Need 2 routers to get inter-router links for the link priority test"""
     @classmethod
     def setUpClass(cls):
-        super(QdstatLinkPriorityTest, cls).setUpClass()
+        super(SkstatLinkPriorityTest, cls).setUpClass()
         cls.inter_router_port = cls.tester.get_port()
         config_1 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'R1'}),
@@ -549,7 +549,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         return self.router_1.addresses[0]
 
     def test_link_priority(self):
-        out = self.run_qdstat(['--links'])
+        out = self.run_skstat(['--links'])
         lines = out.split("\n")
 
         # make sure the output contains a header line
@@ -583,7 +583,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         HEADER_ROW = 4
         TYPE_COL = 0
         PRI_COL = 8
-        out = self.run_qdstat(['--links', '--csv'])
+        out = self.run_skstat(['--links', '--csv'])
         lines = out.split("\n")
 
         # make sure the output contains a header line
@@ -614,7 +614,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         self.assertEqual(len(priorities.keys()), 10, "Not all priorities are present")
 
     def _test_links_all_routers(self, command):
-        out = self.run_qdstat(command)
+        out = self.run_skstat(command)
         self.assertTrue(out.count('UTC') == 1)
         self.assertTrue(out.count('Router Links') == 2)
         self.assertTrue(out.count('inter-router') == 40)
@@ -627,7 +627,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         self._test_links_all_routers(['--links', '--all-routers', '--csv'])
 
     def _test_all_entities(self, command):
-        out = self.run_qdstat(command)
+        out = self.run_skstat(command)
 
         self.assertTrue(out.count('UTC') == 1)
         self.assertTrue(out.count('Router Links') == 1)
@@ -644,7 +644,7 @@ class QdstatLinkPriorityTest(QdstatTestBase):
         self._test_all_entities(['--all-entities', '--csv'])
 
     def _test_all_entities_all_routers(self, command):
-        out = self.run_qdstat(command)
+        out = self.run_skstat(command)
 
         self.assertTrue(out.count('UTC') == 1)
         self.assertTrue(out.count('Router Links') == 2)
@@ -670,8 +670,8 @@ def _has_ssl():
 
 
 @unittest.skipIf(_has_ssl() is False, "Proton SSL support unavailable")
-class QdstatSslTest(QdstatTestBase):
-    """Test qdstat tool output"""
+class SkstatSslTest(SkstatTestBase):
+    """Test skstat tool output"""
 
     @staticmethod
     def ssl_file(name):
@@ -683,7 +683,7 @@ class QdstatSslTest(QdstatTestBase):
 
     @classmethod
     def setUpClass(cls):
-        super(QdstatSslTest, cls).setUpClass()
+        super(SkstatSslTest, cls).setUpClass()
         # Write SASL configuration file:
         with open('tests-mech-EXTERNAL.conf', 'w') as sasl_conf:
             sasl_conf.write("mech_list: EXTERNAL ANONYMOUS DIGEST-MD5 PLAIN\n")
@@ -720,7 +720,7 @@ class QdstatSslTest(QdstatTestBase):
         cls.router = cls.tester.qdrouterd('test-router', config)
 
     def get_ssl_args(self):
-        """A map of short names to the corresponding qdstat arguments.  A list
+        """A map of short names to the corresponding skstat arguments.  A list
         of keys are passed to ssl_test() via the arg_names parameter list.
         """
         args = dict(
@@ -738,7 +738,7 @@ class QdstatSslTest(QdstatTestBase):
         """Run simple SSL connection test with supplied parameters.
 
         :param url_name: a shorthand name used to select which router
-        interface qdstat will connect to:
+        interface skstat will connect to:
         'none' = No SSL or SASL config
         'strict' = Require SSL, No SASL config
         'unsecured' = SSL not required, SASL not required
@@ -754,129 +754,129 @@ class QdstatSslTest(QdstatTestBase):
         urls = dict(zip(['none', 'strict', 'unsecured', 'auth'], addrs))
         urls.update(zip(['none_s', 'strict_s', 'unsecured_s', 'auth_s'],
                         (Url(a, scheme="amqps") for a in addrs)))
-        self.run_qdstat(['--general'] + sum([args[n] for n in arg_names], []),
+        self.run_skstat(['--general'] + sum([args[n] for n in arg_names], []),
                         address=str(urls[url_name]),
                         regex=r'(?s)Router Statistics.*Mode\s*Standalone')
 
     def ssl_test_bad(self, url_name, arg_names):
         self.assertRaises(RuntimeError, self.ssl_test, url_name, arg_names)
 
-    # qdstat -b amqp://localhost:<port> --general and makes sure
+    # skstat -b amqp://localhost:<port> --general and makes sure
     # the router sends back a valid response.
     def test_ssl_none(self):
         self.ssl_test('none', [])
 
-    # qdstat -b amqps://localhost:<port> --general
+    # skstat -b amqps://localhost:<port> --general
     # Make sure that the command fails.
     def test_ssl_scheme_to_none(self):
         self.ssl_test_bad('none_s', [])
 
-    # qdstat -b amqp://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
+    # skstat -b amqp://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
     # Makes sure the command fails.
     def test_ssl_cert_to_none(self):
         self.ssl_test_bad('none', ['client_cert'])
 
     # Tries to run the following command on a listener that requires SSL (requireSsl:yes)
-    # qdstat -b amqp://localhost:<port> --general
+    # skstat -b amqp://localhost:<port> --general
     # Makes sure the command fails.
     def test_ssl_none_to_strict(self):
         self.ssl_test_bad('strict', [])
 
-    # qdstat -b amqps://localhost:<port> --general
+    # skstat -b amqps://localhost:<port> --general
     def test_ssl_schema_to_strict(self):
         self.ssl_test_bad('strict_s', [])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
     # --ssl-key /path/to/client-private-key.pem --ssl-password client-password'
     def test_ssl_cert_to_strict(self):
         self.ssl_test_bad('strict_s', ['client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
     def test_ssl_trustfile_to_strict(self):
         self.ssl_test('strict_s', ['trustfile'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile
     # /path/to/ca-certificate.pem --ssl-certificate /path/to/client-certificate.pem
     # --ssl-key /path/to/client-private-key.pem --ssl-password client-password
     def test_ssl_trustfile_cert_to_strict(self):
         self.ssl_test('strict_s', ['trustfile', 'client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem
     # Send in a bad ca cert and make sure the test fails.
     def test_ssl_bad_trustfile_to_strict(self):
         self.ssl_test_bad('strict_s', ['bad_trustfile'])
 
     # Require-auth SSL listener
-    # qdstat -b amqp://localhost:<port> --general
+    # skstat -b amqp://localhost:<port> --general
     # Send in no certs to a 'authenticatePeer': 'yes', 'requireSsl': 'yes' listener and make sure it fails.
     # Also protocol is amqp not amqps
     def test_ssl_none_to_auth(self):
         self.ssl_test_bad('auth', [])
 
-    # qdstat -b amqps://localhost:28491 --general
+    # skstat -b amqps://localhost:28491 --general
     # Send in no certs to a 'authenticatePeer': 'yes', 'requireSsl': 'yes' listener and make sure it fails.
     def test_ssl_schema_to_auth(self):
         self.ssl_test_bad('auth_s', [])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem'
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem'
     # Send in just a trustfile to an 'authenticatePeer': 'yes', 'requireSsl': 'yes' listener and make sure it fails.
     def test_ssl_trustfile_to_auth(self):
         self.ssl_test_bad('auth_s', ['trustfile'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem
     # --ssl-key /path/to/client-private-key.pem --ssl-password client-password
     # Without a trustfile, this test fails
     def test_ssl_cert_to_auth(self):
         self.ssl_test_bad('auth_s', ['client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
     # --ssl-certificate /path/to/client-certificate.pem
     # --ssl-key /path/to/client-private-key.pem --ssl-password client-password
     # This has everything, the test should pass.
     def test_ssl_trustfile_cert_to_auth(self):
         self.ssl_test('auth_s', ['trustfile', 'client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem
     # --ssl-certificate /path/to/client-certificate.pem --ssl-key /path/to/client-private-key.pem
     # --ssl-password client-password
     # Bad trustfile should be rejected.
     def test_ssl_bad_trustfile_to_auth(self):
         self.ssl_test_bad('auth_s', ['bad_trustfile', 'client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --sasl-mechanisms EXTERNAL
+    # skstat -b amqps://localhost:<port> --general --sasl-mechanisms EXTERNAL
     # --ssl-certificate /path/to/client-certificate.pem --ssl-key /path/to/client-private-key.pem
     # --ssl-password client-password --ssl-trustfile /path/to/ca-certificate.pem'
     def test_ssl_cert_explicit_external_to_auth(self):
         self.ssl_test('auth_s', ['sasl_external', 'client_cert_all', 'trustfile'])
 
     # Unsecured SSL listener, allows non-SSL
-    # qdstat -b amqp://localhost:<port> --general
+    # skstat -b amqp://localhost:<port> --general
     def test_ssl_none_to_unsecured(self):
         self.ssl_test('unsecured', [])
 
-    # qdstat -b amqps://localhost:<port> --general
+    # skstat -b amqps://localhost:<port> --general
     def test_ssl_schema_to_unsecured(self):
         self.ssl_test_bad('unsecured_s', [])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem --ssl-key
+    # skstat -b amqps://localhost:<port> --general --ssl-certificate /path/to/client-certificate.pem --ssl-key
     # /path/to/client-private-key.pem --ssl-password client-password
     # A trustfile is required, test will fail
     def test_ssl_cert_to_unsecured(self):
         self.ssl_test_bad('unsecured_s', ['client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem'
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem'
     # Just send in the trustfile, should be all good.
     def test_ssl_trustfile_to_unsecured(self):
         self.ssl_test('unsecured_s', ['trustfile'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/ca-certificate.pem
     # --ssl-certificate /path/to/client-certificate.pem --ssl-key /path/to/client-private-key.pem
     # --ssl-password client-password
     # We have everything, this should work.
     def test_ssl_trustfile_cert_to_unsecured(self):
         self.ssl_test('unsecured_s', ['trustfile', 'client_cert_all'])
 
-    # qdstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem']
+    # skstat -b amqps://localhost:<port> --general --ssl-trustfile /path/to/bad-ca-certificate.pem']
     # Bad trustfile, test will fail.
     def test_ssl_bad_trustfile_to_unsecured(self):
         self.ssl_test_bad('unsecured_s', ['bad_trustfile'])
@@ -890,19 +890,19 @@ class QdstatSslTest(QdstatTestBase):
 
         with self.assertRaises(RuntimeError,
                                msg="expected fail: host name wrong") as exc:
-            self.run_qdstat(address="amqps://127.0.0.1:%s" % self.strict_port,
+            self.run_skstat(address="amqps://127.0.0.1:%s" % self.strict_port,
                             args=['--general'] + params)
 
         # repeat the same operation but using
         # --ssl-disable--peer-name-verify.  This should succeed:
 
-        self.run_qdstat(address="amqps://127.0.0.1:%s" % self.strict_port,
+        self.run_skstat(address="amqps://127.0.0.1:%s" % self.strict_port,
                         args=['--general',
                               '--ssl-disable-peer-name-verify'] + params)
 
 
 @unittest.skipIf(_has_ssl() is False, "Proton SSL support unavailable")
-class QdstatSslTestSslPasswordFile(QdstatSslTest):
+class SkstatSslTestSslPasswordFile(SkstatSslTest):
     """
     Tests the --ssl-password-file command line parameter
     """
@@ -921,8 +921,8 @@ class QdstatSslTestSslPasswordFile(QdstatSslTest):
 
 
 @unittest.skipIf(_has_ssl() is False, "Proton SSL support unavailable")
-class QdstatSslNoExternalTest(QdstatTestBase):
-    """Test qdstat can't connect without sasl_mech EXTERNAL"""
+class SkstatSslNoExternalTest(SkstatTestBase):
+    """Test skstat can't connect without sasl_mech EXTERNAL"""
 
     @staticmethod
     def ssl_file(name):
@@ -934,7 +934,7 @@ class QdstatSslNoExternalTest(QdstatTestBase):
 
     @classmethod
     def setUpClass(cls):
-        super(QdstatSslNoExternalTest, cls).setUpClass()
+        super(SkstatSslNoExternalTest, cls).setUpClass()
         # Write SASL configuration file:
         with open('tests-mech-NOEXTERNAL.conf', 'w') as sasl_conf:
             sasl_conf.write("mech_list: ANONYMOUS DIGEST-MD5 PLAIN\n")
@@ -974,7 +974,7 @@ class QdstatSslNoExternalTest(QdstatTestBase):
         urls.update(zip(['none_s', 'strict_s', 'unsecured_s', 'auth_s'],
                         (Url(a, scheme="amqps") for a in addrs)))
 
-        self.run_qdstat(['--general'] + sum([args[n] for n in arg_names], []),
+        self.run_skstat(['--general'] + sum([args[n] for n in arg_names], []),
                         address=str(urls[url_name]),
                         regex=r'(?s)Router Statistics.*Mode\s*Standalone')
 

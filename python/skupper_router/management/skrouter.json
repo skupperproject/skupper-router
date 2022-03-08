@@ -1,7 +1,7 @@
 {
-    "description":  "Schema for the Qpid Dispatch Router management model. See qdrouter.json.readme.txt.",
+    "description":  "Schema for the Skupper Router management model. See skrouter.json.readme.txt.",
 
-    "prefix": "org.apache.qpid.dispatch",
+    "prefix": "io.skupper.router",
 
     "entityTypes": {
 
@@ -293,7 +293,7 @@
             "operations": ["GET-SCHEMA", "GET-JSON-SCHEMA", "GET-LOG", "PROFILE"],
             "operationDefs": {
                 "GET-SCHEMA": {
-                    "description": "Get the qdrouterd schema for this router in AMQP map format",
+                    "description": "Get the skrouterd schema for this router in AMQP map format",
                     "request": {
                         "properties": {
                             "identity": {
@@ -304,13 +304,13 @@
                     },
                     "response": {
                         "body": {
-                            "description": "The qdrouter schema as a map.",
+                            "description": "The skrouter schema as a map.",
                             "type": "map"
                         }
                     }
                 },
                 "GET-SCHEMA-JSON": {
-                    "description": "Get the qdrouterd schema for this router in JSON format",
+                    "description": "Get the skrouterd schema for this router in JSON format",
                     "request": {
                         "properties": {
                             "identity": {
@@ -325,7 +325,7 @@
                     },
                     "response": {
                         "body": {
-                            "description": "The qdrouter schema as a JSON string.",
+                            "description": "The skrouter schema as a JSON string.",
                             "type": "string"
                         }
                     }
@@ -452,7 +452,7 @@
                 "saslConfigName": {
                     "type": "string",
                     "description": "Name of the SASL configuration.  This string + '.conf' is the name of the configuration file.",
-                    "default": "qdrouterd",
+                    "default": "skrouterd",
                     "required": false,
                     "create": true
                 },
@@ -592,7 +592,7 @@
                 "memoryUsage": {
                     "type": "integer",
                     "graph": true,
-                    "description": "The current amount of memory in use by the qdrouterd process in bytes.  This includes memory provisioned for stack, data, and code (VmSize).  This value is set to Null if the platform does not provide access to the process memory size."
+                    "description": "The current amount of memory in use by the router process in bytes.  This includes memory provisioned for stack, data, and code (VmSize).  This value is set to Null if the platform does not provide access to the process memory size."
                 }
             }
         },
@@ -796,7 +796,7 @@
                 },
                 "httpRootDir": {
                     "type": "path",
-                    "description": "Absolute path to a directory from which to serve static HTML files (typically /usr/share/qpid-dispatch/html).",
+                    "description": "Absolute path to a directory from which to serve static HTML files (typically /usr/share/skupper-router/html).",
                     "create": true
                 },
                 "messageLoggingComponents": {
@@ -1407,7 +1407,7 @@
                 },
                 "linkRef": {
                     "type": "string",
-                    "description": "Reference to the org.apache.qpid.dispatch.router.link if the link exists",
+                    "description": "Reference to the io.skupper.router.router.link if the link exists",
                     "create": false
                 },
                 "operStatus": {

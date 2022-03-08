@@ -44,15 +44,15 @@ class DefaultDistributionTest(TestCase):
         cls.router.wait_ready()
         cls.address = cls.router.addresses[0]
 
-    def run_qdstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None):
         p = self.popen(
-            ['qdstat', '--bus', str(address or self.address), '--timeout', str(TIMEOUT)] + args,
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            ['skstat', '--bus', str(address or self.address), '--timeout', str(TIMEOUT)] + args,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
         return out
@@ -73,7 +73,7 @@ class DefaultDistributionTest(TestCase):
         self.assertTrue(test.received_error)
 
     def test_general(self):
-        out = self.run_qdstat(['--general'], r'(?s)Router Statistics.*Mode\s*Standalone')
+        out = self.run_skstat(['--general'], r'(?s)Router Statistics.*Mode\s*Standalone')
         self.assertIn("Connections                      1", out)
         self.assertIn("Nodes                            0", out)
         self.assertIn("Auto Links                       0", out)

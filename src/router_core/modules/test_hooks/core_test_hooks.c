@@ -391,12 +391,12 @@ static qdrc_endpoint_desc_t descriptor = {"Core Test Hooks", on_first_attach, on
 
 static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test_module_t *module)
 {
-    char *echo_address       = "org.apache.qpid.dispatch.router/test/echo";
-    char *deny_address       = "org.apache.qpid.dispatch.router/test/deny";
-    char *sink_address       = "org.apache.qpid.dispatch.router/test/sink";
-    char *source_address     = "org.apache.qpid.dispatch.router/test/source";
-    char *source_ps_address  = "org.apache.qpid.dispatch.router/test/source_ps";
-    char *discard_address    = "org.apache.qpid.dispatch.router/test/discard";
+    char *echo_address       = "io.skupper.router.router/test/echo";
+    char *deny_address       = "io.skupper.router.router/test/deny";
+    char *sink_address       = "io.skupper.router.router/test/sink";
+    char *source_address     = "io.skupper.router.router/test/source";
+    char *source_ps_address  = "io.skupper.router.router/test/source_ps";
+    char *discard_address    = "io.skupper.router.router/test/discard";
 
     module->echo_node      = NEW(test_node_t);
     module->deny_node      = NEW(test_node_t);
@@ -611,7 +611,7 @@ static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *c
                            : NULL);
         qd_log(tc->module->core->log, QD_LOG_TRACE, "client test container-id=%s", cid);
 
-        if (cid && strcmp(cid, "org.apache.qpid.dispatch.test_core_client") == 0) {
+        if (cid && strcmp(cid, "io.skupper.router.test_core_client") == 0) {
             qd_log(tc->module->core->log, QD_LOG_TRACE, "client test connection opened");
             qdr_terminus_t *target = qdr_terminus(NULL);
             qdr_terminus_set_address(target, "test_client_address");

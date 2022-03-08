@@ -165,7 +165,7 @@ void qd_server_config_free(qd_server_config_t *cf)
 
 /**
  * Private function to set the values of booleans strip_inbound_annotations and strip_outbound_annotations
- * based on the corresponding values for the settings in qdrouter.json
+ * based on the corresponding values for the settings in skrouter.json
  * strip_inbound_annotations and strip_outbound_annotations are defaulted to true
  */
 static void load_strip_annotations(qd_server_config_t *config, const char* stripAnnotations)

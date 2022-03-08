@@ -17,10 +17,10 @@
 # under the License
 #
 
-"""Interface between python and libqpid-dispatch.so.
+"""Interface between python and libskupper-router.so.
 
 This module contains python ctypes definitions to directly call functions in the
-libqpid-dispatch.so library from python.
+libskupper-router.so library from python.
 
 The C library also adds the following C extension types to this module:
 
@@ -50,7 +50,7 @@ class QdDll(ctypes.PyDLL):
     """
 
     def __init__(self, handle: int) -> None:
-        super(QdDll, self).__init__("qpid-dispatch", handle=handle)
+        super(QdDll, self).__init__("skupper-router", handle=handle)
 
         # Types
         self.qd_dispatch_p = ctypes.c_void_p

@@ -40,4 +40,4 @@ make -j4
 ctest -VV ${DISPATCH_CTEST_EXTRA_ARGS}
 # Run system tests on the install.
 make install
-python $INSTALL_DIR/lib/qpid-dispatch/tests/run_system_tests.py
+python $INSTALL_DIR/lib/skupper-router/tests/run_system_tests.py

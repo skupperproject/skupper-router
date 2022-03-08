@@ -22,7 +22,7 @@
 export HOSTNAME_IP_ADDRESS=$(hostname -i)
 
 EXT=${QDROUTERD_CONF_TYPE:-conf}
-CONFIG_FILE=/tmp/qdrouterd.${EXT}
+CONFIG_FILE=/tmp/skrouterd.${EXT}
 
 ${QDROUTERD_HOME}/bin/configure.sh ${QDROUTERD_HOME} $CONFIG_FILE
 
@@ -31,9 +31,9 @@ if [ -f $CONFIG_FILE ]; then
 fi
 
 if [[ $QDROUTERD_DEBUG = "gdb" ]]; then
-    exec gdb -batch -ex "run" -ex "bt" --args qdrouterd $ARGS
+    exec gdb -batch -ex "run" -ex "bt" --args skrouterd $ARGS
 elif [[ $QDROUTERD_DEBUG = "valgrind" ]]; then
-    exec valgrind qdrouterd $ARGS
+    exec valgrind skrouterd $ARGS
 else
-    exec qdrouterd $ARGS
+    exec skrouterd $ARGS
 fi

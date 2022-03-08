@@ -17,38 +17,38 @@ specific language governing permissions and limitations
 under the License
 ////
 
-qdrouterd(8)
+skrouterd(8)
 ===========
 :doctype: manpage
 
 NAME
 ----
-qdrouterd - routes AMQP messages.
+skrouterd - routes AMQP messages.
 
 SYNOPSIS
 --------
-*qdrouterd* ['OPTIONS']
+*skrouterd* ['OPTIONS']
 
 
 DESCRIPTION
 -----------
-The Qpid Dispatch router ('qdrouterd') is a network daemon that directs
+The skupper router ('skrouterd') is a network daemon that directs
 AMQP 1.0 messages between endpoints, such as messaging clients and
 servers.
 
 OPTIONS
 -------
 
-include::{generated_man}/qdrouterd_help.adoc[]
+include::{generated_man}/skrouterd_help.adoc[]
 
 FILES
 -----
 
-{SYSCONF_INSTALL_DIR}/qdrouterd.conf::
+{SYSCONF_INSTALL_DIR}/skrouterd.conf::
   Configuration file.
 
 SEE ALSO
 --------
-'qdrouterd.conf(5)', 'qdstat(8)', 'qdmanage(8)'
+'skrouterd.conf(5)', 'skstat(8)', 'skmanage(8)'
 
-http://qpid.apache.org/components/dispatch-router
+https://github.com/skupperproject/skupper-router

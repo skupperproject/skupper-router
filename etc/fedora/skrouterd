@@ -17,7 +17,7 @@
 # specific language governing permissions and limitations
 # under the License
 #
-# /etc/rc.d/init.d/qdrouterd
+# /etc/rc.d/init.d/skrouterd
 #
 # Startup script for the Qpid Router.
 #
@@ -31,22 +31,22 @@
 . /etc/rc.d/init.d/functions
 
 ### BEGIN INIT INFO
-# Provides: qdrouterd
+# Provides: skrouterd
 # Required-Start: $local_fs
 # Required-Stop: $local_fs
 # Default-Start: 2 3 4 5
 # Default-Stop: 0 1 6
-# Short-Description: start or stop qdrouterd
-# Description: Qpid Router is an intermediary for AMQP messaging.
+# Short-Description: start or stop skrouterd
+# Description: skupper-router is an intermediary for skupper messaging.
 ### END INIT INFO
 
-prog=qdrouterd
+prog=skrouterd
 exe=/usr/sbin/$prog
 
 # Configurable variables, can be set in /etc/sysconfig/$prog
-USER=qdrouterd
-CONFIG=/etc/qpid-dispatch/qdrouterd.conf
-RUNDIR=/var/run/qpid-dispatch
+USER=skrouterd
+CONFIG=/etc/skupper-router/skrouterd.conf
+RUNDIR=/var/run/skupper-router
 
 if [ -f /etc/sysconfig/$prog ]; then
     . /etc/sysconfig/$prog
@@ -61,14 +61,14 @@ if [[ !(-x $exe) ]]; then
 fi
 
 start() {
-    echo -n "Starting qdrouterd services: "
+    echo -n "Starting skrouterd services: "
     daemon --check $prog --user $USER --pidfile $pidfile $exe --daemon --config $CONFIG --pidfile $pidfile
     echo
     RETVAL=$?
 }
 
 stop() {
-    echo -n "Shutting down qdrouterd services: "
+    echo -n "Shutting down skrouterd services: "
     killproc -p $pidfile $prog
     echo
 }

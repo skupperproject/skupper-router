@@ -31,7 +31,7 @@
 #include <ctype.h>
 
 
-#define DISPATCH_MODULE "qpid_dispatch_internal.dispatch"
+#define DISPATCH_MODULE "skupper_router_internal.dispatch"
 
 //===============================================================================
 // Control Functions
@@ -876,7 +876,7 @@ static void qd_python_setup(void)
 
     // Get the router.message.Message class.
     PyObject *message_module =
-        PyImport_ImportModule("qpid_dispatch_internal.router.message");
+        PyImport_ImportModule("skupper_router_internal.router.message");
     if (message_module) {
         message_type = PyObject_GetAttrString(message_module, "Message");
         Py_DECREF(message_module);
@@ -942,7 +942,7 @@ char *qd_json_msgs_string(PyObject *msgs)
 {
     qd_python_lock_state_t lock_state = qd_python_lock();
 
-    PyObject *message_module = PyImport_ImportModule("qpid_dispatch_internal.router.message");
+    PyObject *message_module = PyImport_ImportModule("skupper_router_internal.router.message");
     if (!message_module) {
         qd_python_unlock(lock_state);
         return NULL;

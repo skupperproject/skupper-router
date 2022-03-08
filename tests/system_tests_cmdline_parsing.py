@@ -18,7 +18,7 @@
 #
 
 """
-This is a unit test class used to validate how qdrouterd
+This is a unit test class used to validate how the router
 behaves with different command line arguments combinations,
 in order to ensure it won't break, causing bad experiences
 to the users.
@@ -52,9 +52,9 @@ class CommandLineTest(TestCase):
             ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'outputFile': os.getcwd() + "/" + CommandLineTest.name + '.log'})
         ])
 
-    def run_qdrouterd_as_daemon(self, config_file_name, pid_file_name):
+    def run_router_as_daemon(self, config_file_name, pid_file_name):
         """
-        Runs qdrouterd as a daemon, using the provided config_file_name
+        Runs the router as a daemon, using the provided config_file_name
         in order to ensure router is able to load it, be it using a
         full or relative path.
 
@@ -63,7 +63,7 @@ class CommandLineTest(TestCase):
         :return:
         """
         pipe = self.popen(
-            [os.path.join(os.environ.get('BUILD_DIR'), 'router', 'qdrouterd'), '-d',
+            [os.path.join(os.environ.get('BUILD_DIR'), 'router', 'skrouterd'), '-d',
              '-I', os.path.join(os.environ.get('SOURCE_DIR'), 'python'),
              '-c', self.config.write(config_file_name), '-P', pid_file_name],
             stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_OK,
@@ -73,7 +73,7 @@ class CommandLineTest(TestCase):
 
         try:
             pipe.teardown()
-            # kill qdrouterd running as a daemon
+            # kill the router running as a daemon
             with open(pid_file_name, 'r') as pidfile:
                 for line in pidfile:
                     os.kill(int(line), signal.SIGTERM)
@@ -83,12 +83,12 @@ class CommandLineTest(TestCase):
 
     def test_01_config_relative_path(self):
         """
-        Starts qdrouterd as daemon, enforcing a config file name with
+        Starts the router as daemon, enforcing a config file name with
         relative path.
         """
 
         try:
-            self.run_qdrouterd_as_daemon("test-router", os.getcwd() + '/test.pid')
+            self.run_router_as_daemon("test-router", os.getcwd() + '/test.pid')
         except OSError as ex:
             self.fail(ex)
 
@@ -115,9 +115,9 @@ class CommandLineTest2(TestCase):
             ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'outputFile': os.getcwd() + "/" + CommandLineTest2.name + '.log'})
         ])
 
-    def run_qdrouterd_as_daemon(self, config_file_name, pid_file_name):
+    def run_router_as_daemon(self, config_file_name, pid_file_name):
         """
-        Runs qdrouterd as a daemon, using the provided config_file_name
+        Runs the router as a daemon, using the provided config_file_name
         in order to ensure router is able to load it, be it using a
         full or relative path.
 
@@ -126,7 +126,7 @@ class CommandLineTest2(TestCase):
         :return:
         """
         pipe = self.popen(
-            [os.path.join(os.environ.get('BUILD_DIR'), 'router', 'qdrouterd'), '-d',
+            [os.path.join(os.environ.get('BUILD_DIR'), 'router', 'skrouterd'), '-d',
              '-I', os.path.join(os.environ.get('SOURCE_DIR'), 'python'),
              '-c', self.config.write(config_file_name), '-P', pid_file_name],
             stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_OK,
@@ -136,7 +136,7 @@ class CommandLineTest2(TestCase):
 
         try:
             pipe.teardown()
-            # kill qdrouterd running as a daemon
+            # kill the router running as a daemon
             with open(pid_file_name, 'r') as pidfile:
                 for line in pidfile:
                     os.kill(int(line), signal.SIGTERM)
@@ -146,13 +146,13 @@ class CommandLineTest2(TestCase):
 
     def test_02_config_full_path(self):
         """
-        Starts qdrouterd as daemon, enforcing a config file name with
+        Starts the router as daemon, enforcing a config file name with
         full path.
         """
 
         try:
-            self.run_qdrouterd_as_daemon(os.getcwd() + "/test-router-2.conf",
-                                         pid_file_name=os.getcwd() + '/test.pid')
+            self.run_router_as_daemon(os.getcwd() + "/test-router-2.conf",
+                                      pid_file_name=os.getcwd() + '/test.pid')
         except OSError as ex:
             self.fail(ex)
 

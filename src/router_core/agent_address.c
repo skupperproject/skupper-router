@@ -82,7 +82,7 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
         break;
 
     case QDR_ADDRESS_TYPE:
-        qd_compose_insert_string(body, "org.apache.qpid.dispatch.router.address");
+        qd_compose_insert_string(body, "io.skupper.router.router.address");
         break;
 
     case QDR_ADDRESS_DISTRIBUTION: {

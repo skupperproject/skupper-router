@@ -29,7 +29,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container, AtLeastOnce
 from proton.utils import BlockingConnection
 
-from qpid_dispatch.management.client import Node
+from skupper_router.management.client import Node
 
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, TestTimeout, PollTimeout
 from system_test import AsyncTestReceiver
@@ -98,9 +98,9 @@ class TwoRouterTest(TestCase):
     def address(self):
         return self.routers[0].addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -116,7 +116,7 @@ class TwoRouterTest(TestCase):
         self.assertIsNone(test.error)
 
         local_node = Node.connect(self.routers[0].addresses[0], timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         # deliveriesTransit must most surely be greater than num_msgs
         pos = outs.attribute_names.index("deliveriesTransit")
@@ -294,7 +294,7 @@ class TwoRouterTest(TestCase):
         prevented from doing so.
         """
         query_command = 'QUERY --type=connection'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         identity = None
         passed = False
 
@@ -304,7 +304,7 @@ class TwoRouterTest(TestCase):
                 if identity:
                     update_command = 'UPDATE --type=connection adminStatus=deleted --id=' + identity
                     try:
-                        json.loads(self.run_qdmanage(update_command))
+                        json.loads(self.run_skmanage(update_command))
                     except Exception as e:
                         if "Forbidden" in str(e):
                             passed = True
@@ -324,7 +324,7 @@ class TwoRouterTest(TestCase):
         connection = BlockingConnection(self.address(),
                                         properties=CONNECTION_PROPERTIES_UNICODE_STRING)
         query_command = 'QUERY --type=connection'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         identity = None
         passed = False
 
@@ -334,17 +334,17 @@ class TwoRouterTest(TestCase):
             if output.get('properties'):
                 conn_properties = output['properties']
                 # Find the connection that has our properties - CONNECTION_PROPERTIES_UNICODE_STRING
-                # Delete that connection and run another qdmanage to see
+                # Delete that connection and run another skmanage to see
                 # if the connection is gone.
                 if conn_properties.get('int_property'):
                     identity = output.get("identity")
                     if identity:
                         update_command = 'UPDATE --type=connection adminStatus=deleted --id=' + identity
                         try:
-                            self.run_qdmanage(update_command)
+                            self.run_skmanage(update_command)
                             query_command = 'QUERY --type=connection'
                             outputs = json.loads(
-                                self.run_qdmanage(query_command))
+                                self.run_skmanage(query_command))
                             no_properties = True
                             for output in outputs:
                                 if output.get('properties'):
@@ -461,7 +461,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
             request = Message()
             request.address = "amqp:/_local/$management"
             request.properties = {
-                'type': 'org.apache.qpid.dispatch.connection',
+                'type': 'io.skupper.router.connection',
                 'operation': 'QUERY'}
             request.reply_to = self.mgmt_receiver.remote_source.address
             self.mgmt_sender.send(request)
@@ -470,7 +470,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
     def poll_timeout(self):
         request = Message()
         request.address = "amqp:/_local/$management"
-        request.properties = {'type': 'org.apache.qpid.dispatch.connection',
+        request.properties = {'type': 'io.skupper.router.connection',
                               'operation': 'QUERY'}
         request.reply_to = self.mgmt_receiver_2.remote_source.address
         self.mgmt_sender.send(request)
@@ -493,7 +493,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
                             request.address = "amqp:/_local/$management"
                             request.properties = {
                                 'identity': identity,
-                                'type': 'org.apache.qpid.dispatch.connection',
+                                'type': 'io.skupper.router.connection',
                                 'operation': 'UPDATE'
                             }
                             request.body = {
@@ -1478,7 +1478,7 @@ class CustomTimeout:
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address1, timeout=TIMEOUT)
 
-        res = local_node.query('org.apache.qpid.dispatch.router.address')
+        res = local_node.query('io.skupper.router.router.address')
         name = res.attribute_names.index('name')
         found = False
         for results in res.results:
@@ -1818,9 +1818,9 @@ class TwoRouterConnection(TestCase):
     def address(self):
         return self.routers[0].addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -1840,7 +1840,7 @@ class TwoRouterConnection(TestCase):
         return False
 
     def check_connections(self):
-        res = self.local_node.query(type='org.apache.qpid.dispatch.connection')
+        res = self.local_node.query(type='io.skupper.router.connection')
         results = res.results
 
         # If DISPATCH-1093 was not fixed, there would be an additional
@@ -1864,20 +1864,20 @@ class TwoRouterConnection(TestCase):
         self.local_node = Node.connect(self.routers[0].addresses[0],
                                        timeout=TIMEOUT)
 
-        res = self.local_node.query(type='org.apache.qpid.dispatch.connection')
+        res = self.local_node.query(type='io.skupper.router.connection')
         results = res.results
 
         self.assertEqual(1, len(results))
 
-        long_type = 'org.apache.qpid.dispatch.connector' ''
+        long_type = 'io.skupper.router.connector' ''
 
         create_command = 'CREATE --type=' + long_type + ' --name=foo' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_1)
 
-        self.run_qdmanage(create_command)
+        self.run_skmanage(create_command)
 
         create_command = 'CREATE --type=' + long_type + ' --name=bar' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_2)
 
-        self.run_qdmanage(create_command)
+        self.run_skmanage(create_command)
 
         self.schedule_num_connections_test()
 

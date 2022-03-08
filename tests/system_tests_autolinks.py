@@ -114,8 +114,8 @@ class NameCollisionTest(TestCase):
     def test_name_collision(self):
         args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "direction": "in"}
         # Add autoLink with the same name as the one already present.
-        al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
-        addr_long_type = 'org.apache.qpid.dispatch.router.config.address'
+        al_long_type = 'io.skupper.router.router.config.autoLink'
+        addr_long_type = 'io.skupper.router.router.config.address'
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
@@ -216,9 +216,9 @@ class AutoLinkRetryTest(TestCase):
         return self.routers[1].addresses[0]
 
     def check_auto_link(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
+        long_type = 'io.skupper.router.router.config.autoLink'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
 
         if output[0].get('operStatus') == "active":
             self.success = True
@@ -227,9 +227,9 @@ class AutoLinkRetryTest(TestCase):
 
         self.attempts += 1
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -254,9 +254,9 @@ class AutoLinkRetryTest(TestCase):
                 Timer(self.timer_delay, self.check_auto_link).start()
 
     def test_auto_link_reattch(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
+        long_type = 'io.skupper.router.router.config.autoLink'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
 
         # Since the distribution of the autoLinked address 'examples'
         # is set to unavailable, the link route will initially be in the
@@ -269,7 +269,7 @@ class AutoLinkRetryTest(TestCase):
         # re-attempt to establish the autoLink and once the  autoLink
         # is up, it should return to the 'active' state.
         delete_command = 'DELETE --type=address --name=unavailable-address'
-        self.run_qdmanage(delete_command, address=self.routers[0].addresses[0])
+        self.run_skmanage(delete_command, address=self.routers[0].addresses[0])
 
         self.schedule_auto_link_reconnect_test()
 
@@ -343,9 +343,9 @@ class AutolinkTest(TestCase):
         assert p.returncode == 0, "qdstat exit status %s, output:\n%s" % (p.returncode, out)
         return out
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', AutolinkTest.normal_address, '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', AutolinkTest.normal_address, '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -373,9 +373,9 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
-        long_type = 'org.apache.qpid.dispatch.router'
+        long_type = 'io.skupper.router.router'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
         self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 0)
         self.assertEqual(output[0]['deliveriesTransit'], 0)
@@ -746,7 +746,7 @@ class ManageAutolinksTest(MessagingHandler):
         if self.n_created < self.count:
             while self.n_created < self.count and self.agent.credit > 0:
                 props = {'operation': 'CREATE',
-                         'type': 'org.apache.qpid.dispatch.router.config.autoLink',
+                         'type': 'io.skupper.router.router.config.autoLink',
                          'name': 'AL.%d' % self.n_created}
                 body  = {'direction': 'out',
                          'containerId': 'container.new',
@@ -757,7 +757,7 @@ class ManageAutolinksTest(MessagingHandler):
         elif self.n_attached == self.count and self.n_deleted < self.count:
             while self.n_deleted < self.count and self.agent.credit > 0:
                 props = {'operation': 'DELETE',
-                         'type': 'org.apache.qpid.dispatch.router.config.autoLink',
+                         'type': 'io.skupper.router.router.config.autoLink',
                          'name': 'AL.%d' % self.n_deleted}
                 body  = {}
                 msg = Message(properties=props, body=body, reply_to=self.reply_to)

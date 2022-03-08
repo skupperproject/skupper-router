@@ -51,13 +51,13 @@ WORKDIR /
 COPY --from=builder /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /
 RUN tar zxpf qpid-proton-image.tar.gz && tar zxpf skupper-router-image.tar.gz && rm -f /qpid-proton-image.tar.gz /skupper-router-image.tar.gz
 
-WORKDIR /home/qdrouterd/etc
-WORKDIR /home/qdrouterd/bin
-COPY ./scripts/* /home/qdrouterd/bin/
+WORKDIR /home/skrouterd/etc
+WORKDIR /home/skrouterd/bin
+COPY ./scripts/* /home/skrouterd/bin/
 
 ARG version=latest
 ENV VERSION=${version}
-ENV QDROUTERD_HOME=/home/qdrouterd
+ENV QDROUTERD_HOME=/home/skrouterd
 
 EXPOSE 5672 55672 5671
-CMD ["/home/qdrouterd/bin/launch.sh"]
+CMD ["/home/skrouterd/bin/launch.sh"]

@@ -28,17 +28,17 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
-from qpid_dispatch.management.client import Node, Url
-from qpid_dispatch.management.error import ManagementError, BadRequestStatus, NotImplementedStatus, NotFoundStatus
-from qpid_dispatch_internal.management.qdrouter import QdSchema
-from qpid_dispatch_internal.compat import dictify
-from qpid_dispatch_internal.compat import BINARY
+from skupper_router.management.client import Node, Url
+from skupper_router.management.error import ManagementError, BadRequestStatus, NotImplementedStatus, NotFoundStatus
+from skupper_router_internal.management.qdrouter import QdSchema
+from skupper_router_internal.compat import dictify
+from skupper_router_internal.compat import BINARY
 
 import system_test
 from system_test import Qdrouterd, Process
 from system_test import unittest
 
-PREFIX = 'org.apache.qpid.dispatch.'
+PREFIX = 'io.skupper.router.'
 MANAGEMENT = PREFIX + 'management'
 CONFIGURATION = PREFIX + 'configurationEntity'
 OPERATIONAL = PREFIX + 'operationalEntity'
@@ -220,7 +220,7 @@ class ManagementTest(system_test.TestCase):
                           'outputFile': 'logrouter.log',
                           'includeSource': True,
                           'includeTimestamp': True,
-                          'type': 'org.apache.qpid.dispatch.log'})
+                          'type': 'io.skupper.router.log'})
 
         def check_log(log, error=True, debug=False):
             """Cause an error and check for expected error and debug logs"""
@@ -377,7 +377,7 @@ class ManagementTest(system_test.TestCase):
 
     def test_connection(self):
         """Verify there is at least one connection"""
-        response = self.node.query(type='org.apache.qpid.dispatch.connection')
+        response = self.node.query(type='io.skupper.router.connection')
         self.assertTrue(response.results)
 
     def test_router(self):
@@ -398,7 +398,7 @@ class ManagementTest(system_test.TestCase):
             name = attrs['id']
             self.assertEqual(attrs['identity'], 'router.node/%s' % name)
             self.assertEqual(attrs['name'], 'router.node/%s' % name)
-            self.assertEqual(attrs['type'], 'org.apache.qpid.dispatch.router.node')
+            self.assertEqual(attrs['type'], 'io.skupper.router.router.node')
             self.assertEqual(attrs['address'], 'amqp:/_topo/0/%s' % name)
             return name
 
@@ -415,7 +415,7 @@ class ManagementTest(system_test.TestCase):
             if e.type == MANAGEMENT:
                 self.assertEqual(e.identity, "self")
             else:
-                if e.type == 'org.apache.qpid.dispatch.connection':
+                if e.type == 'io.skupper.router.connection':
                     # This will make sure that the identity of the connection object is always numeric
                     self.assertRegex(str(e.identity), "[1-9]+", e)
                 else:

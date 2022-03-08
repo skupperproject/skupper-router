@@ -24,13 +24,13 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 
-import qpid_dispatch_site
-qpid_dispatch_site.populate_pythonpath()
+import skupper_router_site
+skupper_router_site.populate_pythonpath()
 
-from qpid_dispatch.management.client import Node
-from qpid_dispatch_internal.tools.command import (UsageError, _qdmanage_parser, check_args,
-                                                  main, opts_ssl_domain, opts_url, opts_sasl)
-from qpid_dispatch_internal.management.qdrouter import QdSchema
+from skupper_router.management.client import Node
+from skupper_router_internal.tools.command import (UsageError, _skmanage_parser, check_args,
+                                                   main, opts_ssl_domain, opts_url, opts_sasl)
+from skupper_router_internal.management.qdrouter import QdSchema
 
 INTEGER_TYPE = "integer"
 
@@ -54,11 +54,11 @@ def attr_split(attrstr, qd_schema, type):
 class QdManage():
     def __init__(self):
         self.qd_schema = QdSchema()
-        self.prefix = 'org.apache.qpid.dispatch.'
+        self.prefix = 'io.skupper.router.'
         self.operations = ['QUERY', 'CREATE', 'READ', 'UPDATE', 'DELETE',
                            'GET-TYPES', 'GET-OPERATIONS', 'GET-ATTRIBUTES', 'GET-ANNOTATIONS',
                            'GET-MGMT-NODES', 'GET-SCHEMA', 'GET-LOG']
-        self.op = _qdmanage_parser(self.operations)
+        self.op = _skmanage_parser(self.operations)
 
     def clean_opts(self):
         attr_type = self.opts.type

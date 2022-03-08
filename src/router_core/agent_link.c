@@ -126,7 +126,7 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
     }
 
     case QDR_LINK_TYPE:
-        qd_compose_insert_string(body, "org.apache.qpid.dispatch.router.link");
+        qd_compose_insert_string(body, "io.skupper.router.router.link");
         break;
 
     case QDR_LINK_LINK_NAME:

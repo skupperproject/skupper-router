@@ -178,12 +178,12 @@ class MulticastLinearTest(TestCase):
         # u'qd_buffer_t', u'batchesRebalancedToThreads': int32(736),
         # u'totalFreeToHeap': int32(0), u'totalAllocFromHeap': int32(2816),
         # u'localFreeListMax': int32(128), u'type':
-        # u'org.apache.qpid.dispatch.allocator', u'identity':
+        # u'io.skupper.router.allocator', u'identity':
         # u'allocator/qd_buffer_t', u'name': u'allocator/qd_buffer_t'}]
 
         d = dict()
         mgmt = router.management
-        atype = 'org.apache.qpid.dispatch.allocator'
+        atype = 'io.skupper.router.allocator'
         q = mgmt.query(type=atype).get_dicts()
         for name in stats:
             d[name] = next(a for a in q if a['typeName'] == name)
@@ -621,7 +621,7 @@ class MulticastBase(MessagingHandler, metaclass=abc.ABCMeta):
             clean = True
             for cfg in self.config:
                 mgmt = cfg['router'].management
-                atype = 'org.apache.qpid.dispatch.router.address'
+                atype = 'io.skupper.router.router.address'
                 addrs = mgmt.query(type=atype).get_dicts()
                 if any(self.topic in a['name'] for a in addrs):
                     clean = False

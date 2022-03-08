@@ -58,7 +58,7 @@ const char *qdr_config_auto_link_columns[] =
      "lastError",
      0};
 
-const char *CONFIG_AUTOLINK_TYPE = "org.apache.qpid.dispatch.router.config.autoLink";
+const char *CONFIG_AUTOLINK_TYPE = "io.skupper.router.router.config.autoLink";
 const char CONFIG_AUTO_LINK_PREFIX = 'A';
 
 static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, qd_composed_field_t *body, bool as_map)

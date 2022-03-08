@@ -1316,7 +1316,7 @@ class Http1ClientCloseTestsMixIn:
         expected = len(fake_request)
         bytes_in = 0
         while expected > bytes_in:
-            ri = server_mgmt.query(type="org.apache.qpid.dispatch.httpRequestInfo").get_entities()
+            ri = server_mgmt.query(type="io.skupper.router.httpRequestInfo").get_entities()
             bytes_in = ri[-1]['bytesIn'] if ri else 0  # most recent request at tail
             sleep(0.1)
 

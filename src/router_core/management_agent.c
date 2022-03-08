@@ -43,14 +43,14 @@ const char *OPERATION = "operation";
 const char *ATTRIBUTE_NAMES = "attributeNames";
 
 
-const unsigned char *config_address_entity_type    = (unsigned char*) "org.apache.qpid.dispatch.router.config.address";
-const unsigned char *auto_link_entity_type         = (unsigned char*) "org.apache.qpid.dispatch.router.config.autoLink";
-const unsigned char *address_entity_type           = (unsigned char*) "org.apache.qpid.dispatch.router.address";
-const unsigned char *link_entity_type              = (unsigned char*) "org.apache.qpid.dispatch.router.link";
-const unsigned char *router_entity_type            = (unsigned char*) "org.apache.qpid.dispatch.router";
-const unsigned char *connection_entity_type        = (unsigned char*) "org.apache.qpid.dispatch.connection";
-const unsigned char *tcp_connection_entity_type    = (unsigned char*) "org.apache.qpid.dispatch.tcpConnection";
-const unsigned char *http_request_info_entity_type = (unsigned char*) "org.apache.qpid.dispatch.httpRequestInfo";
+const unsigned char *config_address_entity_type    = (unsigned char*) "io.skupper.router.router.config.address";
+const unsigned char *auto_link_entity_type         = (unsigned char*) "io.skupper.router.router.config.autoLink";
+const unsigned char *address_entity_type           = (unsigned char*) "io.skupper.router.router.address";
+const unsigned char *link_entity_type              = (unsigned char*) "io.skupper.router.router.link";
+const unsigned char *router_entity_type            = (unsigned char*) "io.skupper.router.router";
+const unsigned char *connection_entity_type        = (unsigned char*) "io.skupper.router.connection";
+const unsigned char *tcp_connection_entity_type    = (unsigned char*) "io.skupper.router.tcpConnection";
+const unsigned char *http_request_info_entity_type = (unsigned char*) "io.skupper.router.httpRequestInfo";
 
 const char * const status_description = "statusDescription";
 const char * const correlation_id = "correlation-id";
@@ -403,8 +403,8 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
 
     //
     // Only certain entity types can be handled by this agent.
-    // 'entityType': 'org.apache.qpid.dispatch.router.address
-    // 'entityType': 'org.apache.qpid.dispatch.router.link'
+    // 'entityType': 'io.skupper.router.router.address
+    // 'entityType': 'io.skupper.router.router.link'
     // TODO - Add more entity types here. The above is not a complete list.
 
     qd_parsed_field_t *parsed_field = qd_parse_value_by_key(properties_fld, IDENTITY);

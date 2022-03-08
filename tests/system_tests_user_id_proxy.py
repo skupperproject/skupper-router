@@ -23,7 +23,7 @@ from system_test import unittest
 import proton
 from proton import SSLDomain, Delivery
 from proton.utils import BlockingConnection
-from qpid_dispatch_internal.compat import BINARY
+from skupper_router_internal.compat import BINARY
 
 
 class QdSSLUseridTest(TestCase):

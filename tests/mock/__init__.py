@@ -20,7 +20,7 @@
 """
 Mock implementation of the dispatch C extension module for use in unit tests.
 """
-from qpid_dispatch_internal import dispatch as real_dispatch
+from skupper_router_internal import dispatch as real_dispatch
 from . import dispatch as mock_dispatch
 
 # For tests we want to allow loading the proton module.

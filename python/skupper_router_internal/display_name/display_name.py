@@ -28,7 +28,7 @@ import json
 import traceback
 from typing import Dict
 
-from qpid_dispatch_internal import dispatch
+from skupper_router_internal import dispatch
 
 
 class SSLProfile:

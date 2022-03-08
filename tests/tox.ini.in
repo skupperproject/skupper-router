@@ -31,8 +31,8 @@ commands =
     ${CMAKE_SOURCE_DIR}/docs \
     ${CMAKE_SOURCE_DIR}/tests \
     ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_SOURCE_DIR}/tools/qdstat \
-    ${CMAKE_SOURCE_DIR}/tools/qdmanage
+    ${CMAKE_SOURCE_DIR}/tools/skstat \
+    ${CMAKE_SOURCE_DIR}/tools/skmanage
 
   # TODO(pylint#5648): crash while parsing system_test.py
   pylint --jobs 2 --rcfile ${CMAKE_BINARY_DIR}/tests/tox.ini \
@@ -41,15 +41,15 @@ commands =
     ${CMAKE_SOURCE_DIR}/docs \
     ${CMAKE_SOURCE_DIR}/tests \
     ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_SOURCE_DIR}/tools/qdstat \
-    ${CMAKE_SOURCE_DIR}/tools/qdmanage
+    ${CMAKE_SOURCE_DIR}/tools/skstat \
+    ${CMAKE_SOURCE_DIR}/tools/skmanage
 
   mypy --config-file ${CMAKE_BINARY_DIR}/tests/tox.ini \
     ${CMAKE_SOURCE_DIR}/python \
     ${CMAKE_SOURCE_DIR}/docs \
     ${CMAKE_SOURCE_DIR}/tests \
     ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_BINARY_DIR}/python/qpid_dispatch_site.py
+    ${CMAKE_BINARY_DIR}/python/skupper_router_site.py
 
 deps =
   hacking==4.1.0

@@ -1821,7 +1821,7 @@ const char *qdr_tcp_connection_columns[] =
      "lastOutSeconds",
      0};
 
-const char *TCP_CONNECTION_TYPE = "org.apache.qpid.dispatch.tcpConnection";
+const char *TCP_CONNECTION_TYPE = "io.skupper.router.tcpConnection";
 
 static void insert_column(qdr_core_t *core, qdr_tcp_connection_t *conn, int col, qd_composed_field_t *body)
 {

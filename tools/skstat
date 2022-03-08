@@ -23,17 +23,17 @@ import sys
 from datetime import datetime
 from time import ctime, strftime, gmtime
 
-import qpid_dispatch_site
-qpid_dispatch_site.populate_pythonpath()
+import skupper_router_site
+skupper_router_site.populate_pythonpath()
 
-from qpid_dispatch.management.client import Node
-from qpid_dispatch_internal.management.qdrouter import QdSchema
-from qpid_dispatch_internal.tools import Display, Header, Sorter, TimeLong, TimeShort, BodyFormat, PlainNum
-from qpid_dispatch_internal.tools import NumKMG
-from qpid_dispatch_internal.tools.command import (parse_args_qdstat, main,
-                                                  opts_ssl_domain, opts_sasl,
-                                                  opts_url)
-from qpid_dispatch_internal.compat import UNICODE
+from skupper_router.management.client import Node
+from skupper_router_internal.management.qdrouter import QdSchema
+from skupper_router_internal.tools import Display, Header, Sorter, TimeLong, TimeShort, BodyFormat, PlainNum
+from skupper_router_internal.tools import NumKMG
+from skupper_router_internal.tools.command import (parse_args_skstat, main,
+                                                   opts_ssl_domain, opts_sasl,
+                                                   opts_url)
+from skupper_router_internal.compat import UNICODE
 
 
 def get(obj, attr):
@@ -109,7 +109,7 @@ class BusManager:
         return text
 
     def displayRouterId(self):
-        objects = self.query('org.apache.qpid.dispatch.router')
+        objects = self.query('io.skupper.router.router')
         router = objects[0]
         if router:
             print(router.id)
@@ -132,7 +132,7 @@ class BusManager:
         heads.append(Header("tenant"))
 
         rows = []
-        objects = self.query('org.apache.qpid.dispatch.connection', limit=self.opts.limit)
+        objects = self.query('io.skupper.router.connection', limit=self.opts.limit)
 
         if not objects:
             if show_date_id:
@@ -196,7 +196,7 @@ class BusManager:
         heads.append(Header("tenant"))
 
         rows = []
-        objects = self.query('org.apache.qpid.dispatch.connection', limit=self.opts.limit)
+        objects = self.query('io.skupper.router.connection', limit=self.opts.limit)
 
         if show_date_id:
             self.display_datetime_router_id()
@@ -217,7 +217,7 @@ class BusManager:
             except:
                 pass
 
-        # This is so that, this qdstat can be used against older routers without Python keyerrors
+        # This is so that, this skstat can be used against older routers without Python keyerrors
         if has_last_dlv:
             heads.append(Header("last dlv"))
         if has_uptime:
@@ -307,7 +307,7 @@ class BusManager:
         heads.append(Header("value"))
         rows = []
 
-        objects = self.query('org.apache.qpid.dispatch.router')
+        objects = self.query('io.skupper.router.router')
 
         router = objects[0]
 
@@ -342,7 +342,7 @@ class BusManager:
 
         # Overall delivery related counts.
         # These overall statistics were introduced in 1.1 version.
-        # Wrap these in a try except so that newer versions of qdstat works with older version of router
+        # Wrap these in a try except so that newer versions of skstat works with older version of router
         try:
             rows.append(('Presettled Count', PlainNum(router.presettledDeliveries)))
             rows.append(('Dropped Presettled Count', PlainNum(router.droppedPresettledDeliveries)))
@@ -392,7 +392,7 @@ class BusManager:
                 'creditAvailable', 'zeroCreditSeconds',
                 'adminStatus', 'operStatus', 'linkName', 'priority', 'settleRate')
 
-        objects = self.query('org.apache.qpid.dispatch.router.link', cols, limit=self.opts.limit)
+        objects = self.query('io.skupper.router.router.link', cols, limit=self.opts.limit)
 
         has_dropped_presettled_count = False
         has_priority = False
@@ -498,7 +498,7 @@ class BusManager:
             heads.append(Header("neighbors"))
             heads.append(Header("valid-origins"))
         rows = []
-        objects = self.query('org.apache.qpid.dispatch.router.node', limit=self.opts.limit)
+        objects = self.query('io.skupper.router.router.node', limit=self.opts.limit)
 
         # Find the most recent topo change in this neighborhood.
         lastTopoChange = 0.0
@@ -553,7 +553,7 @@ class BusManager:
                 'deliveriesIngress', 'deliveriesEgress',
                 'deliveriesTransit', 'deliveriesToContainer', 'deliveriesFromContainer', 'name', 'priority')
 
-        objects = self.query('org.apache.qpid.dispatch.router.address', cols, limit=self.opts.limit)
+        objects = self.query('io.skupper.router.router.address', cols, limit=self.opts.limit)
 
         has_priority = False
 
@@ -614,7 +614,7 @@ class BusManager:
         rows = []
         cols = ('address', 'direction', 'externalAddress', 'linkRef', 'operStatus', 'lastError')
 
-        objects = self.query('org.apache.qpid.dispatch.router.config.autoLink', cols, limit=self.opts.limit)
+        objects = self.query('io.skupper.router.router.config.autoLink', cols, limit=self.opts.limit)
 
         if show_date_id:
             self.display_datetime_router_id()
@@ -655,7 +655,7 @@ class BusManager:
                 'totalAllocFromHeap', 'heldByThreads', 'batchesRebalancedToThreads',
                 'batchesRebalancedToGlobal')
 
-        objects = self.query('org.apache.qpid.dispatch.allocator', cols)
+        objects = self.query('io.skupper.router.allocator', cols)
 
         if show_date_id:
             self.display_datetime_router_id()
@@ -693,7 +693,7 @@ class BusManager:
         # this may not be present on all platforms
         rows = []
         try:
-            objects = self.query('org.apache.qpid.dispatch.router', ['memoryUsage'])
+            objects = self.query('io.skupper.router.router', ['memoryUsage'])
             mem = objects[0].memoryUsage
         except Exception:
             mem = None
@@ -719,7 +719,7 @@ class BusManager:
         heads.append(Header("value"))
         rows = []
 
-        objects = self.query('org.apache.qpid.dispatch.policy')
+        objects = self.query('io.skupper.router.policy')
 
         policy = objects[0]
 
@@ -762,7 +762,7 @@ class BusManager:
     def displayVhosts(self, show_date_id=True):
         disp = Display(prefix="  ", bodyFormat=self.bodyFormat)
 
-        vhosts = self.query('org.apache.qpid.dispatch.vhost')
+        vhosts = self.query('io.skupper.router.vhost')
 
         if len(vhosts) == 0:
             print("No Vhosts")
@@ -799,7 +799,7 @@ class BusManager:
     def displayVhostgroups(self, show_date_id=True):
         disp = Display(prefix="  ", bodyFormat=self.bodyFormat)
 
-        vhosts = self.query('org.apache.qpid.dispatch.vhost')
+        vhosts = self.query('io.skupper.router.vhost')
         schema = self.node.get_schema()
         vg_schema = schema['entityTypes']['vhostUserGroupSettings']['attributes']
 
@@ -878,7 +878,7 @@ class BusManager:
     def displayVhoststats(self, show_date_id=True):
         disp = Display(prefix="  ", bodyFormat=self.bodyFormat)
 
-        vstats = self.query('org.apache.qpid.dispatch.vhostStats')
+        vstats = self.query('io.skupper.router.vhostStats')
 
         if len(vstats) == 0:
             print("No Vhost Stats")
@@ -1003,7 +1003,7 @@ class BusManager:
 
 
 def run(argv):
-    args = parse_args_qdstat(BusManager)
+    args = parse_args_skstat(BusManager)
     bm = BusManager(args)
     try:
         bm.display()

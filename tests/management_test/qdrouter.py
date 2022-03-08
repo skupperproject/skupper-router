@@ -20,7 +20,7 @@
 # pylint: disable=wildcard-import,unused-wildcard-import,missing-docstring,too-many-public-methods
 
 import unittest
-from qpid_dispatch_internal.management.config import Config
+from skupper_router_internal.management.config import Config
 
 # Dash-separated configuration file
 conf_text = """
@@ -78,7 +78,7 @@ listener {
 
 
 class QdrouterTest(unittest.TestCase):
-    """Tests for qpid_dispatch_internal.config.qdrouter"""
+    """Tests for skupper_router_internal.config.qdrouter"""
 
     def do_test_qdrouter_parse(self, text):
         conf = Config()

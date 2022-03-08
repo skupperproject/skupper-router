@@ -20,17 +20,17 @@
 import json
 from typing import TYPE_CHECKING, Any
 
-from qpid_dispatch_internal.policy.policy_util import HostAddr, is_ipv6_enabled
-from qpid_dispatch_internal.policy.policy_util import HostStruct
-from qpid_dispatch_internal.policy.policy_util import PolicyError
-from qpid_dispatch_internal.policy.policy_util import PolicyAppConnectionMgr
-from qpid_dispatch_internal.policy.policy_local import PolicyLocal
+from skupper_router_internal.policy.policy_util import HostAddr, is_ipv6_enabled
+from skupper_router_internal.policy.policy_util import HostStruct
+from skupper_router_internal.policy.policy_util import PolicyError
+from skupper_router_internal.policy.policy_util import PolicyAppConnectionMgr
+from skupper_router_internal.policy.policy_local import PolicyLocal
 
 from system_test import unittest
 from system_test import TestCase, main_module
 
 if TYPE_CHECKING:
-    from qpid_dispatch_internal.policy.policy_local import AppStats
+    from skupper_router_internal.policy.policy_local import AppStats
 
 
 class PolicyHostAddrTest(TestCase):

@@ -17,35 +17,37 @@ specific language governing permissions and limitations
 under the License
 ////
 
-qdstat(8)
+skstat(8)
 =========
 :doctype: manpage
 
 NAME
 ----
-qdstat - show status and statistics for a running 'qdrouterd'
+skstat - show status and statistics for a running skupper-router
 
 SYNOPSIS
 --------
-*qdstat* ['OPTIONS']
+*skstat* ['OPTIONS']
 
 DESCRIPTION
 -----------
-An AMQP monitoring tool that shows status information about networks of Dispatch routers. It can display connections, network nodes and links, policy, and router stats such as memory use.
+An AMQP monitoring tool that shows status information about networks
+of skupper routers ('skrouterd'). It can display connections, network
+nodes and links, policy, and router stats such as memory use.
 
 OPTIONS
 -------
 
-include::{generated_man}/qdstat_help.adoc[]
+include::{generated_man}/skstat_help.adoc[]
 
 OUTPUT COLUMNS
 --------------
 
-qdstat -g
+skstat -g
 ~~~~~~~~~
 
 Version::
-The version of Dispatch Router.
+The version of Skupper Router.
 
 Mode::
 The router's operating mode:
@@ -127,7 +129,7 @@ The number of deliveries this router has received from AMQP route containers.
 Deliveries to Route Container::
 The number of deliveries this router has sent to AMQP route containers.
 
-qdstat -c
+skstat -c
 ~~~~~~~~~
 id::
 The connection's unique identifier.
@@ -166,7 +168,7 @@ uptime::
 Time this connection has been up. Displayed in the days:hours:minutes:seconds format.
 
 
-qdstat -l
+skstat -l
 ~~~~~~~~~
 type::
 The type of link:
@@ -269,7 +271,7 @@ The operational status of the link (with -v option only):
 name::
 The link name (only shown if the -v option is provided).
 
-qdstat -n
+skstat -n
 ~~~~~~~~~
 
 router-id::
@@ -290,7 +292,7 @@ The list of neighbor routers (the router's link-state). This field is available 
 valid-origins::
 The list of origin routers for which the best path to the listed router passes through this router (available only with the -v option).
 
-qdstat -e
+skstat -e
 ~~~~~~~~~
 
 id::
@@ -316,7 +318,7 @@ The authentication method and user ID of the connection's authenticated user.
 tenant::
 If the connection is to a listener using multi-tenancy, this column displays the tenant namespace for the connection.
 
-qdstat -a
+skstat -a
 ~~~~~~~~~
 
 class::
@@ -367,7 +369,7 @@ The number of deliveries for this address that were delivered to an in-process c
 from-proc::
 The number of deliveries for this address that were received from an in-process producer.
 
-qdstat --linkroutes
+skstat --linkroutes
 ~~~~~~~~~~~~~~~~~~~
 
 prefix::
@@ -384,7 +386,7 @@ The operational status of the link route:
   - 'active' - The route is actively routing attaches (it is ready for use).
   - 'inactive' - The route is inactive, because no local destination is connected.
 
-qdstat --autolinks
+skstat --autolinks
 ~~~~~~~~~~~~~~~~~~
 addr::
 The auto link's address.
@@ -412,7 +414,7 @@ The operational status of this auto link:
 lastErr::
 The description of the last attach failure that occurred on this auto link.
 
-qdstat --policy
+skstat --policy
 ~~~~~~~~~~~~~~~
 
 Maximum Concurrent Connections::
@@ -457,7 +459,7 @@ Count of all maxMessageSize policy denials summed across all vhosts.
 Total Denials::
 Count of all policy denials for any reason summed across all vhosts.
 
-qdstat --vhosts
+skstat --vhosts
 ~~~~~~~~~~~~~~~
 
 hostname::
@@ -487,7 +489,7 @@ connect to the vhost. Unknown users are assigned to the '$default' user group an
 groups::
 Count of usergroups defined for this vhost.
 
-qdstat --vhoststats
+skstat --vhoststats
 ~~~~~~~~~~~~~~~~~~~
 
 Vhost Stats table
@@ -527,7 +529,7 @@ Authenticated user name
 remote hosts::
 List of remote hosts from which this user has connected to this vhost.
 
-qdstat --vhostgroups
+skstat --vhostgroups
 ~~~~~~~~~~~~~~~~~~~~
 
 Table of settings for all vhosts and groups.
@@ -693,6 +695,6 @@ the same time.
 SEE ALSO
 --------
 
-'qdrouterd(8)', 'qdmanage(8)', 'qdrouterd.conf(5)'
+'skrouterd(8)', 'skmanage(8)', 'skrouterd.conf(5)'
 
-http://qpid.apache.org/components/dispatch-router
+https://github.com/skupperproject/skupper-router

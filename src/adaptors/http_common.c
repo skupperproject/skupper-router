@@ -316,7 +316,7 @@ const char *qdr_http_request_info_columns[] =
      "details",
      0};
 
-const char *HTTP_REQUEST_INFO_TYPE = "org.apache.qpid.dispatch.httpRequestInfo";
+const char *HTTP_REQUEST_INFO_TYPE = "io.skupper.router.httpRequestInfo";
 
 typedef struct {
     qdr_http_request_info_list_t records;
