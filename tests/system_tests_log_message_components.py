@@ -24,7 +24,7 @@ from proton import Message, symbol
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
-from qpid_dispatch_internal.compat import BINARY
+from skupper_router_internal.compat import BINARY
 
 from system_test import TestCase, Qdrouterd, Process, TIMEOUT
 from system_test import unittest
@@ -37,9 +37,9 @@ BIG_BODY = 'X' * 1000000
 
 
 class RouterMessageLogTestBase(TestCase):
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] +
+            ['skmanage'] +
             cmd.split(' ') +
             ['--bus',
              address or self.address(),
@@ -93,7 +93,7 @@ class RouterMessageLogTestAll(RouterMessageLogTestBase):
 
         everything_ok = False
 
-        logs = json.loads(self.run_qdmanage("get-log"))
+        logs = json.loads(self.run_skmanage("get-log"))
         message_logs = [log for log in logs if log[0] == 'MESSAGE']
         self.assertTrue(message_logs)
         test_message = [log for log in message_logs if "message-id=\"123455\"" in log[2]]
@@ -141,7 +141,7 @@ class RouterMessageLogTestNone(RouterMessageLogTestBase):
         self.assertTrue(test.message_received)
 
         everything_ok = True
-        logs = json.loads(self.run_qdmanage("get-log"))
+        logs = json.loads(self.run_skmanage("get-log"))
         for log in logs:
             if log[0] == 'MESSAGE':
                 everything_ok = False
@@ -175,7 +175,7 @@ class RouterMessageLogTestSome(RouterMessageLogTestBase):
         self.assertTrue(test.message_received)
 
         everything_ok = False
-        logs = json.loads(self.run_qdmanage("get-log"))
+        logs = json.loads(self.run_skmanage("get-log"))
         message_logs = [log for log in logs if log[0] == 'MESSAGE']
         self.assertTrue(message_logs)
         test_message = [log for log in message_logs if

@@ -172,8 +172,8 @@ class LogModuleProtocolTest(TestCase):
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 4)
 
-        # Turn off trace logging using qdmanage
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "info+"}, name="log/DEFAULT")
+        # Turn off trace logging using skmanage
+        qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/DEFAULT")
 
         # Turn on trace (not trace+) level logging for the PROTOCOL module. After doing
         # this we will create a sender and a receiver and make sure that the PROTOCOL module
@@ -184,7 +184,7 @@ class LogModuleProtocolTest(TestCase):
         # module would also spit out dispatch trace level messages from the SERVER module.
         # DISPATCH-1558 adds the new PROTOCOL module which moves all protocol traces into
         # that module.
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "trace+"}, name="log/PROTOCOL")
+        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/PROTOCOL")
 
         TEST_ADDR = "moduletest1"
         hello_world_1 = "Hello World_1!"
@@ -202,7 +202,7 @@ class LogModuleProtocolTest(TestCase):
 
         # Now turn off trace logging for the PROTOCOL module and make sure
         # that there is no more proton frame trace messages appearing in the log
-        qd_manager.update("org.apache.qpid.dispatch.log",
+        qd_manager.update("io.skupper.router.log",
                           {"enable": "info+"}, name="log/PROTOCOL")
 
         TEST_ADDR = "moduletest2"
@@ -271,7 +271,7 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
 
         # The router already has trace logging turned on for all connections.
         # Get the connection id of the inter-router connection
-        results = qd_manager.query("org.apache.qpid.dispatch.connection")
+        results = qd_manager.query("io.skupper.router.connection")
         conn_id = None
         for result in results:
             if result['role'] == 'inter-router':
@@ -279,7 +279,7 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
 
         # Turn off trace logging for the inter-router connection. This update command is run async by the router
         # so we need to sleep a bit before the operation is actually completed.
-        qd_manager.update("org.apache.qpid.dispatch.connection", {"enableProtocolTrace": "false"}, identity=conn_id)
+        qd_manager.update("io.skupper.router.connection", {"enableProtocolTrace": "false"}, identity=conn_id)
         time.sleep(1)
 
         num_transfers = self._get_transfer_frame_count(conn_id)
@@ -298,7 +298,7 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
         self.assertEqual(num_transfers_after_update, num_transfers)
 
         # Turn on trace logging for the inter-router connection
-        qd_manager.update("org.apache.qpid.dispatch.connection", {"enableProtocolTrace": "yes"}, identity=conn_id)
+        qd_manager.update("io.skupper.router.connection", {"enableProtocolTrace": "yes"}, identity=conn_id)
 
         # Create a receiver and make sure the MAU update is NOT seen on the inter-router connection log
         TEST_ADDR_2 = "EnableConnectionLevelProtocolTraceTest2"
@@ -338,7 +338,7 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
 
         try:
             # Turn on trace logging for connection with invalid or non-existent identity
-            outs = qd_manager.update("org.apache.qpid.dispatch.connection", {"enableProtocolTrace": "true"}, identity='G10000')
+            outs = qd_manager.update("io.skupper.router.connection", {"enableProtocolTrace": "true"}, identity='G10000')
         except Exception as e:
             if "BadRequestStatus" in str(e):
                 bad_request = True
@@ -349,7 +349,7 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         qd_manager = QdManager(self.address)
 
         # Turn off trace logging on all connections.
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "info+"},
+        qd_manager.update("io.skupper.router.log", {"enable": "info+"},
                           name="log/DEFAULT")
 
         TEST_ADDR_1 = "EnableConnectionLevelProtocolTraceTest1"
@@ -365,14 +365,14 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         container_2.container_id = CONTAINER_ID_2
         conn_2 = BlockingConnection(self.address, container=container_2)
 
-        results = qd_manager.query("org.apache.qpid.dispatch.connection")
+        results = qd_manager.query("io.skupper.router.connection")
         conn_id = None
         for result in results:
             if result['container'] == CONTAINER_ID_1:
                 conn_id = result['identity']
 
         # Turn on trace logging for connection with identity conn_id
-        qd_manager.update("org.apache.qpid.dispatch.connection", {"enableProtocolTrace": "true"}, identity=conn_id)
+        qd_manager.update("io.skupper.router.connection", {"enableProtocolTrace": "true"}, identity=conn_id)
 
         blocking_receiver_1 = conn_1.create_receiver(address=TEST_ADDR_1)
         blocking_sender_1 = conn_1.create_sender(address=TEST_ADDR_1, options=apply_options)
@@ -398,7 +398,7 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         self.assertTrue(num_attaches_2 == 0)
 
         # Now turn off the connection tracing on that connection
-        qd_manager.update("org.apache.qpid.dispatch.connection",
+        qd_manager.update("io.skupper.router.connection",
                           {"enableProtocolTrace": "off"},
                           identity=conn_id)
         blocking_receiver_1.close()
@@ -469,8 +469,8 @@ class LogLevelUpdateTest(TestCase):
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 4)
 
-        # STEP 2: Turn off trace logging using qdmanage
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "info+"}, name="log/DEFAULT")
+        # STEP 2: Turn off trace logging using skmanage
+        qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/DEFAULT")
 
         # Step 3: Now, router trace logging is turned off (has been set to info+)
         # Create the sender and receiver again on a different address and make
@@ -492,7 +492,7 @@ class LogLevelUpdateTest(TestCase):
 
         # STEP 4: Tuen trace logging back on again and make sure num_attaches = 4
         TEST_ADDR = "apachetest3"
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "trace+"}, name="log/DEFAULT")
+        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/DEFAULT")
         self.create_sender_receiver(TEST_ADDR, hello_world_3, blocking_connection)
 
         # STEP 3: Count the number of attaches for address TEST_ADDR, there should be 4
@@ -534,9 +534,9 @@ class LogLevelUpdateTest(TestCase):
         #         for the PROTOCOL module and make sure it works.
         qd_manager = QdManager(self.address)
         # Set log level to info+ on the DEFAULT module
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "info+"}, name="log/DEFAULT")
+        qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/DEFAULT")
         # Set log level to trace+ on the PROTOCOL module
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "trace+"}, name="log/PROTOCOL")
+        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/PROTOCOL")
         blocking_connection = BlockingConnection(self.address)
 
         self.create_sender_receiver(TEST_ADDR, hello_world_5,
@@ -553,7 +553,7 @@ class LogLevelUpdateTest(TestCase):
         self.assertTrue(num_attaches == 4)
 
         TEST_ADDR = "apachetest6"
-        qd_manager.update("org.apache.qpid.dispatch.log", {"enable": "info+"}, name="log/PROTOCOL")
+        qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/PROTOCOL")
 
         self.create_sender_receiver(TEST_ADDR, hello_world_6, blocking_connection)
 

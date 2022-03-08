@@ -59,7 +59,7 @@ void qd_python_start(void);
 void qd_python_stop(void);
 
 /**
- * Get the Python top level "qpid_dispatch_internal.dispatch" module.
+ * Get the Python top level "skupper_router_internal.dispatch" module.
  */
 PyObject *qd_python_module(void);
 

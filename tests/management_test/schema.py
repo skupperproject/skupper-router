@@ -22,7 +22,7 @@
 
 import unittest
 import json
-from qpid_dispatch_internal.management.schema import Schema, BooleanType, EnumType, AttributeType, ValidationError, EnumValue, EntityType
+from skupper_router_internal.management.schema import Schema, BooleanType, EnumType, AttributeType, ValidationError, EnumValue, EntityType
 
 
 SCHEMA_1 = {

@@ -42,7 +42,7 @@ const char *qdr_config_address_columns[] =
      "priority",
      0};
 
-const char *CONFIG_ADDRESS_TYPE = "org.apache.qpid.dispatch.router.config.address";
+const char *CONFIG_ADDRESS_TYPE = "io.skupper.router.router.config.address";
 const char CONFIG_ADDRESS_PREFIX = 'C';
 
 static void qdr_config_address_insert_column_CT(qdr_address_config_t *addr, int col, qd_composed_field_t *body, bool as_map)

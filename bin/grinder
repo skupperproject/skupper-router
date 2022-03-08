@@ -292,7 +292,7 @@ def parse_error(error_xml):
                     " to handle it" % kind)
 
 
-def parse_xml_file(filename, exe_name='qdrouterd'):
+def parse_xml_file(filename, exe_name='skrouterd'):
     """
     Parse out errors from a valgrind output xml file
     """

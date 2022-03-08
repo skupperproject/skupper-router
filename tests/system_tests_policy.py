@@ -33,7 +33,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container, ReceiverOption
 from proton.utils import BlockingConnection, LinkDetached, SyncRequestResponse
 
-from qpid_dispatch_internal.policy.policy_util import is_ipv6_enabled
+from skupper_router_internal.policy.policy_util import is_ipv6_enabled
 from test_broker import FakeBroker
 
 
@@ -56,9 +56,9 @@ class AbsoluteConnectionCountLimit(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -93,7 +93,7 @@ class AbsoluteConnectionCountLimit(TestCase):
         bc1.close()
         bc2.close()
 
-        policystats = json.loads(self.run_qdmanage('query --type=policy'))
+        policystats = json.loads(self.run_skmanage('query --type=policy'))
         self.assertTrue(policystats[0]["connectionsDenied"] == 1)
         self.assertTrue(policystats[0]["totalDenials"] == 1)
 
@@ -102,7 +102,7 @@ class LoadPolicyFromFolder(TestCase):
     """
     Verify that specifying a policy folder from the router conf file
     effects loading the policies in that folder.
-    This test relies on qdmanage utility.
+    This test relies on skmanage utility.
     """
     @classmethod
     def setUpClass(cls):
@@ -136,9 +136,9 @@ class LoadPolicyFromFolder(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -151,7 +151,7 @@ class LoadPolicyFromFolder(TestCase):
     def test_verify_policies_are_loaded(self):
         addr = self.address()
 
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 5)
 
     def new_policy(self):
@@ -209,12 +209,12 @@ class LoadPolicyFromFolder(TestCase):
 
     def test_verify_policy_add_update_delete(self):
         # verify current vhost count
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 5)
 
         # create
-        self.run_qdmanage('create --type=vhost --name=dispatch-494 --stdin', input=self.new_policy())
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('create --type=vhost --name=dispatch-494 --stdin', input=self.new_policy())
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 6)
         found = False
         for ruleset in rulesets:
@@ -227,8 +227,8 @@ class LoadPolicyFromFolder(TestCase):
         self.assertTrue(found)
 
         # update
-        self.run_qdmanage('update --type=vhost --name=dispatch-494 --stdin', input=self.updated_policy())
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('update --type=vhost --name=dispatch-494 --stdin', input=self.updated_policy())
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 6)
         found = False
         for ruleset in rulesets:
@@ -241,8 +241,8 @@ class LoadPolicyFromFolder(TestCase):
         self.assertTrue(found)
 
         # delete
-        self.run_qdmanage('delete --type=vhost --name=dispatch-494')
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('delete --type=vhost --name=dispatch-494')
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 5)
         absent = True
         for ruleset in rulesets:
@@ -253,12 +253,12 @@ class LoadPolicyFromFolder(TestCase):
 
     def test_repeated_create_delete(self):
         for i in range(0, 10):
-            rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+            rulesets = json.loads(self.run_skmanage('query --type=vhost'))
             self.assertEqual(len(rulesets), 5)
 
             # create
-            self.run_qdmanage('create --type=vhost --name=dispatch-494 --stdin', input=self.new_policy())
-            rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+            self.run_skmanage('create --type=vhost --name=dispatch-494 --stdin', input=self.new_policy())
+            rulesets = json.loads(self.run_skmanage('query --type=vhost'))
             self.assertEqual(len(rulesets), 6)
             found = False
             for ruleset in rulesets:
@@ -268,8 +268,8 @@ class LoadPolicyFromFolder(TestCase):
             self.assertTrue(found)
 
             # delete
-            self.run_qdmanage('delete --type=vhost --name=dispatch-494')
-            rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+            self.run_skmanage('delete --type=vhost --name=dispatch-494')
+            rulesets = json.loads(self.run_skmanage('query --type=vhost'))
             self.assertEqual(len(rulesets), 5)
             absent = True
             for ruleset in rulesets:
@@ -369,7 +369,7 @@ class PolicyVhostOverride(TestCase):
     Verify that specific vhost and global denial counts are propagated.
       This test conveniently forces the vhost denial statistics to be
       on a named vhost and we know where to find them.
-    This test relies on qdmanage utility.
+    This test relies on skmanage utility.
     """
     @classmethod
     def setUpClass(cls):
@@ -387,9 +387,9 @@ class PolicyVhostOverride(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -416,7 +416,7 @@ class PolicyVhostOverride(TestCase):
 
         br1.close()
 
-        vhoststats = json.loads(self.run_qdmanage('query --type=vhostStats'))
+        vhoststats = json.loads(self.run_skmanage('query --type=vhostStats'))
         foundStat = False
         for vhs in vhoststats:
             if vhs["hostname"] == "override.host.com":
@@ -426,7 +426,7 @@ class PolicyVhostOverride(TestCase):
                 break
         self.assertTrue(foundStat, msg="did not find virtual host id 'override.host.com' in stats")
 
-        policystats = json.loads(self.run_qdmanage('query --type=policy'))
+        policystats = json.loads(self.run_skmanage('query --type=policy'))
         self.assertTrue(policystats[0]["linksDenied"] == 1)
         self.assertTrue(policystats[0]["totalDenials"] == 1)
 
@@ -444,7 +444,7 @@ class PolicyVhostOverride(TestCase):
 
         bs1.close()
 
-        vhoststats = json.loads(self.run_qdmanage('query --type=vhostStats'))
+        vhoststats = json.loads(self.run_skmanage('query --type=vhostStats'))
         foundStat = False
         for vhs in vhoststats:
             if vhs["hostname"] == "override.host.com":
@@ -454,7 +454,7 @@ class PolicyVhostOverride(TestCase):
                 break
         self.assertTrue(foundStat, msg="did not find virtual host id 'override.host.com' in stats")
 
-        policystats = json.loads(self.run_qdmanage('query --type=policy'))
+        policystats = json.loads(self.run_skmanage('query --type=policy'))
         self.assertTrue(policystats[0]["linksDenied"] == 2)
         self.assertTrue(policystats[0]["totalDenials"] == 2)
 
@@ -471,7 +471,7 @@ class PolicyTerminusCapabilities(TestCase):
     """
     Verify that specifying a policy folder from the router conf file
     effects loading the policies in that folder.
-    This test relies on qdmanage utility.
+    This test relies on skmanage utility.
     """
     @classmethod
     def setUpClass(cls):
@@ -542,7 +542,7 @@ class VhostPolicyNameField(TestCase):
     """
     Verify that vhosts can be created getting the name from
     'id' or from 'hostname'.
-    This test relies on qdmanage utility.
+    This test relies on skmanage utility.
     """
     @classmethod
     def setUpClass(cls):
@@ -576,9 +576,9 @@ class VhostPolicyNameField(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -697,12 +697,12 @@ class VhostPolicyNameField(TestCase):
 
     def test_01_id_vs_hostname(self):
         # verify current vhost count
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 5)
 
         # create using 'id'
-        self.run_qdmanage('create --type=vhost --name=dispatch-918 --stdin', input=self.id_policy())
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('create --type=vhost --name=dispatch-918 --stdin', input=self.id_policy())
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 6)
         found = False
         for ruleset in rulesets:
@@ -713,8 +713,8 @@ class VhostPolicyNameField(TestCase):
         self.assertTrue(found)
 
         # update using 'hostname'
-        self.run_qdmanage('update --type=vhost --name=dispatch-918 --stdin', input=self.hostname_policy())
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('update --type=vhost --name=dispatch-918 --stdin', input=self.hostname_policy())
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 6)
         found = False
         for ruleset in rulesets:
@@ -726,15 +726,15 @@ class VhostPolicyNameField(TestCase):
 
         # update 'id' and 'hostname'
         try:
-            self.run_qdmanage('update --type=vhost --name=dispatch-918 --stdin',
+            self.run_skmanage('update --type=vhost --name=dispatch-918 --stdin',
                               input=self.both_policy())
             self.assertTrue(False)  # should not be able to update 'id'
         except Exception as e:
             pass
 
         # update using neither
-        self.run_qdmanage('update --type=vhost --name=dispatch-918 --stdin', input=self.neither_policy())
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        self.run_skmanage('update --type=vhost --name=dispatch-918 --stdin', input=self.neither_policy())
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 6)
         found = False
         for ruleset in rulesets:
@@ -777,9 +777,9 @@ class PolicyLinkNamePatternTest(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -930,16 +930,16 @@ class PolicyLinkNamePatternTest(TestCase):
         # update to replace source/target match patterns
         qdm_out = "<not written>"
         try:
-            qdm_out = self.run_qdmanage('update --type=vhost --name=vhost/$default --stdin', input=self.default_patterns())
+            qdm_out = self.run_skmanage('update --type=vhost --name=vhost/$default --stdin', input=self.default_patterns())
         except Exception as e:
-            self.assertTrue(False, msg=('Error running qdmanage %s' % str(e)))
+            self.assertTrue(False, msg=('Error running skmanage %s' % str(e)))
         self.assertNotIn("PolicyError", qdm_out)
 
         # attempt an create that should be rejected
         qdm_out = "<not written>"
         exception = False
         try:
-            qdm_out = self.run_qdmanage('create --type=vhost --name=DISPATCH-1993-2 --stdin', input=self.disallowed_source())
+            qdm_out = self.run_skmanage('create --type=vhost --name=DISPATCH-1993-2 --stdin', input=self.disallowed_source())
         except Exception as e:
             exception = True
             self.assertIn("InternalServerErrorStatus: PolicyError: Policy 'DISPATCH-1993-2' is invalid:", str(e))
@@ -949,7 +949,7 @@ class PolicyLinkNamePatternTest(TestCase):
         qdm_out = "<not written>"
         exception = False
         try:
-            qdm_out = self.run_qdmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_target())
+            qdm_out = self.run_skmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_target())
         except Exception as e:
             exception = True
             self.assertIn("InternalServerErrorStatus: PolicyError: Policy 'DISPATCH-1993-3' is invalid:", str(e))
@@ -959,7 +959,7 @@ class PolicyLinkNamePatternTest(TestCase):
         qdm_out = "<not written>"
         exception = False
         try:
-            qdm_out = self.run_qdmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_source_pattern1())
+            qdm_out = self.run_skmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_source_pattern1())
         except Exception as e:
             exception = True
             self.assertIn("InternalServerErrorStatus: PolicyError:", str(e))
@@ -970,7 +970,7 @@ class PolicyLinkNamePatternTest(TestCase):
         qdm_out = "<not written>"
         exception = False
         try:
-            qdm_out = self.run_qdmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_source_pattern2())
+            qdm_out = self.run_skmanage('create --type=vhost --name=DISPATCH-1993-3 --stdin', input=self.disallowed_source_pattern2())
         except Exception as e:
             exception = True
             self.assertIn("InternalServerErrorStatus: PolicyError:", str(e))
@@ -1003,9 +1003,9 @@ class PolicyHostamePatternTest(TestCase):
     def address(self):
         return self.router.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', re.sub(r'amqp://', 'amqp://u1:password@', self.address()), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -1042,15 +1042,15 @@ class PolicyHostamePatternTest(TestCase):
 """
 
     def test_hostname_pattern_00_hello(self):
-        rulesets = json.loads(self.run_qdmanage('query --type=vhost'))
+        rulesets = json.loads(self.run_skmanage('query --type=vhost'))
         self.assertEqual(len(rulesets), 1)
 
     def test_hostname_pattern_01_denied_add(self):
         qdm_out = "<not written>"
         try:
-            qdm_out = self.run_qdmanage('create --type=vhost --name=#.#.0.0 --stdin', input=self.disallowed_hostname())
+            qdm_out = self.run_skmanage('create --type=vhost --name=#.#.0.0 --stdin', input=self.disallowed_hostname())
         except Exception as e:
-            self.assertIn("pattern conflicts", str(e), msg=('Error running qdmanage %s' % str(e)))
+            self.assertIn("pattern conflicts", str(e), msg=('Error running skmanage %s' % str(e)))
         self.assertNotIn("222222", qdm_out)
 
 

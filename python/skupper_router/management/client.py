@@ -250,8 +250,8 @@ class Node:
 
         # There is a bug in proton (PROTON-1846) wherein we cannot ask for
         # too many rows. So, as a safety we are going to ask only for
-        # MAX_ALLOWED_COUNT_PER_REQUEST. Since this is used by both qdstat
-        # and qdmanage, we have determined that the optimal value for
+        # MAX_ALLOWED_COUNT_PER_REQUEST. Since this is used by both skstat
+        # and skmanage, we have determined that the optimal value for
         # MAX_ALLOWED_COUNT_PER_REQUEST is 500
         MAX_ALLOWED_COUNT_PER_REQUEST = 500
 

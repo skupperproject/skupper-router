@@ -94,7 +94,7 @@ const char *qdr_connection_columns[] =
      "enableProtocolTrace",
      0};
 
-const char *CONNECTION_TYPE = "org.apache.qpid.dispatch.connection";
+const char *CONNECTION_TYPE = "io.skupper.router.connection";
 
 static void qd_get_next_pn_data(pn_data_t **data, const char **d, int *d1)
 {
@@ -567,7 +567,7 @@ void qdra_connection_update_CT(qdr_core_t      *core,
         //
         // The only two fields that can be updated on a connection is the enableProtocolTrace flag and the admin state.
         // If both these fields are not there, this is a bad request
-        // For example, this qdmanage is a bad request - qdmanage update --type=connection identity=1
+        // For example, this skmanage is a bad request - skmanage update --type=connection identity=1
         //
         if (!trace_field && !admin_state) {
             qdra_connection_set_bad_request(query);

@@ -510,8 +510,8 @@ class TcpAdaptor(TestCase):
             for rtr in interior_rtrs:
                 # query each interior for addresses
                 p = Process(
-                    ['qdstat', '-b', str(cls.router_dict[rtr].addresses[0]), '-a'],
-                    name='qdstat-snap1', stdout=PIPE, expect=None,
+                    ['skstat', '-b', str(cls.router_dict[rtr].addresses[0]), '-a'],
+                    name='skstat-snap1', stdout=PIPE, expect=None,
                     universal_newlines=True)
                 out = p.communicate()[0]
                 # examine what this router can see; signal poll loop to continue or not
@@ -550,9 +550,9 @@ class TcpAdaptor(TestCase):
             cls.echo_server_NS_CONN_STALL.wait()
         super(TcpAdaptor, cls).tearDownClass()
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or str(self.router_dict['INTA'].addresses[0]),
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or str(self.router_dict['INTA'].addresses[0]),
                                              '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
@@ -952,11 +952,11 @@ class TcpAdaptor(TestCase):
 
     # connector/listener stats
     def test_80_stats(self):
-        tname = "test_80 check stats in qdmanage"
+        tname = "test_80 check stats in skmanage"
         self.logger.log(tname + " START")
         # Verify listener stats
         query_command = 'QUERY --type=tcpListener'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         for output in outputs:
             if output['name'].startswith("ES"):
                 # Check only echo server listeners
@@ -966,7 +966,7 @@ class TcpAdaptor(TestCase):
                 assert output["bytesIn"] == output["bytesOut"]
         # Verify connector stats
         query_command = 'QUERY --type=tcpConnector'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         for output in outputs:
             assert output['address'].startswith("ES")
             assert "connectionsOpened" in output
@@ -1174,7 +1174,7 @@ class TcpAdaptorManagementTest(TestCase):
         cls.e_router.wait_ready()
 
     def _query_links_by_addr(self, router_mgmt, owning_addr):
-        oid = 'org.apache.qpid.dispatch.router.link'
+        oid = 'io.skupper.router.router.link'
         attrs = ['owningAddr', 'linkDir']
 
         links = []
@@ -1190,8 +1190,8 @@ class TcpAdaptorManagementTest(TestCase):
         Create and delete TCP connectors and listeners. Ensure that the service
         address is properly removed on the interior router.
         """
-        LISTENER_TYPE = 'org.apache.qpid.dispatch.tcpListener'
-        CONNECTOR_TYPE = 'org.apache.qpid.dispatch.tcpConnector'
+        LISTENER_TYPE = 'io.skupper.router.tcpListener'
+        CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 
         mgmt = self.e_router.management
 

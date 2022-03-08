@@ -21,11 +21,11 @@ import argparse
 import sys
 from itertools import combinations
 
-from qpid_dispatch_internal.tools.command import (main,
-                                                  UsageError,
-                                                  parse_args_qdstat,
-                                                  _qdmanage_parser,
-                                                  _qdstat_parser)
+from skupper_router_internal.tools.command import (main,
+                                                   UsageError,
+                                                   parse_args_skstat,
+                                                   _skmanage_parser,
+                                                   _skstat_parser)
 
 from system_test import unittest
 
@@ -36,7 +36,7 @@ def mock_error(self, message):
 
 argparse.ArgumentParser.error = mock_error  # type: ignore[assignment]  # Cannot assign to a method
 
-# Since BusManager file is defined in tools/qdmanage.in -> tools/qdmanage
+# Since BusManager file is defined in tools/skmanage.in -> tools/skmanage
 # otherwise it could be just imported
 
 
@@ -60,15 +60,15 @@ class FakeBusManager:
 FBM = FakeBusManager
 
 
-class TestParseArgsQdstat(unittest.TestCase):
+class TestParseArgsSkstat(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.parser = _qdstat_parser(BusManager=FBM)
+        self.parser = _skstat_parser(BusManager=FBM)
 
-    def test_parse_args_qdstat_print_help(self):
+    def test_parse_args_skstat_print_help(self):
         self.parser.print_help()
 
-    def test_parse_args_qdstat_mutually_exclusive(self):
+    def test_parse_args_skstat_mutually_exclusive(self):
         options1 = ["-g", "-c",
                     "-l", "-n", "-e", "-a", "-m", "--autolinks", "--log",
                     "--all-entities"]
@@ -82,11 +82,11 @@ class TestParseArgsQdstat(unittest.TestCase):
         _call_pairs(options1)
         _call_pairs(options2)
 
-    def test_parse_args_qdstat_default(self):
-        args = parse_args_qdstat(FBM, argv=[])
+    def test_parse_args_skstat_default(self):
+        args = parse_args_skstat(FBM, argv=[])
         self.assertEqual(FBM.displayGeneral.__name__, args.show)
 
-    def test_parse_args_qdstat_method_show_matching(self):
+    def test_parse_args_skstat_method_show_matching(self):
         matching = [("-g", FBM.displayGeneral.__name__),
                     ("-c", FBM.displayConnections.__name__),
                     ("-l", FBM.displayRouterLinks.__name__),
@@ -102,7 +102,7 @@ class TestParseArgsQdstat(unittest.TestCase):
             args = self.parser.parse_args([option])
             self.assertEqual(expected, args.show)
 
-    def test_parse_args_qdstat_limit(self):
+    def test_parse_args_skstat_limit(self):
         args = self.parser.parse_args([])
         self.assertEqual(None, args.limit)
 
@@ -110,21 +110,21 @@ class TestParseArgsQdstat(unittest.TestCase):
         self.assertEqual(1, args.limit)
 
 
-class TestParseArgsQdmanage(unittest.TestCase):
+class TestParseArgsSkmanage(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.operations = ["HERE", "SOME", "OPERATIONS"]
-        self.parser = _qdmanage_parser(operations=self.operations)
+        self.parser = _skmanage_parser(operations=self.operations)
 
-    def test_parse_args_qdmanage_print_help(self):
+    def test_parse_args_skmanage_print_help(self):
         self.parser.print_help()
 
-    def test_parse_args_qdmanage_operation_no_args(self):
+    def test_parse_args_skmanage_operation_no_args(self):
         argv = "-r r1 QUERY --type some --name the_name -b 127.0.0.1:5672"
         opts, args = self.parser.parse_known_args(argv.split())
         self.assertEqual("QUERY", args[0])
 
-    def test_parse_args_qdmanage_operation_and_args(self):
+    def test_parse_args_skmanage_operation_and_args(self):
         argv = "-r r1 QUERY arg1=val1 --type some other=argument --name the_name -b 127.0.0.1:5672"
         opts, args = self.parser.parse_known_args(argv.split())
         self.assertEqual(["QUERY", "arg1=val1", "other=argument"], args)

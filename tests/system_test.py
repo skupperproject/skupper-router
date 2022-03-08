@@ -18,13 +18,13 @@
 #
 
 """System test library, provides tools for tests that start multiple processes,
-with special support for qdrouter processes.
+with special support for skupper-router processes.
 
 Features:
 - Create separate directories for each test.
 - Save logs, sub-process output, core files etc.
 - Automated clean-up after tests: kill sub-processes etc.
-- Tools to manipulate qdrouter configuration files.
+- Tools to manipulate router configuration files.
 - Sundry other tools.
 """
 
@@ -64,8 +64,8 @@ from proton import Delivery
 from proton.handlers import MessagingHandler
 from proton.reactor import AtLeastOnce, Container
 from proton.reactor import AtMostOnce
-from qpid_dispatch.management.client import Node
-from qpid_dispatch.management.error import NotFoundStatus
+from skupper_router.management.client import Node
+from skupper_router.management.error import NotFoundStatus
 
 # Optional modules
 MISSING_MODULES = []
@@ -107,7 +107,7 @@ DIR = os.path.dirname(__file__)
 def _check_requirements():
     """If requirements are missing, return a message, else return empty string."""
     missing = MISSING_MODULES
-    required_exes = ['qdrouterd']
+    required_exes = ['skrouterd']
     missing += ["No exectuable %s" % e for e in required_exes if not find_exe(e)]
 
     if missing:
@@ -488,7 +488,7 @@ class Qdrouterd(Process):
                          'includeSource': 'true', 'outputFile': self.logfile}))
         else:
             self.logfile = default_log[0][1].get('outputFile')
-        args = ['qdrouterd', '-c', config.write(name)] + cl_args
+        args = ['skrouterd', '-c', config.write(name)] + cl_args
         env_home = os.environ.get('QPID_DISPATCH_HOME')
         if pyinclude:
             args += ['-I', pyinclude]
@@ -645,7 +645,7 @@ class Qdrouterd(Process):
         Otherwise return None"""
         try:
             ret_val = False
-            response = self.management.query(type="org.apache.qpid.dispatch.connection")
+            response = self.management.query(type="io.skupper.router.connection")
             index_host = response.attribute_names.index('host')
             for result in response.results:
                 outs = '%s:%s' % (host, port)
@@ -668,7 +668,7 @@ class Qdrouterd(Process):
             # Need to rationalize addresses in management attributes.
             # endswith check is because of M/L/R prefixes
             addrs = self.management.query(
-                type='org.apache.qpid.dispatch.router.address',
+                type='io.skupper.router.router.address',
                 attribute_names=['name', 'subscriberCount', 'remoteCount']).get_entities()
 
             addrs = [a for a in addrs if a['name'].endswith(address)]
@@ -682,7 +682,7 @@ class Qdrouterd(Process):
         """
         Block until address has no subscribers
         """
-        a_type = 'org.apache.qpid.dispatch.router.address'
+        a_type = 'io.skupper.router.router.address'
 
         def check():
             addrs = self.management.query(a_type).get_dicts()
@@ -761,7 +761,7 @@ class Qdrouterd(Process):
             # actually ready for traffic. Investigate.
             # Meantime the following actually tests send-thru to the router.
             node = Node.connect(self.addresses[0], router_id, timeout=1)
-            return retry_exception(lambda: node.query('org.apache.qpid.dispatch.router'))
+            return retry_exception(lambda: node.query('io.skupper.router.router'))
         except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):
             # proton.ConnectionException: the router is not yet accepting connections
             # NotFoundStatus: the queried router is not yet connected
@@ -1221,7 +1221,7 @@ class AsyncTestSender(MessagingHandler):
 
 class QdManager:
     """
-    A means to invoke qdmanage during a testcase
+    A means to invoke skmanage during a testcase
     """
 
     def __init__(self, address: Optional[str] = None,
@@ -1246,7 +1246,7 @@ class QdManager:
                  timeout: Optional[float] = None) -> str:
         addr = address or self._address
         assert addr, "address missing"
-        with subprocess.Popen(['qdmanage'] + cmd.split(' ') + self.router
+        with subprocess.Popen(['skmanage'] + cmd.split(' ') + self.router
                               + ['--bus', addr, '--indent=-1', '--timeout',
                                  str(timeout or self._timeout)], stdin=PIPE,
                               stdout=PIPE, stderr=STDOUT,
@@ -1323,32 +1323,32 @@ class MgmtMsgProxy:
         return self._Response(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def query_router(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_connections(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.connection'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.connection'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_links(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router.link'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.link'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_addresses(self):
         ap = {'operation': 'QUERY',
-              'type': 'org.apache.qpid.dispatch.router.address'}
+              'type': 'io.skupper.router.router.address'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def create_connector(self, name, **kwargs):
         ap = {'operation': 'CREATE',
-              'type': 'org.apache.qpid.dispatch.connector',
+              'type': 'io.skupper.router.connector',
               'name': name}
         return Message(properties=ap, reply_to=self.reply_addr,
                        body=kwargs)
 
     def delete_connector(self, name):
         ap = {'operation': 'DELETE',
-              'type': 'org.apache.qpid.dispatch.connector',
+              'type': 'io.skupper.router.connector',
               'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
@@ -1385,7 +1385,7 @@ def get_link_info(name, address):
     Query the router at address for the status and statistics of the named link
     """
     qdm = QdManager(address=address)
-    rc = qdm.query('org.apache.qpid.dispatch.router.link')
+    rc = qdm.query('io.skupper.router.router.link')
     for item in rc:
         if item.get('name') == name:
             return item
@@ -1394,7 +1394,7 @@ def get_link_info(name, address):
 
 def has_mobile_dest_in_address_table(address, dest):
     qdm = QdManager(address=address)
-    rc = qdm.query('org.apache.qpid.dispatch.router.address')
+    rc = qdm.query('io.skupper.router.router.address')
     has_dest = False
     for item in rc:
         if dest in item.get("name"):
@@ -1410,7 +1410,7 @@ def get_inter_router_links(address):
     """
     inter_router_links = []
     qdm = QdManager(address=address)
-    rc = qdm.query('org.apache.qpid.dispatch.router.link')
+    rc = qdm.query('io.skupper.router.router.link')
     for item in rc:
         if item.get("linkType") == "inter-router":
             inter_router_links.append(item)

@@ -21,7 +21,7 @@ from proton import Message, Delivery
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
-from qpid_dispatch.management.client import Node
+from skupper_router.management.client import Node
 
 from system_test import TestCase, Qdrouterd, TIMEOUT, get_link_info, \
     get_inter_router_links, has_mobile_dest_in_address_table, PollTimeout, TestTimeout
@@ -73,7 +73,7 @@ class OneRouterModifiedTest(TestCase):
         address = self.router.addresses[0]
 
         local_node = Node.connect(address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_modified_index = outs.attribute_names.index('modifiedDeliveries')
         results = outs.results[0]
         num_modified_deliveries_pre_test = results[deliveries_modified_index]
@@ -82,7 +82,7 @@ class OneRouterModifiedTest(TestCase):
         test = ModifiedDeliveriesTest(address, num_messages, large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         results = outs.results[0]
 
         self.assertEqual(results[deliveries_modified_index] - num_modified_deliveries_pre_test, num_messages)
@@ -126,7 +126,7 @@ class OneRouterRejectedTest(TestCase):
         address = self.router.addresses[0]
 
         local_node = Node.connect(address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_rejected_index = outs.attribute_names.index('rejectedDeliveries')
         results = outs.results[0]
         deliveries_rejected_pre_test = results[deliveries_rejected_index]
@@ -135,7 +135,7 @@ class OneRouterRejectedTest(TestCase):
         test = RejectedDeliveriesTest(address, num_messages, large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         results = outs.results[0]
 
         self.assertEqual(results[deliveries_rejected_index] - deliveries_rejected_pre_test, num_messages)
@@ -178,7 +178,7 @@ class OneRouterReleasedDroppedPresettledTest(TestCase):
         address = self.router.addresses[0]
 
         local_node = Node.connect(address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         deliveries_dropped_presettled_index = outs.attribute_names.index('droppedPresettledDeliveries')
         deliveries_released_index = outs.attribute_names.index('releasedDeliveries')
@@ -192,7 +192,7 @@ class OneRouterReleasedDroppedPresettledTest(TestCase):
         test = ReleasedDroppedPresettledCountTest(address, num_messages, large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         results = outs.results[0]
 
@@ -252,7 +252,7 @@ class TwoRouterReleasedDroppedPresettledTest(TestCase):
         # Make sure the hello messages (which are presettled dont show up in the counts
 
         local_node = Node.connect(address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_dropped_presettled_index = outs.attribute_names.index('droppedPresettledDeliveries')
         deliveries_released_index = outs.attribute_names.index('releasedDeliveries')
         deliveries_presettled_index = outs.attribute_names.index('presettledDeliveries')
@@ -264,7 +264,7 @@ class TwoRouterReleasedDroppedPresettledTest(TestCase):
         test = ReleasedDroppedPresettledCountTest(address, num_messages, large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         results = outs.results[0]
 
         self.assertEqual(results[deliveries_dropped_presettled_index] - deliveries_dropped_presettled_pre_test, 10)
@@ -620,14 +620,14 @@ class TwoRouterIngressEgressTest(TestCase):
         # Gather the values for deliveries_ingress and deliveries_egress before running the test.
 
         local_node = Node.connect(in_router_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_ingress_index = outs.attribute_names.index('deliveriesIngress')
         results = outs.results[0]
 
         pre_deliveries_ingresss = results[deliveries_ingress_index]
 
         local_node = Node.connect(out_router_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_egress_index = outs.attribute_names.index('deliveriesEgress')
         deliveries_accepted_index = outs.attribute_names.index('acceptedDeliveries')
         results = outs.results[0]
@@ -643,13 +643,13 @@ class TwoRouterIngressEgressTest(TestCase):
 
         # Gather the values for deliveries_ingress and deliveries_egress after running the test.
         local_node = Node.connect(in_router_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         results = outs.results[0]
 
         post_deliveries_ingresss = results[deliveries_ingress_index]
 
         local_node = Node.connect(out_router_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         results = outs.results[0]
 
         post_deliveries_egress = results[deliveries_egress_index]
@@ -704,7 +704,7 @@ class OneRouterIngressEgressTest(TestCase):
         address = self.router.addresses[0]
 
         local_node = Node.connect(address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         deliveries_ingress_index = outs.attribute_names.index('deliveriesIngress')
         deliveries_egress_index = outs.attribute_names.index('deliveriesEgress')
@@ -716,7 +716,7 @@ class OneRouterIngressEgressTest(TestCase):
         test = IngressEgressOneRouterTest(address, num_messages, large_message=large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         results = outs.results[0]
 
@@ -776,7 +776,7 @@ class RouteContainerEgressCount(TestCase):
         route_container_addr = self.router.addresses[1]
         num_messages = 10
         local_node = Node.connect(regular_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_egress_route_container_index = outs.attribute_names.index('deliveriesEgressRouteContainer')
         results = outs.results[0]
 
@@ -785,7 +785,7 @@ class RouteContainerEgressCount(TestCase):
         test = RouteContainerEgressTest(route_container_addr, regular_addr, num_messages, large_message=large_message)
         test.run()
 
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         deliveries_egress_route_container_index = outs.attribute_names.index('deliveriesEgressRouteContainer')
 
         results = outs.results[0]
@@ -1143,7 +1143,7 @@ class RouteContainerIngressCount(TestCase):
         test.run()
 
         local_node = Node.connect(regular_addr, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
 
         deliveries_ingress_route_container_index = outs.attribute_names.index('deliveriesIngressRouteContainer')
 

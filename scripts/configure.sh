@@ -61,5 +61,5 @@ if [ -n "${QDROUTERD_AUTO_MESH_DISCOVERY:-}" ]; then
 fi
 
 if [ -n "${QDROUTERD_AUTO_CREATE_SASLDB_SOURCE:-}" ]; then
-    $HOME_DIR/bin/create_sasldb.sh ${QDROUTERD_AUTO_CREATE_SASLDB_PATH:-$HOME_DIR/etc/qdrouterd.sasldb} $QDROUTERD_AUTO_CREATE_SASLDB_SOURCE "${APPLICATION_NAME:-qdrouterd}"
+    $HOME_DIR/bin/create_sasldb.sh ${QDROUTERD_AUTO_CREATE_SASLDB_PATH:-$HOME_DIR/etc/skrouterd.sasldb} $QDROUTERD_AUTO_CREATE_SASLDB_SOURCE "${APPLICATION_NAME:-skrouterd}"
 fi

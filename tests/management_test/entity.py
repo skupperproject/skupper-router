@@ -18,7 +18,7 @@
 #
 
 import unittest
-from qpid_dispatch.management.entity import EntityBase, camelcase
+from skupper_router.management.entity import EntityBase, camelcase
 
 
 class EntityTest(unittest.TestCase):

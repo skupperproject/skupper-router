@@ -52,6 +52,6 @@ RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr && make install
 # Uncomment the following line if you would like to run all the dispatch unit tests and system tests. 
 # RUN ctest -VV
 
-# Start the dispatch router
-ENTRYPOINT ["qdrouterd"]
+# Start the skupper router
+ENTRYPOINT ["skrouterd"]
 #CMD ["/bin/bash"]

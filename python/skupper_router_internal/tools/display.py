@@ -18,7 +18,7 @@
 #
 
 from time import strftime, gmtime
-from qpid_dispatch_internal.compat import UNICODE
+from skupper_router_internal.compat import UNICODE
 
 
 def YN(val):

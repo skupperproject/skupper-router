@@ -24,7 +24,7 @@ import sys
 import argparse
 import os
 
-from qpid_dispatch_site import VERSION
+from skupper_router_site import VERSION
 from proton import SSLDomain, Url
 
 
@@ -70,13 +70,13 @@ def check_args(args, maxargs=0, minargs=0):
     return args + [None] * (maxargs - len(args))
 
 
-def parse_args_qdstat(BusManager, argv=None):
-    parser = _qdstat_parser(BusManager)
+def parse_args_skstat(BusManager, argv=None):
+    parser = _skstat_parser(BusManager)
     return parser.parse_args(args=argv)
 
 
-def parse_args_qdmanage(operations, argv=None):
-    parser = _qdmanage_parser(operations)
+def parse_args_skmanage(operations, argv=None):
+    parser = _skmanage_parser(operations)
     return parser.parse_known_args(args=argv)
 
 
@@ -124,7 +124,7 @@ def add_connection_options(parser):
                        "in production environments")
 
 
-def _qdstat_add_display_args(parser, BusManager):
+def _skstat_add_display_args(parser, BusManager):
     _group = parser.add_argument_group('Display', 'Choose what kind of \
                                                    information you want to be displayed')
     display = _group.add_mutually_exclusive_group(required=False)
@@ -174,9 +174,9 @@ def _qdstat_add_display_args(parser, BusManager):
     display.set_defaults(show=BusManager.displayGeneral.__name__)
 
 
-def _qdstat_parser(BusManager):
-    parser = _custom_optional_arguments_parser(prog="qdstat", parents=[common_parser])
-    _qdstat_add_display_args(parser, BusManager)
+def _skstat_parser(BusManager):
+    parser = _custom_optional_arguments_parser(prog="skstat", parents=[common_parser])
+    _skstat_add_display_args(parser, BusManager)
 
     _group = parser.add_argument_group('Target', 'Choose destination router to \
                                                   required, default the one you connect to.')
@@ -199,7 +199,7 @@ def _qdstat_parser(BusManager):
     return parser
 
 
-def _qdmanage_add_args(parser):
+def _skmanage_add_args(parser):
     parser.add_argument("-r", "--router",
                         metavar="ROUTER-ID", help="Router to be queried")
     # Edge routers are not part of the router network. Hence we need a separate option
@@ -217,12 +217,12 @@ def _qdmanage_add_args(parser):
     parser.add_argument('--properties', help='JSON map to use as properties for a non-standard operation call.')
 
 
-def _qdmanage_parser(operations):
+def _skmanage_parser(operations):
     description = "Standard operations: %s. Use GET-OPERATIONS to find additional operations." % (", ".join(operations))
-    parser = _custom_optional_arguments_parser(prog="qdmanage <operation>",
+    parser = _custom_optional_arguments_parser(prog="skmanage <operation>",
                                                parents=[common_parser],
                                                description=description)
-    _qdmanage_add_args(parser)
+    _skmanage_add_args(parser)
     add_connection_options(parser)
     return parser
 

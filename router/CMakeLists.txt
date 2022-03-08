@@ -18,7 +18,7 @@
 ##
 
 
-set(DEFAULT_CONFIG_PATH "${QPID_DISPATCH_CONFDIR}/qdrouterd.conf" CACHE STRING "Default config file path")
+set(DEFAULT_CONFIG_PATH "${QPID_DISPATCH_CONFDIR}/skrouterd.conf" CACHE STRING "Default config file path")
 set(DEFAULT_DISPATCH_PYTHON_DIR ${QPID_DISPATCH_PYTHON_DIR})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
@@ -32,7 +32,7 @@ set(router_SOURCES
     src/main.c
     )
 
-add_executable(qdrouterd ${router_SOURCES})
-target_link_libraries(qdrouterd qpid-dispatch)
+add_executable(skrouterd ${router_SOURCES})
+target_link_libraries(skrouterd skupper-router)
 
-install(TARGETS qdrouterd RUNTIME DESTINATION sbin)
+install(TARGETS skrouterd RUNTIME DESTINATION sbin)

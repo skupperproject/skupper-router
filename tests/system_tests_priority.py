@@ -22,7 +22,7 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
-from qpid_dispatch_internal.compat import UNICODE
+from skupper_router_internal.compat import UNICODE
 
 from system_test import TestCase, Qdrouterd, main_module, unittest
 
@@ -56,7 +56,7 @@ class ManagementMessageHelper:
     def make_router_link_query(self) :
         props = {'count':      '100',
                  'operation':  'QUERY',
-                 'entityType': 'org.apache.qpid.dispatch.router.link',
+                 'entityType': 'io.skupper.router.router.link',
                  'name':       'self',
                  'type':       'org.amqp.management'
                  }

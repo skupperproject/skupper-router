@@ -100,9 +100,9 @@ class FailoverTest(TestCase):
     def address(self):
         return self.routers[1].addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -112,15 +112,15 @@ class FailoverTest(TestCase):
             raise Exception("%s\n%s" % (e, out))
         return out
 
-    def run_qdstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None):
         p = self.popen(
-            ['qdstat', '--bus', str(address or self.router.addresses[0]), '--timeout', str(TIMEOUT)] + args,
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            ['skstat', '--bus', str(address or self.router.addresses[0]), '--timeout', str(TIMEOUT)] + args,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
         return out
@@ -129,14 +129,14 @@ class FailoverTest(TestCase):
         """
         This is the most simple and straightforward case. Router A connects to Router B. Router B sends
         failover information to Router A.
-        We make a qdmanage connector query to Router A which checks if Router A is storing the failover information
+        We make a skmanage connector query to Router A which checks if Router A is storing the failover information
         received from  Router B.The failover list must consist of the original connection info (from the connector)
         followed by the two items sent by the Router B (stored in cls.failover_list)
         The 'failoverUrls' is comma separated.
         """
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         expected = "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) + ", " + FailoverTest.failover_list
 
         self.assertEqual(expected, output[0]['failoverUrls'])
@@ -148,9 +148,9 @@ class FailoverTest(TestCase):
                 self.attempts += 1
 
     def check_C_connector(self):
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command, address=self.routers[1].addresses[0]))
+        output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         expected = FailoverTest.backup_url  + ", " + "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) \
             + ", " + "amqp://third-host:5671"
@@ -178,7 +178,7 @@ class FailoverTest(TestCase):
         """
 
         # First make sure there are no inter-router connections on router C
-        outs = self.run_qdstat(['--connections'], address=self.routers[2].addresses[1])
+        outs = self.run_skstat(['--connections'], address=self.routers[2].addresses[1])
 
         inter_router = 'inter-router' in outs
         self.assertFalse(inter_router)
@@ -203,9 +203,9 @@ class FailoverTest(TestCase):
 
     def check_B_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command, address=self.routers[1].addresses[0]))
+        output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router
         # will attempt to make connections in case the existing connection goes down.
@@ -256,9 +256,9 @@ class FailoverTest(TestCase):
 
     def check_A_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command, address=self.routers[1].addresses[0]))
+        output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router
         # will attempt to make connections in case the existing connection goes down.

@@ -30,7 +30,7 @@ from os import environ
 class BuildPy(build_py):
     """Extend standard build command, add generated modules from binary directory."""
 
-    MODULES = ['qpid_dispatch_site.py']
+    MODULES = ['skupper_router_site.py']
 
     def run(self):
         build_py.run(self)      # Run the standard build, copies source .py files into builddir
@@ -49,16 +49,16 @@ if destdir:
 setup(
     options=options,
 
-    name='qpid_dispatch',
-    description='Apache Qpid Dispatch tools and libraries.',
+    name='skupper_router',
+    description='Skupper Router tools and libraries.',
     package_dir={'' : '${CMAKE_SOURCE_DIR}/python'},
-    packages=['qpid_dispatch', 'qpid_dispatch.management'],
-    package_data={'qpid_dispatch.management': ['*.json']},
+    packages=['skupper_router', 'skupper_router.management'],
+    package_data={'skupper_router.management': ['*.json']},
     cmdclass={'build_py': BuildPy},
 
     version='${QPID_DISPATCH_VERSION}',
-    author='Apache Qpid',
-    author_email='dev@qpid.apache.org',
-    url='http://qpid.apache.org/',
+    author='Skupper Project',
+    author_email='skupper@googlegroups.com',
+    url='https://skupper.io/',
     license='Apache Software License'
 )

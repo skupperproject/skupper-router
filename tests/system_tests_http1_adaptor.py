@@ -48,9 +48,9 @@ class Http1AdaptorManagementTest(TestCase):
     def setUpClass(cls):
         super(Http1AdaptorManagementTest, cls).setUpClass()
 
-        cls.LISTENER_TYPE = 'org.apache.qpid.dispatch.httpListener'
-        cls.CONNECTOR_TYPE = 'org.apache.qpid.dispatch.httpConnector'
-        cls.CONNECTION_TYPE = 'org.apache.qpid.dispatch.connection'
+        cls.LISTENER_TYPE = 'io.skupper.router.httpListener'
+        cls.CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
+        cls.CONNECTION_TYPE = 'io.skupper.router.connection'
 
         cls.interior_edge_port = cls.tester.get_port()
         cls.interior_mgmt_port = cls.tester.get_port()
@@ -315,7 +315,7 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
         qd_manager = QdManager(address=self.INT_A.listener)
-        stats = qd_manager.query('org.apache.qpid.dispatch.httpRequestInfo')
+        stats = qd_manager.query('io.skupper.router.httpRequestInfo')
         self.assertEqual(len(stats), 2)
         for s in stats:
             self.assertEqual(s.get('requests'), 10)

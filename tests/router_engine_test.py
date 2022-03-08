@@ -26,9 +26,9 @@ sys.path.append(os.path.join(os.environ["SOURCE_DIR"], "python"))
 
 from system_test import unittest
 from system_test import main_module
-from qpid_dispatch.management.entity import EntityBase
-from qpid_dispatch_internal.router.data import LinkState, MessageHELLO
-from qpid_dispatch_internal.router.engine import HelloProtocol, PathEngine
+from skupper_router.management.entity import EntityBase
+from skupper_router_internal.router.data import LinkState, MessageHELLO
+from skupper_router_internal.router.engine import HelloProtocol, PathEngine
 
 
 class Adapter:

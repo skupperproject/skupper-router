@@ -25,10 +25,10 @@ set(GENERATED_SOURCES
 
 set(GENERATOR_DEPENDS
   ${CMAKE_CURRENT_SOURCE_DIR}/schema_c.py
-  ${CMAKE_SOURCE_DIR}/python/qpid_dispatch/management/qdrouter.json)
-file (GLOB GENERATOR_SRC ${CMAKE_SOURCE_DIR}/python/qpid_dispatch_internal/management/*.py)
+  ${CMAKE_SOURCE_DIR}/python/skupper_router/management/skrouter.json)
+file (GLOB GENERATOR_SRC ${CMAKE_SOURCE_DIR}/python/skupper_router_internal/management/*.py)
 set(GENERATOR_DEPENDS ${GENERATOR_DEPENDS} ${GENERATOR_SRC})
-file (GLOB GENERATOR_SRC ${CMAKE_SOURCE_DIR}/python/qpid_dispatch/management/*.py)
+file (GLOB GENERATOR_SRC ${CMAKE_SOURCE_DIR}/python/skupper_router/management/*.py)
 set(GENERATOR_DEPENDS ${GENERATOR_DEPENDS} ${GENERATOR_SRC})
 
 add_custom_command (
@@ -36,7 +36,7 @@ add_custom_command (
   COMMAND ${Python_EXECUTABLE} ${CMAKE_BINARY_DIR}/tests/run.py -s ${CMAKE_CURRENT_SOURCE_DIR}/schema_c.py
   DEPENDS ${GENERATOR_DEPENDS})
 
-# Build the qpid-dispatch library.
+# Build the skupper-router library.
 set(qpid_dispatch_SOURCES
   adaptors/reference_adaptor.c
   adaptors/adaptor_utils.c
@@ -165,9 +165,9 @@ if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)
 endif()
 
-add_library(qpid-dispatch OBJECT ${qpid_dispatch_SOURCES})
-target_include_directories(qpid-dispatch PRIVATE ${qpid_dispatch_INCLUDES})
-target_link_libraries(qpid-dispatch PRIVATE ${qpid_dispatch_LIBRARIES})
+add_library(skupper-router OBJECT ${qpid_dispatch_SOURCES})
+target_include_directories(skupper-router PRIVATE ${qpid_dispatch_INCLUDES})
+target_link_libraries(skupper-router PRIVATE ${qpid_dispatch_LIBRARIES})
 
 # check for various function availability
 check_symbol_exists(getrlimit sys/resource.h QD_HAVE_GETRLIMIT)

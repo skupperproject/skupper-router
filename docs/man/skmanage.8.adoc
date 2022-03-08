@@ -17,30 +17,30 @@ specific language governing permissions and limitations
 under the License
 ////
 
-qdmanage(8)
+skmanage(8)
 ==========
 :doctype: manpage
 
 NAME
 ----
-qdmanage - management client to control or query qdrouterd(8)
+skmanage - management client to control or query skupper-router
 
 SYNOPSIS
 --------
-*qdmanage* ['OPTIONS'] 'OPERATION' ['ARGUMENTS']
+*skmanage* ['OPTIONS'] 'OPERATION' ['ARGUMENTS']
 
 DESCRIPTION
 -----------
-An AMQP management client for use with the Dispatch router daemon 
-('qdrouterd'). Sends AMQP management operations requests and prints 
+An AMQP management client for use with the skupper-router daemon 
+('skrouterd'). Sends AMQP management operations requests and prints 
 the response in JSON format. This is a generic AMQP management tool 
 and can be used with any AMQP endpoint that follows the AMQP Management
-specification, not just with 'qdrouterd'.
+specification, not just with 'skrouterd'.
 
 OPTIONS
 -------
 
-include::{generated_man}/qdmanage_help.adoc[]
+include::{generated_man}/skmanage_help.adoc[]
 
 OPERATIONS
 ----------
@@ -99,9 +99,9 @@ OPERATIONS
 FILES
 -----
 
-{CMAKE_INSTALL_PREFIX}/{QD_DOC_INSTALL_DIR}/qdrouter.json::
-  Management schema for 'qdrouterd'.
-{CMAKE_INSTALL_PREFIX}/{QD_DOC_INSTALL_DIR}/qdrouter.json.readme.txt::
+{CMAKE_INSTALL_PREFIX}/{QD_DOC_INSTALL_DIR}/skrouter.json::
+  Management schema for 'skrouterd'.
+{CMAKE_INSTALL_PREFIX}/{QD_DOC_INSTALL_DIR}/skrouter.json.readme.txt::
   Explanation of the management schema.
 
 EXAMPLES
@@ -109,31 +109,31 @@ EXAMPLES
 
 .Show the logging configuration:
 --------------------------------------------------------------
-qdmanage query --type=log
+skmanage query --type=log
 --------------------------------------------------------------
 
 .Enable debug and higher log messages by default:
 --------------------------------------------------------------
-qdmanage update name=log/DEFAULT enable=debug+
+skmanage update name=log/DEFAULT enable=debug+
 --------------------------------------------------------------
 
 .Enable trace log messages only for the MESSAGE module, and direct MESSAGE logs to the file _test.log_:
 --------------------------------------------------------------
-qdmanage update name=log/MESSAGE enable=trace output=test.log
+skmanage update name=log/MESSAGE enable=trace output=test.log
 --------------------------------------------------------------
 
 .Set MESSAGE logging back to the default:
 ------------------------------------------------
-qdmanage update name=log/MESSAGE enable=default
+skmanage update name=log/MESSAGE enable=default
 ------------------------------------------------
 
 .Disable MESSAGE logging:
 ---------------------------------------------
-qdmanage update name=log/MESSAGE enable=none
+skmanage update name=log/MESSAGE enable=none
 ---------------------------------------------
 
 SEE ALSO
 ----------
-'qdrouterd(8)', 'qdstat(8)', 'qdrouterd.conf(5)'
+'skrouterd(8)', 'skstat(8)', 'skrouterd.conf(5)'
 
-http://qpid.apache.org/components/dispatch-router
+https://github.com/skupperproject/skupper-router

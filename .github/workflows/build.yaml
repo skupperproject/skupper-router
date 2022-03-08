@@ -526,7 +526,7 @@ jobs:
       - name: Create Build and Install directories
         run: mkdir -p "${DispatchBuildDir}" "{InstallPrefix}"
 
-      - name: qpid-dispatch cmake configure
+      - name: skupper-router cmake configure
         working-directory: ${{env.DispatchBuildDir}}
         run: >
           cmake "${{github.workspace}}" \

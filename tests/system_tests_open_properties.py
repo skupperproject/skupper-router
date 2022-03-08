@@ -197,7 +197,7 @@ class OpenPropertiesConfigTest(TestCase):
 
 class OpenPropertiesQdManageTest(TestCase):
     """
-    Tests creating openProperties via qdmanage tool
+    Tests creating openProperties via skmanage tool
     """
 
     def _valid_properties_check(self, client_class):
@@ -264,7 +264,7 @@ class OpenPropertiesQdManageTest(TestCase):
                                 'openProperties':
                                 op})
 
-            cmd = "CREATE --type=org.apache.qpid.dispatch.%s --stdin" % client_class.entity
+            cmd = "CREATE --type=io.skupper.router.%s --stdin" % client_class.entity
             output = QdManager()(cmd=cmd,
                                  address=router.addresses[0],
                                  input=input,
@@ -476,7 +476,7 @@ class OpenPropertiesEdgeRouterTest(TestCase):
         cls.RouterA.wait_ready()
         mgmt = cls.RouterA.management
         while True:
-            results = mgmt.query(type='org.apache.qpid.dispatch.connection',
+            results = mgmt.query(type='io.skupper.router.connection',
                                  attribute_names=['container']).get_dicts()
             if len([c for c in results if c['container'] == 'RouterB']):
                 break

@@ -17,10 +17,10 @@ specific language governing permissions and limitations
 under the License.
 -->
 
-# The qdrouter management schema
+# The skrouter management schema
 
-The schema `qdrouterd.json` is a JSON format file that defines
-entity types of the Qpid Dispatch Router management model.  The model is based
+The schema `skrouterd.json` is a JSON format file that defines
+entity types of the Skupper Router management model.  The model is based
 on the AMQP management specification.
 
 The schema is a JSON map with the following keys:
@@ -80,7 +80,7 @@ There is the following hierarchy among entity types:
 
   Operational information reflects the actual current state of the router.  For
   example, "how many addresses are presently active?" All the entities queried
-  by the `qdstat` tool extend `operationalEntity`.
+  by the `skstat` tool extend `operationalEntity`.
 
 The two types are often related. For example `listener` and `connector` extend
 `configurationEntity`, they express the intent to make or receive

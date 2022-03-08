@@ -66,7 +66,7 @@ typedef struct qd_policy__settings_s qd_policy_settings_t;
 
 ALLOC_DECLARE(qd_policy_settings_t);
 
-/** Configure the C policy entity from the settings in qdrouterd.conf["policy"]
+/** Configure the C policy entity from the settings in skrouterd.conf["policy"]
  * Called python-to-C during config processing.
  * @param[in] policy pointer to the policy
  * @param[in] entity pointer to the managed entity

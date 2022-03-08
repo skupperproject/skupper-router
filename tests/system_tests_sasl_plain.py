@@ -22,7 +22,7 @@ import os
 from subprocess import PIPE, Popen
 from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT
 from system_test import unittest, QdManager
-from qpid_dispatch.management.client import Node
+from skupper_router.management.client import Node
 from proton import SASL
 
 
@@ -85,7 +85,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
         super(RouterTestPlainSaslFailure, cls).router('X', [
             ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': x_listener_port,
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            # This unauthenticated listener is for qdstat to connect to it.
+            # This unauthenticated listener is for skstat to connect to it.
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
@@ -124,7 +124,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_sasl_fail(self):
         passed = False
-        long_type = 'org.apache.qpid.dispatch.connection'
+        long_type = 'io.skupper.router.connection'
         qd_manager = QdManager(address=self.routers[1].addresses[0])
         connections = qd_manager.query(long_type)
         for connection in connections:
@@ -180,7 +180,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
         super(RouterTestPlainSaslFailureUsingLiteral, cls).router('X', [
             ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': x_listener_port,
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            # This unauthenticated listener is for qdstat to connect to it.
+            # This unauthenticated listener is for skstat to connect to it.
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
@@ -219,7 +219,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_sasl_fail(self):
         passed = False
-        long_type = 'org.apache.qpid.dispatch.connection'
+        long_type = 'io.skupper.router.connection'
 
         qd_manager = QdManager(address=self.routers[1].addresses[0])
         connections = qd_manager.query(long_type)
@@ -269,7 +269,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         super(RouterTestPlainSasl, cls).router('X', [
             ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': x_listener_port,
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            # This unauthenticated listener is for qdstat to connect to it.
+            # This unauthenticated listener is for skstat to connect to it.
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
@@ -300,7 +300,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         """
         Check authentication of inter-router link is PLAIN.
 
-        This test makes executes a qdstat -c via an unauthenticated listener to
+        This test makes executes a skstat -c via an unauthenticated listener to
         QDR.X and makes sure that the output has an "inter-router" connection to
         QDR.Y whose authentication is PLAIN. This ensures that QDR.Y did not
         somehow use SASL ANONYMOUS to connect to QDR.X
@@ -308,44 +308,44 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         """
 
         p = self.popen(
-            ['qdstat', '-b', str(self.routers[0].addresses[1]), '-c'],
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            ['skstat', '-b', str(self.routers[0].addresses[1]), '-c'],
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
 
         self.assertIn("inter-router", out)
         self.assertIn("test@domain.com(PLAIN)", out)
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
-    def test_qdstat_connect_sasl(self):
+    def test_skstat_connect_sasl(self):
         """
-        Make qdstat use sasl plain authentication.
+        Make skstat use sasl plain authentication.
         """
 
         p = self.popen(
-            ['qdstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
+            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
              '--sasl-username=test@domain.com', '--sasl-password=password'],
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
 
         split_list = out.split()
 
         # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
-        # and the other connection that this qdstat client is making
+        # and the other connection that this skstat client is making
         self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
-    def test_qdstat_connect_sasl_password_file(self):
+    def test_skstat_connect_sasl_password_file(self):
         """
-        Make qdstat use sasl plain authentication with client password specified in a file.
+        Make skstat use sasl plain authentication with client password specified in a file.
         """
         password_file = os.getcwd() + '/sasl-client-password-file.txt'
         # Create a SASL configuration file.
@@ -355,19 +355,19 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         sasl_client_password_file.close()
 
         p = self.popen(
-            ['qdstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
+            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
              '--sasl-username=test@domain.com', '--sasl-password-file=' + password_file],
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
 
         split_list = out.split()
 
         # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
-        # and the other connection that this qdstat client is making
+        # and the other connection that this skstat client is making
         self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
@@ -447,12 +447,12 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
         cls.routers[1].wait_router_connected('QDR.X')
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
-    def test_aaa_qdstat_connect_sasl_over_ssl(self):
+    def test_aaa_skstat_connect_sasl_over_ssl(self):
         """
-        Make qdstat use sasl plain authentication over ssl.
+        Make skstat use sasl plain authentication over ssl.
         """
         p = self.popen(
-            ['qdstat', '-b', str(self.routers[0].addresses[2]), '-c',
+            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c',
              # The following are SASL args
              '--sasl-mechanisms=PLAIN',
              '--sasl-username=test@domain.com',
@@ -463,17 +463,17 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
              '--ssl-certificate=' + self.ssl_file('client-certificate.pem'),
              '--ssl-key=' + self.ssl_file('client-private-key.pem'),
              '--ssl-password=client-password'],
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=None,
             universal_newlines=True)
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "qdstat exit status %s, output:\n%s" % (p.returncode, out)
+            "skstat exit status %s, output:\n%s" % (p.returncode, out)
 
         split_list = out.split()
 
         # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
-        # and the other connection that this qdstat client is making
+        # and the other connection that this skstat client is making
         self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
@@ -482,7 +482,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
     def test_inter_router_plain_over_ssl_exists(self):
         """The setUpClass sets up two routers with SASL PLAIN enabled over TLS.
 
-        This test makes executes a query for type='org.apache.qpid.dispatch.connection' over
+        This test makes executes a query for type='io.skupper.router.connection' over
         an unauthenticated listener to
         QDR.X and makes sure that the output has an "inter-router" connection to
         QDR.Y whose authentication is PLAIN. This ensures that QDR.Y did not
@@ -491,7 +491,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
         """
         local_node = Node.connect(self.routers[0].addresses[1], timeout=TIMEOUT)
-        results = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        results = local_node.query(type='io.skupper.router.connection').get_entities()
 
         # sslProto should be TLSv1.x
         self.assertIn('TLSv1', results[0].sslProto)
@@ -539,7 +539,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
             ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': x_listener_port,
                           'sslProfile': 'server-ssl-profile',
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            # This unauthenticated listener is for qdstat to connect to it.
+            # This unauthenticated listener is for skstat to connect to it.
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('sslProfile', {'name': 'server-ssl-profile',
@@ -586,7 +586,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
         due to setting 'verifyHostname': 'yes'
         """
         local_node = Node.connect(self.routers[1].addresses[0], timeout=TIMEOUT)
-        results = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        results = local_node.query(type='io.skupper.router.connection').get_entities()
 
         # There should be only two connections.
         # There will be no inter-router connection
@@ -631,7 +631,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
             ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': x_listener_port,
                           'sslProfile': 'server-ssl-profile',
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            # This unauthenticated listener is for qdstat to connect to it.
+            # This unauthenticated listener is for skstat to connect to it.
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('sslProfile', {'name': 'server-ssl-profile',
@@ -701,7 +701,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         """
         local_node = Node.connect(self.routers[1].addresses[0], timeout=TIMEOUT)
 
-        results = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        results = local_node.query(type='io.skupper.router.connection').get_entities()
 
         self.common_asserts(results)
 
@@ -712,11 +712,11 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         """
         local_node = self.routers[1].management
 
-        connections = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        connections = local_node.query(type='io.skupper.router.connection').get_entities()
         self.assertIn("QDR.X", [c.container for c in connections])  # We can find the connection before
         local_node.delete(type='connector', name='connectorToX')
         local_node.delete(type='sslProfile', name='client-ssl-profile')
-        connections = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        connections = local_node.query(type='io.skupper.router.connection').get_entities()
         is_qdr_x = "QDR.X" in [c.container for c in connections]
         self.assertFalse(is_qdr_x)  # Should not be present now
 
@@ -739,7 +739,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'password'})
         self.routers[1].wait_connectors()
-        results = local_node.query(type='org.apache.qpid.dispatch.connection').get_entities()
+        results = local_node.query(type='io.skupper.router.connection').get_entities()
 
         self.common_asserts(results)
 

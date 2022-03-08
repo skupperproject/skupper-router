@@ -27,7 +27,7 @@ from proton.handlers import MessagingHandler
 from proton.utils import BlockingConnection, SyncRequestResponse
 from proton.reactor import Container, AtMostOnce, AtLeastOnce
 
-from qpid_dispatch.management.client import Node
+from skupper_router.management.client import Node
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR, Process, unittest, QdManager, TestTimeout
 
@@ -59,7 +59,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.connector",
+            out = mgmt.create("io.skupper.router.connector",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router"})
@@ -78,7 +78,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.listener",
+            out = mgmt.create("io.skupper.router.listener",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "edge",
@@ -98,7 +98,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.listener",
+            out = mgmt.create("io.skupper.router.listener",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router",
@@ -131,7 +131,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.connector",
+            out = mgmt.create("io.skupper.router.connector",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router"})
@@ -150,7 +150,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.listener",
+            out = mgmt.create("io.skupper.router.listener",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "edge",
@@ -170,7 +170,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("org.apache.qpid.dispatch.listener",
+            out = mgmt.create("io.skupper.router.listener",
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router",
@@ -340,9 +340,9 @@ class OneRouterTest(TestCase):
         cls.out_strip_addr  = cls.router.addresses[3]
         cls.in_strip_addr   = cls.router.addresses[4]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address, '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address, '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -424,7 +424,7 @@ class OneRouterTest(TestCase):
         self.assertIsNone(test.error)
 
     # Tests stripping of ingress and egress annotations.
-    # There is a property in qdrouter.json called stripAnnotations with possible values of ["in", "out", "both", "no"]
+    # There is a property in skrouter.json called stripAnnotations with possible values of ["in", "out", "both", "no"]
     # The default for stripAnnotations is "both" (which means strip annotations on both ingress and egress)
     # This test will test the stripAnnotations = no option - meaning no annotations must be stripped.
     # We will send in a custom annotation and make sure that we get back 3 annotations on the received message
@@ -593,7 +593,7 @@ class OneRouterTest(TestCase):
 
         node = Node.connect(self.router.addresses[0])
 
-        results = node.query(type='org.apache.qpid.dispatch.connection', attribute_names=['properties']).results
+        results = node.query(type='io.skupper.router.connection', attribute_names=['properties']).results
 
         found = False
         for result in results:
@@ -616,7 +616,7 @@ class OneRouterTest(TestCase):
 
         node = Node.connect(self.router.addresses[0])
 
-        results = node.query(type='org.apache.qpid.dispatch.connection', attribute_names=['properties']).results
+        results = node.query(type='io.skupper.router.connection', attribute_names=['properties']).results
 
         found = False
         for result in results:
@@ -646,7 +646,7 @@ class OneRouterTest(TestCase):
 
     def test_43_dropped_presettled_receiver_stops(self):
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        res = local_node.query('org.apache.qpid.dispatch.router')
+        res = local_node.query('io.skupper.router.router')
         presettled_dropped_count_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count = res.results[0][presettled_dropped_count_index]
         test = DroppedPresettledTest(self.address, 200, presettled_dropped_count)
@@ -664,7 +664,7 @@ class OneRouterTest(TestCase):
         connection = BlockingConnection(self.address,
                                         properties=CONNECTION_PROPERTIES_UNICODE_STRING)
         query_command = 'QUERY --type=connection'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         identity = None
         passed = False
 
@@ -672,14 +672,14 @@ class OneRouterTest(TestCase):
             if output.get('properties'):
                 conn_properties = output['properties']
                 # Find the connection that has our properties - CONNECTION_PROPERTIES_UNICODE_STRING
-                # Delete that connection and run another qdmanage to see
+                # Delete that connection and run another skmanage to see
                 # if the connection is gone.
                 if conn_properties.get('int_property'):
                     identity = output.get("identity")
                     if identity:
                         update_command = 'UPDATE --type=connection adminStatus=deleted --id=' + identity
                         try:
-                            outputs = json.loads(self.run_qdmanage(update_command))
+                            outputs = json.loads(self.run_skmanage(update_command))
                         except Exception as e:
                             if "Forbidden" in str(e):
                                 passed = True
@@ -772,15 +772,15 @@ class RouterProxy:
         return Entity(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def read_address(self, name):
-        ap = {'operation': 'READ', 'type': 'org.apache.qpid.dispatch.router.address', 'name': name}
+        ap = {'operation': 'READ', 'type': 'io.skupper.router.router.address', 'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_addresses(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router.address'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.address'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_links(self):
-        ap = {'operation': 'QUERY', 'type': 'org.apache.qpid.dispatch.router.link'}
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.link'}
         return Message(properties=ap, reply_to=self.reply_addr)
 
 
@@ -1205,13 +1205,13 @@ class ManagementGetOperationsTest(MessagingHandler):
     def on_message(self, event):
         if event.receiver == self.receiver:
             if event.message.properties['statusCode'] == 200:
-                if 'org.apache.qpid.dispatch.router' in event.message.body.keys():
+                if 'io.skupper.router.router' in event.message.body.keys():
                     if len(event.message.body.keys()) > 2:
                         self.bail(None)
                     else:
                         self.bail('size of keys in message body less than or equal 2')
                 else:
-                    self.bail('org.apache.qpid.dispatch.router is not in the keys')
+                    self.bail('io.skupper.router.router is not in the keys')
             else:
                 self.bail("The return status code is %s. It should be 200" % str(event.message.properties['statusCode']))
 
@@ -1295,7 +1295,7 @@ class CustomTimeout:
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address, timeout=TIMEOUT)
 
-        res = local_node.query('org.apache.qpid.dispatch.router.address')
+        res = local_node.query('io.skupper.router.router.address')
         name = res.attribute_names.index('name')
         found = False
         for results in res.results:
@@ -1454,7 +1454,7 @@ class SendPresettledAfterReceiverCloses(object):
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query('org.apache.qpid.dispatch.router.link')
+        res = local_node.query('io.skupper.router.router.link')
         owning_addr_index = res.attribute_names.index('owningAddr')
         has_address = False
         for out in res.results:
@@ -1486,7 +1486,7 @@ class PresettledCustomTimeout(object):
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query('org.apache.qpid.dispatch.router')
+        res = local_node.query('io.skupper.router.router')
         presettled_deliveries_dropped_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count =  res.results[0][presettled_deliveries_dropped_index]
 
@@ -2928,7 +2928,7 @@ class UptimeLastDlvChecker:
 
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address, timeout=TIMEOUT)
-        result = local_node.query('org.apache.qpid.dispatch.connection')
+        result = local_node.query('io.skupper.router.connection')
         container_id_index = result.attribute_names.index('container')
         uptime_seconds_index = result.attribute_names.index('uptimeSeconds')
         last_dlv_seconds_index = result.attribute_names.index('lastDlvSeconds')
@@ -3094,7 +3094,7 @@ class ReleasedVsModifiedTest(MessagingHandler):
 
     def get_modified_deliveries(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         pos = outs.attribute_names.index("modifiedDeliveries")
         results = outs.results[0]
         n_modified_deliveries = results[pos]
@@ -3218,7 +3218,7 @@ class BatchedSettlementTest(MessagingHandler):
     def check_if_done(self):
         if self.n_settled == self.count:
             local_node = Node.connect(self.address, timeout=TIMEOUT)
-            outs = local_node.query(type='org.apache.qpid.dispatch.router')
+            outs = local_node.query(type='io.skupper.router.router')
             pos = outs.attribute_names.index("acceptedDeliveries")
             results = outs.results[0]
             if results[pos] >= self.count:
@@ -3278,7 +3278,7 @@ class RejectDispositionTest(MessagingHandler):
 
     def count_rejects(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type='org.apache.qpid.dispatch.router')
+        outs = local_node.query(type='io.skupper.router.router')
         pos = outs.attribute_names.index("rejectedDeliveries")
         results = outs.results[0]
         return results[pos]
@@ -3522,7 +3522,7 @@ class Q2HoldoffDropTest(MessagingHandler):
         clean = False
         while not clean:
             clean = True
-            atype = 'org.apache.qpid.dispatch.router.address'
+            atype = 'io.skupper.router.router.address'
             addrs = self.router.management.query(type=atype).get_dicts()
             if any("dispatch-1330" in a['name'] for a in addrs):
                 clean = False

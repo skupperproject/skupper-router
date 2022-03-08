@@ -25,22 +25,22 @@ from time import sleep
 
 from proton.utils import BlockingConnection
 
-from qpid_dispatch_internal.compat import dictify
-from qpid_dispatch_internal.management.qdrouter import QdSchema
+from skupper_router_internal.compat import dictify
+from skupper_router_internal.management.qdrouter import QdSchema
 
 from system_test import unittest
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import QdManager
 
-DUMMY = "org.apache.qpid.dispatch.dummy"
+DUMMY = "io.skupper.router.dummy"
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
 TOTAL_ENTITIES = 29   # for tests that check the total # of entities
 
 
-class QdmanageTest(TestCase):
-    """Test qdmanage tool output"""
+class SkmanageTest(TestCase):
+    """Test skmanage tool output"""
 
     @staticmethod
     def ssl_file(name):
@@ -48,7 +48,7 @@ class QdmanageTest(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(QdmanageTest, cls).setUpClass()
+        super(SkmanageTest, cls).setUpClass()
         cls.inter_router_port = cls.tester.get_port()
         cls.secure_port = cls.tester.get_port()
         cls.secure_user_port = cls.tester.get_port()
@@ -89,9 +89,9 @@ class QdmanageTest(TestCase):
     def address(self):
         return self.router_1.addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -116,7 +116,7 @@ class QdmanageTest(TestCase):
     def test_crud(self):
 
         def check(cmd, expect, copy=None, **kwargs):
-            actual = json.loads(self.run_qdmanage(cmd))
+            actual = json.loads(self.run_skmanage(cmd))
             self.assert_entity_equal(expect, actual, copy=copy)
 
         expect = {'arg1': 'foo', 'type': DUMMY, 'name': 'mydummy2'}
@@ -134,17 +134,17 @@ class QdmanageTest(TestCase):
         # name outside attributes
         check('update name=mydummy arg1=xxx num1=888', expect)
         check('read --name=mydummy', expect)
-        self.run_qdmanage('delete --name mydummy')
-        self.run_qdmanage('read --name=mydummy', expect=Process.EXIT_FAIL)
+        self.run_skmanage('delete --name mydummy')
+        self.run_skmanage('read --name=mydummy', expect=Process.EXIT_FAIL)
 
     def test_stdin(self):
         """Test piping from stdin"""
         def check(cmd, expect, input, copy=None):
-            actual = json.loads(self.run_qdmanage(cmd + " --stdin", input=input))
+            actual = json.loads(self.run_skmanage(cmd + " --stdin", input=input))
             self.assert_entity_equal(expect, actual, copy=copy)
 
         def check_list(cmd, expect_list, input, copy=None):
-            actual = json.loads(self.run_qdmanage(cmd + " --stdin", input=input))
+            actual = json.loads(self.run_skmanage(cmd + " --stdin", input=input))
             self.assert_entities_equal(expect_list, actual, copy=copy)
 
         expect = {'type': DUMMY, 'name': 'mydummyx', 'arg1': 'foo'}
@@ -165,21 +165,21 @@ class QdmanageTest(TestCase):
     def test_query(self):
 
         def long_type(name):
-            return 'org.apache.qpid.dispatch.' + name
+            return 'io.skupper.router.' + name
 
         types = ['listener', 'log', 'router']
         long_types = [long_type(name) for name in types]
 
-        qall = json.loads(self.run_qdmanage('query'))
+        qall = json.loads(self.run_skmanage('query'))
         qall_types = {e['type'] for e in qall}
         for t in long_types:
             self.assertIn(t, qall_types)
 
-        qlistener = json.loads(self.run_qdmanage('query --type=listener'))
+        qlistener = json.loads(self.run_skmanage('query --type=listener'))
         self.assertEqual([long_type('listener')] * 4, [e['type'] for e in qlistener])
         self.assertEqual(self.router_1.ports[0], int(qlistener[0]['port']))
 
-        qattr = json.loads(self.run_qdmanage('query type name'))
+        qattr = json.loads(self.run_skmanage('query type name'))
         for e in qattr:
             self.assertEqual(2, len(e))
 
@@ -191,57 +191,57 @@ class QdmanageTest(TestCase):
 
     def test_get_schema(self):
         schema = dictify(QdSchema().dump())
-        actual = self.run_qdmanage("get-json-schema")
+        actual = self.run_skmanage("get-json-schema")
         self.assertEqual(schema, dictify(json.loads(actual)))
-        actual = self.run_qdmanage("get-schema")
+        actual = self.run_skmanage("get-schema")
         self.assertEqual(schema, dictify(json.loads(actual)))
 
     def test_get_annotations(self):
         """
-        The qdmanage GET-ANNOTATIONS call must return an empty dict since we don't support annotations at the moment.
+        The skmanage GET-ANNOTATIONS call must return an empty dict since we don't support annotations at the moment.
         """
-        out = json.loads(self.run_qdmanage("get-annotations"))
+        out = json.loads(self.run_skmanage("get-annotations"))
         self.assertTrue(len(out) == 0)
 
     def test_get_types(self):
-        out = json.loads(self.run_qdmanage("get-types"))
+        out = json.loads(self.run_skmanage("get-types"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
 
     def test_get_attributes(self):
-        out = json.loads(self.run_qdmanage("get-attributes"))
+        out = json.loads(self.run_skmanage("get-attributes"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
 
     def test_get_operations(self):
-        out = json.loads(self.run_qdmanage("get-operations"))
+        out = json.loads(self.run_skmanage("get-operations"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
-        self.assertEqual(out['org.apache.qpid.dispatch.sslProfile'], ['CREATE', 'DELETE', 'READ'])
+        self.assertEqual(out['io.skupper.router.sslProfile'], ['CREATE', 'DELETE', 'READ'])
 
     def test_get_types_with_ssl_profile_type(self):
-        out = json.loads(self.run_qdmanage("get-types --type=org.apache.qpid.dispatch.sslProfile"))
-        self.assertEqual(out['org.apache.qpid.dispatch.sslProfile'], ['org.apache.qpid.dispatch.configurationEntity', 'org.apache.qpid.dispatch.entity'])
+        out = json.loads(self.run_skmanage("get-types --type=io.skupper.router.sslProfile"))
+        self.assertEqual(out['io.skupper.router.sslProfile'], ['io.skupper.router.configurationEntity', 'io.skupper.router.entity'])
 
     def test_get_ssl_profile_type_attributes(self):
-        out = json.loads(self.run_qdmanage('get-attributes --type=org.apache.qpid.dispatch.sslProfile'))
+        out = json.loads(self.run_skmanage('get-attributes --type=io.skupper.router.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 11)
+        self.assertEqual(len(out['io.skupper.router.sslProfile']), 11)
 
     def test_get_ssl_profile_attributes(self):
-        out = json.loads(self.run_qdmanage('get-attributes org.apache.qpid.dispatch.sslProfile'))
+        out = json.loads(self.run_skmanage('get-attributes io.skupper.router.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 11)
+        self.assertEqual(len(out['io.skupper.router.sslProfile']), 11)
 
     def test_get_ssl_profile_type_operations(self):
-        out = json.loads(self.run_qdmanage('get-operations --type=org.apache.qpid.dispatch.sslProfile'))
+        out = json.loads(self.run_skmanage('get-operations --type=io.skupper.router.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 3)
+        self.assertEqual(len(out['io.skupper.router.sslProfile']), 3)
 
     def test_get_ssl_profile_operations(self):
-        out = json.loads(self.run_qdmanage('get-operations org.apache.qpid.dispatch.sslProfile'))
+        out = json.loads(self.run_skmanage('get-operations io.skupper.router.sslProfile'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['org.apache.qpid.dispatch.sslProfile']), 3)
+        self.assertEqual(len(out['io.skupper.router.sslProfile']), 3)
 
     def test_get_log(self):
-        logs = json.loads(self.run_qdmanage("get-log limit=20"))
+        logs = json.loads(self.run_skmanage("get-log limit=20"))
         found = False
         for log in logs:
             if 'get-log' in log[2] and ['AGENT', 'debug'] == log[0:2]:
@@ -250,7 +250,7 @@ class QdmanageTest(TestCase):
 
     def test_get_logstats(self):
         query_command = 'QUERY --type=logStats'
-        logs = json.loads(self.run_qdmanage(query_command))
+        logs = json.loads(self.run_skmanage(query_command))
         # Each value returned by the above query should be
         # a log, and each log should contain an entry for each
         # log level.
@@ -283,27 +283,27 @@ class QdmanageTest(TestCase):
         exception = False
         try:
             # Try to not set 'output'
-            json.loads(self.run_qdmanage("UPDATE --type org.apache.qpid.dispatch.log --name log/DEFAULT outputFile="))
+            json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT outputFile="))
         except Exception as e:
             exception = True
             self.assertTrue("InternalServerErrorStatus: CError: Configuration: Failed to open log file ''" in str(e))
         self.assertTrue(exception)
 
         # Set a valid 'output'
-        output = json.loads(self.run_qdmanage("UPDATE --type org.apache.qpid.dispatch.log --name log/DEFAULT "
+        output = json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT "
                                               "enable=trace+ outputFile=A.log"))
         self.assertEqual("A.log", output['outputFile'])
         self.assertEqual("trace+", output['enable'])
 
     def create(self, type, name, port):
         create_command = 'CREATE --type=' + type + ' --name=' + name + ' host=0.0.0.0 port=' + port
-        connector = json.loads(self.run_qdmanage(create_command))
+        connector = json.loads(self.run_skmanage(create_command))
         return connector
 
     def test_check_address_name(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.address'
+        long_type = 'io.skupper.router.router.config.address'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 2)
         self.assertEqual(output[0]['name'], "test-address")
         self.assertEqual(output[0]['distribution'], "multicast")
@@ -315,45 +315,45 @@ class QdmanageTest(TestCase):
         self.assertNotIn('prefix', output[1])
 
     def test_create_address(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.address'
+        long_type = 'io.skupper.router.router.config.address'
         create_command = 'CREATE --type=' + long_type + ' pattern="a.b.#"'
-        output = json.loads(self.run_qdmanage(create_command))
+        output = json.loads(self.run_skmanage(create_command))
         self.assertEqual(output['pattern'], '"a.b.#"')
 
     def test_check_auto_link_name(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
+        long_type = 'io.skupper.router.router.config.autoLink'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['name'], "test-auto-link")
         self.assertEqual(output[0]['direction'], "out")
         self.assertEqual(output[0]['addr'], "mnop")
 
     def test_specify_container_id_connection_auto_link(self):
-        long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
+        long_type = 'io.skupper.router.router.config.autoLink'
         create_command = 'CREATE --type=' + long_type + ' address=abc containerId=id1 connection=conn1 direction=out'
-        output = self.run_qdmanage(create_command, expect=Process.EXIT_FAIL)
+        output = self.run_skmanage(create_command, expect=Process.EXIT_FAIL)
         self.assertIn("Both connection and containerId cannot be specified", output)
 
     def test_create_delete_connector(self):
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         name = output[0]['name']
 
         # Delete an existing connector
         delete_command = 'DELETE --type=' + long_type + ' --name=' + name
-        self.run_qdmanage(delete_command)
-        output = json.loads(self.run_qdmanage(query_command))
+        self.run_skmanage(delete_command)
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output, [])
 
         # Re-create the connector and then try wait_connectors
-        self.create(long_type, name, str(QdmanageTest.inter_router_port))
+        self.create(long_type, name, str(SkmanageTest.inter_router_port))
 
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         created = False
         for output in outputs:
-            conn_name = 'connector/127.0.0.1:%s' % QdmanageTest.inter_router_port
-            conn_name_1 = 'connector/0.0.0.0:%s' % QdmanageTest.inter_router_port
+            conn_name = 'connector/127.0.0.1:%s' % SkmanageTest.inter_router_port
+            conn_name_1 = 'connector/0.0.0.0:%s' % SkmanageTest.inter_router_port
             if conn_name == output['name'] or conn_name_1 == output['name']:
                 created = True
                 break
@@ -364,19 +364,19 @@ class QdmanageTest(TestCase):
         port = self.get_port()
         # dont provide role and make sure that role is defaulted to 'normal'
         command = "CREATE --type=connector --name=eaconn1 port=" + str(port) + " host=0.0.0.0"
-        output = json.loads(self.run_qdmanage(command))
+        output = json.loads(self.run_skmanage(command))
         self.assertEqual("normal", output['role'])
         # provide the same connector name (eaconn1), expect duplicate value failure
-        self.assertRaises(Exception, self.run_qdmanage,
+        self.assertRaises(Exception, self.run_skmanage,
                           "CREATE --type=connector --name=eaconn1 port=12345 host=0.0.0.0")
         port = self.get_port()
         # provide role as 'normal' and make sure that it is preserved
         command = "CREATE --type=connector --name=eaconn2 port=" + str(port) + " host=0.0.0.0 role=normal"
-        output = json.loads(self.run_qdmanage(command))
+        output = json.loads(self.run_skmanage(command))
         self.assertEqual("normal", output['role'])
 
     def test_zzz_create_delete_listener(self):
-        long_type = 'org.apache.qpid.dispatch.listener'
+        long_type = 'io.skupper.router.listener'
         name = 'ealistener'
 
         listener_port = self.get_port()
@@ -388,12 +388,12 @@ class QdmanageTest(TestCase):
         exception_occurred = False
 
         delete_command = 'DELETE --type=' + long_type + ' --name=' + name
-        self.run_qdmanage(delete_command)
+        self.run_skmanage(delete_command)
 
         exception_occurred = False
         try:
             # Try deleting an already deleted connector, this should raise an exception
-            self.run_qdmanage(delete_command)
+            self.run_skmanage(delete_command)
         except Exception as e:
             exception_occurred = True
             self.assertTrue(("NotFoundStatus: No entity with name=%s" % name) in str(e))
@@ -405,21 +405,21 @@ class QdmanageTest(TestCase):
         ssl_create_command = 'CREATE --type=sslProfile certFile=' + self.ssl_file('server-certificate.pem') + \
             ' privateKeyFile=' + self.ssl_file('server-private-key.pem') + ' password=server-password' + \
             ' name=' + ssl_profile_name + ' caCertFile=' + self.ssl_file('ca-certificate.pem')
-        output = json.loads(self.run_qdmanage(ssl_create_command))
+        output = json.loads(self.run_skmanage(ssl_create_command))
         self.assertEqual(output['name'], ssl_profile_name)
-        self.run_qdmanage('DELETE --type=sslProfile --name=' +
+        self.run_skmanage('DELETE --type=sslProfile --name=' +
                           ssl_profile_name)
 
     def test_delete_connection(self):
         """
-        This test creates a blocking connection and tries to delete that connection using qdmanage DELETE operation.
-        Make sure we are Forbidden from deleting a connection because qdmanage DELETEs are not allowed on a connection
-        Only qdmanage UPDATEs are allowed..
+        This test creates a blocking connection and tries to delete that connection using skmanage DELETE operation.
+        Make sure we are Forbidden from deleting a connection because skmanage DELETEs are not allowed on a connection
+        Only skmanage UPDATEs are allowed..
         :return:
         """
         connection = BlockingConnection(self.address(), properties=CONNECTION_PROPERTIES_UNICODE_STRING)
         query_command = 'QUERY --type=connection'
-        outputs = json.loads(self.run_qdmanage(query_command))
+        outputs = json.loads(self.run_skmanage(query_command))
         identity = None
         passed = False
         for output in outputs:
@@ -430,7 +430,7 @@ class QdmanageTest(TestCase):
                     if identity:
                         delete_command = 'DELETE --type=connection --id=' + identity
                         try:
-                            outs = json.loads(self.run_qdmanage(delete_command))
+                            outs = json.loads(self.run_skmanage(delete_command))
                         except Exception as e:
                             if "Forbidden" in str(e):
                                 passed = True
@@ -444,7 +444,7 @@ class QdmanageTest(TestCase):
                   ('*/mars/*/#', 'multicast'),
                   ('*.mercury', 'closest'),
                   ('*/#/pluto', 'multicast')]
-        long_type = 'org.apache.qpid.dispatch.router.config.address'
+        long_type = 'io.skupper.router.router.config.address'
 
         # add patterns:
         pcount = 0
@@ -453,12 +453,12 @@ class QdmanageTest(TestCase):
                 ' pattern=' + p[0] + \
                 ' distribution=' + p[1] + \
                 ' name=Pattern' + str(pcount)
-            self.run_qdmanage(query_command)
+            self.run_skmanage(query_command)
             pcount += 1
 
         # verify correctly added:
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         total = len(output)
 
         pcount = 0
@@ -476,12 +476,12 @@ class QdmanageTest(TestCase):
         for p in config:
             query_command = 'DELETE --type=' + long_type + \
                 ' --name=Pattern' + str(pcount)
-            self.run_qdmanage(query_command)
+            self.run_skmanage(query_command)
             pcount += 1
 
         # verify deleted:
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), total - len(config))
         for o in output:
             pattern = o.get('pattern')
@@ -507,13 +507,13 @@ class QdmanageTest(TestCase):
             count += 1
 
         # Try fetching all 10,000 addresses
-        # This qdmanage query command would fail without the fix
+        # This skmanage query command would fail without the fix
         # for DISPATCH-974
-        query_command = 'QUERY --type=org.apache.qpid.dispatch.router.address'
+        query_command = 'QUERY --type=io.skupper.router.router.address'
         for i in range(3):
             sender_addresses = 0
             receiver_addresses = 0
-            outs = json.loads(self.run_qdmanage(query_command))
+            outs = json.loads(self.run_skmanage(query_command))
             for out in outs:
                 if ADDRESS_SENDER in out['name']:
                     sender_addresses += 1
@@ -532,7 +532,7 @@ class QdmanageTest(TestCase):
         for i in range(3):
             out_links = 0
             in_links = 0
-            outs = json.loads(self.run_qdmanage(query_command))
+            outs = json.loads(self.run_skmanage(query_command))
             for out in outs:
                 if out.get('owningAddr'):
                     if ADDRESS_SENDER in out['owningAddr']:
@@ -559,9 +559,9 @@ class QdmanageTest(TestCase):
         self.assertEqual(in_links, COUNT)
 
     def test_worker_threads(self):
-        long_type = 'org.apache.qpid.dispatch.router'
+        long_type = 'io.skupper.router.router'
         qd_manager = QdManager(address=self.address())
-        output = qd_manager.query('org.apache.qpid.dispatch.router')
+        output = qd_manager.query('io.skupper.router.router')
         self.assertEqual(output[0]['workerThreads'], 4)
 
     def test_check_memory_usage(self):
@@ -569,9 +569,9 @@ class QdmanageTest(TestCase):
         Verify that the process memory usage is present. Non-Linux platforms
         may return zero, so accept that as a valid value.
         """
-        long_type = 'org.apache.qpid.dispatch.router'
+        long_type = 'io.skupper.router.router'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 1)
         mem = output[0].get('memoryUsage')
 
@@ -585,34 +585,34 @@ class QdmanageTest(TestCase):
             self.assertTrue(mem is None)
 
     def test_ssl_connection(self):
-        """Verify qdmanage can securely connect via SSL"""
+        """Verify skmanage can securely connect via SSL"""
         ssl_address = "amqps://localhost:%s" % self.secure_port
         ssl_user_address = "amqps://localhost:%s" % self.secure_user_port
-        query = 'QUERY --type org.apache.qpid.dispatch.router'
+        query = 'QUERY --type io.skupper.router.router'
 
         # this should fail: no trustfile
         with self.assertRaises(RuntimeError,
                                msg="failure expected: no trustfile") as exc:
-            self.run_qdmanage(query, address=ssl_address)
+            self.run_skmanage(query, address=ssl_address)
         self.assertIn("certificate verify failed", str(exc.exception),
                       "unexpected exception: %s" % str(exc.exception))
 
         # this should pass:
-        self.run_qdmanage(query + " --ssl-trustfile " +
+        self.run_skmanage(query + " --ssl-trustfile " +
                           self.ssl_file('ca-certificate.pem'),
                           address=ssl_address)
 
         # this should fail: wrong hostname
         with self.assertRaises(RuntimeError,
                                msg="failure expected: wrong hostname") as exc:
-            self.run_qdmanage(query + " --ssl-trustfile " +
+            self.run_skmanage(query + " --ssl-trustfile " +
                               self.ssl_file('ca-certificate.pem'),
                               address="amqps://127.0.0.1:%s" % self.secure_port)
         self.assertIn("certificate verify failed", str(exc.exception),
                       "unexpected exception: %s" % str(exc.exception))
 
         # this should pass: disable hostname check:
-        self.run_qdmanage(query + " --ssl-trustfile " +
+        self.run_skmanage(query + " --ssl-trustfile " +
                           self.ssl_file('ca-certificate.pem') +
                           " --ssl-disable-peer-name-verify",
                           address="amqps://127.0.0.1:%s" % self.secure_port)
@@ -620,14 +620,14 @@ class QdmanageTest(TestCase):
         # this should fail: router requires client to authenticate
         with self.assertRaises(RuntimeError,
                                msg="client authentication should fail") as exc:
-            self.run_qdmanage(query + " --ssl-trustfile " +
+            self.run_skmanage(query + " --ssl-trustfile " +
                               self.ssl_file('ca-certificate.pem'),
                               address=ssl_user_address)
         self.assertIn("SSL Failure", str(exc.exception),
                       "unexpected exception: %s" % str(exc.exception))
 
-        # this should pass: qdmanage provides credentials
-        self.run_qdmanage(query + " --ssl-trustfile " +
+        # this should pass: skmanage provides credentials
+        self.run_skmanage(query + " --ssl-trustfile " +
                           self.ssl_file('ca-certificate.pem') +
                           " --ssl-certificate " +
                           self.ssl_file('client-certificate.pem') +

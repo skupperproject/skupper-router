@@ -29,7 +29,7 @@ from proton.reactor import Container
 # These tests rely on enabling the router test hooks, which instantiates a test
 # client (see modules/test_hooks/core_test_hooks) see core_test_hooks.c
 
-CONTAINER_ID = "org.apache.qpid.dispatch.test_core_client"
+CONTAINER_ID = "io.skupper.router.test_core_client"
 TARGET_ADDR = "test_core_client_address"
 
 

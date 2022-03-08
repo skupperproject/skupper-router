@@ -18,7 +18,7 @@
 ##
 
 cmake_minimum_required(VERSION 3.20)
-project(qpid-dispatch C CXX)
+project(skupper-router C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -115,14 +115,14 @@ if (NOT DEFINED LIB_SUFFIX)
 endif()
 
 set(INCLUDE_INSTALL_DIR include CACHE PATH "Include file directory")
-set(QPID_DISPATCH_HOME "lib/qpid-dispatch" CACHE PATH "Private Dispatch library directory")
+set(QPID_DISPATCH_HOME "lib/skupper-router" CACHE PATH "Private Skupper library directory")
 set(LIB_INSTALL_DIR "lib${LIB_SUFFIX}" CACHE PATH "Library object file directory")
 set(SHARE_INSTALL_DIR share CACHE PATH "Shared read only data directory")
 set(DOC_INSTALL_DIR ${SHARE_INSTALL_DIR}/doc CACHE PATH "Documentation directory")
-set(QD_DOC_INSTALL_DIR ${SHARE_INSTALL_DIR}/doc/qpid-dispatch CACHE PATH "Qpid Dispatch documentation directory")
+set(QD_DOC_INSTALL_DIR ${SHARE_INSTALL_DIR}/doc/skupper-router CACHE PATH "Skupper Router documentation directory")
 set(MAN_INSTALL_DIR share/man CACHE PATH "Manpage directory")
 set(QPID_DISPATCH_HOME_INSTALLED ${CMAKE_INSTALL_PREFIX}/${QPID_DISPATCH_HOME})
-set(QPID_DISPATCH_HTML_DIR ${CMAKE_INSTALL_PREFIX}/share/qpid-dispatch/html CACHE PATH "Qpid Dispatch HTML directory")
+set(QPID_DISPATCH_HTML_DIR ${CMAKE_INSTALL_PREFIX}/share/skupper-router/html CACHE PATH "Skupper Router HTML directory")
 
 set(RUN ${Python_EXECUTABLE} ${CMAKE_BINARY_DIR}/run.py)
 
@@ -135,7 +135,7 @@ if(NOT DEFINED SYSCONF_INSTALL_DIR)
     endif()
 endif()
 
-set(QPID_DISPATCH_CONFDIR ${SYSCONF_INSTALL_DIR}/qpid-dispatch)
+set(QPID_DISPATCH_CONFDIR ${SYSCONF_INSTALL_DIR}/skupper-router)
 
 # Set up runtime checks (valgrind, sanitizers etc.)
 include(cmake/RuntimeChecks.cmake)
@@ -197,20 +197,17 @@ if (CMAKE_BUILD_TYPE MATCHES "Coverage")
 endif(CMAKE_BUILD_TYPE MATCHES "Coverage")
 
 ##
-## Header file installation
+## configuration/html file installation
 ##
-file(GLOB headers "include/qpid/dispatch/*.h")
-install(FILES ${headers} DESTINATION ${INCLUDE_INSTALL_DIR}/qpid/dispatch)
-install(FILES include/qpid/dispatch.h DESTINATION ${INCLUDE_INSTALL_DIR}/qpid)
-install(FILES etc/qdrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/qpid-dispatch)
-install(FILES etc/sasl2/qdrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/sasl2)
+install(FILES etc/skrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/skupper-router)
+install(FILES etc/sasl2/skrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/sasl2)
 install(FILES share/index.html DESTINATION ${QPID_DISPATCH_HTML_DIR})
 
 
 # Tools
 install(PROGRAMS
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qdstat
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/qdmanage
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/skstat
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/skmanage
     DESTINATION bin)
 
 # Doc files
@@ -223,7 +220,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/run.py.in ${CMAKE_CURRENT_BINARY_DIR}
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/run.py.in ${CMAKE_CURRENT_BINARY_DIR}/tests/run.py)
 execute_process(COMMAND ${RUN} --sh OUTPUT_FILE config.sh)
 
-add_subdirectory(src) # Build src first so other subdirs can use qpid-dispatch library
+add_subdirectory(src) # Build src first so other subdirs can use library
 
 if (NOT UNITTEST_MISSING)
   file(GLOB SCRAPER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tools/scraper/*.py)

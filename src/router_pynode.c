@@ -409,7 +409,7 @@ qd_error_t qd_router_python_setup(qd_router_t *router)
     PyObject* pClass;
     PyObject* pArgs;
 
-    pModule = PyImport_ImportModule("qpid_dispatch_internal.router"); QD_ERROR_PY_RET();
+    pModule = PyImport_ImportModule("skupper_router_internal.router"); QD_ERROR_PY_RET();
     pClass = PyObject_GetAttrString(pModule, "RouterEngine");
     Py_DECREF(pModule);
     QD_ERROR_PY_RET();

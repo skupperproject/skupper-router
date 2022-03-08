@@ -21,8 +21,8 @@
 set (src ${CMAKE_CURRENT_SOURCE_DIR})
 set (bin ${CMAKE_CURRENT_BINARY_DIR})
 set (tools ${CMAKE_SOURCE_DIR}/tools)
-set (schema ../../python/qpid_dispatch/management/qdrouter.json)
-set (py_management ../../python/qpid_dispatch_internal/management)
+set (schema ../../python/skupper_router/management/skrouter.json)
+set (py_management ../../python/skupper_router_internal/management)
 set (schema_deps ${schema} ${py_management}/schema_doc.py ${py_management}/schema.py)
 
 # Flags for doc tools, based on cmake options
@@ -47,7 +47,7 @@ macro (schema_gen script output)
   list (APPEND generated_txt "${output}")
 endmacro ()
 
-schema_gen (${src}/qdrouterd.conf.5.py ${bin}/qdrouterd.conf.5.adoc)
+schema_gen (${src}/skrouterd.conf.5.py ${bin}/skrouterd.conf.5.adoc)
 
 # Generate asciidoc .adoc from --help output for man pages
 macro (help2txt program)
@@ -61,9 +61,9 @@ macro (help2txt program)
   list (APPEND generated_txt "${output}")
 endmacro ()
 
-help2txt (${CMAKE_BINARY_DIR}/router/qdrouterd)
-help2txt (${tools}/qdmanage)
-help2txt (${tools}/qdstat)
+help2txt (${CMAKE_BINARY_DIR}/router/skrouterd)
+help2txt (${tools}/skmanage)
+help2txt (${tools}/skstat)
 
 add_custom_target (doc_gen DEPENDS ${generated_txt})
 
@@ -74,7 +74,7 @@ if (ASCIIDOC_EXE)
 
   # Generate HTML
   file (GLOB_RECURSE adoc_files *.adoc)
-  foreach (source ${src}/qdmanage.8 ${src}/qdrouterd.8 ${src}/qdstat.8 ${bin}/qdrouterd.conf.5)
+  foreach (source ${src}/skmanage.8 ${src}/skrouterd.8 ${src}/skstat.8 ${bin}/skrouterd.conf.5)
     get_filename_component (name ${source} NAME)
     string(FIND ${name} "." dot)
     if (dot GREATER 0)
@@ -98,7 +98,7 @@ if (ASCIIDOC_EXE)
   find_program(A2X_EXE a2x DOC DOC "Generate Unix man pages")
   if (A2X_EXE)
     # Generate man pages.
-    foreach (source ${src}/qdmanage.8 ${src}/qdrouterd.8 ${src}/qdstat.8 ${bin}/qdrouterd.conf.5)
+    foreach (source ${src}/skmanage.8 ${src}/skrouterd.8 ${src}/skstat.8 ${bin}/skrouterd.conf.5)
       get_filename_component (name ${source} NAME)
       string(REGEX REPLACE ".*\\.([0-9])$" "\\1" section ${source}) # Man section number
       set (output ${bin}/${name})

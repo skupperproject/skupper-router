@@ -29,7 +29,7 @@ from typing import Optional, Tuple
 
 
 def populate_pythonpath() -> None:
-    """Makes qpid_dispatch_internal available. Modifies sys.path."""
+    """Makes skupper_router_internal available. Modifies sys.path."""
     home = environ.get("QPID_DISPATCH_HOME") or "${QPID_DISPATCH_HOME_INSTALLED}"
     sys.path.insert(0, join(home, 'python'))
 

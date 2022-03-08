@@ -29,8 +29,8 @@ A Schema can be loaded/dumped to a json file.
 import sys
 import traceback
 from collections import OrderedDict
-from qpid_dispatch.management.entity import EntityBase
-from qpid_dispatch.management.error import NotImplementedStatus
+from skupper_router.management.entity import EntityBase
+from skupper_router.management.error import NotImplementedStatus
 
 try:
     from ..dispatch import LogAdapter, LOG_WARNING

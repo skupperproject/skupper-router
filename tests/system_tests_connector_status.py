@@ -72,9 +72,9 @@ class ConnectorStatusTest(TestCase):
     def address(self):
         return self.routers[1].addresses[0]
 
-    def run_qdmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
         p = self.popen(
-            ['qdmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
         out = p.communicate(input)[0]
@@ -101,9 +101,9 @@ class ConnectorStatusTest(TestCase):
 
     def check_B_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command, address=self.address()))
+        output = json.loads(self.run_skmanage(query_command, address=self.address()))
 
         conn_status = output[0].get('connectionStatus')
         conn_msg = output[0].get('connectionMsg')
@@ -117,9 +117,9 @@ class ConnectorStatusTest(TestCase):
         # The routers have connected and begun talking to each other
         # Verify that the connectionStatus field of the connector is set to SUCCESS.
         # Also make sure that the connectionMsg field of the connector has "Connection opened" in it.
-        long_type = 'org.apache.qpid.dispatch.connector'
+        long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_qdmanage(query_command))
+        output = json.loads(self.run_skmanage(query_command))
         connection_msg = output[0]['connectionMsg']
         self.assertEqual('SUCCESS', output[0]['connectionStatus'])
         conn_opened = False
