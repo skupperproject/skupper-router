@@ -90,8 +90,8 @@ class FailoverTest(TestCase):
 
         cls.routers[1].wait_router_connected('B')
 
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.success = False
         self.timer_delay = 2
         self.max_attempts = 10

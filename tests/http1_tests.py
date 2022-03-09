@@ -148,8 +148,10 @@ class MyHTTPServer(HTTPServer):
         self._client_sockets.append(sock)
         return sock, addr
 
-    def shutdown_request(self, request: socket.socket) -> None:
+    def shutdown_request(self, request) -> None:
         """Forget the client socket"""
+        assert isinstance(request, socket.socket)
+
         self._client_sockets.remove(request)
         super().shutdown_request(request)  # type: ignore[misc]  # error: "shutdown_request" undefined in superclass
 

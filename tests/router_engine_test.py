@@ -146,6 +146,7 @@ class NeighborTest(unittest.TestCase):
         self.neighbors[node_id] = (instance, link_id, cost, now)
 
     def setUp(self):
+        super().setUp()
         self.sent = []
         self.neighbors = {}
         self.id = "R1"
@@ -210,6 +211,7 @@ class NeighborTest(unittest.TestCase):
 
 class PathTest(unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.id = 'R1'
         self.engine = PathEngine(self)
 

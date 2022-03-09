@@ -205,8 +205,8 @@ class AutoLinkRetryTest(TestCase):
                           'address': 'examples', 'direction': 'out'}),
         ])
 
-    def __init__(self, test_method):
-        TestCase.__init__(self, test_method)
+    def setUp(self):
+        super().setUp()
         self.success = False
         self.timer_delay = 6
         self.max_attempts = 2

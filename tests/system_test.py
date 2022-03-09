@@ -877,12 +877,13 @@ class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-me
 
     tester: Tester
 
-    def __init__(self, test_method):
-        unittest.TestCase.__init__(self, test_method)
+    def __init__(self, methodName='runTest'):
+        unittest.TestCase.__init__(self, methodName)
         Tester.__init__(self, self.id())
 
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         cls.maxDiff = None
         cls.tester = Tester('.'.join([cls.__module__, cls.__name__, 'setUpClass']))
         cls.tester.rmtree()
@@ -893,12 +894,15 @@ class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-me
         if hasattr(cls, 'tester'):
             cls.tester.teardown()
             del cls.tester
+        super().tearDownClass()
 
     def setUp(self):
+        super().setUp()
         Tester.setup(self)
 
     def tearDown(self):
         Tester.teardown(self)
+        super().tearDown()
 
     def assert_fair(self, seq):
         avg = sum(seq) / len(seq)
