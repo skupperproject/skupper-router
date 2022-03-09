@@ -1139,7 +1139,7 @@ static char *test_check_stream_data_fanout(void *context)
 
     // construct a couple of body data sections, cheek-to-jowl in a buffer
     // chain
-#define sd_count  5
+#define sd_count  6
     field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
     memset(buffer, '1', 99);
     qd_compose_insert_binary(field, buffer, 99);
@@ -1157,7 +1157,10 @@ static char *test_check_stream_data_fanout(void *context)
     qd_compose_insert_binary(field, buffer, 1001);
 
     field = qd_compose(QD_PERFORMATIVE_BODY_DATA, field);
-    memset(buffer, '5', 1001);
+    qd_compose_insert_binary(field, buffer, 0);
+
+    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, field);
+    memset(buffer, '5', 5);
     qd_compose_insert_binary(field, buffer, 5);
 
     qd_message_extend(in_msg, field, 0);
@@ -1342,6 +1345,126 @@ static char *test_check_stream_data_footer(void *context)
     if (!footer) {
         result = "No footer found in out_msg2";
         goto exit;
+    }
+
+    // expect: all but the last body buffer is freed:
+    if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1
+        || DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
+        result = "Possible buffer leak detected!";
+        goto exit;
+    }
+
+exit:
+    qd_message_free(in_msg);
+    qd_message_free(out_msg1);
+    qd_message_free(out_msg2);
+    return result;
+}
+
+
+// Verify that alternating decode and release across fanout
+// "outgoing" messages works
+static char *test_check_stream_data_fanout_leak(void *context)
+{
+    char *result = 0;
+    qd_message_t *in_msg = 0;
+    qd_message_t *out_msg1 = 0;
+    qd_message_t *out_msg2 = 0;
+
+    // simulate building a message as an adaptor would:
+    in_msg = qd_message();
+    qd_message_content_t *content = MSG_CONTENT(in_msg);
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+    qd_compose_start_list(field);
+    qd_compose_insert_bool(field, 0);     // durable
+    qd_compose_insert_null(field);        // priority
+    qd_compose_end_list(field);
+    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+    qd_compose_start_list(field);
+    qd_compose_insert_ulong(field, 666);    // message-id
+    qd_compose_insert_null(field);                 // user-id
+    qd_compose_insert_string(field, "/whereevah"); // to
+    qd_compose_insert_string(field, "my-subject");  // subject
+    qd_compose_insert_string(field, "/reply-to");   // reply-to
+    qd_compose_end_list(field);
+
+    qd_message_compose_2(in_msg, field, false);
+    qd_compose_free(field);
+
+    // snapshot the message buffer count to use as a baseline
+    const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
+
+    // "fan out" the message
+    out_msg1 = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg1);
+    out_msg2 = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg2);
+
+    // alternate adding and releasing body data buffers
+    // Trigger/release Q2 as well
+
+    memset(buffer, 0, sizeof(buffer));
+
+    const int max_bodies = 25;
+    for (int j = 1; j < max_bodies; ++j) {
+
+        field = 0;
+        for (int k = 1; k <= j; ++k) {
+            // next body datas "arrive"
+            field = qd_compose(QD_PERFORMATIVE_BODY_DATA, field);
+            long len = random() % 0xFF;
+            qd_compose_insert_binary(field, buffer, len);
+        }
+        qd_message_extend(in_msg, field, 0);
+        qd_compose_free(field);
+
+        if (j == (max_bodies - 1)) {
+            // last body buffers to add
+            SET_ATOMIC_FLAG(&content->receive_complete);
+        }
+
+        // consume from both messages:
+        qd_message_t *msgs[2] = {out_msg1, out_msg2};
+        for (int i = 0; i < 2; ++i) {
+            qd_message_t *mptr = msgs[i];
+
+            int free_count = 0;
+            qd_message_stream_data_t *marray[max_bodies];
+            bool done = false;
+
+
+            while (!done) {
+                //qd_message_stream_data_t *stream_data = 0;
+                //switch (qd_message_next_stream_data(mptr, &stream_data)) {
+                switch (qd_message_next_stream_data(mptr, &marray[free_count])) {
+                case QD_MESSAGE_STREAM_DATA_BODY_OK: {
+                    //qd_message_stream_data_release(stream_data);
+                    free_count += 1;
+                    break;
+                }
+                case QD_MESSAGE_STREAM_DATA_NO_MORE:
+                case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
+                    done = true;
+                    break;
+                default:
+                    result = "Next body data failed to get next body data";
+                    goto exit;
+                }
+            }
+
+            if (free_count != j) {
+                result = "expected more body datas";
+                goto exit;
+            }
+
+            // semi-random free:
+            for (int x = free_count; x > 0; x -= 2) {
+                qd_message_stream_data_release(marray[x - 1]);
+                marray[x - 1] = 0;
+            }
+            for (int y = 0; y < free_count; ++y)
+                qd_message_stream_data_release(marray[y]);
+        }
     }
 
     // expect: all but the last body buffer is freed:
@@ -1550,6 +1673,7 @@ int message_tests(void)
     TEST_CASE(test_check_stream_data_append, 0);
     TEST_CASE(test_check_stream_data_fanout, 0);
     TEST_CASE(test_check_stream_data_footer, 0);
+    TEST_CASE(test_check_stream_data_fanout_leak, 0);
     TEST_CASE(test_q2_callback_on_disable, 0);
     TEST_CASE(test_q2_ignore_headers, 0);
 
