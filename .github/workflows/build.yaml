@@ -454,8 +454,13 @@ jobs:
         run: |
           echo "coredump.%e.%p" > /proc/sys/kernel/core_pattern
           ulimit -c unlimited
+          
+          threads=12
+          if [[ "${{ matrix.runtimeCheck }}" == "tsan" ]]; then
+            threads=2
+          fi
 
-          ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
