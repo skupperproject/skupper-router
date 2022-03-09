@@ -2646,6 +2646,11 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
             if (start_buf == 0)
                 break;
         }
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release start_buf=%p", (void *)start_buf);
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release stream_data->location.buffer=%p", (void *)stream_data->section.buffer);
+        qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release stream_data->location.buffer->prev=%p", (void *)stream_data->section.buffer->prev);
+
+
     }
     else {
         start_buf = stream_data->section.buffer;
@@ -2709,9 +2714,6 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
         content->q2_input_holdoff = false;
         q2_unblock = content->q2_unblocker;
         qd_log(qd_message_log_source(), QD_LOG_TRACE, "Setting q2_unblock");
-    }
-    else {
-        qd_log(qd_message_log_source(), QD_LOG_TRACE, "Not Setting q2_unblock content->q2_input_holdoff=%d, was_blocked=%d, _Q2_holdoff_should_unblock_LH(content)=%d", content->q2_input_holdoff, was_blocked, should_unblock);
     }
 
     UNLOCK(content->lock);
