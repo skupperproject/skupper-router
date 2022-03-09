@@ -20,11 +20,14 @@
 """Type stubs for objects implemented in the C extension module"""
 
 import ctypes
-from typing import List
+from typing import List, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .router.message import Message
 
 
 class QdDll(ctypes.PyDLL):
-    def __init__(self, handle):
+    def __init__(self, handle: int) -> None:
         ...
 
     def _prototype(self, f, restype, argtypes, check=True):
@@ -56,13 +59,13 @@ class LogAdapter:
     def __init__(self, mod_name):
         ...
 
-    def log(self, level, text):
+    def log(self, level, text, *args):
         ...
 
 
 class IoAdapter:
-    def __init__(self, handler, address, global_address=False):
+    def __init__(self, handler: Callable, address: str, aclass: str, treatment: int) -> None:
         ...
 
-    def send(self, address, properties, application_properties, body, correlation_id=None):
+    def send(self, message: 'Message', no_echo: int, control: int) -> None:
         ...

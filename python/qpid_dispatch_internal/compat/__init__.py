@@ -20,18 +20,16 @@
 """Compatibility hacks for older versions of python"""
 
 __all__ = [
-    "JSON_LOAD_KWARGS",
     "dictify",
     "UNICODE",
     "BINARY"
 ]
 
 from collections import OrderedDict
+from typing import Any, Dict, Union
 
-JSON_LOAD_KWARGS = {'object_pairs_hook': OrderedDict}
 
-
-def dictify(od):
+def dictify(od: Union[OrderedDict, Any]) -> Dict[Any, Any]:
     """Recursively replace OrderedDict with dict"""
     if isinstance(od, OrderedDict):
         return dict((k, dictify(v)) for k, v in od.items())
@@ -39,17 +37,16 @@ def dictify(od):
         return od
 
 
-def BINARY(s):
-    st = type(s)
-    if st is str:
+def BINARY(s: Union[str, bytes]) -> bytes:
+    if isinstance(s, str):
         return s.encode("utf-8")
-    elif st is bytes:
+    elif isinstance(s, bytes):
         return s
     else:
-        raise TypeError("%s cannot be converted to binary" % st)
+        raise TypeError("%s cannot be converted to binary" % type(s))
 
 
-def UNICODE(s):
+def UNICODE(s: Union[str, bytes]) -> str:
     if isinstance(s, bytes):
         return s.decode("utf-8")
     elif isinstance(s, str):

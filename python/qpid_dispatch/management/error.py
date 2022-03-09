@@ -93,12 +93,12 @@ class ManagementError(Exception):
     @ivar description: detailed description of error.
     """
 
-    def __init__(self, status, description):
+    def __init__(self, status: int, description: str) -> None:
         self.status, self.description = status, description
         super(ManagementError, self).__init__(description)
 
     @staticmethod
-    def create(status, description):
+    def create(status: int, description: str) -> 'ManagementError':
         """Create the appropriate ManagementError subclass for status"""
         try:
             class_name = STATUS_TEXT[status].replace(' ', '') + "Status"

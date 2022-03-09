@@ -18,6 +18,7 @@
 #
 
 import json
+from typing import TYPE_CHECKING, Any
 
 from qpid_dispatch_internal.policy.policy_util import HostAddr, is_ipv6_enabled
 from qpid_dispatch_internal.policy.policy_util import HostStruct
@@ -27,6 +28,9 @@ from qpid_dispatch_internal.policy.policy_local import PolicyLocal
 
 from system_test import unittest
 from system_test import TestCase, main_module
+
+if TYPE_CHECKING:
+    from qpid_dispatch_internal.policy.policy_local import AppStats
 
 
 class PolicyHostAddrTest(TestCase):
@@ -119,10 +123,10 @@ class QpidDispatch:
 
 
 class MockAgent:
-    def __init__(self):
+    def __init__(self) -> None:
         self.qd = QpidDispatch()
 
-    def add_implementation(self, entity, cfg_obj_name):
+    def add_implementation(self, entity: 'AppStats', cfg_obj_name: str) -> None:
         pass
 
 
@@ -157,7 +161,7 @@ class MockPolicyManager:
 
 class PolicyFile(TestCase):
 
-    manager = MockPolicyManager()
+    manager: Any = MockPolicyManager()
     policy = PolicyLocal(manager)
     policy.test_load_config()
 
@@ -210,7 +214,7 @@ class PolicyFile(TestCase):
 
 
 class PolicyFileApplicationFallback(TestCase):
-    manager = MockPolicyManager()
+    manager: Any = MockPolicyManager()
     policy = PolicyLocal(manager)
     policy.test_load_config()
 
@@ -367,7 +371,7 @@ class PolicyAliases(TestCase):
   }
 }]
 """
-        manager = MockPolicyManager()
+        manager: Any = MockPolicyManager()
         policy = PolicyLocal(manager)
         ruleset = json.loads(config_str)
         denied = False
@@ -399,7 +403,7 @@ class PolicyAliases(TestCase):
   }
 }]
 """
-        manager = MockPolicyManager()
+        manager: Any = MockPolicyManager()
         policy = PolicyLocal(manager)
         ruleset = json.loads(config_str)
         denied = False
@@ -431,7 +435,7 @@ class PolicyAliases(TestCase):
   }
 }]
 """
-        manager = MockPolicyManager()
+        manager: Any = MockPolicyManager()
         policy = PolicyLocal(manager)
         ruleset = json.loads(config_str)
         denied = False
@@ -444,7 +448,7 @@ class PolicyAliases(TestCase):
 
     #
     def test_AliasOperationalLookup(self):
-        manager = MockPolicyManager()
+        manager: Any = MockPolicyManager()
         policy = PolicyLocal(manager)
         policy.test_load_config()
 

@@ -19,20 +19,22 @@
 
 import socket
 import binascii
+from typing import Any, List, Optional, Dict
+
 
 #
 #
 
 
 class PolicyError(Exception):
-    def __init__(self, value):
+    def __init__(self, value: str) -> None:
         self.value = value
 
     def __str__(self):
         return str(self.value)
 
 
-def is_ipv6_enabled():
+def is_ipv6_enabled() -> bool:
     """
     Returns true if IPV6 is enabled, false otherwise
     """
@@ -61,7 +63,7 @@ class HostStruct:
         families.append(socket.AF_INET6)
         famnames.append("IPv6")
 
-    def __init__(self, hostname):
+    def __init__(self, hostname: str) -> None:
         """
         Given a host name text string, return the socket info for it.
         @param[in] hostname host IP address to parse
@@ -132,7 +134,7 @@ class HostAddr:
     Raises a PolicyError on validation error in constructor.
     """
 
-    def __init__(self, hostspec, separator=","):
+    def __init__(self, hostspec: str, separator: str = ",") -> None:
         """
         Parse host spec into binary structures to use for comparisons.
         Validate the hostspec to enforce usage rules.
@@ -178,7 +180,7 @@ class HostAddr:
         res += ")"
         return res
 
-    def memcmp(self, a, b):
+    def memcmp(self, a: bytes, b: bytes) -> int:
         res = 0
         for i in range(0, len(a)):
             if a[i] > b[i]:
@@ -189,7 +191,7 @@ class HostAddr:
                 break
         return res
 
-    def match_bin(self, candidate):
+    def match_bin(self, candidate: HostStruct) -> bool:
         """
         Does the candidate hoststruct match the IP or range of IP addresses represented by this?
         @param[in] candidate the IP address to be tested
@@ -213,7 +215,7 @@ class HostAddr:
                 ("Wrong type. Expected HostStruct but received %s" % candidate.__class__.__name__)
             return False
 
-    def match_str(self, candidate):
+    def match_str(self, candidate: str) -> bool:
         """
         Does the candidate string match the IP or range represented by this?
         @param[in] candidate the IP address to be tested
@@ -247,12 +249,12 @@ class PolicyAppConnectionMgr:
                        'user2' : [conn4, conn5] }
     """
 
-    def __init__(self, maxconn, maxconnperuser, maxconnperhost):
+    def __init__(self, maxconn: int, maxconnperuser: int, maxconnperhost: int) -> None:
         """
         The object is constructed with the policy limits and zeroed counts.
         @param[in] maxconn maximum total concurrent connections
-        @param[in] maxconnperuser maximum total conncurrent connections for each user
-        @param[in] maxconnperuser maximum total conncurrent connections for each host
+        @param[in] maxconnperuser maximum total concurrent connections for each user
+        @param[in] maxconnperuser maximum total concurrent connections for each host
         """
         if maxconn < 0 or maxconnperuser < 0 or maxconnperhost < 0:
             raise PolicyError("PolicyAppConnectionMgr settings must be >= 0")
@@ -262,8 +264,8 @@ class PolicyAppConnectionMgr:
         self.connections_approved = 0
         self.connections_denied   = 0
         self.connections_active   = 0
-        self.per_host_state = {}
-        self.per_user_state = {}
+        self.per_host_state: Dict[str, List[str]] = {}
+        self.per_user_state: Dict[str, List[str]] = {}
 
     def __str__(self):
         res = ("Connection Limits: total: %s, per user: %s, per host: %s\n" %
@@ -278,12 +280,12 @@ class PolicyAppConnectionMgr:
     def __repr__(self):
         return self.__str__()
 
-    def update(self, maxconn, maxconnperuser, maxconnperhost):
+    def update(self, maxconn: int, maxconnperuser: int, maxconnperhost: int) -> None:
         """
         Reset connection limits
         @param[in] maxconn maximum total concurrent connections
-        @param[in] maxconnperuser maximum total conncurrent connections for each user
-        @param[in] maxconnperuser maximum total conncurrent connections for each host
+        @param[in] maxconnperuser maximum total concurrent connections for each user
+        @param[in] maxconnperuser maximum total concurrent connections for each host
         """
         if maxconn < 0 or maxconnperuser < 0 or maxconnperhost < 0:
             raise PolicyError("PolicyAppConnectionMgr settings must be >= 0")
@@ -291,7 +293,15 @@ class PolicyAppConnectionMgr:
         self.max_per_user = maxconnperuser
         self.max_per_host = maxconnperhost
 
-    def can_connect(self, conn_id, user, host, diags, grp_max_user, grp_max_host):
+    def can_connect(
+            self,
+            conn_id: str,
+            user: str,
+            host: str,
+            diags: List[Any],
+            grp_max_user: Optional[int],
+            grp_max_host: Optional[int]
+    ) -> bool:
         """
         Register a connection attempt.
         If all the connection limit rules pass then add the
@@ -336,7 +346,7 @@ class PolicyAppConnectionMgr:
             self.connections_denied += 1
             return False
 
-    def disconnect(self, conn_id, user, host):
+    def disconnect(self, conn_id: str, user: str, host: str) -> None:
         """
         Unregister a connection
         """
@@ -348,7 +358,7 @@ class PolicyAppConnectionMgr:
         self.per_user_state[user].remove(conn_id)
         self.per_host_state[host].remove(conn_id)
 
-    def count_other_denial(self):
+    def count_other_denial(self) -> None:
         """
         Record the statistic for a connection denied by some other process
         @return:
