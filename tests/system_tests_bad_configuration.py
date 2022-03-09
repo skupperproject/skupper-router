@@ -26,6 +26,8 @@ For example, unresolvable host names.
 import os
 from threading import Timer
 from subprocess import PIPE, STDOUT
+from typing import ClassVar
+
 from system_test import TestCase, Qdrouterd, TIMEOUT, Process
 
 
@@ -36,6 +38,12 @@ class RouterTestBadConfiguration(TestCase):
     well defined, but are not supposed to cause a crash to the router
     process.
     """
+
+    config: ClassVar[Qdrouterd.Config]
+    name: ClassVar[str]
+    unresolvable_host_name: ClassVar[str]
+    router: ClassVar[Qdrouterd]
+
     @classmethod
     def setUpClass(cls) -> None:
         """Set up router instance configuration to be used for testing."""
