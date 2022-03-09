@@ -306,12 +306,18 @@ Existing build directory can be opened with `cmake-gui -S .. -B .`
 Other options include `Debug` (disables optimizations) and `Coverage`.
 
 |`-DQD_ENABLE_ASSERTIONS=`
-|Seting this to `ON` enables asserts irrespective of `CMAKE_BUILD_TYPE`.
+|Setting this to `ON` enables asserts irrespective of `CMAKE_BUILD_TYPE`.
 
 |`-DRUNTIME_CHECK=`
-|Enables C/C++ runtime checkers.See "Run Time Validation" chapter above.
+|Enables C/C++ runtime checkers. See "Run Time Validation" chapter above.
 
 |`-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`
 |With CMake 3.9+, compiles the project with LTO (Link Time Optimization) enabled.
 Older CMake will only honor this option with the Intel compiler on Linux.
+
+|`-DQD_DISABLE_MEMORY_POOL=ON`
+|Dispatch will immediately free memory, instead of returning it to memory pool.
+This option will *break* safe pointers, resulting in crashes, therefore is suitable only for debugging.
+When combined with `-DRUNTIME_CHECK=asan`, the pointer breakages are much less frequent.
+
 |===

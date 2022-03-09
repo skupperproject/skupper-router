@@ -31,6 +31,16 @@
 # This file updates the QDROUTERD_RUNNER and CMAKE_C_FLAGS
 # appropriately for use when running the ctest suite.
 
+# Disabling memory pool turns use-after-poison asan warnings into use-after-free warnings. The latter come with
+# a freeing stacktrace that makes them easier to triage.
+#
+# Safe pointers require memory pool to work (memory may never be relinquished to the OS, otherwise safe pointers may
+# break). Therefore, only disable memory pool for special debugging purposes. Sanitizers minimize memory reuse and
+# make it significantly less likely that a safe pointer breaks.
+set(QD_DISABLE_MEMORY_POOL OFF CACHE STRING "Disables memory pool. Should be only used with asan or msan RUNTIME_CHECK")
+if (QD_DISABLE_MEMORY_POOL)
+  add_definitions(-DQD_DISABLE_MEMORY_POOL)
+endif()
 
 # Valgrind configuration
 #
@@ -84,6 +94,9 @@ deprecated_enable_check(USE_TSAN tsan "Compile with thread sanitizer (tsan)")
 set(RUNTIME_CHECK ${RUNTIME_CHECK_DEFAULT} CACHE STRING "Enable runtime checks. Valid values: ${runtime_checks}")
 if(CMAKE_BUILD_TYPE MATCHES "Coverage" AND RUNTIME_CHECK)
   message(FATAL_ERROR "Cannot set RUNTIME_CHECK with CMAKE_BUILD_TYPE=Coverage")
+endif()
+if(QD_DISABLE_MEMORY_POOL AND NOT RUNTIME_CHECK)
+  message(FATAL_ERROR "Do not set QD_DISABLE_MEMORY_POOL without enabling RUNTIME_CHECK at the same time")
 endif()
 
 if(RUNTIME_CHECK STREQUAL "memcheck")

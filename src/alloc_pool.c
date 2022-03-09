@@ -260,8 +260,9 @@ struct qd_alloc_pool_t {
     qd_alloc_linked_stack_t free_list;
 };
 
-qd_alloc_config_t qd_alloc_default_config_big   = {16,  32, 0};
-qd_alloc_config_t qd_alloc_default_config_small = {64, 128, 0};
+qd_alloc_config_t qd_alloc_default_config_big   = {16,  32, -1};
+qd_alloc_config_t qd_alloc_default_config_small = {64, 128, -1};
+qd_alloc_config_t qd_alloc_default_config_asan  = { 1,   0,  0};
 #define BIG_THRESHOLD 2000
 
 static sys_mutex_t          *init_lock = 0;
@@ -281,7 +282,11 @@ static void qd_alloc_init(qd_alloc_type_desc_t *desc)
             desc->config = desc->total_size > BIG_THRESHOLD ?
                 &qd_alloc_default_config_big : &qd_alloc_default_config_small;
 
+#if defined(QD_DISABLE_MEMORY_POOL)
+        desc->config = &qd_alloc_default_config_asan;
+#else
         assert (desc->config->local_free_list_max >= desc->config->transfer_batch_size);
+#endif
 
         desc->global_pool = NEW(qd_alloc_pool_t);
         DEQ_ITEM_INIT(desc->global_pool);
@@ -489,7 +494,7 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     // If there's a global_free_list size limit, remove items until the limit is
     // not exceeded.
     //
-    if (desc->config->global_free_list_max != 0) {
+    if (desc->config->global_free_list_max != -1) {
         while (DEQ_SIZE(desc->global_pool->free_list) > desc->config->global_free_list_max) {
             item = pop_stack(&desc->global_pool->free_list);
             FREE_CACHE_ALIGNED(item);
@@ -500,7 +505,11 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     sys_mutex_unlock(desc->lock);
 }
 
-
+#if defined(QD_DISABLE_MEMORY_POOL)
+// disabling alloc pool causes use-after-free; no way to check if memory
+// has been freed to the OS before accessing it from `qd_alloc_deref_safe_ptr`
+ATTRIBUTE_NO_SANITIZE_ADDRESS
+#endif
 uint32_t qd_alloc_sequence(void *p)
 {
     if (!p)

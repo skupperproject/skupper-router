@@ -43,7 +43,7 @@ DEQ_DECLARE(qd_alloc_pool_t, qd_alloc_pool_list_t);
 typedef struct {
     int  transfer_batch_size;
     int  local_free_list_max;
-    int  global_free_list_max;
+    int  global_free_list_max;  ///< -1 means unlimited
 } qd_alloc_config_t;
 
 /** Allocation statistics. */
