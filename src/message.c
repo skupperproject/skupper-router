@@ -658,10 +658,8 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
                                                     bool                  dup_ok,
                                                     bool                  protect_buffer)
 {
-    if (!*cursor || !can_advance(cursor, buffer)) {
-        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 1 returning QD_SECTION_NEED_MORE");
+    if (!*cursor || !can_advance(cursor, buffer))
         return QD_SECTION_NEED_MORE;
-    }
 
     qd_buffer_t   *test_buffer   = *buffer;
     unsigned char *test_cursor   = *cursor;
@@ -673,10 +671,8 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
         test_cursor++;
         if (test_cursor == end_of_buffer) {
             test_buffer = test_buffer->next;
-            if (test_buffer == 0) {
-                qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 2 returning QD_SECTION_NEED_MORE");
+            if (test_buffer == 0)
                 return QD_SECTION_NEED_MORE;
-            }
             test_cursor = qd_buffer_base(test_buffer);
             end_of_buffer = test_cursor + qd_buffer_size(test_buffer);
         }
@@ -713,19 +709,15 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     unsigned char tag;
     unsigned char octet;
 
-    if (!next_octet(&test_cursor, &test_buffer, &tag)) {
-        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 3 returning QD_SECTION_NEED_MORE");
+    if (!next_octet(&test_cursor, &test_buffer, &tag))
         return QD_SECTION_NEED_MORE;
-    }
 
     unsigned char tag_subcat = tag & 0xF0;
 
     // if there is no more data the only valid data type is a null type (0x40),
     // size is implied as 0
-    if (!can_advance(&test_cursor, &test_buffer) && tag_subcat != 0x40) {
-        qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 4 returning QD_SECTION_NEED_MORE");
+    if (!can_advance(&test_cursor, &test_buffer) && tag_subcat != 0x40)
         return QD_SECTION_NEED_MORE;
-    }
 
     switch (tag_subcat) {
         // fixed sizes:
@@ -741,22 +733,16 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     case 0xF0:
         // uint32_t size field:
         pre_consume += 3;
-        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 5 returning QD_SECTION_NEED_MORE");
+        if (!next_octet(&test_cursor, &test_buffer, &octet))
             return QD_SECTION_NEED_MORE;
-        }
         consume |= ((uint32_t) octet) << 24;
 
-        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 6 returning QD_SECTION_NEED_MORE");
+        if (!next_octet(&test_cursor, &test_buffer, &octet))
             return QD_SECTION_NEED_MORE;
-        }
         consume |= ((uint32_t) octet) << 16;
 
-        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 7 returning QD_SECTION_NEED_MORE");
+        if (!next_octet(&test_cursor, &test_buffer, &octet))
             return QD_SECTION_NEED_MORE;
-        }
         consume |= ((uint32_t) octet) << 8;
 
         // fallthrough
@@ -766,20 +752,16 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
     case 0xE0:
         // uint8_t size field
         pre_consume += 1;
-        if (!next_octet(&test_cursor, &test_buffer, &octet)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 8 returning QD_SECTION_NEED_MORE");
+        if (!next_octet(&test_cursor, &test_buffer, &octet))
             return QD_SECTION_NEED_MORE;
-        }
         consume |= (uint32_t) octet;
         break;
     }
 
     location->length = pre_consume + consume;
     if (consume) {
-        if (!advance(&test_cursor, &test_buffer, consume)) {
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "message_section_check_LH 9 returning QD_SECTION_NEED_MORE pre_consume=%i, consume=%zu, location->length=%zu", pre_consume, consume, location->length);
+        if (!advance(&test_cursor, &test_buffer, consume))
             return QD_SECTION_NEED_MORE;  // whole section not fully received
-        }
     }
 
     if (protect_buffer) {
