@@ -1106,98 +1106,6 @@ exit:
 }
 
 
-// Verify that there are zero buffers left in the message content once
-// all streaming body data buffers are fetched and freed.
-static char *test_check_buffer_count_after_stream_data_free(void *context)
-{
-    char *result = 0;
-    qd_message_t *in_msg = 0;
-    qd_message_t *out_msg = 0;
-
-    // simulate building a message as an adaptor would:
-    in_msg = qd_message();
-    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
-    qd_compose_start_list(field);
-    qd_compose_insert_bool(field, 0);     // durable
-    qd_compose_insert_null(field);        // priority
-    qd_compose_end_list(field);
-    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
-    qd_compose_start_list(field);
-    qd_compose_insert_ulong(field, 666);    // message-id
-    qd_compose_insert_null(field);                 // user-id
-    qd_compose_insert_string(field, "/whereevah"); // to
-    qd_compose_insert_string(field, "my-subject");  // subject
-    qd_compose_insert_string(field, "/reply-to");   // reply-to
-    qd_compose_end_list(field);
-
-    qd_message_compose_2(in_msg, field, false);
-    qd_compose_free(field);
-
-    // snapshot the message buffer count to use as a baseline.
-    // base_bufct is usually 1.
-    const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
-
-    printf ("1 DEQ_SIZE(MSG_CONTENT(in_msg)->buffers)=%zu\n", DEQ_SIZE(MSG_CONTENT(in_msg)->buffers));
-
-    // Create just one body data and stuff it with data size 10
-    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
-    memset(buffer, '1', 10);
-    qd_compose_insert_binary(field, buffer, 10);
-
-    // Add the body data to the message
-    qd_message_extend(in_msg, field, 0);
-    qd_compose_free(field);
-
-    out_msg = qd_message_copy(in_msg);
-    qd_message_add_fanout(out_msg);
-
-    // Notice that we are not setting receive_complete
-
-    qd_message_stream_data_t *stream_data = 0;
-    bool done = false;
-
-    qd_buffer_list_t buff_list = MSG_CONTENT(out_msg)->buffers;
-    qd_buffer_t *buf = DEQ_HEAD(buff_list);
-    while (buf) {
-        printf("buf=%p\n", (void *)buf);
-        buf = DEQ_NEXT(buf);
-    }
-
-    printf ("2 DEQ_SIZE(MSG_CONTENT(in_msg)->buffers)=%zu\n", DEQ_SIZE(MSG_CONTENT(out_msg)->buffers));
-
-    while (!done) {
-        switch (qd_message_next_stream_data(out_msg, &stream_data)) {
-        case QD_MESSAGE_STREAM_DATA_NO_MORE:
-            done = true;
-            break;
-        case QD_MESSAGE_STREAM_DATA_BODY_OK:
-            // Immediately release the stream data before getting the next one.
-            qd_message_stream_data_release(stream_data);
-            stream_data = 0;
-            break;
-        case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
-            done = true;
-            break;
-        default:
-            result = "Next body data failed to get next body data";
-            goto exit;
-        }
-    }
-
-    printf ("3 DEQ_SIZE(MSG_CONTENT(in_msg)->buffers)=%zu\n", DEQ_SIZE(MSG_CONTENT(out_msg)->buffers));
-
-    // expect: all but the last body buffer is freed:
-    if (DEQ_SIZE(MSG_CONTENT(out_msg)->buffers) != base_bufct) {
-        result = "Possible buffer leak detected!";
-        goto exit;
-    }
-
-    exit:
-        qd_message_free(in_msg);
-        qd_message_free(out_msg);
-        return result;
-}
-
 // Verify that decoding streaming body data across two
 // "outgoing" messages works
 static char *test_check_stream_data_fanout(void *context)
@@ -1641,7 +1549,6 @@ int message_tests(void)
     TEST_CASE(test_check_stream_data, 0);
     TEST_CASE(test_check_stream_data_append, 0);
     TEST_CASE(test_check_stream_data_fanout, 0);
-    TEST_CASE(test_check_buffer_count_after_stream_data_free, 0);
     TEST_CASE(test_check_stream_data_footer, 0);
     TEST_CASE(test_q2_callback_on_disable, 0);
     TEST_CASE(test_q2_ignore_headers, 0);

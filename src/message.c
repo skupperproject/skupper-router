@@ -2654,15 +2654,28 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
     // find the range of buffers that do not overlap other stream_data
     // or msg->body_buffer
     //
+    qd_buffer_t *start_buf;
+    if (stream_data->free_prev) {
+        size_t protected_buffer_count = content->protected_buffers;
+        start_buf = DEQ_HEAD(content->buffers);
+        while (protected_buffer_count > 0) {
+            start_buf = DEQ_NEXT(start_buf);
+            protected_buffer_count -= 1;
+            if (start_buf == 0)
+                break;
+        }
+    }
+    else {
+        start_buf = stream_data->section.buffer;
+    }
 
-    qd_buffer_t *start_buf = stream_data->free_prev ? DEQ_PREV(stream_data->section.buffer) : stream_data->section.buffer;
+    //qd_buffer_t *start_buf = stream_data->free_prev ? DEQ_PREV(stream_data->section.buffer) : stream_data->section.buffer;
     if (DEQ_PREV(stream_data) && DEQ_PREV(stream_data)->last_buffer == start_buf) {
         // overlap previous stream_data
         if (start_buf == stream_data->last_buffer) {
             // no buffers to free
             DEQ_REMOVE(pvt->stream_data_list, stream_data);
             free_qd_message_stream_data_t(stream_data);
-            qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release 1 DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(content->buffers));
             return;
         }
         start_buf = DEQ_NEXT(start_buf);
@@ -2724,8 +2737,6 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
     DEQ_REMOVE(pvt->stream_data_list, stream_data);
     free_qd_message_stream_data_t(stream_data);
 
-    qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_stream_data_release 2 DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(content->buffers));
-
     if (q2_unblock.handler)
         q2_unblock.handler(q2_unblock.context);
 }
@@ -2736,8 +2747,6 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
     qd_message_pvt_t         *msg         = (qd_message_pvt_t*) in_msg;
     qd_message_content_t     *content     = msg->content;
     qd_message_stream_data_t *stream_data = 0;
-
-    qd_log(qd_message_log_source(), QD_LOG_TRACE, "qd_message_next_stream_data DEQ_SIZE(msg->content->buffers)=%zu", DEQ_SIZE(msg->content->buffers));
 
     *out_stream_data = 0;
     if (!msg->body_cursor) {
