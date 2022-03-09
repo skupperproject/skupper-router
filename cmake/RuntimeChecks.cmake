@@ -95,6 +95,9 @@ set(RUNTIME_CHECK ${RUNTIME_CHECK_DEFAULT} CACHE STRING "Enable runtime checks. 
 if(CMAKE_BUILD_TYPE MATCHES "Coverage" AND RUNTIME_CHECK)
   message(FATAL_ERROR "Cannot set RUNTIME_CHECK with CMAKE_BUILD_TYPE=Coverage")
 endif()
+if(QD_DISABLE_MEMORY_POOL AND NOT RUNTIME_CHECK)
+  message(FATAL_ERROR "Do not set QD_DISABLE_MEMORY_POOL without enabling RUNTIME_CHECK at the same time")
+endif()
 
 if(RUNTIME_CHECK STREQUAL "memcheck")
   assert_has_valgrind()
