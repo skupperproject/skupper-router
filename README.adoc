@@ -15,25 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-= Qpid Dispatch
+= Skupper Router
 
-image:https://github.com/apache/qpid-dispatch/actions/workflows/build.yaml/badge.svg[
+image:https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml/badge.svg[
 "GitHub Actions"
-link="https://github.com/apache/qpid-dispatch/actions/workflows/build.yaml"]
-image:https://img.shields.io/travis/apache/qpid-dispatch.svg?logo=travisci[
+link="https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml"]
+image:https://img.shields.io/travis/skupperproject/skupper-router.svg?logo=travisci[
 "Travis",
-link="https://travis-ci.com/apache/qpid-dispatch"]
-image:https://img.shields.io/github/license/apache/qpid-dispatch.svg[
+link="https://travis-ci.com/skupperproject/skupper-router"]
+image:https://img.shields.io/github/license/skupperproject/skupper-router.svg[
 "License",
-link="https://github.com/apache/qpid-dispatch/blob/main/LICENSE"]
+link="https://github.com/skupperproject/skupper-router/blob/main/LICENSE"]
 
-Qpid Dispatch is a high-performance, lightweight AMQP 1.0 message router.
-It provides flexible and scalable interconnect between any AMQP endpoints,
-whether they be clients, brokers or other AMQP-enabled services.
+Skupper Router is a high-performance, lightweight AMQP 1.0 message router.
+It provides flexible and scalable interconnect between any AMQP endpoints, and is focussed on the (Skupper)[https://skupper.io] use case.
 
 == Building and testing
 
-NOTE: Dispatch will not build on Windows.
+NOTE: Skupper router will not build on Windows.
 
 === Dependencies
 
@@ -56,7 +55,7 @@ To build formatted documentation (man pages, HTML, PDF) see the requirements in 
 
 === Build
 
-From the `qpid-dispatch` directory:
+From the `skupper-router` directory:
 
 [source,shell script]
 ----
@@ -191,7 +190,7 @@ This script then does the following:
 The CTest test suite can be configured to enable extra run time
 validation checks against the dispatch router.
 
-Since run time validation slows down qdrouter considerably it is
+Since run time validation slows down skrouter considerably it is
 disabled by default.  It can be enabled by setting the RUNTIME_CHECK
 build flag via the cmake command.
 
@@ -206,11 +205,11 @@ option.
 ctest --timeout 1500 -VV
 ----
 
-The Qpid Dispatch Router test suite supports the following run time
+The Skupper Router test suite supports the following run time
 validation tools:
 
 ==== Valgrind Memcheck
-Runs qdrouterd under Valgrind's memcheck leak checker during the CTest
+Runs skrouterd under Valgrind's memcheck leak checker during the CTest
 suite.  This will cause tests to fail if a memory error is
 encountered.  Use the grinder tool (in the bin directory) to create a
 summary of the errors found during the test run.
@@ -224,7 +223,7 @@ To enable memcheck set the RUNTIME_CHECK build flag to "memcheck":
 cmake .. -DRUNTIME_CHECK=memcheck
 ----
 
-If valgrind detects errors the qdrouterd process will exit with an
+If valgrind detects errors the skrouterd process will exit with an
 exit code of 42. This will be displayed in the CTest output. For
 example:
 
@@ -250,7 +249,7 @@ The TSAN library (libtsan) must be installed in order to use this
 option.
 
 If threading violations are detected during the CTest suite the
-qdrouterd process will exit with an exit code of 66. This will be
+skrouterd process will exit with an exit code of 66. This will be
 displayed in the CTest output. For example:
 
 [source]
