@@ -24,8 +24,9 @@ For example, unresolvable host names.
 """
 
 import os
-from threading import Timer
+import subprocess
 from subprocess import PIPE, STDOUT
+from threading import Timer
 from typing import ClassVar
 
 from system_test import TestCase, Qdrouterd, TIMEOUT, Process
@@ -149,11 +150,12 @@ class RouterTestBadConfiguration(TestCase):
             ['skmanage', '-b', self.address(), 'query', '--type=router', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_OK,
             universal_newlines=True)
-        out = p.communicate()[0]
         try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
+            out, _ = p.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            p.kill()
+            out, _ = p.communicate(timeout=TIMEOUT)
+            raise Exception("%s\n%s" % (e, out)) from e
         return out
 
 
@@ -186,14 +188,13 @@ class RouterTestIdFailCtrlChar(TestCase):
             ['skrouterd', '-c', conf_path, '-I', lib_include_path],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
             universal_newlines=True)
-        out = p.communicate(timeout=5)[0]
         try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
-        if "AttributeError" not in out:
-            print("output: ", out)
-            assert False, "AttributeError not in process output"
+            out, _ = p.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            out, _ = p.communicate()
+            self.fail(f"p.communicate failed after timeout with output: {out}")
+        self.assertIn("AttributeError: Router id attribute containing character", out)
 
 
 class RouterTestIdFailWhiteSpace(TestCase):
@@ -225,11 +226,10 @@ class RouterTestIdFailWhiteSpace(TestCase):
             ['skrouterd', '-c', conf_path, '-I', lib_include_path],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
             universal_newlines=True)
-        out = p.communicate(timeout=5)[0]
         try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
-        if "AttributeError" not in out:
-            print("output: ", out)
-            assert False, "AttributeError not in process output"
+            out, _ = p.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            out, _ = p.communicate()
+            self.fail(f"p.communicate failed after timeout with output: {out}")
+        self.assertIn("AttributeError: Router id attribute containing character", out)
