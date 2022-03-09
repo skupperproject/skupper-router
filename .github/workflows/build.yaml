@@ -187,6 +187,7 @@ jobs:
       LD_LIBRARY_PATH: ${{github.workspace}}/install/lib
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
+
     steps:
 
       - name: Show environment (Linux)
@@ -210,7 +211,7 @@ jobs:
       - name: Install Linux runtime/test dependencies
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt update; sudo apt install -y libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl
+          sudo apt update; sudo apt install -y libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
@@ -221,8 +222,15 @@ jobs:
       - name: CTest
         working-directory: ${{env.RouterBuildDir}}
         run: |
+          sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
+
           ctest --timeout 1200 -C ${BuildType} -V -T Test --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j100 ${{env.RouterCTestExtraArgs}}
+
+      - name: Report coredump stacktraces (if any tests failed)
+        if: ${{ failure() }}
+        run: |
+          find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
 
       - name: Upload test results
         uses: actions/upload-artifact@v2
@@ -245,7 +253,7 @@ jobs:
         with:
           name: cores_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: |
-            **/core
+            **/coredump*
 
   compile_and_test:
     name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
@@ -295,6 +303,7 @@ jobs:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
       volumes:
         - ${{github.workspace}}:${{github.workspace}}
+      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined
 
     env:
       BuildType: ${{matrix.buildType}}
@@ -434,12 +443,8 @@ jobs:
       - name: Install Linux runtime/test dependencies
         if: ${{ runner.os == 'Linux' }}
         run: |
-          dnf install -y curl
-
-      - name: Install Linux runtime/test dependencies (for sanitizers)
-        if: ${{ matrix.runtimeCheck != 'OFF' }}
-        run: |
-          dnf install -y binutils
+          dnf install -y curl gdb binutils elfutils elfutils-debuginfod-client findutils file
+          dnf debuginfo-install -y python3
 
       - name: install qpid-proton python wheel
         run: python3 -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
@@ -447,8 +452,15 @@ jobs:
       - name: CTest
         working-directory: ${{env.RouterBuildDir}}
         run: |
+          echo "coredump.%e.%p" > /proc/sys/kernel/core_pattern
           ulimit -c unlimited
+
           ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
+
+      - name: Report coredump stacktraces (if any tests failed)
+        if: ${{ failure() }}
+        run: |
+          find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
 
       - name: Upload test results
         uses: actions/upload-artifact@v2
@@ -471,7 +483,7 @@ jobs:
         with:
           name: cores_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: |
-            **/core
+            **/coredump*
 
   python:
     name: 'Python Checker (${{ matrix.os }})'
