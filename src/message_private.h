@@ -66,6 +66,7 @@ struct qd_message_stream_data_t {
     qd_message_pvt_t    *owning_message;  // Pointer to the owning message
     qd_field_location_t  section;         // Section descriptor for the field
     qd_field_location_t  payload;         // Descriptor for the payload of the body data
+    qd_buffer_t         *first_buffer; // for freeing, may be before section buffer!
     qd_buffer_t         *last_buffer;     // Pointer to the last buffer in the field
     bool                 free_prev;       // true if old body_data buffer needs freeing
 };
