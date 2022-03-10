@@ -42,52 +42,56 @@ typedef enum plog_record_type {
     PLOG_RECORD_CONNECTOR  = 0x05,  // An egress connector for an application protocol
     PLOG_RECORD_FLOW       = 0x06,  // An application flow between a ingress and an egress
     PLOG_RECORD_PROCESS    = 0x07,  // A running process/pod/container that uses application protocols
+    PLOG_RECORD_INGRESS    = 0x08,  // An access point for external access into the VAN
+    PLOG_RECORD_EGRESS     = 0x09,  // An entity from which external services are accessed from within the VAN
 } plog_record_type_t;
 
 typedef enum plog_attribute {
     PLOG_ATTRIBUTE_IDENTITY         = 0,   // Reference (cannot be set by the user)
     PLOG_ATTRIBUTE_PARENT           = 1,   // Reference (set during object creation only)
-    PLOG_ATTRIBUTE_COUNTERFLOW      = 2,   // Reference
-    PLOG_ATTRIBUTE_PEER             = 3,   // Reference to another record that represents the same flow
+    PLOG_ATTRIBUTE_START_TIME       = 2,   // uint
+    PLOG_ATTRIBUTE_END_TIME         = 3,   // uint
 
-    PLOG_ATTRIBUTE_PROCESS          = 4,   // Reference
-    PLOG_ATTRIBUTE_SIBLING_ORDINAL  = 5,   // uint
-    PLOG_ATTRIBUTE_LOCATION         = 6,   // String
-    PLOG_ATTRIBUTE_PROVIDER         = 7,   // String
+    PLOG_ATTRIBUTE_COUNTERFLOW      = 4,   // Reference
+    PLOG_ATTRIBUTE_PEER             = 5,   // Reference to another record that represents the same flow
+    PLOG_ATTRIBUTE_PROCESS          = 6,   // Reference
+    PLOG_ATTRIBUTE_SIBLING_ORDINAL  = 7,   // uint
 
-    PLOG_ATTRIBUTE_PLATFORM         = 8,   // String
-    PLOG_ATTRIBUTE_NAMESPACE        = 9,   // String
-    PLOG_ATTRIBUTE_MODE             = 10,  // String
-    PLOG_ATTRIBUTE_SOURCE_HOST      = 11,  // String
+    PLOG_ATTRIBUTE_LOCATION         = 8,   // String
+    PLOG_ATTRIBUTE_PROVIDER         = 9,   // String
+    PLOG_ATTRIBUTE_PLATFORM         = 10,  // String
+    PLOG_ATTRIBUTE_NAMESPACE        = 11,  // String
 
-    PLOG_ATTRIBUTE_DESTINATION_HOST = 12,  // String
-    PLOG_ATTRIBUTE_PROTOCOL         = 13,  // String
-    PLOG_ATTRIBUTE_SOURCE_PORT      = 14,  // String
-    PLOG_ATTRIBUTE_DESTINATION_PORT = 15,  // String
+    PLOG_ATTRIBUTE_MODE             = 12,  // String
+    PLOG_ATTRIBUTE_SOURCE_HOST      = 13,  // String
+    PLOG_ATTRIBUTE_DESTINATION_HOST = 14,  // String
+    PLOG_ATTRIBUTE_PROTOCOL         = 15,  // String
 
-    PLOG_ATTRIBUTE_VAN_ADDRESS      = 16,  // String
-    PLOG_ATTRIBUTE_IMAGE_NAME       = 17,  // String
-    PLOG_ATTRIBUTE_IMAGE_VERSION    = 18,  // String
-    PLOG_ATTRIBUTE_HOST_NAME        = 19,  // String
+    PLOG_ATTRIBUTE_SOURCE_PORT      = 16,  // String
+    PLOG_ATTRIBUTE_DESTINATION_PORT = 17,  // String
+    PLOG_ATTRIBUTE_VAN_ADDRESS      = 18,  // String
+    PLOG_ATTRIBUTE_IMAGE_NAME       = 19,  // String
 
-    PLOG_ATTRIBUTE_FLOW_TYPE        = 20,
-    PLOG_ATTRIBUTE_OCTETS           = 21,  // uint
-    PLOG_ATTRIBUTE_START_LATENCY    = 22,  // uint
-    PLOG_ATTRIBUTE_BACKLOG          = 23,  // uint
+    PLOG_ATTRIBUTE_IMAGE_VERSION    = 20,  // String
+    PLOG_ATTRIBUTE_HOST_NAME        = 21,  // String
+    PLOG_ATTRIBUTE_FLOW_TYPE        = 22,
+    PLOG_ATTRIBUTE_OCTETS           = 23,  // uint
 
-    PLOG_ATTRIBUTE_METHOD           = 24,  // String  
-    PLOG_ATTRIBUTE_RESULT           = 25,  // String
-    PLOG_ATTRIBUTE_REASON           = 26,  // String
-    PLOG_ATTRIBUTE_NAME             = 27,  // String
+    PLOG_ATTRIBUTE_START_LATENCY    = 24,  // uint
+    PLOG_ATTRIBUTE_BACKLOG          = 25,  // uint
+    PLOG_ATTRIBUTE_METHOD           = 26,  // String  
+    PLOG_ATTRIBUTE_RESULT           = 27,  // String
 
-    PLOG_ATTRIBUTE_TRACE            = 28,  // List of Strings (use plog_set_trace function)
-    PLOG_ATTRIBUTE_BUILD_VERSION    = 29,  // String
+    PLOG_ATTRIBUTE_REASON           = 28,  // String
+    PLOG_ATTRIBUTE_NAME             = 29,  // String
+    PLOG_ATTRIBUTE_TRACE            = 30,  // List of Strings (use plog_set_trace function)
+    PLOG_ATTRIBUTE_BUILD_VERSION    = 31,  // String
 } plog_attribute_t;
 
-#define VALID_REF_ATTRS    0x0000001c
-#define VALID_UINT_ATTRS   0x00e00020
-#define VALID_STRING_ATTRS 0x2f0fffc0
-#define VALID_TRACE_ATTRS  0x10000000
+#define VALID_REF_ATTRS    0x0000000000000073
+#define VALID_UINT_ATTRS   0x000000000380008c
+#define VALID_STRING_ATTRS 0x00000000bc3fff00
+#define VALID_TRACE_ATTRS  0x0000000040000000
 
 
 /**
