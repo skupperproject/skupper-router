@@ -34,11 +34,11 @@ It provides flexible and scalable interconnect between any AMQP endpoints, and i
 
 == Building and testing
 
-NOTE: You cannot build Skupper router on Windows.
+NOTE: Skupper router only supports the Linux OS.
 
 === Dependencies
 
-To build dispatch on a yum-based Linux system, you need the following packages installed:
+To build skupper router on a yum-based Linux system, you need the following packages installed:
 
 - qpid-proton-c-devel
 - python3-qpid-proton
@@ -109,7 +109,7 @@ The TCP system tests run only if Python selectors is available.
 pip3 install --user quart h2 selectors
 ----
 
-Websocket system tests use the Python `websockets asyncio` module.
+Websocket system tests use the Python `websockets` *asyncio* module.
 
 .Install websockets
 [source,shell script]
@@ -191,9 +191,9 @@ This script then does the following:
 === Run Time Validation
 
 The CTest test suite can be configured to enable extra run time
-validation checks against the dispatch router.
+validation checks against the skupper router.
 
-Since run time validation slows down `skrouter` considerably it is disabled by default.  
+Since run time validation slows down `skrouterd` considerably it is disabled by default.  
 
 It can be enabled by setting the `RUNTIME_CHECK` build flag via the `cmake` command.
 
@@ -293,7 +293,7 @@ Existing build directory can be opened with `cmake-gui -S .. -B .`
 |CMake option| Description
 
 |`-DCMAKE_BUILD_TYPE=`
-|Dispatch defaults to building with the `RelWithDebInfo` CMake preset.
+|Skupper router defaults to building with the `RelWithDebInfo` CMake preset.
 Other options include `Debug` (disables optimizations) and `Coverage`.
 
 |`-DQD_ENABLE_ASSERTIONS=`
@@ -307,8 +307,8 @@ Other options include `Debug` (disables optimizations) and `Coverage`.
 Older versions of `CMake`` only honor this option with the Intel compiler on Linux.
 
 |`-DQD_DISABLE_MEMORY_POOL=ON`
-|Dispatch will immediately free memory, instead of returning it to memory pool.
-This option will *break* safe pointers, resulting in crashes, therefore is suitable only for debugging.
+|Skupper router immediately frees memory, instead of returning it to memory pool.
+This option *breaks* safe pointers, resulting in crashes, therefore is suitable only for debugging.
 When combined with `-DRUNTIME_CHECK=asan`, the pointer breakages are much less frequent.
 
 |===
