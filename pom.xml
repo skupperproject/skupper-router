@@ -113,10 +113,12 @@
                       <exclude>**/*~</exclude> <!-- This is for files created by emacs -->
                       <exclude>.pydevproject</exclude> <!-- PyCharm project file -->
                       <exclude>.cproject</exclude>
+                      <exclude>.adr-dir</exclude>
                       <exclude>**/qpid-proton/**</exclude>
                       <exclude>**/CMakeFiles/**</exclude>
                       <exclude>**/licenses/**</exclude>
                       <exclude>qpid-proton/**</exclude>
+                      <exclude>decisions/**</exclude>
                       <exclude>libuv/**</exclude>
                       <exclude>libwebsockets/**</exclude>
                       <exclude>tools/scraper/test_data/**</exclude>
