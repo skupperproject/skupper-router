@@ -95,12 +95,13 @@ ALLOC_DECLARE(plog_work_t);
 ALLOC_DEFINE(plog_work_t);
 DEQ_DECLARE(plog_work_t, plog_work_list_t);
 
-static const char *event_address_all       = "mc/ske.$all";
-static const char *event_address_my_prefix = "mc/ske.";
+static const char *event_address_all       = "mc/sfe.all";
+static const char *event_address_my_prefix = "mc/sfe.";
 static       char *event_address_my        = 0;
 static const int   beacon_interval_sec     = 5;
 
 static sys_mutex_t        *lock;
+static sys_mutex_t        *id_lock;
 static sys_cond_t         *condition;
 static sys_thread_t       *thread;
 static bool                sleeping = false;
@@ -159,9 +160,11 @@ static plog_attribute_data_t* _plog_find_attribute(plog_record_t *record, plog_a
  */
 static void _plog_next_id(plog_identity_t *identity)
 {
+    sys_mutex_lock(id_lock);
     identity->site_id   = site_id;
     identity->router_id = router_id;
     identity->record_id = next_identity++;
+    sys_mutex_unlock(id_lock);
 }
 
 
@@ -197,15 +200,37 @@ static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute
 
     text[0] = '\0';
 
-    if (1 << data->attribute_type & VALID_UINT_ATTRS) {
+    if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
         sprintf(text, "%"PRIu64, data->value.uint_val);
-    } else if (1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
         text_ptr = data->value.string_val;
-    } else if (1 << data->attribute_type & VALID_REF_ATTRS) {
+    } else if ((uint64_t) 1 << data->attribute_type & VALID_REF_ATTRS) {
         _plog_strncat_id(text, ATTR_TEXT_MAX, &data->value.ref_val);
     }
 
     strncat(buffer, text_ptr, n);
+}
+
+
+static void _plog_compose_id(qd_composed_field_t *field, const plog_identity_t *id)
+{
+    qd_compose_start_list(field);
+    qd_compose_insert_ulong(field, id->site_id);
+    qd_compose_insert_ulong(field, id->router_id);
+    qd_compose_insert_ulong(field, id->record_id);
+    qd_compose_end_list(field);
+}
+
+
+static void _plog_compose_attribute(qd_composed_field_t *field, const plog_attribute_data_t *data)
+{
+    if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
+        qd_compose_insert_long(field, data->value.uint_val);
+    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+        qd_compose_insert_string(field, data->value.string_val);
+    } else if ((uint64_t) 1 << data->attribute_type & VALID_REF_ATTRS) {
+        _plog_compose_id(field, &data->value.ref_val);
+    }
 }
 
 
@@ -222,30 +247,28 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     }
 
     //
-    // The record was allocated in the IO thread call (so the pointer could
-    // be returned synchronously to the caller)
+    // If the record type is ROUTER, this is the local-router record.  Store it.
+    // Otherwise, if the parent is not specified, use the local_router as the parent.
     //
     plog_record_t *record = work->record;
-    if (record->parent == 0) {
+    if (record->record_type == PLOG_RECORD_ROUTER) {
+        local_router = record;
+    } else if (record->parent == 0) {
         record->parent = local_router;
     }
 
     //
-    // Assign a unique identity to the new record
-    //
-    _plog_next_id(&record->identity);
-
-    //
     // Place the new record on the parent's list of children
     //
-    DEQ_INSERT_TAIL(record->parent->children, record);
-
+    if (!!record->parent) {
+        DEQ_INSERT_TAIL(record->parent->children, record);
+    }
 
     //
     // If this record has a parent and the parent has never been logged,
     // flag it as needing to be flushed and logged.
     //
-    if (record->parent->never_logged) {
+    if (!!record->parent && record->parent->never_logged) {
         record->parent->force_log = true;
         if (!record->parent->unflushed) {
             record->parent->unflushed = true;
@@ -471,7 +494,7 @@ static void _plog_post_work(plog_work_t *work)
  */
 static void _plog_create_router_record(void)
 {
-    local_router = plog_start_record(PLOG_RECORD_ROUTER, 0);
+    plog_record_t *router = plog_start_record(PLOG_RECORD_ROUTER, 0);
 
     const char *hostname   = getenv("HOSTNAME");
     const char *namespace  = getenv("POD_NAMESPACE");
@@ -482,26 +505,26 @@ static void _plog_create_router_record(void)
     strcpy(name, router_area);
     strcat(name, "/");
     strcat(name, router_name);
-    plog_set_string(local_router, PLOG_ATTRIBUTE_NAME, name);
+    plog_set_string(router, PLOG_ATTRIBUTE_NAME, name);
     free(name);
 
     if (!!hostname) {
-        plog_set_string(local_router, PLOG_ATTRIBUTE_HOST_NAME, hostname);
+        plog_set_string(router, PLOG_ATTRIBUTE_HOST_NAME, hostname);
     }
 
     if (!!namespace) {
-        plog_set_string(local_router, PLOG_ATTRIBUTE_NAMESPACE, namespace);
+        plog_set_string(router, PLOG_ATTRIBUTE_NAMESPACE, namespace);
     }
 
     if (!!image_name) {
-        plog_set_string(local_router, PLOG_ATTRIBUTE_IMAGE_NAME, image_name);
+        plog_set_string(router, PLOG_ATTRIBUTE_IMAGE_NAME, image_name);
     }
 
     if (!!version) {
-        plog_set_string(local_router, PLOG_ATTRIBUTE_IMAGE_VERSION, version);
+        plog_set_string(router, PLOG_ATTRIBUTE_IMAGE_VERSION, version);
     }
 
-    plog_set_string(local_router, PLOG_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
+    plog_set_string(router, PLOG_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
 }
 
 
@@ -510,7 +533,7 @@ static void _plog_create_router_record(void)
  * 
  * @param record Pointer to the record to be freed.
  */
-static void _plog_free_record(plog_record_t *record)
+static void _plog_free_record_TH(plog_record_t *record)
 {
     //
     // If this record is a child of a parent, remove it from the parent's child list
@@ -531,7 +554,7 @@ static void _plog_free_record(plog_record_t *record)
     // Remove all of this record's children
     //
     while (!DEQ_IS_EMPTY(record->children)) {
-        _plog_free_record(DEQ_HEAD(record->children));
+        _plog_free_record_TH(DEQ_HEAD(record->children));
     }
 
     //
@@ -540,7 +563,7 @@ static void _plog_free_record(plog_record_t *record)
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (!!data) {
         DEQ_REMOVE_HEAD(record->attributes);
-        if (1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+        if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
             free(data->value.string_val);
         }
         free_plog_attribute_data_t(data);
@@ -565,6 +588,8 @@ static const char *_plog_record_type_name(const plog_record_t *record)
     case PLOG_RECORD_CONNECTOR  : return "CONNECTOR";
     case PLOG_RECORD_FLOW       : return "FLOW";
     case PLOG_RECORD_PROCESS    : return "PROCESS";
+    case PLOG_RECORD_INGRESS    : return "INGRESS";
+    case PLOG_RECORD_EGRESS     : return "EGRESS";
     }
     return "UNKNOWN";
 }
@@ -575,6 +600,8 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     switch (data->attribute_type) {
     case PLOG_ATTRIBUTE_IDENTITY         : return "identity";
     case PLOG_ATTRIBUTE_PARENT           : return "parent";
+    case PLOG_ATTRIBUTE_START_TIME       : return "startTime";
+    case PLOG_ATTRIBUTE_END_TIME         : return "endTime";
     case PLOG_ATTRIBUTE_COUNTERFLOW      : return "counterflow";
     case PLOG_ATTRIBUTE_PEER             : return "peer";
     case PLOG_ATTRIBUTE_PROCESS          : return "process";
@@ -639,10 +666,10 @@ static bool _plog_unserialize_identity(qd_parsed_field_t *field, plog_identity_t
 
 /**
  * @brief Emit a single record as a log event
- * 
+ *
  * @param record Pointer to the record to be emitted
  */
-static void _plog_emit_record_as_log(plog_record_t *record)
+static void _plog_emit_record_as_log_TH(plog_record_t *record)
 {
 #define LINE_MAX 1000
     char line[LINE_MAX + 1];
@@ -678,10 +705,77 @@ static void _plog_emit_record_as_log(plog_record_t *record)
 
 
 /**
+ * @brief Emit a single record as an event
+ *
+ * @param core Pointer to the core module
+ * @param record Pointer to the record being flushed
+ */
+static void _plog_emit_record_as_event_TH(qdr_core_t *core, plog_record_t *record)
+{
+    //
+    // Compose the message content starting with the properties
+    //
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
+    qd_compose_start_list(field);
+    qd_compose_insert_long(field, next_message_id++);
+    qd_compose_insert_null(field);                                    // user-id
+    qd_compose_insert_string(field, event_address_my);                // to
+    qd_compose_insert_string(field, _plog_record_type_name(record));  // subject
+    qd_compose_end_list(field);
+
+    //
+    // Append the body section to the content
+    //
+    field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
+    qd_compose_start_map(field);
+
+    qd_compose_insert_int(field, PLOG_ATTRIBUTE_IDENTITY);
+    _plog_compose_id(field, &record->identity);
+
+    if (!!record->parent) {
+        qd_compose_insert_int(field, PLOG_ATTRIBUTE_PARENT);
+        _plog_compose_id(field, &record->parent->identity);
+    }
+
+    plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
+    while (data) {
+        if (data->emit_ordinal >= record->emit_ordinal) {
+            qd_compose_insert_int(field, data->attribute_type);
+            _plog_compose_attribute(field, data);
+        }
+        data = DEQ_NEXT(data);
+    }
+    qd_compose_end_map(field);
+
+    //
+    // Create a message for the content
+    //
+    qd_message_t *event = qd_message();
+    qd_message_compose_2(event, field, true);
+
+    //
+    // Annotate the message so it will be properly multicast
+    //
+    qdr_new_message_annotate(core, event);
+
+    //
+    // Send the message to all of the bound receivers
+    //
+    qdr_send_to2(core, event, event_address_my, true, false);
+
+    //
+    // Free up used resources
+    //
+    qd_compose_free(field);
+    qd_message_free(event);
+}
+
+
+/**
  * @brief Emit all of the unflushed records
  * 
  */
-static void _plog_flush(void)
+static void _plog_flush_TH(qdr_core_t *core)
 {
     plog_record_t *record = DEQ_HEAD(unflushed_records);
     while (!!record) {
@@ -690,21 +784,24 @@ static void _plog_flush(void)
         record->unflushed = false;
 
         //
-        // TODO - Emit event to collectors
+        // Emit event to collectors
         //
+        if (my_address_usable) {
+            _plog_emit_record_as_event_TH(core, record);
+        }
 
         //
         // If this record has been ended, emit the log line.
         //
         if (record->ended || record->force_log) {
             record->force_log = false;
-            _plog_emit_record_as_log(record);
+            _plog_emit_record_as_log_TH(record);
         }
 
         record->never_flushed = false;
         record->emit_ordinal++;
         if (record->ended) {
-            _plog_free_record(record);
+            _plog_free_record_TH(record);
         }
         record = DEQ_HEAD(unflushed_records);
     }
@@ -724,21 +821,24 @@ static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
         qd_compose_insert_long(field, next_message_id++);
         qd_compose_insert_null(field);                       // user-id
         qd_compose_insert_string(field, event_address_all);  // to
-        qd_compose_insert_string(field, "ROUTER");           // subject
+        qd_compose_insert_string(field, "BEACON");           // subject
         qd_compose_end_list(field);
+
+        field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, field);
+        qd_compose_start_map(field);
+        qd_compose_insert_symbol(field, "v");
+        qd_compose_insert_uint(field, 1);
+        qd_compose_insert_symbol(field, "sourceType");
+        qd_compose_insert_string(field, "ROUTER");
+        qd_compose_insert_symbol(field, "address");
+        qd_compose_insert_string(field, event_address_my);
+        qd_compose_end_map(field);
 
         //
         // Append the body section to the content
         //
         field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
-        qd_compose_start_map(field);
-        qd_compose_insert_int(field, PLOG_ATTRIBUTE_IDENTITY);
-        qd_compose_start_list(field);
-        qd_compose_insert_int(field, local_router->identity.site_id);
-        qd_compose_insert_int(field, local_router->identity.router_id);
-        qd_compose_insert_int(field, local_router->identity.record_id);
-        qd_compose_end_list(field);
-        qd_compose_end_map(field);
+        qd_compose_insert_null(field);
 
         //
         // Create a message for the content
@@ -765,12 +865,36 @@ static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
 }
 
 
+static void _plog_refresh_record_TH(plog_record_t *record)
+{
+    record->emit_ordinal = 0;
+    if (!record->unflushed) {
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
+        record->unflushed = true;
+    }
+
+    plog_record_t *child = DEQ_HEAD(record->children);
+    while (!!child) {
+        _plog_refresh_record_TH(child);
+        child = DEQ_NEXT(child);
+    }
+}
+
+
+static void _plog_refresh_events_TH(plog_work_t *work, bool discard)
+{
+    if (!discard) {
+        _plog_refresh_record_TH(local_router);
+    }
+}
+
+
 static void _plog_send_beacon(qdr_core_t *core)
 {
-    plog_work_t *work = _plog_work(_plog_send_beacon_TH);
-    work->value.pointer = core;
-    _plog_post_work(work);
     if (!!beacon_timer) {
+        plog_work_t *work = _plog_work(_plog_send_beacon_TH);
+        work->value.pointer = core;
+        _plog_post_work(work);
         qd_timer_schedule(beacon_timer, beacon_interval_sec * 1000);
     }
 }
@@ -786,11 +910,12 @@ static void _plog_send_beacon(qdr_core_t *core)
  * @param unused Unused
  * @return void* Unused
  */
-static void *_plog_thread(void *unused)
+static void *_plog_thread(void *context)
 {
-    bool             running         = true;
-    bool             do_flush;
+    bool running = true;
+    bool do_flush;
     plog_work_list_t local_work_list = DEQ_EMPTY;
+    qdr_core_t *core = (qdr_core_t*) context;
 
     qd_log(log, QD_LOG_INFO, "Protocol logging started");
 
@@ -822,7 +947,7 @@ static void *_plog_thread(void *unused)
         sys_mutex_unlock(lock);
 
         if (do_flush) {
-            _plog_flush();
+            _plog_flush_TH(core);
         }
 
         //
@@ -844,11 +969,11 @@ static void *_plog_thread(void *unused)
         }
     }
 
-    _plog_flush();
-    _plog_free_record(local_router);
+    _plog_flush_TH(core);
+    _plog_free_record_TH(local_router);
     plog_record_t *record = DEQ_HEAD(unflushed_records);
     while (!!record) {
-        _plog_free_record(record);
+        _plog_free_record_TH(record);
         record = DEQ_HEAD(unflushed_records);
     }
 
@@ -860,6 +985,17 @@ static void *_plog_thread(void *unused)
 //=====================================================================================
 // API Callbacks
 //=====================================================================================
+/**
+ * @brief Handler for changes in reachability for the all-routers multicast address.
+ *        This address is used for "beacon" messages that announce the existence of 
+ *        a router in the network.
+ * 
+ * @param context Context for the handler (the core module pointer)
+ * @param local_consumers The number of local (on this router) consumers for the address
+ * @param in_proc_consumers (unused) The number of in-process consumers for the address
+ * @param remote_consumers The number of remote routers with local consumers for the address
+ * @param local_producers (unused) The number of local producers for the address
+ */
 static void _plog_on_all_address_watch(void     *context,
                                        uint32_t  local_consumers,
                                        uint32_t  in_proc_consumers,
@@ -870,7 +1006,7 @@ static void _plog_on_all_address_watch(void     *context,
 
     if (now_usable && !all_address_usable) {
         //
-        // Start sending beacon messages to the the all_address.
+        // Start sending beacon messages to the all_address.
         //
         all_address_usable = true;
         _plog_send_beacon((qdr_core_t*) context);
@@ -886,6 +1022,16 @@ static void _plog_on_all_address_watch(void     *context,
 }
 
 
+/**
+ * @brief Handler for changes in reachability for this router's event multicast address.
+ *        This address is used to send the log records to collectors in the network.
+ * 
+ * @param context Context for the handler (the core module pointer)
+ * @param local_consumers The number of local (on this router) consumers for the address
+ * @param in_proc_consumers (unused) The number of in-process consumers for the address
+ * @param remote_consumers The number of remote routers with local consumers for the address
+ * @param local_producers (unused) The number of local producers for the address
+ */
 static void _plog_on_my_address_watch(void     *context,
                                       uint32_t  local_consumers,
                                       uint32_t  in_proc_consumers,
@@ -896,12 +1042,13 @@ static void _plog_on_my_address_watch(void     *context,
 
     if (now_usable && !my_address_usable) {
         //
-        // Start using the my_address
+        // Start sending log records
         //
         my_address_usable = true;
+        _plog_post_work(_plog_work(_plog_refresh_events_TH));
     } else if (!now_usable && my_address_usable) {
         //
-        // Stop using the my_address
+        // Stop sending log records
         //
         my_address_usable = false;
     }
@@ -931,6 +1078,11 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
     record->ended         = false;
 
     work->record = record;
+
+    //
+    // Assign a unique identity to the new record
+    //
+    _plog_next_id(&record->identity);
 
     _plog_post_work(work);
     return record;
@@ -962,7 +1114,7 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
 
 void plog_set_ref_from_record(plog_record_t *record, plog_attribute_t attribute_type, plog_record_t *referenced_record)
 {
-    assert(1 << attribute_type & VALID_REF_ATTRS);
+    assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
     plog_work_t *work = _plog_work(_plog_set_ref_TH);
     work->record        = record;
     work->attribute     = attribute_type;
@@ -973,7 +1125,7 @@ void plog_set_ref_from_record(plog_record_t *record, plog_attribute_t attribute_
 
 void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_type, qd_parsed_field_t *field)
 {
-    assert(1 << attribute_type & VALID_REF_ATTRS);
+    assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
     plog_work_t *work = _plog_work(_plog_set_ref_TH);
     work->record    = record;
     work->attribute = attribute_type;
@@ -991,7 +1143,7 @@ void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_
 void plog_set_string(plog_record_t *record, plog_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
-    assert(1 << attribute_type & VALID_STRING_ATTRS);
+    assert((uint64_t) 1 << attribute_type & VALID_STRING_ATTRS);
     plog_work_t *work = _plog_work(_plog_set_string_TH);
     work->record           = record;
     work->attribute        = attribute_type;
@@ -1002,7 +1154,7 @@ void plog_set_string(plog_record_t *record, plog_attribute_t attribute_type, con
 
 void plog_set_uint64(plog_record_t *record, plog_attribute_t attribute_type, uint64_t value)
 {
-    assert(1 << attribute_type & VALID_UINT_ATTRS);
+    assert((uint64_t) 1 << attribute_type & VALID_UINT_ATTRS);
     plog_work_t *work = _plog_work(_plog_set_int_TH);
     work->record        = record;
     work->attribute     = attribute_type;
@@ -1080,6 +1232,22 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg)
 //=====================================================================================
 // IO Module Callbacks
 //=====================================================================================
+
+static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
+{
+    qdr_core_t *core = (qdr_core_t*) work->value.pointer;
+
+    if (!discard) {
+        event_address_my = (char*) malloc(71);
+        strcpy(event_address_my, event_address_my_prefix);
+        _plog_strncat_id(event_address_my, 70, &local_router->identity);
+
+        all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M', _plog_on_all_address_watch, core);
+        my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M', _plog_on_my_address_watch,  core);
+    }
+}
+
+
 /**
  * @brief Module initializer
  * 
@@ -1095,18 +1263,16 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
 
     log       = qd_log_source("FLOW_LOG");
     lock      = sys_mutex();
+    id_lock   = sys_mutex();
     condition = sys_cond();
-    thread    = sys_thread(_plog_thread, 0);
+    thread    = sys_thread(_plog_thread, core);
     *adaptor_context = core;
 
     _plog_create_router_record();
 
-    event_address_my = (char*) malloc(71);
-    strcpy(event_address_my, event_address_my_prefix);
-    _plog_strncat_id(event_address_my, 70, &local_router->identity);
-
-    all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M', _plog_on_all_address_watch, core);
-    my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M', _plog_on_my_address_watch,  core);
+    plog_work_t *work = _plog_work(_plog_init_address_watch_TH);
+    work->value.pointer = core;
+    _plog_post_work(work);
 
     beacon_timer = qd_timer(qdr_core_dispatch(core), _plog_on_beacon, core);
 }
@@ -1131,11 +1297,6 @@ static void _plog_final(void *adaptor_context)
     qdr_core_unwatch_address(core, my_address_watch_handle);
 
     //
-    // Free the allocated my-address
-    //
-    free(event_address_my);
-
-    //
     // Signal the thread to exit by posting a NULL work pointer
     //
     _plog_post_work(_plog_work(0));
@@ -1147,10 +1308,16 @@ static void _plog_final(void *adaptor_context)
     sys_thread_free(thread);
 
     //
+    // Free the allocated my-address
+    //
+    free(event_address_my);
+
+    //
     // Free the condition and lock variables
     //
     sys_cond_free(condition);
     sys_mutex_free(lock);
+    sys_mutex_free(id_lock);
 }
 
 

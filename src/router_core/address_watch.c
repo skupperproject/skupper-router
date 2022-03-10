@@ -54,8 +54,10 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
     action->args.io.context       = context;
     action->args.io.value32_1     = sys_atomic_inc(&next_handle);
 
+    qdr_watch_handle_t retval = action->args.io.value32_1;
+
     qdr_action_enqueue(core, action);
-    return action->args.io.value32_1;
+    return retval;
 }
 
 
