@@ -14,7 +14,8 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-
+:toc:
+:toclevels: 5
 = Skupper Router
 
 image:https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml/badge.svg[
@@ -28,16 +29,16 @@ image:https://img.shields.io/github/license/skupperproject/skupper-router.svg[
 link="https://github.com/skupperproject/skupper-router/blob/main/LICENSE"]
 
 Skupper Router is a high-performance, lightweight AMQP 1.0 message router.
-It provides flexible and scalable interconnect between any AMQP endpoints, and is focussed on the (Skupper)[https://skupper.io] use case.
+It provides flexible and scalable interconnect between any AMQP endpoints, and is forked from the https://github.com/apache/qpid-dispatch/[qpid-dispatch] project to focus on the https://skupper.io[Skupper] use case.
+
 
 == Building and testing
 
-NOTE: Skupper router will not build on Windows.
+NOTE: You cannot build Skupper router on Windows.
 
 === Dependencies
 
-To build dispatch on a yum-based Linux system, you will need the following
-packages installed:
+To build dispatch on a yum-based Linux system, you need the following packages installed:
 
 - qpid-proton-c-devel
 - python3-qpid-proton
@@ -73,9 +74,8 @@ From the `<build>` directory you can run all the system- and unit-tests with:
 $ ctest -VV
 ----
 
-ctest uses the script `<build>/test/run.py` to set up the correct environment for
-tests. You can use it to run tests individually from the `<build>/tests`
-directory.
+The `ctest` tool uses the script `<build>/test/run.py` to set up the correct environment for tests. 
+You can use it to run tests individually from the `<build>/tests` directory.
 
 .Example
 [source,shell script]
@@ -93,15 +93,14 @@ $ ./run.py
 === Test-only dependencies
 
 The HTTP2 system tests (`tests/system_tests_http2.py`) use the Python Quart and hyper-h2 frameworks to start a HTTP2 server.
-The HTTP2 system tests will run only if
+The HTTP2 system tests only runs if
 
 1. Python version >= 3.7
 2. Python Web Microframework Quart version >= 0.13
 3. curl is available
 4. hyper-h2 is available (pure-Python implementation of a HTTP/2 protocol stack)
 
-The TCP system tests (tests/system_tests_tcp_adaptor.py) use the
-Python selectors module when running echo clients and servers.
+The TCP system tests (tests/system_tests_tcp_adaptor.py) use the Python selectors module when running echo clients and servers.
 The TCP system tests run only if Python selectors is available.
 
 .Install quart, h2 and selectors
@@ -110,7 +109,7 @@ The TCP system tests run only if Python selectors is available.
 pip3 install --user quart h2 selectors
 ----
 
-Websocket system tests use the Python websockets asyncio module.
+Websocket system tests use the Python `websockets asyncio` module.
 
 .Install websockets
 [source,shell script]
@@ -118,7 +117,7 @@ Websocket system tests use the Python websockets asyncio module.
 pip3 install --user websockets
 ----
 
-The gRPC system tests (tests/system_tests_grpc.py) use grpcio and protobuf modules.
+The gRPC system tests (tests/system_tests_grpc.py) use `grpcio` and `protobuf` modules.
 
 .Install gRPC libraries
 [source,shell script]
@@ -126,8 +125,7 @@ The gRPC system tests (tests/system_tests_grpc.py) use grpcio and protobuf modul
 pip3 install --user grpcio protobuf
 ----
 
-In order to regenerate the auto generated pb2 files used by system_tests_grpc.py,
-you must also install the following dependency:
+In order to regenerate the auto generated pb2 files used by system_tests_grpc.py, you must also install the following dependency:
 
 [source,shell script]
 ----
@@ -141,10 +139,11 @@ And run the following command to generate grpc code:
 python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. ./friendship.proto
 ----
 
-The system tests are implemented using Python's unittest library. This library is
-used to run the tests by default. The tests can be also run using `xmlrunner` or `pytest`.
+The system tests are implemented using Python's unittest library. 
+This library is used to run the tests by default. 
+The tests can be also run using `xmlrunner` or `pytest`.
 Pytest can generate a JUnit-compatible XML report containing an entry for each Python test method.
-After running the tests, all XML reports will be found under tests/junitxmls in your build directory:
+After running the tests, all XML reports can be found under `tests/junitxmls` in your build directory:
 
 [source,shell script]
 ----
@@ -153,50 +152,53 @@ cmake .. -DPYTHON_TEST_COMMAND='-m;pytest;-vs;--junit-xml=junitxmls/${py_test_mo
 
 === Test Suite Code Coverage (GNU tools only)
 
-Use coverage analysis to ensure that all code paths are exercised by
-the test suite. To run the tests and perform code coverage analysis:
+Use coverage analysis to ensure that all code paths are exercised by the test suite. 
+To run the tests and perform code coverage analysis:
 
-1. install the lcov package
+. Install the lcov package
 [source,shell script]
 $ yum install lcov
 
-2. configure and build for the Coverage build type (from the <build> directory):
+. Configure and build for the Coverage build type (from the <build> directory):
 [source,shell script]
 $ cmake -DCMAKE_BUILD_TYPE=Coverage .. && make
 
-3. run the test suite and generate the coverage html output
+. Run the test suite and generate the coverage html output
 [source,shell script]
 $ ctest && make coverage
 
-4. then point your browser at `<build>/coverage_results/html/index.html`
+. Use your browser to navigate to `<build>/coverage_results/html/index.html`
 
 === Clean build, install and test
+
+WARNING: Any preexisting directories 'build' and 'install' are deleted.
+
+Run the following command:
+
 [source]
 ----
 $ source config.sh; test.sh
 ----
 
-WARNING: Any preexisting directories 'build' and 'install' will be deleted.
 
 This script then does the following:
 
-- Do a fresh cmake and make in directory 'build'
-- Run unit tests (not system tests) in 'build'
-- Do 'make install' into the directory 'install'
-- Run system tests on the installation in 'install'.
+- performs a fresh cmake and make in directory 'build'
+- runs unit tests (not system tests) in 'build'
+- performs 'make install' into the directory 'install'
+- runs system tests on the installation in 'install'.
 
 === Run Time Validation
 
 The CTest test suite can be configured to enable extra run time
 validation checks against the dispatch router.
 
-Since run time validation slows down skrouter considerably it is
-disabled by default.  It can be enabled by setting the RUNTIME_CHECK
-build flag via the cmake command.
+Since run time validation slows down `skrouter` considerably it is disabled by default.  
 
-NOTE: Depending on your environment the ctest suite may time out
-if validation is enabled due to the additional run time overhead it
-adds.  You can extend the default test time via the ctest `--timeout`
+It can be enabled by setting the `RUNTIME_CHECK` build flag via the `cmake` command.
+
+NOTE: Depending on your environment the `ctest` suite may time out if validation is enabled due to the additional run time overhead it adds. 
+You can extend the default test time via the `ctest --timeout`
 option.
 
 .Example
@@ -205,14 +207,13 @@ option.
 ctest --timeout 1500 -VV
 ----
 
-The Skupper Router test suite supports the following run time
-validation tools:
+The Skupper Router test suite supports the following run time validation tools:
 
 ==== Valgrind Memcheck
-Runs skrouterd under Valgrind's memcheck leak checker during the CTest
-suite.  This will cause tests to fail if a memory error is
-encountered.  Use the grinder tool (in the bin directory) to create a
-summary of the errors found during the test run.
+
+Memcheck runs `skrouterd` under Valgrind's memcheck leak checker during the CTest suite.
+This causes tests to fail if a memory error is encountered.  
+Use the grinder tool (in the bin directory) to create a summary of the errors found during the test run.
 
 The valgrind toolset must be installed in order to use memcheck.
 
@@ -223,9 +224,8 @@ To enable memcheck set the RUNTIME_CHECK build flag to "memcheck":
 cmake .. -DRUNTIME_CHECK=memcheck
 ----
 
-If valgrind detects errors the skrouterd process will exit with an
-exit code of 42. This will be displayed in the CTest output. For
-example:
+If valgrind detects errors, the `skrouterd` process exits with an exit code of `42` and a message is displayed in the CTest output. 
+For example:
 
 [source]
 ----
@@ -238,19 +238,16 @@ This option turns on extra run time threading verification.
 
 NOTE: Applicable only to GCC versions >= 7.4 and Clang versions >= 6.0.
 
-To enable the thread sanitizer set the RUNTIME_CHECK build flag to "tsan":
+To enable the thread sanitizer set the RUNTIME_CHECK build flag to `tsan`:
 
 [source,shell script]
 ----
 cmake .. -DRUNTIME_CHECK=tsan
 ----
 
-The TSAN library (libtsan) must be installed in order to use this
-option.
+The TSAN library (libtsan) must be installed in order to use this option.
 
-If threading violations are detected during the CTest suite the
-skrouterd process will exit with an exit code of 66. This will be
-displayed in the CTest output. For example:
+If threading violations are detected during the CTest suite the `skrouterd` process exits with an exit code of `66` and a message is displayed in the CTest output. For example:
 
 [source]
 ----
@@ -258,13 +255,11 @@ RuntimeError: Errors during teardown:
 Process XXXX error: exit code 66, expected 0
 ----
 
-False positives can be suppressed via the `tsan.supp` file in the tests
-directory.
+False positives can be suppressed via the `tsan.supp` file in the tests directory.
 
 ==== GCC/Clang Address Sanitizer (ASAN)
 
-This option turns on extra run time memory verification, including
-leak checks.
+This option turns on extra run time memory verification, including leak checks.
 
 NOTE: Applicable only to GCC versions >= 5.4 and Clang versions >= 6.0.
 
@@ -275,21 +270,18 @@ To enable the address sanitizer set the RUNTIME_CHECK build flag to "asan":
 cmake .. -DCMAKE_C_FLAGS=-DQD_MEMORY_DEBUG -DRUNTIME_CHECK=asan
 ----
 
-On Aarch64, a hardware-assisted address sanitizer is enabled with "hwasan":
+On Aarch64, a hardware-assisted address sanitizer is enabled with `hwasan`.
+
+The ASAN (libasan) and UBSAN (libubsan) libraries must be installed in order to use this option.
 
 [source,shell script]
 ----
 cmake .. -DCMAKE_C_FLAGS=-DQD_MEMORY_DEBUG -DRUNTIME_CHECK=hwasan
 ----
 
-The ASAN (libasan) and UBSAN (libubsan) libraries must be installed in
-order to use this option.
+NOTE: The memory pool produces false leak reports unless `QD_MEMORY_DEBUG` is also defined.
 
-NOTE: Memory pool will produce false leak reports unless `QD_MEMORY_DEBUG`
-is also defined.
-
-False positive leak errors can be suppressed via the lsan.supp file in
-the tests directory.
+False positive leak errors can be suppressed by using the `lsan.supp` file in the `tests` directory.
 
 
 === CMake Build Options
@@ -312,7 +304,7 @@ Other options include `Debug` (disables optimizations) and `Coverage`.
 
 |`-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`
 |With CMake 3.9+, compiles the project with LTO (Link Time Optimization) enabled.
-Older CMake will only honor this option with the Intel compiler on Linux.
+Older versions of `CMake`` only honor this option with the Intel compiler on Linux.
 
 |`-DQD_DISABLE_MEMORY_POOL=ON`
 |Dispatch will immediately free memory, instead of returning it to memory pool.
