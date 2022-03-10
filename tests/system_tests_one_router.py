@@ -56,7 +56,7 @@ class StandaloneRouterQdManageTest(TestCase):
         but never an inter-router connector. Inter router connectors
         are allowed only with interior routers.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.connector",
@@ -75,7 +75,7 @@ class StandaloneRouterQdManageTest(TestCase):
         Since this is a standalone router, other routers (interior or edge routers)
         cannot connect to this router.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.listener",
@@ -95,7 +95,7 @@ class StandaloneRouterQdManageTest(TestCase):
         Since this is a standalone router, other routers (interior or edge routers)
         cannot connect to this router.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.listener",
@@ -128,7 +128,7 @@ class EdgeRouterQdManageTest(TestCase):
         but never an inter-router connector. Inter router connectors
         are allowed only with interior routers.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.connector",
@@ -147,7 +147,7 @@ class EdgeRouterQdManageTest(TestCase):
         an edge router can connect to another edge router and that is not
         allowed.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.listener",
@@ -167,7 +167,7 @@ class EdgeRouterQdManageTest(TestCase):
         an edge router can connect to another edge router and that is not
         allowed.
         """
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create("org.apache.qpid.dispatch.listener",
