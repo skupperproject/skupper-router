@@ -1308,8 +1308,16 @@ ssize_t read_data_callback(nghttp2_session *session,
                 }
                 else {
                     // This means that there is more that 16k worth of payload in one body data.
-                    // We want to send only 16k data per read_data_callback
-                    bytes_to_send = QD_HTTP2_BUFFER_SIZE;
+                    // We want to send only 16k or less of data per read_data_callback.
+                    // We can only send what nghttp2 allows us to send. nghttp2 might be doing http2 flow control and
+                    // we abide by it.
+                    if (length < QD_HTTP2_BUFFER_SIZE) {
+                        bytes_to_send = length;
+                    }
+                    else {
+                        bytes_to_send = QD_HTTP2_BUFFER_SIZE;
+                    }
+
                     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback remaining_payload_length <= QD_HTTP2_BUFFER_SIZE ELSE bytes_to_send=%zu", conn->conn_id, stream_data->stream_id, bytes_to_send);
                     stream_data->full_payload_handled = false;
                 }
@@ -2497,6 +2505,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_CLOSED_READ: {
         if (conn->q2_blocked) {
             conn->q2_blocked = false;
+            qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is unblocked on this connection (PN_RAW_CONNECTION_CLOSED_READ)", conn->conn_id);
         }
     	SET_ATOMIC_FLAG(&conn->raw_closed_read);
         if (conn->pn_raw_conn)
