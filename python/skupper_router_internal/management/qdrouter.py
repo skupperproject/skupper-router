@@ -35,7 +35,7 @@ class QdSchema(schema.Schema):
 
     CONFIGURATION_ENTITY = "configurationEntity"
     OPERATIONAL_ENTITY = "operationalEntity"
-    ILLEGAL_ID_CHARS = "|"
+    ILLEGAL_ID_CHARS = "|$"
 
     def __init__(self) -> None:
         """Load schema."""
