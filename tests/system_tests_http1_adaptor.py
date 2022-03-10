@@ -314,7 +314,7 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         self._do_request(client, self.TESTS_11["GET"])
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
-        qd_manager = QdManager(self, address=self.INT_A.listener)
+        qd_manager = QdManager(address=self.INT_A.listener)
         stats = qd_manager.query('org.apache.qpid.dispatch.httpRequestInfo')
         self.assertEqual(len(stats), 2)
         for s in stats:

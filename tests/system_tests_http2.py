@@ -233,7 +233,7 @@ class CommonHttp2Tests:
             i += 1
         self.assertIn(ret_string, out)
 
-        qd_manager = QdManager(self, address=server_addr)
+        qd_manager = QdManager(address=server_addr)
         http_listeners = qd_manager.query('org.apache.qpid.dispatch.httpListener')
         self.assertEqual(len(http_listeners), 1)
 
@@ -266,7 +266,7 @@ class CommonHttp2Tests:
 
         # Run a qdmanage query on connections to see how many qdr_connections are
         # there on the egress router
-        qd_manager = QdManager(self, address=server_addr)
+        qd_manager = QdManager(address=server_addr)
         connections = qd_manager.query('org.apache.qpid.dispatch.connection')
         self.assertGreaterEqual(len(connections), 2)
 
@@ -373,7 +373,7 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
     def test_000_stats(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0]
-        qd_manager = QdManager(self, address=self.router_qdra.addresses[0])
+        qd_manager = QdManager(address=self.router_qdra.addresses[0])
 
         # First request
         out = self.run_curl(address)
@@ -550,7 +550,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
     def test_000_stats(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0]
-        qd_manager_a = QdManager(self, address=self.router_qdra.addresses[0])
+        qd_manager_a = QdManager(address=self.router_qdra.addresses[0])
         stats_a = qd_manager_a.query('org.apache.qpid.dispatch.httpRequestInfo')
 
         # First request
@@ -576,7 +576,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         self.assertEqual(stats_a[0].get('direction'), 'in')
         self.assertEqual(stats_a[0].get('bytesOut'), 3944)
         self.assertEqual(stats_a[0].get('bytesIn'), 24)
-        qd_manager_b = QdManager(self, address=self.router_qdrb.addresses[0])
+        qd_manager_b = QdManager(address=self.router_qdrb.addresses[0])
         stats_b = qd_manager_b.query('org.apache.qpid.dispatch.httpRequestInfo')
         self.assertEqual(len(stats_b), 1)
 
@@ -777,7 +777,7 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         self.assertIn('content-type: text/html; charset=utf-8', out)
 
         # Now delete the httpConnector on the edge router config_edgea
-        qd_manager = QdManager(self, address=self.router_qdra.addresses[0])
+        qd_manager = QdManager(address=self.router_qdra.addresses[0])
         qd_manager.delete("org.apache.qpid.dispatch.httpConnector", name=self.edge_a_http_connector_name)
         sleep(2)
 
@@ -795,7 +795,7 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         self.assertIn('content-type: text/html; charset=utf-8', out)
 
         # Now delete the httpConnector on the edge router config_edgeb
-        qd_manager = QdManager(self, address=self.router_qdrb.addresses[0])
+        qd_manager = QdManager(address=self.router_qdrb.addresses[0])
         qd_manager.delete("org.apache.qpid.dispatch.httpConnector", name=self.edge_b_http_connector_name)
         sleep(2)
 

@@ -116,7 +116,7 @@ class NameCollisionTest(TestCase):
         # Add autoLink with the same name as the one already present.
         al_long_type = 'org.apache.qpid.dispatch.router.config.autoLink'
         addr_long_type = 'org.apache.qpid.dispatch.router.config.address'
-        mgmt = QdManager(self, address=self.router.addresses[0])
+        mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
             mgmt.create(al_long_type, args)
