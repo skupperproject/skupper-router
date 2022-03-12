@@ -77,6 +77,7 @@ jobs:
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DSANITIZE_PYTHON=OFF
         -DBUILD_BENCHMARKS=ON
+        -DUSE_JEMALLOC=ON
 
       CCACHE_BASEDIR: ${{github.workspace}}
       CCACHE_DIR: ${{github.workspace}}/.ccache
@@ -139,7 +140,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
+          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev libjemalloc-dev ccache ninja-build pixz libbenchmark-dev nginx
 
       - name: Zero ccache stats
         run: ccache -z
@@ -249,7 +250,7 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets16 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
+          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets16 libbenchmark1 libjemalloc2 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz

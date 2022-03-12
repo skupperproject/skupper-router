@@ -168,6 +168,10 @@ else()
   set(qpid_dispatch_SOURCES ${qpid_dispatch_SOURCES} posix/symbolization_none.c)
 endif()
 
+if(USE_JEMALLOC)
+  list(APPEND qpid_dispatch_LIBRARIES PkgConfig::jemalloc)
+endif()
+
 if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)
 endif()
