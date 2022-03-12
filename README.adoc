@@ -311,4 +311,22 @@ Older versions of `CMake`` only honor this option with the Intel compiler on Lin
 This option *breaks* safe pointers, resulting in crashes, therefore is suitable only for debugging.
 When combined with `-DRUNTIME_CHECK=asan`, the pointer breakages are much less frequent.
 
+|`-DBUILD_TESTING=OFF`
+|Excludes project's tests from the build.
+
+|`-DBUILD_BENCHMARKS=ON`
+|Benchmarking tests will be built.
+The `libbenchmark` library is required by the benchmarks.
+
+|`-DUSE_JEMALLOC=ON`
+|The jemalloc library will be linked, replacing the standard C library memory allocation functions with
+its own optimized implementations.
+
 |===
+
+==== Optional dependencies
+
+The following CMake options can be used to force-enable (or force-disable) the use of optional dependencies:
+
+- `-DUSE_LIBNGHTTP2`, for the libnghttp2 library, needed by the http2 protocol adaptor
+- `-DUSE_LIBWEBSOCKETS`, for the libwebsockets library, needed to configure `http: yes` listeners
