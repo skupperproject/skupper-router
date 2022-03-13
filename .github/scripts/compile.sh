@@ -42,13 +42,13 @@ tar -zxf qpid-proton.tar.gz -C qpid-proton-src --strip-components 1
 do_patch "patches/proton" qpid-proton-src
 
 cd proton_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BINDINGS=python -DCMAKE_INSTALL_PREFIX=/usr -DSYSINSTALL_PYTHON=ON -DSSL_IMPL=openssl $WORKING/qpid-proton-src/ \
-    && make \
-    && make DESTDIR=$WORKING/proton_install install \
+cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BINDINGS=python -DCMAKE_INSTALL_PREFIX=/usr -DSYSINSTALL_PYTHON=ON -DSSL_IMPL=openssl $WORKING/qpid-proton-src/ \
+    && ninja \
+    && DESTDIR=$WORKING/proton_install ninja install \
     && tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr \
-    && make install
+    && ninja install
 cd $WORKING/build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_LIBWEBSOCKETS=ON -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
-    && make  \
-    && make DESTDIR=$WORKING/staging/ install \
+cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_LIBWEBSOCKETS=ON -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
+    && ninja  \
+    && DESTDIR=$WORKING/staging/ ninja install \
     && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc

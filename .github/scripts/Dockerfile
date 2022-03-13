@@ -26,7 +26,7 @@ RUN dnf -y --setopt=tsflags=nodocs install \
  && dnf config-manager --set-enabled powertools \
  && dnf clean all
 
-RUN dnf -y --setopt=tsflags=nodocs install gcc gcc-c++ make cmake cyrus-sasl-devel openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
+RUN dnf -y --setopt=tsflags=nodocs install gcc gcc-c++ ninja-build cmake cyrus-sasl-devel openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
 WORKDIR /build
 COPY . .
 ENV PROTON_VERSION=0.36.0
