@@ -568,11 +568,6 @@ jobs:
         run: |
           sudo apt update; sudo apt install -y libqpid-proton-proactor1-dev python3-qpid-proton libpython3-dev libwebsockets-dev libnghttp2-dev ninja-build
 
-      - name: Install Linux docs dependencies
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt update; sudo apt install -y asciidoc asciidoctor ruby-asciidoctor-pdf dblatex libxml2-utils
-
       - name: skupper-router cmake configure
         working-directory: ${{env.RouterBuildDir}}
         run: >
@@ -583,26 +578,11 @@ jobs:
       - name: CMake build for docs
         run: cmake --build "${RouterBuildDir}" -t docs --parallel 6
 
-      - name: Store the rendered user-guide
-        uses: actions/upload-artifact@v2
-        with:
-          name: UserGuide
-          path: ${{env.RouterBuildDir}}/docs/books/user-guide
-
       - name: Store the rendered html man pages
         uses: actions/upload-artifact@v2
         with:
           name: Manpages
           path: ${{env.RouterBuildDir}}/docs/man/*.html
-
-      - name: Build the PDF version of the Router book
-        run: asciidoctor-pdf --failure-level INFO ${{github.workspace}}/docs/books/user-guide/book.adoc
-
-      - name: Store the rendered Router book PDF
-        uses: actions/upload-artifact@v2
-        with:
-          name: book.pdf
-          path: ${{github.workspace}}/docs/books/user-guide/book.pdf
 
   rat_check:
     name: RAT Check
