@@ -117,7 +117,7 @@ management clients.  The core sends and receives these messages in
 exactly the same way it forwards routed traffic - via the worker
 threads.
 
-The core thread's main loop is driven by a work queue (the
+The core thread's main loop `router_core_thread()` is driven by a work queue (the
 qdr_core_t's action_list).  The core thread blocks on a mutex
 condition waiting for work.  When a worker thread needs a service from
 the core thread, the worker queues a work item to the action_list then
@@ -148,7 +148,9 @@ suffixed with "_CT".  For example "qdr_update_delivery_CT()" is a core
 function that must never be invoked by a worker thread.
 
 Code that is private to the Core thread is in the "src/router_core"
-subdirectory of the source code repo.
+subdirectory of the source code repo.  (The subdirectory additionally holds
+code that this not private to the Core thread, e.g. the Worker thread
+function connections.c::qdr_connection_process() discussed elsewhere.)
 
 Worker thread code does not have a particular naming convention. Most
 worker thread-only APIs do start with "qd_", but this prefix is not
@@ -501,7 +503,7 @@ QDR_LINK_WORK_FLOW link work instance.  The core populates this with
 credit information, including drain state if necessary. The work item
 is then queued to the qdr_link_t link_work list.  The qdr_link_t is
 then added to the proper links_with_work list in the qdr_connection_t.
-The core then then wakes a worker.
+The core then wakes a worker.
 
 2) When the worker is activated it services the links_with_work lists
 in the qdr_connection_t.  For each qdr_link_t the worker services the
@@ -587,5 +589,3 @@ The worker compares the disposition state and settlement in the
 qdr_delivery_t against the corresponding state in the Proton
 pn_delivery_t.  The worker updates the pn_delivery_t as necessary,
 including settling it.
-
-
