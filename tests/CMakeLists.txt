@@ -110,6 +110,12 @@ if(USE_LIBNGHTTP2)
   set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc)
 endif(USE_LIBNGHTTP2)
 
+if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})
+  #pass
+else()
+  set(SYSTEM_TESTS_POLICY system_tests_policy system_tests_policy_oversize_basic system_tests_policy_oversize_compound)
+endif()
+
 # System test python modules
 foreach(py_test_module
 #   system_tests_broker
@@ -119,9 +125,7 @@ foreach(py_test_module
     system_tests_one_router
     system_tests_handle_failover
     system_tests_default_distribution
-    system_tests_policy
-    system_tests_policy_oversize_basic
-    system_tests_policy_oversize_compound
+    ${SYSTEM_TESTS_POLICY}
     system_tests_socket_address_family
     system_tests_protocol_settings
     system_tests_qdmanage

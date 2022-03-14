@@ -61,6 +61,7 @@ jobs:
       CCACHE_DIR: ${{github.workspace}}/.ccache
       CCACHE_COMPRESS: 'true'
       CCACHE_MAXSIZE: '400MB'
+      SKUPPER_SYSTEM_TEST_SKIP_POLICY: True
     steps:
 
       - name: Show environment (Linux)
@@ -337,6 +338,7 @@ jobs:
       CCACHE_MAXSIZE: '400MB'
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
+      SKUPPER_SYSTEM_TEST_SKIP_POLICY: True
       VERBOSE: 1
 
     steps:
