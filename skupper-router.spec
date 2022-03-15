@@ -20,9 +20,9 @@
 # This .spec file uses `rpkg` (https://pagure.io/rpkg-util) to provide
 # pleasant user experience to developers.
 #
-#  Command        Description
-# `rpkg srpm`    Creates a *.src.rpm file in /tmp/rpkg (exact path is printed)
-# `rpkg local`   Builds a *.rpm for your system in /tmp/rpkg (exact path is printed)
+#  Command                  Description
+# `rpkg srpm`              Creates a *.src.rpm file in /tmp/rpkg (exact path is printed)
+# `rpkg local --nocheck`   Builds a *.rpm for your system in /tmp/rpkg (exact path is printed)
 #
 # See `man rpkg` for more commands.
 
@@ -66,11 +66,14 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 {{{ git_dir_setup_macro }}}
 
 %build
-cmake . -DCMAKE_INSTALL_PREFIX=/usr
-make -j8
+%cmake -DPython_EXECUTABLE=%python3
+%cmake_build
 
 %install
-%make_install
+%cmake_install
+
+%check
+%ctest
 
 %files router
 /etc/qpid-dispatch/qdrouterd.conf
@@ -78,9 +81,19 @@ make -j8
 /usr/bin/qdmanage
 /usr/bin/qdstat
 /usr/sbin/qdrouterd
-/usr/lib/
-/usr/share/
-/usr/include/qpid/
+
+/usr/include/qpid/dispatch.h
+/usr/include/qpid/dispatch/
+
+%{python3_sitelib}/qpid_dispatch/
+%{python3_sitelib}/qpid_dispatch_site.py
+%{python3_sitelib}/__pycache__/qpid_dispatch_site.*.pyc
+%{python3_sitelib}/qpid_dispatch-*.egg-info/
+/usr/lib/qpid-dispatch/python/qpid_dispatch_internal/
+
+/usr/lib/qpid-dispatch/tests/
+/usr/share/doc/qpid-dispatch/
+/usr/share/qpid-dispatch/
 
 %changelog
 {{{ git_dir_changelog }}}
