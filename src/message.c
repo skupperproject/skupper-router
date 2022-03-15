@@ -648,6 +648,7 @@ typedef enum {
     QD_SECTION_NEED_MORE  // not enough data in the buffer chain - try again
 } qd_section_status_t;
 
+
 static qd_section_status_t message_section_check_LH(qd_message_content_t *content,
                                                     qd_buffer_t         **buffer,
                                                     unsigned char       **cursor,
@@ -658,11 +659,16 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
                                                     bool                  dup_ok,
                                                     bool                  protect_buffer)
 {
-    if (!*cursor || !can_advance(cursor, buffer))
-        return QD_SECTION_NEED_MORE;
-
+    // Note well: do NOT modify the input buffer and cursor values if there is
+    // no match! We need to preserve the original cursor/buffer positions when
+    // parsing out body data sections so we can correctly manage the buffer
+    // fanout counts when releasing qd_message_stream_data_t instances.
     qd_buffer_t   *test_buffer   = *buffer;
     unsigned char *test_cursor   = *cursor;
+
+    if (!test_cursor || !can_advance(&test_cursor, &test_buffer))
+        return QD_SECTION_NEED_MORE;
+
     unsigned char *end_of_buffer = qd_buffer_cursor(test_buffer);
     int            idx           = 0;
 
@@ -693,10 +699,9 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
         return QD_SECTION_INVALID;  // Error: Duplicate section
 
     //
-    // Pattern matched and tag is expected.  Mark the beginning of the section.
+    // Pattern matched and tag is expected. Determine the length
+    // of the sections data:
     //
-    location->buffer     = *buffer;
-    location->offset     = *cursor - qd_buffer_base(*buffer);
     location->length     = 0;
     location->hdr_length = pattern_length;
 
@@ -808,6 +813,18 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
         }
     }
 
+    // the full section is present. Store the location of the first data octet
+    // and advance cursor/buffer past the section
+
+    if ((*cursor) >= qd_buffer_cursor(*buffer)) {
+        // move to first octet of the section
+        *buffer = DEQ_NEXT(*buffer);
+        assert(*buffer);
+        *cursor = qd_buffer_base(*buffer);
+    }
+
+    location->buffer = *buffer;
+    location->offset = *cursor - qd_buffer_base(*buffer);
     location->parsed = 1;
 
     *cursor = test_cursor;
