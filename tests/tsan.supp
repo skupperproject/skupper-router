@@ -76,7 +76,7 @@ race:^qd_message_send$
 race:^qdr_link_process_deliveries$
 
 # ISSUE-65
-race: ^qdr_delivery_continue_CT$
+race:^qdr_delivery_continue_CT$
 
 #
 # External libraries
