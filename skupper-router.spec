@@ -66,14 +66,21 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 {{{ git_dir_setup_macro }}}
 
 %build
-cmake . -DQD_ENABLE_ASSERTIONS=ON
+cmake . -DCMAKE_INSTALL_PREFIX=/usr
 make -j8
 
 %install
 %make_install
 
 %files router
-/usr/local
+/etc/qpid-dispatch/qdrouterd.conf
+/etc/sasl2/qdrouterd.conf
+/usr/bin/qdmanage
+/usr/bin/qdstat
+/usr/sbin/qdrouterd
+/usr/lib/
+/usr/share/
+/usr/include/qpid/
 
 %changelog
 {{{ git_dir_changelog }}}
