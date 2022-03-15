@@ -1219,10 +1219,9 @@ static char *test_check_stream_data_fanout(void *context)
         goto exit;
     }
 
-    // now free each one in opposite order (evil, yes?)
     for (index = 0; index < sd_count; ++index) {
         qd_message_stream_data_release(out_sd1[index]);
-        qd_message_stream_data_release(out_sd2[(sd_count - 1) - index]);
+        qd_message_stream_data_release(out_sd2[index]);
     }
 
     // expect: all but the last body buffer is freed:
@@ -1457,11 +1456,6 @@ static char *test_check_stream_data_fanout_leak(void *context)
                 goto exit;
             }
 
-            // semi-random free:
-            for (int x = free_count; x > 0; x -= 2) {
-                qd_message_stream_data_release(marray[x - 1]);
-                marray[x - 1] = 0;
-            }
             for (int y = 0; y < free_count; ++y)
                 qd_message_stream_data_release(marray[y]);
         }
