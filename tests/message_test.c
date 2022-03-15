@@ -1656,6 +1656,142 @@ exit:
 }
 
 
+// Verify that partial stream data entries do no leak buffers
+//
+static char *test_check_stream_data_partial(void *context)
+{
+    char *result = 0;
+    qd_message_t *in_msg = 0;
+    qd_message_t *out_msg1 = 0;
+    qd_message_t *out_msg2 = 0;
+
+    // simulate building a message as an adaptor would:
+    in_msg = qd_message();
+    qd_message_content_t *content = MSG_CONTENT(in_msg);
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+    qd_compose_start_list(field);
+    qd_compose_insert_bool(field, 0);     // durable
+    qd_compose_insert_null(field);        // priority
+    qd_compose_end_list(field);
+    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+    qd_compose_start_list(field);
+    qd_compose_insert_ulong(field, 666);    // message-id
+    qd_compose_insert_null(field);                 // user-id
+    qd_compose_insert_string(field, "/whereevah"); // to
+    qd_compose_insert_string(field, "my-subject");  // subject
+    qd_compose_insert_string(field, "/reply-to");   // reply-to
+    qd_compose_end_list(field);
+
+    qd_message_compose_2(in_msg, field, false);
+    qd_compose_free(field);
+
+    // snapshot the message buffer count to use as a baseline
+    const size_t base_bufct = DEQ_SIZE(MSG_CONTENT(in_msg)->buffers);
+
+    // "fan out" the message
+    out_msg1 = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg1);
+    out_msg2 = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg2);
+
+    // add a complete body data section
+    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
+    memset(buffer, '1', 15);
+    qd_compose_insert_binary(field, buffer, 15);
+    qd_message_extend(in_msg, field, 0);
+    qd_compose_free(field);
+
+    // encoded body section:
+    const uint8_t section[] = {0x00, 0x53, 0x75};
+    const uint8_t body[] = {0xA0, 5, 1, 2, 3, 4, 5};
+
+    // append only part of the body section:
+    qd_buffer_list_t blist = DEQ_EMPTY;
+    qd_buffer_list_append(&blist, section, 3);
+    for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf))
+        qd_buffer_set_fanout(bf, content->fanout);
+    DEQ_APPEND(content->buffers, blist);
+
+    qd_message_stream_data_t *sdata = 0;
+    qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg1, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+        result = "Did not get first body data entry!";
+        goto exit;
+    }
+    qd_message_stream_data_release(sdata);
+
+    rc = qd_message_next_stream_data(out_msg1, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_INCOMPLETE) {
+        result = "Expected incomplete next body data entry!";
+        goto exit;
+    }
+
+    // append the remainder to complete this section
+    qd_buffer_list_append(&blist, body, 7);
+    for (qd_buffer_t *bf = DEQ_HEAD(blist); bf; bf = DEQ_NEXT(bf))
+        qd_buffer_set_fanout(bf, content->fanout);
+    DEQ_APPEND(content->buffers, blist);
+
+    // add another complete body data section
+    field = qd_compose(QD_PERFORMATIVE_BODY_DATA, 0);
+    memset(buffer, '1', 15);
+    qd_compose_insert_binary(field, buffer, 15);
+    qd_message_extend(in_msg, field, 0);
+    qd_compose_free(field);
+    SET_ATOMIC_FLAG(&content->receive_complete);
+
+    rc = qd_message_next_stream_data(out_msg1, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+        result = "Did not get second body data entry!";
+        goto exit;
+    }
+    qd_message_stream_data_release(sdata);
+
+    rc = qd_message_next_stream_data(out_msg1, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
+        result = "Did not get last body data entry!";
+        goto exit;
+    }
+    qd_message_stream_data_release(sdata);
+
+    rc = qd_message_next_stream_data(out_msg1, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
+        result = "Did not get NO MORE!";
+        goto exit;
+    }
+
+    int i = 0;
+    rc = qd_message_next_stream_data(out_msg2, &sdata);
+    while (rc == QD_MESSAGE_STREAM_DATA_BODY_OK) {
+        ++i;
+        qd_message_stream_data_release(sdata);
+        rc = qd_message_next_stream_data(out_msg2, &sdata);
+    }
+
+    if (rc != QD_MESSAGE_STREAM_DATA_NO_MORE) {
+        result = "Did not get NO MORE for msg2!";
+        goto exit;
+    }
+
+    if (i != 3) {
+        result = "Did not get 3 sections for msg2!";
+        goto exit;
+    }
+
+    if (DEQ_SIZE(MSG_CONTENT(out_msg1)->buffers) != base_bufct + 1
+        || DEQ_SIZE(MSG_CONTENT(out_msg2)->buffers) != base_bufct + 1) {
+        result = "Possible buffer leak detected!";
+        goto exit;
+    }
+
+exit:
+    qd_message_free(in_msg);
+    qd_message_free(out_msg1);
+    qd_message_free(out_msg2);
+    return result;
+}
+    
+
 int message_tests(void)
 {
     int result = 0;
@@ -1674,6 +1810,7 @@ int message_tests(void)
     TEST_CASE(test_check_stream_data_fanout, 0);
     TEST_CASE(test_check_stream_data_footer, 0);
     TEST_CASE(test_check_stream_data_fanout_leak, 0);
+    TEST_CASE(test_check_stream_data_partial, 0);
     TEST_CASE(test_q2_callback_on_disable, 0);
     TEST_CASE(test_q2_ignore_headers, 0);
 
