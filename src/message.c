@@ -2633,8 +2633,6 @@ void qd_message_stream_data_release_up_to(qd_message_stream_data_t *stream_data)
  *
  * Decrement the fanout ref-counts for all of the buffers referred to in the stream_data.  If any have reached zero,
  * remove them from the buffer list and free them.
- *
- * Do not free buffers that overlap with other stream_data or the buffer pointed to by msg->body_buffer.
  */
 void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
 {
@@ -2644,31 +2642,28 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
     qd_message_pvt_t     *pvt       = stream_data->owning_message;
     qd_message_content_t *content   = pvt->content;
 
-    //
+    // Must free these in-order (oldest first). This simplifies the code.
+    assert(DEQ_PREV(stream_data) == 0);
+
     // find the range of buffers that do not overlap other stream_data
     // or msg->body_buffer
-    //
 
-    qd_buffer_t *stop_buf = stream_data->last_buffer;
+    qd_buffer_t *start_buf = stream_data->first_buffer;
+    qd_buffer_t *stop_buf  = stream_data->last_buffer;
+
+    // end_boundary is the next buffer that is referenced by this message past the section that is being freed.
+    // That buffer cannot be released.
+
     qd_buffer_t *end_boundary = DEQ_NEXT(stream_data) ? DEQ_NEXT(stream_data)->first_buffer : pvt->body_buffer;
-    if (stop_buf != end_boundary)
+    while (stop_buf != end_boundary)
         // safe to free last_buffer since this message no longer references it
         stop_buf = DEQ_NEXT(stop_buf);
     assert(stop_buf);
 
-    qd_buffer_t *start_buf = stream_data->first_buffer;
-    if (start_buf != stop_buf &&  // at least one buffer can be freed
-        DEQ_PREV(stream_data) &&  // avoid freeing last buffer of previous stream
-        DEQ_PREV(stream_data)->last_buffer == start_buf) {
-
-        start_buf = DEQ_NEXT(start_buf);
-    }
-    assert(start_buf);
-
     DEQ_REMOVE(pvt->stream_data_list, stream_data);
     free_qd_message_stream_data_t(stream_data);
 
-    if (start_buf == stop_buf)  // nothing to free
+    if (start_buf == stop_buf)  // no unreferenced buffers to free
         return;
 
     LOCK(content->lock);
