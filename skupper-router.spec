@@ -88,7 +88,7 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 %{python3_sitelib}/qpid_dispatch/
 %{python3_sitelib}/qpid_dispatch_site.py
 %{python3_sitelib}/__pycache__/qpid_dispatch_site.*.pyc
-%{python3_sitelib}/qpid_dispatch-*.egg-info/
+%{python3_sitelib}/qpid_dispatch-*.egg-info
 /usr/lib/qpid-dispatch/python/qpid_dispatch_internal/
 
 /usr/lib/qpid-dispatch/tests/
