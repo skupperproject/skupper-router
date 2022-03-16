@@ -883,7 +883,7 @@ class Tester:
         """Start a Process that will be cleaned up on teardown"""
         return self.cleanup(Process(*args, **kwargs))
 
-    def qdrouterd(self, *args, **kwargs):
+    def qdrouterd(self, *args, **kwargs) -> Qdrouterd:
         """Return a Qdrouterd that will be cleaned up on teardown"""
         return self.cleanup(Qdrouterd(*args, **kwargs))
 

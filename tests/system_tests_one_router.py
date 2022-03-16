@@ -21,6 +21,7 @@ import json
 import os
 from subprocess import PIPE, STDOUT
 from time import sleep
+from typing import Sequence
 
 from proton import Condition, Delivery, Message, Timeout, symbol
 from proton.handlers import MessagingHandler
@@ -197,7 +198,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'edge', 'host': '0.0.0.0'})
         ])
-        cls.router = cls.tester.qdrouterd(name, config, wait=False, perform_teardown=False)
+        cls.router = cls.tester.qdrouterd(name, config, wait=False, expect=Process.EXIT_FAIL)
 
         # A standalone router cannot have inter-router connectors.
         name = "test-router-1"
@@ -205,7 +206,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_1 = cls.tester.qdrouterd(name, config_1, wait=False, perform_teardown=False)
+        cls.router_1 = cls.tester.qdrouterd(name, config_1, wait=False, expect=Process.EXIT_FAIL)
 
         # An edge router cannot have edge listeners.
         # Edge routers can have connectors that connect to interior routers
@@ -215,7 +216,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'edge', 'host': '0.0.0.0'})
         ])
-        cls.router_2 = cls.tester.qdrouterd(name, config_2, wait=False, perform_teardown=False)
+        cls.router_2 = cls.tester.qdrouterd(name, config_2, wait=False, expect=Process.EXIT_FAIL)
 
         # Edge routers cannot have inter-router listeners. Only interior
         # routers can have inter-router listeners.
@@ -224,7 +225,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_3 = cls.tester.qdrouterd(name, config_3, wait=False, perform_teardown=False)
+        cls.router_3 = cls.tester.qdrouterd(name, config_3, wait=False, expect=Process.EXIT_FAIL)
 
         # Edge routers cannot have inter-router connectors
         # Inter-router connectors are allowed only on interior routers.
@@ -233,7 +234,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_4 = cls.tester.qdrouterd(name, config_4, wait=False, perform_teardown=False)
+        cls.router_4 = cls.tester.qdrouterd(name, config_4, wait=False, expect=Process.EXIT_FAIL)
 
         # A standalone router cannot have an inter-router listener because
         # it cannot accept inter-router connections.
@@ -242,12 +243,13 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_5 = cls.tester.qdrouterd(name, config_5, wait=False, perform_teardown=False)
+        cls.router_5 = cls.tester.qdrouterd(name, config_5, wait=False, expect=Process.EXIT_FAIL)
 
-        # Give some time for the test to write to the .out file. Without
-        # this sleep, the tests execute too
+        # Give some time for the test to write to the .out file. Without this, the tests execute too
         # fast and find that nothing has yet been written to the .out files.
-        sleep(3)
+        routers: Sequence[Qdrouterd] = (cls.router, cls.router_1, cls.router_2, cls.router_3, cls.router_4, cls.router_5)
+        for router in routers:
+            router.wait(timeout=TIMEOUT)
 
     def test_48_router_in_error(self):
         test_pass = False
