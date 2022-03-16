@@ -31,6 +31,7 @@
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
 
+#include <proton/tls.h>
 #include <nghttp2/nghttp2.h>
 #include <time.h>
 
@@ -124,6 +125,8 @@ struct qdr_http2_connection_t {
     uint64_t                 conn_id;
     char                     *remote_address;
     qdr_link_t               *stream_dispatcher;
+    qdr_link_t               *dummy_link;
+    uint64_t                  dummy_link_id;
     qdr_http2_stream_data_t  *stream_dispatcher_stream_data;
     uint64_t                  stream_dispatcher_id;
     nghttp2_data_provider     data_prd;
@@ -133,21 +136,29 @@ struct qdr_http2_connection_t {
     qd_http2_buffer_list_t    buffs;      // Buffers for writing
     nghttp2_session          *session;    // A pointer to the nghttp2s' session object
     qd_http2_stream_data_list_t  streams;    // A session can have many streams.
+    qd_http_listener_t       *listener;
+    qd_http_connector_t      *connector;
 
     bool                      connection_established;
     bool                      grant_initial_buffers;
     bool                      ingress;
     bool                      timer_scheduled;
     bool                      client_magic_sent;
-    bool                      woken_by_ping;
-    bool                      first_pinged;
     bool                      delete_egress_connections;  // If set to true, the egress qdr_connection_t and qdr_http2_connection_t objects will be deleted
     bool                      goaway_received;
-    sys_atomic_t 		      raw_closed_read;
-    sys_atomic_t 			  raw_closed_write;
+    bool                      tls_error;
+    sys_atomic_t              raw_closed_read;
+    sys_atomic_t              raw_closed_write;
     bool                      q2_blocked;      // send a connection level WINDOW_UPDATE frame to tell the client to stop sending data.
     sys_atomic_t              q2_restart;      // signal to resume receive
     sys_atomic_t              delay_buffer_write;   // if true, buffers will not be written to proton.
+    bool                      require_tls;
+    pn_tls_t                 *tls_session;
+    pn_tls_config_t          *tls_config;
+    bool                      tls_has_output;
+    bool                      buffers_pushed_to_nghttp2;
+    bool                      handled_connected_event;
+    bool                      alpn_check_complete;
     DEQ_LINKS(qdr_http2_connection_t);
  };
 

@@ -119,6 +119,12 @@ static const char *leaking_types[] = {
     // and the underlying shutdown leak must be fixed and this suppression should be removed for release 2.1.0
     "qdr_link_t",
 
+    // This following leak occurs in the system_tests_http2.Http2TestAuthenticatePeerOneRouter
+    // The curl client connects to the router without a client cert and the router rejects this client.
+    // There is a bug in the proton TLS API which does not return a http2 buffer that is given to it
+    // and hence the qd_http2_buffer_t leak. When removing this entry make sure you set the handle_incoming_tls function
+    // to static in http2_adaptor.c
+    "qd_http2_buffer_t",
     0};
 
 //128 has been chosen because many CPUs arch use an

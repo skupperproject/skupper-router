@@ -107,7 +107,7 @@ if(USE_LIBWEBSOCKETS)
 endif()
 
 if(USE_LIBNGHTTP2)
-  set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc)
+  set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc system_tests_http2_tls)
 endif(USE_LIBNGHTTP2)
 
 if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})

@@ -39,8 +39,6 @@ class MyInfo:
         self.fname = fname
         self.lname = lname
         self.id = id
-        #self.hobby = None
-        #self.style = None
 
 
 my_info = MyInfo(fname="John", lname="Doe")
@@ -121,9 +119,13 @@ def main():
     port = os.getenv('SERVER_LISTEN_PORT')
     if port is None:
         raise RuntimeError("Environment variable `SERVER_LISTEN_PORT` is not set.")
-
-    # app.run(port=5000, certfile='cert.pem', keyfile='key.pem')
-    app.run(port=int(port))
+    if os.getenv('SERVER_TLS') == "yes":
+        app.run(port=port,
+                certfile=os.getenv('SERVER_CERTIFICATE'),
+                keyfile=os.getenv('SERVER_PRIVATE_KEY'),
+                ca_certs=os.getenv('SERVER_CA_CERT'))
+    else:
+        app.run(port=port)
 
 
 if __name__ == '__main__':
