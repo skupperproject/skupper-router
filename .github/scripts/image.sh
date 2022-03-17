@@ -20,7 +20,7 @@
 . ./.github/scripts/common.sh
 
 # Building the skupper-router image
-${DOCKER} build -t ${PROJECT_NAME}:${PROJECT_TAG} -f ./.github/scripts/Dockerfile .
+${DOCKER} build -t ${PROJECT_NAME}:${PROJECT_TAG} -f ./Containerfile .
 
 # Pushing only when credentials available
 if [[ -n "${DOCKER_USER}" && -n "${DOCKER_PASSWORD}" ]]; then
