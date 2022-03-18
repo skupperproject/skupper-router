@@ -596,6 +596,7 @@ jobs:
           dnf install -y man
 
           man skrouterd
+          man skrouterd.conf
           man skstat
           man skmanage
 
