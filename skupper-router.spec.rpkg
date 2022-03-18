@@ -26,6 +26,9 @@
 #
 # See `man rpkg` for more commands.
 
+# https://bugzilla.redhat.com/show_bug.cgi?id=1668512#c19
+%undefine __cmake_in_source_build
+
 %global proton_minimum_version 0.34.0
 %global libwebsockets_minimum_version 3.0.1
 %global libnghttp2_minimum_version 1.33.0
