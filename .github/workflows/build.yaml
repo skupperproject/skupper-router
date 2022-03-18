@@ -574,7 +574,6 @@ jobs:
 
       - name: Install build dependencies (2/2)
         run: |
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y gcc gcc-c++
           rpkg spec --outdir /tmp/rpkg
           dnf builddep --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y /tmp/rpkg/skupper-router.spec
 

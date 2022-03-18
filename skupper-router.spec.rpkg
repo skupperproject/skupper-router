@@ -41,6 +41,8 @@ License:       ASL 2.0
 URL:           https://skupper.io
 VCS:           {{{ git_dir_vcs }}}
 
+BuildRequires: gcc
+BuildRequires: gcc-c++
 BuildRequires: cmake
 BuildRequires: python3-devel
 BuildRequires: openssl-devel
