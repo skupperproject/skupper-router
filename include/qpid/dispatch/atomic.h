@@ -32,6 +32,8 @@ extern "C++" {
 #include <atomic>
 }
 using std::atomic_uint;
+using std::memory_order_acq_rel;
+using std::memory_order_relaxed;
 #else
 #include <stdatomic.h>
 #endif
@@ -45,22 +47,22 @@ static inline void sys_atomic_init(sys_atomic_t *ref, uint32_t value)
 
 static inline uint32_t sys_atomic_add(sys_atomic_t *ref, uint32_t value)
 {
-    return atomic_fetch_add(ref, value);
+    return atomic_fetch_add_explicit(ref, value, memory_order_relaxed);
 }
 
 static inline uint32_t sys_atomic_sub(sys_atomic_t *ref, uint32_t value)
 {
-    return atomic_fetch_sub(ref, value);
+    return atomic_fetch_sub_explicit(ref, value, memory_order_relaxed);
 }
 
 static inline uint32_t sys_atomic_get(sys_atomic_t *ref)
 {
-    return atomic_load(ref);
+    return atomic_load_explicit(ref, memory_order_relaxed);
 }
 
 static inline uint32_t sys_atomic_set(sys_atomic_t *ref, uint32_t value)
 {
-    return atomic_exchange(ref, value);
+    return atomic_exchange_explicit(ref, value, memory_order_relaxed);
 }
 
 static inline void sys_atomic_destroy(sys_atomic_t *ref) {}
@@ -75,6 +77,6 @@ static inline void sys_atomic_destroy(sys_atomic_t *ref) {}
 static inline uint32_t sys_atomic_inc(sys_atomic_t *ref) { return sys_atomic_add((ref), 1); }
 
 /** Atomic decrease: NOTE returns value *before* decrease, like i-- */
-static inline uint32_t sys_atomic_dec(sys_atomic_t *ref) { return sys_atomic_sub((ref), 1); }
+static inline uint32_t sys_atomic_dec(sys_atomic_t *ref) { return atomic_fetch_sub_explicit(ref, (uint32_t)1, memory_order_acq_rel); }
 
 #endif
