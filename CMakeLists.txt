@@ -60,7 +60,7 @@ set(C_WARNING_GNU -Wall -Wextra -Wpedantic -pedantic-errors
         -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
 set(C_WARNING_Clang -Wall -Wextra -Wpedantic
         -Wstrict-prototypes -Wold-style-definition
-        -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token
+        -Wthread-safety -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token
         -Wno-gnu-statement-expression-from-macro-expansion)
 
 # Set default build type. Must use FORCE because project() sets default to ""
@@ -140,7 +140,7 @@ if(NOT DEFINED VERSION)
                       OUTPUT_VARIABLE BRANCH_NAME
                       OUTPUT_STRIP_TRAILING_WHITESPACE)
       message(STATUS "BRANCH_NAME is ${BRANCH_NAME}")
-                      
+
       if (BRANCH_NAME STREQUAL "HEAD")
             set(QPID_DISPATCH_VERSION "0.0.0")
       else(BRANCH_NAME STREQUAL "HEAD")
@@ -172,7 +172,7 @@ if(NOT DEFINED VERSION)
        # Git executable was not available, we will not be able to determine the version, just set it to "0.0.0"
        set(QPID_DISPATCH_VERSION "0.0.0")
    endif(Git_FOUND)
-   
+
 else(NOT DEFINED VERSION)
    message(STATUS "VERSION is already provided")
    # What if VERSION is defined but someone passed in an empty value for VERSION? Deal with that case here.
@@ -185,7 +185,7 @@ else(NOT DEFINED VERSION)
       else()
           set(QPID_DISPATCH_VERSION ${VERSION})
       endif()
-   endif(VERSION STREQUAL "")  
+   endif(VERSION STREQUAL "")
 endif(NOT DEFINED VERSION)
 
 message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")

@@ -21,6 +21,7 @@
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
+#include "qpid/dispatch/internal/thread_annotations.h"
 #include "qpid/dispatch/message.h"
 #include "qpid/dispatch/threading.h"
 
@@ -199,8 +200,8 @@ void qd_message_initialize(void);
 //
 
 // These expect content->lock to be locked.
-bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content);
-bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content);
+bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content) TA_REQ(content->lock);
+bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content) TA_REQ(content->lock);
 
 uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flags, qd_buffer_list_t *ra_buffers);
 

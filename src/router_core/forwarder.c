@@ -220,7 +220,7 @@ qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *in
 // Drop all pre-settled deliveries pending on the link's
 // undelivered list.
 //
-static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link)
+static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link) TA_REQ(link->conn->work_lock)
 {
     qdr_delivery_t *dlv = DEQ_HEAD(link->undelivered);
 

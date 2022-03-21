@@ -26,38 +26,40 @@
 #include <assert.h>
 #include <pthread.h>
 
-typedef struct sys_mutex_t sys_mutex_t;
+#include "qpid/dispatch/internal/thread_annotations.h"
+
+typedef struct sys_mutex_t TA_CAP("mutex") sys_mutex_t;
 struct sys_mutex_t {
     pthread_mutex_t mutex;
 };
 
 void sys_mutex_init(sys_mutex_t *mutex);
 void sys_mutex_free(sys_mutex_t *mutex);
-void sys_mutex_lock(sys_mutex_t *mutex);
-void sys_mutex_unlock(sys_mutex_t *mutex);
+void sys_mutex_lock(sys_mutex_t *mutex) TA_ACQ(*mutex);
+void sys_mutex_unlock(sys_mutex_t *mutex) TA_REL(*mutex);
 
-typedef struct sys_cond_t sys_cond_t;
+typedef struct sys_cond_t TA_CAP("cond") sys_cond_t;
 struct sys_cond_t {
     pthread_cond_t cond;
 };
 
 void sys_cond_init(sys_cond_t *cond);
 void sys_cond_free(sys_cond_t *cond);
-void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex);
+void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex) TA_REQ(*held_mutex);
 void sys_cond_signal(sys_cond_t *cond);
 void sys_cond_signal_all(sys_cond_t *cond);
 
 
-typedef struct sys_rwlock_t sys_rwlock_t;
+typedef struct sys_rwlock_t TA_CAP("rwlock") sys_rwlock_t;
 struct sys_rwlock_t {
     pthread_rwlock_t lock;
 };
 
 void sys_rwlock_init(sys_rwlock_t *lock);
 void sys_rwlock_free(sys_rwlock_t *lock);
-void sys_rwlock_wrlock(sys_rwlock_t *lock);
-void sys_rwlock_rdlock(sys_rwlock_t *lock);
-void sys_rwlock_unlock(sys_rwlock_t *lock);
+void sys_rwlock_wrlock(sys_rwlock_t *lock) TA_ACQ(*lock);
+void sys_rwlock_rdlock(sys_rwlock_t *lock) TA_ACQ_SHARED(*lock);
+void sys_rwlock_unlock(sys_rwlock_t *lock) TA_REL_GENERIC(*lock);
 
 typedef enum {
     SYS_THREAD_MAIN,
@@ -108,7 +110,7 @@ typedef enum {
     SYS_THREAD_PROACTOR_MODE_TIMER = SYS_THREAD_PROACTOR_MODE_OTHER,
 } sys_thread_proactor_mode_t;
 
-typedef struct sys_spinlock_t sys_spinlock_t;
+typedef struct sys_spinlock_t TA_CAP("spinlock") sys_spinlock_t;
 struct sys_spinlock_t {
     pthread_mutexattr_t attr;
     pthread_mutex_t     lock;
@@ -116,8 +118,8 @@ struct sys_spinlock_t {
 
 void sys_spinlock_init(sys_spinlock_t *lock);
 void sys_spinlock_free(sys_spinlock_t *lock);
-void sys_spinlock_lock(sys_spinlock_t *lock);
-void sys_spinlock_unlock(sys_spinlock_t *lock);
+void sys_spinlock_lock(sys_spinlock_t *lock) TA_ACQ(*lock);
+void sys_spinlock_unlock(sys_spinlock_t *lock) TA_REL(*lock);
 
 
 typedef struct sys_thread_t sys_thread_t;

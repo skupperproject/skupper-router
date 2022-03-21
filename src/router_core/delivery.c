@@ -306,7 +306,7 @@ void qdr_delivery_reject_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_error_t *
 }
 
 
-bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *dlv)
+bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *dlv) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     //
     // Remove a delivery from its unsettled list.  Side effects include issuing

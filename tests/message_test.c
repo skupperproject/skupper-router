@@ -616,17 +616,21 @@ static char* test_q2_input_holdoff_sensing(void *context)
     for (int nbufs=1; nbufs<QD_QLIMIT_Q2_UPPER + 1; nbufs++) {
         qd_message_t         *msg     = qd_message();
         qd_message_content_t *content = MSG_CONTENT(msg);
+        sys_mutex_lock(&content->lock);
 
         set_content_bufs(content, nbufs);
         if (_Q2_holdoff_should_block_LH(content) != (nbufs >= QD_QLIMIT_Q2_UPPER)) {
+            sys_mutex_unlock(&content->lock);
             qd_message_free(msg);
             return "qd_message_holdoff_would_block was miscalculated";
         }
         if (_Q2_holdoff_should_unblock_LH(content) != (nbufs < QD_QLIMIT_Q2_LOWER)) {
+            sys_mutex_unlock(&content->lock);
             qd_message_free(msg);
             return "qd_message_holdoff_would_unblock was miscalculated";
         }
 
+        sys_mutex_unlock(&content->lock);
         qd_message_free(msg);
     }
     return 0;
@@ -1728,14 +1732,18 @@ static char *test_q2_ignore_headers(void *context)
 
     const size_t header_ct = DEQ_SIZE(content->buffers);
     assert(header_ct);
+    sys_mutex_lock(&content->lock);
     assert(!_Q2_holdoff_should_block_LH(content));
+    sys_mutex_unlock(&content->lock);
 
+    sys_mutex_lock(&content->lock);
     // Now append buffers until Q2 blocks
     while (!_Q2_holdoff_should_block_LH(content)) {
         qd_buffer_t *buffy = qd_buffer();
         qd_buffer_insert(buffy, qd_buffer_capacity(buffy));
         DEQ_INSERT_TAIL(content->buffers, buffy);
     }
+    sys_mutex_unlock(&content->lock);
 
     // expect: Q2 blocking activates when the non-header buffer count exceeds QD_QLIMIT_Q2_UPPER
     if (DEQ_SIZE(content->buffers) - header_ct < QD_QLIMIT_Q2_UPPER) {
@@ -1744,12 +1752,13 @@ static char *test_q2_ignore_headers(void *context)
     }
 
     // now remove buffers until Q2 is relieved
-
+    sys_mutex_lock(&content->lock);
     while (!_Q2_holdoff_should_unblock_LH(content)) {
         qd_buffer_t *buffy = DEQ_TAIL(content->buffers);
         DEQ_REMOVE_TAIL(content->buffers);
         qd_buffer_free(buffy);
     }
+    sys_mutex_unlock(&content->lock);
 
     // expect: Q2 deactivates when the non-header buffer count falls below QD_QLIMIT_Q2_LOWER
     if (DEQ_SIZE(content->buffers) - header_ct > QD_QLIMIT_Q2_LOWER) {

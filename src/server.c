@@ -1186,7 +1186,7 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) {
 
 
 /* Timer callback to try/retry connection open, connector->lock held */
-static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
+static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection) TA_REQ(connector->lock)
 {
     // connection until pn_proactor_connect is called below
     qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
