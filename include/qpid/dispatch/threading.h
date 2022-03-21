@@ -23,30 +23,32 @@
  * Portable threading and locking API.
  */
 
-typedef struct sys_mutex_t sys_mutex_t;
+#include "qpid/dispatch/internal/thread_annotations.h"
+
+typedef struct sys_mutex_t TA_CAP("mutex") sys_mutex_t;
 
 sys_mutex_t *sys_mutex(void);
 void         sys_mutex_free(sys_mutex_t *mutex);
-void         sys_mutex_lock(sys_mutex_t *mutex);
-void         sys_mutex_unlock(sys_mutex_t *mutex);
+void         sys_mutex_lock(sys_mutex_t *mutex) TA_ACQ(*mutex);
+void         sys_mutex_unlock(sys_mutex_t *mutex) TA_REL(*mutex);
 
 
-typedef struct sys_cond_t sys_cond_t;
+typedef struct sys_cond_t TA_CAP("cond") sys_cond_t;
 
 sys_cond_t *sys_cond(void);
 void        sys_cond_free(sys_cond_t *cond);
-void        sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex);
+void        sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex) TA_REQ(*held_mutex);
 void        sys_cond_signal(sys_cond_t *cond);
 void        sys_cond_signal_all(sys_cond_t *cond);
 
 
-typedef struct sys_rwlock_t sys_rwlock_t;
+typedef struct sys_rwlock_t TA_CAP("rwlock") sys_rwlock_t;
 
 sys_rwlock_t *sys_rwlock(void);
 void          sys_rwlock_free(sys_rwlock_t *lock);
-void          sys_rwlock_wrlock(sys_rwlock_t *lock);
-void          sys_rwlock_rdlock(sys_rwlock_t *lock);
-void          sys_rwlock_unlock(sys_rwlock_t *lock);
+void          sys_rwlock_wrlock(sys_rwlock_t *lock) TA_ACQ(lock);
+void          sys_rwlock_rdlock(sys_rwlock_t *lock) TA_ACQ_SHARED(lock);
+void          sys_rwlock_unlock(sys_rwlock_t *lock) TA_REL_GENERIC(lock);
 
 
 typedef struct sys_thread_t sys_thread_t;

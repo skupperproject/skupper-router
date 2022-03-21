@@ -26,6 +26,7 @@
 #include "qpid/dispatch/threading.h"
 
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/internal/thread_annotations.h"
 
 #include <assert.h>
 #include <pthread.h>
@@ -52,14 +53,14 @@ void sys_mutex_free(sys_mutex_t *mutex)
 }
 
 
-void sys_mutex_lock(sys_mutex_t *mutex)
+void sys_mutex_lock(sys_mutex_t *mutex) TA_ACQ(*mutex) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = pthread_mutex_lock(&(mutex->mutex));
     assert(result == 0);
 }
 
 
-void sys_mutex_unlock(sys_mutex_t *mutex)
+void sys_mutex_unlock(sys_mutex_t *mutex) TA_REL(*mutex) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = pthread_mutex_unlock(&(mutex->mutex));
     assert(result == 0);
@@ -87,7 +88,7 @@ void sys_cond_free(sys_cond_t *cond)
 }
 
 
-void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex)
+void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex) TA_REQ(*held_mutex)
 {
     int result = pthread_cond_wait(&(cond->cond), &(held_mutex->mutex));
     assert(result == 0);
@@ -128,21 +129,21 @@ void sys_rwlock_free(sys_rwlock_t *lock)
 }
 
 
-void sys_rwlock_wrlock(sys_rwlock_t *lock)
+void sys_rwlock_wrlock(sys_rwlock_t *lock) TA_ACQ(*lock) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = pthread_rwlock_wrlock(&(lock->lock));
     assert(result == 0);
 }
 
 
-void sys_rwlock_rdlock(sys_rwlock_t *lock)
+void sys_rwlock_rdlock(sys_rwlock_t *lock) TA_ACQ_SHARED(*lock) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = pthread_rwlock_rdlock(&(lock->lock));
     assert(result == 0);
 }
 
 
-void sys_rwlock_unlock(sys_rwlock_t *lock)
+void sys_rwlock_unlock(sys_rwlock_t *lock) TA_REL_GENERIC(*lock) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = pthread_rwlock_unlock(&(lock->lock));
     assert(result == 0);

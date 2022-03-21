@@ -36,7 +36,7 @@ set(CMAKE_ENABLE_EXPORTS TRUE)
 
 # Set warning compile flags
 set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
-set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
+set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wthread-safety -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
 
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
 add_compile_options(${C_WARNING_FLAGS})
@@ -67,22 +67,22 @@ if(NOT DEFINED VERSION)
                       OUTPUT_VARIABLE DEFAULT_VERSION
                       RESULT_VARIABLE GIT_RESULT
                       OUTPUT_STRIP_TRAILING_WHITESPACE)
-                      
-                
+
+
       # You might sometimes get a fatal error when running the above command (when this is not a git repo).
       # GIT_RESULT will contain the result of last child process. It will be zero if successful.
       if (GIT_RESULT EQUAL 0)
           # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
           set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
        else()
-          # The git command failed, set QPID_DISPATCH_VERSION to "UNKNOWN" 
+          # The git command failed, set QPID_DISPATCH_VERSION to "UNKNOWN"
           set(QPID_DISPATCH_VERSION "UNKNOWN")
        endif(GIT_RESULT EQUAL 0)
    else(Git_FOUND)
        # Git executable was not available, we will not be able to determine the version, just set it to "UNKNOWN"
        set(QPID_DISPATCH_VERSION "UNKNOWN")
    endif(Git_FOUND)
-   
+
 else(NOT DEFINED VERSION)
 
    # What if VERSION is defined but someone passed in an empty value for VERSION? Deal with that case here.
@@ -95,7 +95,7 @@ else(NOT DEFINED VERSION)
       else()
           set(QPID_DISPATCH_VERSION ${VERSION})
       endif()
-   endif(VERSION STREQUAL "")  
+   endif(VERSION STREQUAL "")
 endif(NOT DEFINED VERSION)
 
 message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")
