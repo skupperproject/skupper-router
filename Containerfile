@@ -29,7 +29,7 @@ RUN dnf -y --setopt=tsflags=nodocs install \
 RUN dnf -y --setopt=tsflags=nodocs install gcc gcc-c++ make cmake cyrus-sasl-devel openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
 WORKDIR /build
 COPY . .
-ENV PROTON_VERSION=0.36.0
+ENV PROTON_VERSION=0.37.0
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-http://archive.apache.org/dist/qpid/proton/${PROTON_VERSION}/qpid-proton-${PROTON_VERSION}.tar.gz}
 RUN .github/scripts/compile.sh
 
