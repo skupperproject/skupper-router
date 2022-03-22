@@ -177,7 +177,10 @@ class TwoRouterTest(TestCase):
         self.assertIsNone(test.error)
 
     def test_07_semantics_closest_is_remote(self):
-        test = SemanticsClosestIsRemote(self.routers[0].addresses[0], self.routers[1].addresses[0])
+        test = SemanticsClosestIsRemote(self.routers[0].addresses[0],
+                                        self.routers[1].addresses[0],
+                                        self.routers[0],
+                                        self.routers[1])
         test.run()
         self.assertIsNone(test.error)
 
@@ -1407,7 +1410,7 @@ class SemanticsClosestIsLocal(MessagingHandler):
 
 
 class SemanticsClosestIsRemote(MessagingHandler):
-    def __init__(self, address1, address2):
+    def __init__(self, address1, address2, router_check_remote, router_check_local):
         super(SemanticsClosestIsRemote, self).__init__()
         self.address1 = address1
         self.address2 = address2
@@ -1424,16 +1427,32 @@ class SemanticsClosestIsRemote(MessagingHandler):
         self.n_received_b = 0
         self.error = None
         self.n_sent = 0
+        self.sender_created = False
+        self.receiver_a_opened = False
+        self.receiver_b_opened = False
+        self.router_check_remote = router_check_remote
+        self.router_check_local = router_check_local
 
     def on_start(self, event):
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
         self.conn1 = event.container.connect(self.address1)
         self.conn2 = event.container.connect(self.address2)
-        self.sender = event.container.create_sender(self.conn1, self.dest)
         # Receiver on same router as the sender must receive all the messages. The other two
         # receivers are on the other router
         self.receiver_a = event.container.create_receiver(self.conn2, self.dest, name="A")
         self.receiver_b = event.container.create_receiver(self.conn2, self.dest, name="B")
+
+    def on_link_opened(self, event):
+        if event.receiver == self.receiver_a:
+            self.receiver_a_opened = True
+        elif event.receiver == self.receiver_b:
+            self.receiver_b_opened = True
+
+        if self.receiver_a_opened and self.receiver_b_opened and not self.sender_created:
+            self.router_check_remote.wait_address(self.dest, remotes=1)
+            self.router_check_local.wait_address(self.dest, subscribers=2)
+            self.sender = event.container.create_sender(self.conn1, self.dest)
+            self.sender_created = True
 
     def timeout(self):
         self.error = "Timeout Expired: sent=%d rcvd=%d/%d" % \
