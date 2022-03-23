@@ -906,7 +906,8 @@ class OneRouterLinkCountersTest(TestCase):
                     # to propagate the outcome back to the sender the sender's outcomes would lag behind the receivers
                     restart_poll_timer = False
                     self._cleanup()
-            elif self.receiver_stats and self.receiver_stats['deliveryCount'] == self.rx_limit:
+            elif self.receiver_stats and self.receiver_stats['deliveryCount'] == self.rx_limit\
+                    and self.sender_stats and self.sender_stats['deliveryCount'] == self.count:
                 restart_poll_timer = False
                 self._cleanup()
 
