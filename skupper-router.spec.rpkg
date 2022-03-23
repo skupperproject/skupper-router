@@ -52,6 +52,8 @@ BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
 # man pages --help
 BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
+# check ctest
+BuildRequires: cyrus-sasl-plain
 
 Source: {{{ git_dir_pack }}}
 
@@ -125,6 +127,7 @@ Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
 Requires: skupper-router-server == %{version}
 Requires: skupper-router-tools == %{version}
+Requires: cyrus-sasl-plain
 
 %description tests
 %{summary}.
