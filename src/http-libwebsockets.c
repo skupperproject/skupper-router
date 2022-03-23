@@ -367,7 +367,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     info.keepalive_timeout = 1;
     info.ssl_cipher_list = CIPHER_LIST;
     info.options |= LWS_SERVER_OPTION_VALIDATE_UTF8;
-    if (!is_ipv6_address(hs, config->host, config->port)) {
+    if (!is_ipv6_address(hs, strlen(config->host) == 0 ? 0 : config->host, config->port)) {
         qd_log(hs->log, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
         info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
     }
