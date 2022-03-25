@@ -34,7 +34,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
 
 struct qd_config_ssl_profile_t {
     DEQ_LINKS(qd_config_ssl_profile_t);
@@ -336,11 +335,11 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
 
     //
-    // The cost field on the listener or the connector should be > 0 and <= INT_MAX
+    // The cost field on the listener or the connector should be > 0 and <= INT32_MAX
     // The router will terminate on invalid cost values.
     //
-    if (inter_router_cost <= 0 || inter_router_cost > INT_MAX) {
-        return qd_error(QD_ERROR_CONFIG, "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %li", inter_router_cost, INT_MAX);
+    if (inter_router_cost <= 0 || inter_router_cost > INT32_MAX) {
+        return qd_error(QD_ERROR_CONFIG, "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %li", inter_router_cost, INT32_MAX);
     }
 
     config->inter_router_cost = inter_router_cost;

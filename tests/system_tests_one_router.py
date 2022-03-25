@@ -259,7 +259,7 @@ class RouterConfigTest(TestCase):
         name = "test-router-7"
         config_7 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR'}),
-            ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'cost': '-1', 'host': '0.0.0.0'})
+            ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'cost': '-1', 'host': '0.0.0.0'})
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_7, wait=False, expect=Process.EXIT_FAIL))
 
