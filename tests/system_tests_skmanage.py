@@ -297,8 +297,8 @@ class SkmanageTest(TestCase):
 
     def create(self, type, name, port):
         create_command = 'CREATE --type=' + type + ' --name=' + name + ' host=0.0.0.0 port=' + port
-        connector = json.loads(self.run_skmanage(create_command))
-        return connector
+        ret_entity = json.loads(self.run_skmanage(create_command))
+        return ret_entity
 
     def test_check_address_name(self):
         long_type = 'io.skupper.router.router.config.address'
@@ -636,6 +636,57 @@ class SkmanageTest(TestCase):
                           " --ssl-key " +
                           self.ssl_file('client-private-key.pem'),
                           address=ssl_user_address)
+
+    def test_listener_connector_cost(self):
+        # Try creating a connector and listener with negative cost
+        connector_long_type = 'io.skupper.router.connector'
+        create_command = 'CREATE --type=' + connector_long_type + ' port=' +  \
+                         str(self.get_port()) + ' cost=-1 role=normal'
+        error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is " \
+                       "1 and maximum value is 2147483647"
+        passed = False
+        try:
+            json.loads(self.run_skmanage(create_command))
+        except RuntimeError as e:
+            if error_string in str(e):
+                passed = True
+        self.assertTrue(passed)
+
+        listener_long_type = 'io.skupper.router.listener'
+        create_command = 'CREATE --type=' + listener_long_type + ' port=' +  \
+                         str(self.get_port()) + ' cost=-1 role=normal'
+        error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is " \
+                       "1 and maximum value is 2147483647"
+        passed = False
+        try:
+            json.loads(self.run_skmanage(create_command))
+        except RuntimeError as e:
+            if error_string in str(e):
+                passed = True
+        self.assertTrue(passed)
+
+        # Try creating a connector and listener with cost past the int range.
+        create_command = 'CREATE --type=' + connector_long_type + ' port=' +  \
+                         str(self.get_port()) + ' cost=2147483648 role=normal'
+        error_string = "Configuration: Invalid cost (2147483648) specified. Minimum value for cost is " \
+                       "1 and maximum value is 2147483647"
+        passed = False
+        try:
+            json.loads(self.run_skmanage(create_command))
+        except RuntimeError as e:
+            if error_string in str(e):
+                passed = True
+        self.assertTrue(passed)
+
+        create_command = 'CREATE --type=' + listener_long_type + ' port=' +  \
+                         str(self.get_port()) + ' cost=2147483648 role=normal'
+        passed = False
+        try:
+            json.loads(self.run_skmanage(create_command))
+        except RuntimeError as e:
+            if error_string in str(e):
+                passed = True
+        self.assertTrue(passed)
 
 
 if __name__ == '__main__':
