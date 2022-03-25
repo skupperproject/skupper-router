@@ -573,6 +573,8 @@ void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al)
 
     free(al->name);
     free(al->external_addr);
+    if (al->last_error)
+        free(al->last_error);
     qd_hash_handle_free(al->hash_handle);
     qdr_core_timer_free_CT(core, al->retry_timer);
     free_qdr_auto_link_t(al);
