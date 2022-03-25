@@ -21,6 +21,7 @@
 //c
 #include <cstddef>
 #include <cstring>
+#include <cstdint>
 //c++
 #include <map>
 
