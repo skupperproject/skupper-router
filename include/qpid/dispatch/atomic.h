@@ -25,12 +25,17 @@
 
 #include <stdint.h>
 
-/******************************************************************************
- * C11 atomics                                                                *
- ******************************************************************************/
-#if defined(__STDC__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_ATOMICS__)
-
+#ifdef __cplusplus
+// Compatibility maneuver required due to c_unittests written in C++.
+// The stdatomic.h header is proposed only for C++23, which is still far out.
+extern "C++" {
+#include <atomic>
+}
+using std::atomic_uint;
+#else
 #include <stdatomic.h>
+#endif
+
 typedef atomic_uint sys_atomic_t;
 
 static inline void sys_atomic_init(sys_atomic_t *ref, uint32_t value)
@@ -58,50 +63,7 @@ static inline uint32_t sys_atomic_set(sys_atomic_t *ref, uint32_t value)
     return atomic_exchange(ref, value);
 }
 
-
 static inline void sys_atomic_destroy(sys_atomic_t *ref) {}
-
-
-#elif defined(__GNUC__) || defined(__clang__)
-
-/******************************************************************************
- * GCC specific atomics                                                       *
- ******************************************************************************/
-
-typedef volatile uint32_t sys_atomic_t;
-
-static inline void sys_atomic_init(sys_atomic_t *ref, uint32_t value)
-{
-    *ref = value;
-}
-
-static inline uint32_t sys_atomic_add(sys_atomic_t *ref, uint32_t value)
-{
-    return __sync_fetch_and_add(ref, value);
-}
-
-static inline uint32_t sys_atomic_sub(sys_atomic_t *ref, uint32_t value)
-{
-    return __sync_fetch_and_sub(ref, value);
-}
-
-static inline uint32_t sys_atomic_get(sys_atomic_t *ref)
-{
-    return *ref;
-}
-
-static inline uint32_t sys_atomic_set(sys_atomic_t *ref, uint32_t value)
-{
-    uint32_t old = *ref;
-    while (!__sync_bool_compare_and_swap(ref, old, value)) {
-        old = *ref;
-    }
-    return old;
-}
-
-static inline void sys_atomic_destroy(sys_atomic_t *ref) {}
-
-#endif
 
 #define    SET_ATOMIC_FLAG(flag)        sys_atomic_set((flag), 1)
 #define  CLEAR_ATOMIC_FLAG(flag)        sys_atomic_set((flag), 0)
