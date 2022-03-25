@@ -147,6 +147,7 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_profile)           free(cf->ssl_profile);
     if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
     if (cf->log_message)           free(cf->log_message);
+    if (cf->policy_vhost)          free(cf->policy_vhost);
 
     if (cf->ssl_certificate_file)       free(cf->ssl_certificate_file);
     if (cf->ssl_private_key_file)       free(cf->ssl_private_key_file);
