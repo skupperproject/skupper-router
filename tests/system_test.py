@@ -28,42 +28,38 @@ Features:
 - Sundry other tools.
 """
 
-import fcntl
-import pathlib
-from typing import Callable, TextIO
-
-import errno
-import logging
-import sys
-import time
-from typing import List, Optional, Tuple
-
 import __main__
+import errno
+import fcntl
+import json
+import logging
 import os
+import pathlib
+import queue as Queue
 import random
 import re
 import shutil
 import socket
 import subprocess
+import sys
+import time
+import unittest
+import uuid
 from copy import copy
 from datetime import datetime
 from subprocess import PIPE, STDOUT
-
-import queue as Queue
-from threading import Thread
 from threading import Event
-import json
-import uuid
-
-import unittest
+from threading import Thread
+from typing import Callable, TextIO, List, Optional, Tuple
 
 import proton
 import proton.utils
-from proton import Message
 from proton import Delivery
+from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import AtLeastOnce, Container
 from proton.reactor import AtMostOnce
+
 from skupper_router.management.client import Node
 from skupper_router.management.error import NotFoundStatus
 
@@ -879,7 +875,7 @@ class Tester:
         self.cleanup_list.append(x)
         return x
 
-    def popen(self, *args, **kwargs):
+    def popen(self, *args, **kwargs) -> Process:
         """Start a Process that will be cleaned up on teardown"""
         return self.cleanup(Process(*args, **kwargs))
 

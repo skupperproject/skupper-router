@@ -24,15 +24,17 @@ For example, unresolvable host names.
 """
 
 import os
-from threading import Timer
+import pathlib
+import subprocess
+import textwrap
 from subprocess import PIPE, STDOUT
+from threading import Timer
 from typing import ClassVar
 
 from system_test import TestCase, Qdrouterd, TIMEOUT, Process
 
 
 class RouterTestBadConfiguration(TestCase):
-
     """
     This test case sets up a router using configurations that are not
     well defined, but are not supposed to cause a crash to the router
@@ -149,87 +151,71 @@ class RouterTestBadConfiguration(TestCase):
             ['skmanage', '-b', self.address(), 'query', '--type=router', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_OK,
             universal_newlines=True)
-        out = p.communicate()[0]
         try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
+            out, _ = p.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            p.kill()
+            out, _ = p.communicate(timeout=TIMEOUT)
+            raise Exception("%s\n%s" % (e, out)) from e
         return out
 
 
-class RouterTestIdFailCtrlChar(TestCase):
-    """
-    This test case sets up a router using a configuration router id
-    that is illegal (control character). The router should not start.
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(RouterTestIdFailCtrlChar, cls).setUpClass()
-        cls.name = "test-router-ctrl-char"
+class RouterTestIdFailChar(TestCase):
+    """Writes illegal config, runs router, examines console output"""
 
-    @classmethod
-    def tearDownClass(cls):
-        super(RouterTestIdFailCtrlChar, cls).tearDownClass()
+    name = "test-router-ctrl-char"
 
-    def test_verify_reject_id_with_ctrl_char(self):
+    def test_verify_reject_id_with_ctrl_char(self) -> None:
         """
-        Writes illegal config, runs router, examines console output
+        This test case sets up a router using a configuration router id
+        that is illegal (control character). The router should not start.
         """
+
+        self.do_test_id_fail_char(
+            config=textwrap.dedent("""\
+            router {
+                id: abc\\bdef
+            }
+            """),
+            expected="AttributeError: Router id attribute containing character"
+        )
+
+    def test_verify_reject_id_with_whitespace(self) -> None:
+        """
+        This test case sets up a router using a configuration router id
+        that is illegal (whitespace character). The router should not start.
+        """
+
+        self.do_test_id_fail_char(
+            config=textwrap.dedent("""\
+            router {
+                id: abc def
+            }
+            """),
+            expected="AttributeError: Router id attribute containing character"
+        )
+
+    def do_test_id_fail_char(self, config, expected) -> None:
+        filename = f"setUpClass/{self._testMethodName}.conf"
+        conf_path = self.write_config(filename=filename, content=config)
+        self.run_router_assert_failure(conf_path, expected_log=expected)
+
+    def write_config(self, filename: str, content: str) -> pathlib.Path:
         parent_path = os.path.dirname(os.getcwd())
-        conf_path = os.path.join(parent_path, "setUpClass/test-router-ctrl-char.conf")
-        with open(conf_path, 'w') as router_conf:
-            router_conf.write("router { \n")
-            router_conf.write("    id: abc\\bdef \n")
-            router_conf.write("}")
-        lib_include_path = os.path.join(os.environ["QPID_DISPATCH_HOME"], "python")
+        conf_path = pathlib.Path(parent_path, filename)
+        conf_path.write_text(content)
+        return conf_path
+
+    def run_router_assert_failure(self, conf_path: pathlib.Path, expected_log: str) -> None:
+        lib_include_path = pathlib.Path(os.environ["QPID_DISPATCH_HOME"], "python")
         p = self.popen(
-            ['skrouterd', '-c', conf_path, '-I', lib_include_path],
+            ['skrouterd', '-c', str(conf_path), '-I', str(lib_include_path)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
             universal_newlines=True)
-        out = p.communicate(timeout=5)[0]
         try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
-        if "AttributeError" not in out:
-            print("output: ", out)
-            assert False, "AttributeError not in process output"
-
-
-class RouterTestIdFailWhiteSpace(TestCase):
-    """
-    This test case sets up a router using a configuration router id
-    that is illegal (whitespace character). The router should not start.
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(RouterTestIdFailWhiteSpace, cls).setUpClass()
-        cls.name = "test-router-ctrl-char"
-
-    @classmethod
-    def tearDownClass(cls):
-        super(RouterTestIdFailWhiteSpace, cls).tearDownClass()
-
-    def test_verify_reject_id_with_whitespace(self):
-        """
-        Writes illegal config, runs router, examines console output
-        """
-        parent_path = os.path.dirname(os.getcwd())
-        conf_path = os.path.join(parent_path, "setUpClass/test-router-whitespace.conf")
-        with open(conf_path, 'w') as router_conf:
-            router_conf.write("router { \n")
-            router_conf.write("    id: abc def \n")
-            router_conf.write("}")
-        lib_include_path = os.path.join(os.environ["QPID_DISPATCH_HOME"], "python")
-        p = self.popen(
-            ['skrouterd', '-c', conf_path, '-I', lib_include_path],
-            stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=Process.EXIT_FAIL,
-            universal_newlines=True)
-        out = p.communicate(timeout=5)[0]
-        try:
-            p.teardown()
-        except Exception as e:
-            raise Exception("%s\n%s" % (e, out))
-        if "AttributeError" not in out:
-            print("output: ", out)
-            assert False, "AttributeError not in process output"
+            out, _ = p.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            out, _ = p.communicate()
+            self.fail(f"p.communicate failed after timeout with output: {out}")
+        self.assertIn(expected_log, out, out)
