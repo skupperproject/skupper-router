@@ -53,7 +53,7 @@ static inline uint32_t sys_atomic_get(sys_atomic_t *ref)
     return atomic_load(ref);
 }
 
-static inline int32_t sys_atomic_set(sys_atomic_t *ref, uint32_t value)
+static inline uint32_t sys_atomic_set(sys_atomic_t *ref, uint32_t value)
 {
     return atomic_exchange(ref, value);
 }
