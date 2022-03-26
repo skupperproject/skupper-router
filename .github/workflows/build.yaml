@@ -451,6 +451,7 @@ jobs:
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DPython_EXECUTABLE=/usr/bin/python3
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
+        -DBUILD_AS_CXX=ON
 
       CCACHE_BASEDIR: ${{github.workspace}}
       CCACHE_DIR: ${{github.workspace}}/.ccache
