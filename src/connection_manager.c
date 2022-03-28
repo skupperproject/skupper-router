@@ -349,7 +349,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
     config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
     config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
-    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", false);   CHECK();
+    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
     config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
     config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
     config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
