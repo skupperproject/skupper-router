@@ -600,6 +600,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         if (_is_request_in_progress(hreq) && !hreq->response_complete)
             _cancel_request(hreq);
         _process_request(hreq);
+        hreq = 0;  // _process_request *may* free hreq, do not trust this pointer!
 
         //
         // Try to reconnect to the server. Leave the links intact so pending
@@ -719,7 +720,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     //
     // After each event check connection and request status
     //
-    bool need_close = _process_request((_server_request_t*) DEQ_HEAD(hconn->requests));
+    _server_request_t *hreq = (_server_request_t*) DEQ_HEAD(hconn->requests);
+    bool need_close = _process_request(hreq);
     if (need_close) {
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP Request requires connection close", hconn->conn_id);
         qdr_http1_close_connection(hconn, 0);
@@ -1382,7 +1384,8 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
     method_str = (char*) qd_iterator_copy(method_iter);
     qd_iterator_free(method_iter);
     if (!method_str || *method_str == 0) {
-        return PN_REJECTED;
+        outcome = PN_REJECTED;
+        goto exit;
     }
 
     // target, version info and other headers are in the app properties
