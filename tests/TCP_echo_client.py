@@ -132,10 +132,27 @@ class TcpEchoClient:
                 # when count or size .LE. zero then just connect-disconnect
                 self.keep_running = False
 
-            # set up connection
+            # Set up connection.  If the TCPConnectors have not yet finished
+            # coming up then it is possible to get a ConnectionRefusedError.
+            # This is not necessarly an error, so retry
+
             host_address = (self.host, self.port)
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect(host_address)
+
+            conn_timeout = time.time() + TIMEOUT
+            while True:
+                try:
+                    self.sock.connect(host_address)
+                    break
+                except ConnectionRefusedError as err:
+                    if time.time() > conn_timeout:
+                        self.logger.log('%s Failed to connect to host:%s port:%d - Connection Refused!'
+                                        % (self.prefix, self.host, self.port))
+                        raise
+                    time.sleep(0.1)
+                    self.logger.log('%s Failed to connect to host:%s port:%d - Retrying...'
+                                    % (self.prefix, self.host, self.port))
+
             self.sock.setblocking(False)
 
             # set up selector
