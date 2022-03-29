@@ -23,7 +23,7 @@
 #include <stdio.h>
 
 int tool_tests(void);
-int timer_tests(qd_dispatch_t*);
+int timer_tests(void);
 int core_timer_tests(void);
 int alloc_tests(void);
 int compose_tests(void);
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
         printf("Config failed: %s\n", qd_error_message());
         return 1;
     }
-    result += timer_tests(qd);
+    result += timer_tests();
     result += tool_tests();
     result += compose_tests();
     result += alloc_tests();
