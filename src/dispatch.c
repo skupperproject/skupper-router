@@ -68,6 +68,34 @@ sys_atomic_t global_delivery_id;
 
 qd_dispatch_t *qd = 0;
 
+int    n_policy_longs   = 0;
+int    max_policy_longs = 0;
+long * policy_longs;
+
+void alloc_policy_longs()
+{
+    max_policy_longs = 100;
+    policy_longs = qd_malloc(sizeof(long) * max_policy_longs);
+}
+
+void append_policy_long(long val)
+{
+    if (n_policy_longs >= max_policy_longs) {
+        policy_longs = qd_realloc(policy_longs, 2*max_policy_longs);
+        max_policy_longs *= 2;
+    }
+    policy_longs[n_policy_longs] = val;
+    ++ n_policy_longs;
+}
+
+void free_policy_longs()
+{
+    for (int i = 0; i < n_policy_longs; ++i) {
+        qd_policy_c_counts_free(policy_longs[i]);
+    }
+    free(policy_longs);
+}
+
 qd_dispatch_t *qd_dispatch_get_dispatch()
 {
     return qd;
@@ -271,11 +299,18 @@ QD_EXPORT qd_error_t qd_dispatch_register_display_name_service(qd_dispatch_t *qd
 }
 
 
+// Don't free these pointers.
+// Ownership of these pointers is retained in this file,
+// and they are freed just before the router itself is freed.
+// This is done because, as of this writing, pointers to these
+// data structures are only consumed in the Python code and
+// are never freed, causing shutdown-time ASAN leak errors.
 QD_EXPORT long qd_dispatch_policy_c_counts_alloc()
 {
-    return qd_policy_c_counts_alloc();
+    long ptr = qd_policy_c_counts_alloc();
+    append_policy_long(ptr);
+    return ptr;
 }
-
 
 QD_EXPORT void qd_dispatch_policy_c_counts_free(long ccounts)
 {
@@ -318,6 +353,7 @@ qd_error_t qd_dispatch_prepare(qd_dispatch_t *qd)
     qd->router             = qd_router(qd, qd->router_mode, qd->router_area, qd->router_id);
     qd->connection_manager = qd_connection_manager(qd);
     qd->policy             = qd_policy(qd);
+    alloc_policy_longs();
     return qd_error_code();
 }
 
@@ -366,6 +402,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_iterator_finalize();
     free(qd->timestamp_format);
     free(qd->metadata);
+    free_policy_longs();
 
     free(qd);
 }
