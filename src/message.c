@@ -1708,7 +1708,7 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
     }
 
     // index 3: trace list
-    if (!!(ra_flags && QD_MESSAGE_RA_STRIP_TRACE)) {
+    if (!!(ra_flags & QD_MESSAGE_RA_STRIP_TRACE)) {
         qd_compose_empty_list(ra);
     } else {
         qd_compose_start_list(ra);

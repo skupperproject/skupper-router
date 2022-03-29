@@ -222,11 +222,11 @@ execute_process(COMMAND ${RUN} --sh OUTPUT_FILE config.sh)
 
 add_subdirectory(src) # Build src first so other subdirs can use library
 
-if (NOT UNITTEST_MISSING)
+if (BUILD_TESTING)
   file(GLOB SCRAPER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tools/scraper/*.py)
   file(COPY ${SCRAPER_SRC} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests/scraper/)
   add_subdirectory(tests)
-endif(NOT UNITTEST_MISSING)
+endif(BUILD_TESTING)
 add_subdirectory(python)
 add_subdirectory(router)
 add_subdirectory(docs)

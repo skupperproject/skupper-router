@@ -147,6 +147,7 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_profile)           free(cf->ssl_profile);
     if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
     if (cf->log_message)           free(cf->log_message);
+    if (cf->policy_vhost)          free(cf->policy_vhost);
 
     if (cf->ssl_certificate_file)       free(cf->ssl_certificate_file);
     if (cf->ssl_private_key_file)       free(cf->ssl_private_key_file);
@@ -332,13 +333,23 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->port                 = qd_entity_get_string(entity, "port");              CHECK();
     config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
     config->role                 = qd_entity_get_string(entity, "role");              CHECK();
-    config->inter_router_cost    = qd_entity_opt_long(entity, "cost", 1);             CHECK();
+    long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
+
+    //
+    // The cost field on the listener or the connector should be > 0 and <= INT32_MAX
+    // The router will terminate on invalid cost values.
+    //
+    if (inter_router_cost <= 0 || inter_router_cost > INT32_MAX) {
+        return qd_error(QD_ERROR_CONFIG, "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %li", inter_router_cost, INT32_MAX);
+    }
+
+    config->inter_router_cost = inter_router_cost;
     config->socket_address_family      = qd_entity_opt_string(entity, "socketAddressFamily", 0); CHECK();
     config->healthz              = qd_entity_opt_bool(entity, "healthz", true);       CHECK();
     config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
     config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
     config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
-    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", false);   CHECK();
+    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
     config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
     config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
     config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
@@ -776,6 +787,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
 
   error:
     qd_log(cm->log_source, QD_LOG_ERROR, "Unable to create connector: %s", qd_error_message());
+    ct->state = CXTR_STATE_DELETED;
     qd_connector_decref(ct);
     return 0;
 }

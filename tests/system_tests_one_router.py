@@ -183,22 +183,24 @@ class EdgeRouterQdManageTest(TestCase):
         self.assertTrue(test_pass)
 
 
-class StandaloneEdgeRouterConfigTest(TestCase):
+class RouterConfigTest(TestCase):
     """
     Try to start the router with bad config and make sure the router
     does not start and scan the log files for appropriate error messages.
     """
     @classmethod
     def setUpClass(cls):
-        super(StandaloneEdgeRouterConfigTest, cls).setUpClass()
+        super(RouterConfigTest, cls).setUpClass()
         name = "test-router"
+
+        cls.routers: Sequence[Qdrouterd] = []
 
         # A standalone router cannot have an edge listener because it cannot accept edge connections.
         config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'edge', 'host': '0.0.0.0'})
         ])
-        cls.router = cls.tester.qdrouterd(name, config, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config, wait=False, expect=Process.EXIT_FAIL))
 
         # A standalone router cannot have inter-router connectors.
         name = "test-router-1"
@@ -206,7 +208,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_1 = cls.tester.qdrouterd(name, config_1, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config_1, wait=False, expect=Process.EXIT_FAIL))
 
         # An edge router cannot have edge listeners.
         # Edge routers can have connectors that connect to interior routers
@@ -216,7 +218,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'edge', 'host': '0.0.0.0'})
         ])
-        cls.router_2 = cls.tester.qdrouterd(name, config_2, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config_2, wait=False, expect=Process.EXIT_FAIL))
 
         # Edge routers cannot have inter-router listeners. Only interior
         # routers can have inter-router listeners.
@@ -225,7 +227,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_3 = cls.tester.qdrouterd(name, config_3, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config_3, wait=False, expect=Process.EXIT_FAIL))
 
         # Edge routers cannot have inter-router connectors
         # Inter-router connectors are allowed only on interior routers.
@@ -234,7 +236,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'edge', 'id': 'QDR'}),
             ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_4 = cls.tester.qdrouterd(name, config_4, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config_4, wait=False, expect=Process.EXIT_FAIL))
 
         # A standalone router cannot have an inter-router listener because
         # it cannot accept inter-router connections.
@@ -243,17 +245,48 @@ class StandaloneEdgeRouterConfigTest(TestCase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'host': '0.0.0.0'})
         ])
-        cls.router_5 = cls.tester.qdrouterd(name, config_5, wait=False, expect=Process.EXIT_FAIL)
+        cls.routers.append(cls.tester.qdrouterd(name, config_5, wait=False, expect=Process.EXIT_FAIL))
+
+        # A router cannot have a listener with negative cost.
+        name = "test-router-6"
+        config_6 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router', 'cost': '-1', 'host': '0.0.0.0'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_6, wait=False, expect=Process.EXIT_FAIL))
+
+        # A router cannot have a connector with negative cost.
+        name = "test-router-7"
+        config_7 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR'}),
+            ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'cost': '-1', 'host': '0.0.0.0'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_7, wait=False, expect=Process.EXIT_FAIL))
+
+        # A router cannot have a listener with cost past the int range.
+        name = "test-router-8"
+        config_8 = Qdrouterd.Config([
+            ('router', {'mode': 'edge', 'id': 'QDR'}),
+            ('listener', {'port': cls.tester.get_port(), 'cost': '2147483648', 'host': '0.0.0.0'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_8, wait=False, expect=Process.EXIT_FAIL))
+
+        # A router cannot have a connector with cost past the int range.
+        name = "test-router-9"
+        config_9 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR'}),
+            ('connector', {'port': cls.tester.get_port(), 'role': 'inter-router', 'cost': '2147483648', 'host': '0.0.0.0'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_9, wait=False, expect=Process.EXIT_FAIL))
 
         # Give some time for the test to write to the .out file. Without this, the tests execute too
         # fast and find that nothing has yet been written to the .out files.
-        routers: Sequence[Qdrouterd] = (cls.router, cls.router_1, cls.router_2, cls.router_3, cls.router_4, cls.router_5)
-        for router in routers:
+        for router in cls.routers:
             router.wait(timeout=TIMEOUT)
 
     def test_48_router_in_error(self):
         test_pass = False
-        with open(self.router.outfile + '.out', 'r') as out_file:
+        with open(self.routers[0].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
                     test_pass = True
@@ -261,7 +294,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.router_1.outfile + '.out', 'r') as out_file:
+        with open(self.routers[1].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-1.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
                     test_pass = True
@@ -269,7 +302,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.router_2.outfile + '.out', 'r') as out_file:
+        with open(self.routers[2].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-2.conf: role='edge' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -277,7 +310,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.router_3.outfile + '.out', 'r') as out_file:
+        with open(self.routers[3].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-3.conf: role='inter-router' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -285,7 +318,7 @@ class StandaloneEdgeRouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.router_4.outfile + '.out', 'r') as out_file:
+        with open(self.routers[4].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-4.conf: role='inter-router' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -293,9 +326,43 @@ class StandaloneEdgeRouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.router_5.outfile + '.out', 'r') as out_file:
+        with open(self.routers[5].outfile + '.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-5.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is 1 and maximum value is 2147483647"
+        test_pass = False
+        with open(self.routers[6].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        test_pass = False
+        with open(self.routers[7].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        error_string = "Configuration: Invalid cost (2147483648) specified. Minimum value for cost is 1 and maximum value is 2147483647"
+        test_pass = False
+        with open(self.routers[8].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        test_pass = False
+        with open(self.routers[9].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
                     test_pass = True
                     break
         self.assertTrue(test_pass)
