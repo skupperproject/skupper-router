@@ -179,15 +179,24 @@ class SkmanageTest(TestCase):
         self.assertEqual([long_type('listener')] * 4, [e['type'] for e in qlistener])
         self.assertEqual(self.router_1.ports[0], int(qlistener[0]['port']))
 
-        qattr = json.loads(self.run_skmanage('query type name'))
-        for e in qattr:
-            self.assertEqual(2, len(e))
-
         def name_type(entities):
             ignore_types = [long_type(t) for t in ['router.link', 'connection', 'router.address']]
             return set((e['name'], e['type']) for e in entities
                        if e['type'] not in ignore_types)
-        self.assertEqual(name_type(qall), name_type(qattr))
+
+        test_passed = False
+        for i in range(10):
+            qattr = json.loads(self.run_skmanage('query type name'))
+            try:
+                for e in qattr:
+                    self.assertEqual(2, len(e))
+                self.assertEqual(name_type(qall), name_type(qattr))
+                test_passed = True
+                break
+            except AssertionError as ae:
+                # Give some time for the Router 1's data structures to update.
+                sleep(0.5)
+        self.assertTrue(test_passed)
 
     def test_get_schema(self):
         schema = dictify(QdSchema().dump())
