@@ -1038,7 +1038,6 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                                               cls.interior_edge_listener_port})])
         cls.e_router.wait_ready()
 
-
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
     def test_01_ignore_stuck_deliveries(self):
         """
