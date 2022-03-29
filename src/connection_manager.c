@@ -323,7 +323,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     qd_error_clear();
 
     bool authenticatePeer   = qd_entity_opt_bool(entity, "authenticatePeer",  false);    CHECK();
-    bool verifyHostName     = qd_entity_opt_bool(entity, "verifyHostname",    true);     CHECK();
+    bool verifyHostname     = qd_entity_opt_bool(entity, "verifyHostname",    true);     CHECK();
     bool requireEncryption  = qd_entity_opt_bool(entity, "requireEncryption", false);    CHECK();
     bool requireSsl         = qd_entity_opt_bool(entity, "requireSsl",        false);    CHECK();
 
@@ -442,7 +442,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     // user community, we can revisit this later.
     //
     config->allowInsecureAuthentication = true;
-    config->verify_host_name = verifyHostName;
+    config->verify_host_name = verifyHostname;
 
     char *stripAnnotations  = qd_entity_opt_string(entity, "stripAnnotations", 0);
     load_strip_annotations(config, stripAnnotations);

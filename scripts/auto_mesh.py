@@ -225,7 +225,7 @@ class JsonConfig:
                 add_sasl_properties(outval)
                 if "sslProfile" in properties:
                     outval["sslProfile"] = properties["sslProfile"]
-                    outval["verifyHostName"] = "no"
+                    outval["verifyHostname"] = "no"
                 return outval
         return {"port": "55672"}
 
@@ -250,7 +250,7 @@ class SimpleConfig:
                 add_sasl_properties(outval)
                 if "sslProfile" in properties:
                     outval["sslProfile"] = properties["sslProfile"]
-                    outval["verifyHostName"] = "no"
+                    outval["verifyHostname"] = "no"
                 return outval
         return {"port": "55672"}
 
