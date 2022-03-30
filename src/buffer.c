@@ -86,11 +86,12 @@ unsigned int qd_buffer_list_clone(qd_buffer_list_t *dst, const qd_buffer_list_t 
 void qd_buffer_list_free_buffers(qd_buffer_list_t *list)
 {
     qd_buffer_t *buf = DEQ_HEAD(*list);
-    while (buf) {
-        DEQ_REMOVE_HEAD(*list);
+    while (buf != NULL) {
+        qd_buffer_t *next = DEQ_NEXT(buf);
         qd_buffer_free(buf);
-        buf = DEQ_HEAD(*list);
+        buf = next;
     }
+    DEQ_INIT(*list);
 }
 
 
