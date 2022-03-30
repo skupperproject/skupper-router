@@ -111,9 +111,15 @@ if(USE_LIBNGHTTP2)
 endif(USE_LIBNGHTTP2)
 
 if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})
-  #pass
+  #nothing to do
 else()
   set(SYSTEM_TESTS_POLICY system_tests_policy system_tests_policy_oversize_basic system_tests_policy_oversize_compound)
+endif()
+
+if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_DELIVERY_ABORT})
+  #nothing to do
+else()
+  set(SYSTEM_TESTS_DELIVERY_ABORT system_tests_delivery_abort)
 endif()
 
 # System test python modules
@@ -139,7 +145,7 @@ foreach(py_test_module
     system_tests_dynamic_terminus
     system_tests_log_message_components
     system_tests_failover_list
-    system_tests_delivery_abort
+    ${SYSTEM_TESTS_DELIVERY_ABORT}
     system_tests_topology
     system_tests_topology_disposition
     system_tests_topology_addition
