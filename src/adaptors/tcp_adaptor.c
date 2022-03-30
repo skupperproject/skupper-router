@@ -1888,7 +1888,6 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
     while (tl) {
         qd_tcp_listener_t *next = DEQ_NEXT(tl);
-        plog_end_record(tl->plog);
         free_bridge_config(tl->config);
         free_qd_tcp_listener_t(tl);
         tl = next;
@@ -1897,7 +1896,6 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qd_tcp_connector_t *tr = DEQ_HEAD(adaptor->connectors);
     while (tr) {
         qd_tcp_connector_t *next = DEQ_NEXT(tr);
-        plog_end_record(tr->plog);
         free_bridge_config(tr->config);
         free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher);
         free_qd_tcp_connector_t(tr);
