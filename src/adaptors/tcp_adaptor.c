@@ -1727,21 +1727,25 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                DLV_FMT" qdr_tcp_delivery_update: disp: %"PRIu64", settled: %s",
                DLV_ARGS(dlv), disp, settled ? "true" : "false");
 
-        if (settled && disp == PN_RELEASED) {
-            // When the connector is unable to connect to a tcp endpoint it will
-            // release the message. We handle that here by closing the connection.
-            // Half-closed status is signalled by read_eos_seen and is not
-            // sufficient by itself to force a connection closure.
+        const bool final_outcome = qd_delivery_state_is_terminal(disp);
+        if (final_outcome && disp != PN_ACCEPTED) {
+            // Oopsie! The message failed to be delivered due to error. Since
+            // this is a streaming message do not bother waiting for settlement
+            // because downstream routers will not propagate settlement until
+            // after rx complete is set.  Note this is not half-closed, that
+            // status is signalled by read_eos_seen and is not sufficient by
+            // itself to force a connection closure.
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   DLV_FMT" qdr_tcp_delivery_update: call pn_raw_connection_close()",
-                   DLV_ARGS(dlv));
+                   DLV_FMT" qdr_tcp_delivery_update: delivery failed with outcome=0x"PRIx64", closing connection",
+                   DLV_ARGS(dlv), disp);
             pn_raw_connection_close(tc->pn_raw_conn);
+            return;
         }
 
         // handle read window updates
 
         const bool window_was_full = read_window_full(tc);
-        tc->window_disabled = settled || tc->window_disabled;
+        tc->window_disabled = tc->window_disabled || settled || final_outcome;
 
         if (!tc->window_disabled) {
 
