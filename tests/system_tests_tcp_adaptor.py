@@ -1258,5 +1258,79 @@ class TcpAdaptorManagementTest(TestCase):
         client_conn.close()
 
 
+class TcpAdaptorListenerConnectTest(TestCase):
+    """
+    Test client connecting to TcpListeners in various scenarios
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorListenerConnectTest, cls).setUpClass()
+
+        cls.test_name = 'TCPListenConnTest'
+
+        # Two interior routers: one with a tcpListener the other with a tcpConnector
+
+        cls.inter_router_port = cls.tester.get_port()
+        cls.tcp_server_port = cls.tester.get_port()
+        cls.tcp_listener_port = cls.tester.get_port()
+        cls.van_address = "%s/service" % cls.test_name
+
+        a_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'TCPListenConnA'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('listener', {'role': 'inter-router', 'port':
+                          cls.inter_router_port}),
+            ('tcpListener', {'address': cls.van_address,
+                             'port': cls.tcp_listener_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(a_config)
+        cls.router_a = cls.tester.qdrouterd('TCPListenConnA', config, wait=True)
+
+        b_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'TCPListenConnB'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('connector', {'role': 'inter-router',
+                           'host': '127.0.0.1',
+                           'port': cls.inter_router_port}),
+            ('tcpConnector', {'address': cls.van_address,
+                              'host': '127.0.0.1',
+                              'port': cls.tcp_server_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(b_config)
+        cls.router_b = cls.tester.qdrouterd('TCPListenConnB', config,
+                                            wait=True)
+
+    def test_01_no_service(self):
+        """
+        This is a test for the fix to ISSUE #263.  Connect to the listener port
+        without having a server present. we expect the client connection to
+        close since there is no service. Ideally we should get a
+        ConnectionRefusedError, but that support is not yet available.
+        """
+        self.router_a.wait_address(self.van_address, remotes=1)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
+            client_conn.setblocking(True)
+            client_conn.settimeout(TIMEOUT)
+            client_conn.connect(('127.0.0.1', self.tcp_listener_port))
+            try:
+                # note: if the sendall does not eventually fail then this test
+                # will fail on timeout
+                while True:
+                    client_conn.sendall(b'123')
+                    time.sleep(0.5)
+            except BrokenPipeError:
+                # Yay we did not hang!
+                pass
+
+
 if __name__ == '__main__':
     unittest.main(main_module())
