@@ -86,11 +86,14 @@ typedef enum plog_attribute {
     PLOG_ATTRIBUTE_NAME             = 29,  // String
     PLOG_ATTRIBUTE_TRACE            = 30,  // List of Strings (use plog_set_trace function)
     PLOG_ATTRIBUTE_BUILD_VERSION    = 31,  // String
+
+    PLOG_ATTRIBUTE_LINK_COST        = 32,  // uint
+    PLOG_ATTRIBUTE_DIRECTION        = 33,  // String
 } plog_attribute_t;
 
 #define VALID_REF_ATTRS    0x0000000000000073
-#define VALID_UINT_ATTRS   0x000000000380008c
-#define VALID_STRING_ATTRS 0x00000000bc3fff00
+#define VALID_UINT_ATTRS   0x000000010380008c
+#define VALID_STRING_ATTRS 0x00000002bc3fff00
 #define VALID_TRACE_ATTRS  0x0000000040000000
 
 

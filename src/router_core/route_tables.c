@@ -241,12 +241,14 @@ void qdr_route_table_setup_CT(qdr_core_t *core)
         core->routers_by_mask_bit       = NEW_PTR_ARRAY(qdr_node_t, qd_bitmask_width());
         core->control_links_by_mask_bit = NEW_PTR_ARRAY(qdr_link_t, qd_bitmask_width());
         core->rnode_conns_by_mask_bit   = NEW_PTR_ARRAY(qdr_connection_t, qd_bitmask_width());
+        core->plog_links_by_mask_bit    = NEW_PTR_ARRAY(plog_record_t, qd_bitmask_width());
         core->data_links_by_mask_bit    = NEW_ARRAY(qdr_priority_sheaf_t, qd_bitmask_width());
         for (int idx = 0; idx < qd_bitmask_width(); idx++) {
             core->routers_by_mask_bit[idx]   = 0;
             core->control_links_by_mask_bit[idx] = 0;
             core->data_links_by_mask_bit[idx].count = 0;
             core->rnode_conns_by_mask_bit[idx] = 0;
+            core->plog_links_by_mask_bit[idx] = 0;
             for (int priority = 0; priority < QDR_N_PRIORITIES; ++ priority)
               core->data_links_by_mask_bit[idx].links[priority] = 0;
 
@@ -441,9 +443,25 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     }
 
     //
-    // Add the peer_link reference to the router record.
+    // Create a protocol log record for this inter-router link.
     //
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
+    core->plog_links_by_mask_bit[router_maskbit] = plog_start_record(PLOG_RECORD_LINK, 0);
+    const char *rname = (const char*) qd_hash_key_by_handle(rnode->owning_addr->hash_handle);
+    plog_set_string(core->plog_links_by_mask_bit[router_maskbit], PLOG_ATTRIBUTE_NAME, &rname[1]);
+    plog_set_string(core->plog_links_by_mask_bit[router_maskbit], PLOG_ATTRIBUTE_MODE, "interior");
+
+    qdr_link_t       *link = core->control_links_by_mask_bit[conn_maskbit];
+    qdr_connection_t *conn = link->conn;
+
+    if (!!conn) {
+        plog_set_string(core->plog_links_by_mask_bit[router_maskbit], PLOG_ATTRIBUTE_DIRECTION,
+                        conn->incoming ? "incoming" : "outgoing");
+    }
+
+    //
+    // Add the peer_link reference to the router record.
+    //
     rnode->conn_mask_bit = conn_maskbit;
     qdr_addr_start_inlinks_CT(core, rnode->owning_addr);
 }
@@ -465,6 +483,12 @@ static void qdr_remove_link_CT(qdr_core_t *core, qdr_action_t *action, bool disc
         qd_log(core->log, QD_LOG_CRITICAL, "remove_link: Router not found");
         return;
     }
+
+    //
+    // Close out the protocol log record for this link.
+    //
+    plog_end_record(core->plog_links_by_mask_bit[router_maskbit]);
+    core->plog_links_by_mask_bit[router_maskbit] = 0;
 
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
     rnode->conn_mask_bit = -1;
@@ -540,6 +564,13 @@ static void qdr_set_cost_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     if (cost < 1) {
         qd_log(core->log, QD_LOG_CRITICAL, "set_cost: Invalid cost %d for maskbit: %d", cost, router_maskbit);
         return;
+    }
+
+    //
+    // Set the link cost in the protocol log record.
+    //
+    if (!!core->plog_links_by_mask_bit[router_maskbit]) {
+        plog_set_uint64(core->plog_links_by_mask_bit[router_maskbit], PLOG_ATTRIBUTE_LINK_COST, (uint64_t) cost);
     }
 
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
