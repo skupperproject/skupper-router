@@ -32,6 +32,7 @@
 #include "stdbool.h"
 #include <inttypes.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 typedef struct plog_identity_t {
     uint32_t site_id;
@@ -83,6 +84,7 @@ struct plog_work_t {
     DEQ_LINKS(plog_work_t);
     plog_work_handler_t  handler;
     plog_record_t       *record;
+    uint64_t             timestamp;
     plog_attribute_t     attribute;
     union {
         char            *string_val;
@@ -121,6 +123,19 @@ static bool                all_address_usable = false;
 static bool                my_address_usable  = false;
 static qd_timer_t         *beacon_timer = 0;
 static uint64_t            next_message_id = 0;
+
+
+/**
+ * @brief Return the current timestamp in microseconds
+ *
+ * @return uint64_t
+ */
+static uint64_t _now_in_usec(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    return tv.tv_usec + 1000000 * tv.tv_sec;
+}
 
 
 /**
@@ -259,6 +274,34 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     }
 
     //
+    // Record the creation timestamp in the record.
+    //
+    plog_attribute_data_t *insert = _plog_find_attribute(record, PLOG_ATTRIBUTE_START_TIME);
+    plog_attribute_data_t *data;
+
+    if (!insert || insert->attribute_type != PLOG_ATTRIBUTE_START_TIME) {
+        //
+        // The attribute does not exist, create a new one and insert appropriately
+        //
+        data = new_plog_attribute_data_t();
+        ZERO(data);
+        data->attribute_type = PLOG_ATTRIBUTE_START_TIME;
+        data->emit_ordinal   = record->emit_ordinal;
+        data->value.uint_val = work->timestamp;
+        if (!!insert) {
+            DEQ_INSERT_AFTER(record->attributes, data, insert);
+        } else {
+            DEQ_INSERT_HEAD(record->attributes, data);
+        }
+    } else {
+        //
+        // The attribute already exists, overwrite the value
+        //
+        insert->value.uint_val = work->timestamp;
+        insert->emit_ordinal   = record->emit_ordinal;
+    }
+
+    //
     // Place the new record on the parent's list of children
     //
     if (!!record->parent) {
@@ -303,6 +346,34 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     }
 
     plog_record_t *record = work->record;
+
+    //
+    // Record the deletion timestamp in the record.
+    //
+    plog_attribute_data_t *insert = _plog_find_attribute(record, PLOG_ATTRIBUTE_END_TIME);
+    plog_attribute_data_t *data;
+
+    if (!insert || insert->attribute_type != PLOG_ATTRIBUTE_END_TIME) {
+        //
+        // The attribute does not exist, create a new one and insert appropriately
+        //
+        data = new_plog_attribute_data_t();
+        ZERO(data);
+        data->attribute_type = PLOG_ATTRIBUTE_END_TIME;
+        data->emit_ordinal   = record->emit_ordinal;
+        data->value.uint_val = work->timestamp;
+        if (!!insert) {
+            DEQ_INSERT_AFTER(record->attributes, data, insert);
+        } else {
+            DEQ_INSERT_HEAD(record->attributes, data);
+        }
+    } else {
+        //
+        // The attribute already exists, overwrite the value
+        //
+        insert->value.uint_val = work->timestamp;
+        insert->emit_ordinal   = record->emit_ordinal;
+    }
 
     //
     // Mark the record as ended to designate the lifecycle end
@@ -693,10 +764,12 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
 
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (data) {
-        strncat(line, " ", LINE_MAX);
-        strncat(line, _plog_attribute_name(data), LINE_MAX);
-        strncat(line, "=", LINE_MAX);
-        _plog_strncat_attribute(line, LINE_MAX, data);
+        if (data->attribute_type != PLOG_ATTRIBUTE_START_TIME && data->attribute_type != PLOG_ATTRIBUTE_END_TIME) {
+            strncat(line, " ", LINE_MAX);
+            strncat(line, _plog_attribute_name(data), LINE_MAX);
+            strncat(line, "=", LINE_MAX);
+            _plog_strncat_attribute(line, LINE_MAX, data);
+        }
         data = DEQ_NEXT(data);
     }
 
@@ -1068,7 +1141,8 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
     record->force_log     = false;
     record->ended         = false;
 
-    work->record = record;
+    work->record    = record;
+    work->timestamp = _now_in_usec();
 
     //
     // Assign a unique identity to the new record
@@ -1084,7 +1158,8 @@ void plog_end_record(plog_record_t *record)
 {
     if (!!record) {
         plog_work_t *work = _plog_work(_plog_end_record_TH);
-        work->record = record;
+        work->record    = record;
+        work->timestamp = _now_in_usec();
         _plog_post_work(work);
     }
 }
