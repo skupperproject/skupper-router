@@ -137,8 +137,11 @@ static void log_trace_py(PyObject *type, PyObject *value, PyObject* trace, qd_lo
     py_set_item(locals, "value", value);
     py_set_item(locals, "trace", trace);
 
-    PyObject *result = PyRun_String(
+    PyObject *result = 0;
+#if 0
+    result = PyRun_String(
         "''.join(traceback.format_exception(type, value, trace))", Py_eval_input, globals, locals);
+#endif
     Py_DECREF(globals);
     Py_DECREF(locals);
 
