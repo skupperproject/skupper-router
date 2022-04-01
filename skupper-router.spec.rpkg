@@ -103,13 +103,12 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 
 /usr/share/skupper-router/html/index.html
 
-# TODO: package -tools in fact depends on -server, see TODO above
-# TODO: what to do with scrapper tool?
 %package tools
 Summary:  The skstat and skmanage tools for skrouterd
 BuildArch: noarch
 Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
+Requires: skupper-router-server == %{version}
 
 %description tools
 %{summary}.
