@@ -702,6 +702,8 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     case PLOG_ATTRIBUTE_NAME             : return "name";
     case PLOG_ATTRIBUTE_TRACE            : return "trace";
     case PLOG_ATTRIBUTE_BUILD_VERSION    : return "build_version";
+    case PLOG_ATTRIBUTE_LINK_COST        : return "link_cost";
+    case PLOG_ATTRIBUTE_DIRECTION        : return "direction";
     }
     return "UNKNOWN";
 }
@@ -1180,28 +1182,32 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
 
 void plog_set_ref_from_record(plog_record_t *record, plog_attribute_t attribute_type, plog_record_t *referenced_record)
 {
-    assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-    plog_work_t *work = _plog_work(_plog_set_ref_TH);
-    work->record        = record;
-    work->attribute     = attribute_type;
-    work->value.ref_val = referenced_record->identity;
-    _plog_post_work(work);
+    if (!!record && !!referenced_record) {
+        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        plog_work_t *work = _plog_work(_plog_set_ref_TH);
+        work->record        = record;
+        work->attribute     = attribute_type;
+        work->value.ref_val = referenced_record->identity;
+        _plog_post_work(work);
+    }
 }
 
 
 void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_type, qd_parsed_field_t *field)
 {
-    assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-    plog_work_t *work = _plog_work(_plog_set_ref_TH);
-    work->record    = record;
-    work->attribute = attribute_type;
-    bool good_id = _plog_unserialize_identity(field, &work->value.ref_val);
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        plog_work_t *work = _plog_work(_plog_set_ref_TH);
+        work->record    = record;
+        work->attribute = attribute_type;
+        bool good_id = _plog_unserialize_identity(field, &work->value.ref_val);
 
-    if (good_id) {
-        _plog_post_work(work);
-    } else {
-        free_plog_work_t(work);
-        qd_log(log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
+        if (good_id) {
+            _plog_post_work(work);
+        } else {
+            free_plog_work_t(work);
+            qd_log(log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
+        }
     }
 }
 
@@ -1209,29 +1215,37 @@ void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_
 void plog_set_string(plog_record_t *record, plog_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
-    assert((uint64_t) 1 << attribute_type & VALID_STRING_ATTRS);
-    plog_work_t *work = _plog_work(_plog_set_string_TH);
-    work->record           = record;
-    work->attribute        = attribute_type;
-    work->value.string_val = !!value ? strndup(value, strnlen(value, MAX_STRING_VALUE)) : 0;
-    _plog_post_work(work);
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_STRING_ATTRS);
+        plog_work_t *work = _plog_work(_plog_set_string_TH);
+        work->record           = record;
+        work->attribute        = attribute_type;
+        work->value.string_val = !!value ? strndup(value, strnlen(value, MAX_STRING_VALUE)) : 0;
+        _plog_post_work(work);
+    }
 }
 
 
 void plog_set_uint64(plog_record_t *record, plog_attribute_t attribute_type, uint64_t value)
 {
-    assert((uint64_t) 1 << attribute_type & VALID_UINT_ATTRS);
-    plog_work_t *work = _plog_work(_plog_set_int_TH);
-    work->record        = record;
-    work->attribute     = attribute_type;
-    work->value.int_val = value;
-    _plog_post_work(work);
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_UINT_ATTRS);
+        plog_work_t *work = _plog_work(_plog_set_int_TH);
+        work->record        = record;
+        work->attribute     = attribute_type;
+        work->value.int_val = value;
+        _plog_post_work(work);
+    }
 }
 
 
 void plog_set_trace(plog_record_t *record, qd_message_t *msg)
 {
 #define MAX_TRACE_BUFFER 1000
+    if (!record) {
+        return;
+    }
+
     char *trace_text     = "Local";
     char *trace_text_ptr = trace_text;
     char  trace_buffer[MAX_TRACE_BUFFER + 1];
