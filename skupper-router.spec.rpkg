@@ -73,7 +73,6 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %check
 %ctest
 
-# TODO: name?
 %package server
 Summary:  The skrouterd deamon
 Requires: python3
@@ -95,7 +94,7 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 %{python3_sitelib}/__pycache__/skupper_router_site.*.pyc
 %{python3_sitelib}/skupper_router-*.egg-info
 
-# TODO: skupper-router-tools depend on tools/command.py, etc. in skupper_router_internal/
+# skupper-router-tools depend on tools/command.py, etc. in skupper_router_internal/
 /usr/lib/skupper-router/python/skupper_router_internal/
 
 /usr/share/man/man5/skrouterd.conf.5.gz
