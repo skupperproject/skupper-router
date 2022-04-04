@@ -509,16 +509,22 @@ jobs:
 
     steps:
 
-      - name: Add Qpid PPA repository
-        if: ${{ runner.os == 'Linux' }}
-        # the `testing` ppa is less likely to be out-of-date
-        run: |
-          sudo add-apt-repository ppa:qpid/testing && sudo apt-get update
+      - uses: actions/checkout@v2
+        with:
+          repository: 'apache/qpid-proton'
+          ref: main
+          path: 'qpid-proton'
 
       - name: Install Linux build dependencies
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt update; sudo apt install -y libqpid-proton-proactor1-dev python3-qpid-proton libpython3-dev ninja-build
+          sudo apt update; sudo apt install -y python3-qpid-proton libpython3-dev ninja-build
+
+      - name: Install qpid-proton
+        run: |
+          cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+          cmake --build qpid-proton
+          sudo cmake --install qpid-proton
 
       - name: Install python-checker test dependencies
         run: python3 -m pip install tox
@@ -538,53 +544,6 @@ jobs:
       - name: CTest -R python-checker
         working-directory: ${{env.DispatchBuildDir}}
         run: ctest -VV -R python-checker
-
-  docs:
-    name: 'Docs (${{ matrix.os }})'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-20.04 ]
-        buildType: [ RelWithDebInfo ]
-    env:
-      RouterBuildDir: ${{github.workspace}}/build
-      InstallPrefix: ${{github.workspace}}/install
-      RouterCMakeExtraArgs: >
-        -GNinja
-        -DDOC_XMLLINT=ON
-    steps:
-
-      - uses: actions/checkout@v2
-
-      - name: Create Build and Install directories
-        run: mkdir -p "${RouterBuildDir}" "{InstallPrefix}"
-
-      - name: Add Qpid PPA repository
-        if: ${{ runner.os == 'Linux' }}
-        # the `released` ppa does not yet have Proton 0.33.0, have to use `testing`
-        run: |
-          sudo add-apt-repository ppa:qpid/testing && sudo apt-get update
-
-      - name: Install Linux build dependencies
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt update; sudo apt install -y libqpid-proton-proactor1-dev python3-qpid-proton libpython3-dev libwebsockets-dev libnghttp2-dev ninja-build
-
-      - name: skupper-router cmake configure
-        working-directory: ${{env.RouterBuildDir}}
-        run: >
-          cmake "${{github.workspace}}" \
-            "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
-            ${RouterCMakeExtraArgs}
-
-      - name: CMake build for docs
-        run: cmake --build "${RouterBuildDir}" -t docs --parallel 6
-
-      - name: Store the rendered html man pages
-        uses: actions/upload-artifact@v2
-        with:
-          name: Manpages
-          path: ${{env.RouterBuildDir}}/docs/man/*.html
 
   rat_check:
     name: RAT Check
