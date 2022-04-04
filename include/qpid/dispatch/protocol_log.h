@@ -77,7 +77,7 @@ typedef enum plog_attribute {
     PLOG_ATTRIBUTE_FLOW_TYPE        = 22,
     PLOG_ATTRIBUTE_OCTETS           = 23,  // uint
 
-    PLOG_ATTRIBUTE_START_LATENCY    = 24,  // uint
+    PLOG_ATTRIBUTE_LATENCY          = 24,  // uint
     PLOG_ATTRIBUTE_BACKLOG          = 25,  // uint
     PLOG_ATTRIBUTE_METHOD           = 26,  // String  
     PLOG_ATTRIBUTE_RESULT           = 27,  // String
