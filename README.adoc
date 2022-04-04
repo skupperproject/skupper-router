@@ -318,10 +318,6 @@ When combined with `-DRUNTIME_CHECK=asan`, the pointer breakages are much less f
 |Benchmarking tests will be built.
 The `libbenchmark` library is required by the benchmarks.
 
-|`-DUSE_JEMALLOC=ON`
-|The jemalloc library will be linked, replacing the standard C library memory allocation functions with
-its own optimized implementations.
-
 |===
 
 ==== Optional dependencies
