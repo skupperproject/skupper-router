@@ -124,6 +124,9 @@ static bool                my_address_usable  = false;
 static qd_timer_t         *beacon_timer = 0;
 static uint64_t            next_message_id = 0;
 
+static void _plog_set_ref_TH(plog_work_t *work, bool discard);
+static void _plog_set_string_TH(plog_work_t *work, bool discard);
+static void _plog_set_int_TH(plog_work_t *work, bool discard);
 
 /**
  * @brief Return the current timestamp in microseconds
@@ -276,29 +279,20 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     //
     // Record the creation timestamp in the record.
     //
-    plog_attribute_data_t *insert = _plog_find_attribute(record, PLOG_ATTRIBUTE_START_TIME);
-    plog_attribute_data_t *data;
+    plog_work_t sub_work;
+    sub_work.attribute = PLOG_ATTRIBUTE_START_TIME;
+    sub_work.record    = record;
+    sub_work.value.int_val = work->timestamp;
+    _plog_set_int_TH(&sub_work, false);
 
-    if (!insert || insert->attribute_type != PLOG_ATTRIBUTE_START_TIME) {
-        //
-        // The attribute does not exist, create a new one and insert appropriately
-        //
-        data = new_plog_attribute_data_t();
-        ZERO(data);
-        data->attribute_type = PLOG_ATTRIBUTE_START_TIME;
-        data->emit_ordinal   = record->emit_ordinal;
-        data->value.uint_val = work->timestamp;
-        if (!!insert) {
-            DEQ_INSERT_AFTER(record->attributes, data, insert);
-        } else {
-            DEQ_INSERT_HEAD(record->attributes, data);
-        }
-    } else {
-        //
-        // The attribute already exists, overwrite the value
-        //
-        insert->value.uint_val = work->timestamp;
-        insert->emit_ordinal   = record->emit_ordinal;
+    //
+    // Record the parent reference.
+    //
+    if (!!record->parent) {
+        sub_work.attribute = PLOG_ATTRIBUTE_PARENT;
+        sub_work.record    = record;
+        sub_work.value.ref_val = record->parent->identity;
+        _plog_set_ref_TH(&sub_work, false);
     }
 
     //
@@ -350,30 +344,11 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     //
     // Record the deletion timestamp in the record.
     //
-    plog_attribute_data_t *insert = _plog_find_attribute(record, PLOG_ATTRIBUTE_END_TIME);
-    plog_attribute_data_t *data;
-
-    if (!insert || insert->attribute_type != PLOG_ATTRIBUTE_END_TIME) {
-        //
-        // The attribute does not exist, create a new one and insert appropriately
-        //
-        data = new_plog_attribute_data_t();
-        ZERO(data);
-        data->attribute_type = PLOG_ATTRIBUTE_END_TIME;
-        data->emit_ordinal   = record->emit_ordinal;
-        data->value.uint_val = work->timestamp;
-        if (!!insert) {
-            DEQ_INSERT_AFTER(record->attributes, data, insert);
-        } else {
-            DEQ_INSERT_HEAD(record->attributes, data);
-        }
-    } else {
-        //
-        // The attribute already exists, overwrite the value
-        //
-        insert->value.uint_val = work->timestamp;
-        insert->emit_ordinal   = record->emit_ordinal;
-    }
+    plog_work_t sub_work;
+    sub_work.attribute = PLOG_ATTRIBUTE_END_TIME;
+    sub_work.record    = record;
+    sub_work.value.int_val = work->timestamp;
+    _plog_set_int_TH(&sub_work, false);
 
     //
     // Mark the record as ended to designate the lifecycle end
@@ -604,8 +579,9 @@ static void _plog_create_router_record(void)
  * @brief Recursively free the given record and all of its children
  * 
  * @param record Pointer to the record to be freed.
+ * @param recursive If true, delete recursively, otherwise just remove parent references.
  */
-static void _plog_free_record_TH(plog_record_t *record)
+static void _plog_free_record_TH(plog_record_t *record, bool recursive)
 {
     //
     // If this record is a child of a parent, remove it from the parent's child list
@@ -622,11 +598,22 @@ static void _plog_free_record_TH(plog_record_t *record)
         record->unflushed = false;
     }
 
-    //
-    // Remove all of this record's children
-    //
-    while (!DEQ_IS_EMPTY(record->children)) {
-        _plog_free_record_TH(DEQ_HEAD(record->children));
+    if (recursive) {
+        //
+        // Remove all of this record's children
+        //
+        while (!DEQ_IS_EMPTY(record->children)) {
+            _plog_free_record_TH(DEQ_HEAD(record->children), true);
+        }
+    } else {
+        //
+        // Remove the childrens' parent references
+        //
+        plog_record_t *child = DEQ_HEAD(record->children);
+        while (!!child) {
+            child->parent = 0;
+            child = DEQ_NEXT(child);
+        }
     }
 
     //
@@ -759,11 +746,6 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
         strcat(line, " END");
     }
 
-    if ((record->ended || record->never_logged) && !!record->parent) {
-        strcat(line, " parent=");
-        _plog_strncat_id(line, LINE_MAX, &record->parent->identity);
-    }
-
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (data) {
         if (data->attribute_type != PLOG_ATTRIBUTE_START_TIME && data->attribute_type != PLOG_ATTRIBUTE_END_TIME) {
@@ -807,11 +789,6 @@ static void _plog_emit_record_as_event_TH(qdr_core_t *core, plog_record_t *recor
 
     qd_compose_insert_int(field, PLOG_ATTRIBUTE_IDENTITY);
     _plog_compose_id(field, &record->identity);
-
-    if (!!record->parent) {
-        qd_compose_insert_int(field, PLOG_ATTRIBUTE_PARENT);
-        _plog_compose_id(field, &record->parent->identity);
-    }
 
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (data) {
@@ -872,7 +849,7 @@ static void _plog_flush_TH(qdr_core_t *core)
         record->never_flushed = false;
         record->emit_ordinal++;
         if (record->ended) {
-            _plog_free_record_TH(record);
+            _plog_free_record_TH(record, false);
         }
         record = DEQ_HEAD(unflushed_records);
     }
@@ -1036,10 +1013,10 @@ static void *_plog_thread(void *context)
     }
 
     _plog_flush_TH(core);
-    _plog_free_record_TH(local_router);
+    _plog_free_record_TH(local_router, true);
     plog_record_t *record = DEQ_HEAD(unflushed_records);
     while (!!record) {
-        _plog_free_record_TH(record);
+        _plog_free_record_TH(record, true);
         record = DEQ_HEAD(unflushed_records);
     }
 
