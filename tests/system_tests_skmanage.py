@@ -28,7 +28,7 @@ from proton.utils import BlockingConnection
 from skupper_router_internal.compat import dictify
 from skupper_router_internal.management.qdrouter import QdSchema
 
-from system_test import unittest
+from system_test import unittest, retry_exception
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import QdManager
 
@@ -184,19 +184,13 @@ class SkmanageTest(TestCase):
             return set((e['name'], e['type']) for e in entities
                        if e['type'] not in ignore_types)
 
-        test_passed = False
-        for i in range(10):
+        def query_type_name():
             qattr = json.loads(self.run_skmanage('query type name'))
-            try:
-                for e in qattr:
-                    self.assertEqual(2, len(e))
-                self.assertEqual(name_type(qall), name_type(qattr))
-                test_passed = True
-                break
-            except AssertionError as ae:
-                # Give some time for the Router 1's data structures to update.
-                sleep(0.5)
-        self.assertTrue(test_passed)
+            for e in qattr:
+                self.assertEqual(2, len(e))
+            self.assertEqual(name_type(qall), name_type(qattr))
+
+        retry_exception(query_type_name)
 
     def test_get_schema(self):
         schema = dictify(QdSchema().dump())
