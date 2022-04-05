@@ -381,6 +381,14 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         qd_alloc_safe_ptr_t conn_sp = QD_SAFE_PTR_INIT(conn);
         qd_message_set_q2_unblocked_handler(msg, qdr_tcp_q2_unblocked_handler, conn_sp);
 
+        if (conn->ingress) {
+            //
+            // Start latency timer for this cross-van connection.
+            //
+            plog_latency_start(conn->plog);
+        }
+
+
         conn->instream = qdr_link_deliver(conn->incoming, msg, 0, false, 0, 0, 0, 0);
 
         qd_log(log, QD_LOG_DEBUG,
@@ -1659,7 +1667,9 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
         } else if (!tc->outstream) {
             tc->outstream = delivery;
             qdr_delivery_incref(delivery, "tcp_adaptor - new outstream");
-            if (!tc->ingress) {
+            if (tc->ingress) {
+                plog_latency_end(tc->plog);
+            } else {
                 //on egress, can only set up link for the reverse
                 //direction once we receive the first part of the
                 //message from client to server
