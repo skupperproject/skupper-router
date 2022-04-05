@@ -35,7 +35,6 @@ jobs:
           echo "DOCKER_TAG=`cat VERSION.txt`" >> $GITHUB_ENV
       - name: Build and publish skupper-router image
         run: |
-          . ./.github/scripts/common.sh
           export PROJECT_TAG="${DOCKER_TAG}"
           ./.github/scripts/image.sh
         env:
