@@ -1304,7 +1304,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
                 while True:
                     client_conn.sendall(b'123')
                     time.sleep(0.5)
-            except BrokenPipeError:
+            except (BrokenPipeError, ConnectionResetError):
                 # Yay we did not hang!
                 pass
 
