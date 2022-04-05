@@ -65,6 +65,7 @@ struct plog_record_t {
     plog_record_list_t          children;
     plog_identity_t             identity;
     plog_attribute_data_list_t  attributes;
+    uint64_t                    latency_start;
     uint32_t                    emit_ordinal;
     bool                        unflushed;
     bool                        never_flushed;
@@ -1253,6 +1254,23 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg)
     work->attribute = PLOG_ATTRIBUTE_TRACE;
     work->value.string_val = strdup(trace_text_ptr);
     _plog_post_work(work);
+}
+
+
+void plog_latency_start(plog_record_t *record)
+{
+    if (!!record) {
+        record->latency_start = _now_in_usec();
+    }
+}
+
+
+void plog_latency_end(plog_record_t *record)
+{
+    if (!!record) {
+        uint64_t now = _now_in_usec();
+        plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
+    }
 }
 
 
