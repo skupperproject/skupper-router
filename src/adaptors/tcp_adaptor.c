@@ -385,6 +385,11 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
             // Start latency timer for this cross-van connection.
             //
             plog_latency_start(conn->plog);
+        } else {
+            //
+            // End latency timer for this server-side connection.
+            //
+            plog_latency_end(conn->plog);
         }
 
 
@@ -1127,6 +1132,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t *conne
         tc->pn_raw_conn = pn_raw_connection();
         pn_raw_connection_set_context(tc->pn_raw_conn, tc);
         pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->bridge->host_port);
+        plog_latency_start(tc->plog);
 
         const pn_netaddr_t *na = pn_raw_connection_local_addr(tc->pn_raw_conn);
         char local_host[200];

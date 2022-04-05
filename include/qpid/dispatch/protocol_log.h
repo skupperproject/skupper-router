@@ -192,10 +192,12 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg);
  * @brief Make and record a latency measurement for this record.
  * Call plog_latency_start at the beginning of the latency interval.
  * Call plog_latency_end at the end of the latency interval.  This will set the latency attribute.
- * 
+ *
  * plog_latency_start may be called as multiple times.  plog_latency_end will only measure the time
  * interval back to the most recent call to plog_latency_start.
- * 
+ *
+ * If plog_latency_end is called without a prior call to plog_latency_start, the call will do nothing.
+ *
  * @param record The record pointer returned by plog_start_record
  */
 void plog_latency_start(plog_record_t *record);
