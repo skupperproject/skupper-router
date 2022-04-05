@@ -569,7 +569,7 @@ static void _plog_create_router_record(void)
     plog_record_t *router = plog_start_record(PLOG_RECORD_ROUTER, 0);
 
     const char *hostname   = getenv("HOSTNAME");
-    const char *namespace  = getenv("POD_NAMESPACE");
+    const char *namespace_ = getenv("POD_NAMESPACE");
     const char *image_name = getenv("APPLICATION_NAME");
     const char *version    = getenv("VERSION");
 
@@ -584,8 +584,8 @@ static void _plog_create_router_record(void)
         plog_set_string(router, PLOG_ATTRIBUTE_HOST_NAME, hostname);
     }
 
-    if (!!namespace) {
-        plog_set_string(router, PLOG_ATTRIBUTE_NAMESPACE, namespace);
+    if (!!namespace_) {
+        plog_set_string(router, PLOG_ATTRIBUTE_NAMESPACE, namespace_);
     }
 
     if (!!image_name) {

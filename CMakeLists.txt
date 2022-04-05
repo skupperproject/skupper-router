@@ -18,13 +18,13 @@
 ##
 
 cmake_minimum_required(VERSION 3.20)
-project(skupper-router C CXX)
+project(skupper-router LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON) # gnu11
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -78,6 +78,12 @@ message(STATUS "Found Proton: ${Proton_LIBRARIES} (found version \"${Proton_VERS
 ##
 ## Optional dependencies
 ##
+
+OPTION(BUILD_AS_CXX "Enable building C code with C++ compiler" OFF)
+if(BUILD_AS_CXX)
+    add_compile_options(-w -Wno-write-strings -Wno-literal-suffix -fpermissive -Wno-error=literal-suffix)
+    add_definitions("-DQD_BUILD_AS_CXX")
+endif()
 
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
@@ -140,6 +146,7 @@ set(QPID_DISPATCH_CONFDIR ${SYSCONF_INSTALL_DIR}/skupper-router)
 # Set up runtime checks (valgrind, sanitizers etc.)
 include(cmake/RuntimeChecks.cmake)
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SANITIZE_FLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZE_FLAGS}")
 
 ##
 ## Include directories used by all sub-directories.
@@ -240,3 +247,10 @@ add_subdirectory(docs)
 # That will force automatic re-configure and everybody will be happy.
 #
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/reconfigure.in ${CMAKE_CURRENT_BINARY_DIR}/reconfigure)
+
+if(BUILD_AS_CXX)
+    file(GLOB_RECURSE CFILES "*.c")
+    set_source_files_properties(${CFILES}
+            DIRECTORY src tests router
+            PROPERTIES LANGUAGE CXX)
+endif()

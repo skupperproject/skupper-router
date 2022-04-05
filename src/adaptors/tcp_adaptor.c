@@ -1172,17 +1172,19 @@ static qd_error_t load_bridge_config(qd_dispatch_t *qd, qd_tcp_bridge_t *config,
 {
     qd_error_clear();
 
-    config->name    = qd_entity_get_string(entity, "name");      CHECK();
-    config->address = qd_entity_get_string(entity, "address");   CHECK();
-    config->host    = qd_entity_get_string(entity, "host");      CHECK();
-    config->port    = qd_entity_get_string(entity, "port");      CHECK();
-    config->site_id = qd_entity_opt_string(entity, "siteId", 0); CHECK();
+    {
+        config->name    = qd_entity_get_string(entity, "name");      CHECK();
+        config->address = qd_entity_get_string(entity, "address");   CHECK();
+        config->host    = qd_entity_get_string(entity, "host");      CHECK();
+        config->port    = qd_entity_get_string(entity, "port");      CHECK();
+        config->site_id = qd_entity_opt_string(entity, "siteId", 0); CHECK();
 
-    int hplen = strlen(config->host) + strlen(config->port) + 2;
-    config->host_port = malloc(hplen);
-    snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
+        int hplen = strlen(config->host) + strlen(config->port) + 2;
+        config->host_port = malloc(hplen);
+        snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
 
-    return QD_ERROR_NONE;
+        return QD_ERROR_NONE;
+    }
 
  error:
     free_bridge_config(config);

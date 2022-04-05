@@ -30,6 +30,12 @@
 #include <mutex>
 #include <sstream>
 
+#ifdef QD_BUILD_AS_CXX
+    #define QD_TEST_EXTERN_C extern "C++"
+#else
+    #define QD_TEST_EXTERN_C extern "C"
+#endif
+
 // assertions without stack traces when running outside doctest
 #ifndef QDR_DOCTEST
 // https://stackoverflow.com/questions/3767869/adding-message-to-assert
@@ -51,7 +57,7 @@ std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
 } while (false)
 #endif  // QDR_DOCTEST
 
-extern "C" {
+QD_TEST_EXTERN_C {
 #include <dispatch_private.h>
 #include <qpid/dispatch/dispatch.h>
 #include <router_core/router_core_private.h>
@@ -61,7 +67,7 @@ QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd);
 }
 
 // low-level router initialization
-extern "C" {
+QD_TEST_EXTERN_C {
 #include "entity_cache.h"
 #include "log_private.h"
 
