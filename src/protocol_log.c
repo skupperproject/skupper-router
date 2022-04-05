@@ -1267,7 +1267,7 @@ void plog_latency_start(plog_record_t *record)
 
 void plog_latency_end(plog_record_t *record)
 {
-    if (!!record) {
+    if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
         plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
     }
