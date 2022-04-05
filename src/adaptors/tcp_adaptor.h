@@ -66,7 +66,7 @@ ALLOC_DECLARE(qd_tcp_bridge_t);
 struct qd_tcp_listener_t
 {
     qd_handler_context_t      context;
-    /* May be referenced by connection_manager and pn_listener_t */
+    // ref_count: tcp_adapter listener list, pn_listener_t context
     sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_bridge_t          *config;
@@ -81,7 +81,7 @@ ALLOC_DECLARE(qd_tcp_listener_t);
 
 struct qd_tcp_connector_t
 {
-    /* May be referenced by connection_manager, timer and pn_connection_t */
+    // ref_count: tcp_adaptor connector list, qdr_tcp_connection_t
     sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_bridge_t          *config;

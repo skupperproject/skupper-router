@@ -144,6 +144,7 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t* conn);
 static void free_bridge_config(qd_tcp_bridge_t *config);
 static void qdr_tcp_open_server_side_connection(qdr_tcp_connection_t* tc);
 static void detach_links(qdr_tcp_connection_t *tc);
+static void qd_tcp_connector_decref(qd_tcp_connector_t* c);
 
 
 // is the incoming byte window full
@@ -442,6 +443,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 
 static void free_qdr_tcp_connection(qdr_tcp_connection_t* tc)
 {
+    qd_tcp_connector_decref(tc->connector);
     plog_end_record(tc->plog);
     free(tc->reply_to);
     free(tc->remote_address);
@@ -1073,6 +1075,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t *conne
     qdr_tcp_connection_t* tc = new_qdr_tcp_connection_t();
     ZERO(tc);
     tc->connector = connector;
+    sys_atomic_inc(&connector->ref_count);
     tc->activation_lock = sys_mutex();
     if (initial_delivery) {
         tc->egress_dispatcher = false;
@@ -1358,7 +1361,7 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     return c;
 }
 
-void qd_tcp_connector_decref(qd_tcp_connector_t* c)
+static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         sys_atomic_destroy(&c->ref_count);
@@ -1889,6 +1892,13 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qd_log(tcp_adaptor->log_source, QD_LOG_INFO, "Shutting down TCP protocol adaptor");
     qdr_tcp_adaptor_t *adaptor = (qdr_tcp_adaptor_t*) adaptor_context;
 
+    qdr_tcp_connection_t *tc = DEQ_HEAD(adaptor->connections);
+    while (tc) {
+        qdr_tcp_connection_t *next = DEQ_NEXT(tc);
+        free_qdr_tcp_connection(tc);
+        tc = next;
+    }
+
     qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
     while (tl) {
         qd_tcp_listener_t *next = DEQ_NEXT(tl);
@@ -1904,13 +1914,6 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
         free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher);
         free_qd_tcp_connector_t(tr);
         tr = next;
-    }
-
-    qdr_tcp_connection_t *tc = DEQ_HEAD(adaptor->connections);
-    while (tc) {
-        qdr_tcp_connection_t *next = DEQ_NEXT(tc);
-        free_qdr_tcp_connection(tc);
-        tc = next;
     }
 
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
