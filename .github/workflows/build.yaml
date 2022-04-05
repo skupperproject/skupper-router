@@ -522,7 +522,7 @@ jobs:
 
       - name: Install qpid-proton
         run: |
-          cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+          cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TLS=ON
           cmake --build qpid-proton
           sudo cmake --install qpid-proton
 
