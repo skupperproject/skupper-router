@@ -85,7 +85,7 @@ struct qd_tcp_connector_t
     sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_bridge_t          *config;
-    void                     *dispatcher;
+    void                     *dispatcher_conn;
     plog_record_t            *plog;
 
     DEQ_LINKS(qd_tcp_connector_t);

@@ -807,17 +807,30 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     qdr_action_enqueue(tcp_adaptor->core, action);
 }
 
+static void set_plog_string(qdr_tcp_connection_t *conn)
+{
+    char remote_host[200];
+    char remote_port[50];
+    const pn_netaddr_t *na = conn->ingress ? pn_raw_connection_remote_addr(conn->pn_raw_conn) : pn_raw_connection_local_addr(conn->pn_raw_conn);
+    if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
+        plog_set_string(conn->plog, PLOG_ATTRIBUTE_SOURCE_HOST, remote_host);
+        plog_set_string(conn->plog, PLOG_ATTRIBUTE_SOURCE_PORT, remote_port);
+    }
+}
+
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_tcp_connection_t *conn = (qdr_tcp_connection_t*) context;
     qd_log_source_t *log = tcp_adaptor->log_source;
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
+        set_plog_string(conn);
         if (conn->ingress) {
             qdr_tcp_connection_ingress_accept(conn);
             qd_log(log, QD_LOG_INFO,
                    "[C%"PRIu64"] PN_RAW_CONNECTION_CONNECTED Listener ingress accepted to %s from %s (global_id=%s)",
                    conn->conn_id, conn->bridge->host_port, conn->remote_address, conn->global_id);
+
             break;
         } else {
             conn->remote_address = get_address_string(conn->pn_raw_conn);
@@ -984,21 +997,24 @@ static qdr_tcp_connection_t *qdr_tcp_connection_ingress(qd_tcp_listener_t* liste
 
     tc->pn_raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(tc->pn_raw_conn, tc);
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] call pn_listener_raw_accept()", tc->conn_id);
+
     //the following call will cause a PN_RAW_CONNECTION_CONNECTED
     //event on another thread, which is where the rest of the
     //initialisation will happen, through a call to
     //qdr_tcp_connection_ingress_accept
-    qd_log(tcp_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] call pn_listener_raw_accept()", tc->conn_id);
+
+    // IMPORTANT NOTE: this next call TO pn_listener_raw_accept may immediately schedule the connection on another I/O
+    // thread. IF you want to access tc after this call, the activation_lock  must be held to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
+    // and freeing this connection(qdr_tcp_connection_t) from underneath. The PN_RAW_CONNECTION_DISCONNECTED event might occur if the
+    // client that initiated the connection, closes the connection while we are trying to accept the connection.
+    // For example:
+    //     LOCK(tc->activation_lock);
+    //     pn_listener_raw_accept(listener->pn_listener, tc->pn_raw_conn);
+    //     call_some_function(tc->conn_id);   // if the activation_lock is not held, tc might be freed
+    //     UNLOCK(tc->activation_lock);
     pn_listener_raw_accept(listener->pn_listener, tc->pn_raw_conn);
-
-    const pn_netaddr_t *na = pn_raw_connection_remote_addr(tc->pn_raw_conn);
-    char remote_host[200];
-    char remote_port[50];
-    if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
-        plog_set_string(tc->plog, PLOG_ATTRIBUTE_SOURCE_HOST, remote_host);
-        plog_set_string(tc->plog, PLOG_ATTRIBUTE_SOURCE_PORT, remote_port);
-    }
-
     return tc;
 }
 
@@ -1124,29 +1140,30 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t *conne
     // running in that connection's context to set up the core
     // connection.
     //
-    if (tc->egress_dispatcher)
+    if (tc->egress_dispatcher) {
         qdr_tcp_open_server_side_connection(tc);
+        return tc;
+    }
     else {
         allocate_tcp_write_buffer(&tc->write_buffer);
         allocate_tcp_buffer(&tc->read_buffer);
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                "[C%"PRIu64"] call pn_proactor_raw_connect(). Egress connecting to: %s",
                tc->conn_id, tc->bridge->host_port);
+
         tc->pn_raw_conn = pn_raw_connection();
         pn_raw_connection_set_context(tc->pn_raw_conn, tc);
-        pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->bridge->host_port);
+
         plog_latency_start(tc->plog);
 
-        const pn_netaddr_t *na = pn_raw_connection_local_addr(tc->pn_raw_conn);
-        char local_host[200];
-        char local_port[50];
-        if (pn_netaddr_host_port(na, local_host, 200, local_port, 50) == 0) {
-            plog_set_string(tc->plog, PLOG_ATTRIBUTE_SOURCE_HOST, local_host);
-            plog_set_string(tc->plog, PLOG_ATTRIBUTE_SOURCE_PORT, local_port);
-        }
+        // IMPORTANT NOTE: this next call TO pn_proactor_raw_connect may immediately schedule the connection on another I/O
+        // thread. The activation_lock  must be held if you ever want to access tc immediately after the call to pn_proactor_raw_connect
+        // to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
+        // and freeing this qdr_tcp_connection_t from underneath.
+        pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->bridge->host_port);
+        return 0;
     }
 
-    return tc;
 }
 
 
@@ -1405,7 +1422,7 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config->port);
     plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config->address);
 
-    c->dispatcher = qdr_tcp_connection_egress(c, c->config, c->server, NULL);
+    c->dispatcher_conn = qdr_tcp_connection_egress(c, c->config, c->server, NULL);
     return c;
 }
 
@@ -1425,7 +1442,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                "Deleted TcpConnector for %s, %s:%s",
                ct->config->address, ct->config->host, ct->config->port);
-        close_egress_dispatcher((qdr_tcp_connection_t*) ct->dispatcher);
+        close_egress_dispatcher((qdr_tcp_connection_t*) ct->dispatcher_conn);
         DEQ_REMOVE(tcp_adaptor->connectors, ct);
         qd_tcp_connector_decref(ct);
     }
@@ -1927,7 +1944,7 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     while (tr) {
         qd_tcp_connector_t *next = DEQ_NEXT(tr);
         free_bridge_config(tr->config);
-        free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher);
+        free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher_conn);
         free_qd_tcp_connector_t(tr);
         tr = next;
     }
