@@ -27,6 +27,7 @@
 #include "qpid/dispatch/compose.h"
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/discriminator.h"
 #include "dispatch_private.h"
 #include "buffer_field_api.h"
 #include "stdbool.h"
@@ -34,10 +35,12 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+#define ROUTER_ID_SIZE 6
+
 typedef struct plog_identity_t {
-    uint32_t site_id;
-    uint32_t router_id;
     uint64_t record_id;
+    uint32_t site_id;
+    char     router_id[ROUTER_ID_SIZE];
 } plog_identity_t;
 
 typedef struct plog_attribute_data_t {
@@ -114,7 +117,8 @@ static plog_work_list_t    work_list         = DEQ_EMPTY;
 static plog_record_list_t  unflushed_records = DEQ_EMPTY;
 static plog_record_t      *local_router      = 0;
 static uint32_t            site_id;
-static uint32_t            router_id;
+static char               *hostname;
+static char                router_id[ROUTER_ID_SIZE];
 static uint64_t            next_identity     = 0;
 static const char         *router_area;
 static const char         *router_name;
@@ -181,9 +185,9 @@ static plog_attribute_data_t* _plog_find_attribute(plog_record_t *record, plog_a
 static void _plog_next_id(plog_identity_t *identity)
 {
     sys_mutex_lock(id_lock);
-    identity->site_id   = site_id;
-    identity->router_id = router_id;
     identity->record_id = next_identity++;
+    identity->site_id   = site_id;
+    memcpy(identity->router_id, router_id, ROUTER_ID_SIZE);
     sys_mutex_unlock(id_lock);
 }
 
@@ -200,7 +204,7 @@ static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
 #define ID_TEXT_MAX 60
     char text[ID_TEXT_MAX + 1];
 
-    snprintf(text, ID_TEXT_MAX, "%"PRIu32":%"PRIu32":%"PRIu64, id->site_id, id->router_id, id->record_id);
+    snprintf(text, ID_TEXT_MAX, "%"PRIu32":%s:%"PRIu64, id->site_id, id->router_id, id->record_id);
     strncat(buffer, text, n);
 }
 
@@ -232,11 +236,17 @@ static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute
 }
 
 
+/**
+ * @brief Encode an id into a composed field
+ *
+ * @param field Target field for encoding
+ * @param id Identity to encode
+ */
 static void _plog_compose_id(qd_composed_field_t *field, const plog_identity_t *id)
 {
     qd_compose_start_list(field);
     qd_compose_insert_ulong(field, id->site_id);
-    qd_compose_insert_ulong(field, id->router_id);
+    qd_compose_insert_string(field, id->router_id);
     qd_compose_insert_ulong(field, id->record_id);
     qd_compose_end_list(field);
 }
@@ -544,7 +554,6 @@ static void _plog_create_router_record(void)
 {
     plog_record_t *router = plog_start_record(PLOG_RECORD_ROUTER, 0);
 
-    const char *hostname   = getenv("HOSTNAME");
     const char *namespace  = getenv("POD_NAMESPACE");
     const char *image_name = getenv("APPLICATION_NAME");
     const char *version    = getenv("VERSION");
@@ -719,9 +728,12 @@ static bool _plog_unserialize_identity(qd_parsed_field_t *field, plog_identity_t
         return false;
     }
 
-    identity->site_id   = qd_parse_as_uint(site_id_field);
-    identity->router_id = qd_parse_as_uint(router_id_field);
     identity->record_id = qd_parse_as_ulong(record_id_field);
+    identity->site_id   = qd_parse_as_uint(site_id_field);
+
+    qd_iterator_t *iter = qd_parse_raw(router_id_field);
+    qd_iterator_ncopy(iter, (uint8_t*) identity->router_id, ROUTER_ID_SIZE - 1);
+    identity->router_id[ROUTER_ID_SIZE - 1] = '\0';
 
     return true;
 }
@@ -1162,7 +1174,7 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
     if (!!record) {
         qd_compose_start_list(field);
         qd_compose_insert_uint(field, record->identity.site_id);
-        qd_compose_insert_uint(field, record->identity.router_id);
+        qd_compose_insert_string(field, record->identity.router_id);
         qd_compose_insert_ulong(field, record->identity.record_id);
         qd_compose_end_list(field);
     }
@@ -1312,7 +1324,23 @@ static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
  */
 static void _plog_init(qdr_core_t *core, void **adaptor_context)
 {
-    router_id   = qdr_core_dispatch(core)->plog_router_id;
+    hostname = getenv("HOSTNAME");
+    size_t hostLength = strlen(hostname);
+
+    //
+    // If the hostname is in the form of a Kubernetes pod name, use the 5-character
+    // suffix as the router-id.  Otherwise, generate a random router-id.
+    //
+    if (hostLength > 6 && hostname[hostLength - ROUTER_ID_SIZE] == '-') {
+        memcpy(router_id, hostname + hostLength - ROUTER_ID_SIZE + 1, ROUTER_ID_SIZE);
+    } else {
+        assert(QD_DISCRIMINATOR_SIZE > ROUTER_ID_SIZE);
+        char discriminator[QD_DISCRIMINATOR_SIZE];
+        qd_generate_discriminator(discriminator);
+        memcpy(router_id, discriminator, ROUTER_ID_SIZE - 1);
+        router_id[ROUTER_ID_SIZE - 1] = '\0';
+    }
+
     site_id     = qdr_core_dispatch(core)->plog_site_id;
     router_area = qdr_core_dispatch(core)->router_area;
     router_name = qdr_core_dispatch(core)->router_id;
