@@ -1332,8 +1332,16 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
     // suffix as the router-id.  Otherwise, generate a random router-id.
     //
     if (hostLength > 6 && hostname[hostLength - ROUTER_ID_SIZE] == '-') {
-        memcpy(router_id, hostname + hostLength - ROUTER_ID_SIZE + 1, ROUTER_ID_SIZE);
+        //
+        // This memcpy copies the suffix and the terminating null character.
+        //
+        memcpy(router_id, hostname + (hostLength - ROUTER_ID_SIZE) + 1, ROUTER_ID_SIZE);
     } else {
+        //
+        // If the router-id size is ever greater than the discriminator size, the
+        // generation of router-ids will need to be re-written to use multiple
+        // discriminators.
+        //
         assert(QD_DISCRIMINATOR_SIZE > ROUTER_ID_SIZE);
         char discriminator[QD_DISCRIMINATOR_SIZE];
         qd_generate_discriminator(discriminator);
