@@ -264,9 +264,11 @@ void qdr_record_link_credit(qdr_core_t *core, qdr_link_t *link)
 
 void qdr_close_connection_CT(qdr_core_t *core, qdr_connection_t  *conn)
 {
+    sys_mutex_lock(conn->work_lock);
     conn->closed = true;
     conn->error  = qdr_error(QD_AMQP_COND_CONNECTION_FORCED, "Connection forced-closed by management request");
     conn->admin_status = QD_CONN_ADMIN_DELETED;
+    sys_mutex_unlock(conn->work_lock);
 
     //Activate the connection, so the I/O threads can finish the job.
     qdr_connection_activate_CT(core, conn);
@@ -305,12 +307,16 @@ int qdr_connection_process(qdr_connection_t *conn)
 
     int event_count = 0;
 
+    sys_mutex_lock(conn->work_lock);
+
     if (conn->closed) {
+        sys_mutex_unlock(conn->work_lock);
+        // Unlock is called before calling into the conn_close_handler.
+        // The handler's pluggable and we don't control which locks it takes (or may take in the future).
         conn->protocol_adaptor->conn_close_handler(conn->protocol_adaptor->user_context, conn, conn->error);
         return 0;
     }
 
-    sys_mutex_lock(conn->work_lock);
     DEQ_MOVE(conn->work_list, work_list);
     for (int priority = 0; priority <= QDR_MAX_PRIORITY; ++ priority) {
         DEQ_MOVE(conn->links_with_work[priority], links_with_work[priority]);
