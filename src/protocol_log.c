@@ -658,6 +658,7 @@ static const char *_plog_record_type_name(const plog_record_t *record)
 static const char *_plog_attribute_name(const plog_attribute_data_t *data)
 {
     switch (data->attribute_type) {
+    case PLOG_ATTRIBUTE_RECORD_TYPE      : return "recordType";
     case PLOG_ATTRIBUTE_IDENTITY         : return "identity";
     case PLOG_ATTRIBUTE_PARENT           : return "parent";
     case PLOG_ATTRIBUTE_START_TIME       : return "startTime";
@@ -680,9 +681,9 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     case PLOG_ATTRIBUTE_IMAGE_NAME       : return "imageName";
     case PLOG_ATTRIBUTE_IMAGE_VERSION    : return "imageVersion";
     case PLOG_ATTRIBUTE_HOST_NAME        : return "hostname";
-    case PLOG_ATTRIBUTE_FLOW_TYPE        : return "flowType";
     case PLOG_ATTRIBUTE_OCTETS           : return "octets";
     case PLOG_ATTRIBUTE_LATENCY          : return "latency";
+    case PLOG_ATTRIBUTE_TRANSIT_LATENCY  : return "transitLatency";
     case PLOG_ATTRIBUTE_BACKLOG          : return "backlog";
     case PLOG_ATTRIBUTE_METHOD           : return "method";
     case PLOG_ATTRIBUTE_RESULT           : return "result";
@@ -777,29 +778,39 @@ static void _plog_emit_record_as_event_TH(qdr_core_t *core, plog_record_t *recor
     qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
     qd_compose_start_list(field);
     qd_compose_insert_long(field, next_message_id++);
-    qd_compose_insert_null(field);                                    // user-id
-    qd_compose_insert_string(field, event_address_my);                // to
-    qd_compose_insert_string(field, _plog_record_type_name(record));  // subject
+    qd_compose_insert_null(field);                      // user-id
+    qd_compose_insert_string(field, event_address_my);  // to
+    qd_compose_insert_string(field, "RECORD");          // subject
     qd_compose_end_list(field);
 
     //
     // Append the body section to the content
     //
     field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
+
+    //
+    // Form the body as a list of records.  This opens the possibility of later
+    // batching multiple records into the same body.
+    //
+    qd_compose_start_list(field);
     qd_compose_start_map(field);
 
-    qd_compose_insert_int(field, PLOG_ATTRIBUTE_IDENTITY);
+    qd_compose_insert_uint(field, PLOG_ATTRIBUTE_RECORD_TYPE);
+    qd_compose_insert_uint(field, record->record_type);
+
+    qd_compose_insert_uint(field, PLOG_ATTRIBUTE_IDENTITY);
     _plog_compose_id(field, &record->identity);
 
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (data) {
         if (data->emit_ordinal >= record->emit_ordinal) {
-            qd_compose_insert_int(field, data->attribute_type);
+            qd_compose_insert_uint(field, data->attribute_type);
             _plog_compose_attribute(field, data);
         }
         data = DEQ_NEXT(data);
     }
     qd_compose_end_map(field);
+    qd_compose_end_list(field);
 
     //
     // Create a message for the content

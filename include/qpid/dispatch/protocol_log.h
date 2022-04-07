@@ -47,54 +47,55 @@ typedef enum plog_record_type {
 } plog_record_type_t;
 
 typedef enum plog_attribute {
-    PLOG_ATTRIBUTE_IDENTITY         = 0,   // Reference (cannot be set by the user)
-    PLOG_ATTRIBUTE_PARENT           = 1,   // Reference (set during object creation only)
-    PLOG_ATTRIBUTE_START_TIME       = 2,   // uint
-    PLOG_ATTRIBUTE_END_TIME         = 3,   // uint
+    PLOG_ATTRIBUTE_RECORD_TYPE      = 0,   // uint
+    PLOG_ATTRIBUTE_IDENTITY         = 1,   // Reference (cannot be set by the user)
+    PLOG_ATTRIBUTE_PARENT           = 2,   // Reference (set during object creation only)
+    PLOG_ATTRIBUTE_START_TIME       = 3,   // uint
 
-    PLOG_ATTRIBUTE_COUNTERFLOW      = 4,   // Reference
-    PLOG_ATTRIBUTE_PEER             = 5,   // Reference to another record that represents the same flow
-    PLOG_ATTRIBUTE_PROCESS          = 6,   // Reference
-    PLOG_ATTRIBUTE_SIBLING_ORDINAL  = 7,   // uint
+    PLOG_ATTRIBUTE_END_TIME         = 4,   // uint
+    PLOG_ATTRIBUTE_COUNTERFLOW      = 5,   // Reference
+    PLOG_ATTRIBUTE_PEER             = 6,   // Reference to another record that represents the same flow
+    PLOG_ATTRIBUTE_PROCESS          = 7,   // Reference
 
-    PLOG_ATTRIBUTE_LOCATION         = 8,   // String
-    PLOG_ATTRIBUTE_PROVIDER         = 9,   // String
-    PLOG_ATTRIBUTE_PLATFORM         = 10,  // String
-    PLOG_ATTRIBUTE_NAMESPACE        = 11,  // String
+    PLOG_ATTRIBUTE_SIBLING_ORDINAL  = 8,   // uint
+    PLOG_ATTRIBUTE_LOCATION         = 9,   // String
+    PLOG_ATTRIBUTE_PROVIDER         = 10,  // String
+    PLOG_ATTRIBUTE_PLATFORM         = 11,  // String
 
-    PLOG_ATTRIBUTE_MODE             = 12,  // String
-    PLOG_ATTRIBUTE_SOURCE_HOST      = 13,  // String
-    PLOG_ATTRIBUTE_DESTINATION_HOST = 14,  // String
-    PLOG_ATTRIBUTE_PROTOCOL         = 15,  // String
+    PLOG_ATTRIBUTE_NAMESPACE        = 12,  // String
+    PLOG_ATTRIBUTE_MODE             = 13,  // String
+    PLOG_ATTRIBUTE_SOURCE_HOST      = 14,  // String
+    PLOG_ATTRIBUTE_DESTINATION_HOST = 15,  // String
 
-    PLOG_ATTRIBUTE_SOURCE_PORT      = 16,  // String
-    PLOG_ATTRIBUTE_DESTINATION_PORT = 17,  // String
-    PLOG_ATTRIBUTE_VAN_ADDRESS      = 18,  // String
-    PLOG_ATTRIBUTE_IMAGE_NAME       = 19,  // String
+    PLOG_ATTRIBUTE_PROTOCOL         = 16,  // String
+    PLOG_ATTRIBUTE_SOURCE_PORT      = 17,  // String
+    PLOG_ATTRIBUTE_DESTINATION_PORT = 18,  // String
+    PLOG_ATTRIBUTE_VAN_ADDRESS      = 19,  // String
 
-    PLOG_ATTRIBUTE_IMAGE_VERSION    = 20,  // String
-    PLOG_ATTRIBUTE_HOST_NAME        = 21,  // String
-    PLOG_ATTRIBUTE_FLOW_TYPE        = 22,
+    PLOG_ATTRIBUTE_IMAGE_NAME       = 20,  // String
+    PLOG_ATTRIBUTE_IMAGE_VERSION    = 21,  // String
+    PLOG_ATTRIBUTE_HOST_NAME        = 22,  // String
     PLOG_ATTRIBUTE_OCTETS           = 23,  // uint
 
     PLOG_ATTRIBUTE_LATENCY          = 24,  // uint
-    PLOG_ATTRIBUTE_BACKLOG          = 25,  // uint
-    PLOG_ATTRIBUTE_METHOD           = 26,  // String  
-    PLOG_ATTRIBUTE_RESULT           = 27,  // String
+    PLOG_ATTRIBUTE_TRANSIT_LATENCY  = 25,  // uint
+    PLOG_ATTRIBUTE_BACKLOG          = 26,  // uint
+    PLOG_ATTRIBUTE_METHOD           = 27,  // String
 
-    PLOG_ATTRIBUTE_REASON           = 28,  // String
-    PLOG_ATTRIBUTE_NAME             = 29,  // String
-    PLOG_ATTRIBUTE_TRACE            = 30,  // List of Strings (use plog_set_trace function)
-    PLOG_ATTRIBUTE_BUILD_VERSION    = 31,  // String
+    PLOG_ATTRIBUTE_RESULT           = 28,  // String
+    PLOG_ATTRIBUTE_REASON           = 29,  // String
+    PLOG_ATTRIBUTE_NAME             = 30,  // String
+    PLOG_ATTRIBUTE_TRACE            = 31,  // List of Strings (use plog_set_trace function)
 
-    PLOG_ATTRIBUTE_LINK_COST        = 32,  // uint
-    PLOG_ATTRIBUTE_DIRECTION        = 33,  // String
+    PLOG_ATTRIBUTE_BUILD_VERSION    = 32,  // String
+    PLOG_ATTRIBUTE_LINK_COST        = 33,  // uint
+    PLOG_ATTRIBUTE_DIRECTION        = 34,  // String
 } plog_attribute_t;
 
-#define VALID_REF_ATTRS    0x0000000000000073
-#define VALID_UINT_ATTRS   0x000000010380008c
-#define VALID_STRING_ATTRS 0x00000002bc3fff00
-#define VALID_TRACE_ATTRS  0x0000000040000000
+#define VALID_REF_ATTRS    0x00000000000000e6
+#define VALID_UINT_ATTRS   0x0000000207800119
+#define VALID_STRING_ATTRS 0x00000005787ffe00
+#define VALID_TRACE_ATTRS  0x0000000080000000
 
 
 /**
@@ -193,7 +194,7 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg);
  * Call plog_latency_start at the beginning of the latency interval.
  * Call plog_latency_end at the end of the latency interval.  This will set the latency attribute.
  *
- * plog_latency_start may be called as multiple times.  plog_latency_end will only measure the time
+ * plog_latency_start may be called multiple times.  plog_latency_end will only measure the time
  * interval back to the most recent call to plog_latency_start.
  *
  * If plog_latency_end is called without a prior call to plog_latency_start, the call will do nothing.
