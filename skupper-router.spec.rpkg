@@ -128,7 +128,7 @@ Requires: skupper-router-common == %{version}
 Summary:  Tests for the skupper router and the tools
 Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
-Requires: skupper-router-server == %{version}
+Requires: skupper-router == %{version}
 Requires: skupper-router-tools == %{version}
 Requires: cyrus-sasl-plain
 
