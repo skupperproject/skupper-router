@@ -64,7 +64,6 @@
                 <artifactId>apache-rat-plugin</artifactId>
                 <configuration>
                     <excludes>
-                      <exclude>.travis.yml</exclude>
                       <exclude>CMakeCache.txt</exclude>
                       <exclude>.gitmodules</exclude>
                       <exclude>.gitignore</exclude>
