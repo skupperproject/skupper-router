@@ -22,24 +22,23 @@
       <artifactId>apache</artifactId>
       <version>24</version>
     </parent>
-  
+
     <modelVersion>4.0.0</modelVersion>
-    <groupId>org.apache.qpid</groupId>
-    <artifactId>qpid-dispatch</artifactId>
-    <version>2.0.0-SNAPSHOT</version>
-    <name>QpidDispatch</name>
+    <groupId>io.skupper</groupId>
+    <artifactId>router</artifactId>
+    <name>SkupperRouter</name>
     <inceptionYear>2018</inceptionYear>
-    <url>https://qpid.apache.org</url>   
-    
+    <url>https://skupper.io/</url>
+
     <description>
-      Qpid Dispatch Router
+      Skupper Router
     </description>
-    
+
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-    </properties>   
-    
+    </properties>
+
     <build>
         <defaultGoal>verify</defaultGoal>
         <pluginManagement>
@@ -58,7 +57,7 @@
                    </executions>
               </plugin>
             </plugins>
-        </pluginManagement>        
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.rat</groupId>
@@ -127,8 +126,8 @@
                       <exclude>**/*_pb2*</exclude>
                       <exclude>share/index.html</exclude>
                 </excludes>
-        </configuration>            
+        </configuration>
             </plugin>
-        </plugins>        
-    </build>  
+        </plugins>
+    </build>
 </project>
