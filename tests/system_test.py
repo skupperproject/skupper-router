@@ -30,6 +30,7 @@ Features:
 
 import errno
 import fcntl
+import functools
 import json
 import logging
 import os
@@ -112,6 +113,39 @@ def _check_requirements():
 
 
 MISSING_REQUIREMENTS = _check_requirements()
+
+
+def flakey(issue: str, repeats: int = 3):
+    """Decorator that marks test as flakey (flaky).
+
+    If applied, executes the test up to three times, marking it as failed only if it fails each time.
+    Note, that use of this decorator is generally discouraged---tests should pass reliably when their assertions are upheld.
+
+    Example usage
+
+        @flakey(issue='#123')
+        def test_feature_in_fragile_manner():
+            self.assertTrue(...)
+    """
+    del issue  # unused
+
+    def decorator(f):
+        @functools.wraps(f)
+        def inner(*args, **kwargs):
+            # Python 3 clears the exception upon leaving the `except` block
+            # https://docs.python.org/3/reference/compound_stmts.html#the-try-statement
+            preserved_exc = None
+            for _ in range(repeats):
+                try:
+                    return f(*args, **kwargs)
+                except AssertionError as exc:
+                    preserved_exc = exc
+                    logging.warning("Test marked as flakey has failed: %s", exc)
+            raise AssertionError("Flakey test has failed too many times") from preserved_exc
+
+        return inner
+
+    return decorator
 
 
 def retry_delay(deadline, delay, max_delay):
