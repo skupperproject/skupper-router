@@ -38,6 +38,7 @@
 %global proton_vendored_version 0.39.0
 %define proton_install_prefix %{_builddir}/qpid-proton-%{proton_vendored_version}/install
 
+%global python_minimum_version 3.9.0
 %global proton_minimum_version 0.37.0
 %global libwebsockets_minimum_version 3.0.1
 %global libnghttp2_minimum_version 1.33.0
@@ -50,7 +51,8 @@ Summary:       The skrouterd router daemon for Skupper.io
 License:       ASL 2.0
 URL:           https://skupper.io
 
-Requires: python3
+%{?fedora:Requires: python3 >= %{python_minimum_version}}
+%{?rhel:Requires: python39 >= %{python_minimum_version}}
 Requires: skupper-router-common == %{version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
@@ -63,14 +65,21 @@ BuildRequires: gcc-c++
 BuildRequires: cmake
 
 # skupper-router requirements
-BuildRequires: python3-devel
-BuildRequires: python3-setuptools
+%{?fedora:BuildRequires: python3-devel >= %{python_minimum_version}}
+%{?fedora:BuildRequires: python3-setuptools}
+%{?fedora:BuildRequires: python3-pip}
+# without wheel the installed files lack `python_qpid_proton-0.37.0.dist-info`
+%{?fedora:BuildRequires: python3-wheel}
+%{?rhel:BuildRequires: python39-devel >= %{python_minimum_version}}
+%{?rhel:BuildRequires: python39-setuptools}
+%{?rhel:BuildRequires: python39-pip}
+%{?rhel:BuildRequires: python39-wheel}
+%{?rhel:BuildRequires: python39-rpm-macros}
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
 BuildRequires: libunwind-devel >= %{libunwind_minimum_version}
 # man pages --help
 BuildRequires: asciidoc
-BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
 # check ctest
 BuildRequires: cyrus-sasl-plain
 BuildRequires: openssl
@@ -78,6 +87,8 @@ BuildRequires: openssl
 # proton-c requirements
 BuildRequires: openssl-devel
 BuildRequires: cyrus-sasl-devel
+# python-qpid-proton requirements
+BuildRequires: swig
 
 # skupper-router sources
 Source0: packit-placeholder-value.tar.gz
@@ -99,7 +110,8 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
     -DCMAKE_C_FLAGS="$CFLAGS -Wno-error=deprecated-declarations" \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_TESTING=OFF \
-    -DBUILD_BINDINGS=OFF \
+    -DBUILD_BINDINGS=python \
+    -DPython_EXECUTABLE=%{python3} \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl \
     -DBUILD_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
@@ -108,6 +120,8 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 %__cmake --install "%{__cmake_builddir}"
 
 cd %{_builddir}/skupper-router-%{version}
+# for `import proton` when rendering sktools --help to manpages
+source %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/config.sh
 %cmake \
     -DVERSION="%{version}" \
     -DPython_EXECUTABLE=%{python3} \
@@ -117,12 +131,14 @@ cd %{_builddir}/skupper-router-%{version}
 %cmake_build --target all --target man
 
 %install
+# this will install all-in-one cpython .so module with proton inside
+%python3 -m pip install --target "%{buildroot}/usr/lib/skupper-router/python/" %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/python/pkgs/python-qpid-proton-*.tar.gz
 cd %{_builddir}/skupper-router-%{version}
 %cmake_install
 
 %check
-cd %{_builddir}/skupper-router-%{version}
-%ctest
+cd %{_builddir}/skupper-router-%{version}/%{__cmake_builddir}
+PYTHONPATH="%{buildroot}/usr/lib/skupper-router/python/" %__ctest --output-on-failure --force-new-ctest-process %{?_smp_mflags}
 
 %files
 /usr/sbin/skrouterd
@@ -139,21 +155,26 @@ cd %{_builddir}/skupper-router-%{version}
 
 %package common
 Summary:  Internal code shared between the router daemon and the tools
-BuildArch: noarch
+# BuildArch: noarch # due to binary proton
 Requires: python3
-Requires: python3-qpid-proton >= %{proton_minimum_version}
 
 %description common
 %{summary}.
 
 %files common
+# -tools and -tests depend on this
+/usr/lib/skupper-router/python/cproton.py
+/usr/lib/skupper-router/python/proton
+/usr/lib/skupper-router/python/python_qpid_proton-*.dist-info
+/usr/lib/skupper-router/python/_cproton.cpython-*-*-linux-gnu.so
+/usr/lib/skupper-router/python/__pycache__/cproton.cpython-*.pyc
+# skupper-router, -tools, and -tests depend on this
 /usr/lib/skupper-router/python/skupper_router_internal/
 
 %package tools
 Summary:  The skstat and skmanage tools for skrouterd
 BuildArch: noarch
 Requires: python3
-Requires: python3-qpid-proton >= %{proton_minimum_version}
 Requires: skupper-router-common == %{version}
 Requires: cyrus-sasl-plain
 Requires: cyrus-sasl-gssapi
@@ -171,7 +192,6 @@ Requires: cyrus-sasl-gssapi
 %package tests
 Summary:  Tests for the skupper router and the tools
 Requires: python3
-Requires: python3-qpid-proton >= %{proton_minimum_version}
 Requires: skupper-router == %{version}
 Requires: skupper-router-tools == %{version}
 Requires: cyrus-sasl-plain
