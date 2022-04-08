@@ -46,6 +46,7 @@ Requires: qpid-proton-c >= %{proton_minimum_version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
+Requires: cyrus-sasl-gssapi
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
