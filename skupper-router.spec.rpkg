@@ -36,10 +36,16 @@
 Name:          skupper-router
 Version:       {{{ git_dir_version }}}
 Release:       2.0.0%{?dist}
-Summary:       Router for Skupper.io
+Summary:       The skrouterd router daemon for Skupper.io
 License:       ASL 2.0
 URL:           https://skupper.io
 VCS:           {{{ git_dir_vcs }}}
+
+Requires: python3
+Requires: qpid-proton-c >= %{proton_minimum_version}
+Requires: libwebsockets >= %{libwebsockets_minimum_version}
+Requires: libnghttp2 >= %{libnghttp2_minimum_version}
+Requires: cyrus-sasl-plain
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
@@ -73,17 +79,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %check
 %ctest
 
-%package server
-Summary:  The skrouterd deamon
-Requires: python3
-Requires: qpid-proton-c >= %{proton_minimum_version}
-Requires: libwebsockets >= %{libwebsockets_minimum_version}
-Requires: libnghttp2 >= %{libnghttp2_minimum_version}
-
-%description server
-%{summary}.
-
-%files server
+%files
 /usr/sbin/skrouterd
 
 %config /etc/skupper-router/skrouterd.conf
@@ -94,20 +90,29 @@ Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 %{python3_sitelib}/__pycache__/skupper_router_site.*.pyc
 %{python3_sitelib}/skupper_router-*.egg-info
 
-# skupper-router-tools depend on tools/command.py, etc. in skupper_router_internal/
-/usr/lib/skupper-router/python/skupper_router_internal/
-
 /usr/share/man/man5/skrouterd.conf.5.gz
 /usr/share/man/man8/skrouterd.8.gz
 
 /usr/share/skupper-router/html/index.html
+
+%package common
+Summary:  Internal code shared between the router daemon and the tools
+BuildArch: noarch
+Requires: python3
+Requires: python3-qpid-proton >= %{proton_minimum_version}
+
+%description common
+%{summary}.
+
+%files common
+/usr/lib/skupper-router/python/skupper_router_internal/
 
 %package tools
 Summary:  The skstat and skmanage tools for skrouterd
 BuildArch: noarch
 Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
-Requires: skupper-router-server == %{version}
+Requires: skupper-router-common == %{version}
 
 %description tools
 %{summary}.
