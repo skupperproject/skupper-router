@@ -28,6 +28,7 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
+import system_test
 from system_test import AsyncTestReceiver
 from system_test import TestCase, Qdrouterd, main_module
 from system_test import TIMEOUT
@@ -273,6 +274,7 @@ class TopologyTests (TestCase):
         cls.skip = {'test_01' : 0
                     }
 
+    @system_test.flakey(issue='#148')
     def test_01_topology_failover(self):
         name = 'test_01'
         if self.skip[name]:
