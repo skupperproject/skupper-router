@@ -28,6 +28,7 @@ from proton.utils import BlockingConnection
 from skupper_router_internal.compat import dictify
 from skupper_router_internal.management.qdrouter import QdSchema
 
+import system_test
 from system_test import unittest, retry_exception
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import QdManager
@@ -162,6 +163,7 @@ class SkmanageTest(TestCase):
             expect_list[i]['num1'] = i
         check_list('update', expect_list, json.dumps(expect_list))
 
+    @system_test.flakey(issue='#143')
     def test_query(self):
 
         def long_type(name):
