@@ -136,7 +136,11 @@ exclude =
 # do not filter test file names
 python_files = *.py
 # dump all DEBUG+ python logs on test failure
+#  exclusions are configured in tests/__init__.py
 log_level = DEBUG
+# always show important logs
+log_cli = true
+log_cli_level = WARNING
 
 # pylint
 [GENERAL]
@@ -219,6 +223,11 @@ allow_untyped_globals = True
 
 # https://mypy.readthedocs.io/en/stable/error_codes.html#displaying-error-codes
 show_error_codes = True
+
+# tests is a source root, prevent importing as e.g. tests.system_test
+namespace_packages = True
+explicit_package_bases = True
+mypy_path = ${CMAKE_SOURCE_DIR}/tests
 
 # this would print lots and lots of errors
 # check_untyped_defs = True

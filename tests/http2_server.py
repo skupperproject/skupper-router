@@ -20,7 +20,7 @@ import json
 import os
 import system_test
 
-from quart import Quart, request
+from quart import Quart, request  # type: ignore[attr-defined]
 try:
     from quart.static import send_file  # type: ignore[attr-defined]
 except ImportError:
