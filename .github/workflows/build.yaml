@@ -227,7 +227,7 @@ jobs:
           sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
 
-          ctest --timeout 1200 -C ${BuildType} -V -T Test --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j100 ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1200 -V --output-junit=Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j100 ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
@@ -240,6 +240,10 @@ jobs:
         with:
           name: Test_Results_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
+
+      - name: Delete logs from passing tests
+        if: ${{ failure() }}
+        run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
         uses: actions/upload-artifact@v2
@@ -464,7 +468,7 @@ jobs:
             threads=2
           fi
 
-          ctest --timeout 1200 -C ${BuildType} -V -T Test --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
@@ -477,6 +481,10 @@ jobs:
         with:
           name: Test_Results_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
+
+      - name: Delete logs from passing tests
+        if: ${{ failure() }}
+        run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
         uses: actions/upload-artifact@v2
