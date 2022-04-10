@@ -23,7 +23,6 @@
 import json
 import http.client
 import os
-import re
 import ssl
 import sys
 import time
@@ -66,7 +65,7 @@ def api_request(host, port, path, token):
     headers = {}
     headers['Authorization'] = "Bearer %s" % token
 
-    req = conn.request("GET", path, headers=headers)
+    conn.request("GET", path, headers=headers)
     res = conn.getresponse()
 
     return res
@@ -92,7 +91,7 @@ def extract_ips(response, name):
             # Filter non router pods
             if('application' in pod['metadata']['labels'] and
                pod['metadata']['labels']['application'] == name):
-                if('podIP' not in pod['status']):
+                if 'podIP' not in pod['status']:
                     print("Waiting for IP address...")
                     return None
 
@@ -119,7 +118,9 @@ def extract_ips(response, name):
     return pod_list
 
 
-def write_connectors(hosts, port="55672", properties={}):
+def write_connectors(hosts, port="55672", properties=None):
+    if properties is None:
+        properties = {}
     for host in hosts:
         print("connector {")
         print("  role: inter-router")
@@ -130,7 +131,9 @@ def write_connectors(hosts, port="55672", properties={}):
         print("}")
 
 
-def get_connectors(hosts, port="55672", properties={}):
+def get_connectors(hosts, port="55672", properties=None):
+    if properties is None:
+        properties = {}
     connectors = [{"role": "inter-router", "host": host, "port": port} for host in hosts]
     for c in connectors:
         c.update(properties)
@@ -205,7 +208,7 @@ class SimpleParser:
                 if not line:
                     raise Exception("Could not find end of properties: %s" % self.lines[-1])
             else:
-                raise Exception("Could not parse property (line %i): %s" % (self.position+1, line))
+                raise Exception("Could not parse property (line %i): %s" % (self.position + 1, line))
         self.position += 1
         return properties
 
@@ -307,6 +310,7 @@ def infer():
     namespace = retrieve_namespace()
     (prefix, index) = os.environ["HOSTNAME"].rsplit("-", 1)
     return [{"role": "inter-router", "host": "%s-%s.%s.%s.svc.cluster.local" % (prefix, i, service_name, namespace)} for i in range(int(index))]
+
 
 if __name__ == "__main__":
     mode = os.environ.get("QDROUTERD_AUTO_MESH_DISCOVERY")
