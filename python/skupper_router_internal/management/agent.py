@@ -75,10 +75,10 @@ from io import StringIO
 from ctypes import c_void_p, py_object, c_long
 
 import skupper_router_site
-from ..dispatch import IoAdapter, LogAdapter, LOG_INFO, LOG_DEBUG, LOG_ERROR, TREATMENT_ANYCAST_CLOSEST
+from skupper_router.management.entity import camelcase
 from skupper_router.management.error import ManagementError, OK, CREATED, NO_CONTENT, STATUS_TEXT, \
     BadRequestStatus, InternalServerErrorStatus, NotImplementedStatus, NotFoundStatus
-from skupper_router.management.entity import camelcase
+from ..dispatch import IoAdapter, LogAdapter, LOG_INFO, LOG_DEBUG, LOG_ERROR, TREATMENT_ANYCAST_CLOSEST
 from .schema import ValidationError, SchemaEntity, EntityType
 from .qdrouter import QdSchema
 from ..router.message import Message

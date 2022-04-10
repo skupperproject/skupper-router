@@ -19,13 +19,14 @@
 # under the License.
 #
 
-import optparse
-import sys
-
 """
 This program accepts input for a modified Scraper and produces output to create sequence diagrams
 at sequencediagram.org.
 """
+
+import optparse
+import sys
+
 
 IDX_DATETIME = 0
 IDX_NAME_LEFT = 1
@@ -117,7 +118,7 @@ def split_log_file(filename):
     :param filename:
     :return:
     '''
-    if filename == "STDIN" or filename == "" or filename == "-":
+    if filename in ("STDIN", "", "-"):
         log = sys.stdin
         log_lines = log.read().split("\n")
     else:

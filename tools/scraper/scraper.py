@@ -34,15 +34,16 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import argparse
+import datetime
 import os
 import sys
 import traceback
 
+import parser  # this is not the `parser` stdlib module in Python <3.10
+
 import amqp_detail
 import common
-import datetime
 from log_splitter import main_except as splitter_main
-import parser
 import router
 import text
 
@@ -874,7 +875,7 @@ def main_except(argv):
                 # update this router's cost view in running table
                 if plf.router.is_interior():
                     cur_costs[plf.router.container_name] = costs_row
-            except:
+            except:  # pylint: disable=try-except-raise
                 raise
             print("</tr>")
             # if the costs are stable across all routers then put an indicator in table

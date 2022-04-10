@@ -115,7 +115,7 @@ class Common:
         MAX_POSITION = 40
         assert len(key) > 0
         st = line.find(key)
-        return st >= 0 and st <= MAX_POSITION
+        return 0 <= st <= MAX_POSITION
 
 
 def log_letter_of(idx):
@@ -138,7 +138,7 @@ def index_of_log_letter(letter):
     '''
     val = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".find(letter[0].upper())
     if val < 0 or val > 25:
-        raise ValueError("index_of_log_letter Invalid log letter: %s", letter)
+        raise ValueError("index_of_log_letter Invalid log letter: %s" % letter)
     return val
 
 

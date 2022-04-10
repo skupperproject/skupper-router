@@ -34,11 +34,11 @@ import common
 import text
 import router
 
+SEQUENCE_TRANSFER_SIZE = 50
 """
 Sequence output copies the tailing end of transfers to a second display line.
 Define how many characters to show.
 """
-SEQUENCE_TRANSFER_SIZE = 50
 
 
 def colorize_bg(what):
@@ -89,7 +89,7 @@ def proton_split(line):
     if res != '':
         result.append(str(res))
     if indqs:
-        raise ValueError("SPLIT ODD QUOTES: %s", line)
+        raise ValueError("SPLIT ODD QUOTES: %s" % line)
     # print ("SPLIT: line: %s" % line)
     # print ("SPLIT: flds: %s" % result)
     return result
@@ -483,13 +483,13 @@ class ParsedLogLine:
                 res.link_class = 'router-data'
             elif 'qd.router' in caps:
                 res.link_class = 'router'
-            """
-            TODO:
-            res.source = short_endp_names.translate(res.source)
-            res.target = short_endp_names.translate(res.target)
-            res.snd_settle_mode = extract_name(tmpssm)
-            res.rcv_settle_mode = extract_name(tmprsm)
-            """
+
+            # TODO:
+            # res.source = short_endp_names.translate(res.source)
+            # res.target = short_endp_names.translate(res.target)
+            # res.snd_settle_mode = extract_name(tmpssm)
+            # res.rcv_settle_mode = extract_name(tmprsm)
+
             # show_str handled in post_extract
 
         elif perf == 0x13:
@@ -890,8 +890,7 @@ class ParsedLogLine:
                 self.data.is_scraper = True
                 self.data.web_show_str = ("<strong>%s</strong> %s" % (verbatim_module, common.html_escape(self.line[sti:])))
                 stcp = self.line[sti:].find(')')  # close paren after log level
-                if stcp <  0:
-                    stcp = 0
+                stcp = max(stcp, 0)
                 self.data.sdorg_str = self.line[sti + stcp + 1:]
                 return
             else:

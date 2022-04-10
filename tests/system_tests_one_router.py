@@ -1382,7 +1382,7 @@ class PreSettled (MessagingHandler) :
             self.bail(None)
 
 
-class SendPresettledAfterReceiverCloses(object):
+class SendPresettledAfterReceiverCloses:
     def __init__(self, parent):
         self.parent = parent
         self.num_tries = 0
@@ -1414,7 +1414,7 @@ class SendPresettledAfterReceiverCloses(object):
             self.parent.send_remaining()
 
 
-class PresettledCustomTimeout(object):
+class PresettledCustomTimeout:
     def __init__(self, parent):
         self.parent = parent
         self.num_tries = 0
@@ -1847,8 +1847,10 @@ class NoConsumerNoCredit(MessagingHandler):
         self.bailing = True
         self.error = travail
         self.send_conn.close()
-        self.test_timer and self.test_timer.cancel()
-        self.credit_timer and self.credit_timer.cancel()
+        if self.test_timer:
+            self.test_timer.cancel()
+        if self.credit_timer:
+            self.credit_timer.cancel()
 
     def timeout(self):
         self.bail("Test timed out - should not happen!")

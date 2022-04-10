@@ -18,17 +18,6 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from __future__ import print_function
-
-import datetime
-import sys
-import traceback
-
-import common
-import text
 
 """
 Given a map of all connections with lists of the associated frames
@@ -44,6 +33,13 @@ sends a transfer to router B then router A's details could show
 how long it took for the transfer to reach router B. Similarly
 router B's details could show how long ago router A sent the transfer.
 """
+
+import datetime
+import sys
+import traceback
+
+import common
+import text
 
 
 class Counts():
@@ -147,7 +143,7 @@ class Counts():
         if delta.seconds == 0 and delta.microseconds == 0:
             return "<td>%s</td>" % text.nbsp()
         t = float(delta.seconds) + float(delta.microseconds) / 1000000.0
-        return ("<td>%0.06f</td>" % t)
+        return "<td>%0.06f</td>" % t
 
     def show_table_data(self):
         res = ""
