@@ -48,12 +48,11 @@ class Config:
     def __init__(
             self,
             filename: Optional[str] = None,
-            schema: QdSchema = QdSchema(),
             raw_json: bool = False
     ) -> None:
-        self.schema = schema
-        self.config_types = [et for et in schema.entity_types.values()
-                             if schema.is_configuration(et)]
+        self.schema = QdSchema()
+        self.config_types = [et for et in self.schema.entity_types.values()
+                             if self.schema.is_configuration(et)]
         self._log_adapter = LogAdapter("AGENT") if _log_imported else None
 
         if filename:
@@ -274,13 +273,6 @@ class Config:
 
 
 class PolicyConfig(Config):
-    def __init__(
-            self,
-            filename: Optional[str] = None,
-            schema: QdSchema = QdSchema(),
-            raw_json: bool = False
-    ) -> None:
-        super(PolicyConfig, self).__init__(filename, schema, raw_json)
 
     def get_config_types(self) -> List[Any]:
         return [s for s in self.config_types if 'policy' in s.name]
