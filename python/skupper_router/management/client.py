@@ -105,7 +105,7 @@ class Node:
         elif edge_router:
             path = '_edge/%s/$management' % edge_router
         else:
-            path = u'$management'
+            path = '$management'
         connection = BlockingConnection(url,
                                         timeout=timeout,
                                         ssl_domain=ssl_domain,

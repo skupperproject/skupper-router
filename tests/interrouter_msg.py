@@ -17,15 +17,15 @@
 # under the License.
 #
 
-"""An extention to the Proton Message class that supports the custom Inter-Router
+"""An extension to the Proton Message class that supports the custom Inter-Router
 Annotations section. Note well that this file monkey-patches out the original
 Proton message class: importing this module will change every instance of
 Proton.Message to use the InterRouterMessage class
 """
 
-import proton
-from proton import Data
 from typing import List, Optional
+
+import proton
 from proton import Data, Delivery, Link, Receiver, Sender
 
 
@@ -73,7 +73,7 @@ class RouterAnnotationsSection:
         if encoded.startswith(header):
             encoded = encoded[len(header):]
             # next octet should be the list tag:
-            assert(encoded[0] in [0x45, 0xC0, 0xD0])
+            assert encoded[0] in [0x45, 0xC0, 0xD0]
             # skip the entire list
             if encoded[0] == 0x45:
                 # AMQP type list0: empty list
@@ -94,36 +94,36 @@ class RouterAnnotationsSection:
     @staticmethod
     def decode(data: bytes) -> 'RouterAnnotationsSection':
         header = RouterAnnotationsSection.SECTION_HEADER
-        assert(data.startswith(header))
+        assert data.startswith(header)
         data = data[len(header):]
         obj = Data()
         obj.decode(data)
         lcount = obj.get_list()
-        assert(lcount == 4)
+        assert lcount == 4
         obj.enter()
 
         ras = RouterAnnotationsSection()
 
         # index 0: flags
         tag = obj.next()
-        assert(tag == Data.UINT)
+        assert tag == Data.UINT
         ras.flags = obj.get_uint()
 
         # index 1: to-override
         tag = obj.next()
-        assert(tag in [Data.NULL, Data.STRING])
+        assert tag in [Data.NULL, Data.STRING]
         if tag == Data.STRING:
             ras.to_override = obj.get_string()
 
         # index 2: ingress_router
         tag = obj.next()
-        assert(tag in [Data.NULL, Data.STRING])
+        assert tag in [Data.NULL, Data.STRING]
         if tag == Data.STRING:
             ras.ingress_router = obj.get_string()
 
         # index 4: trace list
         tag = obj.next()
-        assert(tag == Data.LIST)
+        assert tag == Data.LIST
         ras.trace = obj.get_sequence()
         obj.exit()
 
@@ -152,7 +152,7 @@ class InterRouterMessage(proton.Message):
         self.router_annotations = router_annotations
         super(InterRouterMessage, self).__init__(body=body, **kwargs)
 
-    def send(self, sender: 'Sender', tag: Optional[str] = None) -> 'Delivery':
+    def send(self, sender: Sender, tag: Optional[str] = None) -> Delivery:
         """
         Overrides the proton message send method in order to send the extra
         router annotations section
@@ -168,7 +168,7 @@ class InterRouterMessage(proton.Message):
             dlv.settle()
         return dlv
 
-    def recv(self, link: 'Receiver') -> Optional['Delivery']:
+    def recv(self, link: Receiver) -> Optional[Delivery]:
         """
         Overrides the proton message receive method in order to handle the
         extra router annotations section
@@ -204,6 +204,6 @@ class InterRouterMessage(proton.Message):
         super(InterRouterMessage, self).decode(encoded)
 
 
-# Override the orginal class:
+# Override the original class:
 proton.Message = InterRouterMessage
 proton._message.Message = InterRouterMessage

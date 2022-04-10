@@ -28,7 +28,6 @@ Features:
 - Sundry other tools.
 """
 
-import __main__
 import errno
 import fcntl
 import json
@@ -52,6 +51,8 @@ from threading import Event
 from threading import Thread
 from typing import Callable, TextIO, List, Optional, Tuple
 
+import __main__
+
 import proton
 import proton.utils
 from proton import Delivery
@@ -67,13 +68,13 @@ from skupper_router.management.error import NotFoundStatus
 MISSING_MODULES = []
 
 try:
-    import qpidtoollibs
+    import qpidtoollibs  # pylint: disable=unused-import
 except ImportError as err:
     qpidtoollibs = None         # pylint: disable=invalid-name
     MISSING_MODULES.append(str(err))
 
 try:
-    import qpid_messaging as qm
+    import qpid_messaging as qm  # pylint: disable=unused-import
 except ImportError as err:
     qm = None  # pylint: disable=invalid-name
     MISSING_MODULES.append(str(err))
@@ -214,8 +215,7 @@ def wait_port(port, socket_address_family='IPv4', **retry_kwargs):
     Takes same keyword arguments as retry to control the timeout"""
     def check(e):
         """Only retry on connection refused"""
-        if not isinstance(e, socket.error) or not e.errno == errno.ECONNREFUSED:
-            raise
+        assert isinstance(e, socket.error) or not e.errno == errno.ECONNREFUSED
 
     host = None
 
@@ -448,7 +448,7 @@ class Qdrouterd(Process):
                 return "%s" %  item
 
             def attributes(e, level):
-                assert(isinstance(e, dict))
+                assert isinstance(e, dict)
                 # k = attribute name
                 # v = string | scalar | dict
                 return "".join(["%s%s: %s\n" % (tabs(level),
@@ -708,7 +708,7 @@ class Qdrouterd(Process):
         @param retry_kwargs: keyword args for L{retry}
         """
         for c in self.config.sections('connector'):
-            assert retry(lambda: self.is_connected(port=c['port'], host=self.get_host(c.get('socketAddressFamily'))),
+            assert retry(lambda c=c: self.is_connected(port=c['port'], host=self.get_host(c.get('socketAddressFamily'))),
                          **retry_kwargs), "Port not connected %s" % c['port']
 
     def wait_startup_message(self, **retry_kwargs):
@@ -893,7 +893,7 @@ class Tester:
         while not is_port_available(p, socket_address_family):
             p = self._next_port()
             if p == start:
-                raise Exception("No available ports in range %s", self.port_range)
+                raise Exception(f"No available ports in range {self.port_range}")
         return p
 
 
@@ -935,12 +935,12 @@ class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-me
             assert i > avg / 2, "Work not fairly distributed: %s" % seq
 
     if not hasattr(unittest.TestCase, 'assertRegex'):
-        def assertRegex(self, text, regexp, msg=None):
-            assert re.search(regexp, text), msg or "Can't find %r in '%s'" % (regexp, text)
+        def assertRegex(self, text, expected_regex, msg=None):
+            assert re.search(expected_regex, text), msg or "Can't find %r in '%s'" % (expected_regex, text)
 
     if not hasattr(unittest.TestCase, 'assertNotRegex'):
-        def assertNotRegex(self, text, regexp, msg=None):
-            assert not re.search(regexp, text), msg or "Found %r in '%s'" % (regexp, text)
+        def assertNotRegex(self, text, unexpected_regex, msg=None):
+            assert not re.search(unexpected_regex, text), msg or "Found %r in '%s'" % (unexpected_regex, text)
 
 
 def main_module():
@@ -1283,7 +1283,7 @@ class QdManager:
 
     def get_log(self, limit=None):
         cmd = 'GET-LOG'
-        if (limit):
+        if limit:
             cmd += " limit=%s" % limit
         return json.loads(self(cmd))
 
@@ -1455,7 +1455,8 @@ class Logger:
             print("%s %s" % (ts, msg))
             sys.stdout.flush()
         if self.python_log_level is not None:
-            logging.log(self.python_log_level, f"{ts} {self.title}: {msg}")
+            logline = f"{ts} {self.title}: {msg}"
+            logging.log(self.python_log_level, logline)
         if self.ofilename is not None:
             with open(self.ofilename, 'a') as f_out:
                 f_out.write("%s %s\n" % (ts, msg))
@@ -1490,7 +1491,7 @@ def curl_available():
         if process.returncode == 0:
             # return curl version as a tuple (major, minor[,fix])
             # expects --version outputs "curl X.Y.Z ..."
-            return tuple([int(x) for x in out.split()[1].split('.')])
+            return tuple(int(x) for x in out.split()[1].split('.'))
     except:
         pass
     return False

@@ -22,7 +22,7 @@ import unittest
 # must include interrouter_msg BEFORE any proton modules because it
 # monkey-patches proton.Message so we can get the message trace
 # annotation
-import interrouter_msg  # noqa: F401
+import interrouter_msg  # noqa: F401  # pylint: disable=unused-import
 
 from proton import Message
 from proton.handlers import MessagingHandler

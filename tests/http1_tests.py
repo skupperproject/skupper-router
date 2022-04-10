@@ -257,7 +257,7 @@ class TestServer:
             except OSError as e:
                 previous_server = cls._active_servers.get(server_port)
                 if previous_server:
-                    logging.log(logging.WARNING, f"TestServer on port {server_port} was not wait()'ed before")
+                    logging.log(logging.WARNING, "TestServer on port %d was not wait()'ed before", server_port)
                     previous_server.wait(timeout=1)  # die quickly, we don't have a whole day
                 exc = e  # remember the exception
         else:

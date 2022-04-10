@@ -46,7 +46,7 @@ def nbsp():
     return "&#160;"
 
 
-"""Large text strings used by main that change infrequently"""
+# Large text strings used by main that change infrequently
 
 
 # html head, start body

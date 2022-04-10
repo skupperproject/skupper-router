@@ -144,6 +144,7 @@ class RouterTestHttp(TestCase):
         if self.skip_delete_http_listener_test:
             # You are not allowed to delete a http:yes listener
             # Try deleting it and make sure you get an exception.
+            exception_raised = False
             try:
                 mgmt.delete(long_type, name=name)
             except Exception as e:

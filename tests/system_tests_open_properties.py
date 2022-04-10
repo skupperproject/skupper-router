@@ -478,7 +478,7 @@ class OpenPropertiesEdgeRouterTest(TestCase):
         while True:
             results = mgmt.query(type='io.skupper.router.connection',
                                  attribute_names=['container']).get_dicts()
-            if len([c for c in results if c['container'] == 'RouterB']):
+            if any(c['container'] == 'RouterB' for c in results):
                 break
 
     def test_01_check_annotations(self):
