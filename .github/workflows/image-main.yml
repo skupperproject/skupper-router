@@ -32,7 +32,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           # build and publish the main image
-          . ./.github/scripts/common.sh
           ./.github/scripts/image.sh
         env:
           DOCKER_USER: '${{ secrets.DOCKER_USER }}'
