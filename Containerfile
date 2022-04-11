@@ -26,7 +26,13 @@ RUN dnf -y --setopt=tsflags=nodocs install \
  && dnf config-manager --set-enabled powertools \
  && dnf clean all
 
-RUN dnf -y --setopt=tsflags=nodocs install gcc gcc-c++ make cmake cyrus-sasl-devel openssl-devel libuuid-devel swig wget patch findutils git valgrind libwebsockets-devel python3-devel libnghttp2-devel && dnf clean all -y
+RUN dnf -y --setopt=tsflags=nodocs install \
+    gcc gcc-c++ make cmake \
+    cyrus-sasl-devel openssl-devel libuuid-devel \
+    python3-devel swig \
+    libwebsockets-devel libnghttp2-devel \
+    wget patch findutils git valgrind \
+ && dnf clean all -y
 WORKDIR /build
 COPY . .
 ENV PROTON_VERSION=0.37.0
@@ -45,7 +51,14 @@ RUN dnf -y --setopt=tsflags=nodocs update \
  && dnf clean all
 
 # gdb and valgrind are part of final image as they can be used as debug options for Skupper
-RUN dnf -y --setopt=tsflags=nodocs install glibc cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl gettext hostname iputils python3 libwebsockets libnghttp2 gdb valgrind && dnf clean all
+RUN dnf -y --setopt=tsflags=nodocs install \
+    glibc \
+    cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl \
+    python3 \
+    libwebsockets libnghttp2 \
+    gdb valgrind \
+    gettext hostname iputils \
+ && dnf clean all
 
 WORKDIR /
 COPY --from=builder /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /
