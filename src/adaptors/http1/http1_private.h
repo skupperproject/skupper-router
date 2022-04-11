@@ -102,6 +102,7 @@ struct qdr_http1_request_base_t {
     qd_timestamp_t            start;
     qd_timestamp_t            stop;
     uint64_t                  out_http1_octets;
+    plog_record_t            *plog;
 };
 DEQ_DECLARE(qdr_http1_request_base_t, qdr_http1_request_list_t);
 
@@ -136,9 +137,10 @@ struct qdr_http1_connection_t {
     // State if connected to an HTTP client
     //
     struct {
-        char *client_ip_addr;
-        char *reply_to_addr;   // set once link is up
-        uint64_t next_msg_id;
+        qd_http_listener_t *listener;
+        char               *client_ip_addr;
+        char               *reply_to_addr;   // set once link is up
+        uint64_t            next_msg_id;
     } client;
 
     // State if connected to an HTTP server
@@ -167,10 +169,11 @@ struct qdr_http1_connection_t {
     //
     qdr_http1_request_list_t requests;
 
-    // statistics
+    // statistics and logging
     //
-    uint64_t  in_http1_octets;
-    uint64_t  out_http1_octets;
+    plog_record_t *plog;
+    uint64_t       in_http1_octets;
+    uint64_t       out_http1_octets;
 
     // flags
     //
