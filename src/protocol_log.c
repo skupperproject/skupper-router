@@ -1325,13 +1325,13 @@ static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
 static void _plog_init(qdr_core_t *core, void **adaptor_context)
 {
     hostname = getenv("HOSTNAME");
-    size_t hostLength = strlen(hostname);
+    size_t hostLength = !!hostname ? strlen(hostname) : 0;
 
     //
     // If the hostname is in the form of a Kubernetes pod name, use the 5-character
     // suffix as the router-id.  Otherwise, generate a random router-id.
     //
-    if (hostLength > 6 && hostname[hostLength - ROUTER_ID_SIZE] == '-') {
+    if (hostLength > ROUTER_ID_SIZE && hostname[hostLength - ROUTER_ID_SIZE] == '-') {
         //
         // This memcpy copies the suffix and the terminating null character.
         //
