@@ -29,7 +29,7 @@ jobs:
     name: Build and publish skupper-router image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set container tag
         run:  |
           echo "DOCKER_TAG=`cat VERSION.txt`" >> $GITHUB_ENV

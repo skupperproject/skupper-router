@@ -69,13 +69,13 @@ jobs:
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: 'apache/qpid-proton'
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: 'skupper-router'
 
@@ -87,7 +87,7 @@ jobs:
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
           message("::set-output name=timestamp::${current_date}")
 
-      - uses: actions/cache@v2.1.6
+      - uses: actions/cache@v3
         env:
           cache-name: cache-ccache
         with:
@@ -100,7 +100,7 @@ jobs:
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: 3.6
           architecture: x64
@@ -161,7 +161,7 @@ jobs:
             qpid-proton/build/python/pkgs
 
       - name: Upload archive
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{ matrix.protonGitRef }}
           path: /tmp/archive.tar.xz
@@ -196,12 +196,12 @@ jobs:
         run: env -0 | sort -z | tr '\0' '\n'
 
       - name: Download Build
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}
 
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: 3.6
           architecture: x64
@@ -234,7 +234,7 @@ jobs:
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
 
       - name: Upload test results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -245,7 +245,7 @@ jobs:
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: testLogs_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -253,7 +253,7 @@ jobs:
             skupper-router/build/tests
 
       - name: Upload core files (if any)
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: cores_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -352,13 +352,13 @@ jobs:
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: 'apache/qpid-proton'
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: 'skupper-router'
 
@@ -384,7 +384,7 @@ jobs:
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
           message("::set-output name=timestamp::${current_date}")
 
-      - uses: actions/cache@v2.1.6
+      - uses: actions/cache@v3
         env:
           cache-name: cache-ccache
         with:
@@ -475,7 +475,7 @@ jobs:
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
 
       - name: Upload test results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -486,7 +486,7 @@ jobs:
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: testLogs_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -494,7 +494,7 @@ jobs:
             skupper-router/build/tests
 
       - name: Upload core files (if any)
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: cores_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
@@ -516,7 +516,7 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: 'apache/qpid-proton'
           ref: main
@@ -536,7 +536,7 @@ jobs:
       - name: Install python-checker test dependencies
         run: python3 -m pip install tox
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Create Build and Install directories
         run: mkdir -p "${DispatchBuildDir}" "{InstallPrefix}"
@@ -557,7 +557,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Build Containerfile
         run: |
@@ -588,7 +588,7 @@ jobs:
           dnf copr enable -y clime/rpkg-util
           dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git rpkg
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install build dependencies (2/2)
         run: |
@@ -621,8 +621,8 @@ jobs:
     name: RAT Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2.1.6
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -630,7 +630,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Install JDK ${{ matrix.java }}
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           distribution: 'adopt'
           java-version: 11
