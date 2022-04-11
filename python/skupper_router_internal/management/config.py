@@ -273,7 +273,6 @@ class Config:
 
 
 class PolicyConfig(Config):
-
     def get_config_types(self) -> List[Any]:
         return [s for s in self.config_types if 'policy' in s.name]
 
