@@ -90,11 +90,12 @@ typedef enum plog_attribute {
     PLOG_ATTRIBUTE_BUILD_VERSION    = 32,  // String
     PLOG_ATTRIBUTE_LINK_COST        = 33,  // uint
     PLOG_ATTRIBUTE_DIRECTION        = 34,  // String
+    PLOG_ATTRIBUTE_RESOURCE         = 35,  // String
 } plog_attribute_t;
 
 #define VALID_REF_ATTRS    0x00000000000000e6
 #define VALID_UINT_ATTRS   0x0000000207800119
-#define VALID_STRING_ATTRS 0x00000005787ffe00
+#define VALID_STRING_ATTRS 0x0000000d787ffe00
 #define VALID_TRACE_ATTRS  0x0000000080000000
 
 

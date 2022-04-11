@@ -20,7 +20,9 @@
 #include "adaptors/adaptor_utils.h"
 #include "http1_private.h"
 
+#include <proton/netaddr.h>
 #include <proton/proactor.h>
+#include <proton/raw_connection.h>
 
 //
 // This file contains code specific to HTTP server processing.  The raw
@@ -467,6 +469,13 @@ static void _do_reconnect(void *context)
             connecting = true;
             hconn->raw_conn = pn_raw_connection();
             pn_raw_connection_set_context(hconn->raw_conn, &hconn->handler_context);
+
+            //
+            // Reset the octet counter to monitor the new raw connection.
+            //
+            hconn->in_http1_octets = 0;
+            hconn->plog = plog_start_record(PLOG_RECORD_FLOW, hconn->server.connector->plog);
+
             // this next call may immediately reschedule the connection on another I/O
             // thread. After this call hconn may no longer be valid!
             pn_proactor_raw_connect(qd_server_proactor(hconn->qd_server), hconn->raw_conn, hconn->cfg.host_port);
@@ -521,6 +530,7 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
         }
 
         hconn->in_http1_octets += length;
+        plog_set_uint64(hconn->plog, PLOG_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
         error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
     }
     return error;
@@ -557,6 +567,17 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
             qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] HTTP/1.x server %s connection established",
                    hconn->conn_id, hconn->cfg.host_port);
         }
+
+        const pn_netaddr_t *na = pn_raw_connection_local_addr(hconn->raw_conn);
+        if (!!na) {
+            char host[200];
+            char port[50];
+            if (pn_netaddr_host_port(na, host, 200, port, 50) == 0) {
+                plog_set_string(hconn->plog, PLOG_ATTRIBUTE_SOURCE_HOST, host);
+                plog_set_string(hconn->plog, PLOG_ATTRIBUTE_SOURCE_PORT, port);
+            }
+        }
+
         hconn->server.link_timeout = 0;
         _setup_server_links(hconn);
         break;
@@ -981,6 +1002,11 @@ static int _server_rx_headers_done_cb(h1_codec_request_state_t *hrs, bool has_bo
     _server_response_msg_t *rmsg = DEQ_TAIL(hreq->responses);
     assert(rmsg && !rmsg->msg);
 
+    //
+    // Stop the timer on server latency
+    //
+    plog_latency_end(hreq->base.plog);
+
     // start building the AMQP message
 
     rmsg->msg = qd_message();
@@ -1004,6 +1030,7 @@ static int _server_rx_headers_done_cb(h1_codec_request_state_t *hrs, bool has_bo
         char u32_str[64];
         snprintf(u32_str, sizeof(u32_str), "%"PRIu32, h1_codec_request_state_response_code(hrs));
         qd_compose_insert_string(props, u32_str);
+        plog_set_string(hreq->base.plog, PLOG_ATTRIBUTE_RESULT, u32_str);
     }
     qd_compose_insert_null(props);   // reply-to
     qd_compose_insert_ulong(props, hreq->base.msg_id);  // correlation-id
@@ -1337,6 +1364,8 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     DEQ_INIT(hreq->responses);
     DEQ_INSERT_TAIL(hconn->requests, &hreq->base);
 
+    hreq->base.plog = plog_start_record(PLOG_RECORD_FLOW, hconn->plog);
+
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
            "[C%"PRIu64"][L%"PRIu64"] New HTTP Request msg-id=%"PRIu64" reply-to=%s.",
            hconn->conn_id, hconn->out_link_id, msg_id, reply_to);
@@ -1403,6 +1432,11 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
         if (version_str)
             sscanf(version_str, "%"SCNu32".%"SCNu32, &major, &minor);
         free(version_str);
+    }
+
+    ref = qd_parse_value_by_key(app_props, QD_AP_FLOW_ID);
+    if (ref) {
+        plog_set_ref_from_parsed(hreq->base.plog, PLOG_ATTRIBUTE_COUNTERFLOW, ref);
     }
 
     // done copying and converting!
@@ -1487,8 +1521,8 @@ exit:
 //
 static void _encode_request_message(_server_request_t *hreq)
 {
-    qdr_http1_connection_t    *hconn = hreq->base.hconn;
-    qd_message_t                *msg = qdr_delivery_message(hreq->request_dlv);
+    qdr_http1_connection_t *hconn = hreq->base.hconn;
+    qd_message_t           *msg = qdr_delivery_message(hreq->request_dlv);
 
     if (!hreq->headers_encoded) {
         hreq->request_dispo = _send_request_headers(hreq, msg);
@@ -1572,6 +1606,7 @@ static void _send_request_message(_server_request_t *hreq)
 
             default:
                 // encoding failure
+                plog_set_string(hreq->base.plog, PLOG_ATTRIBUTE_REASON, "Encoding failure");
                 _cancel_request(hreq);
                 return;
             }
@@ -1644,6 +1679,7 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
         //
         qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
                DLV_FMT" Client has aborted the request", DLV_ARGS(delivery));
+        plog_set_string(hreq->base.plog, PLOG_ATTRIBUTE_REASON, "Client abort");
         _cancel_request(hreq);
         return 0;
     }
@@ -1700,6 +1736,7 @@ static void _server_request_free(_server_request_t *hreq)
             rmsg = DEQ_HEAD(hreq->responses);
         }
 
+        plog_end_record(hreq->base.plog);
         free__server_request_t(hreq);
     }
 }
@@ -1711,10 +1748,12 @@ static void _write_pending_request(_server_request_t *hreq)
         assert(DEQ_PREV(&hreq->base) == 0);  // preserve order!
         uint64_t written = qdr_http1_write_out_data(hreq->base.hconn, &hreq->out_data);
         hreq->base.out_http1_octets += written;
-        if (written)
+        if (written) {
+            plog_latency_start(hreq->base.plog);
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                    "[C%"PRIu64"][L%"PRIu64"] %"PRIu64" request octets written to server",
                    hreq->base.hconn->conn_id, hreq->base.hconn->out_link_id, written);
+        }
     }
 }
 

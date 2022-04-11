@@ -121,6 +121,8 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
 
         sys_atomic_destroy(&hconn->q2_restart);
 
+        plog_end_record(hconn->plog);
+
         free(hconn->cfg.host);
         free(hconn->cfg.port);
         free(hconn->cfg.address);

@@ -702,6 +702,7 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     case PLOG_ATTRIBUTE_BUILD_VERSION    : return "buildVersion";
     case PLOG_ATTRIBUTE_LINK_COST        : return "linkCost";
     case PLOG_ATTRIBUTE_DIRECTION        : return "direction";
+    case PLOG_ATTRIBUTE_RESOURCE         : return "resource";
     }
     return "UNKNOWN";
 }
@@ -1293,6 +1294,7 @@ void plog_latency_end(plog_record_t *record)
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
         plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
+        record->latency_start = 0;
     }
 }
 
