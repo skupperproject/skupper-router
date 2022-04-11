@@ -17,6 +17,15 @@
 # under the License.
 #
 
+[skrouter]
+py_sources =
+  ${CMAKE_SOURCE_DIR}/python
+  ${CMAKE_SOURCE_DIR}/docs
+  ${CMAKE_SOURCE_DIR}/tests
+  ${CMAKE_SOURCE_DIR}/tools
+  ${CMAKE_SOURCE_DIR}/scripts
+  ${CMAKE_BINARY_DIR}/python/skupper_router_site.py
+
 [tox]
 envlist = py36,py37,py38,py39,py310
 skipsdist = True
@@ -26,29 +35,11 @@ skip_install = True
 
 [testenv]
 commands =
-  flake8 --count --show-source \
-    ${CMAKE_SOURCE_DIR}/python \
-    ${CMAKE_SOURCE_DIR}/docs \
-    ${CMAKE_SOURCE_DIR}/tests \
-    ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_SOURCE_DIR}/tools/skstat \
-    ${CMAKE_SOURCE_DIR}/tools/skmanage
+  flake8 --count --show-source {[skrouter]py_sources} ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
 
-  pylint --jobs 2 --rcfile ${CMAKE_BINARY_DIR}/tests/tox.ini \
-    --recursive true \
-    ${CMAKE_SOURCE_DIR}/python \
-    ${CMAKE_SOURCE_DIR}/docs \
-    ${CMAKE_SOURCE_DIR}/tests \
-    ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_SOURCE_DIR}/tools/skstat \
-    ${CMAKE_SOURCE_DIR}/tools/skmanage
+  pylint --jobs 2 --rcfile ${CMAKE_BINARY_DIR}/tests/tox.ini {[skrouter]py_sources} ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
 
-  mypy --config-file ${CMAKE_BINARY_DIR}/tests/tox.ini \
-    ${CMAKE_SOURCE_DIR}/python \
-    ${CMAKE_SOURCE_DIR}/docs \
-    ${CMAKE_SOURCE_DIR}/tests \
-    ${CMAKE_SOURCE_DIR}/tools \
-    ${CMAKE_BINARY_DIR}/python/skupper_router_site.py
+  mypy --config-file ${CMAKE_BINARY_DIR}/tests/tox.ini {[skrouter]py_sources}
 
 deps =
   hacking==4.1.0
@@ -148,6 +139,9 @@ python_files = *.py
 log_level = DEBUG
 
 # pylint
+[GENERAL]
+recursive = True
+
 [MESSAGE_CONTROL]
 disable =
     access-member-before-definition,

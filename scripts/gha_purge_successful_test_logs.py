@@ -39,7 +39,7 @@ args = parser.parse_args()
 def main() -> int:
     build_dir = pathlib.Path(args.build_dir)
     if not build_dir.exists() or not build_dir.is_dir():
-        logging.error(f"Build dir does not exist or is not a directory")
+        logging.error("Build dir %s does not exist or is not a directory", build_dir)
         return 1
 
     with pathlib.Path(build_dir, 'Testing', 'Temporary', 'LastTestsFailed.log').open('rt') as f:
