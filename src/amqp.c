@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-const char * const QD_AP_FLOW_ID = "flowid";
+const char * const QD_AP_FLOW_ID = ":flowid";
 const char * const QD_CAPABILITY_ROUTER_CONTROL   = "qd.router";
 const char * const QD_CAPABILITY_ROUTER_DATA      = "qd.router-data";
 const char * const QD_CAPABILITY_EDGE_DOWNLINK    = "qd.router-edge-downlink";

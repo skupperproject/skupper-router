@@ -24,7 +24,9 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/listener.h>
+#include <proton/netaddr.h>
 #include <proton/proactor.h>
+#include <proton/raw_connection.h>
 #include <proton/netaddr.h>
 
 
@@ -142,6 +144,7 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
 
+    hconn->client.listener    = li;
     hconn->client.next_msg_id = 1;
 
     // configure the HTTP/1.x library
@@ -175,6 +178,8 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
 
     hconn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(hconn->raw_conn, &hconn->handler_context);
+
+    hconn->plog = plog_start_record(PLOG_RECORD_FLOW, hconn->client.listener->plog);
 
     sys_mutex_lock(qdr_http1_adaptor->lock);
     DEQ_INSERT_TAIL(qdr_http1_adaptor->connections, hconn);
@@ -425,6 +430,7 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
         }
 
         hconn->in_http1_octets += length;
+        plog_set_uint64(hconn->plog, PLOG_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
         error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
     }
     return error;
@@ -459,8 +465,15 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     case PN_RAW_CONNECTION_CONNECTED: {
         _setup_client_connection(hconn);
 
-        const struct pn_netaddr_t *na = pn_raw_connection_remote_addr(hconn->raw_conn);
-        if (na) {
+        const pn_netaddr_t *na = pn_raw_connection_remote_addr(hconn->raw_conn);
+        if (!!na) {
+            char host[200];
+            char port[50];
+            if (pn_netaddr_host_port(na, host, 200, port, 50) == 0) {
+                plog_set_string(hconn->plog, PLOG_ATTRIBUTE_SOURCE_HOST, host);
+                plog_set_string(hconn->plog, PLOG_ATTRIBUTE_SOURCE_PORT, port);
+            }
+
             char buf[128];
             if (pn_netaddr_str(na, buf, sizeof(buf)) > 0) {
                 qd_log(log, QD_LOG_INFO,
@@ -776,6 +789,11 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
     creq->version_minor = version_minor;
     DEQ_INIT(creq->responses);
 
+    creq->base.plog = plog_start_record(PLOG_RECORD_FLOW, hconn->plog);
+    plog_set_string(creq->base.plog, PLOG_ATTRIBUTE_METHOD, method);
+    plog_set_string(creq->base.plog, PLOG_ATTRIBUTE_RESOURCE, target);
+    plog_latency_start(creq->base.plog);
+
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
            "[C%"PRIu64"] HTTP request received: msg-id=%"PRIu64" method=%s target=%s version=%"PRIi32".%"PRIi32,
            hconn->conn_id, creq->base.msg_id, method, target, version_major, version_minor);
@@ -802,6 +820,9 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
 
         qd_compose_insert_string(creq->request_props, PATH_PROP_KEY);
         qd_compose_insert_string(creq->request_props, target);
+
+        qd_compose_insert_symbol(creq->request_props, QD_AP_FLOW_ID);
+        plog_serialize_identity(creq->base.plog, creq->request_props);
     }
 
     h1_codec_request_state_set_context(hrs, (void*) creq);
@@ -1759,8 +1780,11 @@ static void _write_pending_response(_client_request_t *hreq)
         if (rmsg && DEQ_HEAD(rmsg->out_data)) {
             uint64_t written = qdr_http1_write_out_data(hreq->base.hconn, &rmsg->out_data);
             hreq->base.out_http1_octets += written;
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %"PRIu64" octets written",
-                   hreq->base.hconn->conn_id, written);
+            if (written) {
+                plog_latency_end(hreq->base.plog);
+                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %"PRIu64" octets written",
+                       hreq->base.hconn->conn_id, written);
+            }
         }
     }
 }
@@ -1787,6 +1811,7 @@ static void _client_request_free(_client_request_t *hreq)
             rmsg = DEQ_HEAD(hreq->responses);
         }
 
+        plog_end_record(hreq->base.plog);
         free__client_request_t(hreq);
     }
 }
