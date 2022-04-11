@@ -49,7 +49,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           # build, run tests and if all worked publish a custom image
-          . ./.github/scripts/common.sh
           export PROJECT_TAG="${DOCKER_TAG}"
           ./.github/scripts/image.sh
         env:
