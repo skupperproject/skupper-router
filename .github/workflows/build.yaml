@@ -122,11 +122,10 @@ jobs:
           cmake "${{github.workspace}}/qpid-proton" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            "-GNinja" \
             ${ProtonCMakeExtraArgs}
 
       - name: qpid-proton cmake build/install
-        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} -t install --parallel 6
+        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} -t install --parallel 1
 
       - name: Display ccache stats
         run: ccache -s
@@ -409,7 +408,7 @@ jobs:
             ${ProtonCMakeExtraArgs}
 
       - name: qpid-proton cmake build/install
-        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} --target install --parallel 6
+        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} --target install --parallel 1
 
       - name: Display ccache stats
         run: ccache -s
