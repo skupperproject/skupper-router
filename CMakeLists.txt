@@ -33,6 +33,7 @@ set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 
+
 # Set warning compile flags
 set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
 set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare)
@@ -58,7 +59,13 @@ else()
     option(QD_ENABLE_ASSERTIONS "Enable assertions" OFF)
 endif()
 
-file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION.txt" QPID_DISPATCH_VERSION)
+if(NOT DEFINED VERSION)
+  set(QPID_DISPATCH_VERSION "UNKNOWN")
+else()
+  set(QPID_DISPATCH_VERSION ${VERSION})
+endif()
+
+message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")
 
 include(CheckLibraryExists)
 include(CheckSymbolExists)
