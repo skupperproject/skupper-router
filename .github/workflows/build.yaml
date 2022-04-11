@@ -122,7 +122,6 @@ jobs:
           cmake "${{github.workspace}}/qpid-proton" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            "-GNinja" \
             ${ProtonCMakeExtraArgs}
 
       - name: qpid-proton cmake build/install
