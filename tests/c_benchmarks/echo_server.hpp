@@ -48,13 +48,16 @@ class EchoServer
         }
     }
 
-    // will handle one TCP client and then it will return
+    // will handle TCP clients one at a time and it will return on failure (when server socket is closed, most likely)
     void run()
     {
-        try {
-            HandleTCPClient(servSock.accept());
-        } catch (SocketException &e) {
-            std::cerr << e.what() << std::endl;
+        while(true) {
+            try {
+                HandleTCPClient(servSock.accept());
+            } catch (SocketException &e) {
+                std::cerr << e.what() << std::endl;  // TODO: error is expected now, make it silent
+                break;
+            }
         }
     }
 
@@ -87,16 +90,15 @@ class EchoServerThread
     unsigned short echoServerPort;
     std::thread u;
 
+    EchoServer es{0};
+
    public:
     EchoServerThread()
     {
         u = std::thread([this]() {
-            EchoServer es(0);
             echoServerPort = es.port();
             portLatch.notify();
             es.run();
-            echoServerLatch.wait();
-            es.stop();
         });
 
         portLatch.wait();
@@ -104,7 +106,7 @@ class EchoServerThread
 
     ~EchoServerThread()
     {
-        echoServerLatch.notify();
+        es.stop();  // if recv failed, echo server may be stuck waiting to accept(); call stop() here
         u.join();
     }
 
