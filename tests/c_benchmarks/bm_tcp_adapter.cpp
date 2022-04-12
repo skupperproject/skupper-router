@@ -44,6 +44,8 @@ extern "C" {
 void qd_error_initialize();
 }  // extern "C"
 
+static const bool VERBOSE = false;
+
 static unsigned short findFreePort()
 {
     TCPServerSocket serverSocket(0);
@@ -180,31 +182,54 @@ class LatencyMeasure
     int echoStringLen       = echoString.length();
 
    public:
+    inline TCPSocket createSocket(benchmark::State &state, unsigned short echoServerPort) {
+        for (int i = 0; i < 30; i++) {
+            try {
+                TCPSocket sock = try_to_connect(servAddress, echoServerPort);
+                sock.setRecvTimeout(std::chrono::seconds(10));
+                // run few times outside benchmark to clean the pipes first
+                latencyMeasureSendReceive(state, sock);
+                latencyMeasureSendReceive(state, sock);
+                latencyMeasureSendReceive(state, sock);
+                return sock;
+            } catch (SocketException&) {
+                if(VERBOSE) printf("latencyMeasureLoop: recv err\n");
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        throw std::runtime_error("Could not get working socket");
+    }
     inline void latencyMeasureLoop(benchmark::State &state, unsigned short echoServerPort)
     {
-        {
-            TCPSocket sock = try_to_connect(servAddress, echoServerPort);
-            latencyMeasureSendReceive(state, sock);  // run once outside benchmark to clean the pipes first
+        TCPSocket sock = createSocket(state, echoServerPort);
 
-            for (auto _ : state) {
-                latencyMeasureSendReceive(state, sock);
+        if(VERBOSE) printf("latencyMeasureLoop: BEGIN state loop\n");
+
+        for (auto _ : state) {
+            if (!latencyMeasureSendReceive(state, sock)) {
+                state.SkipWithError("unable to read from socket");
+                break;
             }
         }
+
+        if(VERBOSE) printf("latencyMeasureLoop: END state loop\n");
     }
 
-    inline void latencyMeasureSendReceive(benchmark::State &state, TCPSocket &sock)
+    inline bool latencyMeasureSendReceive(benchmark::State &state, TCPSocket &sock)
     {
+        // todo: ensure we always receive what we sent, cannot build a bunch of in-flight values
         sock.send(echoString.c_str(), echoStringLen);
 
         int totalBytesReceived = 0;
         while (totalBytesReceived < echoStringLen) {
             int bytesReceived = sock.recv(echoBuffer, RCVBUFSIZE);
             if (bytesReceived <= 0) {
-                state.SkipWithError("unable to read from socket");
+                return false;  // we failed, bail out
             }
             totalBytesReceived += bytesReceived;
             echoBuffer[bytesReceived] = '\0';
         }
+        return true;
     }
 };
 
@@ -257,7 +282,7 @@ class DispatchRouterSubprocessTcpLatencyTest
     int pid;
 
    public:
-    DispatchRouterSubprocessTcpLatencyTest(std::string configName)
+    explicit DispatchRouterSubprocessTcpLatencyTest(std::string configName)
     {
         pid = fork();
         if (pid == 0) {
@@ -361,3 +386,62 @@ static void BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
 }
 
 BENCHMARK(BM_TCPEchoServerLatency2QDRSubprocess)->Unit(benchmark::kMillisecond);
+
+static void BM_TCPEchoServerLatencyNQDRSubprocess(benchmark::State &state)
+{
+    EchoServerThread est;
+
+    int N                       = state.range(0);
+    unsigned short tcpConnector = est.port();
+    unsigned short tcpListener  = findFreePort();
+
+    std::vector<unsigned short> listeners{};  // first one is unused
+    listeners.reserve(N);
+    for (int i = 0; i < N; ++i) {
+        listeners.push_back(findFreePort());
+    }
+
+    std::string configName_1          = "BM_TCPEchoServerLatencyNQDRSubprocess_first.conf";
+    std::stringstream router_config_1 = multiRouterTcpConfig("QDRL1", {}, {listeners[1]}, tcpConnector, 0);
+    writeRouterConfig(configName_1, router_config_1);
+
+    std::string configName_2 = "BM_TCPEchoServerLatencyNQDRSubprocess_last.conf";
+    std::stringstream router_config_2 =
+        multiRouterTcpConfig("QDRL2", {listeners[listeners.size() - 1]}, {}, 0, tcpListener);
+    writeRouterConfig(configName_2, router_config_2);
+
+    DispatchRouterSubprocessTcpLatencyTest qdr1{configName_1};
+    DispatchRouterSubprocessTcpLatencyTest qdr2{configName_2};
+
+    // interior routers
+    std::vector<DispatchRouterSubprocessTcpLatencyTest> interior;
+    interior.reserve(N - 2);
+    for (int i = 1; i < N - 1; i++) {
+        std::stringstream ss;
+        ss << "BM_TCPEchoServerLatencyNQDRSubprocess_" << i << ".conf";
+        std::stringstream id;
+        id << "ROUTER" << i;
+        std::string configName          = ss.str();
+        std::stringstream router_config = multiRouterTcpConfig(id.str(), {listeners[i]}, {listeners[i + 1]}, 0, 0);
+        writeRouterConfig(configName, router_config);
+
+        interior.emplace_back(configName);  // this ends up starting router subprocesses; behold magic of C++
+    }
+
+    {
+        LatencyMeasure lm;
+        lm.latencyMeasureLoop(state, tcpListener);
+    }
+}
+
+BENCHMARK(BM_TCPEchoServerLatencyNQDRSubprocess)
+    ->Unit(benchmark::kMillisecond)
+    ->Arg(2)
+    ->Arg(3)
+    ->Arg(4)
+    ->Arg(5)
+    ->Arg(6)
+    ->Arg(7)
+    ->Arg(8)
+    ->Arg(9)
+    ;
