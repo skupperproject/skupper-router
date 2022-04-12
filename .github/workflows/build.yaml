@@ -609,6 +609,14 @@ jobs:
         run: |
           skrouterd -c /dev/empty |& grep "Configuration file could not be opened"
 
+      - name: Check that skmanage works
+        run: |
+          skmanage --help
+
+      - name: Check that skstat works
+        run: |
+          skstat --help
+
       - name: Check that manpages work
         run: |
           dnf install -y man
