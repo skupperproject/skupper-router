@@ -36,3 +36,11 @@ TCPSocket::TCPSocket(const std::string &remoteAddress, unsigned short remotePort
 TCPSocket::TCPSocket(int newConnSD) : Socket(newConnSD)
 {
 }
+
+void TCPSocket::setRecvTimeout(std::chrono::duration<int64_t> duration)
+{
+    struct timeval timeout;
+    timeout.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+    timeout.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+    setsockopt (mFileDescriptor, SOL_SOCKET, SO_RCVTIMEO, (char*) &timeout, sizeof (timeout));
+}

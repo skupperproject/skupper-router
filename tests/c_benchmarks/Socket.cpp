@@ -120,7 +120,8 @@ void Socket::connect(const std::string &remoteAddress, unsigned short remotePort
 
 void Socket::send(const void *buffer, int bufferLen) noexcept(false)
 {
-    if (::send(mFileDescriptor, buffer, bufferLen, 0) < 0) {
+    // MSG_NOSIGNAL to avoid SIGPIPE
+    if (::send(mFileDescriptor, buffer, bufferLen, MSG_NOSIGNAL) < 0) {
         throw SocketException("Send failed (send())", true);
     }
 }
