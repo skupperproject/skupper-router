@@ -46,7 +46,7 @@ jobs:
           done
         env:
           DOCKER_TAG: '${{github.event.inputs.dockerTag}}'
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: |
           # build, run tests and if all worked publish a custom image
           export PROJECT_TAG="${DOCKER_TAG}"
