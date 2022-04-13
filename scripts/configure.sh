@@ -29,12 +29,12 @@ function printConfig() {
     echo "---------------------------------------" && cat $OUTFILE && echo "---------------------------------------"
 }
 
-if [[ ${QDROUTERD_CONF:-} =~ .*\{.*\}.* ]]; then
+if [[ ${SKROUTERD_CONF:-} =~ .*\{.*\}.* ]]; then
     # env var contains inline config
-    echo "$QDROUTERD_CONF" > $OUTFILE
-elif [[ -n ${QDROUTERD_CONF:-} ]]; then
+    echo "$SKROUTERD_CONF" > $OUTFILE
+elif [[ -n ${SKROUTERD_CONF:-} ]]; then
     # treat as path(s)
-    IFS=':,' read -r -a array <<< "$QDROUTERD_CONF"
+    IFS=':,' read -r -a array <<< "$SKROUTERD_CONF"
     > $OUTFILE
     for i in "${array[@]}"; do
         if [[ -d $i ]]; then
@@ -56,10 +56,10 @@ if [ -f $OUTFILE ]; then
     python3 $HOME_DIR/bin/expandvars.py $OUTFILE
 fi
 
-if [ -n "${QDROUTERD_AUTO_MESH_DISCOVERY:-}" ]; then
+if [ -n "${SKROUTERD_AUTO_MESH_DISCOVERY:-}" ]; then
     python3 $HOME_DIR/bin/auto_mesh.py $OUTFILE || printConfig
 fi
 
-if [ -n "${QDROUTERD_AUTO_CREATE_SASLDB_SOURCE:-}" ]; then
-    $HOME_DIR/bin/create_sasldb.sh ${QDROUTERD_AUTO_CREATE_SASLDB_PATH:-$HOME_DIR/etc/skrouterd.sasldb} $QDROUTERD_AUTO_CREATE_SASLDB_SOURCE "${APPLICATION_NAME:-skrouterd}"
+if [ -n "${SKROUTERD_AUTO_CREATE_SASLDB_SOURCE:-}" ]; then
+    $HOME_DIR/bin/create_sasldb.sh ${SKROUTERD_AUTO_CREATE_SASLDB_PATH:-$HOME_DIR/etc/skrouterd.sasldb} $SKROUTERD_AUTO_CREATE_SASLDB_SOURCE "${APPLICATION_NAME:-skrouterd}"
 fi

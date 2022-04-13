@@ -139,9 +139,9 @@ def get_connectors(hosts, port="55672", properties={}):
 
 # add SASL properties, if they are set on the environment
 def add_sasl_properties(properties):
-    sasl_mechanisms = os.getenv('QDROUTERD_AUTO_MESH_SASL_MECHANISMS')
-    sasl_username = os.getenv('QDROUTERD_AUTO_MESH_SASL_USERNAME')
-    sasl_password = os.getenv('QDROUTERD_AUTO_MESH_SASL_PASSWORD')
+    sasl_mechanisms = os.getenv('SKROUTERD_AUTO_MESH_SASL_MECHANISMS')
+    sasl_username = os.getenv('SKROUTERD_AUTO_MESH_SASL_USERNAME')
+    sasl_password = os.getenv('SKROUTERD_AUTO_MESH_SASL_PASSWORD')
     if sasl_username and sasl_password:
         if sasl_mechanisms:
             properties["saslMechanisms"] = sasl_mechanisms
@@ -303,13 +303,13 @@ def query():
 
 
 def infer():
-    service_name = os.environ.get("QDROUTERD_AUTO_MESH_SERVICE_NAME", "%s-headless" % os.environ.get("APPLICATION_NAME", "amq-interconnect"))
+    service_name = os.environ.get("SKROUTERD_AUTO_MESH_SERVICE_NAME", "%s-headless" % os.environ.get("APPLICATION_NAME", "amq-interconnect"))
     namespace = retrieve_namespace()
     (prefix, index) = os.environ["HOSTNAME"].rsplit("-", 1)
     return [{"role": "inter-router", "host": "%s-%s.%s.%s.svc.cluster.local" % (prefix, i, service_name, namespace)} for i in range(int(index))]
 
 if __name__ == "__main__":
-    mode = os.environ.get("QDROUTERD_AUTO_MESH_DISCOVERY")
+    mode = os.environ.get("SKROUTERD_AUTO_MESH_DISCOVERY")
     if mode and len(sys.argv) > 1:
         try:
             if mode.upper() == "QUERY":
@@ -317,7 +317,7 @@ if __name__ == "__main__":
             elif mode.upper() == "INFER":
                 connectors = infer()
             else:
-                raise Exception("Invalid value for QDROUTERD_AUTO_MESH_DISCOVERY, expected 'QUERY' or 'INFER'")
+                raise Exception("Invalid value for SKROUTERD_AUTO_MESH_DISCOVERY, expected 'QUERY' or 'INFER'")
             get_config(sys.argv[1]).append_connectors(connectors)
         except Exception as e:
             traceback.print_exc()

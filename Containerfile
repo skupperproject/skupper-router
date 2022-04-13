@@ -57,7 +57,7 @@ COPY ./scripts/* /home/skrouterd/bin/
 
 ARG version=latest
 ENV VERSION=${version}
-ENV QDROUTERD_HOME=/home/skrouterd
+ENV SKROUTERD_HOME=/home/skrouterd
 
 EXPOSE 5672 55672 5671
 CMD ["/home/skrouterd/bin/launch.sh"]
