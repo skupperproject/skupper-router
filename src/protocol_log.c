@@ -874,7 +874,7 @@ static void _plog_flush_TH(qdr_core_t *core)
         record->never_flushed = false;
         record->emit_ordinal++;
         if (record->ended) {
-            _plog_free_record_TH(record, false);
+            _plog_free_record_TH(record, true);
         }
         record = DEQ_HEAD(unflushed_records);
     }
