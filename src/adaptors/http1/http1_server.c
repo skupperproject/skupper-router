@@ -449,28 +449,30 @@ static void _do_reconnect(void *context)
 
     _process_request((_server_request_t*) DEQ_HEAD(hconn->requests));
 
-    if (hconn->admin_status == QD_CONN_ADMIN_ENABLED) {
+    // Do not attempt to re-connect if the current request is still in
+    // progress. This happens when the server has closed the connection before
+    // the request message has fully arrived (!rx_complete).
+    // qdr_connection_process() will continue to invoke the
+    // qdr_http1_server_core_link_deliver callback until the request message is
+    // complete.
 
-        // Do not attempt to re-connect if the current request is still in
-        // progress. This happens when the server has closed the connection before
-        // the request message has fully arrived (!rx_complete).
-        // qdr_connection_process() will continue to invoke the
-        // qdr_http1_server_core_link_deliver callback until the request message is
-        // complete.
-
-        // false positive: head request is removed before it is freed, null is passed
-        /* coverity[pass_freed_arg] */
-        if (!_is_request_in_progress((_server_request_t*) DEQ_HEAD(hconn->requests))) {
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] Connecting to HTTP server...", conn_id);
-            sys_mutex_lock(qdr_http1_adaptor->lock);
+    // false positive: head request is removed before it is freed, null is passed
+    /* coverity[pass_freed_arg] */
+    if (!_is_request_in_progress((_server_request_t*) DEQ_HEAD(hconn->requests))) {
+        sys_mutex_lock(qdr_http1_adaptor->lock);
+        bool connecting = false;
+        if (hconn->admin_status == QD_CONN_ADMIN_ENABLED) {
+            connecting = true;
             hconn->raw_conn = pn_raw_connection();
             pn_raw_connection_set_context(hconn->raw_conn, &hconn->handler_context);
             // this next call may immediately reschedule the connection on another I/O
             // thread. After this call hconn may no longer be valid!
             pn_proactor_raw_connect(qd_server_proactor(hconn->qd_server), hconn->raw_conn, hconn->cfg.host_port);
-            sys_mutex_unlock(qdr_http1_adaptor->lock);
         }
+        sys_mutex_unlock(qdr_http1_adaptor->lock);
+        if (connecting)
+            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                   "[C%"PRIu64"] Connecting to HTTP server...", conn_id);
     }
 }
 
@@ -603,39 +605,38 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         // arriving.
         //
 
-        bool reconnect = false;
-        if (hconn->admin_status == QD_CONN_ADMIN_ENABLED && hconn->qdr_conn) {
-            if (hconn->server.link_timeout == 0) {
-                hconn->server.link_timeout = qd_timer_now() + LINK_TIMEOUT_MSEC;
-                hconn->server.reconnect_pause = 0;
-            } else {
-                if ((qd_timer_now() - hconn->server.link_timeout) >= 0) {
-                    _teardown_server_links(hconn);
-                    // at this point we've unbound the service address so no
-                    // more messages will be sent to us. Notify meatspace:
-                    if (hconn->oper_status == QD_CONN_OPER_UP) {
-                        hconn->oper_status = QD_CONN_OPER_DOWN;
-                        qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] HTTP/1.x server %s disconnected",
-                               hconn->conn_id, hconn->cfg.host_port);
-                    }
+        if (hconn->server.link_timeout == 0) {
+            hconn->server.link_timeout = qd_timer_now() + LINK_TIMEOUT_MSEC;
+            hconn->server.reconnect_pause = 0;
+        } else {
+            if ((qd_timer_now() - hconn->server.link_timeout) >= 0) {
+                _teardown_server_links(hconn);
+                // at this point we've unbound the service address so no
+                // more messages will be sent to us. Notify meatspace:
+                if (hconn->oper_status == QD_CONN_OPER_UP) {
+                    hconn->oper_status = QD_CONN_OPER_DOWN;
+                    qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] HTTP/1.x server %s disconnected",
+                           hconn->conn_id, hconn->cfg.host_port);
                 }
-                if (hconn->server.reconnect_pause < RETRY_MAX_PAUSE_MSEC)
-                    hconn->server.reconnect_pause += RETRY_PAUSE_MSEC;
             }
-            reconnect = true;
+            if (hconn->server.reconnect_pause < RETRY_MAX_PAUSE_MSEC)
+                hconn->server.reconnect_pause += RETRY_PAUSE_MSEC;
         }
 
         // prevent core activation
         sys_mutex_lock(qdr_http1_adaptor->lock);
         hconn->raw_conn = 0;
-        if (reconnect && hconn->server.reconnect_timer) {
+        if (hconn->admin_status == QD_CONN_ADMIN_ENABLED && hconn->qdr_conn && hconn->server.reconnect_timer) {
             qd_timer_schedule(hconn->server.reconnect_timer, hconn->server.reconnect_pause);
             sys_mutex_unlock(qdr_http1_adaptor->lock);
             // do not manipulate hconn further as it may now be processed by the
             // timer thread
             return;
         }
+        // we are not reconnecting due to management/shutdown/whatever
         sys_mutex_unlock(qdr_http1_adaptor->lock);
+        hconn->server.link_timeout = 0;
+        hconn->server.reconnect_pause = 0;
         break;
     }
     case PN_RAW_CONNECTION_NEED_WRITE_BUFFERS: {
