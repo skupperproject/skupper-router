@@ -124,7 +124,7 @@ def write_connectors(hosts, port="55672", properties=None):
     for host in hosts:
         print("connector {")
         print("  role: inter-router")
-        print("  host: %s", host)
+        print("  host: config-sync-ignore-%s", host)
         print("  port: %s", port)
         for prop in properties:
             print("  %s: %s", prop)
