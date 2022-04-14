@@ -1702,16 +1702,38 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
     qdr_connection_t      *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
     qdr_link_t            *link = safe_deref_qdr_link_t(action->args.connection.link);
     qdr_delivery_t *initial_dlv = action->args.connection.initial_delivery;
+
+    qdr_terminus_t *source = action->args.connection.source;
+    qdr_terminus_t *target = action->args.connection.target;
+
     if (discard || !conn || !link) {
         if (initial_dlv)
             qdr_delivery_decref(core, initial_dlv,
                                 "qdr_link_inbound_first_attach_CT - discarding action");
+
+        //
+        // Free the terminus objects here.
+        // It is ok to free the terminus objects since their ownership has been passed to us now,
+        //
+        qdr_terminus_free(source);
+        qdr_terminus_free(target);
+
+        //
+        // https://github.com/skupperproject/skupper-router/issues/335
+        // The qdr_link_t cannot be freed here since someone who called qdr_link_first_attach
+        // is still holding a reference to it.
+        // The right approach here would be to add this link to core->open_links
+        // and hope that qdr_core_free() will free this link but currently
+        // the code in qdr_core_first frees all links in core->open_links and then
+        // sets all core actions to discard.
+        // We have temporarily added qdr_link_t to the list of suppressed objects in alloc_pool.c
+        //
+        // DEQ_INSERT_TAIL(core->open_links, link);
+
         return;
     }
 
     qd_direction_t  dir    = action->args.connection.dir;
-    qdr_terminus_t *source = action->args.connection.source;
-    qdr_terminus_t *target = action->args.connection.target;
 
     //
     // Start the attach count.

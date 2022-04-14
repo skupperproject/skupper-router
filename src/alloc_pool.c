@@ -112,6 +112,13 @@ static const char *leaking_types[] = {
     "qd_parsed_field_t",  // DISPATCH-1701
     "qdr_delivery_ref_t", // DISPATCH-1702
 
+    // https://github.com/skupperproject/skupper-router/issues/335
+    // Please see comments in qdr_link_inbound_first_attach_CT's discard flag handling section
+    // to understand why we have added this qdr_link_t suppression.
+    // This suppression will be in place for release 2.0.0 of skupper-router
+    // and the underlying shutdown leak must be fixed and this suppression should be removed for release 2.1.0
+    "qdr_link_t",
+
     0};
 
 //128 has been chosen because many CPUs arch use an
