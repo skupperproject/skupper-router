@@ -1711,26 +1711,24 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
             qdr_delivery_decref(core, initial_dlv,
                                 "qdr_link_inbound_first_attach_CT - discarding action");
 
-        if (discard) {
-            //
-            // Free the terminus objects here.
-            // It is ok to free the terminus objects since their ownership has been passed to us now,
-            //
-            qdr_terminus_free(source);
-            qdr_terminus_free(target);
+        //
+        // Free the terminus objects here.
+        // It is ok to free the terminus objects since their ownership has been passed to us now,
+        //
+        qdr_terminus_free(source);
+        qdr_terminus_free(target);
 
-            //
-            // https://github.com/skupperproject/skupper-router/issues/335
-            // The qdr_link_t cannot be freed here since someone who called qdr_link_first_attach
-            // is still holding a reference to it.
-            // The right approach here would be to add this link to core->open_links
-            // and hope that qdr_core_free() will free this link but currently
-            // the code in qdr_core_first frees all links in core->open_links and then
-            // sets all core actions to discard.
-            // We have temporarily added qdr_link_t to the list of suppressed objects in alloc_pool.c
-            //
-            // DEQ_INSERT_TAIL(core->open_links, link);
-        }
+        //
+        // https://github.com/skupperproject/skupper-router/issues/335
+        // The qdr_link_t cannot be freed here since someone who called qdr_link_first_attach
+        // is still holding a reference to it.
+        // The right approach here would be to add this link to core->open_links
+        // and hope that qdr_core_free() will free this link but currently
+        // the code in qdr_core_first frees all links in core->open_links and then
+        // sets all core actions to discard.
+        // We have temporarily added qdr_link_t to the list of suppressed objects in alloc_pool.c
+        //
+        // DEQ_INSERT_TAIL(core->open_links, link);
 
         return;
     }
