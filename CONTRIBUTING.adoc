@@ -21,13 +21,13 @@ Whenever you want to commit a change to the skupper-router repo, please first cr
 When creating a PR, please use the following commit message pattern
 
 ```
-Fixed #<github-issue-number>: <Commit message>
+Fixes #<github-issue-number> - <Commit message in present tense>
 ```
 
 For example,
 
 ```
-Fixed #90: Fixed code in http2 adaptor that was doing improper q2 related logging
+Fixes #90 - Fix code in http2 adaptor that was doing improper q2 related logging
 ```
 
 In the above commit message, `#90` refers to the github issue - https://github.com/skupperproject/skupper-router/issues/90 (you will need to create an issue if there isn't already one)
