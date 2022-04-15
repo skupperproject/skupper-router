@@ -77,6 +77,7 @@ set(qpid_dispatch_SOURCES
   policy_spec.c
   protocol_adaptor.c
   proton_utils.c
+  posix/symbolization.c
   posix/threading.c
   python_embedded.c
   router_agent.c
@@ -144,6 +145,7 @@ set(qpid_dispatch_LIBRARIES
   ${Proton_Tls_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${rt_lib}
+  -lbfd
   ${CMAKE_DL_LIBS}
   ${Python_LIBRARIES}
   )
