@@ -37,8 +37,8 @@ add_executable(c_unittests
         test_listener_startup.cpp
         test_router_startup.cpp
         test_server.cpp
-        test_terminus.cpp)
-target_link_libraries(c_unittests cpp-stub pthread skupper-router static_accessors_server_c)
+        test_terminus.cpp test_alloc_pool.cpp)
+target_link_libraries(c_unittests cpp-stub pthread skupper-router static_accessors_server_c -lbfd -ldl)
 
 file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf
