@@ -155,7 +155,16 @@ set(qpid_dispatch_LIBRARIES
   ${Proton_Tls_LIBRARIES}
   ${Python_LIBRARIES}
   ${rt_lib}
+  ${CMAKE_DL_LIBS}
+  ${Python_LIBRARIES}
   )
+
+if (dw_lib)
+  set(qpid_dispatch_SOURCES ${qpid_dispatch_SOURCES} posix/symbolization.c)
+  set(qpid_dispatch_LIBRARIES ${qpid_dispatch_LIBRARIES} ${dw_lib})
+else()
+  set(qpid_dispatch_SOURCES ${qpid_dispatch_SOURCES} posix/symbolization_none.c)
+endif()
 
 if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)
