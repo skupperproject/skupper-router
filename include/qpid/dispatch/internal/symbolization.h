@@ -21,6 +21,7 @@
 #define QPID_DISPATCH_SYMBOLIZATION_H
 
 #include <bfd.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 typedef struct qd_backtrace_fileline {
