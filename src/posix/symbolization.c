@@ -62,12 +62,26 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
 
     // loop can be more commonly written using `bfd_map_over_sections` and a callback
     for (struct bfd_section *section = state.abfd->sections; section != NULL; section = section->next) {
-        if ((bfd_section_flags(section) & SEC_ALLOC) == 0) continue;
+        // use preprocessor to handle pre binutils-2.34 API (on CentOS 8)
+#ifdef bfd_get_section_flags
+        flagword flags = bfd_get_section_flags(abfd, section);
+#else
+        flagword flags = bfd_section_flags(section);
+#endif
+        if ((flags & SEC_ALLOC) == 0) continue;
 
+#ifdef bfd_get_section_vma
+        bfd_vma vma = bfd_get_section_vma(abfd, section);
+#else
         bfd_vma vma = bfd_section_vma(section);
+#endif
         if (pc < vma) continue;
 
+#ifdef bfd_get_section_size
+        bfd_size_type size = bfd_get_section_size(section);
+#else
         bfd_size_type size = bfd_section_size(section);
+#endif
         if (pc >= vma + size) continue;
 
         result.found = bfd_find_nearest_line(state.abfd, section, &state.syms, pc - vma, &result.sourcefile,
