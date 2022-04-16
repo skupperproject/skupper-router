@@ -64,14 +64,14 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
     for (struct bfd_section *section = state.abfd->sections; section != NULL; section = section->next) {
         // use preprocessor to handle pre binutils-2.34 API (on CentOS 8)
 #ifdef bfd_get_section_flags
-        flagword flags = bfd_get_section_flags(abfd, section);
+        flagword flags = bfd_get_section_flags(state.abfd, section);
 #else
         flagword flags = bfd_section_flags(section);
 #endif
         if ((flags & SEC_ALLOC) == 0) continue;
 
 #ifdef bfd_get_section_vma
-        bfd_vma vma = bfd_get_section_vma(abfd, section);
+        bfd_vma vma = bfd_get_section_vma(state.abfd, section);
 #else
         bfd_vma vma = bfd_section_vma(section);
 #endif
