@@ -136,7 +136,7 @@ to a subfolder whose name indicates the amount of data the connection handled.
 Split mode also analyzes:
 
 * Each router reboot starts a new router _instance_. Split mode observes the reboots
-and divides the connection data. Connection names inclued the router instance ID.
+and divides the connection data. Connection names include the router instance ID.
 
     A\<instance\>_\<connectionId\>
 
@@ -160,17 +160,17 @@ and divides the connection data. Connection names inclued the router instance ID
 
 Scraper decorates performative display lines with important AMQP values. 
 
-| Performative | Decorations                 |
-|--------------|-----------------------------|
-| open         | [0]                         |
-| close        | [0]                         |
-| begin        | [channel, remoteChannel]    |
-| end          | [channel]                   |
-| attach       | [channel, handle] role linkName (source: src, target: tgt) |
-| detach       | [channel, handle]           |
-| flow         | [channel, handle] (deliveryCount, linkCredit) |
-| transfer     | [channel, handle] (deliveryId) .. [flags] length (settement state)      |
-| disposition  | [channel] (role firstId-lastId settleFlags settleState) |
+| Performative | Decorations                                                         |
+|--------------|---------------------------------------------------------------------|
+| open         | [0]                                                                 |
+| close        | [0]                                                                 |
+| begin        | [channel, remoteChannel]                                            |
+| end          | [channel]                                                           |
+| attach       | [channel, handle] role linkName (source: src, target: tgt)          |
+| detach       | [channel, handle]                                                   |
+| flow         | [channel, handle] (deliveryCount, linkCredit)                       |
+| transfer     | [channel, handle] (deliveryId) .. [flags] length (settlement state) |
+| disposition  | [channel] (role firstId-lastId settleFlags settleState)             |
  
 
 ## Sequence generator
@@ -335,7 +335,7 @@ Each row in this table represents the facts about when a single transfer and its
 | S elapsed | Settlement elapsed time. This is the difference between the accepted disposition log record and the time when the message first entered the system.
 
 Row-by-row it is easiest to read the each line from left to right
-* A0 connecton 11 received the transfer from peer_7.
+* A0 connection 11 received the transfer from peer_7.
 * A0 connection 6 sent the message to D0 connection 4.
 * D0 connection 4 received the message from A0 connection 6.
 

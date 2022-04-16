@@ -63,7 +63,7 @@ How does the router shut down when interrupted with ctrl-C ?
   nulls out and dispatch pointer, and calls qd_dispatch_free().
   It then flushes any remaining content in stdout, disables its 
   SIGINT handler, and sends SIGINT 
-  to itsel, terminating the qdrouterd process.
+  to itself, terminating the qdrouterd process.
 
 .. qd_dispatch_free() +
    calls more freeing functions (see below). Sets the router ID and Area NULL, frees allocated fields in the qd_dispatch_t structure, and frees the structure.

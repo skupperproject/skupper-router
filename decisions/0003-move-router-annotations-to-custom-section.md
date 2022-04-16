@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-The skupper-router includes routing and state meta-data in each message transferred between interior routers. This meta-data is merged into the message annotations section. This is implmentation is both expensive and complicated. In the interest of removing complexity from the router and increasing inter-router throughput, it has been decided to move this meta-data into a custom message section that is prepended to the message.
+The skupper-router includes routing and state meta-data in each message transferred between interior routers. This meta-data is merged into the message annotations section. This implementation is both expensive and complicated. In the interest of removing complexity from the router and increasing inter-router throughput, it has been decided to move this meta-data into a custom message section that is prepended to the message.
 
 ## Decision
 
