@@ -393,7 +393,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
 
     //
     // Given session frame count and max frame size, compute session incoming_capacity
-    //   On 64-bit systems the capacity has no practial limit.
+    //   On 64-bit systems the capacity has no practical limit.
     //   On 32-bit systems the largest default capacity is half the process address space.
     //
     bool is_64bit = sizeof(size_t) == 8;
@@ -417,7 +417,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
                 uint64_t actual_frames = max_32bit_capacity / (uint64_t)config->max_frame_size;
 
                 qd_log(qd->connection_manager->log_source, QD_LOG_WARNING,
-                    "Server configuation for I/O adapter entity name:'%s', host:'%s', port:'%s', "
+                    "Server configuration for I/O adapter entity name:'%s', host:'%s', port:'%s', "
                     "requested maxSessionFrames truncated from %"PRId64" to %"PRId64,
                     config->name, config->host, config->port, ssn_frames, actual_frames);
             }

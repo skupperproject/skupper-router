@@ -253,7 +253,7 @@ class AutoLinkRetryTest(TestCase):
             if not self.success:
                 Timer(self.timer_delay, self.check_auto_link).start()
 
-    def test_auto_link_reattch(self):
+    def test_auto_link_reattach(self):
         long_type = 'io.skupper.router.router.config.autoLink'
         query_command = 'QUERY --type=' + long_type
         output = json.loads(self.run_skmanage(query_command))

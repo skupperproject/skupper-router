@@ -36,7 +36,7 @@
 // exercise the "real" versions of those functions.
 
 
-// overide qd_server_timeout - this test uses ticker_thread instead of proactor
+// override qd_server_timeout - this test uses ticker_thread instead of proactor
 // so this is not needed
 void qd_server_timeout(qd_server_t *server, qd_duration_t duration)
 {

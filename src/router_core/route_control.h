@@ -42,7 +42,7 @@ void qdr_route_check_id_for_deletion_CT(qdr_core_t *core, qdr_conn_identifier_t 
 
 /**
  * Actions to be performed when an auto link detaches.
- * Retries to establishe an auto link that is associated with the passed in link.
+ * Retries to establish an auto link that is associated with the passed in link.
  * Uses the core thread timer API to schedule an auto link retry.
  *
  * @param core Pointer to the core object returned by qd_core()

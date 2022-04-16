@@ -45,7 +45,7 @@ typedef struct qdr_connection_info_t   qdr_connection_info_t;
  * flow updates to be sent across the connection.
  *
  * IMPORTANT: This function will be invoked on the core thread.  It must never block,
- * delay, or do any lenghty computation.
+ * delay, or do any lengthy computation.
  *
  * @param context The context supplied when the callback was registered
  * @param conn The connection object to be activated
@@ -119,7 +119,7 @@ typedef void (*qdr_link_flow_t) (void *context, qdr_link_t *link, int credit);
 /**
  * qdr_link_offer_t callback
  *
- * This function is invoked when the core wishes to inform the remote terminus of an outoing link
+ * This function is invoked when the core wishes to inform the remote terminus of an outgoing link
  * that it is willing and ready to transfer a certain number of deliveries over that link.
  *
  * @param context The context supplied when the callback was registered
@@ -142,7 +142,7 @@ typedef void (*qdr_link_drained_t) (void *context, qdr_link_t *link);
 /**
  * qdr_link_drain_t callback
  *
- * This functino is invoked when the core wishes to inform the remote terminus of a link
+ * This function is invoked when the core wishes to inform the remote terminus of a link
  * that the drain mode of the link has changed.
  *
  * @param context The context supplied when the callback was registered
@@ -160,7 +160,7 @@ typedef void (*qdr_link_drain_t) (void *context, qdr_link_t *link, bool mode);
  * function will call qdr_link_process_deliveries with MIN(limit, available-credit).
  *
  * @param context The context supplied when the callback was registered
- * @param link The link over which deliveries should be transfered
+ * @param link The link over which deliveries should be transferred
  * @param limit The maximum number of deliveries that should be transferred
  * @return The number of deliveries transferred
  */
@@ -175,7 +175,7 @@ extern const uint64_t QD_DELIVERY_MOVED_TO_NEW_LINK;
  * disposition, the core will settle the delivery with that disposition back to the sender.
  *
  * @param context The context supplied when the callback was registered
- * @param link The link over which deliveries should be transfered
+ * @param link The link over which deliveries should be transferred
  * @param delivery The delivery (which contains the message) to be transferred
  * @param settled True iff the delivery is already settled
  * @return The disposition of the delivery to be sent back to the sender, or 0 if no disposition
@@ -197,7 +197,7 @@ typedef int (*qdr_link_get_credit_t) (void *context, qdr_link_t *link);
  * qdr_delivery_update_t callback
  *
  * This function is invoked by the core when a delivery's disposition and settlement are being
- * changed.  This fuction must send the updated delivery state to the remote terminus.
+ * changed.  This function must send the updated delivery state to the remote terminus.
  *
  * @param context The context supplied when the callback was registered
  * @param dlv The delivery being updated
@@ -350,7 +350,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
  * qdr_connection_closed
  *
  * This function must be called when a connection is closed, either cleanly by protocol
- * or uncleanly by lost connectivity.  Once this functino is called, the caller must never
+ * or uncleanly by lost connectivity.  Once this function is called, the caller must never
  * again refer to or use the connection pointer.
  *
  * @param conn The pointer returned by qdr_connection_opened
@@ -452,7 +452,7 @@ void qdr_terminus_free(qdr_terminus_t *terminus);
  *
  * @param terminus The pointer returned by qdr_terminus()
  * @param output The string buffer where the result shall be written
- * @param size Input: the number of bytes availabie in output for writing.  Output: the
+ * @param size Input: the number of bytes available in output for writing.  Output: the
  *             number of bytes remaining after the operation.
  */
 void qdr_terminus_format(qdr_terminus_t *terminus, char *output, size_t *size);
@@ -589,7 +589,7 @@ qd_iterator_t *qdr_terminus_dnp_address(qdr_terminus_t *term);
  * Overwrite the dynamic-node-properties.address in the terminus
  *
  * @param term A qdr_terminus pointer returned by qdr_terminus()
- * @param iter An iterator whos view shall be placed in the dnp.address
+ * @param iter An iterator whose view shall be placed in the dnp.address
  */
 void qdr_terminus_set_dnp_address_iterator(qdr_terminus_t *term, qd_iterator_t *iter);
 
@@ -677,7 +677,7 @@ bool qdr_link_is_routed(const qdr_link_t *link);
 bool qdr_link_strip_annotations_in(const qdr_link_t *link);
 
 /**
- * qdr_link_strip_annotations_oout
+ * qdr_link_strip_annotations_out
  *
  * Indicate whether the link's connection is configured to strip message annotations on outbound messages.
  */
@@ -824,7 +824,7 @@ int qdr_link_process_deliveries(qdr_core_t *core, qdr_link_t *link, int credit);
  * DO NOT call this function from within the link_deliver callback.  Use it only if you must
  * asynchronously complete the sending of the current message.
  *
- * This will typically occur when a message delivered to the protcol adaptor cannot be sent
+ * This will typically occur when a message delivered to the protocol adaptor cannot be sent
  * on the wire due to back-pressure.  In this case, the removal of the back pressure is the
  * stimulus for completing the send of the message.
  *

@@ -26,7 +26,7 @@
 #include <stdarg.h>
 
 /** @file
- * Thread-safe error handling mechansim for dispatch.
+ * Thread-safe error handling mechanism for dispatch.
  *
  * Functions that detect an error should return qd_error_t.
  *
@@ -58,7 +58,7 @@ ENUM_DECLARE(qd_error);
 /**
  * Store thread-local error code and message.
  *@param code Error code. If 0 this is equivalent to calling qd_error_clear()
- *@param ... printf-stlye format and arguments.
+ *@param ... printf-style format and arguments.
  *@return code
  */
 #define qd_error(code, ...) qd_error_impl(code, __FILE__, __LINE__, __VA_ARGS__)

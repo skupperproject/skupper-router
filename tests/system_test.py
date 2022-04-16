@@ -888,7 +888,7 @@ class Tester:
     def _next_port(self) -> int:
         """Reads and increments value stored in self.port_file, under an exclusive file lock.
 
-        When a lock cannot be acquired immediately, fcntl.lockf blocks.
+        When a lock cannot be acquired immediately, fcntl.flock blocks.
 
         Failure possibilities:
             File locks may not work correctly on network filesystems. We still should be no worse off than we were.

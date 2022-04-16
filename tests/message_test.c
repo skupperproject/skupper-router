@@ -900,7 +900,7 @@ static void free_stream_data_list(qd_message_t *msg_in)
 static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatten)
 {
     // Fill a message with n chunks of vbin chunk_size body data.
-    // Then test by retrieving n chunks from a message copy and verifing.
+    // Then test by retrieving n chunks from a message copy and verifying.
     //
     // 'flatten' messes with message buffers after they have been composed.
     // * Not flattened means that vbin headers stand alone in separate buffers and
@@ -931,7 +931,7 @@ static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatte
         assert(FLAT_BUF_SIZE > (n_chunks * (chunk_size
                                             // per-chunk vbin descriptor overhead:
                                             + (chunk_size > 511 ? 8 : 5))
-                                + 100));  // leave plenty of allocaton for header
+                                + 100));  // leave plenty of allocation for header
 
         // compress message into flatten buffer
         size_t flat_size = flatten_bufs(MSG_CONTENT(msg));
@@ -985,7 +985,7 @@ static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatte
                 if (n_used > 0) {
                     for (size_t ii=0; ii<n_used; ii++) {
                         char e_char = (char)(j + 1);   // expected char in payload
-                        // Verify the content of the bufffer
+                        // Verify the content of the buffer
                         for (uint32_t idx=0; idx < buffs[ii].size; idx++) {
                             char actual = buffs[ii].bytes[buffs[ii].offset + idx];
                             if (e_char != actual) {

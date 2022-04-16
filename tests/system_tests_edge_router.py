@@ -1264,7 +1264,7 @@ class RouterTest(TestCase):
 
         outs = self.run_skstat(['--all-routers', '-nv'],
                                address=self.routers[0].addresses[0])
-        # 5 occurences including section headers
+        # 5 occurrences including section headers
         self.assertEqual(outs.count("INT.A"), 5)
         self.assertEqual(outs.count("INT.B"), 5)
 

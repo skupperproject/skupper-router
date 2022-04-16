@@ -268,7 +268,7 @@ void qd_timer_cancel(qd_timer_t *timer)
         sys_cond_wait(timer->condition, lock);
     }
 
-    // timer may have been resheduled before wait returns
+    // timer may have been rescheduled before wait returns
     const bool need_decref = timer_cancel_LH(timer);
     timer->state = QD_TIMER_STATE_IDLE;
     if (need_decref)  // was on scheduled list

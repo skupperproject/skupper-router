@@ -377,7 +377,7 @@ int qdr_connection_process(qdr_connection_t *conn)
             sys_mutex_lock(conn->work_lock);
             link_work = DEQ_HEAD(link->work_list);
             if (link_work) {
-                // link_work ref transfered to local link_work
+                // link_work ref transferred to local link_work
                 DEQ_REMOVE_HEAD(link->work_list);
                 link_work->processing = true;
             }
@@ -432,7 +432,7 @@ int qdr_connection_process(qdr_connection_t *conn)
 
                 sys_mutex_lock(conn->work_lock);
                 if (link_work->work_type == QDR_LINK_WORK_DELIVERY && link_work->value > 0 && !link->detach_received) {
-                    // link_work ref transfered from link_work to work_list
+                    // link_work ref transferred from link_work to work_list
                     DEQ_INSERT_HEAD(link->work_list, link_work);
                     link_work->processing = false;
                     link_work = 0; // Halt work processing
@@ -440,7 +440,7 @@ int qdr_connection_process(qdr_connection_t *conn)
                     qdr_link_work_release(link_work);
                     link_work = DEQ_HEAD(link->work_list);
                     if (link_work) {
-                        // link_work ref transfered to local link_work
+                        // link_work ref transferred to local link_work
                         DEQ_REMOVE_HEAD(link->work_list);
                         link_work->processing = true;
                     }

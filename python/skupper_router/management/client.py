@@ -201,7 +201,7 @@ class Node:
 
         def __init__(self, node, attribute_names, results):
             """
-            @param response: the respose message to a query.
+            @param response: the response message to a query.
             """
             self.node = node
             self.attribute_names = attribute_names
@@ -294,10 +294,10 @@ class Node:
 
             offset += request_count
 
-        query_reponse = Node.QueryResponse(self,
-                                           response_attr_names,
-                                           response_results)
-        return query_reponse
+        query_response = Node.QueryResponse(self,
+                                            response_attr_names,
+                                            response_results)
+        return query_response
 
     def create(self, attributes=None, type=None, name=None):
         """
