@@ -124,4 +124,6 @@ void qd_symbolize_finalize()
         bfd_close(state.abfd);
     }
     state.abfd = NULL;
+
+    state.libbfd_inited = false;
 }
