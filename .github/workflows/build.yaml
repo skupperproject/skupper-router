@@ -464,10 +464,12 @@ jobs:
       - name: Zero ccache stats
         run: ccache -z
 
+      # PROTON-2473: either install `openssl1.1-devel` compat version, or build with `-Wno-error=deprecated-declarations`
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
         run: >
           cmake "${{github.workspace}}/qpid-proton" \
+            '-DCMAKE_C_FLAGS="-Wno-error=deprecated-declarations"' \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             ${ProtonCMakeExtraArgs}
