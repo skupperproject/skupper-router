@@ -307,7 +307,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         container: ['fedora']
-        containerTag: ['35']
+        containerTag: ['36']
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
