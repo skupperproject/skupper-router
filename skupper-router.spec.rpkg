@@ -51,6 +51,7 @@ URL:           https://skupper.io
 VCS:           {{{ git_dir_vcs }}}
 
 Requires: python3
+Requires: skupper-router-common == %{version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
