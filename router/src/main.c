@@ -199,7 +199,7 @@ static void daemon_process(const char *config_path, const char *python_pkgdir, b
                 // Populating fully qualified config file name
                 const char *path_sep = !strcmp("/", cur_path) ? "" : "/";
                 size_t cpf_len = strlen(cur_path) + strlen(path_sep) + strlen(config_path) + 1;
-                config_path_full = calloc(cpf_len, sizeof(char));
+                config_path_full = qd_calloc(cpf_len, sizeof(char));
                 snprintf(config_path_full, cpf_len, "%s%s%s",
                          cur_path, path_sep, config_path);
 
