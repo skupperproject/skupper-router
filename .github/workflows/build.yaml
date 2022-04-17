@@ -465,7 +465,7 @@ jobs:
         working-directory: ${{env.ProtonBuildDir}}
         run: >
           cmake "${{github.workspace}}/qpid-proton" \
-            "-DCMAKE_CFLAGS=$CFLAGS -Wno-error=deprecated-declarations" '
+            '-DCMAKE_C_FLAGS="$CFLAGS -Wno-error=deprecated-declarations"' \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             ${ProtonCMakeExtraArgs}
