@@ -30,6 +30,9 @@ extern "C" {
 
 #include <cstdio>
 
+namespace test_backtrace
+{
+
 const int STACK_DEPTH = 10;
 
 struct item {
@@ -54,8 +57,6 @@ const char *functionname;
 unsigned int line;
 bool found = false;
 
-
-
 // static void find_address_in_section(bfd *abfd, asection *section, void *data __attribute__ ((__unused__)) )
 //{
 //     printf("looping\n");
@@ -63,12 +64,9 @@ bool found = false;
 //
 // }
 
-
-
 /**
  * Run this in between ; bfd_close();
  */
-
 
 void mymapaddr()
 {
@@ -76,29 +74,29 @@ void mymapaddr()
     printf("found: %s %s %d", res.sourcefile, res.funcname, res.line);
 }
 
-    //
-    //    if (!found) {
-    //        printf("[%s] \?\?() \?\?:0\n",addr[naddr-1]);
-    //    } else {
-    //        const char *name;
-    //
-    //        name = functionname;
-    //        if (name == NULL || *name == '\0')
-    //            name = "??";
-    //        if (filename != NULL) {
-    //            char *h;
-    //
-    //            h = strrchr(filename, '/');
-    //            if (h != NULL)
-    //                filename = h + 1;
-    //        }
-    //
-    //        printf("\t%s:%u\t", filename ? filename : "??",
-    //               line);
-    //
-    //        printf("%s()\n", name);
-    //
-    //    }
+//
+//    if (!found) {
+//        printf("[%s] \?\?() \?\?:0\n",addr[naddr-1]);
+//    } else {
+//        const char *name;
+//
+//        name = functionname;
+//        if (name == NULL || *name == '\0')
+//            name = "??";
+//        if (filename != NULL) {
+//            char *h;
+//
+//            h = strrchr(filename, '/');
+//            if (h != NULL)
+//                filename = h + 1;
+//        }
+//
+//        printf("\t%s:%u\t", filename ? filename : "??",
+//               line);
+//
+//        printf("%s()\n", name);
+//
+//    }
 
 void printbt(item &item)
 {
@@ -107,7 +105,6 @@ void printbt(item &item)
 
     printf("Leak: %s type: %s address: %p\n", buf, "xxx", (void *) (&item));
     for (size_t i = 0; i < item.backtrace_size; i++) {
-
     }
     printf("\n");
     free(strings);
@@ -123,3 +120,4 @@ TEST_CASE("backtrace")
 
     mymapaddr();
 }
+}  // namespace test_backtrace
