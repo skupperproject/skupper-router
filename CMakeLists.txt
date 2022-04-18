@@ -71,7 +71,7 @@ if(NOT DEFINED VERSION)
          set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
        else()
          set(QPID_DISPATCH_VERSION "UNKNOWN")
-         endif('${POS}' STREQUAL '-1')
+       endif('${POS}' STREQUAL '-1')
    else(Git_FOUND)
        # Git executable was not available, we will not be able to determine the version, just set it to "UNKNOWN"
        set(QPID_DISPATCH_VERSION "UNKNOWN")
