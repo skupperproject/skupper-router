@@ -151,7 +151,7 @@ size_t qd_hash_size(qd_hash_t *h)
 }
 
 
-// ownership of key is transfered to the qd_hash_item_t
+// ownership of key is transferred to the qd_hash_item_t
 static qd_hash_item_t *qd_hash_internal_insert(qd_hash_t *h, bucket_t *bucket, unsigned char *key, int *exists, qd_hash_handle_t **handle)
 {
     qd_hash_item_t *item = DEQ_HEAD(bucket->items);

@@ -919,7 +919,7 @@ static void qd_connection_free(qd_connection_t *qd_conn)
 }
 
 
-static void timeout_on_handhsake(void *context, bool discard)
+static void timeout_on_handshake(void *context, bool discard)
 {
     if (discard)
         return;
@@ -941,7 +941,7 @@ static void startup_timer_handler(void *context)
     qd_connection_t *ctx = (qd_connection_t*) context;
     qd_timer_free(ctx->timer);
     ctx->timer = 0;
-    qd_connection_invoke_deferred(ctx, timeout_on_handhsake, context);
+    qd_connection_invoke_deferred(ctx, timeout_on_handshake, context);
 }
 
 static void qd_increment_conn_index(qd_connection_t *ctx)

@@ -27,7 +27,7 @@
  * that are due for deletion should be removed with qd_entity_cache_remove
  * *before* they are deleted.
  *
- * The cache is pure C, entites can be added to it before the python agent has
+ * The cache is pure C, entities can be added to it before the python agent has
  * started.
  */
 

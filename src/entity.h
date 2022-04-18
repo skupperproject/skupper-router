@@ -29,7 +29,7 @@
  * @{
  */
 
-/** A managed entitie's attributes */
+/** A managed entity's attributes */
 typedef struct qd_entity_t qd_entity_t;
 
 /** True if the entity has this attribute. */
@@ -93,7 +93,7 @@ qd_error_t qd_entity_set_boolp(qd_entity_t *entity, const char *attribute, const
 qd_error_t qd_entity_clear(qd_entity_t *entity, const char *attribute);
 
 /**
- * Set the attribute to an empty list. Futher qd_entity_set* calls for the attribute
+ * Set the attribute to an empty list. Further qd_entity_set* calls for the attribute
  * will append values to the list.
  */
 qd_error_t qd_entity_set_list(qd_entity_t *entity, const char *attribute);

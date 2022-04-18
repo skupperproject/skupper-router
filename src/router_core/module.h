@@ -22,7 +22,7 @@
 #include "router_core_private.h"
 
 /**
- * Callback to test whether a moduel should be enabled.
+ * Callback to test whether a module should be enabled.
  *
  * If this gate returns true, the init callback will be invoked at core startup
  * and the final callback will be invoked at core shutdown.  If the gate returns

@@ -1211,7 +1211,7 @@ void qdr_delivery_push_CT(qdr_core_t *core, qdr_delivery_t *dlv)
 //
 static bool qdr_delivery_set_remote_delivery_state_CT(qdr_delivery_t *dlv, uint64_t remote_dispo, qd_delivery_state_t *remote_state)
 {
-    // old state, has not been transfered to peer?
+    // old state, has not been transferred to peer?
     if (dlv->remote_state) {
         qd_delivery_state_free(dlv->remote_state);
     }

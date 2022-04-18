@@ -1184,7 +1184,7 @@ static void free_bridge_config(qd_tcp_bridge_t *config)
     if (sys_atomic_dec(&config->ref_count) > 1) return;
 
     qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
-           "Deleted TCP bridge configuation '%s' for address %s, %s, siteId %s. "
+           "Deleted TCP bridge configuration '%s' for address %s, %s, siteId %s. "
            "Connections opened:%"PRIu64", closed:%"PRIu64". Bytes in:%"PRIu64", out:%"PRIu64,
            config->name, config->address, config->host_port, config->site_id,
            config->connections_opened, config->connections_closed, config->bytes_in, config->bytes_out);

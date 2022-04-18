@@ -89,7 +89,7 @@ class PolicyKeys:
     # policy stats controlled by C code but referenced by settings
     KW_CSTATS                   = "denialCounts"
 
-    # Username subsitituion token in link source and target names and patterns
+    # Username substitution token in link source and target names and patterns
     KC_TOKEN_USER               = "${user}"
 
     # Link target/source name wildcard tuple keys
@@ -357,7 +357,7 @@ class PolicyCompiler:
                     for v in val:
                         vcount = v.count(utoken)
                         if vcount > 1:
-                            errors.append("Policy vhost '%s' user group '%s' policy key '%s' item '%s' contains multiple user subtitution tokens" %
+                            errors.append("Policy vhost '%s' user group '%s' policy key '%s' item '%s' contains multiple user substitution tokens" %
                                           (vhostname, usergroup, key, v))
                             return False
                         elif vcount == 1:

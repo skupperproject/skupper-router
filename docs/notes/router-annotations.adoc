@@ -49,7 +49,7 @@ to avoid unnecessary buffering of the message before forwarding it.
 
 == Implementation Goals
 
-The implemention should prioritize minimizing the overhead of parsing
+The implementation should prioritize minimizing the overhead of parsing
 and composing the per-message meta-data. This is necessary because
 each router along the forwarding path needs to read, process and
 update the meta data on the fly.

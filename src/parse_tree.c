@@ -198,7 +198,7 @@ static bool normalize_pattern(qd_parse_tree_type_t type, char *pattern)
 //
 // The pattern is broken up into tokens delimited by a separation character and
 // stored in a directed tree graph.  Common pattern prefixes are merged.  This
-// allows the lookup alogrithm to quickly isolate those sub-trees that match a
+// allows the lookup algorithm to quickly isolate those sub-trees that match a
 // given input string.
 // For example, given the patterns:
 //     a.b.c.<...>

@@ -89,7 +89,7 @@ class Router():
         # conn_log_lines - count of log lines per connection
         self.conn_log_lines = {}
 
-        # conn_transfer_bytes - count of bytes transfered over this connection
+        # conn_transfer_bytes - count of bytes transferred over this connection
         self.conn_xfer_bytes = {}
 
         # connection_to_frame_map

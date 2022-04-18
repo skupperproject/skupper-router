@@ -83,7 +83,7 @@ class DistributedQueueTest(system_test.TestCase):  # pylint: disable=too-many-pu
             # Verify each broker handled a reasonable share of the messages.
             self.assert_fair([q.msgTotalEnqueues for q in qs])
 
-        def test_distrbuted_queue(self):
+        def test_distributed_queue(self):
             """Create a distributed queue with N routers and N brokers.
             Each router is connected to all the brokers."""
             for q in self.qpidds:

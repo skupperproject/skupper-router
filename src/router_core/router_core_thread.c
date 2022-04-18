@@ -25,7 +25,7 @@
 /**
  * Creates a thread that is dedicated to managing and using the routing table.
  * The purpose of moving this function into one thread is to remove the widespread
- * lock contention that happens with synchrounous multi-threaded routing.
+ * lock contention that happens with synchronous multi-threaded routing.
  *
  * This module owns, manages, and uses the router-link list and the address hash table
  */

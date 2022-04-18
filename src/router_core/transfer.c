@@ -225,7 +225,7 @@ int qdr_link_process_deliveries(qdr_core_t *core, qdr_link_t *link, int credit)
                         }
                     } else {
                         //
-                        // This delivery is in the process of being transfered
+                        // This delivery is in the process of being transferred
                         // to a different link, possibly on a entirely
                         // different connection. The delivery must be
                         // disassociated with this link.  Depending on the

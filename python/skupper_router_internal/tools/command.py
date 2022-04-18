@@ -105,10 +105,10 @@ def add_connection_options(parser):
     group.add_argument("--ssl-trustfile", metavar="TRUSTED-CA-DB",
                        help="Trusted Certificate Authority Database file (PEM Format)")
     group.add_argument("--ssl-password", metavar="PASSWORD",
-                       help="Certificate password, will be prompted if not specifed.")
+                       help="Certificate password, will be prompted if not specified.")
     # Use the --ssl-password-file option to avoid having the --ssl-password in history or scripts.
     group.add_argument("--ssl-password-file", metavar="SSL-PASSWORD-FILE",
-                       help="Certificate password, will be prompted if not specifed.")
+                       help="Certificate password, will be prompted if not specified.")
 
     group.add_argument("--sasl-mechanisms", metavar="SASL-MECHANISMS",
                        help="Allowed sasl mechanisms to be supplied during the sasl handshake.")
@@ -270,7 +270,7 @@ def opts_sasl(opts):
 
 def opts_ssl_domain(opts, mode=SSLDomain.MODE_CLIENT):
     """Return proton.SSLDomain from command line options or None if no SSL options specified.
-    @param opts: Parsed optoins including connection_options()
+    @param opts: Parsed options including connection_options()
     """
 
     url = opts_url(opts)

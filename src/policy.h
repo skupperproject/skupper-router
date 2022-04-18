@@ -210,7 +210,7 @@ bool qd_policy_approve_link_name(const char *username,
  * Note that the parse_tree may store an 'optimised' pattern for a given
  * pattern. Thus the patterns a user puts in may collide with existing
  * patterns even though the text of the host patterns is different.
- * This function does not allow new patterns with thier optimizations 
+ * This function does not allow new patterns with their optimizations
  * to overwrite existing patterns that may have been optimised.
  * @param[in] policy qd_policy_t
  * @param[in] hostPattern the hostname pattern with possible parse_tree wildcards

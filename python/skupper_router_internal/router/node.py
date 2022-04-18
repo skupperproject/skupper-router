@@ -296,7 +296,7 @@ class NodeTracker:
 
         ##
         # Check the mobile sequence.  Send a mobile-address-request if we are
-        # behind the advertized sequence.
+        # behind the advertised sequence.
         ##
         if node.mobile_address_sequence < mobile_seq:
             node.mobile_address_request()

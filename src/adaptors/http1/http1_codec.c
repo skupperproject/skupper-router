@@ -208,7 +208,7 @@ static void encoder_reset(struct encoder_t *e);
 
 
 // Create a new request state - this is done when a new http request occurs
-// Keep oldest outstanding tranfer at DEQ_HEAD(conn->hrs_queue)
+// Keep oldest outstanding transfer at DEQ_HEAD(conn->hrs_queue)
 static h1_codec_request_state_t *h1_codec_request_state(h1_codec_connection_t *conn)
 {
     h1_codec_request_state_t *hrs = new_h1_codec_request_state_t();
@@ -765,7 +765,7 @@ static bool process_headers_done(h1_codec_connection_t *conn, struct decoder_t *
             // the final encoding, the message body length cannot be determined
             // reliably; the server MUST respond with the 400 (Bad Request)
             // status code and then close the connection.
-            decoder->error_msg = "Non-chunked Tranfer-Encoding in request";
+            decoder->error_msg = "Non-chunked Transfer-Encoding in request";
             decoder->error = HTTP1_STATUS_BAD_REQ;
             return false;
         }
@@ -1284,7 +1284,7 @@ void *h1_codec_connection_get_context(h1_codec_connection_t *conn)
 // Push inbound network data into the http1 protocol engine.
 //
 // All of the hrs_rx callback will occur in the context of this call. This
-// returns zero on success otherwise an error code.  Any error occuring during
+// returns zero on success otherwise an error code.  Any error occurring during
 // a callback will be reflected in the return value of this function.
 //
 int h1_codec_connection_rx_data(h1_codec_connection_t *conn, qd_buffer_list_t *data, size_t len)

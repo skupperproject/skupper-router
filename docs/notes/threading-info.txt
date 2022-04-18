@@ -182,7 +182,7 @@ pn_delivery_t.
 It is important to understand that pn_delivery_t's - and by extension
 qdr_delivery_t's - are "owned" by the parent pn_link_t
 (qdr_link_t). This means that a delivery object cannot be moved from
-an inbound link to an outbound link - which seems counterintiutive to
+an inbound link to an outbound link - which seems counterintuitive to
 the process of routing a message.
 
 In reality when an inbound delivery is routed, the router create a new
@@ -191,7 +191,7 @@ are also represented by their own pn_delivery_t and qdr_delivery_t
 instances.
 
 The core thread links the inbound and outbound qdr_delivery_t's
-together.  This makes it trival to determine the "peer" of any
+together.  This makes it trivial to determine the "peer" of any
 delivery that is being forwarded.
 
 Note that a single inbound qdr_delivery_t may be linked to
@@ -260,7 +260,7 @@ The qd_message_t maintains state that corresponds to its associated
 qdr_delivery_t.  This includes:
 
  *) a cursor into the message body
- *) header value overrides that apply only to the assoicated delivery.
+ *) header value overrides that apply only to the associated delivery.
 
 Each delivery requires its own cursor into the message body.
 
@@ -447,7 +447,7 @@ storing a reference to it.
 Inter router connections are more involved.  For these connections the
 router will establish one inter-router link for each supported message
 priority (as described above).  Therefore inter-router connections are
-the only connections supporting more than one priorty link.
+the only connections supporting more than one priority link.
 
 3) The handling of Proton session creation is totally reserved to the
 worker thread.  The core does not deal with session management at all.

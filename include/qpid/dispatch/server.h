@@ -433,7 +433,7 @@ void qd_connection_set_context(qd_connection_t *conn, void *context);
 /**
  * Get the user context from a connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return The user context stored with the connection.
  */
 void *qd_connection_get_context(qd_connection_t *conn);
@@ -442,7 +442,7 @@ void *qd_connection_get_context(qd_connection_t *conn);
 /**
  * Get the configuration context (connector or listener) for this connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return The context supplied at the creation of the listener or connector.
  */
 void *qd_connection_get_config_context(qd_connection_t *conn);
@@ -451,7 +451,7 @@ void *qd_connection_get_config_context(qd_connection_t *conn);
 /**
  * Set the link context for a connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @param context Link context to be stored with the connection.
  */
 void qd_connection_set_link_context(qd_connection_t *conn, void *context);
@@ -460,7 +460,7 @@ void qd_connection_set_link_context(qd_connection_t *conn, void *context);
 /**
  * Get the link context from a connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return The link context stored with the connection.
  */
 void *qd_connection_get_link_context(qd_connection_t *conn);
@@ -494,7 +494,7 @@ void qd_server_activate(qd_connection_t *conn);
 /**
  * Get the wrapped proton-engine connection object.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return The proton connection object.
  */
 pn_connection_t *qd_connection_pn(qd_connection_t *conn);
@@ -503,7 +503,7 @@ pn_connection_t *qd_connection_pn(qd_connection_t *conn);
 /**
  * Get the direction of establishment for this connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return true if connection came through a listener, false if through a connector.
  */
 bool qd_connection_inbound(qd_connection_t *conn);
@@ -512,7 +512,7 @@ bool qd_connection_inbound(qd_connection_t *conn);
 /**
  * Get the connection id of a connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return The connection_id associated with the connection.
  */
 uint64_t qd_connection_connection_id(qd_connection_t *conn);
@@ -521,7 +521,7 @@ uint64_t qd_connection_connection_id(qd_connection_t *conn);
 /**
  * Get the configuration that was used in the setup of this connection.
  *
- * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN
  * @return A pointer to the server configuration used in the establishment of this connection.
  */
 const qd_server_config_t *qd_connection_config(const qd_connection_t *conn);

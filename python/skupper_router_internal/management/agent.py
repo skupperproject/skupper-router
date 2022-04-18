@@ -198,7 +198,7 @@ class EntityAdapter(SchemaEntity):
         return bool(self._implementations)
 
     def _add_implementation(self, impl):
-        """Add an implementaiton object to use to refresh our attributes"""
+        """Add an implementation object to use to refresh our attributes"""
         self._implementations.append(impl)
 
     def create(self):

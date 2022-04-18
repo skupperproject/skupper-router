@@ -71,7 +71,7 @@ static qd_message_t *qdcm_edge_create_address_dlv(qdr_core_t *core, qdr_address_
     qd_compose_insert_bool(body, insert_addr);
     qd_compose_end_list(body);
 
-    // Finally, compose and retuen the message so it can be sent out.
+    // Finally, compose and return the message so it can be sent out.
     qd_message_compose_3(msg, fld, body, true);
 
     qd_compose_free(body);
@@ -214,7 +214,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
             if (qd_bitmask_cardinality(addr->rnodes) == 0) {
                 qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
                 //
-                // Every inlink that has an edge context must be informed of the appearence of this address.
+                // Every inlink that has an edge context must be informed of the appearance of this address.
                 //
                 while (inlink) {
                     if(inlink->link->edge_context != 0) {
@@ -235,7 +235,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
             //
             qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
             //
-            // Every inlink that has an edge context must be informed of the appearence of this address.
+            // Every inlink that has an edge context must be informed of the appearance of this address.
             //
             while (inlink) {
                 if(inlink->link->edge_context != 0) {
@@ -261,7 +261,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
             if (qd_bitmask_cardinality(addr->rnodes) == 0) {
                 qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
                 //
-                // Every inlink that has an edge context must be informed of the disappearence of this address.
+                // Every inlink that has an edge context must be informed of the disappearance of this address.
                 //
                 while (inlink) {
                     if(inlink->link->edge_context != 0) {
