@@ -77,7 +77,14 @@ if(NOT DEFINED VERSION)
        set(QPID_DISPATCH_VERSION "UNKNOWN")
    endif(Git_FOUND)
 else()
-  set(QPID_DISPATCH_VERSION ${VERSION})
+   # What if VERSION is defined but someone passed in an empty value for VERSION? Deal with that case here.
+   string(STRIP ${VERSION} VERSION)
+   if (VERSION STREQUAL "")
+      set(QPID_DISPATCH_VERSION "UNKNOWN")
+   else()
+      set(QPID_DISPATCH_VERSION ${VERSION})
+   endif(VERSION STREQUAL "")  
+  
 endif()
 
 message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")
