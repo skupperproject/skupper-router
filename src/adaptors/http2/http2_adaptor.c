@@ -2080,7 +2080,6 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
             conn->pn_raw_conn = pn_raw_connection();
             pn_raw_connection_set_context(conn->pn_raw_conn, conn);
             pn_proactor_raw_connect(qd_server_proactor(conn->server), conn->pn_raw_conn, conn->config->host_port);
-            qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Called pn_proactor_raw_connect to %s", conn->conn_id, conn->config->host_port);
         }
         else {
             // TLS was not configured successfully using the details in the connector and SSLProfile.
@@ -2967,7 +2966,7 @@ static void handle_disconnected(qdr_http2_connection_t* conn)
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
 
     if (conn->pn_raw_conn) {
-        qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Setting conn->pn_raw_conn=0", conn->conn_id);
+        qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] handle_disconnected Setting conn->pn_raw_conn=0", conn->conn_id);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
         conn->pn_raw_conn = 0;
     }
@@ -3010,10 +3009,21 @@ static void egress_conn_timer_handler(void *context)
 {
     qdr_http2_connection_t* conn = (qdr_http2_connection_t*) context;
 
-    if (conn->pn_raw_conn || conn->connection_established)
-        return;
+    // Protect with the lock when accessing conn->pn_raw_conn
+    sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
 
-    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Running egress_conn_timer_handler", conn->conn_id);
+    //
+    // If there is already a conn->pn_raw_conn, don't try to connect again.
+    //
+    if (conn->pn_raw_conn) {
+        sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+        return;
+    }
+
+    sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+
+    if (conn->connection_established)
+        return;
 
     if (!conn->ingress) {
         qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] - Egress_conn_timer_handler - Trying to establish outbound connection", conn->conn_id);
