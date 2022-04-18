@@ -108,10 +108,11 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
 
         // cleanup outstanding requests
         //
-        if (hconn->type == HTTP1_CONN_SERVER)
+        if (hconn->type == HTTP1_CONN_SERVER) {
             qdr_http1_server_conn_cleanup(hconn);
-        else
+        } else {
             qdr_http1_client_conn_cleanup(hconn);
+        }
 
         h1_codec_connection_free(hconn->http_conn);
         if (rconn) {
@@ -683,12 +684,16 @@ static void qd_http1_adaptor_final(void *adaptor_context)
     qd_http_listener_t *li = DEQ_HEAD(adaptor->listeners);
     while (li) {
         DEQ_REMOVE_HEAD(qdr_http1_adaptor->listeners);
+        plog_end_record(li->plog);
+        li->plog = 0;
         qd_http_listener_decref(li);
         li = DEQ_HEAD(adaptor->listeners);
     }
     qd_http_connector_t *ct = DEQ_HEAD(adaptor->connectors);
     while (ct) {
         DEQ_REMOVE_HEAD(qdr_http1_adaptor->connectors);
+        plog_end_record(ct->plog);
+        ct->plog = 0;
         qd_http_connector_decref(ct);
         ct = DEQ_HEAD(adaptor->connectors);
     }

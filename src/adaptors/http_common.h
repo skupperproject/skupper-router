@@ -75,6 +75,7 @@ DEQ_DECLARE(qd_http_listener_t, qd_http_listener_list_t);
 
 qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_server_event_handler_t handler);
 void qd_http_listener_decref(qd_http_listener_t* li);
+inline static void qd_http_listener_incref(qd_http_listener_t *li) { sys_atomic_inc(&li->ref_count); }
 
 typedef struct qd_http_connector_t qd_http_connector_t;
 struct qd_http_connector_t {
@@ -91,6 +92,7 @@ DEQ_DECLARE(qd_http_connector_t, qd_http_connector_list_t);
 
 qd_http_connector_t *qd_http_connector(qd_server_t *server);
 void qd_http_connector_decref(qd_http_connector_t* c);
+inline static void qd_http_connector_incref(qd_http_connector_t *c) { sys_atomic_inc(&c->ref_count); }
 
 
 

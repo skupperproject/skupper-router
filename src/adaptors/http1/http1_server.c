@@ -645,6 +645,9 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                 hconn->server.reconnect_pause += RETRY_PAUSE_MSEC;
         }
 
+        plog_end_record(hconn->plog);
+        hconn->plog = 0;
+
         // prevent core activation
         sys_mutex_lock(qdr_http1_adaptor->lock);
         hconn->raw_conn = 0;
