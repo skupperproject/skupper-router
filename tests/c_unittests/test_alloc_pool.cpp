@@ -62,7 +62,11 @@ void a_calls_b(item &item)
 TEST_CASE("qd_symbolize_backtrace_line")
 {
     const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) probe);
-    printf("found: %s %s %d", res.sourcefile, res.funcname, res.line);
+    REQUIRE(res.found);
+    if(!res.found) {
+        qd_symbolize_finalize();
+        return;
+    };
     CHECK(res.sourcefile == __FILE__);
     CHECK(res.funcname == "probe");
     CHECK(res.line == probe_line);
