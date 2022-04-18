@@ -33,7 +33,7 @@ typedef struct qd_backtrace_fileline {
 
 void qd_symbolize_finalize();
 
-void print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc);
+void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc);
 qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc);
 
 #endif  // QPID_DISPATCH_SYMBOLIZATION_H

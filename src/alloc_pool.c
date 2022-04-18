@@ -646,7 +646,7 @@ void qd_alloc_finalize(void)
                     fprintf(dump_file, "Leak: %s type: %s address: %p\n",
                             buf, desc->type_name, (void *)(&item[1]));
                     for (int i = 0; i < item->backtrace_size; i++)
-                        print_symbolized_backtrace_line(dump_file, strings[i], i, item->backtrace[i]);
+                        qd_print_symbolized_backtrace_line(dump_file, strings[i], i, item->backtrace[i]);
                     fprintf(dump_file, "\n");
                     last_leak = desc->type_name;
                 }
