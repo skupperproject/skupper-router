@@ -60,7 +60,22 @@ else()
 endif()
 
 if(NOT DEFINED VERSION)
-  set(QPID_DISPATCH_VERSION "UNKNOWN")
+  # Version was not provided. First check to see if git is avaialble
+  find_package(Git)
+   if(Git_FOUND)
+      execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty=-modified --always OUTPUT_VARIABLE DEFAULT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+      # You might sometimes get a fatal error when running the above command (when this is not a git repo).
+      string(FIND ${DEFAULT_VERSION} "fatal" POS)
+      if ('${POS}' STREQUAL '-1')
+         # 'fatal' was not found in the output, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
+         set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
+       else()
+         set(QPID_DISPATCH_VERSION "UNKNOWN")
+         endif('${POS}' STREQUAL '-1')
+   else(Git_FOUND)
+       # Git executable was not available, we will not be able to determine the version, just set it to "UNKNOWN"
+       set(QPID_DISPATCH_VERSION "UNKNOWN")
+   endif(Git_FOUND)
 else()
   set(QPID_DISPATCH_VERSION ${VERSION})
 endif()
