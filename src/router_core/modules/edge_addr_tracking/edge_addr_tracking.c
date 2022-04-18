@@ -101,30 +101,33 @@ static void qdrc_address_endpoint_first_attach(void              *bind_context,
 {
     qdr_addr_tracking_module_context_t *bc = (qdr_addr_tracking_module_context_t *) bind_context;
 
-    qdr_addr_endpoint_state_t *endpoint_state = new_qdr_addr_endpoint_state_t();
-
-    ZERO(endpoint_state);
-    endpoint_state->endpoint  = endpoint;
-    endpoint_state->mc        = bc;
-    endpoint_state->conn      = qdrc_endpoint_get_connection_CT(endpoint);
-
-
-    DEQ_INSERT_TAIL(bc->endpoint_state_list, endpoint_state);
-
     //
     // The link to hard coded address QD_TERMINUS_EDGE_ADDRESS_TRACKING should be created only if this is a receiver link
     // and if this link is created inside the QDR_ROLE_EDGE_CONNECTION connection.
     //
-    if (qdrc_endpoint_get_direction_CT(endpoint) == QD_OUTGOING && qdrc_endpoint_get_connection_CT(endpoint)->role == QDR_ROLE_EDGE_CONNECTION) {
+    qdr_connection_role_t conn_role = qdrc_endpoint_get_connection_CT(endpoint)->role;
+    if (conn_role == QDR_ROLE_EDGE_CONNECTION && qdrc_endpoint_get_direction_CT(endpoint) == QD_OUTGOING) {
+
+        qdr_addr_endpoint_state_t *endpoint_state = new_qdr_addr_endpoint_state_t();
+        ZERO(endpoint_state);
+        endpoint_state->endpoint  = endpoint;
+        endpoint_state->mc        = bc;
+        endpoint_state->conn      = qdrc_endpoint_get_connection_CT(endpoint);
+        DEQ_INSERT_TAIL(bc->endpoint_state_list, endpoint_state);
         *link_context = endpoint_state;
         qdrc_endpoint_second_attach_CT(bc->core, endpoint, remote_source, remote_target);
-   }
+    }
     else {
         //
         // We simply detach any links that dont match the above condition.
         //
+        qdr_error_t *error;
+        if (conn_role != QDR_ROLE_EDGE_CONNECTION)
+            error = qdr_error("qd:connection-role", "Connection does not support address tracking");
+        else
+            error = qdr_error(QD_AMQP_COND_NOT_IMPLEMENTED, "Incoming messages not allowed");
         *link_context = 0;
-        qdrc_endpoint_detach_CT(bc->core, endpoint, 0);
+        qdrc_endpoint_detach_CT(bc->core, endpoint, error);
         qdr_terminus_free(remote_source);
         qdr_terminus_free(remote_target);
     }
