@@ -85,29 +85,30 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
         if (pc >= vma + size) continue;
 
         result.found = bfd_find_nearest_line(state.abfd, section, &state.syms, pc - vma, &result.sourcefile,
-                                             &result.funcname, &result.line);
+                                             NULL, &result.line);
 
         if (result.found) break;
     }
 
 finalize:
+    if (result.found) {
+        Dl_info info;
+        if (dladdr((void*)pc, &info) != 0) {
+            result.funcname = info.dli_sname;
+        }
+    }
     return result;
 }
 
 void print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc)
 {
     // attempt to symbolize the address
-    Dl_info info;
-    if (dladdr(pc, &info) != 0) {
-        qd_backtrace_fileline_t res = qd_symbolize_backtrace_line((bfd_vma) pc);
-        if (res.found) {
-            fprintf(dump_file, "#%d %s %s:%d\n", i,
-                    info.dli_sname ? info.dli_sname
-                                   : "(?"
-                                     "?)",
-                    res.sourcefile, res.line);
-            return;
-        }
+
+    qd_backtrace_fileline_t res = qd_symbolize_backtrace_line((bfd_vma) pc);
+    if (res.found) {
+        fprintf(dump_file, "#%d %s %s:%d\n", i,
+                res.funcname ? res.funcname : "(?""?)", res.sourcefile, res.line);
+        return;
     }
     // symbolization did not succeed, print the uninspiring backtrace_symbols output as fallback
     fprintf(dump_file, "   %s\n", fallback_symbolization);
