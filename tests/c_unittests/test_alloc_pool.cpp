@@ -30,8 +30,8 @@ extern "C" {
 
 #include <cstdio>
 
-namespace test_backtrace
-{
+//namespace test_backtrace
+//{
 
 const int STACK_DEPTH = 10;
 
@@ -46,8 +46,7 @@ void b_stores_backtrace(item &item)
     item.backtrace_size = backtrace(item.backtrace, STACK_DEPTH);
 }
 
-void a_calls_b(item &item)
-{
+int a_calls_b_line = __LINE__; void __attribute__((noinline)) a_calls_b(item &item) {
     b_stores_backtrace(item);
 }
 }
@@ -70,8 +69,7 @@ bool found = false;
 
 void mymapaddr()
 {
-    const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) mymapaddr);
-    printf("found: %s %s %d", res.sourcefile, res.funcname, res.line);
+
 }
 
 //
@@ -110,14 +108,20 @@ void printbt(item &item)
     free(strings);
 }
 
-TEST_CASE("backtrace")
+TEST_CASE("qd_symbolize_backtrace_line")
 {
     item i;
-
     a_calls_b(i);
 
-    printbt(i);
+    const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) a_calls_b);
+    printf("found: %s %s %d", res.sourcefile, res.funcname, res.line);
+    REQUIRE(res.sourcefile == __FILE__);
+    REQUIRE(res.funcname == "a_calls_b");
+    REQUIRE(res.line == a_calls_b_line);
+    qd_symbolize_finalize();
 
-    mymapaddr();
+//    printbt(i);
+
+//    mymapaddr();
 }
-}  // namespace test_backtrace
+//}  // namespace test_backtrace
