@@ -60,7 +60,7 @@ else()
 endif()
 
 if(NOT DEFINED VERSION)
-  # Version was not provided. First check to see if git is avaialble
+  # Version was not provided. First check to see if git is available
   find_package(Git)
    if(Git_FOUND)
       execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty=-modified --always OUTPUT_VARIABLE DEFAULT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
