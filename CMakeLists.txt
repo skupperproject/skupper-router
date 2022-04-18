@@ -60,32 +60,43 @@ else()
 endif()
 
 if(NOT DEFINED VERSION)
-  # Version was not provided. First check to see if git is available
-  find_package(Git)
+   # Version was not provided. First check to see if git is available
+   find_package(Git)
    if(Git_FOUND)
-      execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty=-modified --always OUTPUT_VARIABLE DEFAULT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+      execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty=-modified --always
+                      OUTPUT_VARIABLE DEFAULT_VERSION
+                      RESULT_VARIABLE GIT_RESULT
+                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+                      
+                
       # You might sometimes get a fatal error when running the above command (when this is not a git repo).
-      string(FIND ${DEFAULT_VERSION} "fatal" POS)
-      if ('${POS}' STREQUAL '-1')
-         # 'fatal' was not found in the output, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
-         set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
+      # GIT_RESULT will contain the result of last child process. It will be zero if successful.
+      if (GIT_RESULT EQUAL 0)
+          # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
+          set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
        else()
-         set(QPID_DISPATCH_VERSION "UNKNOWN")
-       endif('${POS}' STREQUAL '-1')
+          # The git command failed, set QPID_DISPATCH_VERSION to "UNKNOWN" 
+          set(QPID_DISPATCH_VERSION "UNKNOWN")
+       endif(GIT_RESULT EQUAL 0)
    else(Git_FOUND)
        # Git executable was not available, we will not be able to determine the version, just set it to "UNKNOWN"
        set(QPID_DISPATCH_VERSION "UNKNOWN")
    endif(Git_FOUND)
-else()
+   
+else(NOT DEFINED VERSION)
+
    # What if VERSION is defined but someone passed in an empty value for VERSION? Deal with that case here.
-   string(STRIP ${VERSION} VERSION)
    if (VERSION STREQUAL "")
       set(QPID_DISPATCH_VERSION "UNKNOWN")
    else()
-      set(QPID_DISPATCH_VERSION ${VERSION})
+      string(STRIP ${VERSION} VERSION)
+      if (VERSION STREQUAL "")
+          set(QPID_DISPATCH_VERSION "UNKNOWN")
+      else()
+          set(QPID_DISPATCH_VERSION ${VERSION})
+      endif()
    endif(VERSION STREQUAL "")  
-  
-endif()
+endif(NOT DEFINED VERSION)
 
 message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")
 
