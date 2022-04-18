@@ -30,8 +30,8 @@ extern "C" {
 
 #include <cstdio>
 
-//namespace test_backtrace
-//{
+namespace test_backtrace
+{
 
 const int STACK_DEPTH = 10;
 
@@ -41,87 +41,47 @@ struct item {
 };
 
 extern "C" {
+
+int probe_line = __LINE__ + 2;
+void probe()
+{
+}
+
 void b_stores_backtrace(item &item)
 {
     item.backtrace_size = backtrace(item.backtrace, STACK_DEPTH);
 }
 
-int a_calls_b_line = __LINE__; void __attribute__((noinline)) a_calls_b(item &item) {
+void a_calls_b(item &item)
+{
     b_stores_backtrace(item);
 }
 }
 
-const char *filename;
-const char *functionname;
-unsigned int line;
-bool found = false;
-
-// static void find_address_in_section(bfd *abfd, asection *section, void *data __attribute__ ((__unused__)) )
-//{
-//     printf("looping\n");
-//
-//
-// }
-
-/**
- * Run this in between ; bfd_close();
- */
-
-void mymapaddr()
-{
-
-}
-
-//
-//    if (!found) {
-//        printf("[%s] \?\?() \?\?:0\n",addr[naddr-1]);
-//    } else {
-//        const char *name;
-//
-//        name = functionname;
-//        if (name == NULL || *name == '\0')
-//            name = "??";
-//        if (filename != NULL) {
-//            char *h;
-//
-//            h = strrchr(filename, '/');
-//            if (h != NULL)
-//                filename = h + 1;
-//        }
-//
-//        printf("\t%s:%u\t", filename ? filename : "??",
-//               line);
-//
-//        printf("%s()\n", name);
-//
-//    }
-
-void printbt(item &item)
-{
-    char buf[100];
-    char **strings = backtrace_symbols(item.backtrace, item.backtrace_size);
-
-    printf("Leak: %s type: %s address: %p\n", buf, "xxx", (void *) (&item));
-    for (size_t i = 0; i < item.backtrace_size; i++) {
-    }
-    printf("\n");
-    free(strings);
-}
 
 TEST_CASE("qd_symbolize_backtrace_line")
 {
-    item i;
-    a_calls_b(i);
-
-    const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) a_calls_b);
+    const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) probe);
     printf("found: %s %s %d", res.sourcefile, res.funcname, res.line);
-    REQUIRE(res.sourcefile == __FILE__);
-    REQUIRE(res.funcname == "a_calls_b");
-    REQUIRE(res.line == a_calls_b_line);
+    CHECK(res.sourcefile == __FILE__);
+    CHECK(res.funcname == "probe");
+    CHECK(res.line == probe_line);
     qd_symbolize_finalize();
-
-//    printbt(i);
-
-//    mymapaddr();
 }
-//}  // namespace test_backtrace
+
+TEST_CASE("qd_print_symbolized_backtrace_line")
+{
+    item it;
+    a_calls_b(it);
+
+    char **strings = backtrace_symbols(it.backtrace, it.backtrace_size);
+
+    for (int i = 0; i < it.backtrace_size; i++) {
+        qd_print_symbolized_backtrace_line(stdout, strings[i], i, it.backtrace[i]);
+    }
+    printf("\n");
+    qd_symbolize_finalize();
+    free(strings);
+}
+
+}  // namespace test_backtrace

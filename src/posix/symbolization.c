@@ -84,8 +84,9 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
 #endif
         if (pc >= vma + size) continue;
 
+        const char * funcname; // throwaway, but bfd_find_nearest_line does not accept NULL
         result.found = bfd_find_nearest_line(state.abfd, section, &state.syms, pc - vma, &result.sourcefile,
-                                             NULL, &result.line);
+                                             &funcname, &result.line);
 
         if (result.found) break;
     }
@@ -100,7 +101,7 @@ finalize:
     return result;
 }
 
-void print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc)
+void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc)
 {
     // attempt to symbolize the address
 
