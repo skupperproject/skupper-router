@@ -22,7 +22,7 @@ under the License
 * Create a branch (off of the main branch commit) you want to release
 ** Name the branch with the patch part set to 'x'. For example 2.0.x
 * Test the branch to make sure there are no obvious bugs. If bugs are found, create relevant github issues, fix the bugs,
-  push the fixes to the master branch and cherry-pick those same fixes to the newly created branch.
+  push the fixes to the main branch and cherry-pick those same fixes to the newly created branch.
 * When you are ready to create a release, create a tag on the commit in the branch that you want to create the release
   on and push the tag to the skupper-router git repo. The tag name should contain the release number you are trying
   to release E.g. 2.0.0
@@ -40,4 +40,4 @@ under the License
      were fixed in this milestone.
 * When everything has been verified click the *Publish release* button to publish the release.
 * Create the next milestone if necessary.
-* There is no need to advance any versions on the master branch.
+* There is no need to advance any versions on the main branch.
