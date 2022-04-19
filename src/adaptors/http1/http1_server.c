@@ -287,6 +287,7 @@ void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *ct)
         sys_mutex_unlock(qdr_http1_adaptor->lock);
 
         if (qdr_conn)
+            // this will cause the core thread to activate the connection and call qdr_http1_server_core_conn_close()
             qdr_core_close_connection(qdr_conn);
         qd_http_connector_decref(ct);
     }
@@ -440,7 +441,8 @@ static void _do_reconnect(void *context)
         ;
 
     if (!hconn->qdr_conn) {
-        // the qdr_connection_t has been closed
+        // the qdr_connection_t has been closed and there is no raw_conn to
+        // clean up. It is now safe to delete hconn
         qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
                "[C%"PRIu64"] HTTP/1.x server connection closed", hconn->conn_id);
         qdr_http1_connection_free(hconn);
@@ -557,7 +559,6 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         }
         hconn->server.link_timeout = 0;
         _setup_server_links(hconn);
-        while (qdr_connection_process(hconn->qdr_conn)) {}
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
@@ -626,18 +627,33 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         // prevent core activation
         sys_mutex_lock(qdr_http1_adaptor->lock);
         hconn->raw_conn = 0;
-        if (hconn->admin_status == QD_CONN_ADMIN_ENABLED && hconn->qdr_conn && hconn->server.reconnect_timer) {
+
+        // there are two cases that need to be dealt with: the remote server
+        // has dropped the connection and we need to reconnect, or the
+        // connector has been deleted via management and no reconnect should be
+        // done:
+        if (hconn->admin_status == QD_CONN_ADMIN_ENABLED) {
+            assert(hconn->qdr_conn);
+            assert(hconn->server.reconnect_timer);
             qd_timer_schedule(hconn->server.reconnect_timer, hconn->server.reconnect_pause);
-            sys_mutex_unlock(qdr_http1_adaptor->lock);
             // do not manipulate hconn further as it may now be processed by the
-            // timer thread
-            return;
+            // timer thread as soon as we drop the lock
+            sys_mutex_unlock(qdr_http1_adaptor->lock);
+        } else {
+            // we are not reconnecting due to management/shutdown/whatever. If
+            // the qdr_conn has already been released (when
+            // qdr_connection_process() was last called), then we can now free
+            // the hconn
+            hconn->server.link_timeout = 0;
+            hconn->server.reconnect_pause = 0;
+            bool free_hconn = !hconn->qdr_conn;
+            sys_mutex_unlock(qdr_http1_adaptor->lock);
+            if (free_hconn) {
+                qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP/1.x server connection closed", hconn->conn_id);
+                qdr_http1_connection_free(hconn);
+            }
         }
-        // we are not reconnecting due to management/shutdown/whatever
-        sys_mutex_unlock(qdr_http1_adaptor->lock);
-        hconn->server.link_timeout = 0;
-        hconn->server.reconnect_pause = 0;
-        break;
+        return;
     }
     case PN_RAW_CONNECTION_NEED_WRITE_BUFFERS: {
         _send_request_message((_server_request_t*) DEQ_HEAD(hconn->requests));
@@ -648,6 +664,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
     case PN_RAW_CONNECTION_WAKE: {
+        // Note: wake events may occur before the raw connection is established
         int error = 0;
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Wake-up", hconn->conn_id);
 
@@ -661,7 +678,10 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                 _handle_conn_need_read_buffers(hconn);
         }
 
-        while (qdr_connection_process(hconn->qdr_conn)) {}
+        // note that when qdr_connection_process() handles the connection close
+        // the hconn->qdr_conn pointer will be zeroed.
+        while (hconn->qdr_conn && qdr_connection_process(hconn->qdr_conn))
+            ;
 
         if (error)
             qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
@@ -688,16 +708,10 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     //
     // After each event check connection and request status
     //
-    if (!hconn->qdr_conn) {
-        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP/1.x server connection closed", hconn->conn_id);
-        qdr_http1_connection_free(hconn);
-
-    } else {
-        bool need_close = _process_request((_server_request_t*) DEQ_HEAD(hconn->requests));
-        if (need_close) {
-            qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP Request requires connection close", hconn->conn_id);
-            qdr_http1_close_connection(hconn, 0);
-        }
+    bool need_close = _process_request((_server_request_t*) DEQ_HEAD(hconn->requests));
+    if (need_close) {
+        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP Request requires connection close", hconn->conn_id);
+        qdr_http1_close_connection(hconn, 0);
     }
 }
 
@@ -1738,7 +1752,9 @@ static void _cancel_request(_server_request_t *hreq)
 }
 
 
-// handle connection close request from management
+// Called via qdr_connection_process() to close the connection. On return from
+// this function the qdr_conn instance is no longer accessible and the core
+// will never activate this hconn again.
 //
 void qdr_http1_server_core_conn_close(qdr_http1_adaptor_t *adaptor,
                                       qdr_http1_connection_t *hconn)
@@ -1757,5 +1773,6 @@ void qdr_http1_server_core_conn_close(qdr_http1_adaptor_t *adaptor,
     qdr_http1_close_connection(hconn, 0);
 
     // it is expected that this callback is the final callback before returning
-    // from qdr_connection_process(). Free hconn when qdr_connection_process returns.
+    // from qdr_connection_process(). Since qdr_conn is no longer available
+    // qdr_connection_process() can never be called again for this hconn.
 }
