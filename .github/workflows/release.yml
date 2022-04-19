@@ -18,11 +18,13 @@
 #
 
 name: Release skupper-router
-#on:
-#  release:
-#    types: [published]
 on:
-  workflow_dispatch:
+  push:
+    # Sequence of patterns matched against tags
+    # Right now, we run this job automatically when a semantically versioned
+    # tag is pushed.
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build:
@@ -30,14 +32,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set container tag
+      - name: Get the tag name and set it as the DOCKER_TAG env variable.
         run:  |
-          echo "DOCKER_TAG=`cat VERSION.txt`" >> $GITHUB_ENV
+          echo "DOCKER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Build and publish skupper-router image
         run: |
           export PROJECT_TAG="${DOCKER_TAG}"
+          export VERSION="${DOCKER_TAG}"
           ./.github/scripts/image.sh
         env:
           DOCKER_USER: '${{ secrets.DOCKER_USER }}'
           DOCKER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-
+      # Now that we have successfully pushed a tagged version of the skupper-router container
+      # we will create a draft release and add as much information to it as possible.
+      - name: Create Draft Release
+        id:  create_release
+        uses: actions/create-release@v1
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+           tag_name: ${{ github.ref }}
+           release_name: Release ${{ env.DOCKER_TAG }}
+           body: |
+             Issues fixed in this release
+             - https://github.com/skupperproject/skupper-router/issues?q=is:issue%20milestone:${{ env.DOCKER_TAG }}
+           draft: true

@@ -325,6 +325,10 @@ When combined with `-DRUNTIME_CHECK=asan`, the pointer breakages are much less f
 |`-DBUILD_TESTING=OFF`
 |Excludes project's tests from the build.
 
+|`-DVERSION=`
+|Sets the version of skupper-router. E.g. `-DVERSION=2.0.0`. If not supplied, the version is set to UNKNOWN.
+The version of skupper-router being used can be obtained running `skrouterd --version`
+
 |`-DBUILD_BENCHMARKS=ON`
 |Benchmarking tests will be built.
 The `libbenchmark` library is required by the benchmarks.

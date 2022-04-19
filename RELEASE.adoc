@@ -1,0 +1,43 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+# Use the following steps to generate a skupper-router release
+
+* Create a branch (off of the main branch commit) you want to release
+** Name the branch with the patch part set to 'x'. For example 2.0.x
+* Test the branch to make sure there are no obvious bugs. If bugs are found, create relevant github issues, fix the bugs,
+  push the fixes to the main branch and cherry-pick those same fixes to the newly created branch.
+* When you are ready to create a release, create a tag on the commit in the branch that you want to create the release
+  on and push the tag to the skupper-router git repo. The tag name should contain the release number you are trying
+  to release E.g. 2.0.0
+  ** Note that there is no need to change any versions on the branch. The *tag name* will be used as the *container's tag*
+* The *https://github.com/skupperproject/skupper-router/blob/main/.github/workflows/release.yml[Release skupper-router,window=_blank]*
+  workflow will be automatically triggered once a tag matching the pattern x.y.z (E.g. 2.0.0) is pushed to the git repo.
+  This release workflow will:
+  ** Compile the skupper-router project using the newly created tag and using the latest release version of proton
+  specified in the https://github.com/skupperproject/skupper-router/blob/main/Containerfile[Containerfile,window=_blank]
+  and push the image to quay.io
+  *** The skupper-router image tag name will be obtained from the name of the tag that was used to initiate the release workflow.
+  ** Creates a *draft release* which can be seen here - https://github.com/skupperproject/skupper-router/releases/
+* Edit the draft release by clicking the pencil link and verify if the details in the draft release are accurate.
+  ** Add more details to the text box if necessary. The text box should already contain a link to the issues that
+     were fixed in this milestone.
+* When everything has been verified click the *Publish release* button to publish the release.
+* Create the next milestone if necessary.
+* There is no need to advance any versions on the main branch.

@@ -56,6 +56,7 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
   -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
   -DBUILD_TESTING=OFF \
+  -DVERSION=${VERSION} \
   -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
     && VERBOSE=1 make DESTDIR=$WORKING/staging/ install \
     && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc
