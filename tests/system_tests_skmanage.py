@@ -298,8 +298,10 @@ class SkmanageTest(TestCase):
         self.assertEqual("A.log", output['outputFile'])
         self.assertEqual("trace+", output['enable'])
 
-    def create(self, type, name, port):
+    def create(self, type, name, port, role=None):
         create_command = 'CREATE --type=' + type + ' --name=' + name + ' host=0.0.0.0 port=' + port
+        if role:
+            create_command = create_command + ' role=' + role
         ret_entity = json.loads(self.run_skmanage(create_command))
         return ret_entity
 
@@ -337,7 +339,12 @@ class SkmanageTest(TestCase):
         output = self.run_skmanage(create_command, expect=Process.EXIT_FAIL)
         self.assertIn("Both connection and containerId cannot be specified", output)
 
-    def test_create_delete_connector(self):
+    def test_yyy_delete_create_connector(self):
+        """
+        This test tries to delete a connector and makes sure that there are no inter-router connections
+        It then adds back the connector and make sure that there is at least one inter-router connection.
+        The test name starts with a yyy so that it runs towards the end.
+        """
         long_type = 'io.skupper.router.connector'
         query_command = 'QUERY --type=' + long_type
         output = json.loads(self.run_skmanage(query_command))
@@ -349,9 +356,24 @@ class SkmanageTest(TestCase):
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output, [])
 
-        # Re-create the connector and then try wait_connectors
-        self.create(long_type, name, str(SkmanageTest.inter_router_port))
+        def query_inter_router_connector(check_inter_router_present=False):
+            outs = json.loads(self.run_skmanage('query --type=connection'))
+            inter_router_present = False
+            for out in outs:
+                if check_inter_router_present:
+                    if out['role'] == "inter-router":
+                        inter_router_present = True
+                        break
+                else:
+                    self.assertNotEqual(out['role'], "inter-router")
+            if check_inter_router_present:
+                self.assertTrue(inter_router_present)
 
+        # The connector has been deleted, check to make sure that there are no connections of 'inter-router' role
+        retry_exception(query_inter_router_connector, delay=2)
+
+        # Create back the connector with role="inter-router"
+        self.create(long_type, name, str(SkmanageTest.inter_router_port), role="inter-router")
         outputs = json.loads(self.run_skmanage(query_command))
         created = False
         for output in outputs:
@@ -362,6 +384,10 @@ class SkmanageTest(TestCase):
                 break
 
         self.assertTrue(created)
+
+        # The connector has been created, check to make sure that there is at least one
+        # connection of role 'inter-router'
+        retry_exception(query_inter_router_connector, delay=2, check_inter_router_present=True)
 
     def test_zzz_add_connector(self):
         port = self.get_port()

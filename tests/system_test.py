@@ -146,7 +146,7 @@ def retry(function: Callable[[], bool], timeout: float = TIMEOUT, delay: float =
                 return None
 
 
-def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exception_test=None):
+def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exception_test=None, **kwargs):
     """Call function until it returns without exception or timeout expires.
     Double the delay for each retry up to max_delay.
     Calls exception_test with any exception raised by function, exception_test
@@ -157,7 +157,7 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
     deadline = time.time() + timeout
     while True:
         try:
-            return function()
+            return function(**kwargs)
         except Exception as e:  # pylint: disable=broad-except
             if exception_test:
                 exception_test(e)
