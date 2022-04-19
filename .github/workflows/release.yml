@@ -54,6 +54,9 @@ jobs:
            tag_name: ${{ github.ref }}
            release_name: Release ${{ env.DOCKER_TAG }}
            body: |
+             The skupper-router is available as an image:
+              - quay.io/skupper/skupper-router:${{ env.DOCKER_TAG }}
+
              Issues fixed in this release
              - https://github.com/skupperproject/skupper-router/issues?q=is:issue%20milestone:${{ env.DOCKER_TAG }}
            draft: true
