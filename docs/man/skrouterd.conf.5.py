@@ -36,7 +36,7 @@ LISTENER = 'io.skupper.router.listener'
 # avoid writing these config entity types to the man file, they are not allowed
 # in the configuration file and are only supported at run time via management
 #
-#TYPE_FILTER = ['router.connection.linkRoute']
+TYPE_FILTER = ['router.connection.linkRoute']
 
 
 class ManPageWriter(SchemaWriter):
