@@ -564,68 +564,6 @@ jobs:
         run: |
           docker build -f ./Containerfile .
 
-  rpm:
-    name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
-    runs-on: '${{ matrix.os }}'
-    strategy:
-      matrix:
-        os: [ 'ubuntu-20.04' ]
-        container: [ 'centos' ]
-        containerTag: [ 'stream8' ]
-
-    container:
-      image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
-      volumes:
-        - ${{github.workspace}}:${{github.workspace}}
-
-    env:
-      DNF: ${{github.workspace}}/build
-
-    steps:
-      - name: Install build dependencies (1/2)
-        run: |
-          dnf config-manager --set-enabled powertools
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release 'dnf-command(copr)' 'dnf-command(builddep)'
-          dnf copr enable -y clime/rpkg-util
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git rpkg
-
-      - uses: actions/checkout@v3
-
-      - name: Install build dependencies (2/2)
-        run: |
-          rpkg spec --outdir /tmp/rpkg
-          dnf builddep --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y /tmp/rpkg/skupper-router.spec
-
-      - name: Build packages
-        run: |
-          mkdir /tmp/skupper-rpms
-          rpkg local --nocheck --outdir /tmp/skupper-rpms
-
-      - name: Install built packages
-        run: |
-          dnf install -y /tmp/skupper-rpms/*/*.rpm
-
-      - name: Check that skrouterd works
-        run: |
-          skrouterd -c /dev/empty |& grep "Configuration file could not be opened"
-
-      - name: Check that skmanage works
-        run: |
-          skmanage --help
-
-      - name: Check that skstat works
-        run: |
-          skstat --help
-
-      - name: Check that manpages work
-        run: |
-          dnf install -y man
-
-          man skrouterd
-          man skrouterd.conf
-          man skstat
-          man skmanage
-
   rat_check:
     name: RAT Check
     runs-on: ubuntu-latest
