@@ -19,7 +19,8 @@
 
 # -fno-inline: just to be extra sure, no particular reason so far
 # -fno-builtin: GCC would optimize e.g. abs() and we would not be able to stub
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector")
+# -fno-strict-aliasing: struct in C++ defines a type, causing a double definition (see issue #343)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector -fno-strict-aliasing")
 # DISPATCH-2196 Linking object files containing instances of the same C++ template fails on s390x with sanitizers enabled
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "s390x")
     # set the sanitizer flags only for linking, not for compilation; this workarounds the failure
