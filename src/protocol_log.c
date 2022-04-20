@@ -132,6 +132,15 @@ static uint64_t            next_message_id = 0;
 static void _plog_set_ref_TH(plog_work_t *work, bool discard);
 static void _plog_set_string_TH(plog_work_t *work, bool discard);
 static void _plog_set_int_TH(plog_work_t *work, bool discard);
+static const char *_plog_record_type_name(const plog_record_t *record);
+static const char *_plog_attribute_name(const plog_attribute_data_t *data);
+
+/*
+static void _plog_event_trace(const plog_record_t *record, const char *text)
+{
+    printf("%s.%lu - %s\n", _plog_record_type_name(record), record->identity.record_id, text);
+}
+*/
 
 /**
  * @brief Return the current timestamp in microseconds
@@ -276,6 +285,8 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
         return;
     }
 
+    //_plog_event_trace(work->record, "_plog_start_record_TH");
+
     //
     // If the record type is ROUTER, this is the local-router record.  Store it.
     // Otherwise, if the parent is not specified, use the local_router as the parent.
@@ -351,6 +362,7 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     }
 
     plog_record_t *record = work->record;
+    //_plog_event_trace(record, "_plog_end_record_TH");
 
     //
     // Record the deletion timestamp in the record.
@@ -1153,6 +1165,8 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
     //
     _plog_next_id(&record->identity);
 
+    //_plog_event_trace(record, "plog_start_record");
+
     _plog_post_work(work);
     return record;
 }
@@ -1161,6 +1175,7 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
 void plog_end_record(plog_record_t *record)
 {
     if (!!record) {
+        //_plog_event_trace(record, "plog_end_record");
         plog_work_t *work = _plog_work(_plog_end_record_TH);
         work->record    = record;
         work->timestamp = _now_in_usec();
