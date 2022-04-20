@@ -60,6 +60,11 @@ class ManagementMessageHelper:
     def __init__(self, reply_addr):
         self.reply_addr = reply_addr
 
+    def make_connection_query(self):
+        props = {'operation': 'QUERY', 'type': 'io.skupper.router.connection'}
+        msg = Message(properties=props, reply_to=self.reply_addr)
+        return msg
+
     def make_connector_query(self, connector_name):
         props = {'operation': 'READ', 'type': 'io.skupper.router.connector', 'name' : connector_name}
         msg = Message(properties=props, reply_to=self.reply_addr)
@@ -259,9 +264,29 @@ class TopologyTests (TestCase):
         router_C = cls.routers[2]
         router_D = cls.routers[3]
 
+        # Make sure every router is connected to every other router
         router_A.wait_router_connected('B')
         router_A.wait_router_connected('C')
         router_A.wait_router_connected('D')
+
+        router_B.wait_router_connected('A')
+        router_B.wait_router_connected('C')
+        router_B.wait_router_connected('D')
+
+        router_C.wait_router_connected('A')
+        router_C.wait_router_connected('B')
+        router_C.wait_router_connected('D')
+
+        router_D.wait_router_connected('A')
+        router_D.wait_router_connected('B')
+        router_D.wait_router_connected('C')
+
+        # Additional reinforcements. This wait_connectors() queries for connections.
+        # We can now be absolutely sure that the router network has been established.
+        router_A.wait_connectors()
+        router_B.wait_connectors()
+        router_C.wait_connectors()
+        router_D.wait_connectors()
 
         cls.client_addrs = (router_A.addresses[0],
                             router_B.addresses[0],
@@ -320,6 +345,7 @@ class TopologyFailover (MessagingHandler):
         self.recv_conn  = None
         self.nap_time   = 2
         self.debug      = False
+        self.trace_count = 0
 
         # Holds the management sender, receiver, and 'helper'
         # associated with each router.
@@ -338,7 +364,6 @@ class TopologyFailover (MessagingHandler):
             ['0/A', '0/C', '0/B'],
             ['0/A', '0/B']
         ]
-        self.trace_count    = 0
 
         # This tells the system in what order to kill the connectors.
         self.kill_list = (
@@ -350,13 +375,22 @@ class TopologyFailover (MessagingHandler):
         # Use this to keep track of which connectors we have found
         # when the test is first getting started and we are checking
         # the topology.
-        self.connectors_map = {'AB_connector' : 0,
-                               'AC_connector' : 0,
-                               'AD_connector' : 0,
-                               'BC_connector' : 0,
-                               'BD_connector' : 0,
-                               'CD_connector' : 0
-                               }
+        self.connectors_map = {
+            'AB_connector' : 0,
+            'AC_connector' : 0,
+            'AD_connector' : 0,
+            'BC_connector' : 0,
+            'BD_connector' : 0,
+            'CD_connector' : 0
+        }
+
+        # Number of inter-router connections per router at the start of the test
+        self.connections_map = {
+            'A' : 3,
+            'B' : 3,
+            'C' : 3,
+            'D' : 3
+        }
 
     # The simple state machine transitions when certain events happen,
     # if certain conditions are met.  The conditions are checked for
@@ -366,10 +400,13 @@ class TopologyFailover (MessagingHandler):
     #  2. checking        -- checks initial topology
     #  3. examine_trace   -- look at routing trace of first message
     #  4. kill_connector  -- kills the first connector (CD)
+    #  5. examine_connections - checks if the inter-router connection is gone
     #  5. examine_trace   -- checks routing trace of next message
     #  5. kill_connector  -- kills the next connector  (BD)
+    #  5. examine_connections - checks if the inter-router connection is gone
     #  5. examine_trace   -- checks routing trace of next message
     #  5. kill_connector  -- kills the next connector  (BC)
+    #  5. examine_connections - checks if the inter-router connection is gone
     #  5. examine_trace   -- checks routing trace of final message
     #  5. bailing         -- bails out with success
 
@@ -485,11 +522,18 @@ class TopologyFailover (MessagingHandler):
         self.debug_print("sent: %d" % self.n_sent)
 
     def on_message(self, event):
-
         if event.receiver in (
                 self.routers['B']['mgmt_receiver'],
                 self.routers['C']['mgmt_receiver'],
                 self.routers['D']['mgmt_receiver']):
+
+            if event.receiver == self.routers['B']['mgmt_receiver']:
+                router = 'B'
+            elif event.receiver == self.routers['C']['mgmt_receiver']:
+                router = 'C'
+            elif event.receiver == self.routers['D']['mgmt_receiver']:
+                router = 'D'
+
 
             # ----------------------------------------------------------------
             # This is a management message.
@@ -506,11 +550,12 @@ class TopologyFailover (MessagingHandler):
                 n_connections = sum(self.connectors_map.values())
                 if n_connections == 6 :
                     self.state_transition("all %d connections found" % n_connections, 'examine_trace')
-            elif self.state == 'kill_connector' :
+            elif self.state == 'kill_connector':
                 if event.message.properties["statusDescription"] == 'No Content':
                     # We are in the process of killing a connector, and
                     # have received the response to the kill message.
-                    self.state_transition('got kill response', 'examine_trace')
+                    self.state_transition('got kill response', 'examine_connections')
+                    self.connection_check(router)
                     # This sleep is here because one early bug that this test found
                     # (and which is now fixed) involved connections that had been
                     # deleted coming back sometimes. It was a race and only happened
@@ -520,6 +565,23 @@ class TopologyFailover (MessagingHandler):
                     # this sleep here is the only way to ensure that that particular
                     # bug stays fixed.
                     time.sleep(self.nap_time)
+            elif self.state == 'examine_connections':
+                if event.message.properties['statusDescription'] == 'OK':
+                    role_index = event.message.body['attributeNames'].index("role")
+                    results = event.message.body['results']
+                    num_inter_router = 0
+                    for result in results:
+                        if result[role_index] == "inter-router":
+                            num_inter_router += 1
+
+                    if num_inter_router == self.connections_map[router]:
+                        # After the connector was removed, the number of inter-router connections matched
+                        # the expected count of inter-router connections on the respective router.
+                        # We can now move to the examine_trace state
+                        self.state_transition('inter-router connections verified', 'examine_trace')
+                    else:
+                        time.sleep(self.nap_time)
+                        self.connection_check(router)
         else:
             # ----------------------------------------------------------------
             # This is a payload message.
@@ -553,9 +615,24 @@ class TopologyFailover (MessagingHandler):
         msg = mgmt_helper.make_connector_query(connector)
         mgmt_sender.send(msg)
 
+    def connection_check(self, router):
+        self.debug_print("checking inter-router connections for router %s" % router)
+        mgmt_helper = self.routers[router]['mgmt_helper']
+        mgmt_sender = self.routers[router]['mgmt_sender']
+        msg = mgmt_helper.make_connection_query()
+        mgmt_sender.send(msg)
+
     def kill_a_connector(self, target) :
         router = target[0]
         connector = target[1]
+
+        # Reduce the number of inter-router connections on both sides of the connector
+        num_inter_router_connections = self.connections_map[router] - 1
+        self.connections_map[router] = num_inter_router_connections
+
+        num_inter_router_connections = self.connections_map[connector[0]] - 1
+        self.connections_map[connector[0]] = num_inter_router_connections
+
         self.debug_print("killing connector %s on router %s" % (connector, router))
         mgmt_helper = self.routers[router]['mgmt_helper']
         mgmt_sender = self.routers[router]['mgmt_sender']
