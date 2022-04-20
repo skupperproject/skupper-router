@@ -125,6 +125,8 @@ find_package(LibWebSockets 4.0.1 REQUIRED)
 ## Optional dependencies
 ##
 
+find_library(bfd_lib bfd DOC "libdfd used to symbolize QD_MEMORY_DEBUG backtraces")
+
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
 
