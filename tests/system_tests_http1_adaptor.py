@@ -146,16 +146,24 @@ class Http1AdaptorManagementTest(TestCase):
         # When a connector is configured the router will periodically attempt
         # to connect to the server address. To prove that the connector has
         # been completely removed listen for connection attempts on the server
-        # port.
+        # port. The router is expected to stop connecting to the server
+        # and calling accept() should time out
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(("", self.http_server_port))
-        s.setblocking(True)
-        s.settimeout(3)  # reconnect attempts every 2.5 seconds
-        s.listen(1)
-        with self.assertRaises(socket.timeout):
-            conn, addr = s.accept()
-        s.close()
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", self.http_server_port))
+            s.setblocking(True)
+            s.settimeout(3)  # reconnect attempts every 2.5 seconds
+            s.listen(1)
+            while True:
+                try:
+                    conn, addr = s.accept()
+                    conn.close()  # oop! still connecting...
+                    sleep(0.25)
+                except socket.timeout:
+                    break
+        finally:
+            s.close()
 
         # Verify that the address is no longer bound on the interior
         self.i_router.wait_address_unsubscribed("closest/http1Service")
@@ -548,59 +556,57 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         """
         Test various improperly constructed request messages
         """
-        server = TestServer.new_server(server_port=self.http_server_port,
-                                       client_port=self.http_listener_port,
-                                       tests={})
+        with TestServer.new_server(server_port=self.http_server_port,
+                                   client_port=self.http_listener_port,
+                                   tests={}) as server:
 
-        body_filler = "?" * 1024 * 300  # Q2
+            body_filler = "?" * 1024 * 300  # Q2
 
-        msg = Message(body="NOMSGID " + body_filler)
-        ts = AsyncTestSender(address=self.INT_A.listener,
-                             target="testServer",
-                             message=msg)
-        ts.wait()
-        self.assertEqual(1, ts.rejected)
+            msg = Message(body="NOMSGID " + body_filler)
+            ts = AsyncTestSender(address=self.INT_A.listener,
+                                 target="testServer",
+                                 message=msg)
+            ts.wait()
+            self.assertEqual(1, ts.rejected)
 
-        msg = Message(body="NO REPLY TO " + body_filler)
-        msg.id = 1
-        ts = AsyncTestSender(address=self.INT_A.listener,
-                             target="testServer",
-                             message=msg)
-        ts.wait()
-        self.assertEqual(1, ts.rejected)
+            msg = Message(body="NO REPLY TO " + body_filler)
+            msg.id = 1
+            ts = AsyncTestSender(address=self.INT_A.listener,
+                                 target="testServer",
+                                 message=msg)
+            ts.wait()
+            self.assertEqual(1, ts.rejected)
 
-        msg = Message(body="NO SUBJECT " + body_filler)
-        msg.id = 1
-        msg.reply_to = "amqp://fake/reply_to"
-        ts = AsyncTestSender(address=self.INT_A.listener,
-                             target="testServer",
-                             message=msg)
-        ts.wait()
-        self.assertEqual(1, ts.rejected)
+            msg = Message(body="NO SUBJECT " + body_filler)
+            msg.id = 1
+            msg.reply_to = "amqp://fake/reply_to"
+            ts = AsyncTestSender(address=self.INT_A.listener,
+                                 target="testServer",
+                                 message=msg)
+            ts.wait()
+            self.assertEqual(1, ts.rejected)
 
-        msg = Message(body="NO APP PROPERTIES " + body_filler)
-        msg.id = 1
-        msg.reply_to = "amqp://fake/reply_to"
-        msg.subject = "GET"
-        ts = AsyncTestSender(address=self.INT_A.listener,
-                             target="testServer",
-                             message=msg)
-        ts.wait()
-        self.assertEqual(1, ts.rejected)
+            msg = Message(body="NO APP PROPERTIES " + body_filler)
+            msg.id = 1
+            msg.reply_to = "amqp://fake/reply_to"
+            msg.subject = "GET"
+            ts = AsyncTestSender(address=self.INT_A.listener,
+                                 target="testServer",
+                                 message=msg)
+            ts.wait()
+            self.assertEqual(1, ts.rejected)
 
-        # TODO: fix body parsing (returns NEED_MORE)
-        # msg = Message(body="INVALID BODY " + body_filler)
-        # msg.id = 1
-        # msg.reply_to = "amqp://fake/reply_to"
-        # msg.subject = "GET"
-        # msg.properties = {"http:target": "/Some/target"}
-        # ts = AsyncTestSender(address=self.INT_A.listener,
-        #                      target="testServer",
-        #                      message=msg)
-        # ts.wait()
-        # self.assertEqual(1, ts.rejected);
-
-        server.wait()
+            # TODO: fix body parsing (returns NEED_MORE)
+            # msg = Message(body="INVALID BODY " + body_filler)
+            # msg.id = 1
+            # msg.reply_to = "amqp://fake/reply_to"
+            # msg.subject = "GET"
+            # msg.properties = {"http:target": "/Some/target"}
+            # ts = AsyncTestSender(address=self.INT_A.listener,
+            #                      target="testServer",
+            #                      message=msg)
+            # ts.wait()
+            # self.assertEqual(1, ts.rejected);
 
         # verify router is still sane:
         count, error = http1_ping(self.http_server_port,
