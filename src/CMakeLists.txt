@@ -145,7 +145,7 @@ set(qpid_dispatch_LIBRARIES
   ${Proton_Tls_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${rt_lib}
-  -lbfd
+  ${bfd_lib}
   ${CMAKE_DL_LIBS}
   ${Python_LIBRARIES}
   )

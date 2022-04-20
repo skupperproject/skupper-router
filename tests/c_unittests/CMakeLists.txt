@@ -39,7 +39,7 @@ add_executable(c_unittests
         test_listener_startup.cpp
         test_router_startup.cpp
         test_terminus.cpp test_alloc_pool.cpp)
-target_link_libraries(c_unittests cpp-stub pthread skupper-router -lbfd -ldl)
+target_link_libraries(c_unittests cpp-stub pthread skupper-router ${bfd_lib})
 
 file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf
