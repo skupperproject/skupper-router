@@ -31,7 +31,7 @@ RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel swig \
     libwebsockets-devel libnghttp2-devel \
-    wget patch findutils git valgrind \
+    wget patch findutils git libasan libubsan libtsan \
  && dnf clean all -y
 WORKDIR /build
 COPY . .
@@ -58,7 +58,7 @@ RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl \
     python3 \
     libwebsockets libnghttp2 \
-    gdb valgrind \
+    gdb libasan libubsan libtsan \
     gettext hostname iputils \
  && dnf clean all
 
@@ -73,6 +73,11 @@ COPY ./scripts/* /home/skrouterd/bin/
 ARG version=latest
 ENV VERSION=${version}
 ENV QDROUTERD_HOME=/home/skrouterd
+
+ENV ASAN_OPTIONS="disable_coredump=0 detect_odr_violation=0 strict_string_checks=1 detect_stack_use_after_return=1 check_initialization_order=1 strict_init_order=1 detect_invalid_pointer_pairs=2"
+ENV LSAN_OPTIONS="disable_coredump=0 suppressions=/lsan.supp"
+ENV TSAN_OPTIONS="disable_coredump=0 history_size=4 second_deadlock_stack=1 suppressions=/tsan.supp"
+ENV UBSAN_OPTIONS="disable_coredump=0 print_stacktrace=1 print_summary=1"
 
 EXPOSE 5672 55672 5671
 CMD ["/home/skrouterd/bin/launch.sh"]

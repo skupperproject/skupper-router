@@ -21,6 +21,11 @@
 
 set -euxo pipefail
 
+WORKING=$(pwd)
+
+wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
+tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
+
 do_patch () {
     PATCH_DIR=$1
     PATCH_SRC=$2
@@ -33,35 +38,45 @@ do_patch () {
     fi
 }
 
-WORKING=`pwd`
-wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
-tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
-
-mkdir -p qpid-proton-src build staging proton_build proton_install
-
 do_patch "patches/proton" qpid-proton-src
 
-cmake -S $WORKING/qpid-proton-src -B proton_build \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DRUNTIME_CHECK=OFF \
-  -DENABLE_LINKTIME_OPTIMIZATION=ON \
-  -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
-  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-    && cmake --build proton_build --verbose \
-    && DESTDIR=$WORKING/proton_install cmake --install proton_build \
-    && tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr \
-    && cmake --install proton_build
+do_build () {
+  local suffix=${1}
+  local runtime_check=${2}
 
-cmake -S $WORKING/ -B $WORKING/build \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DRUNTIME_CHECK=OFF \
-  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
-  -DBUILD_TESTING=OFF \
-  -DVERSION=${VERSION} \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-    && cmake --build $WORKING/build --verbose \
-    && VERBOSE=1 DESTDIR=$WORKING/staging/ cmake --install $WORKING/build \
-    && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc
+  cmake -S "$WORKING/qpid-proton-src" -B "$WORKING/proton_build${suffix}" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DRUNTIME_CHECK="${runtime_check}" \
+    -DENABLE_LINKTIME_OPTIMIZATION=ON \
+    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
+    -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "proton_build${suffix}" --parallel "$(nproc)" --verbose
+  DESTDIR="$WORKING/proton_install${suffix}" cmake --install "proton_build${suffix}"
+
+  cmake -S "$WORKING/" -B "$WORKING/build${suffix}" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DRUNTIME_CHECK="${runtime_check}" \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
+    -DProton_DIR="$WORKING/proton_install${suffix}/lib64/cmake/Proton" \
+    -DBUILD_TESTING=OFF \
+    -DVERSION="${VERSION}" \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "$WORKING/build${suffix}" --parallel "$(nproc)" --verbose
+}
+
+do_build "" OFF
+do_build "_asan" asan
+do_build "_tsan" tsan
+
+DESTDIR=$WORKING/proton_install cmake --install proton_build
+tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr
+
+DESTDIR=$WORKING/staging/ cmake --install $WORKING/build
+cp "$WORKING/build_asan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_asan"
+cp "$WORKING/build_tsan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_tsan"
+cp --target-directory="$WORKING/staging/" "$WORKING/tests/tsan.supp" "$WORKING/build_asan/tests/lsan.supp"
+
+tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
