@@ -60,7 +60,7 @@ do_build () {
     -DRUNTIME_CHECK="${runtime_check}" \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
-    -DProton_DIR="$WORKING/proton_install${suffix}/lib64/cmake/Proton" \
+    -DProton_DIR="$WORKING/proton_install${suffix}/usr/lib64/cmake/Proton" \
     -DBUILD_TESTING=OFF \
     -DVERSION="${VERSION}" \
     -DCMAKE_INSTALL_PREFIX=/usr
