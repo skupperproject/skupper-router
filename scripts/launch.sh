@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #
 # Licensed to the Apache Software Foundation (ASF) under one
@@ -33,7 +33,9 @@ fi
 if [[ $QDROUTERD_DEBUG = "gdb" ]]; then
     exec gdb -batch -ex "run" -ex "bt" --args skrouterd $ARGS
 elif [[ $QDROUTERD_DEBUG = "valgrind" ]]; then
-    exec valgrind skrouterd $ARGS
+    exec skrouterd_asan $ARGS
+elif [[ $QDROUTERD_DEBUG = "asan" ]]; then
+    exec skrouterd_asan $ARGS
 else
     exec skrouterd $ARGS
 fi
