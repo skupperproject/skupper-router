@@ -69,7 +69,7 @@ TEST_CASE("qd_symbolize_backtrace_line")
     };
     CHECK(res.sourcefile == __FILE__);
     CHECK(res.funcname == "probe");
-    CHECK(res.line == probe_line);
+    CHECK(std::abs(probe_line - res.line) <= 3);  // require reasonable precision
     qd_symbolize_finalize();
 }
 
