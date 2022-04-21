@@ -28,7 +28,7 @@ typedef struct qd_backtrace_fileline {
     bool found;
     const char *sourcefile;
     const char *funcname;
-    unsigned int line;
+    int line;
 } qd_backtrace_fileline_t;
 
 void qd_symbolize_finalize();
