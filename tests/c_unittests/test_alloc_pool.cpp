@@ -62,7 +62,7 @@ void a_calls_b(item &item)
 TEST_CASE("qd_symbolize_backtrace_line")
 {
     const qd_backtrace_fileline_t &res = qd_symbolize_backtrace_line((bfd_vma) probe);
-    REQUIRE(res.found);
+    CHECK(res.found);
     if(!res.found) {
         qd_symbolize_finalize();
         return;
