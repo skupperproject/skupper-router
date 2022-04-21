@@ -136,7 +136,7 @@ void qd_symbolize_finalize()
     }
     state.abfd = NULL;
 
-    bfd_cache_close_all();
+//    bfd_cache_close_all();
 
 //    state.libbfd_inited = false;
 }
