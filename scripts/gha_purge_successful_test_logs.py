@@ -48,7 +48,7 @@ def main() -> int:
     failed_test_names = {test[1] for test in failed_tests}
     logging.debug("Failed tests: %s", failed_test_names)
 
-    system_tests_dir = pathlib.Path(build_dir, 'tests', 'system_test.dir')
+    system_tests_dir = pathlib.Path(build_dir, 'tests', 'system_test.dir', 'tests')
     if not system_tests_dir.exists():
         logging.info("system_test.dir does not exits, nothing to do")
         return 0
