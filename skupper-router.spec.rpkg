@@ -17,6 +17,8 @@
 # under the License.
 #
 
+# Tutorial for .spec files is available at https://rpm-packaging-guide.github.io
+
 # This .spec file uses `rpkg` (https://pagure.io/rpkg-util) to provide
 # pleasant user experience to developers.
 #
@@ -24,10 +26,17 @@
 # `rpkg srpm`              Creates a *.src.rpm file in /tmp/rpkg (exact path is printed)
 # `rpkg local --nocheck`   Builds a *.rpm for your system in /tmp/rpkg (exact path is printed)
 #
-# See `man rpkg` for more commands.
+# See `man rpkg` for more commands. See `man rpkg-macros` for explanation of the triple-{ macros.
 
+# not undefine, that would break COPR, https://pagure.io/rpkg-util/issue/44
+%define _disable_source_fetch 0
 # https://bugzilla.redhat.com/show_bug.cgi?id=1668512#c19
 %undefine __cmake_in_source_build
+
+# This package builds and statically links against its own proton-c library
+# so we can use newest Proton features even before it is packaged for our distro
+%global proton_vendored_version 0.37.0
+%define proton_install_prefix %{_builddir}/qpid-proton-%{proton_vendored_version}/install
 
 %global proton_minimum_version 0.34.0
 %global libwebsockets_minimum_version 3.0.1
@@ -42,7 +51,7 @@ URL:           https://skupper.io
 VCS:           {{{ git_dir_vcs }}}
 
 Requires: python3
-Requires: qpid-proton-c >= %{proton_minimum_version}
+Requires: skupper-router-common == %{version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
@@ -51,9 +60,9 @@ Requires: cyrus-sasl-gssapi
 BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: cmake
+
+# skupper-router requirements
 BuildRequires: python3-devel
-BuildRequires: openssl-devel
-BuildRequires: qpid-proton-c-devel >= %{proton_minimum_version}
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
 # man pages --help
@@ -62,22 +71,54 @@ BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
 # check ctest
 BuildRequires: cyrus-sasl-plain
 
-Source: {{{ git_dir_pack }}}
+# proton-c requirements
+BuildRequires: openssl-devel
+BuildRequires: cyrus-sasl-devel
+
+# skupper-router sources
+Source0: {{{ git_dir_pack }}}
+# vendored qpid-proton
+Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
 
 %description
 A lightweight message router, written in C and built on Qpid Proton, that provides flexible and scalable interconnect backend for Skupper.io Level 7 Virtual Application Network.
 
 %prep
 {{{ git_dir_setup_macro }}}
+%setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
 
 %build
-%cmake -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON -DPython_EXECUTABLE=%{python3}
+%set_build_flags
+cd %{_builddir}/qpid-proton-%{proton_vendored_version}
+# PROTON-2473: -Wno-error=deprecated-declarations for DH_new, DH_...
+%__cmake . -B "%{__cmake_builddir}" \
+    -DCMAKE_C_FLAGS="$CFLAGS -Wno-error=deprecated-declarations" \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_BINDINGS=OFF \
+    -DBUILD_TLS=ON -DSSL_IMPL=openssl \
+    -DBUILD_STATIC_LIBS=ON \
+    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DCMAKE_INSTALL_PREFIX=%{proton_install_prefix}
+%__cmake --build "%{__cmake_builddir}" %{?_smp_mflags} --verbose
+%__cmake --install "%{__cmake_builddir}"
+
+cd %{_builddir}/skupper-router
+%cmake \
+    -DUSE_LIBWEBSOCKETS=ON \
+    -DUSE_LIBNGHTTP2=ON \
+    -DPython_EXECUTABLE=%{python3} \
+    -DProton_USE_STATIC_LIBS=ON \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton
 %cmake_build --target all --target man
 
 %install
+cd %{_builddir}/skupper-router
 %cmake_install
 
 %check
+cd %{_builddir}/skupper-router
 %ctest
 
 %files
@@ -114,6 +155,8 @@ BuildArch: noarch
 Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
 Requires: skupper-router-common == %{version}
+Requires: cyrus-sasl-plain
+Requires: cyrus-sasl-gssapi
 
 %description tools
 %{summary}.
