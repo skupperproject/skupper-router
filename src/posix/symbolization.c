@@ -93,9 +93,9 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
         const char * funcname; // throwaway, but bfd_find_nearest_line does not accept NULL
         if (result.found) continue;
         result.found = bfd_find_nearest_line(state.abfd, section, &state.syms, pc - vma, &result.sourcefile,
-                                             &funcname, &result.line);
+                                             &funcname, (unsigned int *)&result.line);
 
-//        if (result.found) break;
+        if (result.found) break;
     }
 
 finalize:
