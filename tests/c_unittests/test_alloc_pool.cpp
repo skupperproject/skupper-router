@@ -42,7 +42,7 @@ struct item {
 
 extern "C" {
 
-int probe_line = __LINE__ + 2;
+int probe_line = __LINE__;
 void probe()
 {
 }
