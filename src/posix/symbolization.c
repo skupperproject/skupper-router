@@ -49,15 +49,21 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
 
     if (state.abfd == NULL) {
         state.abfd = bfd_openr("/proc/self/exe", NULL);
+        if (state.abfd == NULL) goto finalize;
         state.abfd->flags |= BFD_DECOMPRESS;  // https://sourceware.org/legacy-ml/gdb-patches/2012-10/msg00262.html
         bfd_boolean res = bfd_check_format(state.abfd, bfd_object);
         if (!res) goto finalize;
+        char **matching;
+        if (!bfd_check_format_matches(state.abfd, bfd_object, &matching)) {
+            free(matching);
+            goto finalize;
+        }
     }
 
     if ((bfd_get_file_flags(state.abfd) & HAS_SYMS) == 0) goto finalize;
 
     symcount = bfd_read_minisymbols(state.abfd, false, (void **) &state.syms, &symsize);
-    if (symcount == 0) symcount = bfd_read_minisymbols(state.abfd, true, (void **) &state.syms, &symsize);
+//    if (symcount == 0) symcount = bfd_read_minisymbols(state.abfd, true, (void **) &state.syms, &symsize);
     if (symcount == 0) goto finalize;
 
     // loop can be more commonly written using `bfd_map_over_sections` and a callback
@@ -85,10 +91,11 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(bfd_vma pc)
         if (pc >= vma + size) continue;
 
         const char * funcname; // throwaway, but bfd_find_nearest_line does not accept NULL
+        if (result.found) continue;
         result.found = bfd_find_nearest_line(state.abfd, section, &state.syms, pc - vma, &result.sourcefile,
                                              &funcname, &result.line);
 
-        if (result.found) break;
+//        if (result.found) break;
     }
 
 finalize:
@@ -97,6 +104,8 @@ finalize:
         if (dladdr((void*)pc, &info) != 0) {
             result.funcname = info.dli_sname;
         }
+    } else {
+        qd_symbolize_finalize();
     }
     return result;
 }
@@ -127,5 +136,7 @@ void qd_symbolize_finalize()
     }
     state.abfd = NULL;
 
-    state.libbfd_inited = false;
+    bfd_cache_close_all();
+
+//    state.libbfd_inited = false;
 }
