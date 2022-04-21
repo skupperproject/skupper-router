@@ -238,6 +238,22 @@ class TestServer:
     __test__ = False
     _active_servers: Mapping[int, 'TestServer'] = weakref.WeakValueDictionary()
 
+    def __init__(self, server_port, client_port, tests, handler_cls=None):
+        self.request_count = 0
+        self._logger = Logger(title="TestServer", print_to_console=False)
+        self._client_port = client_port
+        self._server_addr = ("", server_port)
+        self._server_error = None
+        self._is_ready = Event()
+        self._thread = Thread(target=self._run, args=(tests,
+                                                      handler_cls or RequestHandler))
+        self._thread.start()
+
+        # Block the caller until the MyHTTPServer.__init__() call completes in
+        # the background thread. This guarantees that the server socket is
+        # present and listening before the caller starts connecting clients.
+        self._is_ready.wait(TIMEOUT)
+
     @classmethod
     def new_server(cls, server_port, client_port, tests, handler_cls=None):
         """Repeatedly tries to create a new server.
@@ -263,18 +279,6 @@ class TestServer:
         else:
             raise RuntimeError(f"TestServer failed to start due to port {server_port} already in use issue") from exc
 
-    def __init__(self, server_port, client_port, tests, handler_cls=None):
-        self.request_count = 0
-        self._logger = Logger(title="TestServer", print_to_console=False)
-        self._client_port = client_port
-        self._server_addr = ("", server_port)
-        self._server_error = None
-        self._is_ready = Event()
-        self._thread = Thread(target=self._run, args=(tests,
-                                                      handler_cls or RequestHandler))
-        self._thread.start()
-        self._is_ready.wait(TIMEOUT)
-
     def _run(self, tests, handler_cls):
         self._logger.log("TestServer listening on %s:%s" % self._server_addr)
 
@@ -284,6 +288,7 @@ class TestServer:
             server.timeout = TIMEOUT
             server.server_killed = False
 
+            # listening socket is now open and clients can connect
             self._is_ready.set()
             while not server.server_killed:
                 try:
