@@ -35,28 +35,33 @@ do_patch () {
 
 WORKING=`pwd`
 wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
+tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
 
 mkdir -p qpid-proton-src build staging proton_build proton_install
-tar -zxf qpid-proton.tar.gz -C qpid-proton-src --strip-components 1
 
 do_patch "patches/proton" qpid-proton-src
 
-cd proton_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+cmake -S $WORKING/qpid-proton-src -B proton_build \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DRUNTIME_CHECK=OFF \
   -DENABLE_LINKTIME_OPTIMIZATION=ON \
   -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
   -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
   -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/qpid-proton-src/ \
-    && VERBOSE=1 make DESTDIR=$WORKING/proton_install install \
+  -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build proton_build --verbose \
+    && DESTDIR=$WORKING/proton_install cmake --install proton_build \
     && tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr \
-    && VERBOSE=1 make install
-cd $WORKING/build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    && cmake --install proton_build
+
+cmake -S $WORKING/ -B $WORKING/build \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DRUNTIME_CHECK=OFF \
   -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
   -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
   -DBUILD_TESTING=OFF \
   -DVERSION=${VERSION} \
-  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
-    && VERBOSE=1 make DESTDIR=$WORKING/staging/ install \
+  -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build $WORKING/build --verbose \
+    && VERBOSE=1 DESTDIR=$WORKING/staging/ cmake --install $WORKING/build \
     && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc

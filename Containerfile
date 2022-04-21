@@ -19,14 +19,14 @@
 
 FROM registry.access.redhat.com/ubi8/ubi:latest as builder
 
-RUN dnf -y --setopt=tsflags=nodocs install \
+RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
       http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-4.el8.noarch.rpm \
       http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-stream-repos-8-4.el8.noarch.rpm \
- && dnf -y --setopt=tsflags=nodocs install epel-release \
+ && dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install epel-release \
  && dnf config-manager --set-enabled powertools \
  && dnf clean all
 
-RUN dnf -y --setopt=tsflags=nodocs install \
+RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel swig \
@@ -44,16 +44,16 @@ RUN .github/scripts/compile.sh
 
 FROM registry.access.redhat.com/ubi8/ubi:latest
 
-RUN dnf -y --setopt=tsflags=nodocs update \
- && dnf -y --setopt=tsflags=nodocs install \
+RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs update \
+ && dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
       http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-4.el8.noarch.rpm \
       http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-stream-repos-8-4.el8.noarch.rpm \
- && dnf -y --setopt=tsflags=nodocs install epel-release \
+ && dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install epel-release \
  && dnf config-manager --set-enabled powertools \
  && dnf clean all
 
 # gdb and valgrind are part of final image as they can be used as debug options for Skupper
-RUN dnf -y --setopt=tsflags=nodocs install \
+RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl \
     python3 \
