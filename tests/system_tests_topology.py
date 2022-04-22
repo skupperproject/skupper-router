@@ -447,7 +447,7 @@ class TopologyFailover (MessagingHandler):
     # ------------------------------------------------------------------------
     def timeout(self, name):
         if name == 'test':
-            self.set_state('Timeout Expired', 'bailing')
+            self.state_transition('Timeout Expired', 'bailing')
             self.bail("Timeout Expired: n_sent=%d n_received=%d n_accepted=%d" %
                       (self.n_sent, self.n_received, self.n_accepted))
         elif name == 'sender':
