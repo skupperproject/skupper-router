@@ -1,0 +1,62 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+# skupper-router testcontainers
+
+_Run container to test a container._
+
+## configuration
+
+Docker or Podman must be available. For Podman, setup the
+user podman socket, and configure it in your environment:
+
+[source,shell script]
+----
+systemctl --user enable --now podman.socket
+export DOCKER_HOST=/run/user/${UID}/podman/podman.sock
+----
+
+## atomic test containers
+
+Tests are implemented as Rust tests that run various container
+images in local Docker or Podman environment. These tests are
+used to validate the skupper-router image.
+
+Success or failure of the test is determined by container exit
+status, meaning that (usually) all test logic is implemented in
+the containers themselves, and the rust test orchestrates them.
+
+## differences from qdr-image tests
+
+Docker or Podman is used instead of Kubernetes. This is to make
+setup easier and also to simplify debugging. The disadvantage is
+that the API the test uses to communicate with the container
+engine is less standardized and docker/podman incompatibility may appear.
+
+Rust is used instead of Go to orchestrate the tests. Neither of
+the two languages was yet present in the codebase and it appears
+that Rust is more compatible (re. ffi) with a C codebase than Go,
+if ever such consideration arose. Furthermore, rust has been
+recently discussed in relation to the router, while Go was
+only mentioned long time ago (re. the `mercury` tests).
+
+This test suite is much less mature and so far avoided making
+most of the decisions that qdr-image tests had to make. When the time
+comes, these decisions will have to be made and further differences
+may then appear.

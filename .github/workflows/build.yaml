@@ -591,7 +591,22 @@ jobs:
 
       - name: Build Containerfile
         run: |
-          docker build -f ./Containerfile .
+          docker build -t local/skupper-router:local -f ./Containerfile .
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v1
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -- --nocapture
+        env:
+          QDROUTERD_IMAGE: local/skupper-router:local
+          RUST_BACKTRACE: 1
 
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
