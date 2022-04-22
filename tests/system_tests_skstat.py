@@ -143,13 +143,13 @@ class SkstatTest(SkstatTestBase):
         out = self.run_skstat(['--address'], regex=r'QDR.A')
         out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
-        self.assertEqual(len(parts), 12)
+        self.assertEqual(len(parts), 14)
 
     def test_address_csv(self):
         out = self.run_skstat(['--address'], regex=r'QDR.A')
         out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
-        self.assertEqual(len(parts), 12)
+        self.assertEqual(len(parts), 14)
 
     def test_skstat_no_args(self):
         outs = self.run_skstat(args=None)

@@ -215,6 +215,7 @@ typedef void (*qdr_address_watch_update_t)(void     *context,
 qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
                                           const char                 *address,
                                           char                        aclass,
+                                          qd_address_treatment_t      treatment_hint,
                                           qdr_address_watch_update_t  on_watch,
                                           void                       *context);
 

@@ -159,11 +159,16 @@ void qdr_core_free(qdr_core_t *core)
         }
     }
 
-   qdr_auto_link_t *auto_link = 0;
+    qdr_auto_link_t *auto_link = 0;
     while ( (auto_link = DEQ_HEAD(core->auto_links))) {
         DEQ_REMOVE_HEAD(core->auto_links);
         qdr_core_delete_auto_link(core, auto_link);
     }
+
+    //
+    // Remove all address watches
+    //
+    qdr_address_watch_shutdown(core);
 
     qdr_address_t *addr = 0;
     while ( (addr = DEQ_HEAD(core->addrs)) ) {
@@ -229,11 +234,6 @@ void qdr_core_free(qdr_core_t *core)
     // finalize modules while we can still submit new actions
     // this must happen after qdrc_endpoint_do_cleanup_CT calls
     qdr_modules_finalize(core);
-
-    //
-    // Remove any left-over address watches
-    //
-    qdr_address_watch_shutdown(core);
 
     // discard any left over actions
 

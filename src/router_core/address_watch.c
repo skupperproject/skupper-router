@@ -23,7 +23,7 @@
 struct qdr_address_watch_t {
     DEQ_LINKS(struct qdr_address_watch_t);
     qdr_watch_handle_t          watch_handle;
-    char                       *address_hash;
+    qdr_address_t              *addr;
     qdr_address_watch_update_t  handler;
     void                       *context;
 };
@@ -34,7 +34,7 @@ ALLOC_DEFINE(qdr_address_watch_t);
 static void qdr_watch_invoker(qdr_core_t *core, qdr_general_work_t *work);
 static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_core_unwatch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_address_watch_free_CT(qdr_address_watch_t *watch);
+static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch);
 
 //==================================================================================
 // Core Interface Functions
@@ -42,6 +42,7 @@ static void qdr_address_watch_free_CT(qdr_address_watch_t *watch);
 qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
                                           const char                 *address,
                                           char                        aclass,
+                                          qd_address_treatment_t      treatment_hint,
                                           qdr_address_watch_update_t  on_watch,
                                           void                       *context)
 {
@@ -50,6 +51,7 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
 
     action->args.io.address       = qdr_field(address);
     action->args.io.address_class = aclass;
+    action->args.io.treatment     = treatment_hint;
     action->args.io.watch_handler = on_watch;
     action->args.io.context       = context;
     action->args.io.value32_1     = sys_atomic_inc(&next_handle);
@@ -75,21 +77,17 @@ void qdr_core_unwatch_address(qdr_core_t *core, qdr_watch_handle_t handle)
 //==================================================================================
 void qdr_trigger_address_watch_CT(qdr_core_t *core, qdr_address_t *addr)
 {
-    const char          *address_hash = (char*) qd_hash_key_by_handle(addr->hash_handle);
-    qdr_address_watch_t *watch        = DEQ_HEAD(core->addr_watches);
+    qdr_address_watch_t *watch = addr->watch;
 
-    while (!!watch) {
-        if (strcmp(watch->address_hash, address_hash) == 0) {
-            qdr_general_work_t *work = qdr_general_work(qdr_watch_invoker);
-            work->watch_handler     = watch->handler;
-            work->context           = watch->context;
-            work->local_consumers   = DEQ_SIZE(addr->rlinks);
-            work->in_proc_consumers = DEQ_SIZE(addr->subscriptions);
-            work->remote_consumers  = qd_bitmask_cardinality(addr->rnodes);
-            work->local_producers   = DEQ_SIZE(addr->inlinks);
-            qdr_post_general_work_CT(core, work);
-        }
-        watch = DEQ_NEXT(watch);
+    if (!!watch) {
+        qdr_general_work_t *work = qdr_general_work(qdr_watch_invoker);
+        work->watch_handler     = watch->handler;
+        work->context           = watch->context;
+        work->local_consumers   = DEQ_SIZE(addr->rlinks);
+        work->in_proc_consumers = DEQ_SIZE(addr->subscriptions);
+        work->remote_consumers  = qd_bitmask_cardinality(addr->rnodes);
+        work->local_producers   = DEQ_SIZE(addr->inlinks);
+        qdr_post_general_work_CT(core, work);
     }
 }
 
@@ -98,7 +96,7 @@ void qdr_address_watch_shutdown(qdr_core_t *core)
     qdr_address_watch_t *watch = DEQ_HEAD(core->addr_watches);
     while (!!watch) {
         DEQ_REMOVE(core->addr_watches, watch);
-        qdr_address_watch_free_CT(watch);
+        qdr_address_watch_free_CT(core, watch);
         watch = DEQ_HEAD(core->addr_watches);
     }
 }
@@ -107,9 +105,11 @@ void qdr_address_watch_shutdown(qdr_core_t *core)
 //==================================================================================
 // Local Functions
 //==================================================================================
-static void qdr_address_watch_free_CT(qdr_address_watch_t *watch)
+static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch)
 {
-    free(watch->address_hash);
+    watch->addr->watch = 0;
+    watch->addr->ref_count--;
+    qdr_check_addr_CT(core, watch->addr);
     free_qdr_address_watch_t(watch);
 }
 
@@ -127,15 +127,41 @@ static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bo
         qd_iterator_t *iter = qdr_field_iterator(action->args.io.address);
         qd_iterator_annotate_prefix(iter, action->args.io.address_class);
         qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
+        qdr_address_t *addr = 0;
 
-        qdr_address_watch_t *watch = new_qdr_address_watch_t();
-        ZERO(watch);
-        watch->watch_handle = action->args.io.value32_1;
-        watch->address_hash = (char*) qd_iterator_copy(iter);
-        watch->handler      = action->args.io.watch_handler;
-        watch->context      = action->args.io.context;
+        qd_hash_retrieve(core->addr_hash, iter, (void**) &addr);
+        if (!addr) {
+            qdr_address_config_t   *addr_config;
+            qd_address_treatment_t  treatment =
+                qdr_treatment_for_address_hash_with_default_CT(core, iter, action->args.io.treatment, &addr_config);
 
-        DEQ_INSERT_TAIL(core->addr_watches, watch);
+            addr = qdr_address_CT(core, treatment, addr_config);
+            if (!!addr) {
+                qd_hash_insert(core->addr_hash, iter, addr, &addr->hash_handle);
+                DEQ_ITEM_INIT(addr);
+                DEQ_INSERT_TAIL(core->addrs, addr);
+            } else {
+                qd_log(core->log, QD_LOG_CRITICAL, "Failed to create address for watch");
+                assert(false);
+            }
+        }
+
+        if (!!addr) {
+            if (!addr->watch) {
+                qdr_address_watch_t *watch = new_qdr_address_watch_t();
+                ZERO(watch);
+                watch->watch_handle = action->args.io.value32_1;
+                watch->addr         = addr;
+                watch->handler      = action->args.io.watch_handler;
+                watch->context      = action->args.io.context;
+                DEQ_INSERT_TAIL(core->addr_watches, watch);
+
+                addr->watch = watch;
+                addr->ref_count++;
+            } else {
+                qd_log(core->log, QD_LOG_CRITICAL, "Multiple watches established for the same address, later watches ignored.");
+            }
+        }
     }
     qdr_field_free(action->args.io.address);
 }
@@ -150,7 +176,7 @@ static void qdr_core_unwatch_address_CT(qdr_core_t *core, qdr_action_t *action, 
         while (!!watch) {
             if (watch->watch_handle == watch_handle) {
                 DEQ_REMOVE(core->addr_watches, watch);
-                qdr_address_watch_free_CT(watch);
+                qdr_address_watch_free_CT(core, watch);
                 break;
             }
             watch = DEQ_NEXT(watch);
