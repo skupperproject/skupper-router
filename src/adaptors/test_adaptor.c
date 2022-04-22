@@ -50,8 +50,8 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
     core_ptr = core;
     if (qdr_core_test_hooks_enabled(core)) {
         log_source = qd_log_source("ADDRESS_WATCH");
-        handle1 = qdr_core_watch_address(core, address_1, QD_ITER_HASH_PREFIX_MOBILE, on_watch, (void*) 1);
-        handle2 = qdr_core_watch_address(core, address_2, QD_ITER_HASH_PREFIX_MOBILE, on_watch, (void*) 2);
+        handle1 = qdr_core_watch_address(core, address_1, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED, on_watch, (void*) 1);
+        handle2 = qdr_core_watch_address(core, address_2, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED, on_watch, (void*) 2);
     }
 }
 
