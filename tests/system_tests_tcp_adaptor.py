@@ -511,7 +511,7 @@ class TcpAdaptor(TestCase):
                 # query each interior for addresses
                 p = Process(
                     ['skstat', '-b', str(cls.router_dict[rtr].addresses[0]), '-a'],
-                    name='skstat-snap1', stdout=PIPE, expect=None,
+                    name='skstat-snap1', stdout=PIPE, expect=Process.EXIT_OK,
                     universal_newlines=True)
                 out = p.communicate()[0]
                 # examine what this router can see; signal poll loop to continue or not

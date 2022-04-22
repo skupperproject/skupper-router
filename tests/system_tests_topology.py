@@ -672,7 +672,7 @@ class RouterFluxTest(TestCase):
         if extra:
             config.extend(extra)
         return self.tester.qdrouterd(name, Qdrouterd.Config(config),
-                                     wait=False, expect=None)
+                                     wait=False)
 
     def _deploy_routers(self,
                         ra_interval=None,

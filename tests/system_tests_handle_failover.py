@@ -112,10 +112,10 @@ class FailoverTest(TestCase):
             raise Exception("%s\n%s" % (e, out))
         return out
 
-    def run_skstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None, expect=Process.EXIT_OK):
         p = self.popen(
             ['skstat', '--bus', str(address or self.router.addresses[0]), '--timeout', str(TIMEOUT)] + args,
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=expect,
             universal_newlines=True)
 
         out = p.communicate()[0]

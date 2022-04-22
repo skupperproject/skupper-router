@@ -19,7 +19,7 @@
 
 import re
 from subprocess import PIPE
-from system_test import TestCase, Qdrouterd, TIMEOUT, main_module, unittest, TestTimeout
+from system_test import TestCase, Qdrouterd, TIMEOUT, main_module, unittest, TestTimeout, Process
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
@@ -44,10 +44,10 @@ class DefaultDistributionTest(TestCase):
         cls.router.wait_ready()
         cls.address = cls.router.addresses[0]
 
-    def run_skstat(self, args, regexp=None, address=None):
+    def run_skstat(self, args, regexp=None, address=None, expect=Process.EXIT_OK):
         p = self.popen(
             ['skstat', '--bus', str(address or self.address), '--timeout', str(TIMEOUT)] + args,
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=expect,
             universal_newlines=True)
 
         out = p.communicate()[0]
