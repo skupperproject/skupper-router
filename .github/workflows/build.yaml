@@ -189,6 +189,8 @@ jobs:
       LD_LIBRARY_PATH: ${{github.workspace}}/install/lib
       QPID_SYSTEM_TEST_TIMEOUT: 300
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
+      # this enables colored output
+      FORCE_COLOR: 1
 
     steps:
 
@@ -317,6 +319,8 @@ jobs:
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
       RouterCTestExtraArgs: ""
+      # this enables colored output
+      FORCE_COLOR: 1
 
       # TODO(DISPATCH-2144) use -DPython_EXECUTABLE=/usr/bin/python3-debug when issue is fixed,
       #  as that allows for -DSANITIZE_3RD_PARTY=ON on Fedora
@@ -514,6 +518,8 @@ jobs:
       InstallPrefix: ${{github.workspace}}/install
       DispatchCMakeExtraArgs: >
         -GNinja
+      # this enables colored output
+      FORCE_COLOR: 1
 
     steps:
 
