@@ -17,15 +17,15 @@
 # under the License.
 #
 
-FROM registry.access.redhat.com/ubi8/ubi:latest as builder
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as builder
 
-RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
+RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel swig \
     libnghttp2-devel \
-    wget patch findutils git libasan libubsan \
- && dnf clean all -y
+    wget tar patch findutils git libasan libubsan \
+ && microdnf clean all -y
 
 WORKDIR /build
 COPY . .
@@ -37,22 +37,22 @@ ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/ar
 ARG VERSION=UNKNOWN
 ENV VERSION=$VERSION
 RUN .github/scripts/compile.sh
+RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image
 
-FROM registry.access.redhat.com/ubi8/ubi:latest
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 # gdb and sanitizers are part of final image as they can be used as debug options for Skupper
-RUN dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
+RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
-    cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi libuuid openssl \
+    cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
     python3 \
     libnghttp2 \
     gdb libasan libubsan \
     gettext hostname iputils \
- && dnf clean all
+ && microdnf clean all
 
 WORKDIR /
-COPY --from=builder /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /libwebsockets-image.tar.gz /
-RUN tar zxpf qpid-proton-image.tar.gz && tar zxpf skupper-router-image.tar.gz && tar zxpf libwebsockets-image.tar.gz && rm -f /qpid-proton-image.tar.gz /skupper-router-image.tar.gz /libwebsockets-image.tar.gz
+COPY --from=builder /image /
 
 WORKDIR /home/skrouterd/etc
 WORKDIR /home/skrouterd/bin
