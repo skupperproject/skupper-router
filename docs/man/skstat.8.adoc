@@ -63,9 +63,6 @@ Time this router has been up. Displayed in the days:hours:minutes:seconds format
 
 // Area::
 
-Link Routes::
-The number of active and inactive link routes configured for this router.
-
 Auto Links::
 The number of incoming and outgoing auto links configured for this router.
 
@@ -144,7 +141,7 @@ role::
 The connection's role:
   - 'normal' - The normal connection from a client to a router.
   - 'inter-router' - The connection between routers to form a network.
-  - 'route-container' - The connection to or from a broker or other host to receive link routes and waypoints.
+  - 'route-container' - The connection to or from a broker or other host to receive waypoints.
   - 'edge' - The connection between an edge router and an interior router.
 
 dir::
@@ -189,8 +186,7 @@ id::
 The unique identifier of this link.
 
 peer::
-For link-routed links, the unique identifier of the peer link. In
-link routing, an inbound link is paired with an outbound link.
+For link-routed links, the unique identifier of the peer link.
 
 class::
 The class of the address bound to the link:
@@ -369,22 +365,6 @@ The number of deliveries for this address that were delivered to an in-process c
 from-proc::
 The number of deliveries for this address that were received from an in-process producer.
 
-skstat --linkroutes
-~~~~~~~~~~~~~~~~~~~
-
-prefix::
-The address prefix of the link route.
-
-dir::
-The direction of matching links (from this router's perspective).
-
-distrib::
-The distribution method used for routed links. This value should always be 'linkBalanced', which is the only supported distribution for routed links.
-
-status::
-The operational status of the link route:
-  - 'active' - The route is actively routing attaches (it is ready for use).
-  - 'inactive' - The route is inactive, because no local destination is connected.
 
 skstat --autolinks
 ~~~~~~~~~~~~~~~~~~
@@ -602,10 +582,6 @@ allowWaypointLinks::
 Whether this connection is allowed to claim 'waypoint.N' capability for
 attached links.  This allows endpoints to act as waypoints without
 needing auto-links.
-
-allowDynamicLinkRoutes::
-Whether this connection is allowed to dynamically create connection-scoped
-link route destinations.
 
 allowAdminStatusUpdate::
 Whether this connection is allowed to update the admin status of other
