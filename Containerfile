@@ -37,7 +37,7 @@ WORKDIR /build
 COPY . .
 ENV PROTON_VERSION=0.37.0
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-http://archive.apache.org/dist/qpid/proton/${PROTON_VERSION}/qpid-proton-${PROTON_VERSION}.tar.gz}
-ENV LWS_VERSION=v3.2.3
+ENV LWS_VERSION=v4.3.1
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
 
 ARG VERSION=UNKNOWN
