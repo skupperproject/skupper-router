@@ -41,6 +41,7 @@
 #define QDR_ADDRESS_TRACKED_DELIVERIES                 17
 #define QDR_ADDRESS_PRIORITY                           18
 #define QDR_ADDRESS_DELIVERIES_REDIRECTED              19
+#define QDR_ADDRESS_WATCH                              20
 
 const char *qdr_address_columns[] =
     {"name",
@@ -63,6 +64,7 @@ const char *qdr_address_columns[] =
      "trackedDeliveries",
      "priority",
      "deliveriesRedirectedToFallback",
+     "watch",
      0};
 
 
@@ -171,6 +173,10 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
 
     case QDR_ADDRESS_DELIVERIES_REDIRECTED:
         qd_compose_insert_ulong(body, addr->deliveries_redirected);
+        break;
+
+    case QDR_ADDRESS_WATCH:
+        qd_compose_insert_bool(body, !!addr->watch);
         break;
 
     default:

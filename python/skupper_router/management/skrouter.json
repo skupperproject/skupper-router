@@ -1660,6 +1660,10 @@
                 "priority": {
                     "type": "integer",
                     "description": "The message priority being handled by this address."
+                },
+                "watch": {
+                    "type": "boolean",
+                    "description": "True iff there is an address-watch monitoring this address."
                 }
             }
         },

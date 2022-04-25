@@ -551,7 +551,7 @@ class BusManager:
         rows = []
         cols = ('distribution', 'inProcess', 'subscriberCount', 'remoteCount',
                 'deliveriesIngress', 'deliveriesEgress',
-                'deliveriesTransit', 'deliveriesToContainer', 'deliveriesFromContainer', 'name', 'priority')
+                'deliveriesTransit', 'deliveriesToContainer', 'deliveriesFromContainer', 'name', 'priority', 'watch')
 
         objects = self.query('io.skupper.router.router.address', cols, limit=self.opts.limit)
 
@@ -578,6 +578,7 @@ class BusManager:
         if self.opts.verbose:
             heads.append(Header("to-proc", Header.COMMAS))
             heads.append(Header("from-proc", Header.COMMAS))
+            heads.append(Header("watch", Header.COMMAS))
 
         for addr in objects:
             row = []
@@ -596,6 +597,7 @@ class BusManager:
             if self.opts.verbose:
                 row.append(PlainNum(addr.deliveriesToContainer))
                 row.append(PlainNum(addr.deliveriesFromContainer))
+                row.append("Y" if addr.watch else "")
             rows.append(row)
         title = "Router Addresses"
         sorter = Sorter(heads, rows, 'addr', 0, True)
