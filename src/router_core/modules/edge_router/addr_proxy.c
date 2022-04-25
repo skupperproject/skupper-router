@@ -263,8 +263,8 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
                 // to the interior to signal the presence of local producers.
                 //
                 bool add = false;
-                if (DEQ_SIZE(addr->inlinks) > 0) {
-                    if (DEQ_SIZE(addr->inlinks) == 1) {
+                if (DEQ_SIZE(addr->inlinks) > 0 || !!addr->watch) {
+                    if (DEQ_SIZE(addr->inlinks) == 1 && !addr->watch) {
                         //
                         // If there's only one link and it's on the edge connection, ignore the address.
                         //
