@@ -35,13 +35,28 @@ do_patch () {
 
 WORKING=`pwd`
 wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
+wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
 
-mkdir -p qpid-proton-src build staging proton_build proton_install
+mkdir -p qpid-proton-src build staging proton_build proton_install lws-src lws_build lws_install
 tar -zxf qpid-proton.tar.gz -C qpid-proton-src --strip-components 1
+tar -zxf libwebsockets.tar.gz -C lws-src --strip-components 1
 
 do_patch "patches/proton" qpid-proton-src
 
-cd proton_build
+cd $WORKING/lws_build
+cmake -DLWS_LINK_TESTAPPS_DYNAMIC=ON \
+  -DLWS_WITH_LIBUV=OFF -DLWS_WITHOUT_BUILTIN_GETIFADDRS=ON \
+  -DLWS_USE_BUNDLED_ZLIB=OFF -DLWS_WITHOUT_BUILTIN_SHA1=ON \
+  -DLWS_WITH_STATIC=OFF -DLWS_IPV6=ON -DLWS_WITH_HTTP2=OFF \
+  -DLWS_WITHOUT_CLIENT=OFF -DLWS_WITHOUT_SERVER=OFF \
+  -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITHOUT_TEST_SERVER=ON \
+  -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=ON -DLWS_WITHOUT_TEST_PING=ON \
+  -DLWS_WITHOUT_TEST_CLIENT=ON $WORKING/lws-src \
+    && make \
+    && make DESTDIR=$WORKING/lws_install install \
+    && tar -z -C $WORKING/lws_install -cf /libwebsockets-image.tar.gz usr \
+    && make install
+cd $WORKING/proton_build
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DENABLE_LINKTIME_OPTIMIZATION=ON \
   -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
