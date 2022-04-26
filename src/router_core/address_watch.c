@@ -108,6 +108,8 @@ void qdr_address_watch_shutdown(qdr_core_t *core)
 static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch)
 {
     watch->addr->watch = 0;
+    qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_OFF, watch->addr);
+
     watch->addr->ref_count--;
     qdr_check_addr_CT(core, watch->addr);
     free_qdr_address_watch_t(watch);
@@ -158,6 +160,8 @@ static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bo
 
                 addr->watch = watch;
                 addr->ref_count++;
+
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_ON, addr);
             } else {
                 qd_log(core->log, QD_LOG_CRITICAL, "Multiple watches established for the same address, later watches ignored.");
             }
