@@ -363,6 +363,17 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
             del_outlink(ap, addr);
         break;
 
+    case QDRC_EVENT_ADDR_WATCH_ON :
+        add_outlink(ap, key, addr);
+        break;
+
+    case QDRC_EVENT_ADDR_WATCH_OFF :
+        link_ref = DEQ_HEAD(addr->inlinks);
+        if ((!link_ref || link_ref->link->conn == ap->edge_conn) && DEQ_SIZE(addr->inlinks) < 2) {
+            del_outlink(ap, addr);
+        }
+        break;
+
     default:
         assert(false);
         break;
