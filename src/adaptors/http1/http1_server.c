@@ -559,6 +559,9 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         }
         hconn->server.link_timeout = 0;
         _setup_server_links(hconn);
+
+        while (hconn->qdr_conn && qdr_connection_process(hconn->qdr_conn))
+            ;
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
