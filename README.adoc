@@ -102,6 +102,13 @@ The HTTP2 system tests only runs if
 
 The TCP system tests (tests/system_tests_tcp_adaptor.py) use the Python selectors module when running echo clients and servers.
 The TCP system tests run only if Python selectors is available.
+Several tests require the `nc` (ncat) binary to be present.
+
+.Install curl and ncat (on Fedora)
+[source, shell script]
+----
+dnf install curl nmap-ncat
+----
 
 .Install quart, h2 and selectors
 [source,shell script]
