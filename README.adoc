@@ -33,7 +33,7 @@ It provides flexible and scalable interconnect between any AMQP endpoints, and i
 
 
 [plantuml]
-....
+----
 class BlockProcessor
 class DiagramBlock
 class DitaaBlock
@@ -42,7 +42,7 @@ class PlantUmlBlock
 BlockProcessor <|-- DiagramBlock
 DiagramBlock <|-- DitaaBlock
 DiagramBlock <|-- PlantUmlBlock
-....
+----
 
 == Building and testing
 
