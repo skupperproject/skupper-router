@@ -1,0 +1,140 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+:toc:
+:toclevels: 5
+= Skupper Router Architectural overview
+
+== Brief history
+
+Router started in the Apache Qpid C++ Broker.
+The broker had a Broker Federation feature used to create a network of brokers and route messages between them.
+This required manual provisioning of routes and was hard to scale and manage in a deployment.
+Lots of custom code required to make things work.
+
+What router federation did was essentially internet routing.
+The idea is to let brokers be brokers and add a separate routing layer to connect them.
+
+First router commit:
+
+```
+commit 438e7e82e17f008997276df528424a3cbb0bd32e
+Author: Ted Ross <tross@apache.org>
+Date:   Thu Oct 24 16:01:31 2013 +0000
+
+	QPID-5257 - Add structure for the Dispatch sub-project
+```
+
+Since then, four developers over 8 years.
+The primary use of router is _broker federation_.
+
+Router features to support these usecases:
+
+* Link Routes
+* Autolinks
+* Waypoints/Phases
+* Policy/Vhosts
+* Exchange/Bindings
+
+Lives on as Qpid Dispatch Router, at
+
+Cloud scenarios
+
+New paradigm of application architecture -> New use cases for the router.
+Non-AMQP protocol support (HTTP, HTTPS, TCP) is required to support cloud applications.
+A different set of goals from broker integration.
+
+=== Skupper Router split
+
+Divergent use-cases implies divergent goals
+A car that flies…
+Split skupper-router from Apache Qpid Dispatch
+Remove Broker Integration-specific features
+Emphasis on VAN use case
+Multi-protocol support
+
+Remove the advanced broker federation features and add protocol adaptors to support non-AMQP protocols.
+
+The code carries this legacy and has left footprint.
+
+Vestigial code
+Current implementations influenced by deprecated features
+Opportunities for improvements
+
+
+== Architecture
+
+Qpid Dispatch
+
+Library on top of Apache Qpid Proton to
+
+Q: where did “Dispatch” come from? (Aside from railroad terminology)
+A: Dispatch was a project that provided infrastructure for building high performance AMQP applications on Proton.  It provided implementations of Container, links, connections, messages, etc.
+The router was built using that Dispatch infrastructure.
+The Dispatch project is no more but the current code structure is heavily influenced by it.
+
+The Qpid Dispatch Router was the only application using the Dispatch library.
+
+
+== Control and Data Planes
+
+main/main_process() in router/src/main.c
+qd_dispatch_load_config(config file….)
+python!
+qd_router_setup_late() in src/router_node:
+qdr_core() in src/router_core/router_core.c
+spawns router_core_thread() src/router_core/router_core_thread.c
+qd_server_run()
+For each worker thread (+ main thread):
+thread_run(qd_server….) in src/server.c
+proactor main loop
+src/server.c: all events
+src/container.c: AMQP connection events
+
+
+```
+main/main_process() in router/src/main.c
+qd_dispatch_load_config(config file….)
+python!
+qd_router_setup_late() in src/router_node:
+qdr_core() in src/router_core/router_core.c
+spawns router_core_thread() src/router_core/router_core_thread.c
+qd_server_run()
+For each worker thread (+ main thread):
+thread_run(qd_server….) in src/server.c
+proactor main loop
+src/server.c: all events
+src/container.c: AMQP connection events
+```
+
+== Shutdown Sequence
+
+see shutdown.adoc for a deeper dive
+
+signal_handler() router/src/main.c
+qd_server_stop()
+pn_proactor_interrupt(proactor)
+PN_PROACTOR_INTERRUPT in handle() in server.c
+propagates to all proactor thread
+sets running flag to break out of thread_run() server.c
+thread_run() returns
+qd_server_run(): joins all worker threads to main thread, returns
+Back to main_process():
+qd_dispatch_free() (src/dispatch.c)
+qd_router_free() (src/router_node.c)
+qdr_core_free() (src/router_core/router_core.c)
+sets core->running = false
+joins router core thread

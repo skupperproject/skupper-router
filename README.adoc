@@ -35,6 +35,18 @@ Skupper Router is a high-performance, lightweight AMQP 1.0 message router.
 It provides flexible and scalable interconnect between any AMQP endpoints, and is forked from the https://github.com/apache/qpid-dispatch/[qpid-dispatch] project to focus on the https://skupper.io[Skupper] use case.
 
 
+[plantuml]
+....
+class BlockProcessor
+class DiagramBlock
+class DitaaBlock
+class PlantUmlBlock
+
+BlockProcessor <|-- DiagramBlock
+DiagramBlock <|-- DitaaBlock
+DiagramBlock <|-- PlantUmlBlock
+....
+
 == Building and testing
 
 NOTE: Skupper router only supports the Linux OS.
