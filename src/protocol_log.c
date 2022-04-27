@@ -36,6 +36,7 @@
 #include <sys/time.h>
 
 #define ROUTER_ID_SIZE 6
+#define EVENT_BATCH_MAX 50
 
 typedef struct plog_identity_t {
     uint64_t record_id;
@@ -777,90 +778,127 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
 
 
 /**
- * @brief Emit a single record as an event
+ * @brief Emit all of the unflushed records as events, batched into message bodies.
  *
  * @param core Pointer to the core module
- * @param record Pointer to the record being flushed
  */
-static void _plog_emit_record_as_event_TH(qdr_core_t *core, plog_record_t *record)
+static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
 {
-    //
-    // Compose the message content starting with the properties
-    //
-    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
-    qd_compose_start_list(field);
-    qd_compose_insert_long(field, next_message_id++);
-    qd_compose_insert_null(field);                      // user-id
-    qd_compose_insert_string(field, event_address_my);  // to
-    qd_compose_insert_string(field, "RECORD");          // subject
-    qd_compose_end_list(field);
-
-    //
-    // Append the body section to the content
-    //
-    field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
-
-    //
-    // Form the body as a list of records.  This opens the possibility of later
-    // batching multiple records into the same body.
-    //
-    qd_compose_start_list(field);
-    qd_compose_start_map(field);
-
-    qd_compose_insert_uint(field, PLOG_ATTRIBUTE_RECORD_TYPE);
-    qd_compose_insert_uint(field, record->record_type);
-
-    qd_compose_insert_uint(field, PLOG_ATTRIBUTE_IDENTITY);
-    _plog_compose_id(field, &record->identity);
-
-    plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
-    while (data) {
-        if (data->emit_ordinal >= record->emit_ordinal) {
-            qd_compose_insert_uint(field, data->attribute_type);
-            _plog_compose_attribute(field, data);
-        }
-        data = DEQ_NEXT(data);
+    if (DEQ_SIZE(unflushed_records) == 0) {
+        return;
     }
-    qd_compose_end_map(field);
-    qd_compose_end_list(field);
 
-    //
-    // Create a message for the content
-    //
-    qd_message_t *event = qd_message();
-    qd_message_compose_2(event, field, true);
+    int                  event_count = 0;
+    qd_composed_field_t *field = 0;
+    plog_record_t       *record = DEQ_HEAD(unflushed_records);
 
-    //
-    // Send the message to all of the bound receivers
-    //
-    qdr_send_to2(core, event, event_address_my, true, false);
+    while (!!record) {
+        if (field == 0) {
+            //
+            // Compose a new message content starting with the properties
+            //
+            field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
+            qd_compose_start_list(field);
+            qd_compose_insert_long(field, next_message_id++);
+            qd_compose_insert_null(field);                      // user-id
+            qd_compose_insert_string(field, event_address_my);  // to
+            qd_compose_insert_string(field, "RECORD");          // subject
+            qd_compose_end_list(field);
 
-    //
-    // Free up used resources
-    //
-    qd_compose_free(field);
-    qd_message_free(event);
+            //
+            // Append the body section to the content
+            //
+            field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
+
+            //
+            // Form the body as a list of records.
+            //
+            qd_compose_start_list(field);
+        }
+
+        //
+        // Insert the current record into the current message body.
+        //
+        qd_compose_start_map(field);
+        qd_compose_insert_uint(field, PLOG_ATTRIBUTE_RECORD_TYPE);
+        qd_compose_insert_uint(field, record->record_type);
+
+        qd_compose_insert_uint(field, PLOG_ATTRIBUTE_IDENTITY);
+        _plog_compose_id(field, &record->identity);
+
+        plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
+        while (data) {
+            if (data->emit_ordinal >= record->emit_ordinal) {
+                qd_compose_insert_uint(field, data->attribute_type);
+                _plog_compose_attribute(field, data);
+            }
+            data = DEQ_NEXT(data);
+        }
+        qd_compose_end_map(field);
+
+        //
+        // Count this event.  If we have reached the maximum events for a batch, or
+        // we have reached the end of the unflushed list, close out the current message.
+        //
+        event_count++;
+        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(unflushed_records)) {
+            event_count = 0;
+
+            //
+            // Close out the event list in the message body
+            //
+            qd_compose_end_list(field);
+
+            //
+            // Create a message for the content
+            //
+            qd_message_t *event = qd_message();
+            qd_message_compose_2(event, field, true);
+
+            //
+            // Send the message to all of the bound receivers
+            //
+            qdr_send_to2(core, event, event_address_my, true, false);
+
+            //
+            // Free up used resources
+            //
+            qd_compose_free(field);
+            qd_message_free(event);
+
+            //
+            // Nullify the field pointer so that a new message will be started on the next
+            // loop iteration.
+            //
+            field = 0;
+        }
+
+        record = DEQ_NEXT_N(UNFLUSHED, record);
+    }
+
 }
 
 
 /**
  * @brief Emit all of the unflushed records
  * 
+ * @param core Pointer to the core module
  */
 static void _plog_flush_TH(qdr_core_t *core)
 {
+    //
+    // If there is at least one collector for this router, batch up the
+    // unflushed records and send them as events to the collector.
+    //
+    if (my_address_usable) {
+        _plog_emit_unflushed_as_events_TH(core);
+    }
+
     plog_record_t *record = DEQ_HEAD(unflushed_records);
     while (!!record) {
         DEQ_REMOVE_HEAD_N(UNFLUSHED, unflushed_records);
         assert(record->unflushed);
         record->unflushed = false;
-
-        //
-        // Emit event to collectors
-        //
-        if (my_address_usable) {
-            _plog_emit_record_as_event_TH(core, record);
-        }
 
         //
         // If this record has been ended, emit the log line.
