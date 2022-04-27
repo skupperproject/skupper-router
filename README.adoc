@@ -58,9 +58,27 @@ To build skupper router on a yum-based Linux system, you need the following pack
 
 To build formatted documentation (man pages, HTML, PDF) see the requirements in `doc/README.adoc`
 
+
+```mermaid
+  graph TD;
+      A-->B;
+      A-->C;
+      B-->D;
+      C-->D;
+```
+
 === Build
 
 From the `skupper-router` directory:
+
+[mermaid]
+----
+  graph TD;
+      A-->B;
+      A-->C;
+      B-->D;
+      C-->D;
+----
 
 [source,shell script]
 ----
