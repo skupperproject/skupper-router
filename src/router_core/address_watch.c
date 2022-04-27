@@ -161,7 +161,15 @@ static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bo
                 addr->watch = watch;
                 addr->ref_count++;
 
+                //
+                // Raise a core event to notify interested parties that this address is being watched.
+                //
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_ON, addr);
+
+                //
+                // Trigger a watch callback for an initial snapshot.
+                //
+                qdr_trigger_address_watch_CT(core, addr);
             } else {
                 qd_log(core->log, QD_LOG_CRITICAL, "Multiple watches established for the same address, later watches ignored.");
             }
