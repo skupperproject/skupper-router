@@ -88,6 +88,43 @@ The Dispatch project is no more but the current code structure is heavily influe
 
 The Qpid Dispatch Router was the only application using the Dispatch library.
 
+[mermaid]
+----
+flowchart LR
+  subgraph TOP
+    direction TB
+    subgraph B1
+        direction RL
+        i1 -->f1
+    end
+    subgraph B2
+        direction TB
+        i2 -->f2
+    end
+  end
+  A --> TOP --> B
+  B1 --> B2
+----
+
+
+[mermaid]
+----
+flowchart LR
+  subgraph Router core thread
+    M([$management])
+    DB[(Route Table)]
+    As[Actions]
+  end
+  subgraph Proactor
+    W1["Worker thread <br> (connection)"]
+    W2["Worker thread <br> (timer)"]
+    W3["Worker thread <br> (connection)"]
+    W4["Worker thread <br> (connection)"]
+  end
+  W1 --> As
+  DB --> W3
+  DB --> W4
+----
 
 == Control and Data Planes
 
