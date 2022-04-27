@@ -289,8 +289,7 @@ class Process(subprocess.Popen):
         """
         self.name = name or os.path.basename(args[0])
         self.args = args
-        if expect is None:
-            raise RuntimeError("Process (name=%s) specified a None for except" % self.name)
+        assert expect is not None, "Process (name=%s) argument expect cannot be None" % self.name
         self.expect = expect
         self.actual = None
         self.outdir = os.getcwd()
