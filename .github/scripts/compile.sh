@@ -21,6 +21,39 @@
 
 set -euxo pipefail
 
+WORKING=$(pwd)
+
+#region libwebsockets
+wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
+tar -zxf libwebsockets.tar.gz --one-top-level=lws-src --strip-components 1
+
+cmake -S "$WORKING/lws-src" -B "$WORKING/lws_build" \
+  -DLWS_LINK_TESTAPPS_DYNAMIC=ON \
+  -DLWS_WITH_LIBUV=OFF \
+  -DLWS_WITHOUT_BUILTIN_GETIFADDRS=ON \
+  -DLWS_USE_BUNDLED_ZLIB=OFF \
+  -DLWS_WITHOUT_BUILTIN_SHA1=ON \
+  -DLWS_WITH_STATIC=OFF \
+  -DLWS_IPV6=ON \
+  -DLWS_WITH_HTTP2=OFF \
+  -DLWS_WITHOUT_CLIENT=OFF \
+  -DLWS_WITHOUT_SERVER=OFF \
+  -DLWS_WITHOUT_TESTAPPS=ON \
+  -DLWS_WITHOUT_TEST_SERVER=ON \
+  -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=ON \
+  -DLWS_WITHOUT_TEST_PING=ON \
+  -DLWS_WITHOUT_TEST_CLIENT=ON
+cmake --build "$WORKING/lws_build" --parallel "$(nproc)" --verbose
+cmake --install "$WORKING/lws_build"
+
+DESTDIR=$WORKING/lws_install cmake --install "$WORKING/lws_build"
+tar -z -C $WORKING/lws_install -cf /libwebsockets-image.tar.gz usr
+#endregion
+
+#region qpid-proton and skupper-router
+wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
+tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
+
 do_patch () {
     PATCH_DIR=$1
     PATCH_SRC=$2
@@ -33,45 +66,42 @@ do_patch () {
     fi
 }
 
-WORKING=`pwd`
-wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
-wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
-
-mkdir -p qpid-proton-src build staging proton_build proton_install lws-src lws_build lws_install
-tar -zxf qpid-proton.tar.gz -C qpid-proton-src --strip-components 1
-tar -zxf libwebsockets.tar.gz -C lws-src --strip-components 1
-
 do_patch "patches/proton" qpid-proton-src
 
-cd $WORKING/lws_build
-cmake -DLWS_LINK_TESTAPPS_DYNAMIC=ON \
-  -DLWS_WITH_LIBUV=OFF -DLWS_WITHOUT_BUILTIN_GETIFADDRS=ON \
-  -DLWS_USE_BUNDLED_ZLIB=OFF -DLWS_WITHOUT_BUILTIN_SHA1=ON \
-  -DLWS_WITH_STATIC=OFF -DLWS_IPV6=ON -DLWS_WITH_HTTP2=OFF \
-  -DLWS_WITHOUT_CLIENT=OFF -DLWS_WITHOUT_SERVER=OFF \
-  -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITHOUT_TEST_SERVER=ON \
-  -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=ON -DLWS_WITHOUT_TEST_PING=ON \
-  -DLWS_WITHOUT_TEST_CLIENT=ON $WORKING/lws-src \
-    && make \
-    && make DESTDIR=$WORKING/lws_install install \
-    && tar -z -C $WORKING/lws_install -cf /libwebsockets-image.tar.gz usr \
-    && make install
-cd $WORKING/proton_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DENABLE_LINKTIME_OPTIMIZATION=ON \
-  -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
-  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/qpid-proton-src/ \
-    && VERBOSE=1 make DESTDIR=$WORKING/proton_install install \
-    && tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr \
-    && VERBOSE=1 make install
-cd $WORKING/build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
-  -DBUILD_TESTING=OFF \
-  -DVERSION=${VERSION} \
-  -DCMAKE_INSTALL_PREFIX=/usr $WORKING/ \
-    && VERBOSE=1 make DESTDIR=$WORKING/staging/ install \
-    && tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc
+do_build () {
+  local suffix=${1}
+  local runtime_check=${2}
+
+  cmake -S "$WORKING/qpid-proton-src" -B "$WORKING/proton_build${suffix}" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DRUNTIME_CHECK="${runtime_check}" \
+    -DENABLE_LINKTIME_OPTIMIZATION=ON \
+    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
+    -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "proton_build${suffix}" --parallel "$(nproc)" --verbose
+  DESTDIR="$WORKING/proton_install${suffix}" cmake --install "proton_build${suffix}"
+
+  cmake -S "$WORKING/" -B "$WORKING/build${suffix}" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DRUNTIME_CHECK="${runtime_check}" \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
+    -DProton_DIR="$WORKING/proton_install${suffix}/usr/lib64/cmake/Proton" \
+    -DBUILD_TESTING=OFF \
+    -DVERSION="${VERSION}" \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "$WORKING/build${suffix}" --parallel "$(nproc)" --verbose
+}
+
+do_build "" OFF
+do_build "_asan" asan
+
+tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr
+
+DESTDIR=$WORKING/staging/ cmake --install $WORKING/build
+cp "$WORKING/build_asan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_asan"
+cp --target-directory="$WORKING/staging/" "$WORKING/tests/tsan.supp" "$WORKING/build_asan/tests/lsan.supp"
+tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
+#endregion
