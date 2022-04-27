@@ -267,6 +267,7 @@ class RxLinkCreditTest(MessagingHandler):
         self.addr          = "rx/link/credit/test"
         self.credit_issued = 0
         self.error         = None
+        self.get_baseline  = True
 
         self.stages = ['Setup', 'LinkBlocked', 'LinkUnblocked', '10Credits', '20Credits']
         self.stage  = 0
@@ -342,7 +343,10 @@ class RxLinkCreditTest(MessagingHandler):
                 #
                 # LinkBlocked
                 #
-                if response.results[0].linksBlocked == 1:
+                if self.get_baseline:
+                    self.get_baseline = False
+                    self.baseline_blocked = response.results[0].linksBlocked
+                if response.results[0].linksBlocked == self.baseline_blocked + 1:
                     self.receiver.flow(10)
                     self.stage = 2
                     self.process()
@@ -352,7 +356,7 @@ class RxLinkCreditTest(MessagingHandler):
                 #
                 # LinkUnblocked
                 #
-                if response.results[0].linksBlocked == 0:
+                if response.results[0].linksBlocked == self.baseline_blocked:
                     self.stage = 3
                     self.process()
                     return
@@ -398,6 +402,7 @@ class TxLinkCreditTest(MessagingHandler):
         self.addr          = "rx/link/credit/test"
         self.credit_issued = 0
         self.error         = None
+        self.get_baseline  = True
 
         self.stages = ['Setup', 'LinkBlocked', 'LinkUnblocked', '250Credits']
         self.stage  = 0
@@ -465,7 +470,10 @@ class TxLinkCreditTest(MessagingHandler):
                 #
                 # LinkBlocked
                 #
-                if response.results[0].linksBlocked == 1:
+                if self.get_baseline:
+                    self.get_baseline = False
+                    self.baseline_blocked = response.results[0].linksBlocked
+                if response.results[0].linksBlocked == self.baseline_blocked + 1:
                     self.receiver = event.container.create_receiver(self.sender_conn, self.addr)
                     self.stage = 2
                     self.process()
@@ -475,7 +483,7 @@ class TxLinkCreditTest(MessagingHandler):
                 #
                 # LinkUnblocked
                 #
-                if response.results[0].linksBlocked == 0:
+                if response.results[0].linksBlocked == self.baseline_blocked:
                     self.stage = 3
                     self.process()
                     return
