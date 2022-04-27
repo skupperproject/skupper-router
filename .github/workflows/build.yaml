@@ -311,7 +311,7 @@ jobs:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
       volumes:
         - ${{github.workspace}}:${{github.workspace}}
-      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined
+      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined --sysctl net.ipv6.conf.all.disable_ipv6=0
 
     env:
       BuildType: ${{matrix.buildType}}
