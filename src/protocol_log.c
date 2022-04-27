@@ -37,6 +37,7 @@
 
 #define ROUTER_ID_SIZE 6
 #define EVENT_BATCH_MAX 50
+#define FLUSH_SLOT_COUNT 5
 
 typedef struct plog_identity_t {
     uint64_t record_id;
@@ -71,7 +72,7 @@ struct plog_record_t {
     plog_attribute_data_list_t  attributes;
     uint64_t                    latency_start;
     uint32_t                    emit_ordinal;
-    bool                        unflushed;
+    int                         flush_slot;
     bool                        never_flushed;
     bool                        never_logged;
     bool                        force_log;
@@ -103,20 +104,24 @@ ALLOC_DECLARE(plog_work_t);
 ALLOC_DEFINE(plog_work_t);
 DEQ_DECLARE(plog_work_t, plog_work_list_t);
 
-static const char *event_address_all       = "mc/sfe.all";
-static const char *event_address_my_prefix = "mc/sfe.";
-static       char *event_address_my        = 0;
-static const int   beacon_interval_sec     = 5;
+static const char *event_address_all           = "mc/sfe.all";
+static const char *event_address_my_prefix     = "mc/sfe.";
+static       char *event_address_my            = 0;
+static const int   beacon_interval_sec         = 5;
+static const int   flush_interval_msec         = 200;
+static const int   initial_flush_interval_msec = 2000;
 
+static qdr_core_t         *router_core;
 static sys_mutex_t        *lock;
 static sys_mutex_t        *id_lock;
 static sys_cond_t         *condition;
 static sys_thread_t       *thread;
 static bool                sleeping = false;
 static qd_log_source_t    *log;
-static plog_work_list_t    work_list         = DEQ_EMPTY;
-static plog_record_list_t  unflushed_records = DEQ_EMPTY;
-static plog_record_t      *local_router      = 0;
+static plog_work_list_t    work_list    = DEQ_EMPTY;
+static plog_record_t      *local_router = 0;
+static plog_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
+static int                 current_flush_slot = 0;
 static uint32_t            site_id;
 static char               *hostname;
 static char                router_id[ROUTER_ID_SIZE];
@@ -128,6 +133,7 @@ static qdr_watch_handle_t  my_address_watch_handle;
 static bool                all_address_usable = false;
 static bool                my_address_usable  = false;
 static qd_timer_t         *beacon_timer = 0;
+static qd_timer_t         *flush_timer = 0;
 static uint64_t            next_message_id = 0;
 
 static void _plog_set_ref_TH(plog_work_t *work, bool discard);
@@ -320,9 +326,9 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     //
     if (!!record->parent && record->parent->never_logged) {
         record->parent->force_log = true;
-        if (!record->parent->unflushed) {
-            record->parent->unflushed = true;
-            DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record->parent);
+        if (record->parent->flush_slot == -1) {
+            record->parent->flush_slot = current_flush_slot;
+            DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record->parent);
         }
     }
 
@@ -332,9 +338,9 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     // a record that references this record gets flushed before this record
     // is initially flushed.
     //
-    if (!record->unflushed) {
-        record->unflushed = true;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -371,9 +377,9 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     // If the record has been flushed, schedule it for re-flushing
     // with the updated lifecycle information.
     //
-    if (!record->unflushed) {
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = true;
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -416,9 +422,9 @@ static void _plog_set_ref_TH(plog_work_t *work, bool discard)
         insert->emit_ordinal  = record->emit_ordinal;
     }
 
-    if (!record->unflushed) {
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = true;
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -463,9 +469,9 @@ static void _plog_set_string_TH(plog_work_t *work, bool discard)
         insert->emit_ordinal     = record->emit_ordinal;
     }
 
-    if (!record->unflushed) {
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = true;
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -508,9 +514,9 @@ static void _plog_set_int_TH(plog_work_t *work, bool discard)
         insert->emit_ordinal   = record->emit_ordinal;
     }
 
-    if (!record->unflushed) {
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = true;
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -604,9 +610,9 @@ static void _plog_free_record_TH(plog_record_t *record, bool recursive)
     //
     // Remove the record from the unflushed list if needed
     //
-    if (record->unflushed) {
-        DEQ_REMOVE_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = false;
+    if (record->flush_slot >= 0) {
+        DEQ_REMOVE_N(UNFLUSHED, unflushed_records[record->flush_slot], record);
+        record->flush_slot = -1;
     }
 
     if (recursive) {
@@ -784,13 +790,13 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
  */
 static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
 {
-    if (DEQ_SIZE(unflushed_records) == 0) {
+    if (DEQ_SIZE(unflushed_records[current_flush_slot]) == 0) {
         return;
     }
 
     int                  event_count = 0;
     qd_composed_field_t *field = 0;
-    plog_record_t       *record = DEQ_HEAD(unflushed_records);
+    plog_record_t       *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
 
     while (!!record) {
         if (field == 0) {
@@ -841,7 +847,7 @@ static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
         // we have reached the end of the unflushed list, close out the current message.
         //
         event_count++;
-        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(unflushed_records)) {
+        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(unflushed_records[current_flush_slot])) {
             event_count = 0;
 
             //
@@ -894,11 +900,11 @@ static void _plog_flush_TH(qdr_core_t *core)
         _plog_emit_unflushed_as_events_TH(core);
     }
 
-    plog_record_t *record = DEQ_HEAD(unflushed_records);
+    plog_record_t *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
     while (!!record) {
-        DEQ_REMOVE_HEAD_N(UNFLUSHED, unflushed_records);
-        assert(record->unflushed);
-        record->unflushed = false;
+        DEQ_REMOVE_HEAD_N(UNFLUSHED, unflushed_records[current_flush_slot]);
+        assert(record->flush_slot >= 0);
+        record->flush_slot = -1;
 
         //
         // If this record has been ended, emit the log line.
@@ -913,7 +919,7 @@ static void _plog_flush_TH(qdr_core_t *core)
         if (record->ended) {
             _plog_free_record_TH(record, false);
         }
-        record = DEQ_HEAD(unflushed_records);
+        record = DEQ_HEAD(unflushed_records[current_flush_slot]);
     }
 }
 
@@ -973,9 +979,9 @@ static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
 static void _plog_refresh_record_TH(plog_record_t *record)
 {
     record->emit_ordinal = 0;
-    if (!record->unflushed) {
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records, record);
-        record->unflushed = true;
+    if (record->flush_slot == -1) {
+        record->flush_slot = current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 
     plog_record_t *child = DEQ_HEAD(record->children);
@@ -991,6 +997,23 @@ static void _plog_refresh_events_TH(plog_work_t *work, bool discard)
     if (!discard) {
         _plog_refresh_record_TH(local_router);
     }
+}
+
+
+static void _plog_tick_TH(plog_work_t *work, bool discard)
+{
+    if (!discard) {
+        _plog_flush_TH(router_core);
+        current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
+    }
+}
+
+
+static void _plog_on_flush(void *context)
+{
+    plog_work_t *work = _plog_work(_plog_tick_TH);
+    _plog_post_work(work);
+    qd_timer_schedule(flush_timer, flush_interval_msec);
 }
 
 
@@ -1018,7 +1041,6 @@ static void _plog_send_beacon(qdr_core_t *core)
 static void *_plog_thread(void *context)
 {
     bool running = true;
-    bool do_flush;
     plog_work_list_t local_work_list = DEQ_EMPTY;
     qdr_core_t *core = (qdr_core_t*) context;
 
@@ -1032,13 +1054,10 @@ static void *_plog_thread(void *context)
         for (;;) {
             if (!DEQ_IS_EMPTY(work_list)) {
                 DEQ_MOVE(work_list, local_work_list);
-                do_flush = false;
                 break;
-            } else {
-                do_flush = !DEQ_IS_EMPTY(unflushed_records);
             }
 
-            if (do_flush || !running) {
+            if (!running) {
                 break;
             }
 
@@ -1050,10 +1069,6 @@ static void *_plog_thread(void *context)
             sleeping = false;
         }
         sys_mutex_unlock(lock);
-
-        if (do_flush) {
-            _plog_flush_TH(core);
-        }
 
         //
         // Process the local work list with the lock not held
@@ -1076,10 +1091,12 @@ static void *_plog_thread(void *context)
 
     _plog_flush_TH(core);
     _plog_free_record_TH(local_router, true);
-    plog_record_t *record = DEQ_HEAD(unflushed_records);
-    while (!!record) {
-        _plog_free_record_TH(record, true);
-        record = DEQ_HEAD(unflushed_records);
+    for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
+        plog_record_t *record = DEQ_HEAD(unflushed_records[slot]);
+        while (!!record) {
+            _plog_free_record_TH(record, true);
+            record = DEQ_HEAD(unflushed_records[slot]);
+        }
     }
 
     qd_log(log, QD_LOG_INFO, "Protocol logging completed");
@@ -1176,7 +1193,7 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
     ZERO(record);
     record->record_type   = record_type;
     record->parent        = parent;
-    record->unflushed     = false;
+    record->flush_slot    = -1;
     record->never_flushed = true;
     record->never_logged  = true;
     record->force_log     = false;
@@ -1364,6 +1381,7 @@ static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
  */
 static void _plog_init(qdr_core_t *core, void **adaptor_context)
 {
+    router_core = core;
     hostname = getenv("HOSTNAME");
     size_t hostLength = !!hostname ? strlen(hostname) : 0;
 
@@ -1393,6 +1411,10 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
     router_area = qdr_core_dispatch(core)->router_area;
     router_name = qdr_core_dispatch(core)->router_id;
 
+    for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
+        DEQ_INIT(unflushed_records[slot]);
+    }
+
     log       = qd_log_source("FLOW_LOG");
     lock      = sys_mutex();
     id_lock   = sys_mutex();
@@ -1407,6 +1429,8 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
     _plog_post_work(work);
 
     beacon_timer = qd_timer(qdr_core_dispatch(core), _plog_on_beacon, core);
+    flush_timer  = qd_timer(qdr_core_dispatch(core), _plog_on_flush,  core);
+    qd_timer_schedule(flush_timer, initial_flush_interval_msec);
 }
 
 
@@ -1421,6 +1445,9 @@ static void _plog_final(void *adaptor_context)
 
     qd_timer_free(beacon_timer);
     beacon_timer = 0;
+
+    qd_timer_free(flush_timer);
+    flush_timer = 0;
 
     //
     // Cancel the address watches
