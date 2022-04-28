@@ -2208,7 +2208,7 @@ static void qdr_add_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bo
         DEQ_INSERT_TAIL(tcp_adaptor->connections, conn);
         conn->in_list = true;
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] qdr_add_tcp_connection_CT %s (%zu)",
-            conn->conn_id, conn->bridge->host_port, DEQ_SIZE(tcp_adaptor->connections));    \
+            conn->conn_id, conn->bridge->host_port, DEQ_SIZE(tcp_adaptor->connections));
     }
 }
 
