@@ -332,17 +332,6 @@ class AutolinkTest(TestCase):
         cls.route_address = cls.router.addresses[1]
         cls.ls_route_address = cls.router.addresses[2]
 
-    def run_qdstat_general(self):
-        cmd = ['qdstat', '--bus', str(AutolinkTest.normal_address), '--timeout', str(TIMEOUT)] + ['-g']
-        p = self.popen(
-            cmd,
-            name='qdstat-' + self.id(), stdout=PIPE, expect=None,
-            universal_newlines=True)
-
-        out = p.communicate()[0]
-        assert p.returncode == 0, "qdstat exit status %s, output:\n%s" % (p.returncode, out)
-        return out
-
     def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK):
         p = self.popen(
             ['skmanage'] + cmd.split(' ') + ['--bus', AutolinkTest.normal_address, '--indent=-1', '--timeout', str(TIMEOUT)],
