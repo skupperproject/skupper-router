@@ -186,8 +186,8 @@ async fn find_or_pull_image(docker: &&Docker, image: &str) -> String {
     if let Some(image_id) = docker_find_image(docker, image).await {
         return image_id;
     }
-    docker_pull(&docker, image).await;
-    return docker_find_image(docker, image).await.unwrap();
+    let pull = docker_pull(&docker, image).await;
+    return docker_find_image(docker, image).await.expect(&*format!("{:?}", pull));
 }
 
 async fn docker_find_image(docker: &&Docker, image: &str) -> Option<String> {
