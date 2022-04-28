@@ -49,7 +49,7 @@ def quart_available():
         process = Process(popen_args,
                           name='quart_check',
                           stdout=PIPE,
-                          expect=None,
+                          expect=Process.EXIT_OK,
                           universal_newlines=True)
         out = process.communicate()[0]
         parts = out.split(".")

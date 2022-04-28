@@ -47,7 +47,7 @@ import unittest
 import uuid
 from copy import copy
 from datetime import datetime
-from subprocess import PIPE, STDOUT
+from subprocess import PIPE, STDOUT, TimeoutExpired
 from threading import Event
 from threading import Thread
 from typing import Callable, TextIO, List, Optional, Tuple
@@ -282,17 +282,21 @@ class Process(subprocess.Popen):
         @param expect: Raise error if process status not as expected at end of test:
             L{RUNNING} - expect still running.
             L{EXIT_OK} - expect process to have terminated with 0 exit status.
-            L{EXIT_FAIL} - expect process to have terminated with exit status 1.
+            L{EXIT_FAIL} - expect process to have terminated with exit status >= 1.
             integer    - expected return code
         @keyword stdout: Defaults to the file name+".out"
         @keyword stderr: Defaults to be the same as stdout
         """
         self.name = name or os.path.basename(args[0])
         self.args = args
+        assert expect is not None, "Process (name=%s) argument expect cannot be None" % self.name
         self.expect = expect
+        self.actual = None
         self.outdir = os.getcwd()
         self.outfile = os.path.abspath(self.unique(self.name))
         self.torndown = False
+        self._logger = Logger(title="Process logger for name=%s" % self.name,
+                              print_to_console=True)
         kwargs.setdefault('stdin', subprocess.PIPE)
         with open(self.outfile + '.out', 'w') as out:
             kwargs.setdefault('stdout', out)
@@ -317,19 +321,55 @@ class Process(subprocess.Popen):
 
         def error(msg):
             with open(self.outfile + '.out') as f:
-                raise RuntimeError("Process %s error: %s\n%s\n%s\n>>>>\n%s<<<<" % (
-                    self.pid, msg, ' '.join(self.args),
+                raise RuntimeError("Process %s (name=%s) error: %s\n%s\n%s\n>>>>\n%s<<<<" % (
+                    self.pid, self.name, msg, ' '.join(self.args),
                     self.outfile + '.cmd', f.read()))
 
+        # If the process is already dead, this might mean that the process has crashed (For example: a router
+        # crash). self.poll() will return a non None value if the process is already gone.
+        # A None value indicates that the process hasn’t terminated yet.
+        # A negative value -N indicates that the child was terminated by signal N (POSIX only).
+        # A positive value indicates a fail.
         status = self.poll()
-        if status is None:      # Still running
+
+        if status is None:
+            # If status is None, it means that the process is still running
+            self.actual = Process.RUNNING
+        elif status > 0:
+            self.actual = Process.EXIT_FAIL
+        else:
+            self.actual = status
+
+        if status is None:
+            # The process is still running.
+            # Call process.terminate() which will try to stop the child by sending it a SIGTERM
+            # but is not guaranteed to stop it
             self.terminate()
-            if self.expect is not None and self.expect != Process.RUNNING:
-                error("still running")
-            self.expect = 0     # Expect clean exit after terminate
-            status = self.wait()
-        if self.expect is not None and self.expect != status:
-            error("exit code %s, expected %s" % (status, self.expect))
+            try:
+                # Wait for TIMEOUT seconds and then catch the
+                # TimeoutExpired and kill() the process.
+                self.wait(timeout=TIMEOUT)
+            except TimeoutExpired:
+                # The terminate call() has failed to terminate the process even after we waited for TIMEOUT seconds.
+                # Send a SIGKILL to the child by calling kill()
+                self._logger.log("Wait timeout expired trying to terminate "
+                                 "process %s (name=%s). Trying to kill process now" % (self.pid, self.name))
+                self.kill()
+                try:
+                    self.wait(timeout=TIMEOUT)
+                    self._logger.log("Process %s killed successfully" % self.pid)
+                except TimeoutExpired:
+                    # There is something seriously wrong if kill() did not kill the process.
+                    # But should the test suite fail because of this ? Right now, it will
+                    # but we need to revisit this.
+                    error_msg = "Error: Could not kill process "
+                    self._logger.log(error_msg + self.pid)
+                    # This will raise a RuntimeError and fail the test
+                    error(error_msg)
+
+        # At this time, we want to check if self.expect and self.actual are the same
+        if self.expect != self.actual:
+            error("exit code is %s, expected %s" % (self.actual, self.expect))
 
 
 class Config:
@@ -1559,7 +1599,7 @@ def curl_available():
         process = Process(popen_args,
                           name='curl_check',
                           stdout=PIPE,
-                          expect=None,
+                          expect=Process.EXIT_OK,
                           universal_newlines=True)
         out = process.communicate()[0]
         if process.returncode == 0:

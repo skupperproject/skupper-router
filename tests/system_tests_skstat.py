@@ -25,13 +25,13 @@ from subprocess import PIPE
 from proton import Url, SSLDomain, SSLUnavailable, SASL
 from proton.utils import BlockingConnection
 
-from system_test import main_module, TIMEOUT, TestCase, Qdrouterd, DIR
+from system_test import main_module, TIMEOUT, TestCase, Qdrouterd, DIR, Process
 
 
 class SkstatTestBase(TestCase):
     """Define run_skstat for use with all tests"""
 
-    def run_skstat(self, args, address=None, regex=None):
+    def run_skstat(self, args, address=None, regex=None, expect=Process.EXIT_OK):
         if args is None:
             args = []
         args = ['skstat',
@@ -39,7 +39,7 @@ class SkstatTestBase(TestCase):
                 '--timeout', str(TIMEOUT)] + args
 
         p = self.popen(args, name='skstat-' + self.id(), stdout=PIPE,
-                       expect=None, universal_newlines=True)
+                       expect=expect, universal_newlines=True)
         out, err = p.communicate()
 
         if p.returncode != 0:
@@ -734,7 +734,7 @@ class SkstatSslTest(SkstatTestBase):
 
         return args
 
-    def ssl_test(self, url_name, arg_names):
+    def ssl_test(self, url_name, arg_names, expect=Process.EXIT_OK):
         """Run simple SSL connection test with supplied parameters.
 
         :param url_name: a shorthand name used to select which router
@@ -756,10 +756,11 @@ class SkstatSslTest(SkstatTestBase):
                         (Url(a, scheme="amqps") for a in addrs)))
         self.run_skstat(['--general'] + sum([args[n] for n in arg_names], []),
                         address=str(urls[url_name]),
-                        regex=r'(?s)Router Statistics.*Mode\s*Standalone')
+                        regex=r'(?s)Router Statistics.*Mode\s*Standalone',
+                        expect=expect)
 
     def ssl_test_bad(self, url_name, arg_names):
-        self.assertRaises(RuntimeError, self.ssl_test, url_name, arg_names)
+        self.assertRaises(RuntimeError, self.ssl_test, url_name, arg_names, Process.EXIT_FAIL)
 
     # skstat -b amqp://localhost:<port> --general and makes sure
     # the router sends back a valid response.
@@ -891,7 +892,7 @@ class SkstatSslTest(SkstatTestBase):
         with self.assertRaises(RuntimeError,
                                msg="expected fail: host name wrong") as exc:
             self.run_skstat(address="amqps://127.0.0.1:%s" % self.strict_port,
-                            args=['--general'] + params)
+                            args=['--general'] + params, expect=Process.EXIT_FAIL)
 
         # repeat the same operation but using
         # --ssl-disable--peer-name-verify.  This should succeed:
@@ -957,7 +958,7 @@ class SkstatSslNoExternalTest(SkstatTestBase):
         ])
         cls.router = cls.tester.qdrouterd('test-router', config)
 
-    def ssl_test(self, url_name, arg_names):
+    def ssl_test(self, url_name, arg_names, expect=Process.EXIT_OK):
         """Run simple SSL connection test with supplied parameters.
         See test_ssl_* below.
         """
@@ -976,10 +977,11 @@ class SkstatSslNoExternalTest(SkstatTestBase):
 
         self.run_skstat(['--general'] + sum([args[n] for n in arg_names], []),
                         address=str(urls[url_name]),
-                        regex=r'(?s)Router Statistics.*Mode\s*Standalone')
+                        regex=r'(?s)Router Statistics.*Mode\s*Standalone',
+                        expect=expect)
 
     def ssl_test_bad(self, url_name, arg_names):
-        self.assertRaises(RuntimeError, self.ssl_test, url_name, arg_names)
+        self.assertRaises(RuntimeError, self.ssl_test, url_name, arg_names, Process.EXIT_FAIL)
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_ssl_cert_to_auth_fail_no_sasl_external(self):

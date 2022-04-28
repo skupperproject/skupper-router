@@ -21,7 +21,7 @@ from time import sleep
 import os
 from subprocess import PIPE, Popen
 from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT
-from system_test import unittest, QdManager
+from system_test import unittest, QdManager, Process
 from skupper_router.management.client import Node
 from proton import SASL
 
@@ -309,7 +309,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         p = self.popen(
             ['skstat', '-b', str(self.routers[0].addresses[1]), '-c'],
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
             universal_newlines=True)
         out = p.communicate()[0]
         assert p.returncode == 0, \
@@ -327,7 +327,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         p = self.popen(
             ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
              '--sasl-username=test@domain.com', '--sasl-password=password'],
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
             universal_newlines=True)
 
         out = p.communicate()[0]
@@ -357,7 +357,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         p = self.popen(
             ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
              '--sasl-username=test@domain.com', '--sasl-password-file=' + password_file],
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
             universal_newlines=True)
 
         out = p.communicate()[0]
@@ -463,7 +463,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
              '--ssl-certificate=' + self.ssl_file('client-certificate.pem'),
              '--ssl-key=' + self.ssl_file('client-private-key.pem'),
              '--ssl-password=client-password'],
-            name='skstat-' + self.id(), stdout=PIPE, expect=None,
+            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
             universal_newlines=True)
 
         out = p.communicate()[0]
