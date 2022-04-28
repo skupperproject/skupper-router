@@ -125,7 +125,6 @@ async fn test_h2spec() {
         &docker, NGHTTP2_IMAGE, "nghttpd",
         Config {
             host_config: Some(hostconfig.clone()),
-            // cmd: Some(vec!["nghttp", "--help"]),
             cmd: Some(vec!["nghttpd", "-a", "0.0.0.0", "--no-tls", "-d", "/tmp", "8888"]),
             ..Default::default()
         }).await;
