@@ -1089,15 +1089,18 @@ static void *_plog_thread(void *context)
         }
     }
 
-    _plog_flush_TH(core);
-    _plog_free_record_TH(local_router, true);
-    for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
-        plog_record_t *record = DEQ_HEAD(unflushed_records[slot]);
-        while (!!record) {
-            _plog_free_record_TH(record, true);
-            record = DEQ_HEAD(unflushed_records[slot]);
-        }
+    //
+    // Flush out all of the slots
+    //
+    for (int i = 0; i < FLUSH_SLOT_COUNT; i++) {
+        _plog_flush_TH(core);
+        current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
     }
+
+    //
+    // Free all remaining records in the tree
+    //
+    _plog_free_record_TH(local_router, true);
 
     qd_log(log, QD_LOG_INFO, "Protocol logging completed");
     return 0;
