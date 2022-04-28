@@ -123,7 +123,6 @@ class AddressWatchTest(MessagingHandler):
         self.n_closed += 1
         if self.n_closed == 2:
             def check_log_lines():
-                print ("check_log_lines")
                 with open(self.host_a.logfile_path, 'r') as router_log:
                     log_lines = router_log.read().split("\n")
                     search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
