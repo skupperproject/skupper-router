@@ -1130,12 +1130,14 @@ static void _plog_on_all_address_watch(void     *context,
         //
         // Start sending beacon messages to the all_address.
         //
+        qd_log(log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
         all_address_usable = true;
         _plog_send_beacon((qdr_core_t*) context);
     } else if (!now_usable && all_address_usable) {
         //
         // Stop sending beacons.  Nobody is listening.
         //
+        qd_log(log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
         all_address_usable = false;
         if (!!beacon_timer) {
             qd_timer_cancel(beacon_timer);
@@ -1166,12 +1168,14 @@ static void _plog_on_my_address_watch(void     *context,
         //
         // Start sending log records
         //
+        qd_log(log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
         my_address_usable = true;
         _plog_post_work(_plog_work(_plog_refresh_events_TH));
     } else if (!now_usable && my_address_usable) {
         //
         // Stop sending log records
         //
+        qd_log(log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
         my_address_usable = false;
     }
 }
