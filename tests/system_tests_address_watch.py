@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, retry_exception
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
@@ -58,6 +58,7 @@ class RouterTest(TestCase):
 
         cls.routers[0].wait_router_connected('B')
         cls.routers[1].wait_router_connected('A')
+        cls.routers[0].is_edge_routers_connected()
 
     def test_01_interior_interior(self):
         test = AddressWatchTest(self.routers[0], self.routers[1], 0)
@@ -121,18 +122,23 @@ class AddressWatchTest(MessagingHandler):
     def on_connection_closed(self, event):
         self.n_closed += 1
         if self.n_closed == 2:
-            with open(self.host_a.logfile_path, 'r') as router_log:
-                log_lines = router_log.read().split("\n")
-                search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
-                matches = [s for s in search_lines if ("loc: 1 rem: 0 prod: 0" in s) or ("loc: 1 rem: 0 prod: 1" in s)]
-                if len(matches) == 0:
-                    self.error = "Didn't see local consumer on router 1"
-            with open(self.host_b.logfile_path, 'r') as router_log:
-                log_lines = router_log.read().split("\n")
-                search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
-                matches = [s for s in search_lines if ("loc: 0 rem: 1 prod: 1" in s) or ("loc: 1 rem: 0 prod: 1" in s)]
-                if len(matches) == 0:
-                    self.error = "Didn't see remote consumer and local producer on router 2"
+            def check_log_lines():
+                with open(self.host_a.logfile_path, 'r') as router_log:
+                    log_lines = router_log.read().split("\n")
+                    search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
+                    matches = [s for s in search_lines if ("loc: 1 rem: 0 prod: 0" in s) or ("loc: 1 rem: 0 prod: 1" in s)]
+                    if len(matches) == 0:
+                        raise Exception("Didn't see local consumer on router 1")
+                with open(self.host_b.logfile_path, 'r') as router_log:
+                    log_lines = router_log.read().split("\n")
+                    search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
+                    matches = [s for s in search_lines if ("loc: 0 rem: 1 prod: 1" in s) or ("loc: 1 rem: 0 prod: 1" in s)]
+                    if len(matches) == 0:
+                        raise Exception("Didn't see remote consumer and local producer on router 2")
+
+            # Sometimes the CI is so fast that there is not enough time for the router to write to the log file.
+            # Try repeatedly until TIMEOUT seconds.
+            retry_exception(check_log_lines, delay=2)
             self.timer.cancel()
 
     def run(self):
