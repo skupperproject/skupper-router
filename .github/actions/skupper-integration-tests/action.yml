@@ -109,7 +109,7 @@ runs:
 
       - name: Run Skupper integration tests
         run: |
-          gotestsum --format=standard-verbose -- -p=1 -count=1 -tags=integration -timeout=60m -v ./...
+          gotestsum --format=standard-verbose -- -p=3 -count=1 -tags=integration -timeout=60m ./...
         working-directory: skupper
         shell: bash
         env:
