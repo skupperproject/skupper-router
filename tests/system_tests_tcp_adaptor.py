@@ -21,6 +21,7 @@ import io
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 import traceback
@@ -28,11 +29,11 @@ from subprocess import PIPE
 from subprocess import STDOUT
 
 from system_test import Logger
-from system_test import main_module
 from system_test import Process
 from system_test import Qdrouterd
-from system_test import TestCase
 from system_test import TIMEOUT
+from system_test import TestCase
+from system_test import main_module
 from system_test import unittest
 
 # Tests in this file are organized by classes that inherit TestCase.
@@ -89,23 +90,18 @@ echo_timeout = 30
 
 
 def ncat_available():
-    popen_args = ['ncat', '--version']
     try:
-        process = Process(popen_args,
-                          name='ncat_check',
-                          stdout=PIPE,
-                          expect=None,
-                          universal_newlines=True)
-        out = process.communicate()[0]
-        return True
-    except:
+        return 0 == subprocess.check_call(['ncat', '--version'],
+                                          stdout=subprocess.DEVNULL,
+                                          stderr=subprocess.DEVNULL)
+    except OSError:
         return False
 
 
 #
 # Test concurrent clients
 #
-class EchoClientRunner():
+class EchoClientRunner:
     """
     Launch an echo client upon construction.
     Provide poll interface for checking done/error.
