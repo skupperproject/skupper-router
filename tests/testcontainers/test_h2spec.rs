@@ -18,6 +18,7 @@
  */
 
 use std::env;
+use std::io::{stdout, Write};
 use std::time::Duration;
 
 use bollard::container::{Config, CreateContainerOptions, InspectContainerOptions, KillContainerOptions, LogOutput, LogsOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions, WaitContainerOptions};
@@ -178,6 +179,7 @@ async fn test_h2spec() {
     let router_exit_code = get_container_exit_code(&docker, &container_skrouterd).await;
     println!("container skrouterd finished with exit code {:?}", router_exit_code);
 
+    stdout().flush().expect("failed to flush stdout");
     assert_eq!(Some(0), h2spec_exit_code);
     assert_eq!(Some(0), router_exit_code);
 }
@@ -261,10 +263,10 @@ async fn recreate_network(docker: &Docker, network_name: &str) -> NetworkCreateR
     return net;
 }
 
-fn stream_container_logs(docker: &Docker, name: &'static str, c: &ContainerCreateResponse) -> impl Stream<Item=String> {
+fn stream_container_logs(docker: &Docker, name: &'static str, container: &ContainerCreateResponse) -> impl Stream<Item=String> {
     // keep in mind that containers that don't log anything will eventually (60+ sec) timeout on `RequestTimeoutError`
     let logs = docker.logs::<String>(
-        &*c.id,
+        &*container.id,
         Some(LogsOptions {
             stderr: true,
             stdout: true,
@@ -288,8 +290,8 @@ fn label_log(label: &'static str, stream: impl futures::Stream<Item=Result<LogOu
         .map(move |line| format!("{}: {}", label, line));
 }
 
-async fn get_container_exit_code(docker: &Docker, c_h2spec: &ContainerCreateResponse) -> Option<i64> {
-    let final_inspect = docker.inspect_container(&*c_h2spec.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+async fn get_container_exit_code(docker: &Docker, container: &ContainerCreateResponse) -> Option<i64> {
+    let final_inspect = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
     let exit_code = final_inspect.state.unwrap().exit_code;
     exit_code
 }
