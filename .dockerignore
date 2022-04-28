@@ -28,4 +28,5 @@ Containerfile
 
 build
 cmake-build-*
+target
 tests/system_test.dir
