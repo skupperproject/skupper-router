@@ -138,7 +138,7 @@ cd %{_builddir}/skupper-router
 
 %check
 cd %{_builddir}/skupper-router
-%ctest
+PYTHONPATH="%{buildroot}/usr/lib/skupper-router/python/" %ctest
 
 %files
 /usr/sbin/skrouterd
