@@ -64,12 +64,15 @@ BuildRequires: gcc-c++
 BuildRequires: cmake
 
 # skupper-router requirements
+# without -wheel the installed files lack `python_qpid_proton-0.37.0.dist-info`
 %{?fedora:BuildRequires: python3-devel >= %{python_minimum_version}}
 %{?fedora:BuildRequires: python3-pip}
-# without wheel the installed files lack `python_qpid_proton-0.37.0.dist-info`
+%{?fedora:BuildRequires: python3-setuptools}
 %{?fedora:BuildRequires: python3-wheel}
+
 %{?rhel:BuildRequires: python39-devel >= %{python_minimum_version}}
 %{?rhel:BuildRequires: python39-pip}
+%{?rhel:BuildRequires: python39-setuptools}
 %{?rhel:BuildRequires: python39-wheel}
 %{?rhel:BuildRequires: python39-rpm-macros}
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
