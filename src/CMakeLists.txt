@@ -148,22 +148,13 @@ set(qpid_dispatch_LIBRARIES
   ${Python_LIBRARIES}
   )
 
-# USE_LIBWEBSOCKETS is true only if LIBWEBSOCKETS_FOUND
-if(USE_LIBWEBSOCKETS)
-  list(APPEND qpid_dispatch_SOURCES http-libwebsockets.c)
-  list(APPEND qpid_dispatch_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
-  list(APPEND qpid_dispatch_LIBRARIES ${LIBWEBSOCKETS_LIBRARIES})
-else(USE_LIBWEBSOCKETS)
-  list(APPEND qpid_dispatch_SOURCES http-none.c)
-endif(USE_LIBWEBSOCKETS)
+list(APPEND qpid_dispatch_SOURCES http-libwebsockets.c)
+list(APPEND qpid_dispatch_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
+list(APPEND qpid_dispatch_LIBRARIES ${LIBWEBSOCKETS_LIBRARIES})
 
-if(USE_LIBNGHTTP2)
-  list(APPEND qpid_dispatch_SOURCES adaptors/http2/http2_adaptor.c)
-  list(APPEND qpid_dispatch_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
-  list(APPEND qpid_dispatch_LIBRARIES ${NGHTTP2_LIBRARIES})
-else(USE_LIBNGHTTP2)
-  list(APPEND qpid_dispatch_SOURCES adaptors/http2/http2_adaptor_none.c)
-endif(USE_LIBNGHTTP2)
+list(APPEND qpid_dispatch_SOURCES adaptors/http2/http2_adaptor.c)
+list(APPEND qpid_dispatch_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
+list(APPEND qpid_dispatch_LIBRARIES ${NGHTTP2_LIBRARIES})
 
 if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)

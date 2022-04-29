@@ -33,9 +33,7 @@
 #include <inttypes.h>
 #include <libwebsockets.h>
 
-#if LWS_LIBRARY_VERSION_MAJOR > 3 || (LWS_LIBRARY_VERSION_MAJOR == 3 && LWS_LIBRARY_VERSION_MINOR >= 2)
 #define QD_HAVE_MODERN_LIBWEBSOCKETS 1
-#endif
 
 static const char *CIPHER_LIST = "ALL:aNULL:!eNULL:@STRENGTH"; /* Default */
 static const char *IGNORED = "ignore-this-log-message";
@@ -380,18 +378,12 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
 
         info.options |=
             LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
-#ifdef QD_HAVE_MODERN_LIBWEBSOCKETS
             (config->ssl_required ? 0 : LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT | LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER) |
-#else
-            (config->ssl_required ? 0 : LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT) |
-#endif
             ((config->requireAuthentication && info.ssl_ca_filepath) ? LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT : 0);
     }
     info.vhost_name = hl->listener->config.host_port;
-#ifdef QD_HAVE_MODERN_LIBWEBSOCKETS
     info.finalize = finalize_http;
     info.finalize_arg = hl;
-#endif
     hl->vhost = lws_create_vhost(hs->context, &info);
     if (!hl->vhost) {
         qd_log(hs->log, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
@@ -437,19 +429,6 @@ static void listener_close(qd_lws_listener_t *hl, qd_http_server_t *hs) {
 static int callback_http(struct lws *wsi, enum lws_callback_reasons reason,
                          void *user, void *in, size_t len)
 {
-    /*
-     * Modern LibWebSockets uses the .finalize callback on lws_context for cleanup
-     */
-#ifndef QD_HAVE_MODERN_LIBWEBSOCKETS
-    switch (reason) {
-    case LWS_CALLBACK_PROTOCOL_DESTROY:
-        finalize_http(NULL, wsi_listener(wsi));
-        break;
-    default:
-        break;
-    }
-#endif
-
     /* Do default HTTP handling for all the cases we don't care about. */
     return lws_callback_http_dummy(wsi, reason, user, in, len);
 }

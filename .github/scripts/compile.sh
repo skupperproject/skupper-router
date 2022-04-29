@@ -88,7 +88,7 @@ do_build () {
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DProton_USE_STATIC_LIBS=ON -DUSE_LIBWEBSOCKETS=ON -DUSE_LIBNGHTTP2=ON \
+    -DProton_USE_STATIC_LIBS=ON \
     -DProton_DIR="$WORKING/proton_install${suffix}/usr/lib64/cmake/Proton" \
     -DBUILD_TESTING=OFF \
     -DVERSION="${VERSION}" \

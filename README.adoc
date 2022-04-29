@@ -356,10 +356,3 @@ The version of skupper-router being used can be obtained running `skrouterd --ve
 The `libbenchmark` library is required by the benchmarks.
 
 |===
-
-==== Optional dependencies
-
-The following CMake options can be used to force-enable (or force-disable) the use of optional dependencies:
-
-- `-DUSE_LIBNGHTTP2`, for the libnghttp2 library, needed by the http2 protocol adaptor
-- `-DUSE_LIBWEBSOCKETS`, for the libwebsockets library, needed to configure `http: yes` listeners

@@ -115,6 +115,12 @@ find_package(Python 3.6.8 REQUIRED COMPONENTS Interpreter Development)
 find_package(Threads REQUIRED)
 find_package(Proton 0.37.0 REQUIRED COMPONENTS Core Proactor Tls)
 message(STATUS "Found Proton: ${Proton_LIBRARIES} (found version \"${Proton_VERSION}\")" )
+
+# http2 support
+find_package(libnghttp2 1.33.0 REQUIRED)
+# Web Sockets
+find_package(LibWebSockets 4.0.1 REQUIRED)
+
 ##
 ## Optional dependencies
 ##
@@ -122,15 +128,6 @@ message(STATUS "Found Proton: ${Proton_LIBRARIES} (found version \"${Proton_VERS
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
 
-# http2 support is optional
-find_package(libnghttp2 1.33.0)
-CMAKE_DEPENDENT_OPTION(USE_LIBNGHTTP2 "Use libnghttp2 for HTTP/2 support" ON
-                         "libnghttp2_FOUND" OFF)
-
-# Web Sockets
-find_package(LibWebSockets 3.0.1)
-CMAKE_DEPENDENT_OPTION(USE_LIBWEBSOCKETS "Use libwebsockets for WebSocket support" ON
-                         "LIBWEBSOCKETS_FOUND" OFF)
 
 if (NOT DEFINED DISPATCH_TEST_TIMEOUT)
     set(DISPATCH_TEST_TIMEOUT "600")
@@ -140,10 +137,6 @@ include (CTest)
 
 set(PYTHON_TEST_COMMAND "-m" "unittest" "-v" "\${py_test_module}"
     CACHE STRING "Command used to run tests implemented in Python unittest; \${py_test_module} will be replaced with test module name.")
-
-set (SO_VERSION_MAJOR 2)
-set (SO_VERSION_MINOR 0)
-set (SO_VERSION "${SO_VERSION_MAJOR}.${SO_VERSION_MINOR}")
 
 if (NOT DEFINED LIB_SUFFIX)
     get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)

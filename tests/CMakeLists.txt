@@ -102,13 +102,9 @@ foreach(py_test_module
   add_test(${py_test_module} ${TEST_WRAP} ${CONFIGURED_PYTHON_TEST_COMMAND})
 endforeach()
 
-if(USE_LIBWEBSOCKETS)
-  set(SYSTEM_TESTS_HTTP system_tests_http system_tests_websockets)
-endif()
+set(SYSTEM_TESTS_HTTP system_tests_http system_tests_websockets)
 
-if(USE_LIBNGHTTP2)
-  set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc system_tests_http2_tls)
-endif(USE_LIBNGHTTP2)
+set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc system_tests_http2_tls)
 
 if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})
   #nothing to do
