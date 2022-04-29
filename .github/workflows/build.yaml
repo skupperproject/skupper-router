@@ -388,6 +388,7 @@ jobs:
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
         -DPython_EXECUTABLE=/usr/bin/python3
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
 
