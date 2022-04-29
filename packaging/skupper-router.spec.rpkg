@@ -137,8 +137,8 @@ cd %{_builddir}/skupper-router
 %cmake_install
 
 %check
-cd %{_builddir}/skupper-router
-PYTHONPATH="%{buildroot}/usr/lib/skupper-router/python/" %ctest
+cd %{_builddir}/skupper-router/%{__cmake_builddir}
+PYTHONPATH="%{buildroot}/usr/lib/skupper-router/python/" %__ctest --output-on-failure --force-new-ctest-process %{?_smp_mflags}
 
 %files
 /usr/sbin/skrouterd
