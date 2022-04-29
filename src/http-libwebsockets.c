@@ -33,8 +33,6 @@
 #include <inttypes.h>
 #include <libwebsockets.h>
 
-#define QD_HAVE_MODERN_LIBWEBSOCKETS 1
-
 static const char *CIPHER_LIST = "ALL:aNULL:!eNULL:@STRENGTH"; /* Default */
 static const char *IGNORED = "ignore-this-log-message";
 
