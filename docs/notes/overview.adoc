@@ -109,8 +109,7 @@ In addition, the libwebsockets event loop runs in its own thread (TODO?) and the
 
 (TODO lousy picture, this needs embedded svg because mermaid just does not seem to have the right diagram type for this.)
 
-[mermaid]
-----
+```mermaid
 graph LR;
   subgraph Router core thread;
     M([$management]);
@@ -126,7 +125,7 @@ graph LR;
   W1 --> As;
   DB --> W3;
   DB --> W4;
-----
+```
 
 == Git repository layout
 
