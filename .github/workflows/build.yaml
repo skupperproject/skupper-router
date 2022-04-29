@@ -590,6 +590,12 @@ jobs:
           ref: ${{ env.protonBranch }}
           path: 'qpid-proton'
 
+      - name: Setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.9
+          architecture: x64
+
       - name: Install Linux build dependencies
         run: |
           sudo apt update; sudo apt install -y python3-qpid-proton libpython3-dev ninja-build
