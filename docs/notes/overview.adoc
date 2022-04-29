@@ -111,7 +111,7 @@ In addition, the libwebsockets event loop runs in its own thread (TODO?) and the
 
 [mermaid]
 ----
-flowchart LR
+graph LR
   subgraph Router core thread
     M([$management])
     DB[(Route Table)]
