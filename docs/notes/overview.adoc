@@ -111,21 +111,21 @@ In addition, the libwebsockets event loop runs in its own thread (TODO?) and the
 
 [mermaid]
 ----
-graph LR
-  subgraph Router core thread
-    M([$management])
-    DB[(Route Table)]
-    As[Actions]
-  end
-  subgraph Proactor
-    W1["Worker thread <br> (connection)"]
-    W2["Worker thread <br> (timer)"]
-    W3["Worker thread <br> (connection)"]
-    W4["Worker thread <br> (connection)"]
-  end
-  W1 --> As
-  DB --> W3
-  DB --> W4
+graph LR;
+  subgraph Router core thread;
+    M([$management]);
+    DB[(Route Table)];
+    As[Actions];
+  end;
+  subgraph Proactor;
+    W1["Worker thread <br> (connection)"];
+    W2["Worker thread <br> (timer)"];
+    W3["Worker thread <br> (connection)"];
+    W4["Worker thread <br> (connection)"];
+  end;
+  W1 --> As;
+  DB --> W3;
+  DB --> W4;
 ----
 
 == Git repository layout
