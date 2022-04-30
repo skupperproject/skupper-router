@@ -34,8 +34,8 @@ DEQ_DECLARE(qdr_address_watch_t, qdr_address_watch_list_t);
  * @param core Pointer to the router core state
  * @param addr Pointer to the address record that was modified
  */
-void qdr_trigger_address_watch_CT(qdr_core_t *core, qdr_address_t *addr);
+void qdr_trigger_address_watch_CT(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability);
 
-void qdr_address_watch_shutdown(qdr_core_t *core);
+void qdr_address_watch_shutdown(qdr_core_t *core) TA_REQ(core_thread_capability);
 
 #endif

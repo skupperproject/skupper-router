@@ -97,13 +97,13 @@ QD_EXPORT void qd_dispatch_delete_http_connector(qd_dispatch_t *qd, void *impl);
 QD_EXPORT qd_error_t qd_entity_refresh_httpConnector(qd_entity_t* entity, void *impl);
 
 // Management interfaces for retrieval of HttpRequestInfo entities
-void qdra_http_request_info_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_http_request_info_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qdra_http_request_info_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset) TA_REQ(core_thread_capability);
+void qdra_http_request_info_get_next_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
 void qdra_http_request_info_get_CT(qdr_core_t          *core,
                                    qd_iterator_t       *name,
                                    qd_iterator_t       *identity,
                                    qdr_query_t         *query,
-                                   const char          *qdr_http_request_info_columns[]);
+                                   const char          *qdr_http_request_info_columns[]) TA_REQ(core_thread_capability);
 
 #define QDR_HTTP_REQUEST_INFO_COLUMN_COUNT 11
 extern const char *qdr_http_request_info_columns[QDR_HTTP_REQUEST_INFO_COLUMN_COUNT + 1];

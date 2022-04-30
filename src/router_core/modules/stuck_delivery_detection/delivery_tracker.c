@@ -33,7 +33,7 @@
 static int timer_interval = PROD_TIMER_INTERVAL;
 static int stuck_age      = PROD_STUCK_AGE;
 
-static void action_handler_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void action_handler_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
 
 typedef struct tracker_t tracker_t;
 
@@ -44,7 +44,7 @@ struct tracker_t {
 };
 
 
-static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv)
+static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv) TA_REQ(core_thread_capability)
 {
     // DISPATCH-2036: ignore "infinitely long" streaming messages (like TCP
     // adaptor deliveries)
@@ -69,7 +69,7 @@ static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t
 }
 
 
-static void process_link_CT(qdr_core_t *core, qdr_link_t *link)
+static void process_link_CT(qdr_core_t *core, qdr_link_t *link) TA_REQ(core_thread_capability)
 {
     qdr_delivery_t *dlv = DEQ_HEAD(link->undelivered);
     while (dlv) {
@@ -100,7 +100,7 @@ static void process_link_CT(qdr_core_t *core, qdr_link_t *link)
 }
 
 
-static void timer_handler_CT(qdr_core_t *core, void *context)
+static void timer_handler_CT(qdr_core_t *core, void *context) TA_REQ(core_thread_capability)
 {
     tracker_t  *tracker    = (tracker_t*) context;
     qdr_link_t *first_link = DEQ_HEAD(core->open_links);
@@ -166,7 +166,7 @@ static bool qdrc_delivery_tracker_enable_CT(qdr_core_t *core)
 }
 
 
-static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_context)
+static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     tracker_t *tracker = NEW(tracker_t);
     ZERO(tracker);
@@ -182,7 +182,7 @@ static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_contex
 }
 
 
-static void qdrc_delivery_tracker_final_CT(void *module_context)
+static void qdrc_delivery_tracker_final_CT(void *module_context) TA_REQ(core_thread_capability)
 {
     tracker_t *tracker = (tracker_t*) module_context;
     qdr_core_timer_free_CT(tracker->core, tracker->timer);

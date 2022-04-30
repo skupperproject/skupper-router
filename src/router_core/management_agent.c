@@ -28,6 +28,7 @@
 #include "qpid/dispatch/parse.h"
 #include "qpid/dispatch/router.h"
 #include "qpid/dispatch/router_core.h"
+#include "qpid/dispatch/internal/thread_annotations.h"
 
 #include <stdio.h>
 
@@ -235,14 +236,13 @@ static void qd_manage_response_handler(void *context, const qd_amqp_error_t *sta
     free_qd_management_context_t(ctx);
 }
 
-
 static void qd_core_agent_query_handler(qdr_core_t                 *core,
                                         qd_router_entity_type_t     entity_type,
                                         qd_router_operation_type_t  operation_type,
                                         qd_message_t               *msg,
                                         int                        *count,
                                         int                        *offset,
-                                        uint64_t                    in_conn)
+                                        uint64_t                    in_conn) TA_REQ(core_thread_capability)
 {
     //
     // Add the Body.
@@ -486,7 +486,7 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
  *
  */
 uint64_t qdr_management_agent_on_message(void *context, qd_message_t *msg, int unused_link_id, int unused_cost,
-                                         uint64_t in_conn_id, const qd_policy_spec_t *policy_spec, qdr_error_t **error)
+                                         uint64_t in_conn_id, const qd_policy_spec_t *policy_spec, qdr_error_t **error) TA_REQ(core_thread_capability)
 {
     qdr_core_t *core = (qdr_core_t*) context;
     qd_iterator_t *app_properties_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);

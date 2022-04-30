@@ -24,20 +24,19 @@
 
 int tool_tests(void);
 int timer_tests(void);
-int core_timer_tests(void);
+int core_timer_tests(void) TA_REQ(core_thread_capability);
 int alloc_tests(void);
 int compose_tests(void);
 int policy_tests(void);
 int failoverlist_tests(void);
 int parse_tree_tests(void);
 int proton_utils_tests(void);
-int version_tests(void);
 int hash_tests(void);
 int thread_tests(void);
 int platform_tests(void);
 
 
-int main(int argc, char** argv)
+int main(int argc, char** argv) TA_ACQ(core_thread_capability) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     if (argc != 2) {
         fprintf(stderr, "usage: %s <config-file>\n", argv[0]);

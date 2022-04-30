@@ -2363,7 +2363,7 @@ QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd)
     qd_timer_schedule(qd->router->timer, 1000);
 }
 
-void qd_router_free(qd_router_t *router)
+void qd_router_free(qd_router_t *router) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     if (!router) return;
 

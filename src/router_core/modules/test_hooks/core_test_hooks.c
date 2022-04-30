@@ -537,7 +537,7 @@ static void qdrc_test_hooks_core_endpoint_finalize(test_module_t *module)
 // tests.  Any changes here may require updates to those tests.
 //
 
-static void _do_send(test_client_t *tc);
+static void _do_send(test_client_t *tc) TA_REQ(core_thread_capability);
 
 struct test_client_t {
     test_module_t             *module;
@@ -579,7 +579,7 @@ static void _client_on_done_cb(qdr_core_t    *core,
                                qdrc_client_t *client,
                                void          *user_context,
                                void          *request_context,
-                               const char    *error)
+                               const char    *error) TA_REQ(core_thread_capability)
 {
     // the system_tests_core_client.py looks for the following
     // log message during the tests
@@ -632,7 +632,7 @@ static void _client_on_state_cb(qdr_core_t *core, qdrc_client_t *core_client,
 
 static void _client_on_flow_cb(qdr_core_t *core, qdrc_client_t *core_client,
                                void *user_context, int available_credit,
-                               bool drain)
+                               bool drain) TA_REQ(core_thread_capability)
 {
     test_client_t *tc = (test_client_t *)user_context;
 
@@ -650,7 +650,7 @@ static void _client_on_flow_cb(qdr_core_t *core, qdrc_client_t *core_client,
     }
 }
 
-static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *conn)
+static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     test_client_t *tc = (test_client_t *)context;
 
@@ -710,7 +710,7 @@ static void qdrc_test_client_api_setup(test_module_t *test_module)
 }
 
 
-static void qdrc_test_client_api_finalize(test_module_t *test_module)
+static void qdrc_test_client_api_finalize(test_module_t *test_module) TA_REQ(core_thread_capability)
 {
     test_client_t *tc = test_module->test_client;
     if (tc) {
@@ -784,13 +784,13 @@ static void _handle_crash_request(qdr_core_t *core, qd_message_t *message)
 
 }
 
-static bool qdrc_test_hooks_enable_CT(qdr_core_t *core)
+static bool qdrc_test_hooks_enable_CT(qdr_core_t *core) TA_REQ(core_thread_capability)
 {
     return qd_router_test_hooks_enabled();
 }
 
 
-static void qdrc_test_hooks_init_CT(qdr_core_t *core, void **module_context)
+static void qdrc_test_hooks_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     test_module_t *test_module = NEW(test_module_t);
     ZERO(test_module);
@@ -801,7 +801,7 @@ static void qdrc_test_hooks_init_CT(qdr_core_t *core, void **module_context)
 }
 
 
-static void qdrc_test_hooks_final_CT(void *module_context)
+static void qdrc_test_hooks_final_CT(void *module_context) TA_REQ(core_thread_capability)
 {
     qdrc_test_hooks_core_endpoint_finalize(module_context);
     qdrc_test_client_api_finalize(module_context);

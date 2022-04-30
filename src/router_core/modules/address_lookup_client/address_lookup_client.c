@@ -102,7 +102,7 @@ static qdr_address_t *qdr_lookup_terminus_address_CT(qdr_core_t       *core,
                                                      bool              create_if_not_found,
                                                      bool              accept_dynamic,
                                                      bool             *unavailable,
-                                                     bool             *core_endpoint)
+                                                     bool             *core_endpoint) TA_REQ(core_thread_capability)
 {
     qdr_address_t *addr = 0;
 
@@ -216,7 +216,7 @@ static void qdr_link_react_to_first_attach_CT(qdr_core_t       *core,
                                               qdr_terminus_t   *source,  // must free when done
                                               qdr_terminus_t   *target,  // must free when done
                                               bool              unavailable,
-                                              bool              core_endpoint)
+                                              bool              core_endpoint) TA_REQ(core_thread_capability)
 {
     if (core_endpoint) {
         qdrc_endpoint_do_bound_attach_CT(core, addr, link, source, target);
@@ -283,7 +283,7 @@ static void qcm_addr_lookup_CT(void             *context,
                                qdr_link_t       *link,
                                qd_direction_t    dir,
                                qdr_terminus_t   *source,
-                               qdr_terminus_t   *target)
+                               qdr_terminus_t   *target) TA_REQ(core_thread_capability)
 {
     qcm_lookup_client_t *client = (qcm_lookup_client_t*) context;
     bool                 unavailable;

@@ -25,8 +25,8 @@
 
 extern const char *qdr_router_columns[QDR_ROUTER_COLUMN_COUNT + 1];
 
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset) TA_REQ(core_thread_capability);
+void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
+void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
 
 #endif

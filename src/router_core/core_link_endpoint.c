@@ -37,7 +37,7 @@ ALLOC_DEFINE(qdrc_endpoint_t);
 void qdrc_endpoint_bind_mobile_address_CT(qdr_core_t           *core,
                                           const char           *address,
                                           qdrc_endpoint_desc_t *desc,
-                                          void                 *bind_context)
+                                          void                 *bind_context) TA_REQ(core_thread_capability)
 {
     qdr_address_t *addr = 0;
     qd_iterator_t *iter = qd_iterator_string(address, ITER_VIEW_ADDRESS_HASH);
@@ -67,7 +67,7 @@ qdrc_endpoint_t *qdrc_endpoint_create_link_CT(qdr_core_t           *core,
                                               qdr_terminus_t       *source,
                                               qdr_terminus_t       *target,
                                               qdrc_endpoint_desc_t *desc,
-                                              void                 *link_context)
+                                              void                 *link_context) TA_REQ(core_thread_capability)
 {
     qdrc_endpoint_t *ep = new_qdrc_endpoint_t();
 
@@ -92,13 +92,14 @@ qdr_connection_t *qdrc_endpoint_get_connection_CT(qdrc_endpoint_t *ep)
 }
 
 
-void qdrc_endpoint_second_attach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_terminus_t *source, qdr_terminus_t *target)
+void qdrc_endpoint_second_attach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_terminus_t *source,
+                                    qdr_terminus_t *target) TA_REQ(core_thread_capability)
 {
     qdr_link_outbound_second_attach_CT(core, ep->link, source, target);
 }
 
 
-void qdrc_endpoint_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error)
+void qdrc_endpoint_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error) TA_REQ(core_thread_capability)
 {
     qdr_link_outbound_detach_CT(core, ep->link, error, QDR_CONDITION_NONE, true);
     if (ep->link->detach_count == 2) {
@@ -107,13 +108,14 @@ void qdrc_endpoint_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t 
 }
 
 
-void qdrc_endpoint_flow_CT(qdr_core_t *core, qdrc_endpoint_t *ep, int credit, bool drain)
+void qdrc_endpoint_flow_CT(qdr_core_t *core, qdrc_endpoint_t *ep, int credit, bool drain) TA_REQ(core_thread_capability)
 {
     qdr_link_issue_credit_CT(core, ep->link, credit, drain);
 }
 
 
 void qdrc_endpoint_send_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_delivery_t *dlv, bool presettled)
+    TA_REQ(core_thread_capability)
 {
     set_safe_ptr_qdr_link_t(ep->link, &dlv->link_sp);
     dlv->settled       = presettled;
@@ -151,7 +153,7 @@ qdr_delivery_t *qdrc_endpoint_delivery_CT(qdr_core_t *core, qdrc_endpoint_t *end
 }
 
 
-void qdrc_endpoint_settle_CT(qdr_core_t *core, qdr_delivery_t *dlv, uint64_t disposition)
+void qdrc_endpoint_settle_CT(qdr_core_t *core, qdr_delivery_t *dlv, uint64_t disposition) TA_REQ(core_thread_capability)
 {
     //
     // Set the new delivery state
@@ -214,6 +216,7 @@ void qdrc_endpoint_do_flow_CT(qdr_core_t *core, qdrc_endpoint_t *ep, int credit,
 
 
 void qdrc_endpoint_do_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error, qd_detach_type_t dt)
+    TA_REQ(core_thread_capability)
 {
     if (dt == QD_LOST) {
         qdrc_endpoint_do_cleanup_CT(core, ep);

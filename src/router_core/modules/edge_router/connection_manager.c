@@ -63,7 +63,7 @@ static qdr_edge_peer_t *qdr_find_edge_peer_CT(qdr_core_t *core, const char *cont
 }
 
 
-static void qdr_inter_edge_peer_activate_CT(qdr_core_t *core, qdr_edge_peer_t *edge_peer)
+static void qdr_inter_edge_peer_activate_CT(qdr_core_t *core, qdr_edge_peer_t *edge_peer) TA_REQ(core_thread_capability)
 {
     edge_peer->router_addr = qdr_add_local_address_CT(core, QD_ITER_HASH_PREFIX_EDGE_SUMMARY, edge_peer->identity, QD_TREATMENT_ANYCAST_CLOSEST);
     qdr_link_t *link = qdr_create_link_CT(core, edge_peer->primary_conn, QD_LINK_INTER_EDGE, QD_OUTGOING,
@@ -72,7 +72,7 @@ static void qdr_inter_edge_peer_activate_CT(qdr_core_t *core, qdr_edge_peer_t *e
 }
 
 
-static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
+static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qdr_edge_peer_t *edge_peer = qdr_find_edge_peer_CT(core, conn->connection_info->container);
 
@@ -105,7 +105,7 @@ static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_
 }
 
 
-static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
+static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qdr_edge_peer_t *edge_peer = conn->edge_peer;
 
@@ -132,7 +132,7 @@ static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connectio
 }
 
 
-static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *conn)
+static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qcm_edge_conn_mgr_t *cm = (qcm_edge_conn_mgr_t*) context;
 

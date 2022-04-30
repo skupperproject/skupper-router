@@ -70,7 +70,7 @@ static inline qdr_link_t *peer_router_data_link(qdr_core_t *core,
 // Get an idle anonymous link for a streaming message. This link will come from
 // either the connection's free link pool or it will be dynamically created on
 // the given connection.
-static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *base_conn, qdr_link_t *base_link)
+static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *base_conn, qdr_link_t *base_link) TA_REQ(core_thread_capability)
 {
     qdr_connection_t *conn;
     if (!base_conn) return 0;
@@ -220,7 +220,7 @@ qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *in
 // Drop all pre-settled deliveries pending on the link's
 // undelivered list.
 //
-static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link) TA_REQ(link->conn->work_lock)
+static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link) TA_REQ(link->conn->work_lock) TA_REQ(core_thread_capability)
 {
     qdr_delivery_t *dlv = DEQ_HEAD(link->undelivered);
 
@@ -339,6 +339,7 @@ void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *out_link, qdr_delivery
 
 
 static void qdr_settle_subscription_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+    TA_REQ(core_thread_capability)
 {
     qdr_delivery_t *in_delivery = action->args.delivery.delivery;
 
@@ -522,7 +523,7 @@ static inline bool qdr_invalidated_link_CT(qdr_delivery_t *in_dlv, qdr_link_t *o
 /**
  * Handle forwarding to a subscription
  */
-static void qdr_forward_to_subscriber_CT(qdr_core_t *core, qdr_subscription_t *sub, qdr_delivery_t *in_dlv, qd_message_t *in_msg, bool receive_complete)
+static void qdr_forward_to_subscriber_CT(qdr_core_t *core, qdr_subscription_t *sub, qdr_delivery_t *in_dlv, qd_message_t *in_msg, bool receive_complete) TA_REQ(core_thread_capability)
 {
     qd_message_add_fanout(in_msg);
 
@@ -551,7 +552,7 @@ int qdr_forward_multicast_CT(qdr_core_t      *core,
                              qd_message_t    *msg,
                              qdr_delivery_t  *in_delivery,
                              bool             exclude_inprocess,
-                             bool             control)
+                             bool             control) TA_REQ(core_thread_capability)
 {
     bool          bypass_valid_origins = addr->forwarder->bypass_valid_origins;
     int           fanout               = 0;
@@ -716,7 +717,7 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
                            qd_message_t    *msg,
                            qdr_delivery_t  *in_delivery,
                            bool             exclude_inprocess,
-                           bool             control)
+                           bool             control) TA_REQ(core_thread_capability)
 {
     const bool receive_complete = qd_message_receive_complete(msg);
     //
@@ -900,7 +901,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                             qd_message_t    *msg,
                             qdr_delivery_t  *in_delivery,
                             bool             exclude_inprocess,
-                            bool             control)
+                            bool             control) TA_REQ(core_thread_capability)
 {
     //
     // Control messages should never use balanced treatment.

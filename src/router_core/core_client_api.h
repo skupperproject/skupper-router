@@ -124,7 +124,7 @@ qdrc_client_t *qdrc_client_CT(qdr_core_t                *core,
                               uint32_t                   credit_window,
                               void                      *user_context,
                               qdrc_client_on_state_CT_t  on_state_cb,
-                              qdrc_client_on_flow_CT_t   on_flow_cb);
+                              qdrc_client_on_flow_CT_t   on_flow_cb) TA_REQ(core_thread_capability);
 
 
 /**
@@ -132,7 +132,7 @@ qdrc_client_t *qdrc_client_CT(qdr_core_t                *core,
  *
  * @param client - as returned by qdrc_client_CT()
  */
-void qdrc_client_free_CT(qdrc_client_t *client);
+void qdrc_client_free_CT(qdrc_client_t *client) TA_REQ(core_thread_capability);
 
 
 /**
@@ -161,6 +161,6 @@ int qdrc_client_request_CT(qdrc_client_t                 *client,
                            uint32_t                       timeout,
                            qdrc_client_on_reply_CT_t      on_reply_cb,
                            qdrc_client_on_ack_CT_t        on_ack_cb,
-                           qdrc_client_request_done_CT_t  done_cb);
+                           qdrc_client_request_done_CT_t  done_cb) TA_REQ(core_thread_capability);
 
 #endif // #define qd_router_core_client_api_h 1

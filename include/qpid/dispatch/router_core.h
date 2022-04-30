@@ -46,12 +46,13 @@ ENUM_DECLARE(qd_router_mode);
 /**
  * Allocate and start an instance of the router core module.
  */
-qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id);
+qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id)
+    TA_RET_CAP(core_thread_capability);
 
 /**
  * Stop and deallocate an instance of the router core.
  */
-void qdr_core_free(qdr_core_t *core);
+void qdr_core_free(qdr_core_t *core) TA_REQ(core_thread_capability);
 
 /**
  ******************************************************************************
@@ -363,8 +364,8 @@ void qdr_manage_update(qdr_core_t *core, void *context, qd_router_entity_type_t 
 
 qdr_query_t *qdr_manage_query(qdr_core_t *core, void *context, qd_router_entity_type_t type,
                               qd_parsed_field_t *attribute_names, qd_composed_field_t *body,
-                              uint64_t in_conn);
-void qdr_query_add_attribute_names(qdr_query_t *query);
+                              uint64_t in_conn) TA_REQ(core_thread_capability);
+void qdr_query_add_attribute_names(qdr_query_t *query) TA_REQ(core_thread_capability);
 void qdr_query_get_first(qdr_query_t *query, int offset);
 void qdr_query_get_next(qdr_query_t *query);
 void qdr_query_free(qdr_query_t *query);

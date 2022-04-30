@@ -190,7 +190,7 @@ void qdr_adaptors_finalize(qdr_core_t *core)
 }
 
 
-void *router_core_thread(void *arg)
+void *router_core_thread(void *arg) TA_REQ(core_thread_capability)
 {
     qdr_core_t        *core = (qdr_core_t*) arg;
     qdr_action_list_t  action_list = DEQ_EMPTY;

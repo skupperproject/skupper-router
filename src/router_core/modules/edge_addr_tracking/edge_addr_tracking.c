@@ -171,11 +171,11 @@ static void qdrc_address_endpoint_cleanup(void *link_context)
  * @brief Determine if deliveries to the specified address coming in on the specified connection
  * can be successfully forwarded to a valid destination.  A destination is valid if it is not
  * on the same edge-mesh as the delivery's origin.
- * 
- * @param addr 
- * @param in_conn 
- * @return true 
- * @return false 
+ *
+ * @param addr
+ * @param in_conn
+ * @return true
+ * @return false
  */
 static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *in_conn)
 {
@@ -291,7 +291,7 @@ static void qdrc_check_edge_peers(qdr_core_t *core, qdr_address_t *addr)
 }
 
 
-static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr)
+static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     // We only care about mobile addresses.
     if (!qdr_address_is_mobile_CT(addr))
@@ -341,7 +341,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
     }
 }
 
-static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
+static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link) TA_REQ(core_thread_capability)
 {
     switch (event) {
         case QDRC_EVENT_LINK_EDGE_DATA_ATTACHED :
@@ -364,7 +364,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
             }
             break;
         }
-        
+
         case QDRC_EVENT_LINK_EDGE_DATA_DETACHED :
         {
             if (link->edge_context) {

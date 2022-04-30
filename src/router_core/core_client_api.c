@@ -87,43 +87,41 @@ struct qdrc_client_t {
 ALLOC_DECLARE(qdrc_client_t);
 ALLOC_DEFINE(qdrc_client_t);
 
-
 static void _send_request_CT(qdrc_client_t *client,
-                             qdrc_client_request_t *req);
-static void _flush_send_queue_CT(qdrc_client_t *client);
+                             qdrc_client_request_t *req) TA_REQ(core_thread_capability);
+static void _flush_send_queue_CT(qdrc_client_t *client) TA_REQ(core_thread_capability);
 
-static void _state_updated_CT(qdrc_client_t *client);
+static void _state_updated_CT(qdrc_client_t *client) TA_REQ(core_thread_capability);
 
 static void _sender_second_attach_CT(void *client_context,
                                      qdr_terminus_t *remote_source,
-                                     qdr_terminus_t *remote_target);
+                                     qdr_terminus_t *remote_target) TA_REQ(core_thread_capability);
 static void _receiver_second_attach_CT(void *client_context,
                                        qdr_terminus_t *remote_source,
-                                       qdr_terminus_t *remote_target);
+                                       qdr_terminus_t *remote_target) TA_REQ(core_thread_capability);
 static void _sender_flow_CT(void *client_context,
                             int available_credit,
-                            bool drain);
+                            bool drain) TA_REQ(core_thread_capability);
 static void _sender_update_CT(void *client_context,
                               qdr_delivery_t *delivery,
                               bool settled,
-                              uint64_t disposition);
+                              uint64_t disposition) TA_REQ(core_thread_capability);
 static void _receiver_transfer_CT(void *client_context,
                                   qdr_delivery_t *delivery,
-                                  qd_message_t *message);
+                                  qd_message_t *message) TA_REQ(core_thread_capability);
 static void _sender_detached_CT(void *client_context,
-                                qdr_error_t *error);
+                                qdr_error_t *error) TA_REQ(core_thread_capability);
 static void _receiver_detached_CT(void *client_context,
-                                  qdr_error_t *error);
-static void _sender_cleanup_CT(void *client_context);
-static void _receiver_cleanup_CT(void *client_context);
+                                  qdr_error_t *error) TA_REQ(core_thread_capability);
+static void _sender_cleanup_CT(void *client_context) TA_REQ(core_thread_capability);
+static void _receiver_cleanup_CT(void *client_context) TA_REQ(core_thread_capability);
 
 static void _free_request_CT(qdrc_client_t *client,
                              qdrc_client_request_t *req,
-                             const char *error);
+                             const char *error) TA_REQ(core_thread_capability);
 static qd_message_t *_create_message_CT(qdrc_client_t *client,
-                                        qdrc_client_request_t *req);
-static void _timer_expired(qdr_core_t *core, void *context);
-
+                                        qdrc_client_request_t *req) TA_REQ(core_thread_capability);
+static void _timer_expired(qdr_core_t *core, void *context) TA_REQ(core_thread_capability);
 
 static qdrc_endpoint_desc_t sender_endpoint = {
     .label            = "core client - sender",

@@ -90,7 +90,7 @@ static void log_unknown_router(qdrm_mobile_sync_t *msync, qd_parsed_field_t *id_
     free(r_id);
 }
 
-static void qcm_mobile_sync_on_router_advanced_CT(qdrm_mobile_sync_t *msync, qdr_node_t *router);
+static void qcm_mobile_sync_on_router_advanced_CT(qdrm_mobile_sync_t *msync, qdr_node_t *router) TA_REQ(core_thread_capability);
 
 //================================================================================
 // Helper Functions
@@ -152,7 +152,7 @@ static void qcm_mobile_sync_start_tracking(qdr_address_t *addr)
  * Decrement the address's ref_count.
  * Check the address to have it deleted if it is no longer referenced anywhere.
  */
-static void qcm_mobile_sync_stop_tracking(qdr_core_t *core, qdr_address_t *addr)
+static void qcm_mobile_sync_stop_tracking(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_MOBILE_TRACKING);
     if (--addr->ref_count == 0)
@@ -260,7 +260,7 @@ static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *f
 }
 
 
-static void qcm_mobile_sync_compose_diff_addr_list_add(qdrm_mobile_sync_t *msync, qd_composed_field_t *field)
+static void qcm_mobile_sync_compose_diff_addr_list_add(qdrm_mobile_sync_t *msync, qd_composed_field_t *field) TA_REQ(core_thread_capability)
 {
     qd_compose_start_list(field);
     qdr_address_t *addr = DEQ_HEAD(msync->sync_addrs);
@@ -277,7 +277,7 @@ static void qcm_mobile_sync_compose_diff_addr_list_add(qdrm_mobile_sync_t *msync
 }
 
 
-static void qcm_mobile_sync_compose_diff_addr_list_del(qdrm_mobile_sync_t *msync, qd_composed_field_t *field)
+static void qcm_mobile_sync_compose_diff_addr_list_del(qdrm_mobile_sync_t *msync, qd_composed_field_t *field) TA_REQ(core_thread_capability)
 {
     qd_compose_start_list(field);
     qdr_address_t *addr = DEQ_HEAD(msync->sync_addrs);
@@ -295,7 +295,7 @@ static void qcm_mobile_sync_compose_diff_addr_list_del(qdrm_mobile_sync_t *msync
 }
 
 
-static qd_message_t *qcm_mobile_sync_compose_differential_mau(qdrm_mobile_sync_t *msync, const char *address)
+static qd_message_t *qcm_mobile_sync_compose_differential_mau(qdrm_mobile_sync_t *msync, const char *address) TA_REQ(core_thread_capability)
 {
     qd_message_t        *msg     = qd_message();
     qd_composed_field_t *headers = qcm_mobile_sync_message_headers(address, MAU);
@@ -448,7 +448,7 @@ static void qcm_mobile_sync_process_addr_attributes_CT(qdrm_mobile_sync_t *msync
 // Timer Handler
 //================================================================================
 
-static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
+static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync = (qdrm_mobile_sync_t*) context;
 
@@ -553,7 +553,7 @@ static void qcm_mobile_sync_on_mar_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
 }
 
 
-static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field_t *body)
+static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field_t *body) TA_REQ(core_thread_capability)
 {
     if (!!body && qd_parse_is_map(body)) {
         qd_parsed_field_t *id_field         = qd_parse_value_by_key(body, ID);
@@ -774,7 +774,7 @@ static uint64_t qcm_mobile_sync_on_message_CT(void                    *context,
                                               int                      unused_inter_router_cost,
                                               uint64_t                 unused_conn_id,
                                               const qd_policy_spec_t  *unused_policy_spec,
-                                              qdr_error_t            **error)
+                                              qdr_error_t            **error) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync      = (qdrm_mobile_sync_t*) context;
     qd_iterator_t      *ap_iter    = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
@@ -830,7 +830,7 @@ static void qcm_mobile_sync_on_became_local_dest_CT(qdrm_mobile_sync_t *msync, q
 }
 
 
-static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync, qdr_address_t *addr)
+static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     if (!qcm_mobile_sync_addr_is_mobile(addr))
         return;
@@ -861,7 +861,7 @@ static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync
 }
 
 
-static void qcm_mobile_sync_on_address_local_change_CT(qdrm_mobile_sync_t *msync, qdr_address_t *addr)
+static void qcm_mobile_sync_on_address_local_change_CT(qdrm_mobile_sync_t *msync, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     if (!qcm_mobile_sync_addr_is_mobile(addr)) {
         return;
@@ -886,7 +886,7 @@ static void qcm_mobile_sync_on_address_local_change_CT(qdrm_mobile_sync_t *msync
 }
 
 
-static void qcm_mobile_sync_on_router_flush_CT(qdrm_mobile_sync_t *msync, qdr_node_t *router)
+static void qcm_mobile_sync_on_router_flush_CT(qdrm_mobile_sync_t *msync, qdr_node_t *router) TA_REQ(core_thread_capability)
 {
     router->mobile_seq = 0;
     qdr_address_t *addr = DEQ_HEAD(msync->core->addrs);
@@ -939,7 +939,7 @@ static uint32_t local_dest_count(qdr_address_t *addr)
 
 static void qcm_mobile_sync_on_addr_event_CT(void          *context,
                                              qdrc_event_t   event_type,
-                                             qdr_address_t *addr)
+                                             qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync = (qdrm_mobile_sync_t*) context;
 
@@ -968,7 +968,7 @@ static void qcm_mobile_sync_on_addr_event_CT(void          *context,
 
 static void qcm_mobile_sync_on_router_event_CT(void          *context,
                                                qdrc_event_t   event_type,
-                                               qdr_node_t    *router)
+                                               qdr_node_t    *router) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync = (qdrm_mobile_sync_t*) context;
 
@@ -991,13 +991,13 @@ static void qcm_mobile_sync_on_router_event_CT(void          *context,
 // Module Handlers
 //================================================================================
 
-static bool qcm_mobile_sync_enable_CT(qdr_core_t *core)
+static bool qcm_mobile_sync_enable_CT(qdr_core_t *core) TA_REQ(core_thread_capability)
 {
     return core->router_mode == QD_ROUTER_MODE_INTERIOR;
 }
 
 
-static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
+static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync = NEW(qdrm_mobile_sync_t);
     ZERO(msync);
@@ -1041,7 +1041,7 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
 }
 
 
-static void qcm_mobile_sync_final_CT(void *module_context)
+static void qcm_mobile_sync_final_CT(void *module_context) TA_REQ(core_thread_capability)
 {
     qdrm_mobile_sync_t *msync = (qdrm_mobile_sync_t*) module_context;
 
