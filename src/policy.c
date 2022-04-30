@@ -191,26 +191,23 @@ qd_error_t qd_register_policy_manager(qd_policy_t *policy, void *policy_manager)
 }
 
 
-long qd_policy_c_counts_alloc()
+void *qd_policy_c_counts_alloc()
 {
-    qd_policy_denial_counts_t * dc = NEW(qd_policy_denial_counts_t);
+    qd_policy_denial_counts_t *dc = NEW(qd_policy_denial_counts_t);
     assert(dc);
     ZERO(dc);
-    return (long)dc;
+    return dc;
 }
 
-
-void qd_policy_c_counts_free(long ccounts)
+void qd_policy_c_counts_free(void *dc)
 {
-    void *dc = (void *)ccounts;
     assert(dc);
     free(dc);
 }
 
 
-qd_error_t qd_policy_c_counts_refresh(long ccounts, qd_entity_t *entity)
+qd_error_t qd_policy_c_counts_refresh(qd_policy_denial_counts_t* dc, qd_entity_t *entity)
 {
-    qd_policy_denial_counts_t *dc = (qd_policy_denial_counts_t*)ccounts;
     if (!qd_entity_set_long(entity, "sessionDenied", dc->sessionDenied) &&
         !qd_entity_set_long(entity, "senderDenied", dc->senderDenied) &&
         !qd_entity_set_long(entity, "receiverDenied", dc->receiverDenied) &&
@@ -573,7 +570,7 @@ bool qd_policy_open_fetch_settings(
                         settings->sourceParseTree      = qd_policy_parse_tree(settings->sourcePattern);
                         settings->targetParseTree      = qd_policy_parse_tree(settings->targetPattern);
                         settings->denialCounts         = (qd_policy_denial_counts_t*)
-                                                        qd_entity_get_long((qd_entity_t*)upolicy, "denialCounts");
+                                                        qd_entity_get_pointer_from_capsule((qd_entity_t*)upolicy, "denialCounts");
                         res = true; // named settings content returned
                     } else {
                         // lookup failed: object did not exist in python database

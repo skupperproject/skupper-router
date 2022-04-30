@@ -58,6 +58,7 @@ void            qd_router_free(qd_router_t *router);
 void            qd_error_initialize();
 static void qd_dispatch_set_router_id(qd_dispatch_t *qd, char *_id);
 static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area);
+static void qd_dispatch_policy_c_counts_free(PyObject *capsule);
 
 const char     *CLOSEST_DISTRIBUTION   = "closest";
 const char     *MULTICAST_DISTRIBUTION = "multicast";
@@ -267,20 +268,24 @@ QD_EXPORT qd_error_t qd_dispatch_register_display_name_service(qd_dispatch_t *qd
     return qd_register_display_name_service(qd, object);
 }
 
-
-QD_EXPORT long qd_dispatch_policy_c_counts_alloc()
+QD_EXPORT PyObject* qd_dispatch_policy_c_counts_alloc()
 {
-    return qd_policy_c_counts_alloc();
+    return PyCapsule_New(qd_policy_c_counts_alloc(), "qd_policy_c_counts", qd_dispatch_policy_c_counts_free);
 }
 
-
-QD_EXPORT void qd_dispatch_policy_c_counts_free(long ccounts)
+static void qd_dispatch_policy_c_counts_free(PyObject *capsule)
 {
+    void *ccounts = PyCapsule_GetPointer(capsule, "qd_policy_c_counts");
     qd_policy_c_counts_free(ccounts);
 }
 
-QD_EXPORT void qd_dispatch_policy_c_counts_refresh(long ccounts, qd_entity_t *entity)
+QD_EXPORT void qd_dispatch_policy_c_counts_refresh(PyObject *ccounts_capsule, qd_entity_t *entity)
 {
+    assert(PyCapsule_CheckExact(ccounts_capsule));
+    const char * name = PyCapsule_GetName(ccounts_capsule);
+    assert(PyCapsule_IsValid(ccounts_capsule, name));
+    void* ccounts = PyCapsule_GetPointer(ccounts_capsule, name);
+    qd_error_py();
     qd_policy_c_counts_refresh(ccounts, entity);
 }
 
