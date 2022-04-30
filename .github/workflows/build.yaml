@@ -218,7 +218,7 @@ jobs:
       #  https://docs.python.org/3/using/cmdline.html#envvar-PYTHONMALLOC
       #  https://pythonextensionpatterns.readthedocs.io/en/latest/debugging/debug_python.html#debug-version-of-python-memory-alloc-label
       PYTHONMALLOC: malloc_debug
-      PYTHONTRACEMALLOC: 5
+      PYTHONTRACEMALLOC: 20
       # this enables colored output
       FORCE_COLOR: 1
       COLUMNS: 160
