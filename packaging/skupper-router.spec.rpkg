@@ -105,6 +105,7 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 
 cd %{_builddir}/skupper-router
 %cmake \
+    -DVERSION="%{version} (upstream rpm build)" \
     -DUSE_LIBWEBSOCKETS=ON \
     -DUSE_LIBNGHTTP2=ON \
     -DPython_EXECUTABLE=%{python3} \
