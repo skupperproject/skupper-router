@@ -108,10 +108,6 @@ find_address_in_section (bfd *abfd, asection *section,
 }
 
 
-static int naddr = 1;		/* Number of addresses to process.  */
-//const static char* first = "0x123";
-static char *arr[] = {"first"};
-static char **addr = arr;		/* Hex addresses to process.  */
 bool unwind_inlines = false;
 static bool base_names = false;		/* -s, strip directory names.  */
 static bool pretty_print = true;
@@ -152,25 +148,7 @@ find_offset_in_section (bfd *abfd, asection *section)
 static void
 translate_addresses (bfd *abfd, asection *section)
 {
-    int read_stdin = (naddr == 0);
-
-    for (;;)
-    {
-        if (read_stdin)
-        {
-            char addr_hex[100];
-
-            if (fgets (addr_hex, sizeof addr_hex, stdin) == NULL)
-                break;
-            pc = bfd_scan_vma (addr_hex, NULL, 16);
-        }
-        else
-        {
-            if (naddr <= 0)
-                break;
-            --naddr;
-            pc = bfd_scan_vma (*addr++, NULL, 16);
-        }
+            pc = (bfd_vma) &translate_addresses;
 
         if (bfd_get_flavour (abfd) == bfd_target_elf_flavour)
         {
@@ -285,7 +263,7 @@ translate_addresses (bfd *abfd, asection *section)
            with line number information, processing one address at a
            time.  */
         fflush (stdout);
-    }
+
 }
 
 /* After a FALSE return from bfd_check_format_matches with
@@ -419,13 +397,13 @@ int main2() {
         xexit (1);
     }
 
-    if (section_name != NULL)
-    {
-        section = bfd_get_section_by_name (abfd, section_name);
-        if (section == NULL)
-            printf ("%s: cannot find section %s", file_name, section_name);
-    }
-    else
+//    if (section_name != NULL)
+//    {
+//        section = bfd_get_section_by_name (abfd, section_name);
+//        if (section == NULL)
+//            printf ("%s: cannot find section %s", file_name, section_name);
+//    }
+//    else
         section = NULL;
 
     slurp_symtab (abfd);

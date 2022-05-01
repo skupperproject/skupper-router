@@ -58,6 +58,11 @@ void a_calls_b(item &item)
 }
 }
 
+TEST_CASE("main2")
+{
+    main2();
+}
+
 
 TEST_CASE("qd_symbolize_backtrace_line")
 {
