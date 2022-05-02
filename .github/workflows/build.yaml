@@ -191,6 +191,7 @@ jobs:
       QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST: True
       # this enables colored output
       FORCE_COLOR: 1
+      COLUMNS: 160
 
     steps:
 
@@ -321,6 +322,7 @@ jobs:
       RouterCTestExtraArgs: ""
       # this enables colored output
       FORCE_COLOR: 1
+      COLUMNS: 160
 
       # TODO(DISPATCH-2144) use -DPython_EXECUTABLE=/usr/bin/python3-debug when issue is fixed,
       #  as that allows for -DSANITIZE_3RD_PARTY=ON on Fedora
@@ -520,6 +522,7 @@ jobs:
         -GNinja
       # this enables colored output
       FORCE_COLOR: 1
+      COLUMNS: 160
 
     steps:
 
