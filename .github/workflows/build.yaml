@@ -617,6 +617,10 @@ jobs:
         run: |
           dnf install -y /tmp/skupper-rpms/*/*.rpm
 
+      - name: Check skrouterd version
+        run: |
+          skrouterd --version
+
       - name: Check that skrouterd works
         run: |
           skrouterd -c /dev/empty |& grep "Configuration file could not be opened"
