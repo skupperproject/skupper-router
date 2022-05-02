@@ -92,6 +92,21 @@ $ ./run.py
 
 === Test-only dependencies
 
+.Install package dependencies (Fedora)
+[source, shell script]
+----
+dnf install curl nmap-ncat
+----
+
+.Install Python test dependencies from `requirements-dev.txt`
+[source, shell script]
+----
+python3 -m pip install --user --upgrade pip
+python3 -m pip install --user -r ./requirements-dev.txt
+----
+
+==== Description of the individual dependencies
+
 The HTTP2 system tests (`tests/system_tests_http2.py`) use the Python Quart and hyper-h2 frameworks to start a HTTP2 server.
 The HTTP2 system tests only runs if
 
