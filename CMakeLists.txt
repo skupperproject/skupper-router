@@ -119,6 +119,8 @@ message(STATUS "Found Proton: ${Proton_LIBRARIES} (found version \"${Proton_VERS
 ## Optional dependencies
 ##
 
+find_library(bfd_lib bfd DOC "libdfd used to symbolize QD_MEMORY_DEBUG backtraces")
+
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
 
