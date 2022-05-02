@@ -246,6 +246,9 @@ jobs:
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
 
+      - name: Upgrade pip
+        run: python3 -m pip install --upgrade pip
+
       - name: Install Python runtime/test dependencies
         run: ${{matrix.python}} -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
 
