@@ -76,6 +76,7 @@ struct plog_record_t {
     bool                        never_flushed;
     bool                        never_logged;
     bool                        force_log;
+    bool                        in_work_list;
     bool                        ended;
 };
 
@@ -152,6 +153,23 @@ static uint64_t _now_in_usec(void)
     struct timeval tv;
     gettimeofday(&tv, 0);
     return tv.tv_usec + 1000000 * tv.tv_sec;
+}
+
+
+static void _plog_remove_work_record_in_work_list(plog_record_t *record)
+{
+    sys_mutex_lock(lock);
+    plog_work_t *work = DEQ_HEAD(work_list);
+    while(work) {
+        plog_record_t *work_record = work->record;
+        if (record == work_record) {
+            record->in_work_list = false;
+            work->record = 0;
+            break;
+        }
+        work = DEQ_NEXT(work);
+    }
+    sys_mutex_unlock(lock);
 }
 
 
@@ -289,7 +307,11 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     // If the record type is ROUTER, this is the local-router record.  Store it.
     // Otherwise, if the parent is not specified, use the local_router as the parent.
     //
-    plog_record_t *record = work->record;
+    plog_record_t         *record = work->record;
+
+    if (!record)
+        return;
+
     if (record->record_type == PLOG_RECORD_ROUTER) {
         local_router = record;
     } else if (record->parent == 0) {
@@ -361,6 +383,9 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
 
     plog_record_t *record = work->record;
 
+    if (!record)
+        return;
+
     //
     // Record the deletion timestamp in the record.
     //
@@ -399,6 +424,11 @@ static void _plog_set_ref_TH(plog_work_t *work, bool discard)
     }
 
     plog_record_t         *record = work->record;
+
+
+    if(!record)
+        return;
+
     plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
     plog_attribute_data_t *data;
 
@@ -445,6 +475,10 @@ static void _plog_set_string_TH(plog_work_t *work, bool discard)
     }
 
     plog_record_t         *record = work->record;
+
+    if (!record)
+        return;
+
     plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
     plog_attribute_data_t *data;
 
@@ -490,7 +524,11 @@ static void _plog_set_int_TH(plog_work_t *work, bool discard)
         return;
     }
 
-    plog_record_t         *record = work->record;
+    plog_record_t *record = work->record;
+
+    if (!record)
+        return;
+
     plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
     plog_attribute_data_t *data;
 
@@ -546,6 +584,8 @@ static plog_work_t *_plog_work(plog_work_handler_t handler)
 static void _plog_post_work(plog_work_t *work)
 {
     sys_mutex_lock(lock);
+    if (work->record)
+        work->record->in_work_list = true;
     DEQ_INSERT_TAIL(work_list, work);
     bool need_signal = sleeping;
     sys_mutex_unlock(lock);
@@ -647,6 +687,13 @@ static void _plog_free_record_TH(plog_record_t *record, bool recursive)
         free_plog_attribute_data_t(data);
         data = DEQ_HEAD(record->attributes);
     }
+
+    //
+    // We are going to free the record. If a work in the work_list is pointing to this record,
+    // zero out that record so there will be no risk of the record being accessed again.
+    //
+    if (record->in_work_list)
+        _plog_remove_work_record_in_work_list(record);
 
     //
     // Free the record
