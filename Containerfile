@@ -24,7 +24,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel swig \
     libnghttp2-devel \
-    wget tar patch findutils git libasan libubsan \
+    wget tar patch findutils git libasan libubsan libtsan \
  && microdnf clean all -y
 
 WORKDIR /build
@@ -47,7 +47,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
     python3 \
     libnghttp2 \
-    gdb libasan libubsan \
+    gdb libasan libubsan libtsan \
     gettext hostname iputils \
  && microdnf clean all
 

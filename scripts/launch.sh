@@ -34,6 +34,8 @@ if [[ $QDROUTERD_DEBUG = "gdb" ]]; then
     exec gdb -batch -ex "run" -ex "bt" --args skrouterd $ARGS
 elif [[ $QDROUTERD_DEBUG = "asan" ]]; then
     exec skrouterd_asan $ARGS
+elif [[ $QDROUTERD_DEBUG = "tsan" ]]; then
+    exec skrouterd_tsan $ARGS
 else
     exec skrouterd $ARGS
 fi
