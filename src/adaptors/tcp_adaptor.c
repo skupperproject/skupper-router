@@ -502,6 +502,19 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                "[C%"PRIu64"][L%"PRIu64"] handle_disconnected - close out_dlv_stream",
                conn->conn_id, conn->outgoing_id);
+
+        // Fun fact: the delivery pointed to by conn->initial_delivery is
+        // eventually moved to conn->out_dlv_stream.  I don't trust the code
+        // enough to be confident both pointers are not set at the same time
+        // and we risk calling remote_state_updated twice.
+        if (conn->initial_delivery == 0) {
+            // This is my best guess as to the proper outcome, so do not assume
+            // I know what I'm doing here:
+            qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream,
+                                              conn->read_eos_seen ? PN_ACCEPTED : PN_MODIFIED,
+                                              true, // settled
+                                              0, false);
+        }
         qdr_delivery_decref(tcp_adaptor->core, conn->out_dlv_stream, "tcp-adaptor.handle_disconnected - out_dlv_stream");
         conn->out_dlv_stream = 0;
     }
@@ -509,6 +522,7 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
     detach_links(conn);
 
     if (conn->initial_delivery) {
+        // PN_RELEASED: because if initial_delivery is set then the connection DISCONNECTED before data could be sent:
         qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->initial_delivery, PN_RELEASED, true, 0, false);
         qdr_delivery_decref(tcp_adaptor->core, conn->initial_delivery, "tcp-adaptor.handle_disconnected - initial_delivery");
         conn->initial_delivery = 0;
