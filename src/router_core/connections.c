@@ -204,6 +204,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
     connection_info->ssl_ssf = ssl_ssf;
     connection_info->ssl     = ssl;
     connection_info->streaming_links = streaming_links;
+    connection_info->connection_info_lock = sys_mutex();
     return connection_info;
 }
 
@@ -217,6 +218,7 @@ static void qdr_connection_info_free(qdr_connection_info_t *ci)
     free(ci->ssl_cipher);
     free(ci->user);
     free(ci->version);
+    sys_mutex_free(ci->connection_info_lock);
     pn_data_free(ci->connection_properties);
     free_qdr_connection_info_t(ci);
 }

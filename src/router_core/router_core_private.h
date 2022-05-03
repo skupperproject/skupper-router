@@ -625,6 +625,7 @@ struct qdr_connection_info_t {
     bool                        ssl;
     int                         ssl_ssf; //ssl strength factor
     char                       *version; // if role is router or edge
+    sys_mutex_t                *connection_info_lock;
 };
 
 ALLOC_DECLARE(qdr_connection_info_t);
