@@ -259,8 +259,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
     }
     int result = raw_buffer.size;
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-        "[C%"PRIu64"] pn_raw_connection_take_read_buffers() took buffer with %zu bytes",
-        conn->conn_id, result);
+        "[C%"PRIu64"] pn_raw_connection_take_read_buffers() took buffer with %i bytes", conn->conn_id, result);
 
     if (buffers) {
         qd_buffer_list_append(buffers, (uint8_t*) (raw_buffer.bytes + raw_buffer.offset), raw_buffer.size);
@@ -641,7 +640,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
 
         conn->outgoing_buff_idx   += used;
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Copied %i buffers, %i remain", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx);
+               "[C%"PRIu64"] Copied %zu buffers, %i remain", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx);
     }
     return result;
 }
