@@ -821,7 +821,7 @@ jobs:
         uses: ./.github/actions/skupper-integration-tests
         with:
           qdrouterdImage: "local/skupper-router:local"
-          skupperGitRef: "a618477ff6f0b74dd1583f0af04eb9d8d36ecf09"
+          skupperGitRef: "1439e4431a01f81e5d86bd4c8e6d1a53239b5494"
 
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
