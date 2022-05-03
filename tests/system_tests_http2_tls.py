@@ -560,12 +560,11 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
                                  assert_status=False,
                                  get_err=True,
                                  timeout=5)
-
         conn_closed = False
         if "HTTP/2 stream 1 was not closed cleanly before end of the underlying stream" in err or \
                 "Connection reset by peer" in err:
             conn_closed = True
-        self.assertTrue(conn_closed)
+        self.assertTrue(conn_closed, msg="err is %s and out is %s" % (err, out))
 
         def find_tls_error_in_log_file():
             error = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
