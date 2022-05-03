@@ -741,7 +741,13 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         # Wait till listener is running and all expected connectors are connected
         cls.routers[0].wait_ports()
         for router in cls.connected_tls_sasl_routers[1:]:
+            # get the start time
+            st = time.time()
             cls.routers[0].wait_router_connected(router)
+            # get the end time
+            et = time.time()
+            elapsed_time = et - st
+            print('QDR.A to ', router, 'connecting time:', elapsed_time, 'seconds')
 
     def get_router_nodes(self):
         """
@@ -766,6 +772,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         """
         Validates if all expected routers are connected in the network
         """
+        # get the start time
+        st = time.time()
         if not SASL.extended():
             self.skipTest("Cyrus library not available. skipping test")
 
@@ -786,6 +794,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
             expected_nodes -= 1
 
         self.assertEqual(len(router_nodes), expected_nodes)
+
+        et = time.time()
+        elapsed_time = et - st
+        print('test_connected_tls_sasl_routers Execution time:', elapsed_time, 'seconds')
 
 
 class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
