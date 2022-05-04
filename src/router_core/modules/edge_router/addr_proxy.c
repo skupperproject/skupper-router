@@ -498,6 +498,8 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
                                             | QDRC_EVENT_ADDR_NO_LONGER_SOURCE
                                             | QDRC_EVENT_ADDR_TWO_SOURCE
                                             | QDRC_EVENT_ADDR_ONE_SOURCE
+                                            | QDRC_EVENT_ADDR_WATCH_ON
+                                            | QDRC_EVENT_ADDR_WATCH_OFF
                                             | QDRC_EVENT_LINK_IN_DETACHED
                                             | QDRC_EVENT_LINK_OUT_DETACHED,
                                             on_conn_event,
