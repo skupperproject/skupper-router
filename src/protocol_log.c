@@ -139,8 +139,6 @@ static uint64_t            next_message_id = 0;
 static void _plog_set_ref_TH(plog_work_t *work, bool discard);
 static void _plog_set_string_TH(plog_work_t *work, bool discard);
 static void _plog_set_int_TH(plog_work_t *work, bool discard);
-static const char *_plog_record_type_name(const plog_record_t *record);
-static const char *_plog_attribute_name(const plog_attribute_data_t *data);
 
 /**
  * @brief Return the current timestamp in microseconds
@@ -223,7 +221,7 @@ static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
  *
  * @param buffer Target string for concatenation
  * @param n String size limit
- * @param data Data value to extract the attribute-type from
+ * @param data Data value to extrace the attribute-type from
  */
 static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute_data_t *data)
 {
@@ -711,7 +709,6 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     case PLOG_ATTRIBUTE_BUILD_VERSION    : return "buildVersion";
     case PLOG_ATTRIBUTE_LINK_COST        : return "linkCost";
     case PLOG_ATTRIBUTE_DIRECTION        : return "direction";
-    case PLOG_ATTRIBUTE_RESOURCE         : return "resource";
     }
     return "UNKNOWN";
 }
@@ -920,7 +917,7 @@ static void _plog_flush_TH(qdr_core_t *core)
         record->never_flushed = false;
         record->emit_ordinal++;
         if (record->ended) {
-            _plog_free_record_TH(record, true);
+            _plog_free_record_TH(record, false);
         }
         record = DEQ_HEAD(unflushed_records[current_flush_slot]);
     }
@@ -1358,7 +1355,6 @@ void plog_latency_end(plog_record_t *record)
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
         plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
-        record->latency_start = 0;
     }
 }
 

@@ -1462,7 +1462,6 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
                "Deleted TcpConnector for %s, %s:%s",
                ct->config->address, ct->config->host, ct->config->port);
         close_egress_dispatcher_connection((qdr_tcp_connection_t*) ct->dispatcher_conn);
-        ct->dispatcher_conn = 0;
         DEQ_REMOVE(tcp_adaptor->connectors, ct);
         qd_tcp_connector_decref(ct);
     }
