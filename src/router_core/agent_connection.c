@@ -130,6 +130,8 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
     if (as_map)
         qd_compose_insert_string(body, qdr_connection_columns[col]);
 
+    sys_mutex_lock(conn->connection_info->connection_info_lock);
+
     switch(col) {
     case QDR_CONNECTION_NAME:
         qd_compose_insert_string2(body, "connection/", conn->connection_info->host);
@@ -175,9 +177,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_IS_AUTHENTICATED:
-        sys_mutex_lock(conn->connection_info->connection_info_lock);
         qd_compose_insert_bool(body, conn->connection_info->is_authenticated);
-        sys_mutex_unlock(conn->connection_info->connection_info_lock);
         break;
 
     case QDR_CONNECTION_USER:
@@ -188,27 +188,21 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_IS_ENCRYPTED:
-        sys_mutex_lock(conn->connection_info->connection_info_lock);
         qd_compose_insert_bool(body, conn->connection_info->is_encrypted);
-        sys_mutex_unlock(conn->connection_info->connection_info_lock);
         break;
 
     case QDR_CONNECTION_SSLPROTO:
-        sys_mutex_lock(conn->connection_info->connection_info_lock);
         if (conn->connection_info->ssl_proto[0] != '\0')
             qd_compose_insert_string(body, conn->connection_info->ssl_proto);
         else
             qd_compose_insert_null(body);
-        sys_mutex_unlock(conn->connection_info->connection_info_lock);
         break;
 
     case QDR_CONNECTION_SSLCIPHER:
-        sys_mutex_lock(conn->connection_info->connection_info_lock);
         if (conn->connection_info->ssl_cipher[0] != '\0')
             qd_compose_insert_string(body, conn->connection_info->ssl_cipher);
         else
             qd_compose_insert_null(body);
-        sys_mutex_unlock(conn->connection_info->connection_info_lock);
         break;
 
     case QDR_CONNECTION_SSLSSF:
@@ -220,9 +214,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_SSL:
-        sys_mutex_lock(conn->connection_info->connection_info_lock);
         qd_compose_insert_bool(body, conn->connection_info->ssl);
-        sys_mutex_unlock(conn->connection_info->connection_info_lock);
         break;
 
     case QDR_CONNECTION_OPENED:
@@ -310,6 +302,8 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
     }
     break;
     }
+
+    sys_mutex_unlock(conn->connection_info->connection_info_lock);
 }
 
 
