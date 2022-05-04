@@ -20,7 +20,7 @@
 from time import sleep
 import os
 from subprocess import PIPE, Popen
-from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT
+from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT, retry_exception
 from system_test import unittest, QdManager, Process
 from skupper_router.management.client import Node
 from proton import SASL
@@ -716,9 +716,16 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         self.assertIn("QDR.X", [c.container for c in connections])  # We can find the connection before
         local_node.delete(type='connector', name='connectorToX')
         local_node.delete(type='sslProfile', name='client-ssl-profile')
-        connections = local_node.query(type='io.skupper.router.connection').get_entities()
-        is_qdr_x = "QDR.X" in [c.container for c in connections]
-        self.assertFalse(is_qdr_x)  # Should not be present now
+
+        def check_connections():
+            conns = local_node.query(type='io.skupper.router.connection').get_entities()
+            is_qdr_x = "QDR.X" in [c.container for c in conns]
+            self.assertFalse(is_qdr_x)  # Should not be present now
+
+        # Even though we deleted the connector, it might take a bit of time for the actual connection
+        # object to be deleted since there might be some latency with the core thread. Retry the
+        # connection query till TIMEOUT seconds.
+        retry_exception(check_connections)
 
         # re-create the ssl profile
         local_node.create({'type': 'sslProfile',
