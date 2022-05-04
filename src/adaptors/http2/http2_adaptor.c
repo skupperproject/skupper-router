@@ -2634,28 +2634,45 @@ static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffe
 
 static void set_qdr_connection_info_details(qdr_http2_connection_t *conn)
 {
-    qdr_connection_info_t *conn_info = conn->qdr_conn->connection_info;
-    if (conn_info) {
-        const char *protocol_info;
-        size_t protocol_info_length;
-        if (pn_tls_get_protocol_version(conn->tls_session, &protocol_info, &protocol_info_length)) {
-            char *protocol_ver = qd_calloc(protocol_info_length + 1, sizeof(char));
-            memmove(protocol_ver, protocol_info, protocol_info_length);
-            free(conn_info->ssl_proto);
-            conn_info->ssl_proto = protocol_ver;
-            conn_info->ssl = true;
-            conn_info->is_encrypted = true;
-        }
-        if (pn_tls_get_cipher(conn->tls_session, &protocol_info, &protocol_info_length)) {
-            char *protocol_cipher = qd_calloc(protocol_info_length + 1, sizeof(char));
-            memmove(protocol_cipher, protocol_info, protocol_info_length);
-            free(conn_info->ssl_cipher);
-            conn_info->ssl_cipher = protocol_cipher;
-        }
-        if (conn->config->authenticate_peer) {
-            conn_info->is_authenticated = true;
-        }
+    const char *protocol_info;
+    size_t protocol_info_length;
+    char *protocol_ver = 0;
+    char *protocol_cipher = 0;
+    //
+    // Ask the Proton TLS API for protocol version and protol cipher.
+    //
+    if (pn_tls_get_protocol_version(conn->tls_session, &protocol_info, &protocol_info_length)) {
+        protocol_ver = qd_calloc(protocol_info_length + 1, sizeof(char));
+        memmove(protocol_ver, protocol_info, protocol_info_length);
     }
+    if (pn_tls_get_cipher(conn->tls_session, &protocol_info, &protocol_info_length)) {
+        protocol_cipher = qd_calloc(protocol_info_length + 1, sizeof(char));
+        memmove(protocol_cipher, protocol_info, protocol_info_length);
+    }
+
+    qdr_connection_info_t *conn_info = conn->qdr_conn->connection_info;
+
+    //
+    // Lock using the connection_info_lock before setting the values on the
+    // connection_info. This same lock is being used in the agent_connection.c's qdr_connection_insert_column_CT
+    //
+    sys_mutex_lock(conn_info->connection_info_lock);
+    free(conn_info->ssl_cipher);
+    conn_info->ssl_cipher = 0;
+    free(conn_info->ssl_proto);
+    conn_info->ssl_proto = 0;
+    conn_info->ssl = true;
+    conn_info->is_encrypted = true;
+    if (protocol_cipher) {
+        conn_info->ssl_cipher = protocol_cipher;
+    }
+    if (protocol_ver) {
+        conn_info->ssl_proto = protocol_ver;
+    }
+    if (conn->config->authenticate_peer) {
+        conn_info->is_authenticated = true;
+    }
+    sys_mutex_unlock(conn_info->connection_info_lock);
 }
 
 /**
