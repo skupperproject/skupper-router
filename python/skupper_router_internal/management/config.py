@@ -277,9 +277,9 @@ class PolicyConfig(Config):
         return [s for s in self.config_types if 'policy' in s.name]
 
 
-def configure_dispatch(dispatch: int, lib_handle: int, filename: str) -> None:
+def configure_dispatch(dispatch: int, filename: str) -> None:
     """Called by C router code to load configuration file and do configuration"""
-    qd = QdDll(lib_handle)
+    qd = QdDll()
     dispatch = qd.qd_dispatch_p(dispatch)
     config = Config(filename)
 

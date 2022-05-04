@@ -49,8 +49,9 @@ class QdDll(ctypes.PyDLL):
     internally makes python calls.
     """
 
-    def __init__(self, handle: int) -> None:
-        super(QdDll, self).__init__("skupper-router", handle=handle)
+    def __init__(self) -> None:
+        # `dlopen(NULL, ...)` opens the current executable; the router used to dlopen libqpid-dispatch.so before
+        super().__init__(name=None)
 
         # Types
         self.qd_dispatch_p = ctypes.c_void_p

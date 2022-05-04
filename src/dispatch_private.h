@@ -48,7 +48,6 @@ struct qd_dispatch_t {
     void                    *agent;
     qd_connection_manager_t *connection_manager;
     qd_policy_t             *policy;
-    void                    *dl_handle;
     qd_address_treatment_t   default_treatment;
 
     int    thread_count;

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 class QdDll(ctypes.PyDLL):
-    def __init__(self, handle: int) -> None:
+    def __init__(self) -> None:
         ...
 
     def _prototype(self, f, restype, argtypes, check=True):
