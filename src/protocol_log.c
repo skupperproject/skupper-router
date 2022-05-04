@@ -1057,10 +1057,6 @@ static void *_plog_thread(void *context)
                 break;
             }
 
-            if (!running) {
-                break;
-            }
-
             //
             // Block on the condition variable when there is no work to do
             //
