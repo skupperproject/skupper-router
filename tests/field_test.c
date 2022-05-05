@@ -297,6 +297,7 @@ static char* test_view_address_hash(void *context)
     struct {const char *addr; const char *view;} cases[] = {
     {"amqp:/_local/my-addr/sub",                "Lmy-addr/sub"},
     {"amqp:/_local/my-addr",                    "Lmy-addr"},
+    {"_local/my-addr",                          "Lmy-addr"},
     {"amqp:/_topo/area/router/local/sub",       "Aarea"},
     {"amqp:/_topo/my-area/router/local/sub",    "Rrouter"},
     {"amqp:/_topo/my-area/my-router/local/sub", "Llocal/sub"},
