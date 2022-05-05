@@ -39,5 +39,8 @@ under the License
   ** Add more details to the text box if necessary. The text box should already contain a link to the issues that
      were fixed in this milestone.
 * When everything has been verified click the *Publish release* button to publish the release.
+* Go to the *https://github.com/skupperproject/skupper-router/milestones[Milestones,window=_blank]*  link and make sure
+  the release milestone is 100% complete and click on the "Close" link for that milestone. This will close the milestone and you
+  will be unable to assign any more issues to the closed milestone.
 * Create the next milestone if necessary.
 * There is no need to advance any versions on the main branch.
