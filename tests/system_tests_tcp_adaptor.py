@@ -919,7 +919,9 @@ class TcpAdaptor(TestCase):
         try:
             p.teardown()
         except Exception as e:
-            raise Exception("ncat failed: stdout=%s stderr=%s" % (out, err) if out or err else str(e))
+            raise Exception("ncat failed:"
+                            " stdout='%s' stderr='%s' returncode=%d" % (out, err, p.returncode)
+                            if out or err else str(e))
         return out
 
     def ncat_runner(self, tname, client, server, logger):
@@ -943,8 +945,8 @@ class TcpAdaptor(TestCase):
         self.ncat_runner(name, "INTA", "INTB", self.logger)
         self.ncat_runner(name, "INTA", "INTC", self.logger)
         self.ncat_runner(name, "EA1",  "EA1", self.logger)
-        #self.ncat_runner(name, "EA1",  "EB1", self.logger)
-        #self.ncat_runner(name, "EA1",  "EC2", self.logger)
+        self.ncat_runner(name, "EA1",  "EB1", self.logger)
+        self.ncat_runner(name, "EA1",  "EC2", self.logger)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     # connector/listener stats
@@ -1168,6 +1170,7 @@ class TcpAdaptorManagementTest(TestCase):
         CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 
         mgmt = self.e_router.management
+        van_address = self.test_name + "/test_01_mgmt"
 
         # When starting out, there should be no tcpListeners or tcpConnectors.
         self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
@@ -1178,12 +1181,12 @@ class TcpAdaptorManagementTest(TestCase):
 
         mgmt.create(type=LISTENER_TYPE,
                     name=listener_name,
-                    attributes={'address': self.test_name,
+                    attributes={'address': van_address,
                                 'port': self.tcp_listener_port,
                                 'host': '127.0.0.1'})
         mgmt.create(type=CONNECTOR_TYPE,
                     name=connector_name,
-                    attributes={'address': self.test_name,
+                    attributes={'address': van_address,
                                 'port': self.tcp_server_port,
                                 'host': '127.0.0.1'})
 
@@ -1192,16 +1195,15 @@ class TcpAdaptorManagementTest(TestCase):
         self.assertEqual(1, len(mgmt.query(type=CONNECTOR_TYPE).results))
 
         # now verify that the interior router sees the service address
-        # and two proxy links are created
-        self.i_router.wait_address(self.test_name, subscribers=1)
+        # and two proxy links are created: one outgoing for the connector and
+        # one incoming for the listeners address watcher
+        self.i_router.wait_address(van_address, subscribers=1)
         while True:
             links = self._query_links_by_addr(self.i_router.management,
-                                              self.test_name)
-            if links:
-                # expect a single consumer link that represents
-                # the connector
-                self.assertEqual(1, len(links))
-                self.assertEqual("out", links[0][1])
+                                              van_address)
+            if links and len(links) == 2:
+                self.assertTrue((links[0][1] == "out" and links[1][1] == "in") or
+                                (links[1][1] == "out" and links[0][1] == "in"))
                 break
             time.sleep(0.25)
 
@@ -1215,10 +1217,10 @@ class TcpAdaptorManagementTest(TestCase):
 
         # verify the service address and proxy links are no longer active on
         # the interior router
-        self.i_router.wait_address_unsubscribed(self.test_name)
+        self.i_router.wait_address_unsubscribed(van_address)
         while True:
             links = self._query_links_by_addr(self.i_router.management,
-                                              self.test_name)
+                                              van_address)
             if len(links) == 0:
                 break
             time.sleep(0.25)
@@ -1236,13 +1238,14 @@ class TcpAdaptorListenerConnectTest(TestCase):
     """
     Test client connecting to TcpListeners in various scenarios
     """
+    LISTENER_TYPE = 'io.skupper.router.tcpListener'
+    CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
+
     @classmethod
     def setUpClass(cls):
         super(TcpAdaptorListenerConnectTest, cls).setUpClass()
 
         cls.test_name = 'TCPListenConnTest'
-        cls.LISTENER_TYPE = 'io.skupper.router.tcpListener'
-        cls.CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 
         # 4 router linear deployment:
         #  EdgeA - InteriorA - InteriorB - EdgeB
@@ -1365,25 +1368,30 @@ class TcpAdaptorListenerConnectTest(TestCase):
 
         self.INTA.wait_address_unsubscribed(van_address)
 
-    def test_02_listener_interior(self):
+    def _test_listener_socket_lifecycle(self,
+                                        l_router: Qdrouterd,  # listener router
+                                        c_router: Qdrouterd,  # connector router
+                                        test_id: str):
         """
         Verify that the listener socket is active only when a connector for the
         VAN address has been provisioned
         """
-        van_address = "closest/test_02_listener_interior"
+        listener_name = "Listener_%s" % test_id
+        connector_name = "Connector_%s" % test_id
+        van_address = "closest/%s" % test_id
         listener_port = self.tester.get_port()
         connector_port = self.tester.get_port()
 
-        a_mgmt = self.INTA.management
-        a_mgmt.create(type=self.LISTENER_TYPE,
-                      name="ClientListener02",
+        l_mgmt = l_router.management
+        l_mgmt.create(type=self.LISTENER_TYPE,
+                      name=listener_name,
                       attributes={'address': van_address,
                                   'port': listener_port})
 
         # since there is no connector present, the operational state must be
         # down and connection attempts must be refused
 
-        listener = a_mgmt.read(type=self.LISTENER_TYPE, name='ClientListener02')
+        listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
         self.assertEqual('down', listener['operStatus'])
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
@@ -1394,26 +1402,30 @@ class TcpAdaptorListenerConnectTest(TestCase):
 
         # create a connector and a TCP server for the connector to connect to
 
-        b_mgmt = self.INTB.management
+        c_mgmt = c_router.management
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.settimeout(TIMEOUT)
             server.bind(("", connector_port))
             server.listen(1)
 
-            b_mgmt.create(type=self.CONNECTOR_TYPE,
-                          name="ServerConnector02",
+            c_mgmt.create(type=self.CONNECTOR_TYPE,
+                          name=connector_name,
                           attributes={'address': van_address,
                                       'host': '127.0.0.1',
                                       'port': connector_port})
 
-            # let the connectors address propagate to INTA
-            self.INTA.wait_address(van_address, remotes=1)
+            # let the connectors address propagate to listener router
+
+            if l_router.config.router_mode == 'interior':
+                l_router.wait_address(van_address, remotes=1)
+            else:
+                l_router.wait_address(van_address, subscribers=1)
 
             # expect the listener socket to come up
 
             while True:
-                listener = a_mgmt.read(type=self.LISTENER_TYPE, name='ClientListener02')
+                listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
                 if listener['operStatus'] == 'down':
                     time.sleep(0.1)
                     continue
@@ -1428,9 +1440,10 @@ class TcpAdaptorListenerConnectTest(TestCase):
                         # There may be a delay between the operStatus going up and
                         # the actual listener socket availability, so allow that:
                         time.sleep(0.1)
+                        continue
 
                     server_conn, _ = server.accept()
-                    client_conn.sendall(b'test_02_listener_interior')
+                    client_conn.sendall(b' test ')
                     client_conn.close()
                     server_conn.close()
                     break
@@ -1438,11 +1451,11 @@ class TcpAdaptorListenerConnectTest(TestCase):
         # Teardown the connector, expect listener admin state to go down
         # and connections be refused
 
-        b_mgmt.delete(type=self.CONNECTOR_TYPE, name="ServerConnector02")
-        self.INTA.wait_address_unsubscribed(van_address)
+        c_mgmt.delete(type=self.CONNECTOR_TYPE, name=connector_name)
+        l_router.wait_address_unsubscribed(van_address)
 
         while True:
-            listener = a_mgmt.read(type=self.LISTENER_TYPE, name='ClientListener02')
+            listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
             if listener['operStatus'] == 'up':
                 time.sleep(0.1)
                 continue
@@ -1459,7 +1472,31 @@ class TcpAdaptorListenerConnectTest(TestCase):
                     # Test successful
                     break
 
-        a_mgmt.delete(type=self.LISTENER_TYPE, name="ClientListener02")
+        l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
+
+    def test_02_listener_interior(self):
+        """
+        Test tcpListener socket lifecycle interior to interior
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
+
+    def test_03_listener_edge_interior(self):
+        """
+        Test tcpListener socket lifecycle edge to interior
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
+
+    def test_04_listener_interior_edge(self):
+        """
+        Test tcpListener socket lifecycle interior to edge
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
+
+    def test_05_listener_edge_edge(self):
+        """
+        Test tcpListener socket lifecycle edge to edge
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
 
 
 if __name__ == '__main__':
