@@ -138,17 +138,13 @@ static uint64_t on_message(void                    *context,
                            const qd_policy_spec_t  *policy,
                            qdr_error_t            **error)
 {
-    qd_log(log_source, QD_LOG_INFO, "Control Message Received");
     if (qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES) == QD_MESSAGE_DEPTH_OK) {
-        qd_log(log_source, QD_LOG_INFO, "    Depth good");
         qd_iterator_t     *ap_iter  = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
         qd_parsed_field_t *ap_field = qd_parse(ap_iter);
         if (qd_parse_is_map(ap_field)) {
-            qd_log(log_source, QD_LOG_INFO, "    Map good");
             qd_parsed_field_t *opcode  = qd_parse_value_by_key(ap_field, "opcode");
             qd_parsed_field_t *address = qd_parse_value_by_key(ap_field, "address");
             if (!!opcode && !!address) {
-                qd_log(log_source, QD_LOG_INFO, "    Args good");
                 char *addr = (char*) qd_iterator_copy(qd_parse_raw(address));
                 if (qd_iterator_equal(qd_parse_raw(opcode), (const unsigned char*) "watch-on")) {
                     start_watch(addr);
