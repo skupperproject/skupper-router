@@ -23,16 +23,9 @@ DOCKER_REGISTRY=quay.io
 DOCKER_ORG=skupper
 
 # If PROJECT_TAG is not defined set PROJECT_TAG to main
-PUSH_LATEST=true
 if [ -z "$PROJECT_TAG" ]
 then
   PROJECT_TAG=main
-fi
-
-
-# If PROJECT_TAG is not main (it is possibly a release), don't push the :latest tag
-if [[ ${PROJECT_TAG} =~ rc || ${PROJECT_TAG} =~ x || ${PROJECT_TAG} =~ freeze || "${PROJECT_TAG}" != main ]]; then
-    PUSH_LATEST=false
 fi
 
 # Building the skupper-router image
@@ -45,7 +38,16 @@ if [[ -n "${DOCKER_USER}" && -n "${DOCKER_PASSWORD}" ]]; then
     ${DOCKER} login -u ${DOCKER_USER} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
     ${DOCKER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
     ${DOCKER} push ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
-    if ${PUSH_LATEST}; then
+
+    # PUSH_LATEST environment variable is exported only in release.yml
+    # Only when an actual release tag (for e.g. 2.1.0) is pushed, we push the :latest.
+    # :latest represents the latest released version of the software.
+    # We do not push :latest when main or other non-release tags are pushed.
+    if [ -z "$PUSH_LATEST" ]
+    then
+         echo 'NOT Pushing :latest tag'
+    else
+        echo 'Pushing :latest tag'
         ${DOCKER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:latest
         ${DOCKER} push ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:latest
     fi
