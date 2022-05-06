@@ -25,7 +25,7 @@ from subprocess import PIPE
 from time import sleep
 
 import system_test
-from system_test import TestCase, Qdrouterd, QdManager, Process, retry_exception
+from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, TIMEOUT, skip_test_in_ci
 
 h2hyper_installed = True
@@ -426,7 +426,7 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         # Since this test is failing intermittently and not always, I am going to give more
         # time for this test to execute. If this test still fails, I will look at the http2 code
         # in more detail.
-        retry_exception(check_num_requests)
+        retry_assertion(check_num_requests)
 
         stats = qd_manager.query('io.skupper.router.httpRequestInfo')
 
@@ -611,7 +611,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         # Since this test is failing intermittently and not always, I am going to give more
         # time for this test to execute. If this test still fails, I will look at the http2 code
         # in more detail.
-        retry_exception(check_num_requests)
+        retry_assertion(check_num_requests)
 
         stats_a = qd_manager_a.query('io.skupper.router.httpRequestInfo')
 
