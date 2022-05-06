@@ -39,6 +39,16 @@ static qd_dispatch_t *dispatch = 0;
 static qd_log_source_t *log_source = 0;
 static const char* argv0 = 0;
 
+/**
+ * Configures the handler function. Specify SIG_IGN to ignore incoming signals.
+ */
+static void install_signal_handler(void (*handler)(int))
+{
+    signal(SIGHUP, handler);
+    signal(SIGQUIT, handler);
+    signal(SIGTERM, handler);
+    signal(SIGINT, handler);
+}
 
 /**
  * This is the OS signal handler, invoked on an undetermined thread at a completely
@@ -47,10 +57,7 @@ static const char* argv0 = 0;
 static void signal_handler(int signum)
 {
     /* Ignore future signals, dispatch may already be freed */
-    signal(SIGHUP,  SIG_IGN);
-    signal(SIGQUIT, SIG_IGN);
-    signal(SIGTERM, SIG_IGN);
-    signal(SIGINT,  SIG_IGN);
+    install_signal_handler(SIG_IGN);
     switch (signum) {
     case SIGINT:
         exit_with_sigint = 1;
@@ -92,10 +99,7 @@ static void main_process(const char *config_path, const char *python_pkgdir, boo
     qd_dispatch_load_config(dispatch, config_path);
     check(fd);
 
-    signal(SIGHUP,  signal_handler);
-    signal(SIGQUIT, signal_handler);
-    signal(SIGTERM, signal_handler);
-    signal(SIGINT,  signal_handler);
+    install_signal_handler(signal_handler);
 
     if (fd > 2) {               /* Daemon mode, fd is one end of a pipe not stdout or stderr */
         dprintf(fd, "ok"); // Success signal
