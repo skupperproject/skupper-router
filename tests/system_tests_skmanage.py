@@ -387,7 +387,7 @@ class SkmanageTest(TestCase):
 
         # The connector has been created, check to make sure that there is at least one
         # connection of role 'inter-router'
-        retry_assertion(query_inter_router_connector, delay=2, check_inter_router_present=True)
+        retry_assertion(lambda: query_inter_router_connector(check_inter_router_present=True), delay=2)
 
     def test_zzz_add_connector(self):
         port = self.get_port()
