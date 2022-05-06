@@ -186,7 +186,7 @@ def retry_exception(
     while True:
         try:
             return function()
-        except exception as e:
+        except exception as e:  # pylint: disable=misc  # error: Exception type must be derived from BaseException
             if exception_test:
                 exception_test(e)
             delay = retry_delay(deadline, delay, max_delay)
