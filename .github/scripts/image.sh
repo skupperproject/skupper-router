@@ -17,14 +17,15 @@
 # under the License.
 #
 
+set -euxo pipefail
+
 DOCKER=docker
 PROJECT_NAME=skupper-router
 DOCKER_REGISTRY=quay.io
 DOCKER_ORG=skupper
 
 # If PROJECT_TAG is not defined set PROJECT_TAG to main
-if [ -z "$PROJECT_TAG" ]
-then
+if [ -z "$PROJECT_TAG" ]; then
   PROJECT_TAG=main
 fi
 
@@ -43,8 +44,7 @@ if [[ -n "${DOCKER_USER}" && -n "${DOCKER_PASSWORD}" ]]; then
     # Only when an actual release tag (for e.g. 2.1.0) is pushed, we push the :latest.
     # :latest represents the latest released version of the software.
     # We do not push :latest when main or other non-release tags are pushed.
-    if [ -z "$PUSH_LATEST" ]
-    then
+    if [ -z "$PUSH_LATEST" ]; then
          echo 'NOT Pushing :latest tag'
     else
         echo 'Pushing :latest tag'
