@@ -28,7 +28,7 @@ from proton.utils import BlockingConnection
 from skupper_router_internal.compat import dictify
 from skupper_router_internal.management.qdrouter import QdSchema
 
-from system_test import unittest, retry_exception
+from system_test import unittest, retry_assertion
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import QdManager
 
@@ -190,7 +190,7 @@ class SkmanageTest(TestCase):
                 self.assertEqual(2, len(e))
             self.assertEqual(name_type(qall), name_type(qattr))
 
-        retry_exception(query_type_name)
+        retry_assertion(query_type_name)
 
     def test_get_schema(self):
         schema = dictify(QdSchema().dump())
@@ -370,7 +370,7 @@ class SkmanageTest(TestCase):
                 self.assertTrue(inter_router_present)
 
         # The connector has been deleted, check to make sure that there are no connections of 'inter-router' role
-        retry_exception(query_inter_router_connector, delay=2)
+        retry_assertion(query_inter_router_connector, delay=2)
 
         # Create back the connector with role="inter-router"
         self.create(long_type, name, str(SkmanageTest.inter_router_port), role="inter-router")
@@ -387,7 +387,7 @@ class SkmanageTest(TestCase):
 
         # The connector has been created, check to make sure that there is at least one
         # connection of role 'inter-router'
-        retry_exception(query_inter_router_connector, delay=2, check_inter_router_present=True)
+        retry_assertion(lambda: query_inter_router_connector(check_inter_router_present=True), delay=2)
 
     def test_zzz_add_connector(self):
         port = self.get_port()

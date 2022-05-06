@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, retry_exception
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, retry_assertion
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
@@ -255,17 +255,17 @@ class AddressWatchTest(MessagingHandler):
                     search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
                     matches = [s for s in search_lines if "loc: 1 rem: 0" in s]
                     if len(matches) == 0:
-                        raise Exception("Didn't see local consumer on router 1")
+                        raise AssertionError("Didn't see local consumer on router 1")
                 with open(self.host_b.logfile_path, 'r') as router_log:
                     log_lines = router_log.read().split("\n")
                     search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
                     matches = [s for s in search_lines if ("loc: 0 rem: 1" in s) or ("loc: 1 rem: 0" in s)]
                     if len(matches) == 0:
-                        raise Exception("Didn't see remote consumer and local producer on router 2")
+                        raise AssertionError("Didn't see remote consumer and local producer on router 2")
 
             # Sometimes the CI is so fast that there is not enough time for the router to write to the log file.
             # Try repeatedly until TIMEOUT seconds.
-            retry_exception(check_log_lines, delay=2)
+            retry_assertion(check_log_lines, delay=2)
             self.timer.cancel()
 
     def run(self):
