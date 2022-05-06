@@ -154,6 +154,14 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
     Returns what function returns if it succeeds before timeout.
     Raises last exception raised by function on timeout.
     """
+
+    def default_exception_test(exception: Exception):
+        """Do not permit retry on exceptions usually caused by programmer error. The list might be incomplete."""
+        if isinstance(exception, (SyntaxError, UnboundLocalError, RecursionError, ImportError, TypeError)):
+            raise exception
+
+    exception_test = exception_test or default_exception_test
+
     deadline = time.time() + timeout
     while True:
         try:
@@ -164,6 +172,18 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
             delay = retry_delay(deadline, delay, max_delay)
             if delay is None:
                 raise
+
+
+def retry_assertion(function, timeout=TIMEOUT, delay=.001, max_delay=1, **kwargs):
+    """Variant of retry_exception that only retries on AssertionError. Used in tests to
+    retry while assertion is failing, but fail immediately if unexpected exception occurs."""
+    def exception_test(exception: Exception) -> bool:
+        if isinstance(exception, AssertionError):
+            return True
+        raise exception
+
+    return retry_exception(function=function, timeout=timeout, delay=delay, max_delay=max_delay,
+                           exception_test=exception_test, **kwargs)
 
 
 def get_local_host_socket(socket_address_family='IPv4'):
