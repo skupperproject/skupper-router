@@ -22,6 +22,7 @@
 set -euxo pipefail
 
 WORKING=$(pwd)
+eval "$(rpmbuild --eval '%set_build_flags')"
 
 #region libwebsockets
 wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
