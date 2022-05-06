@@ -50,7 +50,7 @@ from datetime import datetime
 from subprocess import PIPE, STDOUT, TimeoutExpired
 from threading import Event
 from threading import Thread
-from typing import Callable, TextIO, List, Optional, Tuple
+from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar
 
 import __main__
 
@@ -146,11 +146,24 @@ def retry(function: Callable[[], bool], timeout: float = TIMEOUT, delay: float =
                 return None
 
 
-def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exception_test=None, **kwargs):
+_T = TypeVar('_T')
+"""Type parameter used to declare generic types."""
+
+
+def retry_exception(
+        function: Callable[[], _T],
+        timeout: float = TIMEOUT,
+        delay: float = .001,
+        max_delay: float = 1,
+        exception: Union[Type[Exception], Set[Type[Exception]]] = None,
+        exception_test: Callable[[Exception], Any] = None,
+) -> _T:
     """Call function until it returns without exception or timeout expires.
     Double the delay for each retry up to max_delay.
-    Calls exception_test with any exception raised by function, exception_test
+    Catches and retries when expected exception was raised
+    or calls exception_test with any exception raised by function, exception_test
     may itself raise an exception to terminate the retry.
+    Parameters exception and exception_test may not be both provided at the same time.
     Returns what function returns if it succeeds before timeout.
     Raises last exception raised by function on timeout.
     """
@@ -160,13 +173,20 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
         if isinstance(exception, (SyntaxError, UnboundLocalError, RecursionError, ImportError, TypeError)):
             raise exception
 
-    exception_test = exception_test or default_exception_test
+    if exception is not None and exception_test is not None:
+        raise RuntimeError("Only one of `exception` and `exception_test` arguments may be specified")
+
+    if exception is None and exception_test is None:
+        exception_test = default_exception_test
+
+    if exception is None:
+        exception = Exception
 
     deadline = time.time() + timeout
     while True:
         try:
-            return function(**kwargs)
-        except Exception as e:  # pylint: disable=broad-except
+            return function()
+        except exception as e:
             if exception_test:
                 exception_test(e)
             delay = retry_delay(deadline, delay, max_delay)
@@ -174,16 +194,11 @@ def retry_exception(function, timeout=TIMEOUT, delay=.001, max_delay=1, exceptio
                 raise
 
 
-def retry_assertion(function, timeout=TIMEOUT, delay=.001, max_delay=1, **kwargs):
+def retry_assertion(function, timeout=TIMEOUT, delay=.001, max_delay=1):
     """Variant of retry_exception that only retries on AssertionError. Used in tests to
     retry while assertion is failing, but fail immediately if unexpected exception occurs."""
-    def exception_test(exception: Exception) -> bool:
-        if isinstance(exception, AssertionError):
-            return True
-        raise exception
-
     return retry_exception(function=function, timeout=timeout, delay=delay, max_delay=max_delay,
-                           exception_test=exception_test, **kwargs)
+                           exception=AssertionError)
 
 
 def get_local_host_socket(socket_address_family='IPv4'):
