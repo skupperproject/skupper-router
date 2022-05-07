@@ -281,3 +281,6 @@ ignore_missing_imports = True
 
 [mypy-pytest]
 ignore_missing_imports = True
+
+[mypy-pkg_resources]
+ignore_missing_imports = True
