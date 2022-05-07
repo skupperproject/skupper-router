@@ -60,15 +60,14 @@ do { \
 #define DEQ_DECLARE(i,d) typedef struct { \
     i      *head;       \
     i      *tail;       \
-    i      *scratch;    \
     size_t  size;       \
     } d
 
 #define DEQ_LINKS_N(n,t) t *prev##n; t *next##n
 #define DEQ_LINKS(t) DEQ_LINKS_N(,t)
-#define DEQ_EMPTY {0,0,0,0}
+#define DEQ_EMPTY {0,0,0}
 
-#define DEQ_INIT(d) do { (d).head = 0; (d).tail = 0; (d).scratch = 0; (d).size = 0; } while (0)
+#define DEQ_INIT(d) do { (d).head = 0; (d).tail = 0; (d).size = 0; } while (0)
 #define DEQ_IS_EMPTY(d) ((d).head == 0)
 #define DEQ_ITEM_INIT_N(n,i) do { (i)->next##n = 0; (i)->prev##n = 0; } while(0)
 #define DEQ_ITEM_INIT(i) DEQ_ITEM_INIT_N(,i)
@@ -125,9 +124,10 @@ do {                              \
 
 #define DEQ_REMOVE_HEAD_N(n,d)    \
 do {                              \
+    __typeof__((d).head) scratch; \
     CT_ASSERT((d).head);          \
     if ((d).head) {               \
-        (d).scratch = (d).head;   \
+        scratch = (d).head;   \
         (d).head = (d).head->next##n;  \
         if ((d).head == 0) {      \
             (d).tail = 0;         \
@@ -135,17 +135,18 @@ do {                              \
         } else                     \
             (d).head->prev##n = 0; \
         (d).size--;                \
-        (d).scratch->next##n = 0;  \
-        (d).scratch->prev##n = 0;  \
+        scratch->next##n = 0;  \
+        scratch->prev##n = 0;  \
     }                              \
 } while (0)
 #define DEQ_REMOVE_HEAD(d)  DEQ_REMOVE_HEAD_N(,d)
 
 #define DEQ_REMOVE_TAIL_N(n,d)  \
 do {                            \
+    __typeof__((d).head) scratch;   \
     CT_ASSERT((d).tail);        \
     if ((d).tail) {             \
-        (d).scratch = (d).tail; \
+        scratch = (d).tail; \
         (d).tail = (d).tail->prev##n;  \
         if ((d).tail == 0) {    \
             (d).head = 0;       \
@@ -153,8 +154,8 @@ do {                            \
         } else                  \
             (d).tail->next##n = 0; \
         (d).size--;             \
-        (d).scratch->next##n = 0;  \
-        (d).scratch->prev##n = 0;  \
+        scratch->next##n = 0;  \
+        scratch->prev##n = 0;  \
     }                           \
 } while (0)
 #define DEQ_REMOVE_TAIL(d) DEQ_REMOVE_TAIL_N(,d)
