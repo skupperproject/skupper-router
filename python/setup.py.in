@@ -18,9 +18,9 @@
 # under the License.
 #
 
-from distutils.core import setup
-from distutils.command.build_py import build_py
-from distutils.file_util import copy_file
+from setuptools import setup
+from setuptools.command.build_py import build_py
+from setuptools.command.build_ext import copy_file
 from os.path import join
 from os import environ
 

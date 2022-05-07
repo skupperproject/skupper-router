@@ -25,7 +25,7 @@ import ssl
 import sys
 import re
 import time
-from distutils.version import StrictVersion
+from pkg_resources import parse_version
 from subprocess import Popen, PIPE
 
 import cproton
@@ -125,7 +125,7 @@ class RouterTestSslClient(RouterTestSslBase):
             m = re.search(r'[0-9]+\.[0-9]+\.[0-9]+', openssl_out)
             assert m is not None
             OPENSSL_OUT_VER = m.group(0)
-            OPENSSL_VER_1_1_GT = StrictVersion(OPENSSL_OUT_VER) >= StrictVersion('1.1')
+            OPENSSL_VER_1_1_GT = parse_version(OPENSSL_OUT_VER) >= parse_version('1.1')
             print("OpenSSL Version found = %s" % OPENSSL_OUT_VER)
         except:
             pass
