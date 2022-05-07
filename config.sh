@@ -17,8 +17,6 @@
 # under the License.
 #
 
-set -Eeuo pipefail
-
 if [[ ! -f config.sh ]]; then
     echo "You must source config.sh from within its own directory"
     return
@@ -31,5 +29,5 @@ export INSTALL_DIR=$SOURCE_DIR/${2:-install}
 PYTHON_BIN=$(command -v python3 || command -v python)
 PYTHON_LIB=$(${PYTHON_BIN} -c "from sysconfig import get_path; print(get_path(name='purelib', vars={'base': '$INSTALL_DIR'}))")
 
-export PYTHONPATH=$PYTHON_LIB:$PYTHONPATH
+export PYTHONPATH=$PYTHON_LIB:${PYTHONPATH:-}
 export PATH=$INSTALL_DIR/sbin:$INSTALL_DIR/bin:$SOURCE_DIR/bin:$PATH
