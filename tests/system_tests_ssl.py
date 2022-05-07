@@ -25,8 +25,9 @@ import ssl
 import sys
 import re
 import time
-from pkg_resources import parse_version
 from subprocess import Popen, PIPE
+
+from pkg_resources import parse_version
 
 import cproton
 import proton
