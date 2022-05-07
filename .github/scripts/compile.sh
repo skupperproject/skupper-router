@@ -97,11 +97,13 @@ do_build () {
 
 do_build "" OFF
 do_build "_asan" asan
+do_build "_tsan" tsan
 
 tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr
 
 DESTDIR=$WORKING/staging/ cmake --install $WORKING/build
 cp "$WORKING/build_asan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_asan"
+cp "$WORKING/build_tsan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_tsan"
 cp --target-directory="$WORKING/staging/" "$WORKING/tests/tsan.supp" "$WORKING/build_asan/tests/lsan.supp"
 tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
 #endregion
