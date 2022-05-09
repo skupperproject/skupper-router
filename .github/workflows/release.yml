@@ -39,6 +39,9 @@ jobs:
         run: |
           export PROJECT_TAG="${DOCKER_TAG}"
           export VERSION="${DOCKER_TAG}"
+          # This is a release build which means we need to push the :latest tag
+          # to the container repo.
+          export PUSH_LATEST=true
           ./.github/scripts/image.sh
         env:
           DOCKER_USER: '${{ secrets.DOCKER_USER }}'
