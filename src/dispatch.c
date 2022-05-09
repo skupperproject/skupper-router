@@ -112,23 +112,16 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     if (qd_error_code()) { qd_dispatch_free(qd); return 0; }
     qd_message_initialize();
     if (qd_error_code()) { qd_dispatch_free(qd); return 0; }
-    qd->dl_handle = 0;
     return qd;
 }
 
 qd_error_t qd_dispatch_load_config(qd_dispatch_t *qd, const char *config_path)
 {
-    // `dlopen(NULL, ...)` opens the current executable; qdrouterd used to dlopen libqpid-dispatch.so here before
-    qd->dl_handle = dlopen(NULL, RTLD_LAZY | RTLD_NOLOAD);
-    if (!qd->dl_handle)
-        return qd_error(QD_ERROR_RUNTIME, "Failed to dlopen the current executable");
-
     qd_python_lock_state_t lock_state = qd_python_lock();
     PyObject *module = PyImport_ImportModule("skupper_router_internal.management.config");
     PyObject *configure_dispatch = module ? PyObject_GetAttrString(module, "configure_dispatch") : NULL;
     Py_XDECREF(module);
-    PyObject *result = configure_dispatch ? PyObject_CallFunction(configure_dispatch, "(NNs)", PyLong_FromVoidPtr(qd),
-                                                                  PyLong_FromVoidPtr(qd->dl_handle), config_path)
+    PyObject *result = configure_dispatch ? PyObject_CallFunction(configure_dispatch, "(Ns)", PyLong_FromVoidPtr(qd), config_path)
                                           : NULL;
     Py_XDECREF(configure_dispatch);
     if (!result) qd_error_py();

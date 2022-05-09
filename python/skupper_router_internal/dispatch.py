@@ -31,6 +31,7 @@ This module also prevents the proton python module from being accidentally loade
 """
 import builtins
 import ctypes
+import os
 import sys
 from ctypes import c_char_p, c_long, py_object
 from types import ModuleType
@@ -49,8 +50,9 @@ class QdDll(ctypes.PyDLL):
     internally makes python calls.
     """
 
-    def __init__(self, handle: int) -> None:
-        super(QdDll, self).__init__("skupper-router", handle=handle)
+    def __init__(self) -> None:
+        # `dlopen(NULL, ...)` opens the current executable; the router used to dlopen libqpid-dispatch.so before
+        super().__init__(name=None, mode=os.RTLD_LAZY | os.RTLD_NOLOAD)
 
         # Types
         self.qd_dispatch_p = ctypes.c_void_p
