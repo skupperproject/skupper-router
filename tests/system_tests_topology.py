@@ -302,8 +302,7 @@ class TopologyTests (TestCase):
         name = 'test_01'
         if self.skip[name]:
             self.skipTest("Test skipped during development.")
-        test = TopologyFailover(name,
-                                self.client_addrs,
+        test = TopologyFailover(self.client_addrs,
                                 "closest/01"
                                 )
         test.run()
@@ -326,7 +325,7 @@ class TopologyFailover (MessagingHandler):
     deliberately severed do no get restored.
     """
 
-    def __init__(self, test_name, client_addrs, destination):
+    def __init__(self, client_addrs, destination):
         super(TopologyFailover, self).__init__(prefetch=0)
         self.client_addrs     = client_addrs
         self.dest       = destination
@@ -344,7 +343,7 @@ class TopologyFailover (MessagingHandler):
         self.send_conn  = None
         self.recv_conn  = None
         self.nap_time   = 2
-        self.debug      = False
+        self.debug      = True
         self.trace_count = 0
 
         # Holds the management sender, receiver, and 'helper'
@@ -452,7 +451,7 @@ class TopologyFailover (MessagingHandler):
                       (self.n_sent, self.n_received, self.n_accepted))
         elif name == 'sender':
             if self.state == 'examine_trace' :
-                self.send()
+                self.send_messages()
             self.send_timer = self.reactor.schedule(1, Timeout(self, "sender"))
 
     def on_start(self, event):
@@ -508,10 +507,11 @@ class TopologyFailover (MessagingHandler):
             for connector in ['AD_connector', 'BD_connector', 'CD_connector'] :
                 self.connector_check('D', connector)
 
-    def send(self):
+    def send_messages(self):
         n_sent_this_time = 0
         if self.sender.credit <= 0:
             self.receiver.flow(100)
+            self.debug_print("receiver sends flow of 100")
             return
         # Send messages one at a time.
         if self.sender.credit > 0 :
@@ -519,6 +519,8 @@ class TopologyFailover (MessagingHandler):
             self.sender.send(msg)
             n_sent_this_time += 1
             self.n_sent += 1
+        else:
+            self.debug_print("No credit yet, not sending")
         self.debug_print("sent: %d" % self.n_sent)
 
     def on_message(self, event):
