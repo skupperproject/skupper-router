@@ -17,17 +17,22 @@
 # under the License
 #
 
-"""Interface between python and libskupper-router.so.
+"""Interface between Python and C router code.
 
-This module contains python ctypes definitions to directly call functions in the
-libskupper-router.so library from python.
+This module contains python ctypes definitions to directly call router functions
+implemented in C from Python.
 
-The C library also adds the following C extension types to this module:
+The C library also injects the following C extension types to this Python module:
 
 - LogAdapter: Logs to the C logging system.
 - IoAdapter: Receives messages from the router into python.
 
+(See `qd_python_setup` in python_embedded.c for the extension injection code.)
+
 This module also prevents the proton python module from being accidentally loaded.
+
+For Python unit-testing, this module is replaced by tests/mock/dispatch.py to break
+the dependency on the C.
 """
 import builtins
 import ctypes

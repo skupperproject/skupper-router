@@ -30,10 +30,10 @@ class QdDll(ctypes.PyDLL):
     def __init__(self) -> None:
         ...
 
-    def _prototype(self, f, restype, argtypes, check=True):
+    def _prototype(self, f, restype, argtypes, check: bool = True):
         ...
 
-    def function(self, fname, restype, argtypes, check=True):
+    def function(self, fname: str, restype, argtypes, check: bool = True):
         ...
 
 
@@ -56,10 +56,10 @@ TREATMENT_LINK_BALANCED: int
 
 
 class LogAdapter:
-    def __init__(self, mod_name):
+    def __init__(self, mod_name: str) -> None:
         ...
 
-    def log(self, level, text, *args):
+    def log(self, level: int, text: str, *args) -> None:
         ...
 
 
