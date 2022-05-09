@@ -17,6 +17,8 @@
 # under the License.
 #
 
+set -exo pipefail
+
 DOCKER=docker
 PROJECT_NAME=skupper-router
 DOCKER_REGISTRY=quay.io
