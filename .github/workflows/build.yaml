@@ -277,6 +277,7 @@ jobs:
         shard: [ 1, 2 ]
         shards: [ 2 ]
         include:
+          # CentOS
           - os: ubuntu-20.04
             container: 'centos'
             containerTag: stream8
@@ -305,6 +306,16 @@ jobs:
             protonGitRef: 0.37.0
             shard: 2
             shards: 2
+          # coverage
+          - os: ubuntu-20.04
+            container: 'fedora'
+            containerTag: 35
+            buildType: Coverage
+            runtimeCheck: OFF
+            protonGitRef: 0.37.0
+            routerCTestExtraArgs: "-R 'unittests|unit_tests'"
+            shard: 1
+            shards: 1
 
     container:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
@@ -317,7 +328,7 @@ jobs:
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
-      RouterCTestExtraArgs: ""
+      RouterCTestExtraArgs: ${{matrix.routerCTestExtraArgs}}
       # this enables colored output
       FORCE_COLOR: 1
       COLUMNS: 160
@@ -470,6 +481,21 @@ jobs:
           fi
 
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
+
+      - name: Process Coverage
+        if: ${{ matrix.buildType == 'Coverage' }}
+        working-directory: ${{env.RouterBuildDir}}
+        run: |
+          dnf install -y lcov
+          cmake --build . --target coverage
+
+      - name: Upload Coverage
+        if: ${{ matrix.buildType == 'Coverage' }}
+        working-directory: ${{github.workspace}}/skupper-router
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov -n skupper-router -Z -F unittests -R . -v --gcov
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
