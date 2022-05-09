@@ -25,7 +25,7 @@ from subprocess import PIPE
 from time import sleep
 
 import system_test
-from system_test import TestCase, Qdrouterd, QdManager, Process
+from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, TIMEOUT, skip_test_in_ci
 
 h2hyper_installed = True
@@ -415,15 +415,20 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         stats = qd_manager.query('io.skupper.router.httpRequestInfo')
         self.assertEqual(len(stats), 2)
 
-        # Give time for the core thread to augment the stats.
-        i = 0
-        while i < 3:
-            if not stats or stats[0].get('requests') < 2:
-                i += 1
-                sleep(1)
-                stats = qd_manager.query('io.skupper.router.httpRequestInfo')
-            else:
-                break
+        def check_num_requests():
+            statistics = qd_manager.query('io.skupper.router.httpRequestInfo')
+            for stat in statistics:
+                self.assertEqual(stat.get('requests'), 2)
+
+        # This test intermittently fail s with the following error -
+        # self.assertEqual(s.get('requests'), 2) - AssertionError: 1 != 2
+        # The logs do not show any request failures.
+        # Since this test is failing intermittently and not always, I am going to give more
+        # time for this test to execute. If this test still fails, I will look at the http2 code
+        # in more detail.
+        retry_assertion(check_num_requests)
+
+        stats = qd_manager.query('io.skupper.router.httpRequestInfo')
 
         for s in stats:
             self.assertEqual(s.get('requests'), 2)
@@ -583,6 +588,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0]
         qd_manager_a = QdManager(address=self.router_qdra.addresses[0])
+        qd_manager_b = QdManager(address=self.router_qdrb.addresses[0])
         stats_a = qd_manager_a.query('io.skupper.router.httpRequestInfo')
 
         # First request
@@ -593,34 +599,30 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         out = self.run_curl(address, args=self.get_all_curl_args(['-d', 'fname=Mickey&lname=Mouse', '-X', 'POST']))
         self.assertIn('Success! Your first name is Mickey, last name is Mouse', out)
 
-        # Give time for the core thread to augment the stats.
-        i = 0
-        while i < 3:
-            if not stats_a or stats_a[0].get('requests') < 2:
-                sleep(1)
-                i += 1
-                stats_a = qd_manager_a.query('io.skupper.router.httpRequestInfo')
-            else:
-                break
+        def check_num_requests():
+            stats = qd_manager_a.query('io.skupper.router.httpRequestInfo')
+            self.assertEqual(stats[0].get('requests'), 2)
+            stats = qd_manager_b.query('io.skupper.router.httpRequestInfo')
+            self.assertEqual(stats[0].get('requests'), 2)
+
+        # This test intermittently fails with the following error -
+        # self.assertEqual(s.get('requests'), 2) - AssertionError: 1 != 2
+        # The logs do not show any request failures.
+        # Since this test is failing intermittently and not always, I am going to give more
+        # time for this test to execute. If this test still fails, I will look at the http2 code
+        # in more detail.
+        retry_assertion(check_num_requests)
+
+        stats_a = qd_manager_a.query('io.skupper.router.httpRequestInfo')
 
         self.assertEqual(len(stats_a), 1)
         self.assertEqual(stats_a[0].get('requests'), 2)
         self.assertEqual(stats_a[0].get('direction'), 'in')
         self.assertEqual(stats_a[0].get('bytesOut'), 3944)
         self.assertEqual(stats_a[0].get('bytesIn'), 24)
-        qd_manager_b = QdManager(address=self.router_qdrb.addresses[0])
+
         stats_b = qd_manager_b.query('io.skupper.router.httpRequestInfo')
         self.assertEqual(len(stats_b), 1)
-
-        i = 0
-        while i < 3:
-            s = stats_b[0]
-            if not stats_b or stats_b[0].get('requests') < 2:
-                i += 1
-                sleep(1)
-                stats_b = qd_manager_b.query('io.skupper.router.httpRequestInfo')
-            else:
-                break
 
         self.assertEqual(stats_b[0].get('requests'), 2)
         self.assertEqual(stats_b[0].get('direction'), 'out')
