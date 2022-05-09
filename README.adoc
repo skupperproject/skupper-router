@@ -16,7 +16,7 @@
 // under the License.
 :toc:
 :toclevels: 5
-= Skupper Router XXX
+= Skupper Router
 
 image:https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml/badge.svg[
 "GitHub Actions"
