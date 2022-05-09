@@ -17,7 +17,7 @@
 # under the License.
 #
 
-set -euxo pipefail
+set -exo pipefail
 
 DOCKER=docker
 PROJECT_NAME=skupper-router
