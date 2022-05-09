@@ -597,8 +597,17 @@ static int on_invalid_frame_recv_callback(nghttp2_session *session, const nghttp
 {
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *)user_data;
     int32_t stream_id = frame->hd.stream_id;
-    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] on_invalid_frame_recv_callback", conn->conn_id, stream_id);
-    return 0;
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] on_invalid_frame_recv_callback, lib_error_code=%i", conn->conn_id, stream_id, lib_error_code);
+
+    if (lib_error_code == NGHTTP2_ERR_FLOW_CONTROL) {
+        const char*str_error = nghttp2_http2_strerror(lib_error_code);
+        nghttp2_submit_goaway(session, 0, 0, NGHTTP2_FLOW_CONTROL_ERROR, (uint8_t *)str_error, strlen(str_error));
+        nghttp2_session_send(conn->session);
+        write_buffers(conn);
+
+    }
+
+    return lib_error_code;
 }
 
 
