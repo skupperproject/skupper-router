@@ -27,6 +27,8 @@ wheel
 tox
 
 pytest
+pytest-instafail
+pytest-timeout
 
 grpcio
 h2
