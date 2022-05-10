@@ -495,7 +495,7 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov
           chmod +x codecov
-          ./codecov -n skupper-router -Z -F unittests -R . -v --gcov
+          ./codecov -n skupper-router -F unittests -R . -v --gcov
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
