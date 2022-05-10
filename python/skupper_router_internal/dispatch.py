@@ -36,6 +36,46 @@ import sys
 from ctypes import c_char_p, c_long, py_object
 from types import ModuleType
 
+import ctypes
+from typing import List, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .router.message import Message
+
+
+FORBIDDEN: List[str]
+
+LOG_TRACE: int
+LOG_DEBUG: int
+LOG_INFO: int
+LOG_NOTICE: int
+LOG_WARNING: int
+LOG_ERROR: int
+LOG_CRITICAL: int
+LOG_STACK_LIMIT: int
+
+TREATMENT_MULTICAST_FLOOD: int
+TREATMENT_MULTICAST_ONCE: int
+TREATMENT_ANYCAST_CLOSEST: int
+TREATMENT_ANYCAST_BALANCED: int
+TREATMENT_LINK_BALANCED: int
+
+
+class LogAdapter:
+    def __init__(self, mod_name):
+        ...
+
+    def log(self, level, text, *args):
+        ...
+
+
+class IoAdapter:
+    def __init__(self, handler: Callable, address: str, aclass: str, treatment: int) -> None:
+        ...
+
+    def send(self, message: 'Message', no_echo: int, control: int) -> None:
+        ...
+
 
 class CError(Exception):
     """Exception raised if there is an error in a C call"""
