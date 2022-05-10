@@ -17,7 +17,13 @@
 # under the License
 #
 
-"""Type stubs for objects implemented in the C extension module"""
+"""Type stubs for objects implemented in the C extension module.
+
+ISSUE #452:
+Given the way C and Python is interleaved, it is best to put all type
+annotations into a separate .pyi file, even though Python 3 allows
+type-annotating the Python part of the code directly.
+"""
 
 import ctypes
 from typing import List, Callable, TYPE_CHECKING
