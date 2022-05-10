@@ -904,7 +904,7 @@ class Qdrouterd(Process):
                                 "http" in conn[protocol_index]:
                             if check_tls:
                                 ssl_proto_index = out.attribute_names.index("sslProto")
-                                if "TLS" in conn[ssl_proto_index]:
+                                if conn[ssl_proto_index] and "TLS" in conn[ssl_proto_index]:
                                     return True
                                 return False
                             return True
