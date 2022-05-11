@@ -489,13 +489,17 @@ jobs:
           dnf install -y lcov
           cmake --build . --target coverage
 
+      # https://github.com/codecov/codecov-action
       - name: Upload Coverage
         if: ${{ matrix.buildType == 'Coverage' }}
-        working-directory: ${{github.workspace}}/skupper-router
-        run: |
-          curl -Os https://uploader.codecov.io/latest/linux/codecov
-          chmod +x codecov
-          ./codecov -n skupper-router -F unittests -R . -v --gcov
+        uses: codecov/codecov-action@v3
+        with:
+          flags: unittests
+          verbose: true
+          gcov: true
+          name: skupper-router
+          root_dir: .
+          working-directory: ${{github.workspace}}/skupper-router
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
