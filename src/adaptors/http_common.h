@@ -22,6 +22,8 @@
 #include "delivery.h"
 #include "entity.h"
 
+#include "adaptor_common.h"
+
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
@@ -31,39 +33,30 @@
 #define QD_HTTP_LOG_SOURCE "HTTP_ADAPTOR"
 
 typedef enum {
-    VERSION_HTTP1,
-    VERSION_HTTP2,
+    HTTP1,
+    HTTP2,
 } qd_http_version_t;
 
-typedef enum {
-    QD_AGGREGATION_NONE,
-    QD_AGGREGATION_JSON,
-    QD_AGGREGATION_MULTIPART
-} qd_http_aggregation_t;
+typedef struct qd_http_adaptor_config_t qd_http_adaptor_config_t;
 
-typedef struct qd_http_bridge_config_t {
-    qd_dispatch_t     *qpid_dispatch;
-    char              *name;
-    char              *host;
-    char              *port;
-    char              *address;
-    char              *site;
-    char              *host_override;
-    char              *host_port;
-    qd_http_version_t  version;
-    bool                  event_channel;
-    qd_http_aggregation_t aggregation;
-    char              *ssl_profile_name;
-    bool               require_tls;
-    bool               authenticate_peer;
-    bool               verify_host_name;
-} qd_http_bridge_config_t;
+//
+// Common adaptor config for http1 and http2
+//
+struct qd_http_adaptor_config_t {
+    qd_adaptor_config_t   *adaptor_config; // Pointer to the common adaptor config used by all adaptors.
+    // Fields used by http1 only
+    bool                   event_channel;
+    qd_http_aggregation_t  aggregation;
+    char                  *host_override;
+    // Common fields.
+    qd_http_version_t      http_version;
+};
 
-void qd_http_free_bridge_config(qd_http_bridge_config_t *config);
+ALLOC_DECLARE(qd_http_adaptor_config_t);
 
 typedef struct qd_http_listener_t qd_http_listener_t;
 struct qd_http_listener_t {
-    qd_http_bridge_config_t    config;
+    qd_http_adaptor_config_t  *config;
     qd_handler_context_t       context;
     sys_atomic_t               ref_count;
     qd_server_t               *server;
@@ -78,7 +71,7 @@ void qd_http_listener_decref(qd_http_listener_t* li);
 
 typedef struct qd_http_connector_t qd_http_connector_t;
 struct qd_http_connector_t {
-    qd_http_bridge_config_t       config;
+    qd_http_adaptor_config_t     *config;
     sys_atomic_t                  ref_count;
     qd_server_t                  *server;
     qd_timer_t                   *timer;
@@ -91,8 +84,6 @@ DEQ_DECLARE(qd_http_connector_t, qd_http_connector_list_t);
 
 qd_http_connector_t *qd_http_connector(qd_server_t *server);
 void qd_http_connector_decref(qd_http_connector_t* c);
-
-
 
 //
 // Management Entity Interfaces (see HttpListenerEntity and HttpConnectorEntity in agent.py)
@@ -123,18 +114,20 @@ void qd_http_record_request(qdr_core_t *core, const char * method, uint32_t stat
                             uint64_t bytes_in, uint64_t bytes_out, uint64_t latency);
 char *qd_get_host_from_host_port(const char *host_port);
 
+qd_error_t qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t* entity, qd_log_source_t *log_source);
+void qd_http_free_adaptor_config(qd_http_adaptor_config_t *config);
 //
 // These functions are defined in their respective HTTP adaptors:
 //
 
-qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *, const qd_http_bridge_config_t *, qd_entity_t *);
-qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *, const qd_http_bridge_config_t *, qd_entity_t *);
+qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
+qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
 
 void qd_http1_delete_listener(qd_dispatch_t *, qd_http_listener_t *);
 void qd_http2_delete_listener(qd_dispatch_t *, qd_http_listener_t *);
 
-qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *, const qd_http_bridge_config_t *, qd_entity_t *);
-qd_http_connector_t *qd_http2_configure_connector(qd_dispatch_t *, const qd_http_bridge_config_t *, qd_entity_t *);
+qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
+qd_http_connector_t *qd_http2_configure_connector(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
 
 void qd_http1_delete_connector(qd_dispatch_t *, qd_http_connector_t *);
 void qd_http2_delete_connector(qd_dispatch_t *, qd_http_connector_t *);

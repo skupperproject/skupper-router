@@ -19,6 +19,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+#include "adaptors/adaptor_common.h"
 #include "adaptors/http_common.h"
 #include "server_private.h"
 
@@ -120,7 +121,7 @@ struct qdr_http2_connection_t {
     pn_raw_buffer_t          read_buffers[4];
     qd_timer_t              *activate_timer;
     qd_timer_t              *ping_timer;  // This timer is used to send a ping frame on the egress connection every 4 seconds.
-    qd_http_bridge_config_t *config;
+    qd_http_adaptor_config_t *config;
     qd_server_t             *server;
     uint64_t                 conn_id;
     char                     *remote_address;

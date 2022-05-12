@@ -18,6 +18,7 @@
  */
 
 #include "http_common.h"
+#include "adaptor_common.h"
 #include <proton/listener.h>
 #include <proton/tls.h>
 #include <stdio.h>
@@ -26,120 +27,132 @@ ALLOC_DECLARE(qd_http_listener_t);
 ALLOC_DEFINE(qd_http_listener_t);
 ALLOC_DECLARE(qd_http_connector_t);
 ALLOC_DEFINE(qd_http_connector_t);
-
-
-static qd_error_t load_bridge_config(qd_dispatch_t *qd, qd_http_bridge_config_t *config, qd_entity_t* entity)
-{
-    char *version_str = 0;
-    char *aggregation_str = 0;
-
-    qd_error_clear();
-    ZERO(config);
-
-    config->qpid_dispatch = qd;
-
-#define CHECK() if (qd_error_code()) goto error
-    config->name    = qd_entity_get_string(entity, "name");            CHECK();
-    config->host    = qd_entity_get_string(entity, "host");            CHECK();
-    config->port    = qd_entity_get_string(entity, "port");            CHECK();
-    config->address = qd_entity_get_string(entity, "address");         CHECK();
-    config->site    = qd_entity_opt_string(entity, "siteId", 0);       CHECK();
-    version_str     = qd_entity_get_string(entity, "protocolVersion"); CHECK();
-    aggregation_str = qd_entity_opt_string(entity, "aggregation", 0);  CHECK();
-    config->event_channel     = qd_entity_opt_bool(entity, "eventChannel", false);     CHECK();
-    config->host_override     = qd_entity_opt_string(entity, "hostOverride", 0);       CHECK();
-    config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0);         CHECK();
-    config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
-    config->verify_host_name  = qd_entity_opt_bool(entity, "verifyHostname", false);   CHECK();
-
-    if (config->ssl_profile_name) {
-        qd_connection_manager_t *cm = qd_dispatch_connection_manager(qd);
-        assert(cm);
-        qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, config->ssl_profile_name);
-
-        if(!config_ssl_profile) {
-            //
-            // The sslProfile was not found, we are going to terminate the router.
-            //
-            qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_CRITICAL, "sslProfile %s could not be found", config->ssl_profile_name);
-            exit(1);
-        }
-    }
-
-
-    if (strcmp(version_str, "HTTP2") == 0) {
-        config->version = VERSION_HTTP2;
-    } else {
-        config->version = VERSION_HTTP1;
-    }
-    free(version_str);
-    version_str = 0;
-
-    if (aggregation_str && strcmp(aggregation_str, "json") == 0) {
-        config->aggregation = QD_AGGREGATION_JSON;
-    } else if (aggregation_str && strcmp(aggregation_str, "multipart") == 0) {
-        config->aggregation = QD_AGGREGATION_MULTIPART;
-    } else {
-        config->aggregation = QD_AGGREGATION_NONE;
-    }
-    free(aggregation_str);
-    aggregation_str = 0;
-
-    int hplen = strlen(config->host) + strlen(config->port) + 2;
-    config->host_port = malloc(hplen);
-    snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
-
-    return QD_ERROR_NONE;
-
-error:
-    qd_http_free_bridge_config(config);
-    free(version_str);
-    return qd_error_code();
-}
-
-
-void qd_http_free_bridge_config(qd_http_bridge_config_t *config)
-{
-    if (!config) {
-        return;
-    }
-    free(config->host);
-    free(config->port);
-    free(config->name);
-    free(config->address);
-    free(config->site);
-    free(config->host_override);
-    free(config->host_port);
-    free(config->ssl_profile_name);
-}
+ALLOC_DEFINE(qd_http_adaptor_config_t);
 
 //
 // HTTP Listener Management (HttpListenerEntity)
 //
 
+#define CHECK() if (qd_error_code()) goto error
+
+static qd_http_adaptor_config_t *qd_http_adaptor_config()
+{
+    qd_http_adaptor_config_t *http_config = new_qd_http_adaptor_config_t();
+    if (!http_config)
+        return 0;
+    ZERO(http_config);
+
+    qd_adaptor_config_t *adaptor_config = new_qd_adaptor_config_t();
+    if (!adaptor_config) {
+        free_qd_http_adaptor_config_t(http_config);
+        return 0;
+    }
+    ZERO(adaptor_config);
+
+    http_config->adaptor_config = adaptor_config;
+
+    return http_config;
+}
+
+void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
+{
+    if (!config)
+        return;
+
+    qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_INFO,
+            "Deleted HTTP adaptor configuration '%s' for address %s, %s, siteId %s.",
+           config->adaptor_config->name, config->adaptor_config->address, config->adaptor_config->host_port, config->adaptor_config->site_id);
+
+
+    //
+    // Free the common adaptor configuration
+    //
+    if (config->adaptor_config)
+        qd_free_adaptor_config(config->adaptor_config);
+
+    //
+    // Free the adaptor config that is common to http1 and http2
+    //
+    free_qd_http_adaptor_config_t(config);
+}
+
+
+qd_error_t qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t* entity, qd_log_source_t *log_source)
+{
+    //
+    // First load the common config data (common to all adaptors)
+    //
+    qd_error_t qd_error = qd_load_adaptor_config(qd, config->adaptor_config, entity, log_source);
+    if (qd_error != QD_ERROR_NONE) {
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
+               "Unable to load config information: %s", qd_error_message());
+        qd_free_http_adaptor_config(config);
+        return qd_error;
+    }
+
+    //
+    // Now, load http1/http2 specific config.
+    //
+    char *aggregation_str = 0;
+    char *version_str         = qd_entity_opt_string(entity, "protocolVersion", 0);    CHECK();
+    if (strcmp(version_str, "HTTP2") == 0) {
+        config->http_version = HTTP2;
+    } else if (strcmp(version_str, "HTTP1") == 0) {
+        config->http_version = HTTP1;
+    }
+    free(version_str);
+    version_str = 0;
+
+
+    if (config->http_version == HTTP1) {
+        aggregation_str = qd_entity_opt_string(entity, "aggregation", 0);  CHECK();
+        config->event_channel     = qd_entity_opt_bool(entity, "eventChannel", false);     CHECK();
+        config->host_override     = qd_entity_opt_string(entity, "hostOverride", 0);       CHECK();
+
+        if (aggregation_str && strcmp(aggregation_str, "json") == 0) {
+            config->aggregation = QD_AGGREGATION_JSON;
+        } else if (aggregation_str && strcmp(aggregation_str, "multipart") == 0) {
+            config->aggregation = QD_AGGREGATION_MULTIPART;
+        } else {
+            config->aggregation = QD_AGGREGATION_NONE;
+        }
+        free(aggregation_str);
+        aggregation_str = 0;
+    }
+
+    return QD_ERROR_NONE;
+
+error:
+    qd_free_http_adaptor_config(config);
+    free(version_str);
+    free(aggregation_str);
+    return qd_error_code();
+
+}
+
 
 qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_http_listener_t *listener = 0;
-    qd_http_bridge_config_t config;
-
-    if (load_bridge_config(qd, &config, entity) != QD_ERROR_NONE) {
+    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
+    if (qd_load_http_adaptor_config(qd, config, entity, qd_log_source(QD_HTTP_LOG_SOURCE)) != QD_ERROR_NONE) {
         qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
                "Unable to create http listener: %s", qd_error_message());
+        qd_free_http_adaptor_config(config);
         return 0;
     }
 
-    switch (config.version) {
-    case VERSION_HTTP1:
-        listener = qd_http1_configure_listener(qd, &config, entity);
+    switch (config->http_version) {
+    case HTTP1:
+        listener = qd_http1_configure_listener(qd, config, entity);
         break;
-    case VERSION_HTTP2:
-        listener = qd_http2_configure_listener(qd, &config, entity);
+    case HTTP2:
+        listener = qd_http2_configure_listener(qd, config, entity);
         break;
     }
 
     if (!listener)
-        qd_http_free_bridge_config(&config);
+        qd_free_http_adaptor_config(config);
 
     return listener;
 }
@@ -149,12 +162,14 @@ void qd_dispatch_delete_http_listener(qd_dispatch_t *qd, void *impl)
 {
     qd_http_listener_t *listener = (qd_http_listener_t*) impl;
     if (listener) {
-        switch (listener->config.version) {
-        case VERSION_HTTP1:
+        switch (listener->config->http_version) {
+        case HTTP1:
             qd_http1_delete_listener(qd, listener);
             break;
-        case VERSION_HTTP2:
+        case HTTP2:
             qd_http2_delete_listener(qd, listener);
+            break;
+        default:
             break;
         }
     }
@@ -175,25 +190,25 @@ qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl)
 qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_http_connector_t *conn = 0;
-    qd_http_bridge_config_t config;
+    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
 
-    if (load_bridge_config(qd, &config, entity) != QD_ERROR_NONE) {
+    if (qd_load_http_adaptor_config(qd, config, entity, qd_log_source(QD_HTTP_LOG_SOURCE)) != QD_ERROR_NONE) {
         qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
                "Unable to create http connector: %s", qd_error_message());
         return 0;
     }
 
-    switch (config.version) {
-    case VERSION_HTTP1:
-        conn = qd_http1_configure_connector(qd, &config, entity);
+    switch (config->http_version) {
+    case HTTP1:
+        conn = qd_http1_configure_connector(qd, config, entity);
         break;
-    case VERSION_HTTP2:
-        conn = qd_http2_configure_connector(qd, &config, entity);
+    case HTTP2:
+        conn = qd_http2_configure_connector(qd, config, entity);
         break;
     }
 
     if (!conn)
-        qd_http_free_bridge_config(&config);
+        qd_free_http_adaptor_config(config);
 
     return conn;
 }
@@ -204,12 +219,14 @@ void qd_dispatch_delete_http_connector(qd_dispatch_t *qd, void *impl)
     qd_http_connector_t *conn = (qd_http_connector_t*) impl;
 
     if (conn) {
-        switch (conn->config.version) {
-        case VERSION_HTTP1:
+        switch (conn->config->http_version) {
+        case HTTP1:
             qd_http1_delete_connector(qd, conn);
             break;
-        case VERSION_HTTP2:
+        case HTTP2:
             qd_http2_delete_connector(qd, conn);
+            break;
+        default:
             break;
         }
     }
@@ -249,7 +266,7 @@ qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_server_event_handle
 void qd_http_listener_decref(qd_http_listener_t* li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
-        qd_http_free_bridge_config(&li->config);
+        qd_free_http_adaptor_config(li->config);
         plog_end_record(li->plog);
         free_qd_http_listener_t(li);
     }
@@ -272,7 +289,7 @@ qd_http_connector_t *qd_http_connector(qd_server_t *server)
 void qd_http_connector_decref(qd_http_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
-        qd_http_free_bridge_config(&c->config);
+        qd_free_http_adaptor_config(c->config);
         plog_end_record(c->plog);
         free_qd_http_connector_t(c);
     }
