@@ -309,7 +309,7 @@ def infer():
     service_name = os.environ.get("QDROUTERD_AUTO_MESH_SERVICE_NAME", "%s-headless" % os.environ.get("APPLICATION_NAME", "amq-interconnect"))
     namespace = retrieve_namespace()
     (prefix, index) = os.environ["HOSTNAME"].rsplit("-", 1)
-    return [{"role": "inter-router", "host": "%s-%s-%s.%s.%s.svc.cluster.local" % ("config-sync-ignore-",prefix, i, service_name, namespace)} for i in range(int(index))]
+    return [{"role": "inter-router", "host": "%s-%s-%s.%s.%s.svc.cluster.local" % ("config-sync-ignore-", prefix, i, service_name, namespace)} for i in range(int(index))]
 
 
 if __name__ == "__main__":
