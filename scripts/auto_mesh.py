@@ -124,7 +124,7 @@ def write_connectors(hosts, port="55672", properties=None):
     for host in hosts:
         print("connector {")
         print("  role: inter-router")
-        print("  host: config-sync-ignore-%s", host)
+        print("  host: %s", host)
         print("  port: %s", port)
         for prop in properties:
             print("  %s: %s", prop)
@@ -301,7 +301,7 @@ def query():
         # Keep only pods created after current pod
         si = ip_list.index(ip)
         ip_list = ip_list[:si]
-        return [{"role": "inter-router", "host": host} for host in ip_list]
+        return [{"role": "inter-router", "host": "config-sync-ignore-%s" % host} for host in ip_list]
     return ip_list
 
 
@@ -309,7 +309,7 @@ def infer():
     service_name = os.environ.get("QDROUTERD_AUTO_MESH_SERVICE_NAME", "%s-headless" % os.environ.get("APPLICATION_NAME", "amq-interconnect"))
     namespace = retrieve_namespace()
     (prefix, index) = os.environ["HOSTNAME"].rsplit("-", 1)
-    return [{"role": "inter-router", "host": "%s-%s.%s.%s.svc.cluster.local" % (prefix, i, service_name, namespace)} for i in range(int(index))]
+    return [{"role": "inter-router", "host": "%s-%s-%s.%s.%s.svc.cluster.local" % ("config-sync-ignore-",prefix, i, service_name, namespace)} for i in range(int(index))]
 
 
 if __name__ == "__main__":
