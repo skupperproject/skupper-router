@@ -115,6 +115,10 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     return qd;
 }
 
+
+// We sometimes still pass pointers as longs via the python interface, make sure this is safe.
+STATIC_ASSERT(sizeof(long) >= sizeof(void*), pointer_is_bigger_than_long);
+
 qd_error_t qd_dispatch_load_config(qd_dispatch_t *qd, const char *config_path)
 {
     qd_python_lock_state_t lock_state = qd_python_lock();
