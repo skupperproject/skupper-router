@@ -23,6 +23,9 @@
 #define QPID_DISPATCH_TCPSOCKET_HPP
 
 #include "Socket.hpp"
+
+#include <chrono>
+
 class TCPSocket : public Socket
 {
    private:
@@ -36,6 +39,7 @@ class TCPSocket : public Socket
     {
         socket.mFileDescriptor = -1;
     };
+    void setRecvTimeout(std::chrono::duration<int64_t> duration);
 };
 
 #endif  // QPID_DISPATCH_TCPSOCKET_HPP
