@@ -28,6 +28,10 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZE_FLAGS}")
 endif()
 
+add_library(static_accessors_server_c SHARED
+        static_accessors_server_c.c)
+target_compile_options(static_accessors_server_c PRIVATE -fvisibility=hidden)
+
 add_executable(c_unittests
         qdr_stubbing_probe.cpp
         c_unittests_main.cpp
@@ -39,8 +43,9 @@ add_executable(c_unittests
         test_connection_manager_static.cpp
         test_listener_startup.cpp
         test_router_startup.cpp
+        test_server.cpp
         test_terminus.cpp)
-target_link_libraries(c_unittests cpp-stub pthread skupper-router)
+target_link_libraries(c_unittests cpp-stub pthread skupper-router static_accessors_server_c)
 
 file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf
