@@ -26,8 +26,8 @@ export SOURCE_DIR=$(pwd)
 export BUILD_DIR=$SOURCE_DIR/${1:-build}
 export INSTALL_DIR=$SOURCE_DIR/${2:-install}
 
-PYTHON_BIN=`type -P python || type -P python3`
-PYTHON_LIB=$(${PYTHON_BIN} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(prefix='$INSTALL_DIR'))")
+PYTHON_BIN=$(command -v python3 || command -v python)
+PYTHON_LIB=$(${PYTHON_BIN} -c "from sysconfig import get_path; print(get_path(name='purelib', vars={'base': '$INSTALL_DIR'}))")
 
-export PYTHONPATH=$PYTHON_LIB:$PYTHONPATH
+export PYTHONPATH=$PYTHON_LIB:${PYTHONPATH:-}
 export PATH=$INSTALL_DIR/sbin:$INSTALL_DIR/bin:$SOURCE_DIR/bin:$PATH
