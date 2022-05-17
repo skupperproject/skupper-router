@@ -557,7 +557,6 @@ class TcpAdaptor(TestCase):
 
         cls.logger.log("TCP_TEST All tcpListeners are active")
 
-
     @classmethod
     def tearDownClass(cls):
         # stop echo servers
