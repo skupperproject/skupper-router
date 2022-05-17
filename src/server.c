@@ -1483,12 +1483,12 @@ void qd_server_run(qd_dispatch_t *qd)
 #ifndef NDEBUG
     qd_log(qd_server->log_source, QD_LOG_INFO, "Running in DEBUG Mode");
 #endif
-    int n = qd_server->thread_count - 1; /* Start count-1 threads + use current thread */
+    const int n = qd_server->thread_count;
     sys_thread_t **threads = (sys_thread_t **)qd_calloc(n, sizeof(sys_thread_t*));
     for (i = 0; i < n; i++) {
         threads[i] = sys_thread(thread_run, qd_server);
     }
-    thread_run(qd_server);      /* Use the current thread */
+
     for (i = 0; i < n; i++) {
         sys_thread_join(threads[i]);
         sys_thread_free(threads[i]);
