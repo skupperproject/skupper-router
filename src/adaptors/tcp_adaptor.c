@@ -1204,12 +1204,11 @@ static void free_bridge_config(qd_tcp_bridge_t *config)
     if (!config) return;
     if (sys_atomic_dec(&config->ref_count) > 1) return;
 
-    if (tcp_adaptor)
-        qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
-               "Deleted TCP bridge configuration '%s' for address %s, %s, siteId %s. "
-               "Connections opened:%"PRIu64", closed:%"PRIu64". Bytes in:%"PRIu64", out:%"PRIu64,
-               config->name, config->address, config->host_port, config->site_id,
-               config->connections_opened, config->connections_closed, config->bytes_in, config->bytes_out);
+    qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
+           "Deleted TCP bridge configuration '%s' for address %s, %s, siteId %s. "
+           "Connections opened:%"PRIu64", closed:%"PRIu64". Bytes in:%"PRIu64", out:%"PRIu64,
+           config->name, config->address, config->host_port, config->site_id,
+           config->connections_opened, config->connections_closed, config->bytes_in, config->bytes_out);
     free(config->name);
     free(config->address);
     free(config->host);
@@ -1313,11 +1312,10 @@ static void handle_listener_event(pn_event_t *e, qd_server_t *qd_server, void *c
 
             qd_tcp_bridge_t *config = 0;
             if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
-                // The listener has NOT been deleted by management - some sort
-                // of error occurred?
-
+                // close is due to loss of available consumers - see _on_watched_address_update()
                 if (li->oper_status == QD_LISTENER_OPER_UP) {
-                    // The VAN address has consumers - re-establish the listening socket:
+                    // The VAN address now has consumers - it is possible that new consumers arrived
+                    // since the close was started. Re-establish the listening socket:
                     li->pn_listener = pn_listener();
                     pn_listener_set_context(li->pn_listener, &li->context);
                     sys_atomic_inc(&li->ref_count);  // context reference
@@ -1394,10 +1392,8 @@ static void _on_watched_address_update(void     *context,
                                        uint32_t  remote_consumers,
                                        uint32_t  local_producers)
 {
-    char log_buf[256];
     uintptr_t id = (uintptr_t)context;
 
-    *log_buf = 0;
     if (tcp_adaptor) {  // adaptor not finalized yet
 
         sys_mutex_lock(tcp_adaptor->listener_lock);
@@ -1464,9 +1460,6 @@ static void _on_watched_address_update(void     *context,
 
             qd_tcp_listener_decref(li);
         }
-
-        if (*log_buf)
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "%s", log_buf);
     }
 }
 
@@ -2147,8 +2140,6 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
     while (tl) {
         qd_tcp_listener_t *next = DEQ_NEXT(tl);
-        //free_bridge_config(tl->config);
-        //free_qd_tcp_listener_t(tl);
         qd_tcp_listener_destroy(tl);
         tl = next;
     }
