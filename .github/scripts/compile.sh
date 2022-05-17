@@ -97,6 +97,8 @@ do_build () {
 }
 
 do_build "" OFF
+# options that are needed for sanitizers do not pass annobin active checks
+eval "$(rpmbuild --undefine=_annotated_build --eval '%set_build_flags')"
 do_build "_asan" asan
 do_build "_tsan" tsan
 
