@@ -32,6 +32,7 @@ extern "C" {
 
 #include <sys/mman.h>
 
+#include <set>
 #include <thread>
 
 extern "C" {
@@ -87,6 +88,12 @@ TEST_CASE("qd_dispatch_configure_ssl_profile")
                 Stub s{};
                 s.set(
                     getenv, +[](const char *name) {
+                        // on Ubuntu, these variables are being looked up
+                        std::set<std::string> ignored = {"TZ", "TZDIR"};
+                        if (ignored.find(name) != ignored.end()) {
+                            return "";
+                        }
+
                         CHECK(name == "some_env_variable");
                         return "some_password";
                     });
