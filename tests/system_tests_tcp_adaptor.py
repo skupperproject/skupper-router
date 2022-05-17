@@ -534,6 +534,30 @@ class TcpAdaptor(TestCase):
                 time.sleep(poll_loop_delay)
         cls.logger.log("TCP_TEST Done poll wait")
 
+        cls.logger.log("TCP_TEST waiting for all tcpListeners to activate...")
+
+        LISTENER_TYPE = 'io.skupper.router.tcpListener'
+        for rtr in cls.routers:
+            mgmt = rtr.management
+            listeners_ready = False
+            while not listeners_ready:
+                listeners = mgmt.query(type=LISTENER_TYPE,
+                                       attribute_names=["operStatus", "name",
+                                                        "address"]).get_dicts()
+                listeners_ready = True
+                for listener in listeners:
+                    if listener['address'] != 'nodest':
+                        if listener['operStatus'] != 'up':
+                            listeners_ready = False
+                            cls.logger.log("Listener %s for %s is not active, retrying..." %
+                                           (listener['name'],
+                                            listener['address']))
+                            time.sleep(0.25)
+                            break
+
+        cls.logger.log("TCP_TEST All tcpListeners are active")
+
+
     @classmethod
     def tearDownClass(cls):
         # stop echo servers
