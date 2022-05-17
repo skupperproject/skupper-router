@@ -277,10 +277,10 @@ class PolicyConfig(Config):
         return [s for s in self.config_types if 'policy' in s.name]
 
 
-def configure_dispatch(dispatch: int, filename: str) -> None:
+def configure_dispatch(dispatch_int: int, filename: str) -> None:
     """Called by C router code to load configuration file and do configuration"""
     qd = QdDll()
-    dispatch = qd.qd_dispatch_p(dispatch)
+    dispatch = qd.qd_dispatch_p(dispatch_int)
     config = Config(filename)
 
     # NOTE: Can't import agent until dispatch C extension module is initialized.
