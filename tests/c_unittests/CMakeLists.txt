@@ -36,6 +36,7 @@ add_executable(c_unittests
         helpers.cpp
         helpers.hpp
         test_amqp.cpp
+        test_connection_manager_static.cpp
         test_listener_startup.cpp
         test_router_startup.cpp
         test_terminus.cpp)
