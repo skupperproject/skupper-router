@@ -26,7 +26,8 @@ find_package(benchmark REQUIRED)
 # need -Wno-pedantic, for two reasons:
 #  incompatibility in older libbenchmark, https://github.com/google/benchmark/issues/494#issuecomment-502444478
 #  PRIu64 macros without spaces around are invalid C++ (c.f. the C++11 value suffixes feature)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} ${SANITIZE_FLAGS} -Wno-pedantic -Wno-unused-function")
+# -fno-strict-aliasing: struct in C++ defines a type, causing a double definition (see issue #343)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} ${SANITIZE_FLAGS} -Wno-pedantic -Wno-unused-function -fno-strict-aliasing")
 
 add_executable(c-benchmarks
         ../c_unittests/helpers.cpp
