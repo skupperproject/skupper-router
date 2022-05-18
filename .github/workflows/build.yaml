@@ -193,7 +193,7 @@ jobs:
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
-          - ${{github.event.inputs.protonBranch || 'apache/qpid-proton' }}
+          - ${{ github.event.inputs.protonBranch || 'apache/qpid-proton' }}
           - 0.37.0
         shard: [1, 2]
         shards: [2]
