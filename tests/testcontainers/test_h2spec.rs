@@ -88,6 +88,16 @@ log {
 
 "#;
 
+/**
+ * Performs the DISPATCH-1940 reproducer steps using Container images. To run manually:
+ *
+ * 1. Write the `ROUTER_CONFIG` above to a file, say `h2spec_router.conf`
+ *     - change `host: nghttpd` to `host: localhost`
+ * 2. Run router, nghttpd and h2spec, each in its own terminal, using docker or (for skrouterd) without it
+ *     - `docker run --rm -it --network=host nixery.dev/nghttp2:latest nghttpd -a 0.0.0.0 --no-tls -d /tmp 8888`
+ *     - `skrouterd -c h2spec_router.conf`
+ *     - `docker run --rm -it --network=host summerwind/h2spec:2.6.0 -h localhost -p 24162 --verbose --insecure --timeout 10`
+ */
 #[tokio::test(flavor = "multi_thread")]
 async fn test_h2spec() {
     let skupper_router_image = &env::var("QDROUTERD_IMAGE").unwrap_or(String::from("quay.io/skupper/skupper-router:latest"));
