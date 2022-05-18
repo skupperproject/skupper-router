@@ -100,7 +100,7 @@ if(QD_DISABLE_MEMORY_POOL AND NOT RUNTIME_CHECK)
 endif()
 
 # set -Wp,-U_FORTIFY_SOURCE to avoid bad interaction with fortify flags, https://developers.redhat.com/blog/2021/05/05/memory-error-checking-in-c-and-c-comparing-sanitizers-and-valgrind#fortifysource
-set(common_sanitizer_flags -g -fno-omit-frame-pointer -Wp,-U_FORTIFY_SOURCE)
+set(common_sanitizer_flags "-g -fno-omit-frame-pointer -Wp,-U_FORTIFY_SOURCE")
 
 if(RUNTIME_CHECK STREQUAL "memcheck")
   assert_has_valgrind()
