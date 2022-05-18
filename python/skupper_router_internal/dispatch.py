@@ -35,14 +35,12 @@ For Python unit-testing, this module is replaced by tests/mock/dispatch.py to br
 the dependency on the C.
 """
 import builtins
-import ctypes
 import os
 import sys
-from ctypes import c_char_p, c_long, py_object
+from ctypes import c_char_p, c_long, py_object, c_void_p, c_bool, PyDLL
 from types import ModuleType
 
-import ctypes
-from typing import List, Callable, TYPE_CHECKING
+from typing import List, Callable, TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .router.message import Message
@@ -78,7 +76,8 @@ class IoAdapter:
     def __init__(self, handler: Callable, address: str, aclass: str, treatment: int) -> None:
         ...
 
-    def send(self, message: 'Message', no_echo: int, control: int) -> None:
+    def send(self, message: 'Message', no_echo: Optional[bool] = True, control:
+             Optional[bool] = False) -> None:
         ...
 
 
@@ -87,7 +86,7 @@ class CError(Exception):
     pass
 
 
-class QdDll(ctypes.PyDLL):
+class QdDll(PyDLL):
     """
     Load the library, set up function prototypes.
 
@@ -100,7 +99,7 @@ class QdDll(ctypes.PyDLL):
         super().__init__(name=None, mode=os.RTLD_LAZY | os.RTLD_NOLOAD)
 
         # Types
-        self.qd_dispatch_p = ctypes.c_void_p
+        self.qd_dispatch_p = c_void_p
 
         # No check on qd_error_* functions, it would be recursive
         self._prototype(self.qd_error_code, c_long, [], check=False)
@@ -108,20 +107,20 @@ class QdDll(ctypes.PyDLL):
         self._prototype(self.qd_log_entity, c_long, [py_object])
         self._prototype(self.qd_dispatch_configure_router, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_prepare, None, [self.qd_dispatch_p])
-        self._prototype(self.qd_dispatch_configure_listener, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_connector, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_ssl_profile, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_tcp_listener, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_tcp_connector, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_http_listener, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_http_connector, ctypes.c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_delete_tcp_listener, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_dispatch_delete_http_listener, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_dispatch_delete_http_connector, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, ctypes.c_void_p])
-        self._prototype(self.qd_connection_manager_delete_ssl_profile, ctypes.c_bool, [self.qd_dispatch_p, ctypes.c_void_p])
+        self._prototype(self.qd_dispatch_configure_listener, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_tcp_connector, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_http_listener, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_configure_http_connector, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_delete_tcp_listener, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_delete_http_listener, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_delete_http_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_connection_manager_delete_ssl_profile, c_bool, [self.qd_dispatch_p, c_void_p])
 
         self._prototype(self.qd_dispatch_configure_address, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_auto_link, None, [self.qd_dispatch_p, py_object])
@@ -131,7 +130,7 @@ class QdDll(ctypes.PyDLL):
         self._prototype(self.qd_dispatch_policy_c_counts_alloc, c_long, [], check=False)
         self._prototype(self.qd_dispatch_policy_c_counts_free, None, [c_long], check=False)
         self._prototype(self.qd_dispatch_policy_c_counts_refresh, None, [c_long, py_object])
-        self._prototype(self.qd_dispatch_policy_host_pattern_add, ctypes.c_bool, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_policy_host_pattern_add, c_bool, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_remove, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_lookup, c_char_p, [self.qd_dispatch_p, py_object])
 
