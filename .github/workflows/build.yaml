@@ -45,7 +45,9 @@ jobs:
         os: [ubuntu-20.04]
         buildType: [Debug]
         runtimeCheck: [asan]
-        protonGitRef: [baf, 0.37.0]
+        protonGitRef:
+          - ${{ github.event.inputs.protonBranch || 'main' }}
+          - 0.37.0
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
