@@ -192,7 +192,9 @@ jobs:
         os: [ubuntu-20.04]
         buildType: [Debug]
         runtimeCheck: [asan]
-        protonGitRef: [ ${{inputs.protonBranch }}, 0.37.0]
+        protonGitRef:
+          - ${{github.event.inputs.protonBranch || 'apache/qpid-proton' }}
+          - 0.37.0
         shard: [1, 2]
         shards: [2]
     env:
