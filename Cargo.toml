@@ -14,19 +14,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
-# under the License
+# under the License.
 #
 
-Containerfile
+# https://doc.rust-lang.org/cargo/reference/manifest.html
 
-.git
-.idea
-**/.mypy_cache
-**/.pytest_cache
-**/__pycache__
-**/*.pyc
+[package]
+name = "skupper-router"
+version = "0.0.0"
+edition = "2021"
 
-build
-cmake-build-*
-target
-tests/system_test.dir
+[dependencies]
+
+[dev-dependencies]
+futures = "0.3"
+tokio = { version = "1", features = ["macros", "time"] }
+bollard = "0.12"

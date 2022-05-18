@@ -21,3 +21,9 @@ tests/policy-1/policy-*.json
 .history/
 .tox
 .vscode
+
+
+# Added by cargo
+
+/target
+/Cargo.lock

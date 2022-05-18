@@ -77,6 +77,9 @@ leak:^PyList_New$
 
 ### Qpid Proton
 
+# ISSUE #386: pn_record leaks when running h2spec test
+leak:^pn_record_def
+
 # Proton suppressions taken from Proton's lsan.supp
 #  this appears in system_tests_open_properties:
 leak:^pni_data_grow$
