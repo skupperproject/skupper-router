@@ -27,7 +27,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/skupper_router_site.py.in
                ${CMAKE_CURRENT_BINARY_DIR}/skupper_router_site.py)
 
 # Install script for public python modules
-install(CODE "execute_process(COMMAND ${Python_EXECUTABLE} setup.py -v install --single-version-externally-managed --prefix=${CMAKE_INSTALL_PREFIX} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})")
+install(CODE "execute_process(COMMAND ${Python_EXECUTABLE} setup.py -v install --single-version-externally-managed --record=/dev/null --prefix=${CMAKE_INSTALL_PREFIX} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})")
 
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/skupper_router/management/skrouter.json
