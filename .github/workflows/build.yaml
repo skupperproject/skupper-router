@@ -291,7 +291,9 @@ jobs:
         containerTag: ['35']
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
-        protonGitRef: [${{ inputs.protonBranch }}, 0.37.0]
+        protonGitRef:
+          - ${{ github.event.inputs.protonBranch }}
+          - 0.37.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
         include:
@@ -300,14 +302,14 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ inputs.protonBranch }}
+            protonGitRef: ${{ github.event.inputs.protonBranch }}
             shard: 1
             shards: 2
           - os: ubuntu-20.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ inputs.protonBranch }}
+            protonGitRef: ${{ github.event.inputs.protonBranch }}
             shard: 2
             shards: 2
           - os: ubuntu-20.04
@@ -388,7 +390,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ inputs.protonRepository }}
+          repository: ${{ github.event.inputs.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
@@ -571,8 +573,8 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ inputs.protonRepository }}
-          ref: ${{ inputs.protonBranch }}
+          repository: ${{ github.event.inputs.protonRepository }}
+          ref: ${{ github.event.inputs.protonBranch }}
           path: 'qpid-proton'
 
       - name: Install Linux build dependencies
