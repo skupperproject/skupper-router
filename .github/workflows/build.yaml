@@ -36,8 +36,8 @@ on:
         required: false
 
 env:
-  protonRepository: "${{ github.env.protonRepository || 'apache/qpid-proton' }}"
-  protonBranch: "${{ github.env.protonBranch || 'main' }}"
+  protonRepository: "${{ env.protonRepository || 'apache/qpid-proton' }}"
+  protonBranch: "${{ env.protonBranch || 'main' }}"
 
 jobs:
   compile:
@@ -50,7 +50,7 @@ jobs:
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
-          - ${{ github.env.protonBranch }}
+          - ${{ env.protonBranch }}
           - 0.37.0
     env:
       BuildType: ${{matrix.buildType}}
@@ -91,7 +91,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.env.protonRepository }}
+          repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
@@ -197,7 +197,7 @@ jobs:
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
-          - ${{ github.env.protonBranch }}
+          - ${{ env.protonBranch }}
           - 0.37.0
         shard: [1, 2]
         shards: [2]
@@ -296,7 +296,7 @@ jobs:
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
-          - ${{ github.env.protonBranch }}
+          - ${{ env.protonBranch }}
           - 0.37.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
@@ -306,14 +306,14 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ github.env.protonBranch }}
+            protonGitRef: ${{ env.protonBranch }}
             shard: 1
             shards: 2
           - os: ubuntu-20.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ github.env.protonBranch }}
+            protonGitRef: ${{ env.protonBranch }}
             shard: 2
             shards: 2
           - os: ubuntu-20.04
@@ -394,7 +394,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.env.protonRepository }}
+          repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
@@ -577,8 +577,8 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.env.protonRepository }}
-          ref: ${{ github.env.protonBranch }}
+          repository: ${{ env.protonRepository }}
+          ref: ${{ env.protonBranch }}
           path: 'qpid-proton'
 
       - name: Install Linux build dependencies
