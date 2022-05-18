@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}
+          repository: ${{ github.event.inputs.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
@@ -390,7 +390,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}
+          repository: ${{ github.event.inputs.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
@@ -573,7 +573,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}
+          repository: ${{ github.event.inputs.protonRepository }}
           ref: ${{ github.event.inputs.protonBranch }}
           path: 'qpid-proton'
 
