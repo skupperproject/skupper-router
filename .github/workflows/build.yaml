@@ -35,6 +35,7 @@ on:
         default: main
         required: false
 
+# known limitation https://github.com/actions/runner/issues/480
 env:
   protonRepository: "${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}"
   protonBranch: "${{ github.event.inputs.protonBranch || 'main' }}"
@@ -50,7 +51,7 @@ jobs:
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
-          - ${{ env.protonBranch }}
+          - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.37.0
     env:
       BuildType: ${{matrix.buildType}}
@@ -197,7 +198,7 @@ jobs:
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
-          - ${{ env.protonBranch }}
+          - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.37.0
         shard: [1, 2]
         shards: [2]
@@ -296,7 +297,7 @@ jobs:
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
-          - ${{ env.protonBranch }}
+          - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.37.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
@@ -306,14 +307,14 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ env.protonBranch }}
+            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
             shards: 2
           - os: ubuntu-20.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
-            protonGitRef: ${{ env.protonBranch }}
+            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
           - os: ubuntu-20.04
