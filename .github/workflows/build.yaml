@@ -36,8 +36,8 @@ on:
         required: false
 
 env:
-  protonRepository: "${{ env.protonRepository || 'apache/qpid-proton' }}"
-  protonBranch: "${{ env.protonBranch || 'main' }}"
+  protonRepository: "${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}"
+  protonBranch: "${{ github.event.inputs.protonBranch || 'main' }}"
 
 jobs:
   compile:
