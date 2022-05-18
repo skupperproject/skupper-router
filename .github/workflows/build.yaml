@@ -45,7 +45,7 @@ jobs:
         os: [ubuntu-20.04]
         buildType: [Debug]
         runtimeCheck: [asan]
-        protonGitRef: [${{ inputs.protonBranch }}, 0.37.0]
+        protonGitRef: [${{ github.event.inputs.protonBranch || 'main' }}, 0.37.0]
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
@@ -85,7 +85,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: ${{ inputs.protonRepository }}
+          repository: ${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
