@@ -27,7 +27,7 @@ on:
       protonRepository:
         description: GitHub repository where to fetch Qpid Proton from
         type: string
-        default: apache/qpid-proton
+        default: 'apache/qpid-proton'
         required: false
       protonBranch:
         description: Branch in the protonRepository to check out (in addition to hardcoded branches)
