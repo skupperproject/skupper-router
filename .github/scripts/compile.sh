@@ -98,7 +98,8 @@ do_build () {
 
 do_build "" OFF
 
-common_sanitizer_flags="-Wp,-U_FORTIFY_SOURCE -fplugin-arg-annobin-no-active-checks"
+# talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
+common_sanitizer_flags="-Wp,-U_FORTIFY_SOURCE -fplugin=annobin -fplugin-arg-annobin-no-active-checks"
 export CFLAGS="${CFLAGS} ${common_sanitizer_flags}"
 export CXXFLAGS="${CXXFLAGS} ${common_sanitizer_flags}"
 do_build "_asan" asan
