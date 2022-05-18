@@ -52,7 +52,7 @@ engine is less standardized and docker/podman incompatibility may appear.
 Rust is used instead of Go to orchestrate the tests. Neither of
 the two languages was yet present in the codebase and it appears
 that Rust is more compatible (re. ffi) with a C codebase than Go,
-if ever such consideration arose. Furthermore, rust has been
+if ever such consideration arises. Furthermore, rust has been
 recently discussed in relation to the router, while Go was
 only mentioned long time ago (re. the `mercury` tests).
 
