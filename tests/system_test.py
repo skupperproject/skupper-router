@@ -500,6 +500,9 @@ class Qdrouterd(Process):
         @property
         def router_id(self): return self.sections("router")[0]["id"]
 
+        @property
+        def router_mode(self): return self.sections("router")[0]["mode"]
+
         def defaults(self):
             """Fill in default values in gconfiguration"""
             for name, props in self:

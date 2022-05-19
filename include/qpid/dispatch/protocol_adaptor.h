@@ -870,4 +870,24 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            const char      *version,
                                            bool             streaming_links);
 
+
+/**
+ ******************************************************************************
+ * Listener State
+ ******************************************************************************
+ */
+
+
+typedef enum {
+    QD_LISTENER_OPER_UP,
+    QD_LISTENER_OPER_DOWN,
+} qd_listener_oper_status_t;
+
+
+typedef enum {
+    QD_LISTENER_ADMIN_ENABLED,
+    QD_LISTENER_ADMIN_DELETED
+} qd_listener_admin_status_t;
+
+
 #endif

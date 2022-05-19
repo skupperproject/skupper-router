@@ -30,6 +30,7 @@
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/protocol_log.h"
+#include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/engine.h>
 #include <proton/event.h>
@@ -70,9 +71,19 @@ struct qd_tcp_listener_t
     sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_bridge_t          *config;
-    pn_listener_t            *pn_listener;
     plog_record_t            *plog;
+    qdr_watch_handle_t        addr_watcher;
+    uint32_t                  identity;
 
+    // the following fields are mutably shared between multiple threads and
+    // must be protected by holding the lock:
+    sys_mutex_t                *lock;
+    pn_listener_t              *pn_listener;
+    qd_listener_admin_status_t  admin_status;  // set by mgmt
+    qd_listener_oper_status_t   oper_status;   // set by addr_watcher
+    // end of lock scope
+
+    // must hold tcp_adaptor->listener_lock during list operations:
     DEQ_LINKS(qd_tcp_listener_t);
 };
 

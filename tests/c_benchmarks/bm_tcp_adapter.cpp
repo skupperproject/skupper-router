@@ -160,14 +160,14 @@ static void writeRouterConfig(const std::string &configName, const std::stringst
 static TCPSocket try_to_connect(const std::string &servAddress, int echoServPort)
 {
     auto then = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - then < std::chrono::seconds(3)) {
+    while (std::chrono::steady_clock::now() - then < std::chrono::seconds(60)) {
         try {
             TCPSocket sock(servAddress, echoServPort);
             return sock;
         } catch (SocketException &e) {
         }
     }
-    throw std::runtime_error("Failed to connect in time");
+    throw std::runtime_error("Failed to connect in time (60 seconds)");
 }
 
 class LatencyMeasure

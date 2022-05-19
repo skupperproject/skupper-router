@@ -24,7 +24,6 @@
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/amqp.h"
-#include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/codec.h>
 #include <proton/condition.h>
@@ -131,9 +130,13 @@ typedef struct qdr_tcp_adaptor_t {
     qdr_tcp_connection_list_t connections;
     qd_bridge_config_list_t   bridges;
     qd_log_source_t          *log_source;
+    sys_mutex_t              *listener_lock; // protect listeners list
+
 } qdr_tcp_adaptor_t;
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
+static sys_atomic_t next_id;
+static const int BACKLOG = 50;  /* Listening backlog */
 
 static void qdr_add_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_del_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
@@ -1005,22 +1008,12 @@ static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *serve
     return tc;
 }
 
-static qdr_tcp_connection_t *qdr_tcp_connection_ingress(qd_tcp_listener_t* listener)
+static void qdr_tcp_connection_ingress(qd_tcp_listener_t* listener)
 {
     qdr_tcp_connection_t* tc = qdr_tcp_connection(true, listener->server, listener->config);
 
     tc->plog = plog_start_record(PLOG_RECORD_FLOW, listener->plog);
     plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
-
-    tc->pn_raw_conn = pn_raw_connection();
-    pn_raw_connection_set_context(tc->pn_raw_conn, tc);
-
-    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] call pn_listener_raw_accept()", tc->conn_id);
-
-    //the following call will cause a PN_RAW_CONNECTION_CONNECTED
-    //event on another thread, which is where the rest of the
-    //initialisation will happen, through a call to
-    //qdr_tcp_connection_ingress_accept
 
     // IMPORTANT NOTE: this next call TO pn_listener_raw_accept may immediately schedule the connection on another I/O
     // thread. IF you want to access tc after this call, the activation_lock  must be held to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
@@ -1031,8 +1024,17 @@ static qdr_tcp_connection_t *qdr_tcp_connection_ingress(qd_tcp_listener_t* liste
     //     pn_listener_raw_accept(listener->pn_listener, tc->pn_raw_conn);
     //     call_some_function(tc->conn_id);   // if the activation_lock is not held, tc might be freed
     //     UNLOCK(tc->activation_lock);
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "listener %s (%s) accepting new client connection",
+           listener->config->host_port, listener->config->address);
+
+    sys_mutex_lock(listener->lock);
+
+    tc->pn_raw_conn = pn_raw_connection();
+    pn_raw_connection_set_context(tc->pn_raw_conn, tc);
     pn_listener_raw_accept(listener->pn_listener, tc->pn_raw_conn);
-    return tc;
+
+    sys_mutex_unlock(listener->lock);
 }
 
 
@@ -1246,15 +1248,30 @@ static void log_tcp_bridge_config(qd_log_source_t *log, qd_tcp_bridge_t *c, cons
     qd_log(log, QD_LOG_INFO, "Configured %s for %s, %s:%s", what, c->address, c->host, c->port);
 }
 
-void qd_tcp_listener_decref(qd_tcp_listener_t* li)
+
+// Force delete the tcp listener.  This is also called during adaptor shutdown
+// so do not check reference counts or schedule work or do anything that causes
+// other side effects.
+//
+static void qd_tcp_listener_destroy(qd_tcp_listener_t *li)
 {
-    if (li && sys_atomic_dec(&li->ref_count) == 1) {
+    if (li) {
         sys_atomic_destroy(&li->ref_count);
-        plog_end_record(li->plog);
+        sys_mutex_free(li->lock);
         free_bridge_config(li->config);
         free_qd_tcp_listener_t(li);
     }
 }
+
+
+void qd_tcp_listener_decref(qd_tcp_listener_t* li)
+{
+    if (li && sys_atomic_dec(&li->ref_count) == 1) {
+        plog_end_record(li->plog);
+        qd_tcp_listener_destroy(li);
+    }
+}
+
 
 static void handle_listener_event(pn_event_t *e, qd_server_t *qd_server, void *context) {
     qd_log_source_t *log = tcp_adaptor->log_source;
@@ -1285,9 +1302,45 @@ static void handle_listener_event(pn_event_t *e, qd_server_t *qd_server, void *c
             } else {
                 qd_log(log, QD_LOG_TRACE, "PN_LISTENER_CLOSE Listener closed on %s", host_port);
             }
+
+            sys_mutex_lock(li->lock);
+
+            // the pn_listener holds a counted reference to this listener in its context:
+            bool need_decref = pn_listener_get_context(li->pn_listener) != 0;
             pn_listener_set_context(li->pn_listener, 0);
             li->pn_listener = 0;
-            qd_tcp_listener_decref(li);
+
+            qd_tcp_bridge_t *config = 0;
+            if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
+                // close is due to loss of available consumers - see _on_watched_address_update()
+                if (li->oper_status == QD_LISTENER_OPER_UP) {
+                    // The VAN address now has consumers - it is possible that new consumers arrived
+                    // since the close was started. Re-establish the listening socket:
+                    li->pn_listener = pn_listener();
+                    pn_listener_set_context(li->pn_listener, &li->context);
+                    sys_atomic_inc(&li->ref_count);  // context reference
+
+                    // Note: the call to pn_proactor_listen may cause the
+                    // listener event handler to start executing immediately on
+                    // another thread.  The listener may possibly get deleted
+                    // as well, so take a reference to its config so it can be
+                    // used in the log message outside of the lock.
+                    config = li->config;
+                    sys_atomic_inc(&config->ref_count);
+                    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->host_port, BACKLOG);
+                }
+            }
+
+            sys_mutex_unlock(li->lock);
+
+            if (config) {
+                qd_log(log, QD_LOG_DEBUG, "Re-creating TCP listener %s (%s) for service address %s",
+                       config->name, config->host_port, config->address);
+                free_bridge_config(config);  // drop our reference
+            }
+
+            if (need_decref)
+                qd_tcp_listener_decref(li);
         }
         break;
 
@@ -1306,6 +1359,12 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->context.context = li;
     li->context.handler = &handle_listener_event;
     li->config = qd_bridge_config();
+    li->lock = sys_mutex();
+    li->admin_status = QD_LISTENER_ADMIN_ENABLED;
+    li->oper_status = QD_LISTENER_OPER_DOWN;
+    do {
+        li->identity = sys_atomic_inc(&next_id);
+    } while (li->identity == 0);
 
     //
     // Create a plog record for this listener
@@ -1316,22 +1375,96 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     return li;
 }
 
-static const int BACKLOG = 50;  /* Listening backlog */
 
-static bool tcp_listener_listen(qd_tcp_listener_t *li) {
-   li->pn_listener = pn_listener();
-    if (li->pn_listener) {
-        pn_listener_set_context(li->pn_listener, &li->context);
-        pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->host_port, BACKLOG);
-        sys_atomic_inc(&li->ref_count); /* In use by proactor, PN_LISTENER_CLOSE will dec */
-        /* Listen is asynchronous, log "listening" message on PN_LISTENER_OPEN event */
-    } else {
-        qd_log(tcp_adaptor->log_source, QD_LOG_CRITICAL, "Failed to create listener for %s",
-               li->config->host_port);
-     }
-    return li->pn_listener;
+// Callback when there is a change in the number of active consumers (servers)
+// for the VAN address associated with a listener. The lifecycle of the
+// listening socket associated with a listener is determined by the number of
+// active consumers: we close the listening socket to prevent client access
+// when there are no servers available.
+//
+// Note well that this is called on the general handler thread and may execute
+// in parallel with the management agent thread which creates and deletes
+// listeners, as well as the listener proactor thread.
+//
+static void _on_watched_address_update(void     *context,
+                                       uint32_t  local_consumers,
+                                       uint32_t  in_proc_consumers,
+                                       uint32_t  remote_consumers,
+                                       uint32_t  local_producers)
+{
+    uintptr_t id = (uintptr_t)context;
+
+    if (tcp_adaptor) {  // adaptor not finalized yet
+
+        sys_mutex_lock(tcp_adaptor->listener_lock);
+
+        qd_tcp_listener_t *li = DEQ_HEAD(tcp_adaptor->listeners);
+        while (li) {
+            if (id == (uintptr_t) li->identity)
+                break;
+            li = DEQ_NEXT(li);
+        }
+
+        if (li)
+            sys_atomic_inc(&li->ref_count);
+
+        sys_mutex_unlock(tcp_adaptor->listener_lock);
+
+        if (li) {
+
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                   "Listener address %s consumer count updates: local=%"PRIu32" in-process=%"PRIu32" remote=%"PRIu32,
+                   li->config->address, local_consumers, in_proc_consumers, remote_consumers);
+
+            sys_mutex_lock(li->lock);
+
+            bool created = false;
+            bool stopped = false;
+            if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
+
+                li->oper_status = (local_consumers || in_proc_consumers || remote_consumers)
+                    ? QD_LISTENER_OPER_UP : QD_LISTENER_OPER_DOWN;
+
+                if (li->oper_status == QD_LISTENER_OPER_UP) {
+                    if (!li->pn_listener) {
+                        created = true;
+                        li->pn_listener = pn_listener();
+                        pn_listener_set_context(li->pn_listener, &li->context);
+                        sys_atomic_inc(&li->ref_count);  // for pn_listener context reference
+
+                        // Note: after this call the handle_listener_event may be called immediately on another thread:
+                        pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->host_port, BACKLOG);
+                    }
+
+                } else {  // QD_LISTENER_OPER_DOWN
+                    if (li->pn_listener) {
+                        stopped = true;
+                        // Note: after this call the handle_listener_event may be called immediately on another thread:
+                        pn_listener_close(li->pn_listener);
+                        // finish cleanup in PN_LISTENER_CLOSE event
+                    }
+                }
+            }
+
+            sys_mutex_unlock(li->lock);
+
+            if (stopped)
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                       "Closing TCP listener %s (%s): no service for address %s",
+                       li->config->name, li->config->host_port, li->config->address);
+
+            else if (created)
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                       "Creating TCP listener %s (%s) for service address %s",
+                       li->config->name, li->config->host_port, li->config->address);
+
+            qd_tcp_listener_decref(li);
+        }
+    }
 }
 
+
+// Note well: called from the management thread
 QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_tcp_listener_t *li = qd_tcp_listener(qd->server);
@@ -1341,7 +1474,6 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
         return 0;
     }
     DEQ_ITEM_INIT(li);
-    DEQ_INSERT_TAIL(tcp_adaptor->listeners, li);
     log_tcp_bridge_config(tcp_adaptor->log_source, li->config, "TcpListener");
 
     //
@@ -1352,22 +1484,59 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config->port);
     plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      li->config->address);
 
-    tcp_listener_listen(li);
+    sys_mutex_lock(tcp_adaptor->listener_lock);
+    DEQ_INSERT_TAIL(tcp_adaptor->listeners, li);  // ref_count taken
+    sys_mutex_unlock(tcp_adaptor->listener_lock);
+
+    // Register for callbacks when the number of active consumers for the VAN
+    // address changes. We create the proton listener when there are active
+    // consumers present.  Note once this call is made the
+    // _on_watched_address_update may immediately run on another thread:
+    li->addr_watcher = qdr_core_watch_address(tcp_adaptor->core, li->config->address,
+                                              QD_ITER_HASH_PREFIX_MOBILE,
+                                              qd->default_treatment,
+                                              _on_watched_address_update,
+                                              (void*) ((uintptr_t) li->identity));
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+           "tcpListener %s created at %s:%s for address %s",
+           li->config->name, li->config->host, li->config->port, li->config->address);
+
     return li;
 }
 
+
+// Note: this runs on the management thread
 QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 {
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
     if (li) {
+
+        // note: this cancel is asynchonous, which means the watcher
+        // callback may still be invoked on another thread...
+        qdr_core_unwatch_address(tcp_adaptor->core, li->addr_watcher);
+
+        sys_mutex_lock(tcp_adaptor->listener_lock);
+        DEQ_REMOVE(tcp_adaptor->listeners, li);
+        sys_mutex_unlock(tcp_adaptor->listener_lock);
+
+        sys_mutex_lock(li->lock);
+
+        li->admin_status = QD_LISTENER_ADMIN_DELETED;
+        li->oper_status = QD_LISTENER_OPER_DOWN;
         if (li->pn_listener) {
+            // Note: after this call the listener event handler may be invoked
+            // on another thread:
             pn_listener_close(li->pn_listener);
         }
-        DEQ_REMOVE(tcp_adaptor->listeners, li);
+
+        sys_mutex_unlock(li->lock);
+
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                "Deleted TcpListener for %s, %s:%s",
                li->config->address, li->config->host, li->config->port);
-        qd_tcp_listener_decref(li);
+
+        qd_tcp_listener_decref(li);  // listener lists reference
     }
 }
 
@@ -1382,11 +1551,16 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
     uint64_t cc = listener->config->connections_closed;
     UNLOCK(listener->config->stats_lock);
 
+    LOCK(listener->lock);
+    const char *oper_status = listener->oper_status == QD_LISTENER_OPER_UP
+        ? "up" : "down";
+    UNLOCK(listener->lock);
 
     if (   qd_entity_set_long(entity, "bytesIn",           bi) == 0
         && qd_entity_set_long(entity, "bytesOut",          bo) == 0
         && qd_entity_set_long(entity, "connectionsOpened", co) == 0
-        && qd_entity_set_long(entity, "connectionsClosed", cc) == 0)
+        && qd_entity_set_long(entity, "connectionsClosed", cc) == 0
+        && qd_entity_set_string(entity, "operStatus", oper_status) == 0)
     {
         return QD_ERROR_NONE;
     }
@@ -1799,7 +1973,7 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
             // status is signalled by read_eos_seen and is not sufficient by
             // itself to force a connection closure.
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   DLV_FMT" qdr_tcp_delivery_update: delivery failed with outcome=0x"PRIx64", closing connection",
+                   DLV_FMT" qdr_tcp_delivery_update: delivery failed with outcome=0x%"PRIx64", closing connection",
                    DLV_ARGS(dlv), disp);
             pn_raw_connection_close(tc->pn_raw_conn);
             return;
@@ -1941,6 +2115,8 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     DEQ_INIT(adaptor->listeners);
     DEQ_INIT(adaptor->connectors);
     DEQ_INIT(adaptor->connections);
+    sys_atomic_init(&next_id, 1);
+    adaptor->listener_lock = sys_mutex();
     *adaptor_context = adaptor;
 
     tcp_adaptor = adaptor;
@@ -1959,13 +2135,16 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
         tc = next;
     }
 
+    sys_mutex_lock(adaptor->listener_lock);
+
     qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
     while (tl) {
         qd_tcp_listener_t *next = DEQ_NEXT(tl);
-        free_bridge_config(tl->config);
-        free_qd_tcp_listener_t(tl);
+        qd_tcp_listener_destroy(tl);
         tl = next;
     }
+
+    sys_mutex_unlock(adaptor->listener_lock);
 
     qd_tcp_connector_t *tr = DEQ_HEAD(adaptor->connectors);
     while (tr) {
@@ -1977,8 +2156,10 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     }
 
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
-    free(adaptor);
     tcp_adaptor =  NULL;
+    sys_mutex_free(adaptor->listener_lock);
+    free(adaptor);
+    sys_atomic_destroy(&next_id);
 }
 
 /**
