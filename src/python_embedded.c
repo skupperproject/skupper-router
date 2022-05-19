@@ -771,7 +771,7 @@ static PyObject *qd_python_send(PyObject *self, PyObject *args)
     int       no_echo = 1;
     int       control = 0;
 
-    if (!PyArg_ParseTuple(args, "O|ii", &message, &no_echo, &control))
+    if (!PyArg_ParseTuple(args, "O|pp", &message, &no_echo, &control))
         return 0;
 
     if (compose_python_message(&field, message, ioa->qd) == QD_ERROR_NONE) {
