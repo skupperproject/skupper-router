@@ -40,7 +40,7 @@ import sys
 from ctypes import c_char_p, c_long, py_object, c_void_p, c_bool, PyDLL
 from types import ModuleType
 
-from typing import List, Callable, TYPE_CHECKING, Optional
+from typing import List, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .router.message import Message
@@ -76,8 +76,7 @@ class IoAdapter:
     def __init__(self, handler: Callable, address: str, aclass: str, treatment: int) -> None:
         ...
 
-    def send(self, message: 'Message', no_echo: Optional[bool] = True, control:
-             Optional[bool] = False) -> None:
+    def send(self, message: 'Message', no_echo: bool = True, control: bool = False) -> None:
         ...
 
 
