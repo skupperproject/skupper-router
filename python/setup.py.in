@@ -60,5 +60,7 @@ setup(
     author='Skupper Project',
     author_email='skupper@googlegroups.com',
     url='https://skupper.io/',
-    license='Apache Software License'
+    license='Apache Software License',
+
+    zip_safe=False,
 )
