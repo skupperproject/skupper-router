@@ -20,6 +20,7 @@
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as builder
 
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
+    rpm-build \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel swig \

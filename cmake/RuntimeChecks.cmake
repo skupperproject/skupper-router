@@ -99,6 +99,9 @@ if(QD_DISABLE_MEMORY_POOL AND NOT RUNTIME_CHECK)
   message(FATAL_ERROR "Do not set QD_DISABLE_MEMORY_POOL without enabling RUNTIME_CHECK at the same time")
 endif()
 
+# set -Wp,-U_FORTIFY_SOURCE to avoid bad interaction with fortify flags, https://developers.redhat.com/blog/2021/05/05/memory-error-checking-in-c-and-c-comparing-sanitizers-and-valgrind#fortifysource
+set(common_sanitizer_flags "-g -fno-omit-frame-pointer -Wp,-U_FORTIFY_SOURCE")
+
 if(RUNTIME_CHECK STREQUAL "memcheck")
   assert_has_valgrind()
   message(STATUS "Runtime memory checker: valgrind memcheck")
@@ -147,7 +150,7 @@ elseif(RUNTIME_CHECK STREQUAL "asan" OR RUNTIME_CHECK STREQUAL "hwasan")
   add_custom_target(generate_lsan.supp ALL
         DEPENDS ${CMAKE_BINARY_DIR}/tests/lsan.supp)
   # force QD_MEMORY_DEBUG else lsan will catch alloc_pool suppressed leaks (ok to remove this once leaks are fixed)
-  set(SANITIZE_FLAGS "-g -fno-omit-frame-pointer -fsanitize=${ASAN_VARIANTS} -DQD_MEMORY_DEBUG=1")
+  set(SANITIZE_FLAGS "${common_sanitizer_flags} -fsanitize=${ASAN_VARIANTS} -DQD_MEMORY_DEBUG=1")
   # `detect_leaks=1` is set by default where it is available; better not to set it conditionally ourselves
   # https://github.com/openSUSE/systemd/blob/1270e56526cd5a3f485ae2aba975345c38860d37/docs/TESTING_WITH_SANITIZERS.md
   # TODO(DISPATCH-2148) re-enable odr violation detection when Proton linking issue in test-sender is fixed
@@ -162,7 +165,7 @@ elseif(RUNTIME_CHECK STREQUAL "tsan")
     message(FATAL_ERROR "libtsan not installed - thread sanitizer not available")
   endif(TSAN_LIBRARY-NOTFOUND)
   message(STATUS "Runtime race checker: gcc/clang thread sanitizer")
-  set(SANITIZE_FLAGS "-g -fno-omit-frame-pointer -fsanitize=thread")
+  set(SANITIZE_FLAGS "${common_sanitizer_flags} -fsanitize=thread")
   set(RUNTIME_TSAN_ENV_OPTIONS "disable_coredump=0 history_size=4 second_deadlock_stack=1 suppressions=${CMAKE_SOURCE_DIR}/tests/tsan.supp")
 
 elseif(RUNTIME_CHECK)

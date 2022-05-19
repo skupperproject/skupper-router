@@ -22,6 +22,7 @@
 set -euxo pipefail
 
 WORKING=$(pwd)
+eval "$(rpmbuild --eval '%set_build_flags')"
 
 #region libwebsockets
 wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
@@ -96,6 +97,11 @@ do_build () {
 }
 
 do_build "" OFF
+
+# talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
+common_sanitizer_flags="-Wp,-U_FORTIFY_SOURCE -fplugin=annobin -fplugin-arg-annobin-no-active-checks"
+export CFLAGS="${CFLAGS} ${common_sanitizer_flags}"
+export CXXFLAGS="${CXXFLAGS} ${common_sanitizer_flags}"
 do_build "_asan" asan
 do_build "_tsan" tsan
 
