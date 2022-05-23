@@ -318,7 +318,7 @@ def infer():
 def generate_connector_name(connector):
     host = connector.get("host")
     port = connector.get("port")
-    name = "config-sync-ignore-connector/{}:{}".format(host, port)
+    name = "auto-mesh-connector/{}:{}".format(host, port)
     return {"name": name}
 
 
