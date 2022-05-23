@@ -291,7 +291,6 @@ class Process(subprocess.Popen):
         self.args = args
         assert expect is not None, "Process (name=%s) argument expect cannot be None" % self.name
         self.expect = expect
-        self.actual = None
         self.outdir = os.getcwd()
         self.outfile = os.path.abspath(self.unique(self.name))
         self.torndown = False
@@ -325,51 +324,35 @@ class Process(subprocess.Popen):
                     self.pid, self.name, msg, ' '.join(self.args),
                     self.outfile + '.cmd', f.read()))
 
-        # If the process is already dead, this might mean that the process has crashed (For example: a router
-        # crash). self.poll() will return a non None value if the process is already gone.
-        # A None value indicates that the process hasn’t terminated yet.
-        # A negative value -N indicates that the child was terminated by signal N (POSIX only).
-        # A positive value indicates a fail.
-        status = self.poll()
-
-        if status is None:
+        state = self.poll()
+        if state is None:
             # If status is None, it means that the process is still running
-            self.actual = Process.RUNNING
-        elif status > 0:
-            self.actual = Process.EXIT_FAIL
-        else:
-            self.actual = status
-
-        if status is None:
-            # The process is still running.
-            # Call process.terminate() which will try to stop the child by sending it a SIGTERM
-            # but is not guaranteed to stop it
             self.terminate()
             try:
-                # Wait for TIMEOUT seconds and then catch the
-                # TimeoutExpired and kill() the process.
-                self.wait(timeout=TIMEOUT)
+                self.wait(TIMEOUT)
             except TimeoutExpired:
-                # The terminate call() has failed to terminate the process even after we waited for TIMEOUT seconds.
-                # Send a SIGKILL to the child by calling kill()
-                self._logger.log("Wait timeout expired trying to terminate "
-                                 "process %s (name=%s). Trying to kill process now" % (self.pid, self.name))
                 self.kill()
-                try:
-                    self.wait(timeout=TIMEOUT)
-                    self._logger.log("Process %s killed successfully" % self.pid)
-                except TimeoutExpired:
-                    # There is something seriously wrong if kill() did not kill the process.
-                    # But should the test suite fail because of this ? Right now, it will
-                    # but we need to revisit this.
-                    error_msg = "Error: Could not kill process "
-                    self._logger.log(error_msg + self.pid)
-                    # This will raise a RuntimeError and fail the test
-                    error(error_msg)
+                error("did not terminate properly, required kill()")
 
-        # At this time, we want to check if self.expect and self.actual are the same
-        if self.expect != self.actual:
-            error("exit code is %s, expected %s" % (self.actual, self.expect))
+        # at this point the process has terminated, either of its own accord or
+        # due to the above terminate call.
+
+        if state is None and self.expect != Process.RUNNING:
+            error("process was unexpectedly still running")
+
+        # check the process return code
+        if self.expect in (Process.RUNNING, Process.EXIT_OK):
+            # returncode should be zero
+            if self.returncode != 0:
+                error("returned error code %s" % self.returncode)
+        elif self.expect == Process.EXIT_FAIL:
+            # expect any nonzero error code
+            if self.returncode == 0:
+                error("expected error on exit but successful exit occurred")
+        elif self.returncode != self.expect:
+            # self.expected is the expected return code
+            error("expected %s but actual returncode is %s"
+                  % (self.expect, self.returncode))
 
 
 class Config:
