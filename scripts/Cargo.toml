@@ -1,0 +1,14 @@
+[package]
+name = "skupper-router-scripts"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4"
+libc = "0.2"
+nix = "0.24"
+procfs = "0.12"
+
+[[bin]]
+name = "sigforwarder"
+path = "sigforwarder.rs"

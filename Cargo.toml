@@ -19,6 +19,9 @@
 
 # https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = ["scripts"]
+
 [package]
 name = "skupper-router"
 version = "0.0.0"
