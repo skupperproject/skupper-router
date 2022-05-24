@@ -25,13 +25,20 @@
 #include <string.h>
 
 
-size_t BUFFER_SIZE     = 512;
+size_t BUFFER_SIZE = QD_BUFFER_DEFAULT_SIZE;
 
 ALLOC_DECLARE(qd_buffer_t);
 ALLOC_DEFINE_CONFIG(qd_buffer_t, sizeof(qd_buffer_t), &BUFFER_SIZE, 0);
 
 
-void qd_buffer_set_size(size_t size)
+/**
+ * Set the initial buffer capacity to be allocated by future calls to qp_buffer.
+ *
+ * NOTICE:  This function is provided for testing purposes only.  It should not be invoked
+ * in the production code.  If this function is called after the first buffer has been allocated,
+ * the software WILL BE unstable and WILL crash.
+ */
+void qd_buffer_set_size_test_only(size_t size)
 {
     BUFFER_SIZE = size;
 }

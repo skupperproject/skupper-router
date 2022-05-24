@@ -55,7 +55,7 @@ add_executable(unit_tests_size ${unit_test_size_SOURCES})
 target_link_libraries(unit_tests_size skupper-router)
 
 add_executable(test-sender test-sender.c)
-target_link_libraries(test-sender ${Proton_LIBRARIES} skupper-router)
+target_link_libraries(test-sender ${Proton_LIBRARIES})
 
 add_executable(test-receiver test-receiver.c)
 target_link_libraries(test-receiver ${Proton_LIBRARIES})
