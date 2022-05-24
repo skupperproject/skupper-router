@@ -94,23 +94,24 @@ static qdr_terminus_t *qdr_terminus_normal(const char *addr)
 
 static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr)
 {
-    if (addr->edge_inlink == 0) {
+    qdr_link_t *edge_inlink = safe_deref_qdr_link_t(addr->edge_inlink_sp);
+    if (edge_inlink == 0) {
         qdr_terminus_t *term = qdr_terminus_normal(key + 1);
 
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_INCOMING,
                                               term, qdr_terminus_normal(0), QD_SSN_ENDPOINT,
                                               QDR_DEFAULT_PRIORITY);
         qdr_core_bind_address_link_CT(ap->core, addr, link);
-        addr->edge_inlink = link;
+        set_safe_ptr_qdr_link_t(link, &addr->edge_inlink_sp);
     }
 }
 
 
 static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 {
-    qdr_link_t *link = addr->edge_inlink;
+    qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_inlink_sp);
     if (link) {
-        addr->edge_inlink = 0;
+        qd_nullify_safe_ptr(&addr->edge_inlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
         qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
     }
@@ -119,7 +120,8 @@ static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 
 static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr)
 {
-    if (addr->edge_outlink == 0 && DEQ_SIZE(addr->subscriptions) == 0) {
+    qdr_link_t *edge_outlink = safe_deref_qdr_link_t(addr->edge_outlink_sp);
+    if (edge_outlink == 0 && DEQ_SIZE(addr->subscriptions) == 0) {
         //
         // Note that this link must not be bound to the address at this time.  That will
         // happen later when the interior tells us that there are upstream destinations
@@ -130,16 +132,16 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_OUTGOING,
                                               qdr_terminus_normal(0), term, QD_SSN_ENDPOINT,
                                               QDR_DEFAULT_PRIORITY);
-        addr->edge_outlink = link;
+        set_safe_ptr_qdr_link_t(link, &addr->edge_outlink_sp);
     }
 }
 
 
 static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 {
-    qdr_link_t *link = addr->edge_outlink;
+    qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_outlink_sp);
     if (link) {
-        addr->edge_outlink = 0;
+        qd_nullify_safe_ptr(&addr->edge_outlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
         qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
     }
@@ -159,26 +161,32 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
     switch (event) {
         case QDRC_EVENT_LINK_OUT_DETACHED: {
             qdr_address_t *addr = link->owning_addr;
-            if (addr && link == addr->edge_outlink) {
-                //
-                // The link is being detached. If the detaching link is the same as the link's owning_addr's edge_outlink,
-                // set the edge_outlink on the address to be zero. We do this because this link is going to be freed
-                // and we don't want anyone dereferencing the addr->edge_outlink
-                //
-                addr->edge_outlink = 0;
+            if (addr) {
+                qdr_link_t *edge_outlink = safe_deref_qdr_link_t(addr->edge_outlink_sp);
+                if (link == edge_outlink) {
+                    //
+                    // The link is being detached. If the detaching link is the same as the link's owning_addr's edge_outlink,
+                    // set the edge_outlink on the address to be zero. We do this because this link is going to be freed
+                    // and we don't want anyone dereferencing the addr->edge_outlink
+                    //
+                    qd_nullify_safe_ptr(&addr->edge_outlink_sp);
+                }
             }
             break;
         }
 
         case QDRC_EVENT_LINK_IN_DETACHED: {
             qdr_address_t *addr = link->owning_addr;
-            if (addr && link == addr->edge_inlink) {
-                //
-                // The link is being detached. If the detaching link is the same as the link's owning_addr's edge_inlink,
-                // set the edge_inlink on the address to be zero. We do this because this link is going to be freed
-                // and we don't want anyone dereferencing the addr->edge_inlink
-                //
-                addr->edge_inlink = 0;
+            if (addr) {
+                qdr_link_t *edge_inlink = safe_deref_qdr_link_t(addr->edge_inlink_sp);
+                if (link == edge_inlink) {
+                    //
+                    // The link is being detached. If the detaching link is the same as the link's owning_addr's edge_inlink,
+                    // set the edge_inlink on the address to be zero. We do this because this link is going to be freed
+                    // and we don't want anyone dereferencing the addr->edge_inlink
+                    //
+                    qd_nullify_safe_ptr(&addr->edge_inlink_sp);
+                }
             }
             break;
         }
@@ -424,7 +432,7 @@ static void on_transfer(void           *link_context,
                 qd_iterator_reset_view(addr_iter, ITER_VIEW_ALL);
                 qd_hash_retrieve(ap->core->addr_hash, addr_iter, (void**) &addr);
                 if (addr) {
-                    qdr_link_t *link = addr->edge_outlink;
+                    qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_outlink_sp);
                     if (link) {
                         if (dest)
                             qdr_core_bind_address_link_CT(ap->core, addr, link);

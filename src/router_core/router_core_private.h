@@ -525,8 +525,8 @@ struct qdr_address_t {
     qd_hash_handle_t          *hash_handle;   ///< Linkage back to the hash table entry
     qdrc_endpoint_desc_t      *core_endpoint; ///< [ref] Set if this address is bound to an in-core endpoint
     void                      *core_endpoint_context;
-    qdr_link_t                *edge_inlink;   ///< [ref] In-link from connected Interior router (on edge router)
-    qdr_link_t                *edge_outlink;  ///< [ref] Out-link to connected Interior router (on edge router)
+    qdr_link_t_sp              edge_inlink_sp;  ///< [ref] In-link safe ptr from connected Interior router (on edge router)
+    qdr_link_t_sp              edge_outlink_sp; ///< [ref] Out-link safe ptr to connected Interior router (on edge router)
     qd_address_treatment_t     treatment;
     qdr_forwarder_t           *forwarder;
     qdr_address_watch_t       *watch;
