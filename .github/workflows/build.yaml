@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
@@ -194,7 +194,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
         buildType: [Debug]
         runtimeCheck: [asan]
         protonGitRef:
@@ -291,7 +291,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
         container: ['fedora']
         containerTag: ['35']
         buildType: [RelWithDebInfo]
@@ -303,28 +303,28 @@ jobs:
         shards: [ 2 ]
         include:
           # CentOS
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
             shards: 2
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
             protonGitRef: 0.37.0
             shard: 1
             shards: 2
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
@@ -332,7 +332,7 @@ jobs:
             shard: 2
             shards: 2
           # coverage
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             container: 'fedora'
             containerTag: 35
             buildType: Coverage
@@ -563,7 +563,7 @@ jobs:
     runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04' ]
+        os: [ 'ubuntu-22.04' ]
 
     env:
       DispatchBuildDir: ${{github.workspace}}/build
@@ -642,7 +642,7 @@ jobs:
     runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04' ]
+        os: [ 'ubuntu-22.04' ]
         container: [ 'centos' ]
         containerTag: [ 'stream8' ]
 
