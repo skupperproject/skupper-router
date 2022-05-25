@@ -139,7 +139,7 @@ fn sigforwarder<T: AsRef<std::ffi::OsStr>>(program: &str, program_args: &[T]) ->
             let status = p.wait()
                 .expect("Waiting for subprocess failed");
 
-            // rr will propagate exit code from qdrouterd, so we only need to propagate from rr
+            // rr will propagate exit code from skrouterd, so we only need to propagate from rr
             let code = status.code().expect("Subprocess did not provide exit code");
             return code;
         }
