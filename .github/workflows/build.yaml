@@ -249,7 +249,7 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
+          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets16 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
