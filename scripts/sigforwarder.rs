@@ -149,14 +149,23 @@ fn sigforwarder<T: AsRef<std::ffi::OsStr>>(program: &str, program_args: &[T]) ->
 
 #[cfg(test)]
 mod sigforwarder_tests {
+    /// Ensure only one test is running at one time
+    lazy_static::lazy_static! {
+        static ref test_lock: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    }
+
     #[test]
     fn test_run_child_process_propagate_exit_code() {
+        let lock_guard = test_lock.lock().unwrap();
+
         let res = crate::sigforwarder("/bin/sh", ["-c", "exit 42"].as_slice());
         assert_eq!(res, 42);
     }
 
     #[test]
     fn test_run_child_process_parent_kill_is_ignored() {
+        let lock_guard = test_lock.lock().unwrap();
+
         let res = crate::sigforwarder("/usr/bin/bash", ["-c", r#"
         kill -SIGTERM $PPID
         "#].as_slice());
@@ -165,6 +174,8 @@ mod sigforwarder_tests {
 
     #[test]
     fn test_run_child_process_grandchild_gets_the_kill() {
+        let lock_guard = test_lock.lock().unwrap();
+
         // be careful to not leave `sleep infinity` behind, http://mywiki.wooledge.org/SignalTrap#When_is_the_signal_handled.3F
         let res = crate::sigforwarder("/usr/bin/bash", ["-c", r#"
         trap "echo 'WRONG: child has trapped'; exit 11" TERM

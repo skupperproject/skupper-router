@@ -23,6 +23,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+lazy_static = "1.4"
 log = "0.4"
 libc = "0.2"
 nix = "0.24"
