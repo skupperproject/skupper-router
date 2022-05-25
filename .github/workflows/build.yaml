@@ -63,6 +63,7 @@ jobs:
       ProtonCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DCMAKE_C_FLAGS=-Wno-error=deprecated-declarations
         -DBUILD_BINDINGS=python
         -DBUILD_EXAMPLES=OFF
         -DBUILD_TESTING=OFF
@@ -576,7 +577,7 @@ jobs:
 
       - name: Install qpid-proton
         run: |
-          cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TLS=ON
+          cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TLS=ON -DCMAKE_C_FLAGS=-Wno-error=deprecated-declarations
           cmake --build qpid-proton
           sudo cmake --install qpid-proton
 
