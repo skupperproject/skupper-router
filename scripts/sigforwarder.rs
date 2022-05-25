@@ -62,7 +62,6 @@ static mut P: Option<Child> = None;
 /// we don't leave any zombies around. Because Linux has this feature.
 fn pre_exec() -> std::io::Result<()> {
     // https://stackoverflow.com/questions/284325/how-to-make-child-process-die-after-parent-exits
-    // https://stackoverflow.com/questions/284325/how-to-make-child-process-die-after-parent-exits
     // https://github.com/nix-rust/nix/issues/601
     unsafe {
         let ret = libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGHUP);
