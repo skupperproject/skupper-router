@@ -27,6 +27,11 @@ Use `clang-format` to apply the styles configured in the
 Use the [`git-clang-format`](https://github.com/llvm/llvm-project/blob/main/clang/tools/clang-format/git-clang-format)
 script to only reformat your outstanding modified files in a git repository.
 
+Reformat entire repository using the following command, then analyze how much has changed
+
+    $ clang-format -i $(git ls-files -- '*.cpp' '*.hpp' '*.c' '*.h')
+    $ git diff -w --shortstat
+
 To disable automatic formatting in a particular part of your file,
 bracket it with `clang-format on` and `off` commands:
 
