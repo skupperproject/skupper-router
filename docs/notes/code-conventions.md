@@ -24,6 +24,9 @@ Use `clang-format` to apply the styles configured in the
 
     $ clang-format -i <your-file>
 
+Use the [`git-clang-format`](https://github.com/llvm/llvm-project/blob/main/clang/tools/clang-format/git-clang-format)
+script to only reformat your outstanding modified files in a git repository.
+
 To disable automatic formatting in a particular part of your file,
 bracket it with `clang-format on` and `off` commands:
 
