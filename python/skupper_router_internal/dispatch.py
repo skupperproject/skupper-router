@@ -126,9 +126,8 @@ class QdDll(PyDLL):
 
         self._prototype(self.qd_dispatch_configure_policy, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_register_policy_manager, None, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_policy_c_counts_alloc, c_long, [], check=False)
-        self._prototype(self.qd_dispatch_policy_c_counts_free, None, [c_long], check=False)
-        self._prototype(self.qd_dispatch_policy_c_counts_refresh, None, [c_long, py_object])
+        self._prototype(self.qd_dispatch_policy_c_counts_alloc, py_object, [], check=False)
+        self._prototype(self.qd_dispatch_policy_c_counts_refresh, None, [py_object, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_add, c_bool, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_remove, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_lookup, c_char_p, [self.qd_dispatch_p, py_object])

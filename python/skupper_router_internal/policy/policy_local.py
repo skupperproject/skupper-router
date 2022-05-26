@@ -18,7 +18,7 @@
 #
 
 """Entity implementing the business logic of user connection/access policy."""
-
+import ctypes
 import json
 from typing import Any, Dict, List, Union, TYPE_CHECKING
 
@@ -590,7 +590,7 @@ class AppStats:
     def count_other_denial(self) -> None:
         self.conn_mgr.count_other_denial()
 
-    def get_cstats(self) -> int:
+    def get_cstats(self) -> ctypes.py_object:
         return self._cstats
 
 #
@@ -939,7 +939,7 @@ class PolicyLocal:
             self,
             vhost_in: str,
             groupname: str,
-            upolicy: Dict[Any, Any]
+            upolicy: Dict[str, Any]
     ) -> bool:
         """
         Given a settings name, return the aggregated policy blob.

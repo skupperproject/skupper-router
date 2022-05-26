@@ -11,9 +11,6 @@ leak:^qd_policy_open_fetch_settings$
 # to be triaged; system_tests_handle_failover
 leak:^parse_failover_property_list$
 
-# to be triaged; system_tests_policy, system_tests_policy_oversize_basic
-leak:^qd_policy_c_counts_alloc$
-
 # to be triaged; system_tests_http
 leak:^callback_healthz$
 leak:^callback_metrics$

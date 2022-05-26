@@ -85,17 +85,17 @@ qd_error_t qd_register_policy_manager(qd_policy_t *policy, void *policy_manager)
 /** Allocate counts statistics block.
  * Called from Python
  */
-long qd_policy_c_counts_alloc();
+void* qd_policy_c_counts_alloc();
 
 /** Free counts statistics block.
  * Called from Python
  */
-void qd_policy_c_counts_free(long ccounts);
+void qd_policy_c_counts_free(void* dc);
 
 /** Refresh a counts statistics block
  * Called from Python
  */
-qd_error_t qd_policy_c_counts_refresh(long ccounts, qd_entity_t*entity);
+qd_error_t qd_policy_c_counts_refresh(qd_policy_denial_counts_t* dc, qd_entity_t*entity);
 
 
 /** Allow or deny an incoming connection based on connection count(s).

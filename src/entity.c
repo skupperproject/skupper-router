@@ -70,6 +70,18 @@ long qd_entity_get_long(qd_entity_t *entity, const char* attribute) {
     return result;
 }
 
+void *qd_entity_get_pointer_from_capsule(qd_entity_t *entity, const char *attribute) {
+    qd_error_clear();
+    PyObject *py_obj = qd_entity_get_py(entity, attribute);
+    assert(PyCapsule_CheckExact(py_obj));
+    const char * name = PyCapsule_GetName(py_obj);
+    assert(PyCapsule_IsValid(py_obj, name));
+    void* result = PyCapsule_GetPointer(py_obj, name);
+    Py_XDECREF(py_obj);
+    qd_error_py();
+    return result;
+}
+
 bool qd_entity_get_bool(qd_entity_t *entity, const char* attribute) {
     qd_error_clear();
     PyObject *py_obj = qd_entity_get_py(entity, attribute);
