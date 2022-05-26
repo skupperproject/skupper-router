@@ -22,6 +22,8 @@
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/router.h"
 
+extern void qd_buffer_set_size_test_only(size_t size);
+
 void qd_log_initialize(void);
 void qd_log_finalize(void);
 void qd_error_initialize();
@@ -108,7 +110,7 @@ int main(int argc, char** argv)
     qd_alloc_initialize();
     qd_log_initialize();
     qd_error_initialize();
-    qd_buffer_set_size(buffer_size);
+    qd_buffer_set_size_test_only(buffer_size);
 
     result += router_id_tests();
     qd_router_id_initialize("0", "UnitTestRouter");

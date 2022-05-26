@@ -33,6 +33,7 @@ typedef struct qd_buffer_t qd_buffer_t;
 
 DEQ_DECLARE(qd_buffer_t, qd_buffer_list_t);
 
+#define QD_BUFFER_DEFAULT_SIZE 512
 extern size_t BUFFER_SIZE;
 
 /** A raw byte buffer .*/
@@ -43,16 +44,7 @@ struct qd_buffer_t {
 };
 
 /**
- * Set the initial buffer capacity to be allocated by future calls to qp_buffer.
- *
- * NOTICE:  This function is provided for testing purposes only.  It should not be invoked
- * in the production code.  If this function is called after the first buffer has been allocated,
- * the software WILL BE unstable and WILL crash.
- */
-void qd_buffer_set_size(size_t size);
-
-/**
- * Create a buffer with capacity set by last call to qd_buffer_set_size(), and data
+ * Create a buffer with capacity set to the value of BUFFER_SIZE, and data
  * content size of 0 bytes.
  */
 qd_buffer_t *qd_buffer(void);
