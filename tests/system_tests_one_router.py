@@ -411,8 +411,8 @@ class OneRouterTest(TestCase):
         config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'bad'}),
             ('listener', {'port': OneRouterTest.listen_port})])
-        r = Qdrouterd(name="expect_fail", config=config, wait=False)
-        self.assertEqual(1, r.wait())
+        with Qdrouterd(name="expect_fail", config=config, wait=False, expect=Process.EXIT_FAIL) as r:
+            self.assertEqual(1, r.wait())
 
     def test_02_pre_settled(self):
         addr = self.address + '/closest/' + str(OneRouterTest.closest_count)

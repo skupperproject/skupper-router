@@ -372,6 +372,10 @@ class Process(subprocess.Popen):
         # at this point the process has terminated, either of its own accord or
         # due to the above terminate call.
 
+        # prevent leak of stdin fd
+        if self.stdin:
+            self.stdin.close()
+
         if state is None and self.expect != Process.RUNNING:
             error("process was unexpectedly still running")
 
@@ -562,6 +566,13 @@ class Qdrouterd(Process):
         self._wait_ready = False
         if wait:
             self.wait_ready()
+
+    def __enter__(self):
+        """Allows using the class in the `with` contextmanager"""
+        return self
+
+    def __exit__(self, *_):
+        self.teardown()
 
     @property
     def management(self):
