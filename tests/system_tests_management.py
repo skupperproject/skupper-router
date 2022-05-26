@@ -474,18 +474,16 @@ class ManagementTest(system_test.TestCase):
             ('router', {'mode': 'standalone', 'id': 'all_by_myself1'}),
             ('listener', {'port': self.get_port(), 'role': 'inter-router'})
         ])
-        r = self.qdrouterd('routerX', conf, wait=False)
-        r.expect = Process.EXIT_FAIL
-        self.assertTrue(r.wait() != 0)
+        r = self.qdrouterd('routerX', conf, wait=False, expect=Process.EXIT_FAIL)
+        self.assertEqual(r.wait(), 1)
 
         conf = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'all_by_myself2'}),
             ('listener', {'port': self.get_port(), 'role': 'normal'}),
             ('connector', {'port': self.get_port(), 'role': 'inter-router'})
         ])
-        r = self.qdrouterd('routerY', conf, wait=False)
-        r.expect = Process.EXIT_FAIL
-        self.assertTrue(r.wait() != 0)
+        r = self.qdrouterd('routerY', conf, wait=False, expect=Process.EXIT_FAIL)
+        self.assertEqual(r.wait(), 1)
 
     def test_get_schema(self):
         schema = dictify(QdSchema().dump())
