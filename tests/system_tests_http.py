@@ -86,8 +86,8 @@ class RouterTestHttp(TestCase):
             ('router', {'mode': 'standalone', 'id': 'bad'}),
             ('listener', {'port': listen_port, 'maxFrameSize': '2048', 'stripAnnotations': 'no'}),
             ('listener', {'port': listen_port, 'http': True})])
-        r = Qdrouterd(name="expect_fail", config=config, wait=False)
-        self.assertEqual(1, r.wait())
+        with Qdrouterd(name="expect_fail", config=config, wait=False) as r:
+            self.assertEqual(1, r.wait())
 
     def is_get_request_failing(self, url, use_ca=True, use_get_cert=False):
         try:
