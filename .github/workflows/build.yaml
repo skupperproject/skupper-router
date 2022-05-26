@@ -311,6 +311,7 @@ jobs:
         containerTag: ['37']
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
+        python: [/usr/bin/python3.10d]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.38.0
@@ -322,6 +323,7 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
+            python: /usr/bin/python3.6-debug
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
             shards: 2
@@ -329,6 +331,7 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
+            python: /usr/bin/python3.6-debug
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
@@ -336,6 +339,7 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
+            python: /usr/bin/python3.6-debug
             protonGitRef: 0.38.0
             shard: 1
             shards: 2
@@ -343,6 +347,7 @@ jobs:
             container: 'centos'
             containerTag: stream8
             runtimeCheck: OFF
+            python: /usr/bin/python3.6-debug
             protonGitRef: 0.38.0
             shard: 2
             shards: 2
@@ -386,10 +391,11 @@ jobs:
         -DENABLE_FUZZ_TESTING=OFF
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DBUILD_TLS=ON
+        -DPython_EXECUTABLE=${{matrix.python}}
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DPython_EXECUTABLE=/usr/bin/python3
+        -DPython_EXECUTABLE=${{matrix.python}}
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
 
       CCACHE_BASEDIR: ${{github.workspace}}
@@ -431,10 +437,10 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
+          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-debug python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
 
       - name: Install Python build dependencies
-        run: python3 -m pip install setuptools wheel tox
+        run: ${{matrix.python}} -m pip install setuptools wheel tox
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       - name: Prepare ccache timestamp
@@ -507,16 +513,24 @@ jobs:
       - name: Upgrade pip
         run: python3 -m pip install --upgrade pip
 
+      - name: CentOS 8 python3.6-debug needs this to build pip packages from source in next step
+        if: ${{ matrix.container == 'centos' }}
+        run: |
+          dnf install -y libxml2-devel libxslt-devel
+
       - name: Install Python runtime/test dependencies
-        run: python3 -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
+        run: ${{matrix.python}} -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
 
       - name: Install Linux runtime/test dependencies
         run: |
           dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file
           dnf debuginfo-install -y python3
 
+      - name: Replace /usr/bin/python3 with ${{matrix.python}}, for tools such as skmanage
+        run: sudo ln -sf ${{matrix.python}} /usr/bin/python3
+
       - name: install qpid-proton python wheel
-        run: python3 -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
+        run: ${{matrix.python}} -m pip install ${ProtonBuildDir}/python/pkgs/python_qpid_proton*.whl
 
       - name: CTest
         working-directory: ${{env.RouterBuildDir}}
