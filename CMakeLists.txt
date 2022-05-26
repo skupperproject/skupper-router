@@ -180,6 +180,7 @@ set(QPID_DISPATCH_CONFDIR ${SYSCONF_INSTALL_DIR}/skupper-router)
 # Set up runtime checks (valgrind, sanitizers etc.)
 include(cmake/RuntimeChecks.cmake)
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SANITIZE_FLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZE_FLAGS}")
 
 ##
 ## Include directories used by all sub-directories.
