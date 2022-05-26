@@ -24,4 +24,5 @@ BreakBeforeBraces: Linux
 AllowShortFunctionsOnASingleLine: false
 SpaceAfterCStyleCast: true
 AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
 KeepEmptyLinesAtTheStartOfBlocks: false
