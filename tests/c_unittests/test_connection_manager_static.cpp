@@ -44,7 +44,8 @@ QD_EXPORT void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void 
 static void check_password(qd_dispatch_t *qd, const char *password, const char *expected, bool expect_success = true)
 {
     PyObject *pyObject = PyDict_New();
-    PyDict_SetItemString(pyObject, "password", PyUnicode_FromString(password));
+    PyObject *item     = PyUnicode_FromString(password);
+    PyDict_SetItemString(pyObject, "password", item);
     qd_entity_t *entity              = reinterpret_cast<qd_entity_t *>(pyObject);
     qd_config_ssl_profile_t *profile = qd_dispatch_configure_ssl_profile(qd, entity);
     if (expect_success) {
@@ -54,6 +55,8 @@ static void check_password(qd_dispatch_t *qd, const char *password, const char *
     } else {
         REQUIRE(profile == nullptr);
     }
+    Py_DECREF(item);
+    Py_DECREF(pyObject);
 }
 
 TEST_CASE("qd_dispatch_configure_ssl_profile")
