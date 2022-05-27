@@ -39,6 +39,7 @@ import random
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -331,8 +332,8 @@ class Process(subprocess.Popen):
             try:
                 self.wait(TIMEOUT)
             except TimeoutExpired:
-                self.kill()
-                error("did not terminate properly, required kill()")
+                self.send_signal(signal.SIGABRT)  # so that we may get core dump
+                error("did not terminate properly, required SIGABORT")
 
         # at this point the process has terminated, either of its own accord or
         # due to the above terminate call.
