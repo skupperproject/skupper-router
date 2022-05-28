@@ -131,21 +131,22 @@ elseif(RUNTIME_CHECK STREQUAL "asan" OR RUNTIME_CHECK STREQUAL "hwasan")
     add_link_options("-fuse-ld=lld")
   endif()
   message(STATUS "Runtime memory checker: gcc/clang address sanitizers: ${ASAN_VARIANTS}")
-  option(SANITIZE_3RD_PARTY "Detect leaks in 3rd party libraries used by Dispatch while running tests" OFF)
-  if (SANITIZE_3RD_PARTY)
+  option(SANITIZE_PYTHON "Detect leaks in 3rd party libpython library used by Router while running tests" ON)
+  if (SANITIZE_PYTHON)
     add_custom_command(
         OUTPUT ${CMAKE_BINARY_DIR}/tests/lsan.supp
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tests/lsan.supp ${CMAKE_BINARY_DIR}/tests/lsan.supp
         DEPENDS ${CMAKE_SOURCE_DIR}/tests/lsan.supp
         VERBATIM)
-  else (SANITIZE_3RD_PARTY)
+  else (SANITIZE_PYTHON)
     # Append wholesale library suppressions
-    #  this is necessary if target system does not have debug symbols for these libraries installed
-    #  and therefore the more specific suppressions do not match
+    #  this is necessary if target system has older version of Python which still exhibits leaks
     add_custom_command(
         OUTPUT ${CMAKE_BINARY_DIR}/tests/lsan.supp
-        COMMAND bash -c 'cat ${CMAKE_SOURCE_DIR}/tests/lsan.supp ${CMAKE_SOURCE_DIR}/tests/lsan_3rdparty.supp > ${CMAKE_BINARY_DIR}/tests/lsan.supp'
-        DEPENDS ${CMAKE_SOURCE_DIR}/tests/lsan.supp ${CMAKE_SOURCE_DIR}/tests/lsan_3rdparty.supp)
+        COMMAND bash -c 'cat ${CMAKE_SOURCE_DIR}/tests/lsan.supp > ${CMAKE_BINARY_DIR}/tests/lsan.supp'
+        COMMAND bash -c 'echo "leak:/libpython3.*.so" >> ${CMAKE_BINARY_DIR}/tests/lsan.supp'
+        DEPENDS ${CMAKE_SOURCE_DIR}/tests/lsan.supp
+        VERBATIM)
   endif ()
   add_custom_target(generate_lsan.supp ALL
         DEPENDS ${CMAKE_BINARY_DIR}/tests/lsan.supp)

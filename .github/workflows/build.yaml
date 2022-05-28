@@ -75,7 +75,7 @@ jobs:
         -DCMAKE_C_FLAGS=-DQD_MEMORY_DEBUG
         -DUSE_BWRAP=ON
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
-        -DSANITIZE_3RD_PARTY=ON
+        -DSANITIZE_PYTHON=OFF
         -DBUILD_BENCHMARKS=ON
 
       CCACHE_BASEDIR: ${{github.workspace}}
@@ -461,6 +461,10 @@ jobs:
         if: matrix.runtimeCheck == 'tsan'
         run: echo "RouterCMakeAsserts=OFF" >> $GITHUB_ENV
 
+      - name: disable Python leak checking on CentOS build
+        if: matrix.container == 'centos'
+        run: echo "RouterCMakeSanitizePython=OFF" >> $GITHUB_ENV
+
       - name: skupper-router cmake configure
         working-directory: ${{env.RouterBuildDir}}
         run: >
@@ -468,7 +472,7 @@ jobs:
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
-            ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts}
+            ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython}
 
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
