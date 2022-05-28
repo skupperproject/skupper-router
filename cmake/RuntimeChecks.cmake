@@ -144,7 +144,7 @@ elseif(RUNTIME_CHECK STREQUAL "asan" OR RUNTIME_CHECK STREQUAL "hwasan")
     add_custom_command(
         OUTPUT ${CMAKE_BINARY_DIR}/tests/lsan.supp
         COMMAND bash -c 'cat ${CMAKE_SOURCE_DIR}/tests/lsan.supp > ${CMAKE_BINARY_DIR}/tests/lsan.supp'
-        COMMAND bash -c 'echo "leak:/libpython3.*.so" >> ${CMAKE_BINARY_DIR}/tests/lsan.supp'
+        COMMAND bash -c 'echo leak:/libpython3.*.so >> ${CMAKE_BINARY_DIR}/tests/lsan.supp'
         DEPENDS ${CMAKE_SOURCE_DIR}/tests/lsan.supp
         VERBATIM)
   endif ()
