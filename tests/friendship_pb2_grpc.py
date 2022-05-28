@@ -5,8 +5,9 @@ import grpc
 import friendship_pb2 as friendship__pb2
 
 
-class FriendshipStub:
-    """Missing associated documentation comment in .proto file."""
+class FriendshipStub(object):
+    """This service definition is used by system_tests_grpc
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -19,6 +20,11 @@ class FriendshipStub:
                 request_serializer=friendship__pb2.Person.SerializeToString,
                 response_deserializer=friendship__pb2.CreateResult.FromString,
                 )
+        self.MakeFriends = channel.stream_stream(
+                '/Friendship/MakeFriends',
+                request_serializer=friendship__pb2.FriendshipRequest.SerializeToString,
+                response_deserializer=friendship__pb2.FriendshipResponse.FromString,
+                )
         self.ListFriends = channel.unary_stream(
                 '/Friendship/ListFriends',
                 request_serializer=friendship__pb2.PersonEmail.SerializeToString,
@@ -29,39 +35,35 @@ class FriendshipStub:
                 request_serializer=friendship__pb2.PersonEmail.SerializeToString,
                 response_deserializer=friendship__pb2.CommonFriendsResult.FromString,
                 )
-        self.MakeFriends = channel.stream_stream(
-                '/Friendship/MakeFriends',
-                request_serializer=friendship__pb2.FriendshipRequest.SerializeToString,
-                response_deserializer=friendship__pb2.FriendshipResponse.FromString,
-                )
 
 
-class FriendshipServicer:
-    """Missing associated documentation comment in .proto file."""
+class FriendshipServicer(object):
+    """This service definition is used by system_tests_grpc
+    """
 
     def Create(self, request, context):
-        """returns email (as the id)
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ListFriends(self, request, context):
-        """lists all friends for a given email
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def CommonFriendsCount(self, request_iterator, context):
-        """list number of friends for all given emails
+        """unary request that receives a person and returns a result
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def MakeFriends(self, request_iterator, context):
-        """associate friends and returns true if friendship created or false if a given Person cannot be found
+        """bilateral streaming that takes FriendshipRequests and stream FriendshipResponses back
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListFriends(self, request, context):
+        """server streaming method that streams all friends for a given email
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CommonFriendsCount(self, request_iterator, context):
+        """client streaming method that receive a stream of PersonEmail returning a summary with common friends
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -75,6 +77,11 @@ def add_FriendshipServicer_to_server(servicer, server):
                     request_deserializer=friendship__pb2.Person.FromString,
                     response_serializer=friendship__pb2.CreateResult.SerializeToString,
             ),
+            'MakeFriends': grpc.stream_stream_rpc_method_handler(
+                    servicer.MakeFriends,
+                    request_deserializer=friendship__pb2.FriendshipRequest.FromString,
+                    response_serializer=friendship__pb2.FriendshipResponse.SerializeToString,
+            ),
             'ListFriends': grpc.unary_stream_rpc_method_handler(
                     servicer.ListFriends,
                     request_deserializer=friendship__pb2.PersonEmail.FromString,
@@ -85,11 +92,6 @@ def add_FriendshipServicer_to_server(servicer, server):
                     request_deserializer=friendship__pb2.PersonEmail.FromString,
                     response_serializer=friendship__pb2.CommonFriendsResult.SerializeToString,
             ),
-            'MakeFriends': grpc.stream_stream_rpc_method_handler(
-                    servicer.MakeFriends,
-                    request_deserializer=friendship__pb2.FriendshipRequest.FromString,
-                    response_serializer=friendship__pb2.FriendshipResponse.SerializeToString,
-            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'Friendship', rpc_method_handlers)
@@ -97,8 +99,9 @@ def add_FriendshipServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Friendship:
-    """Missing associated documentation comment in .proto file."""
+class Friendship(object):
+    """This service definition is used by system_tests_grpc
+    """
 
     @staticmethod
     def Create(request,
@@ -114,6 +117,23 @@ class Friendship:
         return grpc.experimental.unary_unary(request, target, '/Friendship/Create',
             friendship__pb2.Person.SerializeToString,
             friendship__pb2.CreateResult.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def MakeFriends(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_stream(request_iterator, target, '/Friendship/MakeFriends',
+            friendship__pb2.FriendshipRequest.SerializeToString,
+            friendship__pb2.FriendshipResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -148,22 +168,5 @@ class Friendship:
         return grpc.experimental.stream_unary(request_iterator, target, '/Friendship/CommonFriendsCount',
             friendship__pb2.PersonEmail.SerializeToString,
             friendship__pb2.CommonFriendsResult.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def MakeFriends(request_iterator,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.stream_stream(request_iterator, target, '/Friendship/MakeFriends',
-            friendship__pb2.FriendshipRequest.SerializeToString,
-            friendship__pb2.FriendshipResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
