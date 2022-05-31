@@ -130,14 +130,19 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
 }
 
 
+void qdr_core_stop_thread_CT(qdr_core_t *core, qdr_action_t *action, bool discard) {
+    if (!discard) {
+        core->running = false;
+    }
+}
+
+
 void qdr_core_free(qdr_core_t *core)
 {
     //
     // Stop and join the thread
     //
-    core->running = false;
-
-    sys_cond_signal(core->action_cond);
+    qdr_action_enqueue(core, qdr_action(qdr_core_stop_thread_CT, "Stop Thread"));
     sys_thread_join(core->thread);
 
     // have adaptors clean up all core resources
