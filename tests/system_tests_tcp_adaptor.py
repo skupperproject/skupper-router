@@ -1073,22 +1073,28 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.settimeout(TIMEOUT)
             server.bind(("", self.interior_tcp_connector_port))
-            server.listen(1)
+            server.listen(10)
         except Exception as exc:
             print("%s: failed creating tcp server: %s" % (self.test_name, exc),
                   flush=True)
             raise
 
-        # step 2: initiate client connection to edge1.
-        try:
+        # step 2: initiate client connection to edge1. Since the listening
+        # socket may not be immediately available allow for connection refused
+        # error until it is ready. Should the listening socket fail to appear
+        # the test will fail on timeout.
+
+        while True:
             client_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_conn.settimeout(TIMEOUT)
-            client_conn.connect(('127.0.0.1', self.edge_tcp_listener_port))
-        except Exception as exc:
-            print("%s: failed creating client connection: %s" % (self.test_name,
-                                                                 exc),
-                  flush=True)
-            raise
+            try:
+                client_conn.connect(('127.0.0.1', self.edge_tcp_listener_port))
+                break
+            except ConnectionRefusedError:
+                print("%s: client connection refused, retrying..." % self.test_name,
+                      flush=True)
+                time.sleep(1.0)
+                continue
 
         # step 3: accept the connection request from interior:
         try:
