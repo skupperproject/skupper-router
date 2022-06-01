@@ -148,6 +148,10 @@ set(qpid_dispatch_LIBRARIES
   ${Python_LIBRARIES}
   )
 
+if(USE_JEMALLOC)
+  list(APPEND qpid_dispatch_LIBRARIES PkgConfig::jemalloc)
+endif()
+
 # USE_LIBWEBSOCKETS is true only if LIBWEBSOCKETS_FOUND
 if(USE_LIBWEBSOCKETS)
   list(APPEND qpid_dispatch_SOURCES http-libwebsockets.c)
