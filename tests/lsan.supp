@@ -43,6 +43,7 @@ leak:__strdup
 
 # these Python leaks happen even after simple Py_Initialize(); Py_Finalize();
 #  https://bugs.python.org/issue1635741
+leak:^_PyObject_Malloc
 leak:^_PyObject_Realloc
 leak:^PyObject_Malloc$
 leak:^PyThread_allocate_lock$
