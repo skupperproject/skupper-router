@@ -46,6 +46,7 @@ set(qpid_dispatch_SOURCES
   adaptors/http1/http1_client.c
   adaptors/http1/http1_server.c
   adaptors/http1/http1_request_info.c
+  adaptors/http2/http2_adaptor.c
   adaptors/tcp_adaptor.c
   adaptors/test_adaptor.c
   alloc.c
@@ -68,6 +69,7 @@ set(qpid_dispatch_SOURCES
   entity_cache.c
   failoverlist.c
   hash.c
+  http-libwebsockets.c
   iterator.c
   log.c
   message.c
@@ -133,28 +135,24 @@ set(qpid_dispatch_SOURCES
   )
 
 set(qpid_dispatch_INCLUDES
+  ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/router_core
-  ${CMAKE_CURRENT_BINARY_DIR}
+  ${LIBWEBSOCKETS_INCLUDE_DIRS}
+  ${NGHTTP2_INCLUDE_DIRS}
   )
 
 set(qpid_dispatch_LIBRARIES
-  ${Proton_Proactor_LIBRARIES}
-  ${Proton_Core_LIBRARIES}
-  ${Proton_Tls_LIBRARIES}
-  ${CMAKE_THREAD_LIBS_INIT}
-  ${rt_lib}
   ${CMAKE_DL_LIBS}
+  ${CMAKE_THREAD_LIBS_INIT}
+  ${LIBWEBSOCKETS_LIBRARIES}
+  ${NGHTTP2_LIBRARIES}
+  ${Proton_Core_LIBRARIES}
+  ${Proton_Proactor_LIBRARIES}
+  ${Proton_Tls_LIBRARIES}
   ${Python_LIBRARIES}
+  ${rt_lib}
   )
-
-list(APPEND qpid_dispatch_SOURCES http-libwebsockets.c)
-list(APPEND qpid_dispatch_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
-list(APPEND qpid_dispatch_LIBRARIES ${LIBWEBSOCKETS_LIBRARIES})
-
-list(APPEND qpid_dispatch_SOURCES adaptors/http2/http2_adaptor.c)
-list(APPEND qpid_dispatch_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
-list(APPEND qpid_dispatch_LIBRARIES ${NGHTTP2_LIBRARIES})
 
 if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
   set(USING_SANITIZERS TRUE)
