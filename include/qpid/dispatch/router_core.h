@@ -223,6 +223,10 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
  * qdr_core_unwatch_address
  * 
  * Cancel an address watch subscription.  It is safe to invoke this function from an IO thread.
+ *
+ * Note that it is possible for the watch update handler to be invoked after the unwatch call is made.
+ * This is because a watch event may already be in flight during the call to unwatch_address.  The caller
+ * must handle this case.
  * 
  * @param core Pointer to the core module
  * @param handle Watch handle returned by qdr_core_watch_address
