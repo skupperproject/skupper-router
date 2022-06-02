@@ -54,6 +54,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _execute_request(self, tests):
         for req, resp, val in tests:
             if req.target == self.path:
+                req.rx_count += 1
                 xhdrs = None
                 if "test-echo" in self.headers:
                     xhdrs = {"test-echo":
@@ -412,6 +413,7 @@ class RequestMsg:
         self.target = target
         self.headers = headers or {}
         self.body = body
+        self.rx_count = 0  # +1 when server gets the request
 
     def send_request(self, conn: HTTPConnection, extra_headers=None):
         extra_headers = extra_headers or {}
@@ -1313,21 +1315,20 @@ class Http1ClientCloseTestsMixIn:
                 + b'\r\n' \
                 + b'?' * 50000
             fake_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            fake_client.settimeout(5)
+            fake_client.settimeout(TIMEOUT)
             fake_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             fake_client.connect(("127.0.0.1", client_port))
             fake_client.sendall(fake_request, socket.MSG_WAITALL)
+
+            # Wait until the test server receives the partial request
+            # by checking the rx_count field in the RequestMsg for the
+            # test PUT.  Then simulate a loss of client by closing the
+            # socket.
+
+            while TESTS["PUT"][0][0].rx_count == 0:
+                sleep(1.0)
+
             fake_client.close()
-
-            # since socket I/O is asynchronous wait until the request arrives
-            # at the server
-
-            expected = len(fake_request)
-            bytes_in = 0
-            while expected > bytes_in:
-                ri = server_mgmt.query(type="io.skupper.router.httpRequestInfo").get_entities()
-                bytes_in = ri[-1]['bytesIn'] if ri else 0  # most recent request at tail
-                sleep(0.1)
 
             # now ensure the connection between the router and the HTTP server
             # still functions:
