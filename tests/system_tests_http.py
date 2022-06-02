@@ -315,13 +315,10 @@ class RouterTestHttp(TestCase):
         self.assert_get("https://localhost:%s" % r.ports[0])
         # requireSsl=false Allows simple-ssl HTTP
 
-        # DISPATCH-1513: libwebsockets versions 3.2.0 introduces a new flag called
+        # DISPATCH-1513: libwebsockets version 3.2.0 introduced a new flag called
         # LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER
         # The new flag allows (as the flag says) HTTP over HTTPS listeners.
-        # Since this flag is not available before lws 3.2.0 we need
-        # to selectively disable this check
-        if skupper_router_site.LIBWEBSOCKETS_VERSION >= (3, 2, 0):
-            self.assert_get("http://localhost:%s" % r.ports[0])
+        self.assert_get("http://localhost:%s" % r.ports[0])
 
         self.assert_get("https://localhost:%s" % r.ports[1])
         # requireSsl=True does not allow simple-ssl HTTP
