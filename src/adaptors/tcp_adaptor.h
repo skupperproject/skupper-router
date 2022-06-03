@@ -21,6 +21,7 @@
 
 #include "dispatch_private.h"
 #include "timer_private.h"
+#include "adaptor_common.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
@@ -38,21 +39,17 @@
 
 typedef struct qd_tcp_listener_t qd_tcp_listener_t;
 typedef struct qd_tcp_connector_t qd_tcp_connector_t;
-typedef struct qd_tcp_bridge_t qd_tcp_bridge_t;
+typedef struct qdr_tcp_stats_t qdr_tcp_stats_t;
+typedef struct qd_tcp_adaptor_config_t qd_tcp_adaptor_config_t;
 
-struct qd_tcp_bridge_t
-{
-    /* Created and referenced by each new listener or connector.
-     * Referenced by all connections created by listener or connector
-     */
-    sys_atomic_t  ref_count;
-    // static configuration defined at listener/connector creation
-    char         *name;
-    char         *address;   // VAN (AMQP) address
-    char         *host;
-    char         *port;
-    char         *site_id;
-    char         *host_port; // Generated as "<host>:<port>" for convenience
+struct qd_tcp_adaptor_config_t {
+    qd_adaptor_config_t *adaptor_config; // Pointer to the common adaptor config used by all adaptors.
+    sys_atomic_t         ref_count;
+};
+
+ALLOC_DECLARE(qd_tcp_adaptor_config_t);
+
+struct qdr_tcp_stats_t {
     // run time statistics updated by connections
     sys_mutex_t  *stats_lock;
     uint64_t      connections_opened;
@@ -61,8 +58,7 @@ struct qd_tcp_bridge_t
     uint64_t      bytes_out;
 };
 
-DEQ_DECLARE(qd_tcp_bridge_t, qd_bridge_config_list_t);
-ALLOC_DECLARE(qd_tcp_bridge_t);
+ALLOC_DECLARE(qdr_tcp_stats_t);
 
 struct qd_tcp_listener_t
 {
@@ -70,10 +66,11 @@ struct qd_tcp_listener_t
     // ref_count: tcp_adapter listener list, pn_listener_t context
     sys_atomic_t              ref_count;
     qd_server_t              *server;
-    qd_tcp_bridge_t          *config;
+    qd_tcp_adaptor_config_t  *config;
     plog_record_t            *plog;
     qdr_watch_handle_t        addr_watcher;
     uint32_t                  identity;
+    qdr_tcp_stats_t           *tcp_stats;
 
     // the following fields are mutably shared between multiple threads and
     // must be protected by holding the lock:
@@ -95,10 +92,10 @@ struct qd_tcp_connector_t
     // ref_count: tcp_adaptor connector list, qdr_tcp_connection_t
     sys_atomic_t              ref_count;
     qd_server_t              *server;
-    qd_tcp_bridge_t          *config;
+    qd_tcp_adaptor_config_t  *config;
     void                     *dispatcher_conn;
     plog_record_t            *plog;
-
+    qdr_tcp_stats_t           *tcp_stats;
     DEQ_LINKS(qd_tcp_connector_t);
 };
 
@@ -113,6 +110,8 @@ void qdra_tcp_connection_get_CT(qdr_core_t          *core,
                                 qdr_query_t         *query,
                                 const char          *qdr_tcp_connection_columns[]);
 
+void qd_free_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_log_source_t  *log_source);
+qd_error_t qd_load_tcp_adaptor_config(qd_dispatch_t *qd, qd_tcp_adaptor_config_t *config, qd_entity_t* entity);
 #define QDR_TCP_CONNECTION_COLUMN_COUNT 10
 extern const char *qdr_tcp_connection_columns[QDR_TCP_CONNECTION_COLUMN_COUNT + 1];
 

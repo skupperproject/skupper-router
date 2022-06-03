@@ -146,7 +146,7 @@ static void _send_request_message(_server_request_t *hreq);
 //
 static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ctor,
                                                          qd_dispatch_t *qd,
-                                                         const qd_http_bridge_config_t *bconfig)
+                                                         const qd_http_adaptor_config_t *config)
 {
     qdr_http1_connection_t *hconn = new_qdr_http1_connection_t();
 
@@ -159,16 +159,16 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ct
     hconn->handler_context.handler = &_handle_connection_events;
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
-    hconn->cfg.host = qd_strdup(bconfig->host);
-    hconn->cfg.port = qd_strdup(bconfig->port);
-    hconn->cfg.address = qd_strdup(bconfig->address);
-    hconn->cfg.site = bconfig->site ? qd_strdup(bconfig->site) : 0;
-    hconn->cfg.host_port = qd_strdup(bconfig->host_port);
+    hconn->cfg.host = qd_strdup(config->adaptor_config->host);
+    hconn->cfg.port = qd_strdup(config->adaptor_config->port);
+    hconn->cfg.address = qd_strdup(config->adaptor_config->address);
+    hconn->cfg.site = config->adaptor_config->site_id ? qd_strdup(config->adaptor_config->site_id) : 0;
+    hconn->cfg.host_port = qd_strdup(config->adaptor_config->host_port);
     hconn->server.connector = ctor;
     ctor->ctx = (void*)hconn;
-    hconn->cfg.event_channel = bconfig->event_channel;
-    hconn->cfg.aggregation = bconfig->aggregation;
-    hconn->cfg.host_override = bconfig->host_override ? qd_strdup(bconfig->host_override) : 0;
+    hconn->cfg.event_channel = config->event_channel;
+    hconn->cfg.aggregation = config->aggregation;
+    hconn->cfg.host_override = config->host_override ? qd_strdup(config->host_override) : 0;
 
     // for initiating a connection to the server
     hconn->server.reconnect_timer = qd_timer(qdr_http1_adaptor->core->qd, _do_reconnect, hconn);
@@ -219,14 +219,14 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ct
 //
 // Note that this runs on the Management Agent thread, which may be running concurrently with the
 // I/O and timer threads.
-qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, const qd_http_bridge_config_t *config, qd_entity_t *entity)
+qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
     qd_http_connector_t *c = qd_http_connector(qd->server);
     if (!c) {
         qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR, "Unable to create http connector: no memory");
         return 0;
     }
-    c->config = *config;
+    c->config = config;
     DEQ_ITEM_INIT(c);
 
     qdr_http1_connection_t *hconn = _create_server_connection(c, qd, config);
@@ -237,10 +237,10 @@ qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, const qd_ht
 
         c->plog = plog_start_record(PLOG_RECORD_CONNECTOR, 0);
         plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "http1");
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config.name);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config.host);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config.port);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config.address);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
+        plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
 
         // lock out the core activation thread.  Up until this point the core
         // thread cannot activate the qdr_connection_t since the
@@ -272,7 +272,7 @@ qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, const qd_ht
 void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *ct)
 {
     if (ct) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s", ct->config.address, ct->config.host, ct->config.port);
+        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s", ct->config->adaptor_config->address, ct->config->adaptor_config->host, ct->config->adaptor_config->port);
 
         sys_mutex_lock(qdr_http1_adaptor->lock);
         DEQ_REMOVE(qdr_http1_adaptor->connectors, ct);

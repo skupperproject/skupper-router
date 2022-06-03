@@ -63,7 +63,6 @@ ALLOC_DEFINE(qdr_http1_connection_t);
 
 qdr_http1_adaptor_t *qdr_http1_adaptor;
 
-
 void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq)
 {
     if (hreq) {

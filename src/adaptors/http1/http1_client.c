@@ -166,12 +166,12 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
         return 0;
     }
 
-    hconn->cfg.host = qd_strdup(li->config.host);
-    hconn->cfg.port = qd_strdup(li->config.port);
-    hconn->cfg.address = qd_strdup(li->config.address);
-    hconn->cfg.site = li->config.site ? qd_strdup(li->config.site) : 0;
-    hconn->cfg.event_channel = li->config.event_channel;
-    hconn->cfg.aggregation = li->config.aggregation;
+    hconn->cfg.host = qd_strdup(li->config->adaptor_config->host);
+    hconn->cfg.port = qd_strdup(li->config->adaptor_config->port);
+    hconn->cfg.address = qd_strdup(li->config->adaptor_config->address);
+    hconn->cfg.site = li->config->adaptor_config->site_id ? qd_strdup(li->config->adaptor_config->site_id) : 0;
+    hconn->cfg.event_channel = li->config->event_channel;
+    hconn->cfg.aggregation = li->config->aggregation;
 
     hconn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(hconn->raw_conn, &hconn->handler_context);
@@ -191,7 +191,7 @@ static void _handle_listener_events(pn_event_t *e, qd_server_t *qd_server, void 
 {
     qd_log_source_t *log = qdr_http1_adaptor->log;
     qd_http_listener_t *li = (qd_http_listener_t*) context;
-    const char *host_port = li->config.host_port;
+    const char *host_port = li->config->adaptor_config->host_port;
 
     qd_log(log, QD_LOG_DEBUG, "HTTP/1.x Client Listener Event %s\n", pn_event_type_name(pn_event_type(e)));
 
@@ -246,30 +246,30 @@ static void _handle_listener_events(pn_event_t *e, qd_server_t *qd_server, void 
 // Note that this runs on the Management Agent thread, which may be running concurrently with the
 // I/O and timer threads.
 //
-qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, const qd_http_bridge_config_t *config, qd_entity_t *entity)
+qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
     qd_http_listener_t *li = qd_http_listener(qd->server, &_handle_listener_events);
     if (!li) {
         qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR, "Unable to create http listener: no memory");
         return 0;
     }
-    li->config = *config;
+    li->config = config;
     DEQ_ITEM_INIT(li);
 
     li->plog = plog_start_record(PLOG_RECORD_LISTENER, 0);
     plog_set_string(li->plog, PLOG_ATTRIBUTE_PROTOCOL,         "http1");
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_NAME,             li->config.name);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, li->config.host);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config.port);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      li->config.address);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_NAME,             li->config->adaptor_config->name);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      li->config->adaptor_config->address);
 
     sys_mutex_lock(qdr_http1_adaptor->lock);
     DEQ_INSERT_TAIL(qdr_http1_adaptor->listeners, li);
     sys_mutex_unlock(qdr_http1_adaptor->lock);
 
-    qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Configured HTTP_ADAPTOR listener on %s", (&li->config)->host_port);
+    qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Configured HTTP_ADAPTOR listener on %s", li->config->adaptor_config->host_port);
     // Note: the proactor may schedule the pn_listener on another thread during this call
-    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config.host_port, LISTENER_BACKLOG);
+    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->adaptor_config->host_port, LISTENER_BACKLOG);
     return li;
 }
 
@@ -282,7 +282,7 @@ qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, const qd_http
 void qd_http1_delete_listener(qd_dispatch_t *ignore, qd_http_listener_t *li)
 {
     if (li) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleting HttpListener for %s, %s:%s", li->config.address, li->config.host, li->config.port);
+        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleting HttpListener for %s, %s:%s", li->config->adaptor_config->address, li->config->adaptor_config->host, li->config->adaptor_config->port);
         sys_mutex_lock(qdr_http1_adaptor->lock);
         if (li->pn_listener) {
             // note that the proactor may immediately schedule the
