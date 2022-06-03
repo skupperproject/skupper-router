@@ -84,6 +84,11 @@ env_vars = {
     'QPID_DISPATCH_RUNNER': qdrouterd_runner,
     'MALLOC_CHECK_': "3",      # 3 = print error and abort
     'MALLOC_PERTURB_': "153",  # 153 = 0x99 freed memory pattern
+    # https://docs.python.org/3/library/devmode.html
+    # https://pythondev.readthedocs.io/debug_tools.html
+    # https://pythonextensionpatterns.readthedocs.io/en/latest/debugging/debug_tools.html
+    'PYTHONMALLOC': 'malloc_debug',
+    'PYTHONDEVMODE': '1',
     'TSAN_OPTIONS': "${RUNTIME_TSAN_ENV_OPTIONS}",
     'ASAN_OPTIONS': "${RUNTIME_ASAN_ENV_OPTIONS}",
     'LSAN_OPTIONS': "${RUNTIME_LSAN_ENV_OPTIONS}",

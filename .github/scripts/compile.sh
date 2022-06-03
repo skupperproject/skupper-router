@@ -87,6 +87,7 @@ do_build () {
   cmake -S "$WORKING/" -B "$WORKING/build${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
+    -DSANITIZE_PYTHON=OFF \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DProton_USE_STATIC_LIBS=ON \
     -DProton_DIR="$WORKING/proton_install${suffix}/usr/lib64/cmake/Proton" \
