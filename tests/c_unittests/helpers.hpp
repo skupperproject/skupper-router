@@ -20,6 +20,7 @@
 #ifndef QPID_DISPATCH_HELPERS_HPP
 #define QPID_DISPATCH_HELPERS_HPP
 
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include <cassert>
@@ -317,43 +318,64 @@ class QDRMinimalEnv
     }
 };
 
+/**
+ * This class intercepts writes to a FILE stream to a memory buffer.
+ *
+ * The most reliable approach is to temporarily replace the underlying file descriptor, as shown in
+ * https://stackoverflow.com/questions/14543443/in-c-how-do-you-redirect-stdin-stdout-stderr-to-files-when-making-an-execvp-or
+ *
+ * This class uses `memfd_create` to obtain a file descriptor for an in-memory file. Alternative option is
+ * to use `open` with the `O_TEMPFILE` flag.
+ */
 class CaptureCStream
 {
-    FILE **mStream;
-    FILE *mMemstream;
-    FILE *mOriginal;
+    int mMem; /// File descriptor of in-memory temporary file
+    int mDup;
+    int mNew;
 
-    char *buf;
-    size_t size;
    public:
-    CaptureCStream(FILE **stream) : mStream(stream), mOriginal(*stream) {
-        mMemstream = open_memstream(&buf, &size);
-        *mStream = mMemstream;
+    CaptureCStream(FILE *file)
+    {
+        fflush(file);
+
+        int fd = fileno(file);
+        REQUIRE_MESSAGE(fd != -1, "Failed to get fileno of the FILE");
+
+        mDup = dup(fd);
+        REQUIRE_MESSAGE(mDup != -1, "Failed to dup fd");
+
+        mMem = memfd_create("CaptureCStream", 0);
+        REQUIRE_MESSAGE(mMem != -1, "Failed to create memfd");
+
+        mNew = dup2(mMem, fd);
+        REQUIRE_MESSAGE(mNew != -1, "Failed to dup2");
     }
 
-    void reset() {
-        *mStream = mOriginal;
-    }
-
-    size_t checkpoint() {
-        fflush(mMemstream);
-        return size;
+    void reset()
+    {
+        int err = dup2(mDup, mNew);
+        REQUIRE_MESSAGE(err != -1, "Failed to restore the original dup2");
     }
 
     std::string str() {
-        fflush(mMemstream);
-        return std::string(buf, size);
-    }
+        fsync(mMem);
 
-    std::string str(size_t begin) {
-        fflush(mMemstream);
-        return std::string(buf + begin, size - begin);
+        int reader = dup(mMem);
+        REQUIRE_MESSAGE(reader != -1, "Failed to dup mMem for reading");
+
+        auto len   = lseek(reader, 0, SEEK_END);
+        void *data = mmap(NULL, len, PROT_READ, MAP_PRIVATE, reader, 0);
+
+        std::string s(static_cast<char *>(data), len);
+
+        munmap(data, len);
+        close(reader);
+        return s;
     }
 
     ~CaptureCStream() {
         reset();
-        fclose(mMemstream);
-        free(buf);
+        close(mMem);
     }
 };
 
