@@ -1917,7 +1917,7 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
     if (conn->require_tls) {
 
 
-        bool tls_setup_success = qd_initial_tls_setup(conn->config->adaptor_config,
+        bool tls_setup_success = qd_tls_initial_setup(conn->config->adaptor_config,
                                                       qd_server_dispatch(conn->server),
                                                       &conn->tls_config,
                                                       &conn->tls_session,
@@ -3057,7 +3057,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             conn->tls_error = false;
             if (conn->ingress) {
 
-                bool tls_setup_success = qd_initial_tls_setup(conn->config->adaptor_config,
+                bool tls_setup_success = qd_tls_initial_setup(conn->config->adaptor_config,
                                                               qd_server_dispatch(conn->server),
                                                               &conn->tls_config,
                                                               &conn->tls_session,

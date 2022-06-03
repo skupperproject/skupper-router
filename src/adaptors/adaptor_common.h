@@ -69,7 +69,7 @@ void qd_free_adaptor_config(qd_adaptor_config_t *config);
  *     Error log is written
  *     All in-progress pn_tls objects are destroyed
  */
-bool qd_initial_tls_setup(qd_adaptor_config_t *config,
+bool qd_tls_initial_setup(qd_adaptor_config_t *config,
                           qd_dispatch_t       *qd,
                           pn_tls_config_t     **tls_config,
                           pn_tls_t            **tls_session,
