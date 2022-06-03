@@ -186,7 +186,7 @@ struct qd_connection_t {
     qd_pn_free_link_session_list_t  free_link_session_list;
     bool                            strip_annotations_in;
     bool                            strip_annotations_out;
-    void (*wake)(qd_connection_t*); /* Wake method, different for HTTP vs. proactor */
+    void (*wake)(qd_connection_t*); /* Wake method, different for libwebsockets vs. proactor */
     char rhost[NI_MAXHOST];     /* Remote host numeric IP for incoming connections */
     char rhost_port[NI_MAXHOST+NI_MAXSERV]; /* Remote host:port for incoming connections */
 };
