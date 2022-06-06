@@ -199,6 +199,16 @@ typedef void (*qdr_address_watch_update_t)(void     *context,
                                            uint32_t  remote_consumers,
                                            uint32_t  local_producers);
 
+
+/**
+ * Handler to confirm the cancellation (unwatch) of an address-watch.
+ *
+ * When this call is invoked, it is guaranteed that no further updates shall be received for this watch.
+ *
+ * @param context The opaque context supplied in the call to qdr_core_watch_address.
+ */
+typedef void (*qdr_address_watch_cancel_t)(void *context);
+
 /**
  * qdr_core_watch_address
  *
@@ -208,7 +218,8 @@ typedef void (*qdr_address_watch_update_t)(void     *context,
  * @param core Pointer to the core module
  * @param address The address to be watched
  * @param aclass Address class character
- * @param on_watch The handler function
+ * @param on_update The update handler function
+ * @param on_cancel The cancel handler function
  * @param context The opaque context sent to the handler on all invocations
  * @return Watch handle to be used when canceling the watch
  */
@@ -216,7 +227,8 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
                                           const char                 *address,
                                           char                        aclass,
                                           qd_address_treatment_t      treatment_hint,
-                                          qdr_address_watch_update_t  on_watch,
+                                          qdr_address_watch_update_t  on_update,
+                                          qdr_address_watch_cancel_t  on_cancel,
                                           void                       *context);
 
 /**
@@ -225,8 +237,7 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
  * Cancel an address watch subscription.  It is safe to invoke this function from an IO thread.
  *
  * Note that it is possible for the watch update handler to be invoked after the unwatch call is made.
- * This is because a watch event may already be in flight during the call to unwatch_address.  The caller
- * must handle this case.
+ * Wait until the on_cancel handler is invoked to clean up any related resources.
  * 
  * @param core Pointer to the core module
  * @param handle Watch handle returned by qdr_core_watch_address

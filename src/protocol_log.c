@@ -1369,9 +1369,9 @@ static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
         _plog_strncat_id(event_address_my, 70, &local_router->identity);
 
         all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_all_address_watch, core);
+                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_all_address_watch, 0, core);
         my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_my_address_watch, core);
+                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_my_address_watch, 0, core);
     }
 }
 

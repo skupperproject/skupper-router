@@ -156,6 +156,7 @@ struct qdr_action_t {
             bool                        exclude_inprocess;
             bool                        control;
             qdr_address_watch_update_t  watch_handler;
+            qdr_address_watch_cancel_t  cancel_handler;
             void                       *context;
             uint32_t                    value32_1;
         } io;
@@ -240,7 +241,8 @@ struct qdr_general_work_t {
     qdr_delivery_t              *delivery;
     qdr_delivery_cleanup_list_t  delivery_cleanup_list;
     qdr_global_stats_handler_t   stats_handler;
-    qdr_address_watch_update_t   watch_handler;
+    qdr_address_watch_update_t   watch_update_handler;
+    qdr_address_watch_cancel_t   watch_cancel_handler;
     void                        *context;
 };
 
