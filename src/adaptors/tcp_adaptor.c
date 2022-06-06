@@ -1465,6 +1465,12 @@ static void _on_watched_address_update(void     *context,
     }
 }
 
+
+static void _on_watched_address_cancel(void *context)
+{
+    // Intentionally left blank
+}
+
 qd_error_t qd_load_tcp_adaptor_config(qd_dispatch_t *qd, qd_tcp_adaptor_config_t *config, qd_entity_t* entity)
 {
     // Make a call to the function that loads the common adaptor config.
@@ -1510,6 +1516,7 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
                                               QD_ITER_HASH_PREFIX_MOBILE,
                                               qd->default_treatment,
                                               _on_watched_address_update,
+                                              _on_watched_address_cancel,
                                               (void*) ((uintptr_t) li->identity));
 
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,

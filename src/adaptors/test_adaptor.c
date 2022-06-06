@@ -43,7 +43,6 @@ static qdr_core_t           *core_ptr        = 0;
 static qd_log_source_t      *log_source      = 0;
 static qdr_subscription_t   *subscription    = 0;
 static dynamic_watch_list_t  dynamic_watches = DEQ_EMPTY;
-static sys_mutex_t          *watch_lock;
 
 static void on_watch(void     *context,
                      uint32_t  local_consumers,
@@ -63,61 +62,50 @@ static void on_dynamic_watch(void     *context,
                              uint32_t  local_producers)
 {
     dynamic_watch_t *dw = (dynamic_watch_t*) context;
-    bool valid_context = false;
 
-    sys_mutex_lock(watch_lock);
-    dynamic_watch_t *w = DEQ_HEAD(dynamic_watches);
-    while (!!w) {
-        if (w == dw) {
-            valid_context = true;
-            break;
-        }
-        w = DEQ_NEXT(w);
-    }
+    qd_log(log_source, QD_LOG_INFO, "On Dynamic Watch: %s", dw->address);
 
-    if (valid_context) {
-        qd_log(log_source, QD_LOG_INFO, "On Dynamic Watch: %s", dw->address);
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
+    qd_compose_start_map(field);
 
-        qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
-        qd_compose_start_map(field);
+    qd_compose_insert_symbol(field, "address");
+    qd_compose_insert_string(field, dw->address);
 
-        qd_compose_insert_symbol(field, "address");
-        qd_compose_insert_string(field, dw->address);
+    qd_compose_insert_symbol(field, "local_consumers");
+    qd_compose_insert_uint(field, local_consumers);
 
-        sys_mutex_unlock(watch_lock); // We don't need to dereference dw any more
+    qd_compose_insert_symbol(field, "in_proc_consumers");
+    qd_compose_insert_uint(field, in_proc_consumers);
 
-        qd_compose_insert_symbol(field, "local_consumers");
-        qd_compose_insert_uint(field, local_consumers);
+    qd_compose_insert_symbol(field, "remote_consumers");
+    qd_compose_insert_uint(field, remote_consumers);
 
-        qd_compose_insert_symbol(field, "in_proc_consumers");
-        qd_compose_insert_uint(field, in_proc_consumers);
+    qd_compose_insert_symbol(field, "local_producers");
+    qd_compose_insert_uint(field, local_producers);
 
-        qd_compose_insert_symbol(field, "remote_consumers");
-        qd_compose_insert_uint(field, remote_consumers);
+    qd_compose_end_map(field);
 
-        qd_compose_insert_symbol(field, "local_producers");
-        qd_compose_insert_uint(field, local_producers);
+    qd_message_t *msg = qd_message();
+    qd_message_compose_2(msg, field, true);
+    qd_compose_free(field);
+    qdr_send_to2(core_ptr, msg, "_local/_testhook/watch_event", true, false);
 
-        qd_compose_end_map(field);
-
-        qd_message_t *msg = qd_message();
-        qd_message_compose_2(msg, field, true);
-        qd_compose_free(field);
-        qdr_send_to2(core_ptr, msg, "_local/_testhook/watch_event", true, false);
-
-        qd_message_free(msg);
-    } else {
-        sys_mutex_unlock(watch_lock);
-    }
+    qd_message_free(msg);
 }
 
 
-static void remove_dynamic_watch_LH(dynamic_watch_t *dw)
+static void on_dynamic_cancel(void *context)
 {
-    qdr_core_unwatch_address(core_ptr, dw->watch_handle);
+    dynamic_watch_t *dw = (dynamic_watch_t*) context;
     free(dw->address);
     DEQ_REMOVE(dynamic_watches, dw);
     free(dw);
+}
+
+
+static void remove_dynamic_watch(dynamic_watch_t *dw)
+{
+    qdr_core_unwatch_address(core_ptr, dw->watch_handle);
 }
 
 
@@ -128,10 +116,9 @@ static void start_watch(const char *address)
     dynamic_watch_t *dw = NEW(dynamic_watch_t);
     DEQ_ITEM_INIT(dw);
     dw->address = strdup(address);
-    dw->watch_handle = qdr_core_watch_address(core_ptr, address, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED, on_dynamic_watch, dw);
-    sys_mutex_lock(watch_lock);
+    dw->watch_handle = qdr_core_watch_address(core_ptr, address, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED,
+                                              on_dynamic_watch, on_dynamic_cancel, dw);
     DEQ_INSERT_TAIL(dynamic_watches, dw);    
-    sys_mutex_unlock(watch_lock);
 }
 
 
@@ -139,16 +126,14 @@ static void stop_watch(const char *address)
 {
     qd_log(log_source, QD_LOG_INFO, "Stop Watch: %s", address);
 
-    sys_mutex_lock(watch_lock);
     dynamic_watch_t *dw = DEQ_HEAD(dynamic_watches);
     while (!!dw) {
         if (strcmp(address, dw->address) == 0) {
-            remove_dynamic_watch_LH(dw);
+            remove_dynamic_watch(dw);
             break;
         }
         dw = DEQ_NEXT(dw);
     }
-    sys_mutex_unlock(watch_lock);
 }
 
 
@@ -187,12 +172,11 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
     core_ptr = core;
     if (qdr_core_test_hooks_enabled(core)) {
-        watch_lock = sys_mutex();
         log_source = qd_log_source("ADDRESS_WATCH");
         char address[100];
         for (long index = 0; index < ADDRESS_COUNT; index++) {
             sprintf(address, address_fmt, index);
-            handle[index] = qdr_core_watch_address(core, address, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED, on_watch, (void*) index);
+            handle[index] = qdr_core_watch_address(core, address, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED, on_watch, 0, (void*) index);
         }
 
         subscription = qdr_core_subscribe(core, "_testhook/address_watch", QD_ITER_HASH_PREFIX_LOCAL,
@@ -209,14 +193,11 @@ static void qdr_test_adaptor_final(void *adaptor_context)
         }
 
         qdr_core_unsubscribe(subscription);
-        sys_mutex_lock(watch_lock);
         dynamic_watch_t *dw = DEQ_HEAD(dynamic_watches);
         while (!!dw) {
-            remove_dynamic_watch_LH(dw);
+            remove_dynamic_watch(dw);
             dw = DEQ_HEAD(dynamic_watches);
         }
-        sys_mutex_unlock(watch_lock);
-        sys_mutex_free(watch_lock);
     }
 }
 
