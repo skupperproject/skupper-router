@@ -220,8 +220,14 @@ DEQ_DECLARE(qdr_delivery_cleanup_t, qdr_delivery_cleanup_list_t);
 // a zero-delay timer and are processed by one thread at a time.  General
 // actions occur in-order and are not run concurrently.
 //
+// If the discard parameter to the handler is true the router is in the process
+// of shutting down and cleaning up any outstanding general work items. At this
+// point all threads have been shutdown and the handler must avoid scheduling
+// any further work and should simply release any resources held by the work
+// item.
+//
 typedef struct qdr_general_work_t qdr_general_work_t;
-typedef void (*qdr_general_work_handler_t) (qdr_core_t *core, qdr_general_work_t *work);
+typedef void (*qdr_general_work_handler_t) (qdr_core_t *core, qdr_general_work_t *work, bool discard);
 
 struct qdr_general_work_t {
     DEQ_LINKS(qdr_general_work_t);

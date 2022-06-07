@@ -720,21 +720,24 @@ static void qdr_unsubscribe_CT(qdr_core_t *core, qdr_action_t *action, bool disc
 // Call-back Functions
 //==================================================================================
 
-static void qdr_do_set_mobile_seq(qdr_core_t *core, qdr_general_work_t *work)
+static void qdr_do_set_mobile_seq(qdr_core_t *core, qdr_general_work_t *work, bool discard)
 {
-    core->rt_set_mobile_seq(core->rt_context, work->maskbit, work->mobile_seq);
+    if (!discard)
+        core->rt_set_mobile_seq(core->rt_context, work->maskbit, work->mobile_seq);
 }
 
 
-static void qdr_do_set_my_mobile_seq(qdr_core_t *core, qdr_general_work_t *work)
+static void qdr_do_set_my_mobile_seq(qdr_core_t *core, qdr_general_work_t *work, bool discard)
 {
-    core->rt_set_my_mobile_seq(core->rt_context, work->mobile_seq);
+    if (!discard)
+        core->rt_set_my_mobile_seq(core->rt_context, work->mobile_seq);
 }
 
 
-static void qdr_do_link_lost(qdr_core_t *core, qdr_general_work_t *work)
+static void qdr_do_link_lost(qdr_core_t *core, qdr_general_work_t *work, bool discard)
 {
-    core->rt_link_lost(core->rt_context, work->maskbit);
+    if (!discard)
+        core->rt_link_lost(core->rt_context, work->maskbit);
 }
 
 

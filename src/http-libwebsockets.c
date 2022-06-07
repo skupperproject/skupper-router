@@ -450,10 +450,10 @@ static void connection_wake(qd_connection_t *qd_conn)
 /**
  * Called on router worker thread
  */
-static void handle_stats_results(void *context)
+static void handle_stats_results(void *context, bool discard)
 {
     stats_request_state_t* state = (stats_request_state_t*) context;
-    if (state->wsi_deleted) {
+    if (state->wsi_deleted || discard) {
         free(state);
     } else {
         qd_http_server_t *hs = state->server;

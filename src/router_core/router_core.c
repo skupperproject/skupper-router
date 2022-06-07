@@ -240,43 +240,6 @@ void qdr_core_free(qdr_core_t *core)
     // this must happen after qdrc_endpoint_do_cleanup_CT calls
     qdr_modules_finalize(core);
 
-    // discard any left over actions
-
-    qdr_action_list_t  action_list;
-    DEQ_MOVE(core->action_list, action_list);
-    DEQ_APPEND(action_list, core->action_list_background);
-    qdr_action_t *action = DEQ_HEAD(action_list);
-    while (action) {
-        DEQ_REMOVE_HEAD(action_list);
-        action->action_handler(core, action, true);
-        free_qdr_action_t(action);
-        action = DEQ_HEAD(action_list);
-    }
-
-    // Drain the general work lists
-    qdr_general_handler(core);
-
-    sys_thread_free(core->thread);
-    sys_cond_free(core->action_cond);
-    sys_mutex_free(core->action_lock);
-    sys_mutex_free(core->work_lock);
-    sys_mutex_free(core->id_lock);
-    qd_timer_free(core->work_timer);
-
-    //
-    // Clean up any qdr_delivery_cleanup_t's that are still left in the core->delivery_cleanup_list
-    //
-    qdr_delivery_cleanup_t *cleanup = DEQ_HEAD(core->delivery_cleanup_list);
-    while (cleanup) {
-        DEQ_REMOVE_HEAD(core->delivery_cleanup_list);
-        if (cleanup->msg)
-            qd_message_free(cleanup->msg);
-        if (cleanup->iter)
-            qd_iterator_free(cleanup->iter);
-        free_qdr_delivery_cleanup_t(cleanup);
-        cleanup = DEQ_HEAD(core->delivery_cleanup_list);
-    }
-
     qdr_connection_t *conn = DEQ_HEAD(core->open_connections);
     while (conn) {
         DEQ_REMOVE_HEAD(core->open_connections);
@@ -306,12 +269,62 @@ void qdr_core_free(qdr_core_t *core)
         qdr_connection_free(conn);
         conn = DEQ_HEAD(core->open_connections);
     }
-    assert(DEQ_SIZE(core->streaming_connections) == 0);
 
     // at this point all the conn identifiers have been freed
     qd_hash_free(core->conn_id_hash);
 
     qdr_agent_free(core->mgmt_agent);
+
+    // discard any left over general work items, allowing them to clean up any
+    // resources held by the work item
+
+    while (!DEQ_IS_EMPTY(core->work_list)) {
+        qdr_general_work_t *work = DEQ_HEAD(core->work_list);
+        DEQ_REMOVE_HEAD(core->work_list);
+        work->handler(core, work, true);  // discard == true
+        free_qdr_general_work_t(work);
+        work = DEQ_HEAD(core->work_list);
+    }
+
+    // discard any left over actions, allowing them to clean up any resources
+    // held by the action
+
+    qdr_action_list_t  action_list;
+    while (!DEQ_IS_EMPTY(core->action_list) || !DEQ_IS_EMPTY(core->action_list_background)) {
+        DEQ_MOVE(core->action_list, action_list);
+        DEQ_APPEND(action_list, core->action_list_background);
+        qdr_action_t *action = DEQ_HEAD(action_list);
+        while (action) {
+            DEQ_REMOVE_HEAD(action_list);
+            action->action_handler(core, action, true);  // discard == true
+            free_qdr_action_t(action);
+            action = DEQ_HEAD(action_list);
+        }
+    }
+
+    //
+    // Clean up any qdr_delivery_cleanup_t's that are still left in the core->delivery_cleanup_list
+    //
+    qdr_delivery_cleanup_t *cleanup = DEQ_HEAD(core->delivery_cleanup_list);
+    while (cleanup) {
+        DEQ_REMOVE_HEAD(core->delivery_cleanup_list);
+        if (cleanup->msg)
+            qd_message_free(cleanup->msg);
+        if (cleanup->iter)
+            qd_iterator_free(cleanup->iter);
+        free_qdr_delivery_cleanup_t(cleanup);
+        cleanup = DEQ_HEAD(core->delivery_cleanup_list);
+    }
+
+    // The moment of truth: ensure none of the above cleanup has resulted in
+    // generating yet more work. Hitting any of these asserts indicates an
+    // action/work handler did not properly honor the discard flag and needs to
+    // be fixed!
+
+    assert(DEQ_IS_EMPTY(core->work_list));
+    assert(DEQ_IS_EMPTY(core->action_list));
+    assert(DEQ_IS_EMPTY(core->action_list_background));
+    assert(DEQ_IS_EMPTY(core->streaming_connections));
 
     if (core->routers_by_mask_bit)       free(core->routers_by_mask_bit);
     if (core->control_links_by_mask_bit) free(core->control_links_by_mask_bit);
@@ -319,6 +332,13 @@ void qdr_core_free(qdr_core_t *core)
     if (core->neighbor_free_mask)        qd_bitmask_free(core->neighbor_free_mask);
     if (core->rnode_conns_by_mask_bit)   free(core->rnode_conns_by_mask_bit);
     if (core->plog_links_by_mask_bit)    free(core->plog_links_by_mask_bit);
+
+    sys_thread_free(core->thread);
+    sys_cond_free(core->action_cond);
+    sys_mutex_free(core->action_lock);
+    sys_mutex_free(core->work_lock);
+    sys_mutex_free(core->id_lock);
+    qd_timer_free(core->work_timer);
 
     free(core);
 }
@@ -826,7 +846,7 @@ static void qdr_general_handler(void *context)
     work = DEQ_HEAD(work_list);
     while (work) {
         DEQ_REMOVE_HEAD(work_list);
-        work->handler(core, work);
+        work->handler(core, work, false);
         free_qdr_general_work_t(work);
         work = DEQ_HEAD(work_list);
     }
@@ -880,40 +900,42 @@ void qdr_connection_work_free_CT(qdr_connection_work_t *work)
     free_qdr_connection_work_t(work);
 }
 
-static void qdr_post_global_stats_response(qdr_core_t *core, qdr_general_work_t *work)
+static void qdr_post_global_stats_response(qdr_core_t *core, qdr_general_work_t *work, bool discard)
 {
-    work->stats_handler(work->context);
+    work->stats_handler(work->context, discard);
 }
 
 static void qdr_global_stats_request_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
-    qdr_global_stats_t *stats = action->args.stats_request.stats;
-    if (stats) {
-        stats->addrs = DEQ_SIZE(core->addrs);
-        stats->links = DEQ_SIZE(core->open_links);
-        stats->routers = DEQ_SIZE(core->routers);
-        stats->connections = DEQ_SIZE(core->open_connections);
-        stats->auto_links = DEQ_SIZE(core->auto_links);
-        stats->presettled_deliveries = core->presettled_deliveries;
-        stats->dropped_presettled_deliveries = core->dropped_presettled_deliveries;
-        stats->accepted_deliveries = core->accepted_deliveries;
-        stats->rejected_deliveries = core->rejected_deliveries;
-        stats->released_deliveries = core->released_deliveries;
-        stats->modified_deliveries = core->modified_deliveries;
-        stats->deliveries_ingress = core->deliveries_ingress;
-        stats->deliveries_egress = core->deliveries_egress;
-        stats->deliveries_transit = core->deliveries_transit;
-        stats->deliveries_ingress_route_container = core->deliveries_ingress_route_container;
-        stats->deliveries_egress_route_container = core->deliveries_egress_route_container;
-        stats->deliveries_delayed_1sec = core->deliveries_delayed_1sec;
-        stats->deliveries_delayed_10sec = core->deliveries_delayed_10sec;
-        stats->deliveries_stuck = core->deliveries_stuck;
-        stats->links_blocked = core->links_blocked;
+    if (!discard) {
+        qdr_global_stats_t *stats = action->args.stats_request.stats;
+        if (stats) {
+            stats->addrs = DEQ_SIZE(core->addrs);
+            stats->links = DEQ_SIZE(core->open_links);
+            stats->routers = DEQ_SIZE(core->routers);
+            stats->connections = DEQ_SIZE(core->open_connections);
+            stats->auto_links = DEQ_SIZE(core->auto_links);
+            stats->presettled_deliveries = core->presettled_deliveries;
+            stats->dropped_presettled_deliveries = core->dropped_presettled_deliveries;
+            stats->accepted_deliveries = core->accepted_deliveries;
+            stats->rejected_deliveries = core->rejected_deliveries;
+            stats->released_deliveries = core->released_deliveries;
+            stats->modified_deliveries = core->modified_deliveries;
+            stats->deliveries_ingress = core->deliveries_ingress;
+            stats->deliveries_egress = core->deliveries_egress;
+            stats->deliveries_transit = core->deliveries_transit;
+            stats->deliveries_ingress_route_container = core->deliveries_ingress_route_container;
+            stats->deliveries_egress_route_container = core->deliveries_egress_route_container;
+            stats->deliveries_delayed_1sec = core->deliveries_delayed_1sec;
+            stats->deliveries_delayed_10sec = core->deliveries_delayed_10sec;
+            stats->deliveries_stuck = core->deliveries_stuck;
+            stats->links_blocked = core->links_blocked;
+        }
+        qdr_general_work_t *work = qdr_general_work(qdr_post_global_stats_response);
+        work->stats_handler = action->args.stats_request.handler;
+        work->context = action->args.stats_request.context;
+        qdr_post_general_work_CT(core, work);
     }
-    qdr_general_work_t *work = qdr_general_work(qdr_post_global_stats_response);
-    work->stats_handler = action->args.stats_request.handler;
-    work->context = action->args.stats_request.context;
-    qdr_post_general_work_CT(core, work);
 }
 
 
