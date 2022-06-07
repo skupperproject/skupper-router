@@ -318,8 +318,14 @@ static void qdr_settle_subscription_delivery_CT(qdr_core_t *core, qdr_action_t *
 }
 
 
-void qdr_forward_on_message(qdr_core_t *core, qdr_general_work_t *work)
+void qdr_forward_on_message(qdr_core_t *core, qdr_general_work_t *work, bool discard)
 {
+    if (discard) {
+        qd_message_free(work->msg);
+        qdr_delivery_decref(core, work->delivery, "qdr_forward_on_message - discard on shutdown");
+        return;
+    }
+
     qdr_error_t *error = 0;
     uint64_t disposition = work->on_message(work->on_message_context, work->msg, work->maskbit,
                                             work->inter_router_cost, work->in_conn_id, work->policy_spec, &error);
