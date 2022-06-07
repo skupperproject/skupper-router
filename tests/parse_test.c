@@ -713,6 +713,7 @@ static char *test_field_api(void *context)
 exit:
     qd_iterator_free(iter);
     qd_parse_free(parsed);
+    qd_buffer_list_free_buffers(&blist);
     return result;
 }
 
