@@ -19,7 +19,8 @@
 
 [skrouter]
 py_sources =
-  ${CMAKE_SOURCE_DIR}/python
+  ${CMAKE_SOURCE_DIR}/python/skupper_router
+  ${CMAKE_SOURCE_DIR}/python/skupper_router_internal
   ${CMAKE_SOURCE_DIR}/docs
   ${CMAKE_SOURCE_DIR}/tests
   ${CMAKE_SOURCE_DIR}/tools
@@ -45,8 +46,8 @@ deps =
   hacking==4.1.0
   # hacking 4.1.0 requires flake8<3.9.0 and >=3.8.0
   flake8==3.8.4
-  pylint==2.13.5
-  mypy==0.942
+  pylint==2.13.9
+  mypy==0.950
 
 [testenv:py36]
 basepython = python3.6
@@ -141,9 +142,6 @@ log_cli = true
 log_cli_level = WARNING
 
 # pylint
-[GENERAL]
-recursive = True
-
 [MESSAGE_CONTROL]
 disable =
     access-member-before-definition,
