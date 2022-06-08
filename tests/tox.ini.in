@@ -280,3 +280,6 @@ ignore_missing_imports = True
 
 [mypy-pkg_resources]
 ignore_missing_imports = True
+
+[mypy-psutil]
+ignore_missing_imports = True

@@ -36,3 +36,4 @@ protobuf
 quart
 selectors
 websockets
+psutil
