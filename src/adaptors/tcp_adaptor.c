@@ -138,7 +138,6 @@ typedef struct qdr_tcp_adaptor_t {
 } qdr_tcp_adaptor_t;
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
-static sys_atomic_t next_id;
 static const int BACKLOG = 50;  /* Listening backlog */
 
 static void qdr_add_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
@@ -1365,9 +1364,6 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->oper_status = QD_LISTENER_OPER_DOWN;
     li->tcp_stats = new_qdr_tcp_stats_t();
     li->tcp_stats->stats_lock = sys_mutex();
-    do {
-        li->identity = sys_atomic_inc(&next_id);
-    } while (li->identity == 0);
 
     //
     // Create a plog record for this listener
@@ -1394,81 +1390,68 @@ static void _on_watched_address_update(void     *context,
                                        uint32_t  remote_consumers,
                                        uint32_t  local_producers)
 {
-    uintptr_t id = (uintptr_t)context;
-
     if (tcp_adaptor) {  // adaptor not finalized yet
 
-        sys_mutex_lock(tcp_adaptor->listener_lock);
+        // the address watch holds a reference count to the listener so it cannot be
+        // deleted during this call
+        //
+        qd_tcp_listener_t *li = (qd_tcp_listener_t*) context;
 
-        qd_tcp_listener_t *li = DEQ_HEAD(tcp_adaptor->listeners);
-        while (li) {
-            if (id == (uintptr_t) li->identity)
-                break;
-            li = DEQ_NEXT(li);
-        }
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+               "Listener address %s consumer count updates: local=%"PRIu32" in-process=%"PRIu32" remote=%"PRIu32,
+               li->config->adaptor_config->address, local_consumers, in_proc_consumers, remote_consumers);
 
-        if (li)
-            sys_atomic_inc(&li->ref_count);
+        sys_mutex_lock(li->lock);
 
-        sys_mutex_unlock(tcp_adaptor->listener_lock);
+        bool created = false;
+        bool stopped = false;
+        if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
 
-        if (li) {
+            li->oper_status = (local_consumers || in_proc_consumers || remote_consumers)
+                ? QD_LISTENER_OPER_UP : QD_LISTENER_OPER_DOWN;
 
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "Listener address %s consumer count updates: local=%"PRIu32" in-process=%"PRIu32" remote=%"PRIu32,
-                   li->config->adaptor_config->address, local_consumers, in_proc_consumers, remote_consumers);
+            if (li->oper_status == QD_LISTENER_OPER_UP) {
+                if (!li->pn_listener) {
+                    created = true;
+                    li->pn_listener = pn_listener();
+                    pn_listener_set_context(li->pn_listener, &li->context);
+                    sys_atomic_inc(&li->ref_count);  // for pn_listener context reference
 
-            sys_mutex_lock(li->lock);
+                    // Note: after this call the handle_listener_event may be called immediately on another thread:
+                    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->adaptor_config->host_port, BACKLOG);
+                }
 
-            bool created = false;
-            bool stopped = false;
-            if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
-
-                li->oper_status = (local_consumers || in_proc_consumers || remote_consumers)
-                    ? QD_LISTENER_OPER_UP : QD_LISTENER_OPER_DOWN;
-
-                if (li->oper_status == QD_LISTENER_OPER_UP) {
-                    if (!li->pn_listener) {
-                        created = true;
-                        li->pn_listener = pn_listener();
-                        pn_listener_set_context(li->pn_listener, &li->context);
-                        sys_atomic_inc(&li->ref_count);  // for pn_listener context reference
-
-                        // Note: after this call the handle_listener_event may be called immediately on another thread:
-                        pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->adaptor_config->host_port, BACKLOG);
-                    }
-
-                } else {  // QD_LISTENER_OPER_DOWN
-                    if (li->pn_listener) {
-                        stopped = true;
-                        // Note: after this call the handle_listener_event may be called immediately on another thread:
-                        pn_listener_close(li->pn_listener);
-                        // finish cleanup in PN_LISTENER_CLOSE event
-                    }
+            } else {  // QD_LISTENER_OPER_DOWN
+                if (li->pn_listener) {
+                    stopped = true;
+                    // Note: after this call the handle_listener_event may be called immediately on another thread:
+                    pn_listener_close(li->pn_listener);
+                    // finish cleanup in PN_LISTENER_CLOSE event
                 }
             }
-
-            sys_mutex_unlock(li->lock);
-
-            if (stopped)
-                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                       "Closing TCP listener %s (%s): no service for address %s",
-                       li->config->adaptor_config->name, li->config->adaptor_config->host_port, li->config->adaptor_config->address);
-
-            else if (created)
-                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                       "Creating TCP listener %s (%s) for service address %s",
-                       li->config->adaptor_config->name, li->config->adaptor_config->host_port, li->config->adaptor_config->address);
-
-            qd_tcp_listener_decref(li);
         }
+
+        sys_mutex_unlock(li->lock);
+
+        if (stopped)
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                   "Closing TCP listener %s (%s): no service for address %s",
+                   li->config->adaptor_config->name, li->config->adaptor_config->host_port, li->config->adaptor_config->address);
+
+        else if (created)
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                   "Creating TCP listener %s (%s) for service address %s",
+                   li->config->adaptor_config->name, li->config->adaptor_config->host_port, li->config->adaptor_config->address);
     }
 }
 
 
 static void _on_watched_address_cancel(void *context)
 {
-    // Intentionally left blank
+    if (tcp_adaptor) {  // adaptor not finalized yet
+        qd_tcp_listener_t *li = (qd_tcp_listener_t*) context;
+        qd_tcp_listener_decref(li);
+    }
 }
 
 qd_error_t qd_load_tcp_adaptor_config(qd_dispatch_t *qd, qd_tcp_adaptor_config_t *config, qd_entity_t* entity)
@@ -1512,12 +1495,13 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     // address changes. We create the proton listener when there are active
     // consumers present.  Note once this call is made the
     // _on_watched_address_update may immediately run on another thread:
+    sys_atomic_inc(&li->ref_count);  // context reference
     li->addr_watcher = qdr_core_watch_address(tcp_adaptor->core, li->config->adaptor_config->address,
                                               QD_ITER_HASH_PREFIX_MOBILE,
                                               qd->default_treatment,
                                               _on_watched_address_update,
                                               _on_watched_address_cancel,
-                                              (void*) ((uintptr_t) li->identity));
+                                              (void*) li);
 
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
            "tcpListener %s created at %s:%s for address %s",
@@ -2139,7 +2123,6 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     DEQ_INIT(adaptor->listeners);
     DEQ_INIT(adaptor->connectors);
     DEQ_INIT(adaptor->connections);
-    sys_atomic_init(&next_id, 1);
     adaptor->listener_lock = sys_mutex();
     *adaptor_context = adaptor;
 
@@ -2187,7 +2170,6 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     tcp_adaptor =  NULL;
     sys_mutex_free(adaptor->listener_lock);
     free(adaptor);
-    sys_atomic_destroy(&next_id);
 }
 
 /**

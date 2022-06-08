@@ -69,8 +69,7 @@ struct qd_tcp_listener_t
     qd_tcp_adaptor_config_t  *config;
     plog_record_t            *plog;
     qdr_watch_handle_t        addr_watcher;
-    uint32_t                  identity;
-    qdr_tcp_stats_t           *tcp_stats;
+    qdr_tcp_stats_t          *tcp_stats;
 
     // the following fields are mutably shared between multiple threads and
     // must be protected by holding the lock:
