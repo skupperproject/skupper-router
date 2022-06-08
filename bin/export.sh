@@ -56,12 +56,10 @@ cleanup()
     [ ${WORKDIR} ] && [ -d ${WORKDIR} ] && rm -rf ${WORKDIR}
 }
 
-
 DIR=$PWD
 
 # This will get the latest created tag
-TAG=$(git describe --tags --always)
-echo Using tag ${TAG} to create archive
+TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
 
 ##
 ## Allow overrides to be passed on the cmdline
@@ -74,6 +72,8 @@ elif [ $# -ge 1 ]; then
         TAG=$2
     fi
 fi
+
+echo Using tag ${TAG} to create archive
 
 # verify the tag exists
 git rev-list -1 tags/${TAG} -- >/dev/null || usage
@@ -89,9 +89,8 @@ echo Working Directory=${WORKDIR}
 (
     cd ${SRC}
     MTIME=$(date -d @`git log -1 --pretty=format:%ct tags/${TAG}` '+%Y-%m-%d %H:%M:%S')
-    VERSION=$(git show tags/${TAG}:VERSION.txt)
-    ARCHIVE=$DIR/skupper-router-${VERSION}.tar.gz
-    PREFIX=skupper-router-${VERSION}
+    ARCHIVE=$DIR/skupper-router-${TAG}.tar.gz
+    PREFIX=skupper-router-${TAG}
     [ -d ${WORKDIR} ] || mkdir -p ${WORKDIR}
     git archive --format=tar --prefix=${PREFIX}/ tags/${TAG} \
         | tar -x -C ${WORKDIR}
