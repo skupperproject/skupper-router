@@ -25,6 +25,7 @@ AllowShortFunctionsOnASingleLine: None
 SpaceAfterCStyleCast: true
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
 KeepEmptyLinesAtTheStartOfBlocks: false
 
 IncludeCategories:
