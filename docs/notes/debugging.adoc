@@ -30,12 +30,12 @@ under the License
 
 The rr workflow is to reproduce failure whilst running under rr, and then repeatedly debug the recording until the cause of the failure is understood.
 
-Start by compiling the `scripts/sigforwarder.rs` helper scripts according to instructions at top of the file.
+Start by installing the `psutil` dependency for the `scripts/sigforwarder.py` helper script.
 Router system-tests may be run under rr through adding the following CMake option
 
 [source]
 ----
--DQDROUTERD_RUNNER="/absolute/path/to/sigforwarder rr record --print-trace-dir=1"
+-DQDROUTERD_RUNNER="/absolute/path/to/sigforwarder.py rr record --print-trace-dir=1"
 ----
 
 Run a suspect test in a loop until failure (at most 100 times)
