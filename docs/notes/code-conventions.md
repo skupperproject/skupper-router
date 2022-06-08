@@ -39,6 +39,9 @@ bracket it with `clang-format on` and `off` commands:
     static void* do();
     // clang-format on
 
+The options available in `.clang-format` file are explained in
+<https://clang.llvm.org/docs/ClangFormatStyleOptions.html> documentation page.
+
 See <https://clang.llvm.org/docs/ClangFormat.html> more information
 about Clang formatting.
 
