@@ -377,7 +377,8 @@ void qd_dispatch_free(qd_dispatch_t *qd)
 QD_EXPORT void qd_dispatch_router_lock(qd_dispatch_t *qd) { sys_mutex_lock(qd->router->lock); }
 QD_EXPORT void qd_dispatch_router_unlock(qd_dispatch_t *qd) { sys_mutex_unlock(qd->router->lock); }
 
-qdr_core_t* qd_dispatch_router_core(qd_dispatch_t *qd) {
+qdr_core_t* qd_dispatch_router_core(const qd_dispatch_t *qd)
+{
     return qd->router->router_core;
 }
 

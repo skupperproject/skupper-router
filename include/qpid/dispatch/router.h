@@ -90,7 +90,7 @@ typedef void (*qd_router_message_cb_t)(void *context, qd_message_t *msg, int lin
 
 const char *qd_router_id(void);
 
-qdr_core_t *qd_router_core(qd_dispatch_t *qd);
+qdr_core_t *qd_router_core(const qd_dispatch_t *qd);
 
 /** Register an address in the router's hash table.
  * @param qd Pointer to the dispatch instance.

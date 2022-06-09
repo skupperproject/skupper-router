@@ -130,7 +130,7 @@ void qd_dispatch_unregister_entity(qd_dispatch_t *qd, void *impl);
 /** Set the agent */
 QD_EXPORT void qd_dispatch_set_agent(qd_dispatch_t *qd, void *agent);
 
-qdr_core_t* qd_dispatch_router_core(qd_dispatch_t *qd);
+qdr_core_t* qd_dispatch_router_core(const qd_dispatch_t *qd);
 
 sys_mutex_t *qd_server_get_activation_lock(qd_server_t *server);
 

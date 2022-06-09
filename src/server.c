@@ -791,7 +791,7 @@ static void do_handle_listener(pn_event_t *e, qd_server_t *qd_server)
     handle_event_with_context(e, qd_server, (qd_handler_context_t*) pn_listener_get_context(pn_event_listener(e)));
 }
 
-pn_proactor_t *qd_server_proactor(qd_server_t *qd_server)
+pn_proactor_t *qd_server_proactor(const qd_server_t *qd_server)
 {
     return qd_server->proactor;
 }

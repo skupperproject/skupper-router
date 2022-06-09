@@ -2112,7 +2112,7 @@ const char *qd_router_id(void)
 }
 
 
-qdr_core_t *qd_router_core(qd_dispatch_t *qd)
+qdr_core_t *qd_router_core(const qd_dispatch_t *qd)
 {
     return qd->router->router_core;
 }

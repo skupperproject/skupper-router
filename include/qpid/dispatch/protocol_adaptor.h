@@ -870,6 +870,9 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            const char      *version,
                                            bool             streaming_links);
 
+void qd_adaptor_listener_init();
+void qd_adaptor_listener_finalize();
+
 
 /**
  ******************************************************************************
