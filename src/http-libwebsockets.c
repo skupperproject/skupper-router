@@ -952,8 +952,8 @@ static void* http_thread_run(void* v) {
                 break;
             case W_WAKE: {
                 connection_t *c = w.value;
-                pn_collector_put(c->driver.collector, PN_OBJECT, c->driver.connection,
-                                 PN_CONNECTION_WAKE);
+                pn_collector_put_object(c->driver.collector, c->driver.connection,
+                                        PN_CONNECTION_WAKE);
                 handle_events(c);
                 break;
             }
