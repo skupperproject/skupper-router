@@ -41,6 +41,7 @@ typedef struct qd_tcp_listener_t qd_tcp_listener_t;
 typedef struct qd_tcp_connector_t qd_tcp_connector_t;
 typedef struct qdr_tcp_stats_t qdr_tcp_stats_t;
 typedef struct qd_tcp_adaptor_config_t qd_tcp_adaptor_config_t;
+typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
 
 struct qd_tcp_adaptor_config_t {
     qd_adaptor_config_t *adaptor_config; // Pointer to the common adaptor config used by all adaptors.
@@ -62,22 +63,11 @@ ALLOC_DECLARE(qdr_tcp_stats_t);
 
 struct qd_tcp_listener_t
 {
-    qd_handler_context_t      context;
-    // ref_count: tcp_adapter listener list, pn_listener_t context
-    sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_adaptor_config_t  *config;
     plog_record_t            *plog;
-    qdr_watch_handle_t        addr_watcher;
     qdr_tcp_stats_t          *tcp_stats;
-
-    // the following fields are mutably shared between multiple threads and
-    // must be protected by holding the lock:
-    sys_mutex_t                *lock;
-    pn_listener_t              *pn_listener;
-    qd_listener_admin_status_t  admin_status;  // set by mgmt
-    qd_listener_oper_status_t   oper_status;   // set by addr_watcher
-    // end of lock scope
+    qd_adaptor_listener_t    *adaptor_listener;
 
     // must hold tcp_adaptor->listener_lock during list operations:
     DEQ_LINKS(qd_tcp_listener_t);

@@ -50,6 +50,7 @@ set(qpid_dispatch_SOURCES
   adaptors/adaptor_common.c
   adaptors/tcp_adaptor.c
   adaptors/test_adaptor.c
+  adaptors/adaptor_listener.c
   alloc.c
   alloc_pool.c
   aprintf.c

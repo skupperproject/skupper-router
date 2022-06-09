@@ -91,7 +91,7 @@ DEQ_DECLARE(qd_pn_free_link_session_t, qd_pn_free_link_session_list_t);
 # define NI_MAXSERV 32
 #endif
 
-pn_proactor_t* qd_server_proactor(qd_server_t *s);
+pn_proactor_t* qd_server_proactor(const qd_server_t *s);
 
 qd_http_server_t *qd_server_http(qd_server_t *server);
 
