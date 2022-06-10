@@ -2,9 +2,6 @@
 # found by AddressSanitizer (ASAN)
 #
 
-# to be triaged; pretty much all tests
-leak:^load_server_config$
-
 # to be triaged; system_tests_http
 leak:^callback_healthz$
 leak:^callback_metrics$
