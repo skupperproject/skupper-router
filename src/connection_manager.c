@@ -145,6 +145,8 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
     if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
 
+    if (cf->conn_props) pn_data_free(cf->conn_props);
+
     memset(cf, 0, sizeof(*cf));
 }
 
