@@ -742,7 +742,7 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
         return 0;
     }
 
-    case LWS_CALLBACK_CLOSED: {
+    case LWS_CALLBACK_CLOSED_HTTP: {
         stats->context->wsi_deleted = true;
         if (stats->context->callback_completed) {
             free(stats->context);
@@ -800,7 +800,7 @@ static int callback_healthz(struct lws *wsi, enum lws_callback_reasons reason,
         else return 0;
     }
 
-    case LWS_CALLBACK_CLOSED: {
+    case LWS_CALLBACK_CLOSED_HTTP: {
         stats->context->wsi_deleted = true;
         if (stats->context->callback_completed) {
             free(stats->context);
