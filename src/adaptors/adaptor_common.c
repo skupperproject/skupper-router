@@ -23,150 +23,68 @@
 #include "qpid/dispatch/connection_manager.h"
 
 ALLOC_DEFINE(qd_adaptor_config_t);
+ALLOC_DEFINE(qd_adaptor_buffer_t);
 
-#define NUM_ALPN_PROTOCOLS 1
+//size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 4096;
+//size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 8192;
+size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 16384;
+//size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 32768;
+//size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 65536;
 
-bool qd_tls_initial_setup(qd_adaptor_config_t *config,
-                          qd_dispatch_t       *qd,
-                          pn_tls_config_t     **tls_config,
-                          pn_tls_t            **tls_session,
-                          qd_log_source_t     *log_source,
-                          uint64_t             conn_id,
-                          bool                 is_listener,
-                          bool                *tls_has_output,
-                          const char          *protocols[])
+
+qd_adaptor_buffer_t *qd_adaptor_buffer()
 {
-    const char *role = is_listener ? "listener" : "connector";
+    qd_adaptor_buffer_t *adaptor_buff = new_qd_adaptor_buffer_t();
+    ZERO(adaptor_buff);
+    DEQ_ITEM_INIT(adaptor_buff);
+    return adaptor_buff;
+}
 
-    qd_log(log_source, QD_LOG_INFO, "[C%"PRIu64"] %s %s configuring ssl profile %s", conn_id, role, config->name, config->ssl_profile_name);
+qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *buffer)
+{
+    qd_adaptor_buffer_t *adaptor_buff = qd_adaptor_buffer();
+    ZERO(buffer);
+    buffer->bytes = (char*) qd_adaptor_buffer_base(adaptor_buff);
+    buffer->capacity = qd_adaptor_buffer_capacity(adaptor_buff);
+    buffer->size = 0;
+    buffer->offset = 0;
+    buffer->context = (uintptr_t) adaptor_buff;
+    return adaptor_buff;
+}
 
-    do {
-        // find the ssl profile
-        assert(qd);
-        qd_connection_manager_t *cm = qd_dispatch_connection_manager(qd);
-        assert(cm);
-        qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, config->ssl_profile_name);
-        if (!config_ssl_profile) {
-            qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to find ssl profile %s", conn_id, config->name, config->ssl_profile_name);
-            break;
-        }
+qd_adaptor_buffer_t *qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint8_t *data, size_t len)
+{
+    //
+    // If len is zero, there's no work to do.
+    //
+    if (len == 0)
+        return DEQ_TAIL(*buflist);
 
-        int res;
-        // First free, then create pn domain
-        if (*tls_config)
-            pn_tls_config_free(*tls_config);
-        *tls_config = pn_tls_config(is_listener ? PN_TLS_MODE_SERVER : PN_TLS_MODE_CLIENT);
-
-        if (! *tls_config) {
-            qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to create tls domain for ssl profile %s", conn_id, role, config->name, config->ssl_profile_name);
-            break;
-        }
-
-        if (config_ssl_profile->ssl_trusted_certificate_db) {
-            res = pn_tls_config_set_trusted_certs(*tls_config, config_ssl_profile->ssl_trusted_certificate_db);
-            if (res != 0) {
-                qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to set tls trusted certificates (%d)", conn_id, role, config->name, res);
-                break;
-            }
-        }
-
-        // Call pn_tls_config_set_credentials only if "certFile" is provided.
-        if (config_ssl_profile->ssl_certificate_file) {
-            res = pn_tls_config_set_credentials(*tls_config,
-                                                config_ssl_profile->ssl_certificate_file,
-                                                config_ssl_profile->ssl_private_key_file,
-                                                config_ssl_profile->ssl_password);
-            if (res != 0) {
-                qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] HTTP2 %s %s unable to set tls credentials (%d)", conn_id, role, config->name, res);
-                break;
-            }
-        }
-        else {
-            qd_log(log_source, QD_LOG_INFO, "[C%"PRIu64"] sslProfile %s did not provide certFile", conn_id, config->ssl_profile_name);
-        }
-
-
-        if (!!config_ssl_profile->ssl_ciphers) {
-            res = pn_tls_config_set_impl_ciphers(*tls_config, config_ssl_profile->ssl_ciphers);
-            if (res != 0) {
-                qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to set tls ciphers (%d)", conn_id, role, config->name, res);
-                break;
-            }
-        }
-
-
-        if (is_listener) {
-            if (config->authenticate_peer) {
-                res = pn_tls_config_set_peer_authentication(*tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->ssl_trusted_certificate_db);
-            }
-            else {
-                res = pn_tls_config_set_peer_authentication(*tls_config, PN_TLS_ANONYMOUS_PEER, 0);
-            }
-        }
-        else {
-            // Connector.
-            if (config->verify_host_name) {
-                res = pn_tls_config_set_peer_authentication(*tls_config, PN_TLS_VERIFY_PEER_NAME, config_ssl_profile->ssl_trusted_certificate_db);
-            }
-            else {
-                res = pn_tls_config_set_peer_authentication(*tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->ssl_trusted_certificate_db);
-            }
-
-            *tls_has_output = true; // always true for initial client side TLS.
-        }
-
-        if (res != 0) {
-            qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] Unable to set tls peer authentication for sslProfile %s - (%d)", conn_id, config->ssl_profile_name, res);
-            break;
-        }
-
-        //
-        // Provide an ordered list of application protocols for ALPN by calling pn_tls_config_set_alpn_protocols. In our case, h2 is the only supported protocol.
-        // A list of protocols can be found here - https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt
-        //
-        if (protocols)
-            pn_tls_config_set_alpn_protocols(*tls_config, protocols, NUM_ALPN_PROTOCOLS);
-
-        // set up tls session
-        if (*tls_session) {
-            pn_tls_free(*tls_session);
-        }
-        *tls_session = pn_tls(*tls_config);
-
-        if (! *tls_session) {
-            qd_log(log_source, QD_LOG_ERROR, "[C%"PRIu64"] Unable to create tls session for sslProfile %s with hostname: '%s'", conn_id, config->ssl_profile_name, config->host);
-            break;
-        }
-
-        int ret = pn_tls_start(*tls_session);
-        if (ret != 0) {
-            break;
-        }
-
-
-        pn_tls_set_peer_hostname(*tls_session, config->host);
-
-
-        qd_log(log_source, QD_LOG_INFO, "[C%"PRIu64"] Successfully configured ssl profile %s", conn_id, config->ssl_profile_name);
-
-        return true;
-
-
-    } while (0);
-
-    // Handle tls creation/setup failure by deleting any pn domain or session objects
-    if (*tls_session) {
-        pn_tls_free(*tls_session);
-        *tls_session = 0;
+    //
+    // If the buffer list is empty and there's some data, add one empty buffer before we begin.
+    //
+    if (DEQ_SIZE(*buflist) == 0) {
+        qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
+        DEQ_INSERT_TAIL(*buflist, buf);
     }
 
-    if (*tls_config) {
-        pn_tls_config_free(*tls_config);
-        *tls_config = 0;
+    qd_adaptor_buffer_t *tail = DEQ_TAIL(*buflist);
+
+    while (len > 0) {
+        size_t to_copy = MIN(len, qd_adaptor_buffer_capacity(tail));
+        if (to_copy > 0) {
+            memcpy(qd_adaptor_buffer_cursor(tail), data, to_copy);
+            qd_adaptor_buffer_insert(tail, to_copy);
+            data += to_copy;
+            len  -= to_copy;
+        }
+        if (len > 0) {
+            tail = qd_adaptor_buffer();
+            DEQ_INSERT_TAIL(*buflist, tail);
+        }
     }
 
-
-    return false;
+    return DEQ_TAIL(*buflist);
 }
 
 void qd_free_adaptor_config(qd_adaptor_config_t *config)

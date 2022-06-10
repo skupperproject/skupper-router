@@ -124,7 +124,7 @@ static const char *leaking_types[] = {
     // There is a bug in the proton TLS API which does not return a http2 buffer that is given to it
     // and hence the qd_http2_buffer_t leak. When removing this entry make sure you set the handle_incoming_tls function
     // to static in http2_adaptor.c
-    "qd_http2_buffer_t",
+    //"qd_http2_buffer_t",
     0};
 
 //128 has been chosen because many CPUs arch use an

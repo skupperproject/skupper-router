@@ -23,11 +23,11 @@ import argparse
 import selectors
 import signal
 import socket
+import ssl
 import sys
 from threading import Thread
 import time
 import traceback
-
 from system_test import Logger
 from system_test import TIMEOUT
 
@@ -59,8 +59,10 @@ def split_chunk_for_display(raw_bytes):
 
 
 class TcpEchoClient:
-
-    def __init__(self, prefix, host, port, size, count, timeout, logger):
+    def __init__(self, prefix, host, port, size, count,
+                 timeout=TIMEOUT,
+                 logger=None,
+                 ssl_info=None):
         """
         :param host: connect to this host
         :param port: connect to this port
@@ -73,6 +75,7 @@ class TcpEchoClient:
         """
         # Start up
         self.sock = None
+        self.ssl_sock = None
         self.prefix = prefix
         self.host = host
         self.port = int(port)
@@ -84,6 +87,7 @@ class TcpEchoClient:
         self.is_running = False
         self.exit_status = None
         self.error = None
+        self.ssl_info = ssl_info
         self._thread = Thread(target=self.run)
         self._thread.daemon = True
         self._thread.start()
@@ -137,8 +141,21 @@ class TcpEchoClient:
             # This is not necessarly an error, so retry
 
             host_address = (self.host, self.port)
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self.ssl_info:
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.load_verify_locations(cafile=self.ssl_info['CA_CERT'])
 
+                # If a client cert is provided, use it. If not, we will try connecting to the router
+                # with the ca-certificate.pem
+                if self.ssl_info.get('CLIENT_CERTIFICATE'):
+                    context.load_cert_chain(certfile=self.ssl_info['CLIENT_CERTIFICATE'],
+                                            keyfile=self.ssl_info['CLIENT_PRIVATE_KEY'],
+                                            password=self.ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'])
+                sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock = context.wrap_socket(sck, server_hostname=self.host, server_side=False)
+                self.logger.log("%s Socket wrapped with TLS self.host=%s, self.port=%s" % (self.prefix, self.host, self.port))
+            else:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn_timeout = time.time() + TIMEOUT
             while True:
                 try:
@@ -168,13 +185,38 @@ class TcpEchoClient:
                         self.exit_status = "%s Exiting due to timeout. Total sent= %d, total rcvd= %d" % \
                                            (self.prefix, total_sent, total_rcvd)
                         break
-                for key, mask in sel.select(timeout=0.1):
+                for key, mask in sel.select(timeout=1):
                     sock = key.fileobj
                     if mask & selectors.EVENT_READ:
-                        recv_data = sock.recv(1024)
+                        ssl_want_read = False
+                        self.logger.log("ECHO CLIENT selectors.EVENT_READ")
+                        if self.ssl_info:
+                            try:
+                                recv_data = b''
+                                while True:
+                                    self.logger.log("ECHO CLIENT selectors.EVENT_READ...receiving SSL data")
+                                    rcv_data = sock.recv(1024)
+                                    if rcv_data and len(rcv_data) > 0:
+                                        self.logger.log("ECHO CLIENT selectors.EVENT_READ "
+                                                        "received SSL data length=%d" % len(rcv_data))
+                                        recv_data += rcv_data
+                                    else:
+                                        self.logger.log("ECHO CLIENT selectors.EVENT_READ...no more SSL data "
+                                                        "to receive, breaking")
+                                        break
+                            except ssl.SSLWantReadError:
+                                ssl_want_read = True
+                                len_recv_data = len(recv_data) if recv_data else 0
+                                self.logger.log("ECHO CLIENT ssl.SSLWantReadError, recv_data=%d" % len_recv_data)
+                        else:
+                            recv_data = sock.recv(1024)
+
                         if recv_data:
                             total_rcvd = len(recv_data)
                             payload_in[in_list_idx].extend(recv_data)
+                            self.logger.log("%s Received bytes len=%d, bytes received so far=%d" %
+                                            (self.prefix, total_rcvd, len(payload_in[in_list_idx])))
+
                             if len(payload_in[in_list_idx]) == self.size:
                                 self.logger.log("%s Rcvd message %d" % (self.prefix, in_list_idx))
                                 in_list_idx += 1
@@ -203,14 +245,20 @@ class TcpEchoClient:
                             else:
                                 pass  # still accumulating a message
                         else:
-                            # socket closed
-                            self.keep_running = False
-                            if not in_list_idx == self.count:
-                                self.error = "ERROR server closed. Echoed %d of %d messages." % (in_list_idx, self.count)
+                            if not ssl_want_read:
+                                # In the non SSL case, if a read event came
+                                self.keep_running = False
+                                if not in_list_idx == self.count:
+                                    self.error = "ERROR server closed. Echoed %d of %d messages." % \
+                                                 (in_list_idx, self.count)
+
                     if self.keep_running and mask & selectors.EVENT_WRITE:
                         if out_ready_to_send:
-                            n_sent = self.sock.send(payload_out[out_list_idx][out_byte_idx:])
-                            total_sent += n_sent
+                            payload_to_send = payload_out[out_list_idx][out_byte_idx:]
+                            n_sent = self.sock.send(payload_to_send)
+                            self.logger.log("%s Sent payload of length=%d" % (self.prefix, n_sent if n_sent else 0))
+                            if n_sent:
+                                total_sent += n_sent
                             out_byte_idx += n_sent
                             if out_byte_idx == self.size:
                                 self.logger.log("%s Sent message %d" % (self.prefix, out_list_idx))
@@ -302,23 +350,23 @@ def main(argv):
         while keep_running:
             time.sleep(0.1)
             if client.error is not None:
-                logger.log("%s Client stopped with error: %s" % (prefix, client.error))
+                logger.log("ECHO CLIENT %s stopped with error: %s" % (prefix, client.error))
                 keep_running = False
                 retval = 1
             if client.exit_status is not None:
-                logger.log("%s Client stopped with status: %s" % (prefix, client.exit_status))
+                logger.log("ECHO CLIENT %s stopped with status: %s" % (prefix, client.exit_status))
                 keep_running = False
             if signaller.kill_now:
-                logger.log("%s Process killed with signal" % prefix)
+                logger.log("ECHO CLIENT %s Process killed with signal" % prefix)
                 keep_running = False
             if keep_running and not client.is_running:
-                logger.log("%s Client stopped with no error or status" % prefix)
+                logger.log("ECHO CLIENT %s Client stopped with no error or status" % prefix)
                 keep_running = False
 
     except Exception:
-        client.error = "ERROR: exception : '%s'" % traceback.format_exc()
+        client.error = "ECHO CLIENT ERROR: exception : '%s'" % traceback.format_exc()
         if logger is not None:
-            logger.log("%s Exception: %s" % (prefix, traceback.format_exc()))
+            logger.log("ECHO CLIENT %s Exception: %s" % (prefix, traceback.format_exc()))
         retval = 1
 
     if client.error is not None:

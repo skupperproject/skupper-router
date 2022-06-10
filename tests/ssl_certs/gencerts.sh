@@ -34,6 +34,7 @@ openssl pkcs12 -nokeys -passin pass:bad-ca-password -in bad-ca.pkcs12 -passout p
 keytool $KEYARGS -keystore server.pkcs12 -storepass server-password -alias server-certificate -keypass server-password -genkey  -dname "O=Server,CN=$SERVER" -validity 99999
 keytool $KEYARGS -keystore server.pkcs12 -storepass server-password -alias server-certificate -keypass server-password -certreq -file server-request.pem
 keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass ca-password -gencert -rfc -validity 99999 -infile server-request.pem -outfile server-certificate.pem
+# Create a server private key file.
 openssl pkcs12 -nocerts -passin pass:server-password -in server.pkcs12 -passout pass:server-password -out server-private-key.pem
 # Create a server private key without a password
 openssl pkcs12 -nocerts -passin pass:server-password -in server.pkcs12 -nodes -out server-private-key-no-pass.pem
@@ -46,4 +47,6 @@ keytool $KEYARGS -keystore client.pkcs12 -storepass client-password -alias clien
 keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass ca-password -gencert -rfc -validity 99999 -infile client-request.pem -outfile client-certificate.pem
 # Create a client private key file.
 openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -passout pass:client-password -out client-private-key.pem
+# Create a client private key without a password
+openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -nodes -out client-private-key-no-pass.pem
 

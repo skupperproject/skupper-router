@@ -21,7 +21,7 @@
 
 #include "dispatch_private.h"
 #include "timer_private.h"
-#include "adaptor_common.h"
+#include "adaptors/adaptor_common.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
@@ -37,11 +37,14 @@
 #include <proton/event.h>
 #include <proton/ssl.h>
 
-typedef struct qd_tcp_listener_t qd_tcp_listener_t;
-typedef struct qd_tcp_connector_t qd_tcp_connector_t;
-typedef struct qdr_tcp_stats_t qdr_tcp_stats_t;
+extern const size_t TCP_BUFFER_SIZE;
+
+typedef struct qd_tcp_listener_t       qd_tcp_listener_t;
+typedef struct qd_tcp_connector_t      qd_tcp_connector_t;
+typedef struct qdr_tcp_stats_t         qdr_tcp_stats_t;
 typedef struct qd_tcp_adaptor_config_t qd_tcp_adaptor_config_t;
 typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
+
 
 struct qd_tcp_adaptor_config_t {
     qd_adaptor_config_t *adaptor_config; // Pointer to the common adaptor config used by all adaptors.
@@ -57,6 +60,8 @@ struct qdr_tcp_stats_t {
     uint64_t      connections_closed;
     uint64_t      bytes_in;
     uint64_t      bytes_out;
+    uint64_t      encrypted_bytes_in;
+    uint64_t      encrypted_bytes_out;
 };
 
 ALLOC_DECLARE(qdr_tcp_stats_t);
@@ -93,6 +98,7 @@ struct qd_tcp_connector_t
 DEQ_DECLARE(qd_tcp_connector_t, qd_tcp_connector_list_t);
 ALLOC_DECLARE(qd_tcp_connector_t);
 
+
 void qdra_tcp_connection_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
 void qdra_tcp_connection_get_next_CT(qdr_core_t *core, qdr_query_t *query);
 void qdra_tcp_connection_get_CT(qdr_core_t          *core,
@@ -103,7 +109,7 @@ void qdra_tcp_connection_get_CT(qdr_core_t          *core,
 
 void qd_free_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_log_source_t  *log_source);
 qd_error_t qd_load_tcp_adaptor_config(qd_dispatch_t *qd, qd_tcp_adaptor_config_t *config, qd_entity_t* entity);
-#define QDR_TCP_CONNECTION_COLUMN_COUNT 10
+#define QDR_TCP_CONNECTION_COLUMN_COUNT 12
 extern const char *qdr_tcp_connection_columns[QDR_TCP_CONNECTION_COLUMN_COUNT + 1];
 
 #endif

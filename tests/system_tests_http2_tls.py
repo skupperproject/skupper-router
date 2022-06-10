@@ -27,6 +27,7 @@ from proton import SASL
 from system_tests_sasl_plain import RouterTestPlainSaslCommon
 from system_tests_http2 import skip_test, skip_h2_test, image_file
 from system_tests_http2 import Http2TestTwoRouter, Http2TestBase, CommonHttp2Tests
+from system_tests_tcp_adaptor_tls import check_proton_38
 
 
 class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSslBase):
@@ -552,17 +553,17 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.3']
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
-    # Tests the HTTP2 head request
     def test_head_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge --head
         # This test should fail because the curl client is not presenting a client cert but the router has
         # authenticatePeer set to true.
+        if not check_proton_38():
+            self.skipTest("Proton version > 0.37.0 needed to run authenticate peer tests, see PROTON-2535")
         address = self.router_qdra.http_addresses[0]
         rc, out, err = self.run_curl(address,
                                      args=self.get_all_curl_args(['--head']),
                                      assert_status=False,
                                      timeout=5)
         self.assertNotEqual(0, rc, f"Expected curl to fail {out} {err}")
-
         error_log = ":peer did not return a certificate"
         self.router_qdra.wait_log_message(error_log)
