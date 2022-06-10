@@ -30,11 +30,6 @@ leak:sys_mutex
 leak:^qd_message_copy$
 leak:^qd_message_set_to_override_annotation$
 
-# Ubuntu 16.04 (Xenial)
-#
-leak:_ctypes_alloc_format_string
-leak:__strdup
-
 ####
 #### Miscellaneous 3rd party libraries:
 ####
