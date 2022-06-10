@@ -1391,7 +1391,7 @@ void qd_server_free(qd_server_t *qd_server)
         free(ctx->name);
         free(ctx->role);
         if (ctx->policy_settings)
-            free_qd_policy_settings_t(ctx->policy_settings);
+            qd_policy_settings_free(ctx->policy_settings);
         if (ctx->connector) {
             ctx->connector->qd_conn = 0;
             qd_connector_decref(ctx->connector);
