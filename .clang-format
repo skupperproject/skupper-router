@@ -27,6 +27,7 @@ AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignConsecutiveMacros: true
 KeepEmptyLinesAtTheStartOfBlocks: false
+ExperimentalAutoDetectBinPacking: true
 
 IncludeCategories:
   # python-related headers must go first
