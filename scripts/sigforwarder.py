@@ -24,7 +24,7 @@ Sigforwarder catches signals and forwards them to its grandchildren processes
 
 To use sigforwarder, configure CMake with
 
-    -DQDROUTERD_RUNNER="/absolute/path/to/sigforwarder rr record --print-trace-dir=1"
+    -DQDROUTERD_RUNNER="/absolute/path/to/sigforwarder.py rr record --print-trace-dir=1"
 
 The parameter to rr causes it to print the trace name for each given router to ctest log.
 Same output can be found in files in the build directory, such as `build/tests/system_test.dir/system_tests_autolinks/AutoLinkRetryTest/setUpClass/A-2.out`
