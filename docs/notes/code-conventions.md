@@ -19,8 +19,7 @@
 
 ## C conventions
 
-Use `clang-format` to apply the styles configured in the
-`src/.clang-format` file.
+Use `clang-format` to apply the styles configured in the `.clang-format` file.
 
     $ clang-format -i <your-file>
 
