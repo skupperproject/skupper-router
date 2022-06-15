@@ -407,6 +407,13 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         # First request
         out = self.run_curl(address, args=self.get_all_curl_args())
 
+        i = 0
+        ret_string = ""
+        while i < 1000:
+            ret_string += str(i) + ","
+            i += 1
+        self.assertIn(ret_string, out)
+
         # Second request
         address = self.router_qdra.http_addresses[0] + "/myinfo"
         out = self.run_curl(address, args=self.get_all_curl_args(['-d', 'fname=Mickey&lname=Mouse', '-X', 'POST']))

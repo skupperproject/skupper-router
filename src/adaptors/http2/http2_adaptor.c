@@ -1785,6 +1785,13 @@ static void qdr_http_delivery_update(void *context, qdr_delivery_t *dlv, uint64_
             // don't want to close the entire connection like we did not the client side.
             //
             nghttp2_submit_data(conn->session, NGHTTP2_FLAG_END_STREAM, stream_data->stream_id, &conn->data_prd);
+            // On the ingress side, there is a possibility that the client immediately closes the connection as soon as it receives the
+            // required data frames. The client does not need to wait to receive the END_STREAM flag.
+            // When that happens, the delivery on the ingress side is freed which in turn releases its peer delivery which means we can close
+            // the stream on the egress side.
+            // The stream status can be set to QD_STREAM_FULLY_CLOSED and freed.
+            advance_stream_status(stream_data);
+            stream_data->out_msg_send_complete = true;
         }
 
         nghttp2_session_send(stream_data->conn->session);
@@ -1816,6 +1823,7 @@ static void qdr_http_delivery_update(void *context, qdr_delivery_t *dlv, uint64_
         set_stream_data_delivery_flags(stream_data, dlv);
 
         if (send_complete && stream_data->status == QD_STREAM_FULLY_CLOSED) {
+            // When all the necessary HTTP2 frames have been sent and the stream is fully closed, free the stream.
             qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] qdr_http_delivery_update, stream_data->status == QD_STREAM_FULLY_CLOSED, calling free_http2_stream_data, send_complete(dlv)=%i", stream_data->conn->conn_id, stream_data->stream_id, stream_data->out_msg_send_complete);
             free_http2_stream_data(stream_data, false);
         }
