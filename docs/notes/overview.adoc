@@ -39,7 +39,7 @@ Date:   Thu Oct 24 16:01:31 2013 +0000
 	QPID-5257 - Add structure for the Dispatch sub-project
 ----
 
-Since then, four developers over 8 years.
+Since then, four developers over 8 years (as of 2022).
 
 === Broker federation
 
@@ -54,6 +54,15 @@ Router build many features to support these use-cases.
 * Exchange/Bindings
 
 All this still lives in the https://qpid.apache.org/components/dispatch-router[Qpid Dispatch Router] project.
+
+=== Packet tunnelling (LanQP)
+
+Virtual network interface can be created, that is then serving as entry point to the Router network.
+On the user end, the interface is assigned an IP address and behaves as a regular network card.
+The backed encapsulates the data into AMQP frames and sends them to the router network, which then delivers the data to correct interface on the other end.
+
+This scenario is now much better handled by the Skupper.io (see below).
+Old LanQP project (GNU GPL 2+) is at ted-ross/lanqp[https://github.com/ted-ross/lanqp].
 
 === Interconnected cloud
 
@@ -242,23 +251,361 @@ src/container.c: AMQP connection events
 
 == Startup sequence
 
-
+* main/main_process() in router/src/main.c
+   * qd_dispatch_load_config(config file….)
+      * python!
+          * qd_router_setup_late() in src/router_node:
+               * qdr_core() in src/router_core/router_core.c
+                    * spawns router_core_thread() src/router_core/router_core_thread.c
+   * qd_server_run()
+       * For each worker thread (+ main thread):
+           * thread_run(qd_server….) in src/server.c
+                * proactor main loop
+                      * src/server.c: all events
+                      * src/container.c: AMQP connection events
 
 == Shutdown Sequence
 
-see shutdown.adoc for a deeper dive
+See shutdown.adoc for a deeper dive
 
-signal_handler() router/src/main.c
-qd_server_stop()
-pn_proactor_interrupt(proactor)
-PN_PROACTOR_INTERRUPT in handle() in server.c
-propagates to all proactor thread
-sets running flag to break out of thread_run() server.c
-thread_run() returns
-qd_server_run(): joins all worker threads to main thread, returns
-Back to main_process():
-qd_dispatch_free() (src/dispatch.c)
-qd_router_free() (src/router_node.c)
-qdr_core_free() (src/router_core/router_core.c)
-sets core->running = false
-joins router core thread
+* signal_handler() router/src/main.c
+   ** qd_server_stop()
+      *** pn_proactor_interrupt(proactor)
+          **** PN_PROACTOR_INTERRUPT in handle() in server.c
+               ***** propagates to all proactor thread
+               ***** sets running flag to break out of thread_run() server.c
+               ***** thread_run() returns
+* qd_server_run(): joins all worker threads to main thread, returns
+* Back to main_process():
+    ** qd_dispatch_free() (src/dispatch.c)
+        *** qd_router_free() (src/router_node.c)
+              **** qdr_core_free() (src/router_core/router_core.c)
+                  ***** sets core->running = false (TODO: update this)
+                  ***** joins router core thread
+
+== Data plane: “gang of four”
+
+A set of top-level singleton data structures:
+
+* qd_dispatch_t - src/dispatch_private.h
+   ** “top level” structure (?); initialized first
+   ** references to qd_server_t, qd_container_t, qd_router_t
+* qd_server_t - src/server.c
+   ** references proactor
+* qd_container_t - src/container.c
+   ** “node” - AMQP event dispatch layer
+* qd_router_t - src/router_private.h
+   ** references router core (qdr_core_t)
+   ** contains the “node” used by container.c
+
+Future Architecture discussion topic: can we simplify this? Can this be more ‘adaptor like’?
+
+== Data plane: AMQP handlers (dispatch library)
+
+Interaction among:
+
+* qd_server_t - proactor AMQP event batch handler
+* qd_container_t - dispatches events to AMQP callbacks
+   ** defines a set of callbacks to handler AMQP events
+      *** qd_node_type_t in include/qpid/dispatch/container.h
+   ** callbacks are the interface to the dispatch library “application”
+* qd_router_t - router “application”
+   ** registers callbacks with the container via a “qd_node_type_t”
+   ** see the router_node structure in router_node.c
+
+== Data plane: Proactor event handling
+
+* The main proactor event loop in server.c::thread_run
+   ** qd_server_t handles all events: listener, timer, interrupt, connection
+* qd_server passes connection-related events to the container
+   ** via qd_container_handle_event(container, event, pn_conn, qd_conn)
+   ** only connection-related events, like session, link, delivery, flow, transport, wake
+* qd_container_t - dispatches events to AMQP callbacks
+   ** vectors these events into the qd_router_t callbacks
+* AMQP_xxx functions defined in src/router_node.c
+
+Note well: these are AMQP-specific events, NOT Raw Connection events!
+
+Listener and Raw Conn event handling to be discussed in the future….
+
+== Data plane: router_node.c - the AMQP “adaptor”
+
+Router interacts with proton elements (pn_connection_t, links, deliveries)
+
+“Safe” to touch proton stuff since it is running on a proactor thread (not core!)
+
+Function call naming conventions:
+
+* AMQP_xxx(): driven by incoming proactor events
+   ** peer actions involving connections, links, deliveries, disposition, etc.
+* CORE_xxx(): driven by router-generated work items
+   ** local actions to be sent to the peer, e.g. send a new delivery, accept a link, etc.
+   ** Uses the adaptor interface layer - see router_node.c::qd_router_setup_late()
+   ** Kicked off by PN_CONNECTION_WAKE event
+      *** EXCEPT CORE_connection_activate(_CT): called by core thread
+
+
+== Data plane: the Adaptor interface
+
+qdr_protocol_adaptor_t: abstraction to allow support of non-AMQP protocols
+
+* used by router_core.c, http1, http2, tcp, etc…
+* “fakes out” the router core: looks like an AMQP connection
+* Associated with the router core’s connection object qdr_connection_t
+* see qdr_protocol_adaptor() in include/qpid/dispatch/protocol_adaptor.h
+   ** router-initiated protocol actions
+      *** create an outgoing link, close a link, grant credit, send a delivery, set dispo, etc.
+   ** qd_connection_activate callback: only callback run on CORE thread!
+      *** schedules the I/O thread (pn_connection_wake(), the dreaded “timer zero”!)
+      *** the rest are run on proactor threads
+
+== Summary: Proactor AMQP Event Handlers
+
+Proactor AMQP event handlers (src/router_node.c):
+
+[source,c]
+----
+static qd_node_type_t router_node = {"router", 0, 0,
+    AMQP_rx_handler,
+    AMQP_disposition_handler,
+    AMQP_incoming_link_handler,
+    AMQP_outgoing_link_handler,
+    AMQP_writable_conn_handler,
+    AMQP_link_detach_handler,
+    AMQP_link_attach_handler,
+    qd_link_abandoned_deliveries_handler,
+    AMQP_link_flow_handler, ...,
+    AMQP_inbound_opened_handler,
+    AMQP_outbound_opened_handler,
+    AMQP_closed_handler};
+----
+
+== Summary: Adapter Interface
+
+AMQP  (src/router_node.c):
+
+[source,c]
+----
+qdr_protocol_adaptor(qd->router->router_core, "amqp", (void*) qd->router,
+    CORE_connection_activate,
+    CORE_link_first_attach,
+    CORE_link_second_attach,
+    CORE_link_detach,
+    CORE_link_flow,
+    CORE_link_offer,
+    CORE_link_drained,
+    CORE_link_drain,
+    CORE_link_push,
+    CORE_link_deliver,
+    CORE_link_get_credit,
+    CORE_delivery_update,
+    CORE_close_connection,
+    CORE_conn_trace);
+----
+
+AMQP Wiring
+Connections, Links, Deliveries, Messages
+
+
+Hierarchy
+
+Global
+
+qdr_connection_t
+qdr_link_t
+qdr_delivery_t
+qd_message_t
+
+AMQP Adaptor
+qd_connection_t
+qd_link_t
+
+TCP Adaptor
+qdr_tcp_connection_t
+
+HTTP/2 Adaptor
+qdr_http2_connection_t
+
+HTTP/1 Adaptor
+qdr_http1_connection_t
+
+
+AMQP Connections
+
+AMQP “Adaptor” specific: qd_connection_t
+
+* src/server_private.h
+* AMQP adaptor specific - not used by any other adaptor
+* Created:
+** pn_listener accept (incoming)
+** Connector (outgoing)
+* Proactor facing:
+** pn_connection_t, pn_session_t(s), pn_ssl
+* extensively used in router_node.c (AMQP_xxx)
+* libWebsockets (router web console)
+
+Router connection: qdr_connection_t
+* src/router_core/router_core_private.h
+* “abstract” connection representation
+* Holds list of child links (qdr_link_t)
+* work queue (qdr_connection_process())
+
+constructor:
+
+[source,c]
+----
+qdr_connection_t *qdr_connection_opened(qdr_core_t               	*core,
+                                    	qdr_protocol_adaptor_t    	*protocol_adaptor,
+                                    	bool                       	incoming,
+                                    	qdr_connection_role_t      	role,
+                                    	int                        	cost,
+                                    	uint64_t                   	management_id,
+                                    	const char                	*label,
+                                    	const char                	*remote_container_id,
+                                    	bool                       	strip_annotations_in,
+                                    	bool                       	strip_annotations_out,
+                                    	int                        	link_capacity,
+                                    	const qd_policy_spec_t    	*policy_spec,
+                                    	qdr_connection_info_t     	*connection_info,
+                                    	qdr_connection_bind_context_t  context_binder,
+                                    	void                      	*bind_token);
+----
+
+* qdr_connection_opened()
+** include/qpid/dispatch/protocol_adaptor.h
+** invoked on data-plane thread
+*** router_node.c::AMQP_opened_handler()
+*** other adaptors:
+**** pn_listener accept handling (incoming)
+**** locally initiated outgoing conn to server
+*** sent via action to core thread - qdr_connection_opened_CT()
+** teardown: qdr_connection_closed()
+*** include/qpid/dispatch/protocol_adaptor.h
+*** invoked on data-plane thread
+**** adaptor “conn_close” handler for non-AMQP adaptors
+**** in response to protocol close:
+***** router_node.c::AMQP_closed_handler()
+***** handling PN_RAW_CONNECTION_DISCONNECTED
+*** sends action w/qdr_connection_closed_CT()
+
+AMQP Links
+
+* “Adaptor” specific: qd_link_t
+** structure definition private to src/container.c
+** AMQP adaptor specific - not used by any other adaptor
+** Proactor facing:
+*** pn_link_t, pn_session_t
+** Created:
+*** handling remote-initiated PN_LINK_REMOTE_OPEN
+*** locally initiated via AMQP protocol adaptor “link first attach” handler
+**** router_node.c::CORE_link_first_attach()
+** Destroyed: qd_link_free()
+*** router_core.c::AMQP_link_detach_handler()
+*** locally initiated via AMQP protocol adaptor “link detach” handler
+**** router_core.c::CORE_link_detach()
+
+* Router link: qdr_link_t
+** src/router_core/router_core_private.h
+** “abstract” link representation
+** Constructed:
+*** router_core/connections.c::qdr_link_first_attach()
+**** invoked by data plane thread
+***** AMQP container callbacks:
+****** router_node.c::AMQP_incoming/outgoing_link_handler()
+**** sent via action to core - qdr_inbound_first_attach_CT()
+*** locally initiated by control plane
+**** qdr_create_link_CT()
+** Destroyed:
+*** router_core/connections.c::qdr_link_cleanup_CT()
+**** in response to remote or locally initiated detach
+
+** Holds list of active deliveries (qdr_delivery_t)
+*** undelivered - forwarding not complete
+*** unsettled - forwarded, pending settlement
+*** settled - pre-settled but buffers not fully sent
+*** updated - delivery state changed; need processing
+** link work queue (qdr_connection_process())
+
+AMQP Sessions
+
+Not surfaced beyond the AMQP adaptor (src/container.c)
+
+qdr_delivery_t
+
+* Represents a message transfer
+* src/router_core/delivery.h
+* Used by all adaptors
+** AMQP adaptor holds pn_delivery_t in user context field
+** atomic reference counted
+* 1-to-1 relationship with a qd_message_t
+* Owned by parent qdr_link_t
+* linked together as peers:
+** 1 incoming
+** 1..N outgoing (1 if unicast, else multicast)
+** Or not… locally-generated outgoing messages (routing updates, mgmt, etc)
+* local and remote delivery state
+** outcome
+
+qd_message_t  (src/message.c, src/message_private.h)
+
+// TODO diagram, maybe use asciiart in source?
+
+qd_message_t
+
+* src/message.c and src/message_private.h
+** message_private.h shared with unit test code
+* include/qpid/dispatch/message.h public API
+** qd_message()
+** qd_message_free()
+** qd_message_copy()
+** …
+* Uses a codec for parsing and composition
+** parse.h and compose.h
+** iterators!
+
+Aside: qd_iterator_t
+
+Iterators?
+
+* demarcate a span of data in a qd_buffer_t chain
+* starting buffer, offset, length in octets
+* “view” - transform the underlying data based on context
+** addresses and “node” identifiers (router id)
+** hashing
+** ITER_VIEW_ALL: no transformation, just raw data
+* used to access data in messages
+** message sections
+** fields within sections
+** example: qd_message_field_iterator(msg, QD_FIELD_REPLY_TO)
+*** creates an iterator referencing the reply-to field in the Message Properties Section
+
+qd_message_t
+
+Created:
+
+* `qd_message_receive()` - read from pn_link_t (AMQP only)
+* locally generated (e.g. incoming from adaptor client)
+** `qd_message_compose<_N>(... composed_fields,...)`
+** `qd_message_extend(msg, composed_field, …)`
+* Copied when forwarded (`qd_message_copy`)
+** instantiates a new `qd_message_t`
+** references the same `qd_message_content_t`  (ref_counted)
+* Transmit
+** `qd_message_send(msg, …)` written to `pn_link_t` (AMQP only)
+** Adaptors directly access headers and body in data buffers:
+*** e.g `src/adaptors/http1/http1_client.c::_encode_response_message()`
+*** Access non-data sections via iterators
+*** Body via a Stream Data API
+
+AMQP Body Stream Data
+
+* Provides support for managing data in streaming messages
+* Used by Adaptors to generate/parse AMQP message body sections
+** Adaptors put incoming client data into the AMQP message body section
+** This is done in “chunks” of AMQP Body Data sections
+** Why?  Total size is unknown upfront
+* An iterator type API is provided to parse incoming AMQP message bodies
+** qd_message_stream_data_t
+** `qd_message_next_stream_data(msg, qd_message_stream_data_t *)`
+** example: `http1_client.c::_encode_response_message()`
+
