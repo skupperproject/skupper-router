@@ -24,7 +24,10 @@ Use `clang-format` to apply the styles configured in the `.clang-format` file.
     $ clang-format -i <your-file>
 
 Use the [`git-clang-format`](https://github.com/llvm/llvm-project/blob/main/clang/tools/clang-format/git-clang-format)
-script to only reformat your outstanding modified files in a git repository.
+script to only reformat your outstanding modified source code lines in a git repository.
+The script is likely present in your Linux distribution packages, e.g. on Fedora,
+
+    $ dnf install git-clang-format
 
 Reformat entire repository using the following command, then analyze how much has changed
 
