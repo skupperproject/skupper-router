@@ -178,7 +178,12 @@ void qd_dispatch_delete_http_listener(qd_dispatch_t *qd, void *impl)
 
 qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl)
 {
-    return QD_ERROR_NONE;
+    qd_http_listener_t *listener = (qd_http_listener_t*) impl;
+    qd_listener_oper_status_t os = qd_adaptor_listener_oper_status(listener->adaptor_listener);
+    if (qd_entity_set_string(entity, "operStatus",
+                             os == QD_LISTENER_OPER_UP ? "up" : "down") == 0)
+        return QD_ERROR_NONE;
+    return qd_error_code();
 }
 
 
@@ -241,29 +246,21 @@ qd_error_t qd_entity_refresh_httpConnector(qd_entity_t* entity, void *impl)
 // qd_http_listener_t constructor
 //
 
-qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_server_event_handler_t handler)
+qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_http_adaptor_config_t *config)
 {
     qd_http_listener_t *li = new_qd_http_listener_t();
     if (!li)
         return 0;
     ZERO(li);
-
-    li->pn_listener = pn_listener();
-    if (!li->pn_listener) {
-        free_qd_http_listener_t(li);
-        return 0;
-    }
-
     sys_atomic_init(&li->ref_count, 1);
     li->server = server;
-    li->context.context = li;
-    li->context.handler = handler;
-    pn_listener_set_context(li->pn_listener, &li->context);
+    li->config = config;
+    DEQ_ITEM_INIT(li);
 
     return li;
 }
 
-void qd_http_listener_decref(qd_http_listener_t* li)
+void qd_http_listener_decref(qd_http_listener_t *li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         qd_free_http_adaptor_config(li->config);

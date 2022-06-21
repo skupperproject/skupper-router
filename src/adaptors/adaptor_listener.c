@@ -129,12 +129,11 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
         switch (pn_event_type(e)) {
 
         case PN_LISTENER_OPEN:
-            qd_log(log, QD_LOG_DEBUG, "%s listening on %s", li->name, li->host_port);
+            qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s", li->name, li->host_port);
             break;
 
         case PN_LISTENER_ACCEPT:
-            qd_log(log, QD_LOG_INFO, "Listener %s accepting client connection to %s",
-                   li->name, li->host_port);
+            qd_log(log, QD_LOG_INFO, "Listener %s: new incoming client connection to %s", li->name, li->host_port);
 
             // block qd_adapter_listener_close() from returning during the accept call:
             sys_mutex_lock(li->lock);
@@ -154,14 +153,10 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
         case PN_LISTENER_CLOSE: {
             pn_condition_t *cond = pn_listener_condition(pn_event_listener(e));
             if (cond && pn_condition_is_set(cond)) {
-                qd_log(log, QD_LOG_ERROR, "%s proactor listener error on %s: %s (%s)",
-                       li->name,
-                       li->host_port,
-                       pn_condition_get_name(cond),
-                       pn_condition_get_description(cond));
+                qd_log(log, QD_LOG_ERROR, "Listener %s: proactor listener error on %s: %s (%s)", li->name,
+                       li->host_port, pn_condition_get_name(cond), pn_condition_get_description(cond));
             } else {
-                qd_log(log, QD_LOG_DEBUG, "PN_LISTENER_CLOSE %s listener closed on %s",
-                       li->name,
+                qd_log(log, QD_LOG_INFO, "Listener %s: stopped listening for client connections on %s", li->name,
                        li->host_port);
             }
 
@@ -192,14 +187,15 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                     // Note: the call to pn_proactor_listen may cause this
                     // listener event handler to start executing immediately on
                     // another thread.
-                    pn_proactor_listen(pn_listener_proactor(li->pn_listener), li->pn_listener, li->host_port, QD_LISTENER_BACKLOG);
+                    pn_proactor_listen(qd_server_proactor(qd_server), li->pn_listener, li->host_port,
+                                       QD_LISTENER_BACKLOG);
                 }
             }
 
             sys_mutex_unlock(li->lock);
 
             if (re_created) {
-                qd_log(log, QD_LOG_DEBUG, "Re-creating listener %s socket address %s for service address %s",
+                qd_log(log, QD_LOG_DEBUG, "Re-creating listener %s socket on address %s for service address %s",
                        li->name, li->host_port, li->service_address);
             }
 
@@ -237,11 +233,10 @@ static void _on_watched_address_update(void     *context,
         //
         qd_adaptor_listener_t *li = (qd_adaptor_listener_t*) context;
 
-        qd_log(li->log_source, QD_LOG_DEBUG,
+        qd_log(li->log_source, QD_LOG_TRACE,
                "Listener %s (%s) service address %s consumer count updates:"
-               " local=%"PRIu32" in-process=%"PRIu32" remote=%"PRIu32,
-               li->name, li->host_port, li->service_address,
-               local_consumers, in_proc_consumers, remote_consumers);
+               " local=%" PRIu32 " in-process=%" PRIu32 " remote=%" PRIu32,
+               li->name, li->host_port, li->service_address, local_consumers, in_proc_consumers, remote_consumers);
 
         sys_mutex_lock(li->lock);
 
@@ -279,14 +274,12 @@ static void _on_watched_address_update(void     *context,
         sys_mutex_unlock(li->lock);
 
         if (stopped)
-            qd_log(li->log_source, QD_LOG_DEBUG,
-                   "Closing listener %s (%s): no service for address %s",
+            qd_log(li->log_source, QD_LOG_DEBUG, "Closing listener %s (%s) socket: no service available for address %s",
                    li->name, li->host_port, li->service_address);
 
         else if (created)
-            qd_log(li->log_source, QD_LOG_DEBUG,
-                   "Creating listener %s (%s) for service address %s",
-                   li->name, li->host_port, li->service_address);
+            qd_log(li->log_source, QD_LOG_DEBUG, "Creating listener %s (%s) socket for service address %s", li->name,
+                   li->host_port, li->service_address);
     }
 }
 

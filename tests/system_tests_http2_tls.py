@@ -19,6 +19,7 @@
 import os
 import unittest
 
+from http1_tests import wait_http_listeners_up
 from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
 
@@ -80,6 +81,8 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
         ])
         cls.router_qdra = cls.tester.qdrouterd(name, config, wait=True)
         cls.router_qdra.wait_http_server_connected()
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
+
         if cls.tls_v12:
             cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.2']
         else:
@@ -180,6 +183,7 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         cls.router_qdra.wait_router_connected('QDR.B')
         cls.router_qdrb.wait_router_connected('QDR.A')
         cls.router_qdrb.wait_http_server_connected(is_tls=True)
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
@@ -326,6 +330,7 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
         cls.router_qdra.wait_router_connected('QDR.B')
         cls.router_qdrb.wait_router_connected('QDR.A')
         cls.router_qdrb.wait_http_server_connected(is_tls=True)
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
@@ -477,6 +482,7 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
         cls.router_qdrb.wait_router_connected('QDR.A')
         cls.router_qdra.wait_router_connected('QDR.B')
         cls.router_qdrb.wait_http_server_connected(is_tls=True)
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
@@ -540,6 +546,7 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         ])
         cls.router_qdra = cls.tester.qdrouterd(name, config, wait=True)
         cls.router_qdra.wait_http_server_connected()
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # Note that the curl client does not present client cert. It only presents the ca-cert
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.3']

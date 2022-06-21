@@ -30,6 +30,7 @@ from http.client import HTTPConnection
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
+from system_test import retry_exception
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -38,6 +39,7 @@ from http1_tests import CommonHttp1Edge2EdgeTest
 from http1_tests import Http1Edge2EdgeTestBase
 from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
+from http1_tests import wait_http_listeners_up
 
 
 class Http1AdaptorManagementTest(TestCase):
@@ -303,6 +305,7 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
                                                   tests=cls.TESTS_10,
                                                   handler_cls=RequestHandler10)
         cls.INT_A.wait_connectors()
+        wait_http_listeners_up(cls.INT_A.addresses[0])
 
     @classmethod
     def tearDownClass(cls):
@@ -838,11 +841,16 @@ class Http1AdaptorQ2Standalone(TestCase):
         server_sock.settimeout(0.5)
         server_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
+        wait_http_listeners_up(router.addresses[0])
+
         # create a client connection to the router
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_sock.settimeout(0.5)
         client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        client_sock.connect((host_port[0], listener_port))
+        retry_exception(lambda: client_sock.connect((host_port[0],
+                                                     listener_port)),
+                        delay=0.25,
+                        exception=ConnectionRefusedError)
+        client_sock.settimeout(0.5)
 
         # send a Very Large PUSH request, expecting it to block at some point
 
@@ -915,11 +923,16 @@ class Http1AdaptorQ2Standalone(TestCase):
         server_sock.settimeout(0.5)
         server_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
+        wait_http_listeners_up(router.addresses[0])
+
         # create a client connection to the router
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_sock.settimeout(0.5)
         client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        client_sock.connect((host_port[0], listener_port))
+        retry_exception(lambda: client_sock.connect((host_port[0],
+                                                     listener_port)),
+                        delay=0.25,
+                        exception=ConnectionRefusedError)
+        client_sock.settimeout(0.5)
 
         # send GET request - expect this to be successful
         count = self._write_until_full(client_sock, small_get_req, 1.0)

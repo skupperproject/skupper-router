@@ -1036,6 +1036,11 @@
                     "required": false,
                     "description": "Enables restricted event mode where no responses are sent to request and only post is allowed",
                     "create": true
+                },
+                "operStatus": {
+                    "type": ["up", "down"],
+                    "description": "The operational status of the HTTP socket listener: up - the service is active and incoming connections are permitted; down - the service is not active and incoming connection attempts will be refused.",
+                    "create": false
                 }
             }
         },
