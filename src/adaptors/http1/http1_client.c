@@ -125,8 +125,7 @@ static bool _find_token(const char *list, const char *value);
 // HTTP/1.x Client Listener
 ////////////////////////////////////////////////////////
 
-
-// Listener received connection request from client
+// Create a new client connection. Runs on the proactor listener thread.
 //
 static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
 {
@@ -159,12 +158,7 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
     config.request_complete = _client_request_complete_cb;
 
     hconn->http_conn = h1_codec_connection(&config, hconn);
-    if (!hconn->http_conn) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR,
-               "Failed to initialize HTTP/1.x library - connection refused.");
-        qdr_http1_connection_free(hconn);
-        return 0;
-    }
+    assert(hconn->http_conn);
 
     hconn->cfg.host = qd_strdup(li->config->adaptor_config->host);
     hconn->cfg.port = qd_strdup(li->config->adaptor_config->port);
@@ -184,62 +178,18 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
     return hconn;
 }
 
-
-// Process proactor events for the client listener
+// Handle the proactor listener accept event. This runs on the proactor listener thread.
 //
-static void _handle_listener_events(pn_event_t *e, qd_server_t *qd_server, void *context)
+static void _handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
 {
-    qd_log_source_t *log = qdr_http1_adaptor->log;
-    qd_http_listener_t *li = (qd_http_listener_t*) context;
-    const char *host_port = li->config->adaptor_config->host_port;
-
-    qd_log(log, QD_LOG_DEBUG, "HTTP/1.x Client Listener Event %s\n", pn_event_type_name(pn_event_type(e)));
-
-    switch (pn_event_type(e)) {
-
-    case PN_LISTENER_OPEN: {
-        qd_log(log, QD_LOG_NOTICE, "Listening for HTTP/1.x client requests on %s", host_port);
-        break;
-    }
-
-    case PN_LISTENER_ACCEPT: {
-        qd_log(log, QD_LOG_DEBUG, "Accepting HTTP/1.x connection on %s", host_port);
-        qdr_http1_connection_t *hconn = _create_client_connection(li);
-        if (hconn) {
-            // Note: the proactor may schedule the hconn on another thread
-            // during this call!
-            pn_listener_raw_accept(li->pn_listener, hconn->raw_conn);
-        }
-        break;
-    }
-
-    case PN_LISTENER_CLOSE: {
-        if (li->pn_listener) {
-            pn_condition_t *cond = pn_listener_condition(li->pn_listener);
-            if (pn_condition_is_set(cond)) {
-                qd_log(log, QD_LOG_ERROR, "Listener error on %s: %s (%s)", host_port,
-                       pn_condition_get_description(cond),
-                       pn_condition_get_name(cond));
-            } else {
-                qd_log(log, QD_LOG_TRACE, "Listener closed on %s", host_port);
-            }
-
-            sys_mutex_lock(qdr_http1_adaptor->lock);
-            pn_listener_set_context(li->pn_listener, 0);
-            li->pn_listener = 0;
-            DEQ_REMOVE(qdr_http1_adaptor->listeners, li);
-            sys_mutex_unlock(qdr_http1_adaptor->lock);
-
-            qd_http_listener_decref(li);
-        }
-        break;
-    }
-
-    default:
-        break;
+    qd_http_listener_t     *li    = (qd_http_listener_t *) context;
+    qdr_http1_connection_t *hconn = _create_client_connection(li);
+    if (hconn) {
+        // Note: the proactor may schedule the hconn on another thread
+        // during this call!
+        pn_listener_raw_accept(pn_listener, hconn->raw_conn);
     }
 }
-
 
 // Management Agent API - Create
 //
@@ -248,13 +198,13 @@ static void _handle_listener_events(pn_event_t *e, qd_server_t *qd_server, void 
 //
 qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
-    qd_http_listener_t *li = qd_http_listener(qd->server, &_handle_listener_events);
+    qd_http_listener_t *li = qd_http_listener(qd->server, config);
     if (!li) {
         qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR, "Unable to create http listener: no memory");
         return 0;
     }
-    li->config = config;
-    DEQ_ITEM_INIT(li);
+
+    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, qdr_http1_adaptor->log);
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL,         "http1");
@@ -264,12 +214,12 @@ qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, qd_http_adapt
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->config->adaptor_config->address);
 
     sys_mutex_lock(qdr_http1_adaptor->lock);
-    DEQ_INSERT_TAIL(qdr_http1_adaptor->listeners, li);
+    DEQ_INSERT_TAIL(qdr_http1_adaptor->listeners, li);  // holds li refcount
     sys_mutex_unlock(qdr_http1_adaptor->lock);
 
     qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Configured HTTP_ADAPTOR listener on %s", li->config->adaptor_config->host_port);
-    // Note: the proactor may schedule the pn_listener on another thread during this call
-    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->adaptor_config->host_port, LISTENER_BACKLOG);
+    // Note: the proactor may execute _handle_listener_accept on another thread during this call
+    qd_adaptor_listener_listen(li->adaptor_listener, _handle_listener_accept, (void *) li);
     return li;
 }
 
@@ -283,13 +233,15 @@ void qd_http1_delete_listener(qd_dispatch_t *ignore, qd_http_listener_t *li)
 {
     if (li) {
         qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleting HttpListener for %s, %s:%s", li->config->adaptor_config->address, li->config->adaptor_config->host, li->config->adaptor_config->port);
+
+        qd_adaptor_listener_close(li->adaptor_listener);
+        li->adaptor_listener = 0;
+
         sys_mutex_lock(qdr_http1_adaptor->lock);
-        if (li->pn_listener) {
-            // note that the proactor may immediately schedule the
-            // PN_LISTENER_CLOSED event on another thread...
-            pn_listener_close(li->pn_listener);
-        }
+        DEQ_REMOVE(qdr_http1_adaptor->listeners, li);
         sys_mutex_unlock(qdr_http1_adaptor->lock);
+
+        qd_http_listener_decref(li);
     }
 }
 

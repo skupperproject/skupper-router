@@ -25,12 +25,14 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
 from http.client import HTTPException
 from threading import Thread, Event
-from time import sleep
+from time import sleep, time
 
-from typing import List, Any, Tuple, Mapping
+from typing import List, Any, Tuple, Mapping, Optional
 
+from skupper_router.management.client import Node
 from system_test import TestCase, TIMEOUT, Logger, Qdrouterd, unittest
-from system_test import curl_available, run_curl
+from system_test import curl_available, run_curl, retry
+from system_test import retry_exception
 
 
 CURL_VERSION = (7, 47, 0)   # minimum required
@@ -170,21 +172,34 @@ class ThreadedTestClient:
     An HTTP client running in a separate thread
     """
 
-    def __init__(self, tests, port, repeat=1):
+    def __init__(self, tests, port, repeat=1, wait=True, timeout=TIMEOUT):
         self._id = uuid.uuid4().hex
         self._conn_addr = ("127.0.0.1:%s" % port)
         self._tests = tests
         self._repeat = repeat
         self._logger = Logger(title="TestClient: %s" % self._id,
                               print_to_console=False)
-        self._thread = Thread(target=self._run, daemon=True)
+        self._thread = Thread(target=self._run, args=(wait, timeout), daemon=True)
         self.error = None
         self.count = 0
         self._thread.start()
 
-    def _run(self):
+    def _run(self, wait, timeout):
         self._logger.log("TestClient connecting on %s" % self._conn_addr)
-        client = HTTPConnection(self._conn_addr, timeout=TIMEOUT)
+        client = HTTPConnection(self._conn_addr, timeout=timeout)
+        deadline = timeout + time()
+        while True:
+            # wait for listener socket to initialize
+            try:
+                client.connect()
+                break
+            except ConnectionRefusedError:
+                if wait is False or time() >= deadline:
+                    self._logger.log("TestClient: connection to %s refused"
+                                     % self._conn_addr)
+                    self._logger.dump()
+                    return
+                sleep(0.25)
         try:
             self._logger.log("TestClient connected")
             for loop in range(self._repeat):
@@ -247,7 +262,9 @@ class TestServer:
         self._server_error = None
         self._is_ready = Event()
         self._thread = Thread(target=self._run, args=(tests,
-                                                      handler_cls or RequestHandler))
+                                                      handler_cls or
+                                                      RequestHandler),
+                              daemon=True)
         self._thread.start()
 
         # Block the caller until the MyHTTPServer.__init__() call completes in
@@ -325,17 +342,23 @@ class TestServer:
         for the duration of the entire testclass. The only place for server to graciously die is
         after processing an incoming request and closing the connection, but before accepting a new one.
         """
-        client = HTTPConnection("127.0.0.1:%s" % self._client_port,
-                                timeout=TIMEOUT)
-        try:
-            client.putrequest("POST", "/SHUTDOWN")
-            client.putheader("Content-Length", "0")
-            client.endheaders()
-            with client.getresponse() as response:
-                body = response.read()
-            assert body == b'Server Closed', f"Unexpectedly, response was {body}"
-        finally:
-            client.close()
+        shutdown_request = b'POST /SHUTDOWN HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+            client.settimeout(TIMEOUT)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+            # allow time for the listening socket to initialize
+            retry_exception(lambda: client.connect(("127.0.0.1", self._client_port)),
+                            delay=0.25, exception=ConnectionRefusedError)
+            client.sendall(shutdown_request, socket.MSG_WAITALL)
+            reply = b''
+            while True:
+                reply += client.recv(4096)
+                if b'Server Closed' in reply:
+                    break
 
     def __enter__(self):
         return self
@@ -343,6 +366,42 @@ class TestServer:
     def __exit__(self, type, value, traceback):
         if self._thread.is_alive():
             self.wait()
+
+
+def wait_http_listeners_up(mgmt_address: str,
+                           l_filter: Optional[Mapping[str, Any]] = None,
+                           timeout: float = TIMEOUT):
+    """
+    Wait until the configured HTTP listener sockets have come up. Optionally
+    filter the set of configured listeners using attribute names and values
+    """
+
+    LISTENER_TYPE = 'io.skupper.router.httpListener'
+    mgmt = Node.connect(mgmt_address, timeout=timeout)
+    l_filter = l_filter or {}
+    attributes = set(l_filter.keys())
+    attributes.add("name")  # required for query() to work
+    attributes.add("operStatus")
+
+    def _filter_listener(listener):
+        for key, value in l_filter:
+            if listener[key] != value:
+                return False
+        return True
+
+    def _check():
+        listeners = mgmt.query(type=LISTENER_TYPE,
+                               attribute_names=list(attributes)).get_dicts()
+        listeners = filter(_filter_listener, listeners)
+        assert listeners, "Filter error: no listeners matched"
+        for listener in listeners:
+            if listener['operStatus'] != 'up':
+                print("Listener %s is not active, retrying..." %
+                      listener['name'], flush=True)
+                return False
+        return True
+    assert retry(_check, timeout=timeout, delay=0.25), \
+        "Timed out waiting for HTTP listener sockets to activate"
 
 
 def http1_ping(sport, cport):

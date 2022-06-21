@@ -41,7 +41,6 @@ const char *METHOD = ":method";
 const char *STATUS = ":status";
 const char *CONTENT_TYPE = "content-type";
 const char *CONTENT_ENCODING = "content-encoding";
-static const int BACKLOG = 50;  /* Listening backlog */
 
 #define DEFAULT_CAPACITY 250
 #define READ_BUFFERS 4
@@ -1649,7 +1648,6 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
 
     nghttp2_session_server_new(&(ingress_http_conn->session), (nghttp2_session_callbacks*)http2_adaptor->callbacks, ingress_http_conn);
     pn_raw_connection_set_context(ingress_http_conn->pn_raw_conn, ingress_http_conn);
-    pn_listener_raw_accept(listener->pn_listener, ingress_http_conn->pn_raw_conn);
     return ingress_http_conn;
 }
 
@@ -3216,48 +3214,13 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     }
 }
 
-
-static void handle_listener_event(pn_event_t *e, qd_server_t *qd_server, void *context) {
-    qd_log_source_t *log = http2_adaptor->log_source;
-
-    qd_http_listener_t *li = (qd_http_listener_t*) context;
-    const char *host_port = li->config->adaptor_config->host_port;
-
-    switch (pn_event_type(e)) {
-        case PN_LISTENER_OPEN: {
-            qd_log(log, QD_LOG_NOTICE, "Listening on %s", host_port);
-        }
-        break;
-
-        case PN_LISTENER_ACCEPT: {
-            qd_log(log, QD_LOG_INFO, "Accepting HTTP connection on %s", host_port);
-            qdr_http_connection_ingress(li);
-        }
-        break;
-
-        case PN_LISTENER_CLOSE: {
-            if (li->pn_listener) {
-                pn_condition_t *cond = pn_listener_condition(li->pn_listener);
-                if (pn_condition_is_set(cond)) {
-                    qd_log(log, QD_LOG_ERROR, "Listener error on %s: %s (%s)", host_port, pn_condition_get_description(cond), pn_condition_get_name(cond));
-                }
-                else {
-                    qd_log(log, QD_LOG_TRACE, "Listener closed on %s", host_port);
-                }
-            }
-
-            sys_mutex_lock(http2_adaptor->lock);
-            pn_listener_set_context(li->pn_listener, 0);
-            li->pn_listener = 0;
-            DEQ_REMOVE(http2_adaptor->listeners, li);
-            sys_mutex_unlock(http2_adaptor->lock);
-            qd_http_listener_decref(li);
-        }
-        break;
-
-        default:
-            break;
-    }
+// Handle the proactor listener accept event. This runs on the proactor listener thread.
+//
+static void handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
+{
+    qd_http_listener_t     *li   = (qd_http_listener_t *) context;
+    qdr_http2_connection_t *conn = qdr_http_connection_ingress(li);
+    pn_listener_raw_accept(pn_listener, conn->pn_raw_conn);
 }
 
 /**
@@ -3285,28 +3248,48 @@ void qd_http2_delete_connector(qd_dispatch_t *qd, qd_http_connector_t *connector
  */
 void qd_http2_delete_listener(qd_dispatch_t *qd, qd_http_listener_t *li)
 {
-    sys_mutex_lock(http2_adaptor->lock);
     if (li) {
-        if (li->pn_listener) {
-            pn_listener_close(li->pn_listener);
-        }
+        qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Deleting HttpListener for %s, %s:%s",
+               li->config->adaptor_config->address, li->config->adaptor_config->host, li->config->adaptor_config->port);
+
+        qd_adaptor_listener_close(li->adaptor_listener);
+        li->adaptor_listener = 0;
+
+        sys_mutex_lock(http2_adaptor->lock);
+        DEQ_REMOVE(http2_adaptor->listeners, li);
+        sys_mutex_unlock(http2_adaptor->lock);
+
+        qd_http_listener_decref(li);
     }
-    sys_mutex_unlock(http2_adaptor->lock);
 }
 
-
+/**
+ * Create listener via Management request
+ */
 qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
-    qd_http_listener_t *li = qd_http_listener(qd->server, &handle_listener_event);
+    qd_http_listener_t *li = qd_http_listener(qd->server, config);
     if (!li) {
         qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "Unable to create http listener: no memory");
         return 0;
     }
 
-    li->config = config;
-    DEQ_INSERT_TAIL(http2_adaptor->listeners, li);
+    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, http2_adaptor->log_source);
+
+    li->plog = plog_start_record(PLOG_RECORD_LISTENER, 0);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_PROTOCOL, "http2");
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_NAME, li->config->adaptor_config->name);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
+    plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS, li->config->adaptor_config->address);
+
+    sys_mutex_lock(http2_adaptor->lock);
+    DEQ_INSERT_TAIL(http2_adaptor->listeners, li);  // holds li refcount
+    sys_mutex_unlock(http2_adaptor->lock);
+
     qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Configured http2_adaptor listener on %s", li->config->adaptor_config->host_port);
-    pn_proactor_listen(qd_server_proactor(li->server), li->pn_listener, li->config->adaptor_config->host_port, BACKLOG);
+    // Note: the proactor may execute _handle_listener_accept on another thread during this call
+    qd_adaptor_listener_listen(li->adaptor_listener, handle_listener_accept, (void *) li);
     return li;
 }
 
@@ -3371,6 +3354,7 @@ static void qdr_http2_adaptor_final(void *adaptor_context)
     qd_http_listener_t *li = DEQ_HEAD(adaptor->listeners);
     while (li) {
         DEQ_REMOVE_HEAD(adaptor->listeners);
+        assert(sys_atomic_get(&li->ref_count) == 1);  // leak check
         qd_http_listener_decref(li);
         li = DEQ_HEAD(adaptor->listeners);
     }

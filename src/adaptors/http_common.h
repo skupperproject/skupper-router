@@ -19,10 +19,10 @@
  * under the License.
  */
 
+#include "adaptor_common.h"
+#include "adaptor_listener.h"
 #include "delivery.h"
 #include "entity.h"
-
-#include "adaptor_common.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
@@ -57,17 +57,16 @@ ALLOC_DECLARE(qd_http_adaptor_config_t);
 typedef struct qd_http_listener_t qd_http_listener_t;
 struct qd_http_listener_t {
     qd_http_adaptor_config_t  *config;
-    qd_handler_context_t       context;
     sys_atomic_t               ref_count;
     qd_server_t               *server;
-    pn_listener_t             *pn_listener;
     vflow_record_t            *vflow;
+    qd_adaptor_listener_t     *adaptor_listener;
     DEQ_LINKS(qd_http_listener_t);
 };
 DEQ_DECLARE(qd_http_listener_t, qd_http_listener_list_t);
 
-qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_server_event_handler_t handler);
-void qd_http_listener_decref(qd_http_listener_t* li);
+qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_http_adaptor_config_t *config);
+void                qd_http_listener_decref(qd_http_listener_t *li);
 
 typedef struct qd_http_connector_t qd_http_connector_t;
 struct qd_http_connector_t {
