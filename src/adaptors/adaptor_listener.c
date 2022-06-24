@@ -73,6 +73,15 @@ static qd_adaptor_listener_list_t _listeners;
 //
 static bool _finalized;
 
+// There is a window during listener shutdown where connection attempts may occur. These connections need to be
+// rejected. Proactor does not provide a "reject" api for the listener, so we have to accept them and immediately close
+// them. This is a raw connect event handler that just closes the connection.
+//
+static void _conn_event_handler(pn_event_t *e, qd_server_t *qd_server, void *context);
+
+static qd_handler_context_t _conn_event_context = {
+    .handler = _conn_event_handler,
+};
 
 // called during shutdown: must not schedule work!
 static void _listener_free(qd_adaptor_listener_t *li)
@@ -83,7 +92,6 @@ static void _listener_free(qd_adaptor_listener_t *li)
     sys_mutex_free(li->lock);
     free_qd_adaptor_listener_t(li);
 }
-
 
 static void _listener_decref(qd_adaptor_listener_t *li)
 {
@@ -96,6 +104,9 @@ static void _listener_decref(qd_adaptor_listener_t *li)
             sys_mutex_lock(_listeners_lock);
             DEQ_REMOVE(_listeners, li);
             sys_mutex_unlock(_listeners_lock);
+
+            // expect the proton listener has been successfully closed
+            assert(li->pn_listener == 0);
 
             _listener_free(li);
             return;
@@ -129,6 +140,14 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             sys_mutex_lock(li->lock);
             if (li->on_accept)
                 li->on_accept(li, pn_event_listener(e), li->user_context);
+            else {
+                // the adaptor_listener is closing but a connection attempt arrived before the
+                // cleanup is complete.  Need to accept it then close it when the connection
+                // completes
+                pn_raw_connection_t *close_me = pn_raw_connection();
+                pn_raw_connection_set_context(close_me, &_conn_event_context);
+                pn_listener_raw_accept(pn_event_listener(e), close_me);
+            }
             sys_mutex_unlock(li->lock);
             break;
 
@@ -276,10 +295,24 @@ static void _on_watched_address_cancel(void *context)
 {
     if (!_finalized) {
         qd_adaptor_listener_t *li = (qd_adaptor_listener_t*) context;
+
+        sys_mutex_lock(li->lock);
+        if (li->pn_listener) {
+            pn_listener_close(li->pn_listener);
+        }
+        sys_mutex_unlock(li->lock);
+
         _listener_decref(li);
     }
 }
 
+static void _conn_event_handler(pn_event_t *e, qd_server_t *qd_server, void *context)
+{
+    // the listener is closing - reject the connection
+    if (pn_event_type(e) == PN_RAW_CONNECTION_CONNECTED) {
+        pn_raw_connection_close(pn_event_raw_connection(e));
+    }
+}
 
 qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t *qd,
                                            const qd_adaptor_config_t *config,
