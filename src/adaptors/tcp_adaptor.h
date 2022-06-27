@@ -63,6 +63,8 @@ ALLOC_DECLARE(qdr_tcp_stats_t);
 
 struct qd_tcp_listener_t
 {
+    // ref_count: tcp_adapter listener list, child connections
+    sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_adaptor_config_t  *config;
     plog_record_t            *plog;
