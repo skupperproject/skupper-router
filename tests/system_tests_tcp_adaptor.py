@@ -1273,7 +1273,7 @@ class TcpAdaptorManagementTest(TestCase):
         CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 
         mgmt = self.e_router.management
-        van_address = self.test_name + "/test_02_mgmt"
+        van_address = self.test_name + "/test_02_mgmt_recreate"
 
         # When starting out, there should be no tcpListeners or tcpConnectors.
         self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
