@@ -29,6 +29,7 @@ from subprocess import PIPE
 from subprocess import STDOUT
 from typing import List, Optional
 
+from http1_tests import http1_ping
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
@@ -36,6 +37,7 @@ from system_test import TIMEOUT
 from system_test import TestCase
 from system_test import main_module
 from system_test import unittest
+from system_test import retry
 
 # Tests in this file are organized by classes that inherit TestCase.
 # The first instance is TcpAdaptor(TestCase).
@@ -1261,6 +1263,68 @@ class TcpAdaptorManagementTest(TestCase):
         with self.assertRaises(ConnectionRefusedError):
             client_conn.connect(('127.0.0.1', self.tcp_listener_port))
         client_conn.close()
+
+    @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
+    def test_02_mgmt_recreate(self):
+        """
+        Verify that deleting then re-creating listeners and connectors works
+        """
+        LISTENER_TYPE = 'io.skupper.router.tcpListener'
+        CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
+
+        mgmt = self.e_router.management
+        van_address = self.test_name + "/test_02_mgmt_recreate"
+
+        # When starting out, there should be no tcpListeners or tcpConnectors.
+        self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
+
+        connector_name = "ServerConnector"
+        listener_name = "ClientListener"
+
+        for i in range(2):
+
+            mgmt.create(type=LISTENER_TYPE,
+                        name=listener_name,
+                        attributes={'address': van_address,
+                                    'port': self.tcp_listener_port,
+                                    'host': '127.0.0.1'})
+            mgmt.create(type=CONNECTOR_TYPE,
+                        name=connector_name,
+                        attributes={'address': van_address,
+                                    'port': self.tcp_server_port,
+                                    'host': '127.0.0.1'})
+
+            # wait until the listener has initialized
+
+            def _wait_for_listener_up():
+                li = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+                if li['operStatus'] == 'up':
+                    return True
+                return False
+            self.assertTrue(retry(_wait_for_listener_up))
+
+            # test everything works
+
+            count, error = http1_ping(self.tcp_server_port,
+                                      self.tcp_listener_port)
+            self.assertEqual(1, count, "client ping failed - no response")
+            self.assertIsNone(error, f"client ping failed: {error}")
+
+            # splendid!  Not delete all the things
+
+            mgmt.delete(type=LISTENER_TYPE, name=listener_name)
+            self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
+
+            mgmt.delete(type=CONNECTOR_TYPE, name=connector_name)
+            self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
+
+            # attempting to connect should fail
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
+                client_conn.setblocking(True)
+                client_conn.settimeout(TIMEOUT)
+                self.assertRaises(ConnectionRefusedError, client_conn.connect,
+                                  ('127.0.0.1', self.tcp_listener_port))
 
 
 class TcpAdaptorListenerConnectTest(TestCase):

@@ -177,7 +177,7 @@ class ThreadedTestClient:
         self._repeat = repeat
         self._logger = Logger(title="TestClient: %s" % self._id,
                               print_to_console=False)
-        self._thread = Thread(target=self._run)
+        self._thread = Thread(target=self._run, daemon=True)
         self.error = None
         self.count = 0
         self._thread.start()
