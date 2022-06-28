@@ -42,8 +42,10 @@ typedef enum plog_record_type {
     PLOG_RECORD_CONNECTOR  = 0x05,  // An egress connector for an application protocol
     PLOG_RECORD_FLOW       = 0x06,  // An application flow between a ingress and an egress
     PLOG_RECORD_PROCESS    = 0x07,  // A running process/pod/container that uses application protocols
-    PLOG_RECORD_INGRESS    = 0x08,  // An access point for external access into the VAN
-    PLOG_RECORD_EGRESS     = 0x09,  // An entity from which external services are accessed from within the VAN
+    PLOG_RECORD_IMAGE      = 0x08,  // A process-type or container image
+    PLOG_RECORD_INGRESS    = 0x09,  // An access point for external access into the VAN
+    PLOG_RECORD_EGRESS     = 0x0a,  // An entity from which external services are accessed from within the VAN
+    PLOG_RECORD_COLLECTOR  = 0x0b,  // An event collector
 } plog_record_type_t;
 
 typedef enum plog_attribute {
@@ -90,6 +92,12 @@ typedef enum plog_attribute {
     PLOG_ATTRIBUTE_BUILD_VERSION    = 32,  // String
     PLOG_ATTRIBUTE_LINK_COST        = 33,  // uint
     PLOG_ATTRIBUTE_DIRECTION        = 34,  // String
+    PLOG_ATTRIBUTE_OCTET_RATE       = 35,  // uint
+
+    PLOG_ATTRIBUTE_OCTETS_OUT       = 36,  // uint
+    PLOG_ATTRIBUTE_OCTETS_UNACKED   = 37,  // uint
+    PLOG_ATTRIBUTE_WINDOW_CLOSURES  = 38,  // uint
+    PLOG_ATTRIBUTE_WINDOW_SIZE      = 39,  // uint
 } plog_attribute_t;
 
 #define VALID_REF_ATTRS    0x00000000000000e6
@@ -203,5 +211,14 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg);
  */
 void plog_latency_start(plog_record_t *record);
 void plog_latency_end(plog_record_t *record);
+
+/**
+ * @brief Request that the rate of change of a counter attribute be stored in a rate attribute.
+ *
+ * @param record The record pointer returned by plg_start_record
+ * @param count_attribute The attribute identifier of the counter to be measured
+ * @param rate_attribute The attribute identifier for the rate to be stored
+ */
+void plog_add_rate(plog_record_t *record, plog_attribute_t count_attribute, plog_attribute_t rate_attribute);
 
 #endif

@@ -42,7 +42,7 @@
 typedef struct plog_identity_t {
     uint64_t record_id;
     uint32_t site_id;
-    char     router_id[ROUTER_ID_SIZE];
+    char     source_id[ROUTER_ID_SIZE];
 } plog_identity_t;
 
 typedef struct plog_attribute_data_t {
@@ -194,7 +194,7 @@ static void _plog_next_id(plog_identity_t *identity)
     sys_mutex_lock(id_lock);
     identity->record_id = next_identity++;
     identity->site_id   = site_id;
-    memcpy(identity->router_id, router_id, ROUTER_ID_SIZE);
+    memcpy(identity->source_id, router_id, ROUTER_ID_SIZE);
     sys_mutex_unlock(id_lock);
 }
 
@@ -211,7 +211,7 @@ static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
 #define ID_TEXT_MAX 60
     char text[ID_TEXT_MAX + 1];
 
-    snprintf(text, ID_TEXT_MAX, "%"PRIu32":%s:%"PRIu64, id->site_id, id->router_id, id->record_id);
+    snprintf(text, ID_TEXT_MAX, "%"PRIu32":%s:%"PRIu64, id->site_id, id->source_id, id->record_id);
     strncat(buffer, text, n);
 }
 
@@ -253,7 +253,7 @@ static void _plog_compose_id(qd_composed_field_t *field, const plog_identity_t *
 {
     qd_compose_start_list(field);
     qd_compose_insert_ulong(field, id->site_id);
-    qd_compose_insert_string(field, id->router_id);
+    qd_compose_insert_string(field, id->source_id);
     qd_compose_insert_ulong(field, id->record_id);
     qd_compose_end_list(field);
 }
@@ -664,8 +664,10 @@ static const char *_plog_record_type_name(const plog_record_t *record)
     case PLOG_RECORD_CONNECTOR  : return "CONNECTOR";
     case PLOG_RECORD_FLOW       : return "FLOW";
     case PLOG_RECORD_PROCESS    : return "PROCESS";
+    case PLOG_RECORD_IMAGE      : return "IMAGE";
     case PLOG_RECORD_INGRESS    : return "INGRESS";
     case PLOG_RECORD_EGRESS     : return "EGRESS";
+    case PLOG_RECORD_COLLECTOR  : return "COLLECTOR";
     }
     return "UNKNOWN";
 }
@@ -739,8 +741,8 @@ static bool _plog_unserialize_identity(qd_parsed_field_t *field, plog_identity_t
     identity->site_id   = qd_parse_as_uint(site_id_field);
 
     qd_iterator_t *iter = qd_parse_raw(router_id_field);
-    qd_iterator_ncopy(iter, (uint8_t*) identity->router_id, ROUTER_ID_SIZE - 1);
-    identity->router_id[ROUTER_ID_SIZE - 1] = '\0';
+    qd_iterator_ncopy(iter, (uint8_t*) identity->source_id, ROUTER_ID_SIZE - 1);
+    identity->source_id[ROUTER_ID_SIZE - 1] = '\0';
 
     return true;
 }
@@ -1232,7 +1234,7 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
     if (!!record) {
         qd_compose_start_list(field);
         qd_compose_insert_uint(field, record->identity.site_id);
-        qd_compose_insert_string(field, record->identity.router_id);
+        qd_compose_insert_string(field, record->identity.source_id);
         qd_compose_insert_ulong(field, record->identity.record_id);
         qd_compose_end_list(field);
     }
