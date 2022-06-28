@@ -38,6 +38,7 @@
 #define ROUTER_ID_SIZE 6
 #define EVENT_BATCH_MAX 50
 #define FLUSH_SLOT_COUNT 5
+#define RATE_SLOT_COUNT 5
 
 typedef struct plog_identity_t {
     uint64_t record_id;
@@ -60,6 +61,20 @@ ALLOC_DECLARE(plog_attribute_data_t);
 ALLOC_DEFINE(plog_attribute_data_t);
 DEQ_DECLARE(plog_attribute_data_t, plog_attribute_data_list_t);
 
+typedef struct plog_rate_t {
+    DEQ_LINKS(struct plog_rate_t);
+    DEQ_LINKS_N(PER_RECORD, struct plog_rate_t);
+    uint64_t               slot[RATE_SLOT_COUNT];
+    int                    slot_cursor;
+    uint64_t               last_rate;
+    plog_record_t         *record;
+    plog_attribute_t       rate_attribute;
+    plog_attribute_data_t *count_attribute;
+} plog_rate_t;
+
+ALLOC_DECLARE(plog_rate_t);
+ALLOC_DEFINE(plog_rate_t);
+DEQ_DECLARE(plog_rate_t, plog_rate_list_t);
 DEQ_DECLARE(plog_record_t, plog_record_list_t);
 
 struct plog_record_t {
@@ -70,6 +85,7 @@ struct plog_record_t {
     plog_record_list_t          children;
     plog_identity_t             identity;
     plog_attribute_data_list_t  attributes;
+    plog_rate_list_t            rates;
     uint64_t                    latency_start;
     uint32_t                    emit_ordinal;
     int                         flush_slot;
@@ -110,6 +126,8 @@ static       char *event_address_my            = 0;
 static const int   beacon_interval_sec         = 5;
 static const int   flush_interval_msec         = 200;
 static const int   initial_flush_interval_msec = 2000;
+static const int   rate_slot_flush_intervals   = 10;    // For a two-second slot interval
+static const int   rate_span                   = 10;    // Ten-second rolling average
 
 static qdr_core_t         *router_core;
 static sys_mutex_t        *lock;
@@ -121,6 +139,7 @@ static qd_log_source_t    *log;
 static plog_work_list_t    work_list    = DEQ_EMPTY;
 static plog_record_t      *local_router = 0;
 static plog_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
+static plog_rate_list_t    rate_trackers = DEQ_EMPTY;
 static int                 current_flush_slot = 0;
 static uint32_t            site_id;
 static char               *hostname;
@@ -380,6 +399,17 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     if (record->flush_slot == -1) {
         record->flush_slot = current_flush_slot;
         DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+    }
+
+    //
+    // Free any rate trackers on this record
+    //
+    plog_rate_t *rate = DEQ_HEAD(record->rates);
+    while (!!rate) {
+        DEQ_REMOVE(rate_trackers, rate);
+        DEQ_REMOVE_N(PER_RECORD, record->rates, rate);
+        free_plog_rate_t(rate);
+        rate = DEQ_HEAD(record->rates);
     }
 }
 
@@ -711,6 +741,11 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
     case PLOG_ATTRIBUTE_BUILD_VERSION    : return "buildVersion";
     case PLOG_ATTRIBUTE_LINK_COST        : return "linkCost";
     case PLOG_ATTRIBUTE_DIRECTION        : return "direction";
+    case PLOG_ATTRIBUTE_OCTET_RATE       : return "octetRate";
+    case PLOG_ATTRIBUTE_OCTETS_OUT       : return "octetsOut";
+    case PLOG_ATTRIBUTE_OCTETS_UNACKED   : return "octetsUnacked";
+    case PLOG_ATTRIBUTE_WINDOW_CLOSURES  : return "windowClosures";
+    case PLOG_ATTRIBUTE_WINDOW_SIZE      : return "windowSize";
     }
     return "UNKNOWN";
 }
@@ -1002,11 +1037,57 @@ static void _plog_refresh_events_TH(plog_work_t *work, bool discard)
 }
 
 
+static void _plog_add_rate_TH(plog_work_t *work, bool discard)
+{
+    if (!discard) {
+        plog_rate_t *rate = new_plog_rate_t();
+        ZERO(rate);
+        plog_attribute_data_t *data = DEQ_HEAD(work->record->attributes);
+        while (!!data) {
+            if (data->attribute_type == work->attribute) {
+                rate->count_attribute = data;
+                break;
+            }
+            data = DEQ_NEXT(data);
+        }
+        assert(!!rate->count_attribute); // Ensure rate is created against an existing counter
+        rate->rate_attribute = work->value.int_val;
+        rate->record         = work->record;
+        for (int i = 0; i < RATE_SLOT_COUNT; i++) {
+            rate->slot[i] = rate->count_attribute->value.uint_val;
+        }
+        rate->slot_cursor = 1;
+        DEQ_INSERT_TAIL(rate_trackers, rate);
+        DEQ_INSERT_TAIL_N(PER_RECORD, rate->record->rates, rate);
+    }
+}
+
+
+static void _plog_process_rates_TH(void)
+{
+    plog_rate_t *rate = DEQ_HEAD(rate_trackers);
+    while(!!rate) {
+        rate->slot[rate->slot_cursor] = rate->count_attribute->value.uint_val;
+        uint64_t delta = rate->slot[rate->slot_cursor] - rate->slot[(rate->slot_cursor + 1) % RATE_SLOT_COUNT];
+        rate->slot_cursor = (rate->slot_cursor + 1) % RATE_SLOT_COUNT;
+        uint64_t average_rate = delta / rate_span;
+        plog_set_uint64(rate->record, rate->rate_attribute, average_rate);
+        rate = DEQ_NEXT(rate);
+    }
+}
+
+
 static void _plog_tick_TH(plog_work_t *work, bool discard)
 {
+    static int tick_ordinal = 0;
     if (!discard) {
         _plog_flush_TH(router_core);
         current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
+
+        tick_ordinal = (tick_ordinal + 1) % rate_slot_flush_intervals;
+        if (tick_ordinal == 0) {
+            _plog_process_rates_TH();
+        }
     }
 }
 
@@ -1353,6 +1434,20 @@ void plog_latency_end(plog_record_t *record)
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
         plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
+    }
+}
+
+
+void plog_add_rate(plog_record_t *record, plog_attribute_t count_attribute, plog_attribute_t rate_attribute)
+{
+    if (!!record) {
+        assert((uint64_t) 1 << count_attribute & VALID_UINT_ATTRS);
+        assert((uint64_t) 1 << rate_attribute & VALID_UINT_ATTRS);
+        plog_work_t *work = _plog_work(_plog_add_rate_TH);
+        work->record        = record;
+        work->attribute     = count_attribute;
+        work->value.int_val = rate_attribute;
+        _plog_post_work(work);
     }
 }
 

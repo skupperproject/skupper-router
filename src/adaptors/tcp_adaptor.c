@@ -1065,6 +1065,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
 
     tc->plog = plog_start_record(PLOG_RECORD_FLOW, listener->plog);
     plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
+    plog_add_rate(tc->plog, PLOG_ATTRIBUTE_OCTETS, PLOG_ATTRIBUTE_OCTET_RATE);
     plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
     // IMPORTANT NOTE: this next call TO pn_listener_raw_accept may immediately schedule the connection on another I/O
@@ -1194,6 +1195,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
 
         tc->plog = plog_start_record(PLOG_RECORD_FLOW, connector->plog);
         plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
+        plog_add_rate(tc->plog, PLOG_ATTRIBUTE_OCTETS, PLOG_ATTRIBUTE_OCTET_RATE);
         plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
         allocate_tcp_write_buffer(&tc->write_buffer);
