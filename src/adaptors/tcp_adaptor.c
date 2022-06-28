@@ -1289,6 +1289,7 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->server = server;
     li->config = qd_tcp_adaptor_config();
     li->tcp_stats = new_qdr_tcp_stats_t();
+    ZERO(li->tcp_stats);
     li->tcp_stats->stats_lock = sys_mutex();
 
     //
@@ -1404,6 +1405,7 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     c->server = server;
     c->config = qd_tcp_adaptor_config();
     c->tcp_stats = new_qdr_tcp_stats_t();
+    ZERO(c->tcp_stats);
     c->tcp_stats->stats_lock = sys_mutex();
     //
     // Create a plog record for this connector
