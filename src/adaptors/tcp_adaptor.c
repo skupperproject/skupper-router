@@ -98,6 +98,7 @@ struct qdr_tcp_connection_t {
     uint64_t              bytes_in;       // read from raw conn
     uint64_t              bytes_out;      // written to raw conn
     uint64_t              bytes_unacked;  // not yet acked by outgoing tcp adaptor
+    uint64_t              window_closed_count;
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
@@ -307,14 +308,18 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
 
         conn->last_in_time = qdr_core_uptime_ticks(tcp_adaptor->core);
         conn->bytes_in      += result;
-        plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_OCTETS, conn->bytes_in);
 
         qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
         LOCK(tcp_stats->stats_lock);
         tcp_stats->bytes_in += result;
         UNLOCK(tcp_stats->stats_lock);
         conn->bytes_unacked += result;
+        plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_OCTETS, conn->bytes_in);
+        plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_OCTETS_UNACKED, conn->bytes_unacked);
+
         if (read_window_full(conn)) {
+            conn->window_closed_count++;
+            plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_WINDOW_CLOSURES, conn->window_closed_count);
             qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
                    "[C%"PRIu64"] TCP RX window CLOSED: bytes in=%"PRIu64" unacked=%"PRIu64,
                    conn->conn_id, conn->bytes_in, conn->bytes_unacked);
@@ -1060,6 +1065,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
 
     tc->plog = plog_start_record(PLOG_RECORD_FLOW, listener->plog);
     plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
+    plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
     // IMPORTANT NOTE: this next call TO pn_listener_raw_accept may immediately schedule the connection on another I/O
     // thread. IF you want to access tc after this call, the activation_lock  must be held to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
@@ -1188,6 +1194,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
 
         tc->plog = plog_start_record(PLOG_RECORD_FLOW, connector->plog);
         plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
+        plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
         allocate_tcp_write_buffer(&tc->write_buffer);
         allocate_tcp_buffer(&tc->read_buffer);
