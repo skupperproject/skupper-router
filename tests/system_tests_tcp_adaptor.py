@@ -1304,12 +1304,40 @@ class TcpAdaptorManagementTest(TestCase):
                 return False
             self.assertTrue(retry(_wait_for_listener_up))
 
+            # verify initial statistics
+
+            l_stats = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+            self.assertEqual(0, l_stats['bytesIn'])
+            self.assertEqual(0, l_stats['bytesOut'])
+            self.assertEqual(0, l_stats['connectionsOpened'])
+            self.assertEqual(0, l_stats['connectionsClosed'])
+
+            c_stats = mgmt.read(type=CONNECTOR_TYPE, name=connector_name)
+            self.assertEqual(0, c_stats['bytesIn'])
+            self.assertEqual(0, c_stats['bytesOut'])
+            self.assertEqual(1, c_stats['connectionsOpened'])  # dispatcher
+            self.assertEqual(0, c_stats['connectionsClosed'])
+
             # test everything works
 
             count, error = http1_ping(self.tcp_server_port,
                                       self.tcp_listener_port)
             self.assertEqual(1, count, "client ping failed - no response")
             self.assertIsNone(error, f"client ping failed: {error}")
+
+            # verify updated statistics
+
+            l_stats = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+            self.assertLess(0, l_stats['bytesIn'])
+            self.assertLess(0, l_stats['bytesOut'])
+            self.assertLess(0, l_stats['connectionsOpened'])
+            self.assertLess(0, l_stats['connectionsClosed'])
+
+            c_stats = mgmt.read(type=CONNECTOR_TYPE, name=connector_name)
+            self.assertLess(0, c_stats['bytesIn'])
+            self.assertLess(0, c_stats['bytesOut'])
+            self.assertLess(1, c_stats['connectionsOpened'])  # dispatcher
+            self.assertLess(0, c_stats['connectionsClosed'])
 
             # splendid!  Not delete all the things
 
