@@ -484,11 +484,16 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
     return count;
 }
 
-// Delete the tcp connection.  This is also called during adaptor shutdown so do
-// not schedule work or do anything that requires action by other threads.
-//
-static void qdr_tcp_connection_destroy(qdr_tcp_connection_t *tc)
+static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
 {
+    qdr_tcp_stats_t *tcp_stats = get_tcp_stats(tc);
+    LOCK(tcp_stats->stats_lock);
+    tcp_stats->connections_closed += 1;
+    UNLOCK(tcp_stats->stats_lock);
+
+    qd_tcp_connector_decref(tc->connector);
+    qd_tcp_listener_decref(tc->listener);
+    plog_end_record(tc->plog);
     free(tc->reply_to);
     free(tc->remote_address);
     free(tc->global_id);
@@ -503,19 +508,6 @@ static void qdr_tcp_connection_destroy(qdr_tcp_connection_t *tc)
 
     qd_free_tcp_adaptor_config(tc->config, tcp_adaptor->log_source);
     free_qdr_tcp_connection_t(tc);
-}
-
-static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
-{
-    qdr_tcp_stats_t *tcp_stats = get_tcp_stats(tc);
-    LOCK(tcp_stats->stats_lock);
-    tcp_stats->connections_closed += 1;
-    UNLOCK(tcp_stats->stats_lock);
-
-    qd_tcp_connector_decref(tc->connector);
-    qd_tcp_listener_decref(tc->listener);
-    plog_end_record(tc->plog);
-    qdr_tcp_connection_destroy(tc);
 }
 
 static void handle_disconnected(qdr_tcp_connection_t* conn)
@@ -1255,13 +1247,10 @@ static void log_tcp_adaptor_config(qd_log_source_t *log, qd_tcp_adaptor_config_t
     qd_log(log, QD_LOG_INFO, "Configured %s for %s, %s:%s", what, c->adaptor_config->address, c->adaptor_config->host, c->adaptor_config->port);
 }
 
-
-// Delete the tcp listener.  This is also called during adaptor shutdown so do
-// not schedule work or do anything that requires action by other threads.
-//
-static void qd_tcp_listener_destroy(qd_tcp_listener_t* li)
+static void qd_tcp_listener_decref(qd_tcp_listener_t *li)
 {
-    if (li) {
+    if (li && sys_atomic_dec(&li->ref_count) == 1) {
+        plog_end_record(li->plog);
         sys_atomic_destroy(&li->ref_count);
         qd_free_tcp_adaptor_config(li->config, tcp_adaptor->log_source);
         sys_mutex_free(li->tcp_stats->stats_lock);
@@ -1269,16 +1258,6 @@ static void qd_tcp_listener_destroy(qd_tcp_listener_t* li)
         free_qd_tcp_listener_t(li);
     }
 }
-
-
-static void qd_tcp_listener_decref(qd_tcp_listener_t* li)
-{
-    if (li && sys_atomic_dec(&li->ref_count) == 1) {
-        plog_end_record(li->plog);
-        qd_tcp_listener_destroy(li);
-    }
-}
-
 
 static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
 {
@@ -1362,8 +1341,6 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         qd_adaptor_listener_close(li->adaptor_listener);
         li->adaptor_listener = 0;
 
-        plog_end_record(li->plog);
-
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                "Deleted TcpListener for %s, %s:%s",
                li->config->adaptor_config->address, li->config->adaptor_config->host, li->config->adaptor_config->port);
@@ -1416,26 +1393,15 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     return c;
 }
 
-
-// Force delete the tcp connector.  This is also called during adaptor shutdown
-// so do not check reference counts or schedule work or do anything that causes
-// other side effects.
-//
-static void qd_tcp_connector_destroy(qd_tcp_connector_t *c)
-{
-    sys_atomic_destroy(&c->ref_count);
-    sys_mutex_free(c->tcp_stats->stats_lock);
-    free_qdr_tcp_stats_t(c->tcp_stats);
-    qd_free_tcp_adaptor_config(c->config, tcp_adaptor->log_source);
-    free_qd_tcp_connector_t(c);
-}
-
-
 static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         plog_end_record(c->plog);
-        qd_tcp_connector_destroy(c);
+        sys_atomic_destroy(&c->ref_count);
+        sys_mutex_free(c->tcp_stats->stats_lock);
+        free_qdr_tcp_stats_t(c->tcp_stats);
+        qd_free_tcp_adaptor_config(c->config, tcp_adaptor->log_source);
+        free_qd_tcp_connector_t(c);
     }
 }
 
@@ -1975,14 +1941,15 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qdr_tcp_connection_t *tc = DEQ_HEAD(adaptor->connections);
     while (tc) {
         qdr_tcp_connection_t *next = DEQ_NEXT(tc);
-        qdr_tcp_connection_destroy(tc);
+        free_qdr_tcp_connection(tc);
         tc = next;
     }
 
     qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
     while (tl) {
         qd_tcp_listener_t *next = DEQ_NEXT(tl);
-        qd_tcp_listener_destroy(tl);
+        assert(sys_atomic_get(&tl->ref_count) == 1);  // leak check
+        qd_tcp_listener_decref(tl);
         tl = next;
     }
 
@@ -1990,7 +1957,8 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     while (tr) {
         qd_tcp_connector_t *next = DEQ_NEXT(tr);
         free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher_conn);
-        qd_tcp_connector_destroy(tr);
+        assert(sys_atomic_get(&tr->ref_count) == 1);  // leak check
+        qd_tcp_connector_decref(tr);
         tr = next;
     }
 
