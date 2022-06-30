@@ -549,6 +549,18 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
         }
     }
 
+    //
+    // We are about to free the qdr_http2_connection_t object. We need to decref the listener/connector, so they can be freed.
+    //
+    if (http_conn->listener) {
+        qd_http_listener_decref(http_conn->listener);
+    }
+    else if (http_conn->connector) {
+        // Note here that decrefing the connector also frees the config. The http_conn->config remains unfreed and accessible on the qdr_http2_connection_t object
+        // until we call the following qd_http_connector_decref which *might* then free the config and then free connector itself.
+        qd_http_connector_decref(http_conn->connector);
+    }
+
     qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Freeing http2 connection in free_qdr_http2_connection", http_conn->conn_id);
 
     free_qdr_http2_connection_t(http_conn);
@@ -1611,6 +1623,11 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     ingress_http_conn->require_tls = listener->config->adaptor_config->ssl_profile_name ? true: false;
     ingress_http_conn->context.context = ingress_http_conn;
     ingress_http_conn->context.handler = &handle_connection_event;
+    ingress_http_conn->listener = listener;
+
+    // Incref the ref count on the listener since the qdr_http2_connection_t object is holding a ref to the listener
+    sys_atomic_inc(&listener->ref_count);
+
     ingress_http_conn->config = listener->config;
     ingress_http_conn->server = listener->server;
     ingress_http_conn->pn_raw_conn = pn_raw_connection();
@@ -1622,7 +1639,6 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     DEQ_INIT(ingress_http_conn->streams);
     DEQ_INIT(ingress_http_conn->granted_read_buffs);
     ingress_http_conn->data_prd.read_callback = read_data_callback;
-    ingress_http_conn->listener = listener;
 
     sys_mutex_lock(http2_adaptor->lock);
     DEQ_INSERT_TAIL(http2_adaptor->connections, ingress_http_conn);
@@ -2971,11 +2987,14 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     egress_http_conn->ingress = false;
     egress_http_conn->context.context = egress_http_conn;
     egress_http_conn->context.handler = &handle_connection_event;
+    egress_http_conn->connector = connector;
+
+    // Incref the ref count on the connector since the qdr_http2_connection_t object is holding a ref to the connector
+    sys_atomic_inc(&connector->ref_count);
+
     egress_http_conn->config = connector->config;
     egress_http_conn->server = connector->server;
     egress_http_conn->data_prd.read_callback = read_data_callback;
-    egress_http_conn->connector = connector;
-
     DEQ_INIT(egress_http_conn->buffs);
     DEQ_INIT(egress_http_conn->streams);
     DEQ_INIT(egress_http_conn->granted_read_buffs);
