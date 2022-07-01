@@ -276,7 +276,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
-          name: Test_Results_${{env.JOB_IDENTIFIER}}
+          name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Delete logs from passing tests
@@ -287,7 +287,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: testLogs_${{env.JOB_IDENTIFIER}}
+          name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             skupper-router/build/tests
 
@@ -295,7 +295,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: cores_${{env.JOB_IDENTIFIER}}
+          name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
 
@@ -406,7 +406,7 @@ jobs:
       # The option to enable + in sed regexps differs by OS so we avoid it, https://github.com/actions/upload-artifact/issues/22
       - name: Escape job identifier for artifact naming
         run: |
-          _jobIdentifierRaw="${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
+          _jobIdentifierRaw="${{matrix.os}}_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
           jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
           echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
 
@@ -557,7 +557,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
-          name: Test_Results_${{env.JOB_IDENTIFIER}}
+          name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Delete logs from passing tests
@@ -568,7 +568,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: testLogs_${{env.JOB_IDENTIFIER}}
+          name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             skupper-router/build/tests
 
@@ -576,7 +576,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: cores_${{env.JOB_IDENTIFIER}}
+          name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
 
