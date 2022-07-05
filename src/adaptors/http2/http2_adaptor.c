@@ -77,7 +77,8 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
 static void clean_conn_buffs(qdr_http2_connection_t* conn);
 static void handle_raw_connected_event(qdr_http2_connection_t *conn);
 static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *outgoing_buff, size_t outgoing_buff_size, bool can_write_buffers);
-
+static bool schedule_activation(qdr_http2_connection_t *conn, qd_duration_t msec);
+static void cancel_activation(qdr_http2_connection_t *conn);
 
 /**
  * If an ALPN protocol was detected by the TLS API, we make sure that the protocol matches the "h2" (short for http2) protocol.
@@ -501,6 +502,7 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
         buff = DEQ_HEAD(http_conn->granted_read_buffs);
     }
 
+    sys_atomic_destroy(&http_conn->activate_scheduled);
     sys_atomic_destroy(&http_conn->raw_closed_read);
     sys_atomic_destroy(&http_conn->raw_closed_write);
     sys_atomic_destroy(&http_conn->q2_restart);
@@ -1631,6 +1633,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     ingress_http_conn->config = listener->config;
     ingress_http_conn->server = listener->server;
     ingress_http_conn->pn_raw_conn = pn_raw_connection();
+    sys_atomic_init(&ingress_http_conn->activate_scheduled, 0);
     sys_atomic_init(&ingress_http_conn->raw_closed_read, 0);
     sys_atomic_init(&ingress_http_conn->raw_closed_write, 0);
     sys_atomic_init(&ingress_http_conn->q2_restart, 0);
@@ -1919,7 +1922,7 @@ static void qdr_http_activate(void *notused, qdr_connection_t *c)
             pn_raw_connection_wake(conn->pn_raw_conn);
         }
         else if (conn->activate_timer) {
-            qd_timer_schedule(conn->activate_timer, 0);
+            schedule_activation(conn, 0);
             qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Activation triggered, no socket yet so scheduled timer", conn->conn_id);
         } else {
             qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot activate", conn->conn_id);
@@ -2899,6 +2902,7 @@ static void handle_disconnected(qdr_http2_connection_t* conn)
 static void egress_conn_timer_handler(void *context)
 {
     qdr_http2_connection_t* conn = (qdr_http2_connection_t*) context;
+    CLEAR_ATOMIC_FLAG(&conn->activate_scheduled);
 
     // Protect with the lock when accessing conn->pn_raw_conn
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
@@ -3137,11 +3141,11 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             conn->client_magic_sent = false;
             if (conn->delete_egress_connections) {
                 // The egress connection has been deleted, cancel any pending timer
-                qd_timer_cancel(conn->activate_timer);
+                cancel_activation(conn);
             }
             else {
-                qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Scheduling 2 second timer to reconnect to egress connection", conn->conn_id);
-                qd_timer_schedule(conn->activate_timer, 2000);
+                if (schedule_activation(conn, 2000))
+                    qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Scheduling 2 second timer to reconnect to egress connection", conn->conn_id);
             }
         }
         conn->connection_established = false;
@@ -3320,6 +3324,25 @@ qd_http_connector_t *qd_http2_configure_connector(qd_dispatch_t *qd, qd_http_ada
     qdr_http_connection_egress(c);
     return c;
 }
+
+// avoid re-scheduling too rapidly after a connection drop - see ISSUE #582
+static bool schedule_activation(qdr_http2_connection_t *conn, qd_duration_t msec)
+{
+    if (SET_ATOMIC_FLAG(&conn->activate_scheduled) == 0) {
+        qd_timer_schedule(conn->activate_timer, msec);
+        return true;
+    }
+    return false;
+}
+
+static void cancel_activation(qdr_http2_connection_t *conn)
+{
+    // order is important: clearing the flag after the cancel eliminates a race where the flag may be left set without
+    // the timer being scheduled.
+    qd_timer_cancel(conn->activate_timer);
+    CLEAR_ATOMIC_FLAG(&conn->activate_scheduled);
+}
+
 
 /**
  * Called just before shutdown of the router. Frees listeners and connectors and any http2 buffers
