@@ -143,11 +143,11 @@ struct qdr_http2_connection_t {
     bool                      connection_established;
     bool                      grant_initial_buffers;
     bool                      ingress;
-    bool                      timer_scheduled;
     bool                      client_magic_sent;
     bool                      delete_egress_connections;  // If set to true, the egress qdr_connection_t and qdr_http2_connection_t objects will be deleted
     bool                      goaway_received;
     bool                      tls_error;
+    sys_atomic_t              activate_scheduled;  // 1 == activate timer scheduled
     sys_atomic_t              raw_closed_read;
     sys_atomic_t              raw_closed_write;
     bool                      q2_blocked;      // send a connection level WINDOW_UPDATE frame to tell the client to stop sending data.
