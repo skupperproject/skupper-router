@@ -18,6 +18,7 @@
 #
 import unittest
 
+from http1_tests import wait_http_listeners_up
 from system_test import TestCase, Qdrouterd, TIMEOUT
 try:
     import grpc
@@ -113,7 +114,9 @@ class GrpcServiceMethodsTest(TestCase):
                               'host': '127.0.0.1', 'protocolVersion': 'HTTP2'}),
             ('httpConnector', cls.connector_props)
         ])
-        cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config, wait=True)
+        cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config,
+                                              wait=True)
+        wait_http_listeners_up(cls.router_qdr.addresses[0])
 
         # If you wanna try it without the router, set the grpc_channel
         # directly to the grpc_server_port
@@ -257,6 +260,7 @@ class GrpcServiceMethodsTestOverTls(GrpcServiceMethodsTest, RouterTestSslBase):
                             'password': 'client-password'})
         ])
         cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config, wait=True)
+        wait_http_listeners_up(cls.router_qdr.addresses[0])
 
         ca_certificate = RouterTestSslBase.get_byte_string(cls.ssl_file('ca-certificate.pem'))
         credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
