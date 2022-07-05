@@ -880,12 +880,11 @@ void qd_adaptor_listener_finalize();
  ******************************************************************************
  */
 
-
 typedef enum {
-    QD_LISTENER_OPER_UP,
     QD_LISTENER_OPER_DOWN,
+    QD_LISTENER_OPER_OPENING,  // waiting for proactor PN_LISTENER_OPEN event
+    QD_LISTENER_OPER_UP,
 } qd_listener_oper_status_t;
-
 
 typedef enum {
     QD_LISTENER_ADMIN_ENABLED,

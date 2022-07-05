@@ -37,7 +37,7 @@ struct qd_adaptor_listener_t {
     pn_listener_t                *pn_listener;
     qd_adaptor_listener_accept_t  on_accept;
     qd_listener_admin_status_t    admin_status;  // set by mgmt
-    qd_listener_oper_status_t     oper_status;   // set by addr_watcher
+    qd_listener_oper_status_t     oper_status;
     int                           ref_count;
     bool                          watched;
 
@@ -127,10 +127,19 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
         qd_log_source_t *log = li->log_source;
 
         switch (pn_event_type(e)) {
-
-        case PN_LISTENER_OPEN:
-            qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s", li->name, li->host_port);
-            break;
+            case PN_LISTENER_OPEN: {
+                bool up = false;
+                sys_mutex_lock(li->lock);
+                if (li->oper_status == QD_LISTENER_OPER_OPENING) {  // may have been closed
+                    up              = true;
+                    li->oper_status = QD_LISTENER_OPER_UP;
+                }
+                sys_mutex_unlock(li->lock);
+                if (up)
+                    qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s", li->name,
+                           li->host_port);
+                break;
+            }
 
         case PN_LISTENER_ACCEPT:
             qd_log(log, QD_LOG_INFO, "Listener %s: new incoming client connection to %s", li->name, li->host_port);
@@ -175,7 +184,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
                 // close is due to loss of available consumers - see
                 // _on_watched_address_update()
-                if (li->oper_status == QD_LISTENER_OPER_UP) {
+                if (li->oper_status != QD_LISTENER_OPER_DOWN) {
                     // The VAN address now has consumers - it is possible that
                     // new consumers arrived since the close was
                     // started. Re-establish the listening socket:
@@ -243,13 +252,11 @@ static void _on_watched_address_update(void     *context,
         bool created = false;
         bool stopped = false;
         if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
+            const bool can_listen = (local_consumers || remote_consumers || in_proc_consumers);
 
-            const qd_listener_oper_status_t new_status = (local_consumers || in_proc_consumers || remote_consumers)
-                ? QD_LISTENER_OPER_UP : QD_LISTENER_OPER_DOWN;
-
-            if (new_status != li->oper_status) {
-                li->oper_status = new_status;
-                if (li->oper_status == QD_LISTENER_OPER_UP) {
+            if (can_listen) {
+                if (li->oper_status == QD_LISTENER_OPER_DOWN) {
+                    li->oper_status = QD_LISTENER_OPER_OPENING;
                     if (!li->pn_listener) {
                         created = true;
                         li->pn_listener = pn_listener();
@@ -259,8 +266,10 @@ static void _on_watched_address_update(void     *context,
                         // Note: after this call the _listener_event_handler may be called immediately on another thread:
                         pn_proactor_listen(qd_server_proactor(li->qd->server), li->pn_listener, li->host_port, QD_LISTENER_BACKLOG);
                     }
-
-                } else {  // QD_LISTENER_OPER_DOWN
+                }
+            } else {  // close listener
+                if (li->oper_status != QD_LISTENER_OPER_DOWN) {
+                    li->oper_status = QD_LISTENER_OPER_DOWN;
                     if (li->pn_listener) {
                         stopped = true;
                         // Note: after this call the _listener_event_handler may be called immediately on another thread:
