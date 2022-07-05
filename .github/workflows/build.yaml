@@ -86,6 +86,13 @@ jobs:
       SKUPPER_SYSTEM_TEST_SKIP_DELIVERY_ABORT: True
     steps:
 
+      # The option to enable + in sed regexps differs by OS so we avoid it, https://github.com/actions/upload-artifact/issues/22
+      - name: Escape job identifier for artifact naming
+        run: |
+          _jobIdentifierRaw="${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
+          jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
+          echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
+
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
@@ -184,7 +191,7 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v3
         with:
-          name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{ matrix.protonGitRef }}
+          name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
           path: /tmp/archive.tar.xz
 
   test:
@@ -217,6 +224,13 @@ jobs:
 
     steps:
 
+      # The option to enable + in sed regexps differs by OS so we avoid it, https://github.com/actions/upload-artifact/issues/22
+      - name: Escape job identifier for artifact naming
+        run: |
+          _jobIdentifierRaw="${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
+          jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
+          echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
+
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
@@ -224,7 +238,7 @@ jobs:
       - name: Download Build
         uses: actions/download-artifact@v3
         with:
-          name: skupper_router_wrk_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}
+          name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
 
       - name: Setup python
         uses: actions/setup-python@v3
@@ -262,7 +276,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
-          name: Test_Results_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Delete logs from passing tests
@@ -273,7 +287,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: testLogs_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             skupper-router/build/tests
 
@@ -281,7 +295,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: cores_${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
 
@@ -388,6 +402,13 @@ jobs:
       VERBOSE: 1
 
     steps:
+
+      # The option to enable + in sed regexps differs by OS so we avoid it, https://github.com/actions/upload-artifact/issues/22
+      - name: Escape job identifier for artifact naming
+        run: |
+          _jobIdentifierRaw="${{matrix.os}}_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
+          jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
+          echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
 
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
@@ -536,7 +557,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
         with:
-          name: Test_Results_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: ${{env.RouterBuildDir}}/Testing/**/*.xml
 
       - name: Delete logs from passing tests
@@ -547,7 +568,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: testLogs_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             skupper-router/build/tests
 
@@ -555,7 +576,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: cores_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}_${{matrix.shard}}
+          name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
 
