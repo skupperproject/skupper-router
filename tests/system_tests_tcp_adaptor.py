@@ -1453,7 +1453,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
         while True:
             listener = a_mgmt.read(type=self.LISTENER_TYPE,
                                    name='ClientListener01')
-            if listener['operStatus'] == 'down':
+            if listener['operStatus'] != 'up':
                 time.sleep(0.1)
                 continue
 
@@ -1547,7 +1547,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
 
             while True:
                 listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
-                if listener['operStatus'] == 'down':
+                if listener['operStatus'] != 'up':
                     time.sleep(0.1)
                     continue
 
@@ -1577,7 +1577,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
 
         while True:
             listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
-            if listener['operStatus'] == 'up':
+            if listener['operStatus'] != 'down':
                 time.sleep(0.1)
                 continue
 
