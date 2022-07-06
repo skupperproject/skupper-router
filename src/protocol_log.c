@@ -39,10 +39,10 @@
 #define EVENT_BATCH_MAX 50
 #define FLUSH_SLOT_COUNT 5
 #define RATE_SLOT_COUNT 5
+#define IDENTITY_MAX 27
 
 typedef struct plog_identity_t {
     uint64_t record_id;
-    uint32_t site_id;
     char     source_id[ROUTER_ID_SIZE];
 } plog_identity_t;
 
@@ -51,9 +51,8 @@ typedef struct plog_attribute_data_t {
     plog_attribute_t  attribute_type;
     uint32_t          emit_ordinal;
     union {
-        uint64_t         uint_val;
-        char            *string_val;
-        plog_identity_t  ref_val;
+        uint64_t  uint_val;
+        char     *string_val;
     } value;
 } plog_attribute_data_t;
 
@@ -109,10 +108,9 @@ struct plog_work_t {
     uint64_t             timestamp;
     plog_attribute_t     attribute;
     union {
-        char            *string_val;
-        uint64_t         int_val;
-        plog_identity_t  ref_val;
-        void            *pointer;
+        char     *string_val;
+        uint64_t  int_val;
+        void     *pointer;
     } value;
 };
 
@@ -141,7 +139,7 @@ static plog_record_t      *local_router = 0;
 static plog_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
 static plog_rate_list_t    rate_trackers = DEQ_EMPTY;
 static int                 current_flush_slot = 0;
-static uint32_t            site_id;
+static char               *site_id;
 static char               *hostname;
 static char                router_id[ROUTER_ID_SIZE];
 static uint64_t            next_identity     = 0;
@@ -155,7 +153,6 @@ static qd_timer_t         *beacon_timer = 0;
 static qd_timer_t         *flush_timer = 0;
 static uint64_t            next_message_id = 0;
 
-static void _plog_set_ref_TH(plog_work_t *work, bool discard);
 static void _plog_set_string_TH(plog_work_t *work, bool discard);
 static void _plog_set_int_TH(plog_work_t *work, bool discard);
 
@@ -212,9 +209,16 @@ static void _plog_next_id(plog_identity_t *identity)
 {
     sys_mutex_lock(id_lock);
     identity->record_id = next_identity++;
-    identity->site_id   = site_id;
     memcpy(identity->source_id, router_id, ROUTER_ID_SIZE);
     sys_mutex_unlock(id_lock);
+}
+
+
+static char *_plog_id_to_new_string(const plog_identity_t *identity)
+{
+    char *result = (char*) malloc(IDENTITY_MAX);
+    snprintf(result, IDENTITY_MAX, "%s:%"PRIu64, identity->source_id, identity->record_id);
+    return result;
 }
 
 
@@ -227,10 +231,8 @@ static void _plog_next_id(plog_identity_t *identity)
  */
 static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
 {
-#define ID_TEXT_MAX 60
-    char text[ID_TEXT_MAX + 1];
-
-    snprintf(text, ID_TEXT_MAX, "%"PRIu32":%s:%"PRIu64, id->site_id, id->source_id, id->record_id);
+    char text[IDENTITY_MAX + 1];
+    snprintf(text, IDENTITY_MAX, "%s:%"PRIu64, id->source_id, id->record_id);
     strncat(buffer, text, n);
 }
 
@@ -252,29 +254,11 @@ static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute
 
     if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
         sprintf(text, "%"PRIu64, data->value.uint_val);
-    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
         text_ptr = data->value.string_val;
-    } else if ((uint64_t) 1 << data->attribute_type & VALID_REF_ATTRS) {
-        _plog_strncat_id(text, ATTR_TEXT_MAX, &data->value.ref_val);
     }
 
     strncat(buffer, text_ptr, n);
-}
-
-
-/**
- * @brief Encode an id into a composed field
- *
- * @param field Target field for encoding
- * @param id Identity to encode
- */
-static void _plog_compose_id(qd_composed_field_t *field, const plog_identity_t *id)
-{
-    qd_compose_start_list(field);
-    qd_compose_insert_ulong(field, id->site_id);
-    qd_compose_insert_string(field, id->source_id);
-    qd_compose_insert_ulong(field, id->record_id);
-    qd_compose_end_list(field);
 }
 
 
@@ -282,10 +266,8 @@ static void _plog_compose_attribute(qd_composed_field_t *field, const plog_attri
 {
     if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
         qd_compose_insert_long(field, data->value.uint_val);
-    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
         qd_compose_insert_string(field, data->value.string_val);
-    } else if ((uint64_t) 1 << data->attribute_type & VALID_REF_ATTRS) {
-        _plog_compose_id(field, &data->value.ref_val);
     }
 }
 
@@ -328,8 +310,8 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     if (!!record->parent) {
         sub_work.attribute = PLOG_ATTRIBUTE_PARENT;
         sub_work.record    = record;
-        sub_work.value.ref_val = record->parent->identity;
-        _plog_set_ref_TH(&sub_work, false);
+        sub_work.value.string_val = _plog_id_to_new_string(&record->parent->identity);
+        _plog_set_string_TH(&sub_work, false);
     }
 
     //
@@ -410,51 +392,6 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
         DEQ_REMOVE_N(PER_RECORD, record->rates, rate);
         free_plog_rate_t(rate);
         rate = DEQ_HEAD(record->rates);
-    }
-}
-
-
-/**
- * @brief Work handler for plog_set_ref
- * 
- * @param work Pointer to work context
- * @param discard Indicator that this work must be discarded
- */
-static void _plog_set_ref_TH(plog_work_t *work, bool discard)
-{
-    if (discard) {
-        return;
-    }
-
-    plog_record_t         *record = work->record;
-    plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
-    plog_attribute_data_t *data;
-
-    if (!insert || insert->attribute_type != work->attribute) {
-        //
-        // The attribute does not exist, create a new one and insert appropriately
-        //
-        data = new_plog_attribute_data_t();
-        ZERO(data);
-        data->attribute_type = work->attribute;
-        data->emit_ordinal   = record->emit_ordinal;
-        data->value.ref_val  = work->value.ref_val;
-        if (!!insert) {
-            DEQ_INSERT_AFTER(record->attributes, data, insert);
-        } else {
-            DEQ_INSERT_HEAD(record->attributes, data);
-        }
-    } else {
-        //
-        // The attribute already exists, overwrite the value
-        //
-        insert->value.ref_val = work->value.ref_val;
-        insert->emit_ordinal  = record->emit_ordinal;
-    }
-
-    if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 }
 
@@ -601,6 +538,10 @@ static void _plog_create_router_record(void)
     strcat(name, router_name);
     plog_set_string(router, PLOG_ATTRIBUTE_NAME, name);
     free(name);
+
+    if (!!site_id) {
+        plog_set_string(router, PLOG_ATTRIBUTE_PARENT, site_id);
+    }
 
     if (!!hostname) {
         plog_set_string(router, PLOG_ATTRIBUTE_HOST_NAME, hostname);
@@ -760,20 +701,18 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
  */
 static bool _plog_unserialize_identity(qd_parsed_field_t *field, plog_identity_t *identity)
 {
-    if (!qd_parse_is_list(field) || qd_parse_sub_count(field) != 3) {
+    if (!qd_parse_is_list(field) || qd_parse_sub_count(field) != 2) {
         return false;
     }
 
-    qd_parsed_field_t *site_id_field   = qd_parse_sub_value(field, 0);
-    qd_parsed_field_t *router_id_field = qd_parse_sub_value(field, 1);
-    qd_parsed_field_t *record_id_field = qd_parse_sub_value(field, 2);
+    qd_parsed_field_t *router_id_field = qd_parse_sub_value(field, 0);
+    qd_parsed_field_t *record_id_field = qd_parse_sub_value(field, 1);
 
-    if (!qd_parse_is_scalar(site_id_field) || !qd_parse_is_scalar(router_id_field) || !qd_parse_is_scalar(record_id_field)) {
+    if (!qd_parse_is_scalar(router_id_field) || !qd_parse_is_scalar(record_id_field)) {
         return false;
     }
 
     identity->record_id = qd_parse_as_ulong(record_id_field);
-    identity->site_id   = qd_parse_as_uint(site_id_field);
 
     qd_iterator_t *iter = qd_parse_raw(router_id_field);
     qd_iterator_ncopy(iter, (uint8_t*) identity->source_id, ROUTER_ID_SIZE - 1);
@@ -867,7 +806,9 @@ static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
         qd_compose_insert_uint(field, record->record_type);
 
         qd_compose_insert_uint(field, PLOG_ATTRIBUTE_IDENTITY);
-        _plog_compose_id(field, &record->identity);
+        char identity[IDENTITY_MAX + 1];
+        snprintf(identity, IDENTITY_MAX, "%s:%"PRIu64, record->identity.source_id, record->identity.record_id);
+        qd_compose_insert_string(field, identity);
 
         plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
         while (data) {
@@ -1314,7 +1255,6 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
     assert(!!record);
     if (!!record) {
         qd_compose_start_list(field);
-        qd_compose_insert_uint(field, record->identity.site_id);
         qd_compose_insert_string(field, record->identity.source_id);
         qd_compose_insert_ulong(field, record->identity.record_id);
         qd_compose_end_list(field);
@@ -1326,10 +1266,10 @@ void plog_set_ref_from_record(plog_record_t *record, plog_attribute_t attribute_
 {
     if (!!record && !!referenced_record) {
         assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-        plog_work_t *work = _plog_work(_plog_set_ref_TH);
-        work->record        = record;
-        work->attribute     = attribute_type;
-        work->value.ref_val = referenced_record->identity;
+        plog_work_t *work = _plog_work(_plog_set_string_TH);
+        work->record           = record;
+        work->attribute        = attribute_type;
+        work->value.string_val = _plog_id_to_new_string(&referenced_record->identity);
         _plog_post_work(work);
     }
 }
@@ -1339,10 +1279,13 @@ void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_
 {
     if (!!record) {
         assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-        plog_work_t *work = _plog_work(_plog_set_ref_TH);
+        plog_work_t *work = _plog_work(_plog_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
-        bool good_id = _plog_unserialize_identity(field, &work->value.ref_val);
+
+        plog_identity_t reference;
+        bool good_id = _plog_unserialize_identity(field, &reference);
+        work->value.string_val = _plog_id_to_new_string(&reference);
 
         if (good_id) {
             _plog_post_work(work);
@@ -1358,7 +1301,7 @@ void plog_set_string(plog_record_t *record, plog_attribute_t attribute_type, con
 {
 #define MAX_STRING_VALUE 300
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_STRING_ATTRS);
+        assert((uint64_t) 1 << attribute_type & (VALID_STRING_ATTRS | VALID_REF_ATTRS));
         plog_work_t *work = _plog_work(_plog_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
@@ -1485,6 +1428,8 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
     hostname = getenv("HOSTNAME");
     size_t hostLength = !!hostname ? strlen(hostname) : 0;
 
+    site_id = getenv("SKUPPER_SITE_ID");
+
     //
     // If the hostname is in the form of a Kubernetes pod name, use the 5-character
     // suffix as the router-id.  Otherwise, generate a random router-id.
@@ -1507,7 +1452,6 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
         router_id[ROUTER_ID_SIZE - 1] = '\0';
     }
 
-    site_id     = qdr_core_dispatch(core)->plog_site_id;
     router_area = qdr_core_dispatch(core)->router_area;
     router_name = qdr_core_dispatch(core)->router_id;
 
