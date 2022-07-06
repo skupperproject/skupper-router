@@ -610,7 +610,7 @@ static void _plog_free_record_TH(plog_record_t *record, bool recursive)
     plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (!!data) {
         DEQ_REMOVE_HEAD(record->attributes);
-        if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS)) {
+        if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
             free(data->value.string_val);
         }
         free_plog_attribute_data_t(data);
