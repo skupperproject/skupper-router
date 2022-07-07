@@ -251,6 +251,9 @@ ignore_missing_imports = True
 [mypy-quart.*]
 ignore_missing_imports = True
 
+[mypy-hypercorn.*]
+ignore_missing_imports = True
+
 [mypy-werkzeug.*]
 ignore_missing_imports = True
 
