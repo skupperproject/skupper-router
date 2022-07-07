@@ -29,6 +29,7 @@ import json
 import os
 import system_test
 
+from hypercorn import Config as HConfig
 from quart import Quart, request  # type: ignore[attr-defined]
 try:
     from quart.static import send_file  # type: ignore[attr-defined]
@@ -39,6 +40,12 @@ try:
     from quart.exceptions import HTTPStatusException  # type: ignore[attr-defined]
 except ImportError:
     from werkzeug.exceptions import InternalServerError as HTTPStatusException  # type: ignore[no-redef]  # mypy#1153
+
+# Hypercorn default config sets a connection idle timeout to 5 seconds. This
+# will cause the connection to the server to occasionally drop when running on
+# slower systems. We do not need idle connection timeout for CI - disable it.
+#
+HConfig.keep_alive_timeout = 50000.0
 
 app = Quart(__name__)
 
