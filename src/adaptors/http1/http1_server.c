@@ -235,12 +235,12 @@ qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, qd_http_ada
                "[C%"PRIu64"] Initiating connection to HTTP server %s",
                hconn->conn_id, hconn->cfg.host_port);
 
-        c->plog = plog_start_record(PLOG_RECORD_CONNECTOR, 0);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "http1");
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
-        plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
+        c->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
+        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
+        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
+        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
+        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
+        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
 
         // lock out the core activation thread.  Up until this point the core
         // thread cannot activate the qdr_connection_t since the

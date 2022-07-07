@@ -67,7 +67,7 @@ struct qdr_tcp_connection_t {
     qd_handler_context_t  context;
     qd_tcp_connector_t   *connector;
     qd_tcp_listener_t    *listener;
-    plog_record_t        *plog;
+    vflow_record_t        *vflow;
     char                 *reply_to;
     qdr_connection_t     *qdr_conn;
     uint64_t              conn_id;
@@ -314,12 +314,12 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
         tcp_stats->bytes_in += result;
         UNLOCK(tcp_stats->stats_lock);
         conn->bytes_unacked += result;
-        plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_OCTETS, conn->bytes_in);
-        plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_OCTETS_UNACKED, conn->bytes_unacked);
+        vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, conn->bytes_in);
+        vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, conn->bytes_unacked);
 
         if (read_window_full(conn)) {
             conn->window_closed_count++;
-            plog_set_uint64(conn->plog, PLOG_ATTRIBUTE_WINDOW_CLOSURES, conn->window_closed_count);
+            vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window_closed_count);
             qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
                    "[C%"PRIu64"] TCP RX window CLOSED: bytes in=%"PRIu64" unacked=%"PRIu64,
                    conn->conn_id, conn->bytes_in, conn->bytes_unacked);
@@ -410,7 +410,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, props);
         qd_compose_start_map(props);
         qd_compose_insert_symbol(props, QD_AP_FLOW_ID);
-        plog_serialize_identity(conn->plog, props);
+        vflow_serialize_identity(conn->vflow, props);
         qd_compose_end_map(props);
 
         qd_message_compose_2(msg, props, false);
@@ -424,12 +424,12 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
             //
             // Start latency timer for this cross-van connection.
             //
-            plog_latency_start(conn->plog);
+            vflow_latency_start(conn->vflow);
         } else {
             //
             // End latency timer for this server-side connection.
             //
-            plog_latency_end(conn->plog);
+            vflow_latency_end(conn->vflow);
         }
 
         conn->in_dlv_stream = qdr_link_deliver(conn->incoming_link, msg, 0, false, 0, 0, 0, 0);
@@ -498,7 +498,7 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
 
     qd_tcp_connector_decref(tc->connector);
     qd_tcp_listener_decref(tc->listener);
-    plog_end_record(tc->plog);
+    vflow_end_record(tc->vflow);
     free(tc->reply_to);
     free(tc->remote_address);
     free(tc->global_id);
@@ -858,14 +858,14 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     qdr_action_enqueue(tcp_adaptor->core, action);
 }
 
-static void set_plog_string(qdr_tcp_connection_t *conn)
+static void set_vflow_string(qdr_tcp_connection_t *conn)
 {
     char remote_host[200];
     char remote_port[50];
     const pn_netaddr_t *na = conn->ingress ? pn_raw_connection_remote_addr(conn->pn_raw_conn) : pn_raw_connection_local_addr(conn->pn_raw_conn);
     if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
-        plog_set_string(conn->plog, PLOG_ATTRIBUTE_SOURCE_HOST, remote_host);
-        plog_set_string(conn->plog, PLOG_ATTRIBUTE_SOURCE_PORT, remote_port);
+        vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, remote_host);
+        vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_SOURCE_PORT, remote_port);
     }
 }
 
@@ -875,7 +875,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     qd_log_source_t *log = tcp_adaptor->log_source;
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
-        set_plog_string(conn);
+        set_vflow_string(conn);
         if (conn->ingress) {
             qdr_tcp_connection_ingress_accept(conn);
             qd_log(log, QD_LOG_INFO,
@@ -1063,10 +1063,10 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
     tc->listener = listener;
     sys_atomic_inc(&listener->ref_count);
 
-    tc->plog = plog_start_record(PLOG_RECORD_FLOW, listener->plog);
-    plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
-    plog_add_rate(tc->plog, PLOG_ATTRIBUTE_OCTETS, PLOG_ATTRIBUTE_OCTET_RATE);
-    plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
+    tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->vflow);
+    vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
     // IMPORTANT NOTE: this next call TO pn_listener_raw_accept may immediately schedule the connection on another I/O
     // thread. IF you want to access tc after this call, the activation_lock  must be held to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
@@ -1193,10 +1193,10 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
         tc->initial_delivery  = initial_delivery;
         qdr_delivery_incref(initial_delivery, "qdr_tcp_connection_egress - held initial delivery");
 
-        tc->plog = plog_start_record(PLOG_RECORD_FLOW, connector->plog);
-        plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_OCTETS, 0);
-        plog_add_rate(tc->plog, PLOG_ATTRIBUTE_OCTETS, PLOG_ATTRIBUTE_OCTET_RATE);
-        plog_set_uint64(tc->plog, PLOG_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
+        tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+        vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
         allocate_tcp_write_buffer(&tc->write_buffer);
         allocate_tcp_buffer(&tc->read_buffer);
@@ -1207,7 +1207,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
         tc->pn_raw_conn = pn_raw_connection();
         pn_raw_connection_set_context(tc->pn_raw_conn, tc);
 
-        plog_latency_start(tc->plog);
+        vflow_latency_start(tc->vflow);
 
         // IMPORTANT NOTE: this next call TO pn_proactor_raw_connect may immediately schedule the connection on another I/O
         // thread. The activation_lock  must be held if you ever want to access tc immediately after the call to pn_proactor_raw_connect
@@ -1259,7 +1259,7 @@ static void log_tcp_adaptor_config(qd_log_source_t *log, qd_tcp_adaptor_config_t
 static void qd_tcp_listener_decref(qd_tcp_listener_t *li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
-        plog_end_record(li->plog);
+        vflow_end_record(li->vflow);
         sys_atomic_destroy(&li->ref_count);
         qd_free_tcp_adaptor_config(li->config, tcp_adaptor->log_source);
         sys_mutex_free(li->tcp_stats->stats_lock);
@@ -1281,10 +1281,10 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->tcp_stats->stats_lock = sys_mutex();
 
     //
-    // Create a plog record for this listener
+    // Create a vflow record for this listener
     //
-    li->plog = plog_start_record(PLOG_RECORD_LISTENER, 0);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_PROTOCOL, "tcp");
+    li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "tcp");
 
     return li;
 }
@@ -1315,12 +1315,12 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     log_tcp_adaptor_config(tcp_adaptor->log_source, li->config, "TcpListener");
 
     //
-    // Report listener configuration to plog
+    // Report listener configuration to vflow
     //
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_NAME,             li->config->adaptor_config->name);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      li->config->adaptor_config->address);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_NAME,             li->config->adaptor_config->name);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->config->adaptor_config->address);
 
     sys_mutex_lock(tcp_adaptor->listener_lock);
     DEQ_INSERT_TAIL(tcp_adaptor->listeners, li);  // ref_count taken
@@ -1394,10 +1394,10 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     ZERO(c->tcp_stats);
     c->tcp_stats->stats_lock = sys_mutex();
     //
-    // Create a plog record for this connector
+    // Create a vflow record for this connector
     //
-    c->plog = plog_start_record(PLOG_RECORD_CONNECTOR, 0);
-    plog_set_string(c->plog, PLOG_ATTRIBUTE_PROTOCOL, "tcp");
+    c->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
+    vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "tcp");
 
     return c;
 }
@@ -1405,7 +1405,7 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
 static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
-        plog_end_record(c->plog);
+        vflow_end_record(c->vflow);
         sys_atomic_destroy(&c->ref_count);
         sys_mutex_free(c->tcp_stats->stats_lock);
         free_qdr_tcp_stats_t(c->tcp_stats);
@@ -1428,12 +1428,12 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     log_tcp_adaptor_config(tcp_adaptor->log_source, c->config, "TcpConnector");
 
     //
-    // Report connector configuration to plog
+    // Report connector configuration to vflow
     //
-    plog_set_string(c->plog, PLOG_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
-    plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
-    plog_set_string(c->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
-    plog_set_string(c->plog, PLOG_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
+    vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
+    vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
+    vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
+    vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
 
     c->dispatcher_conn = qdr_tcp_connection_egress(c, c->config, c->server, NULL);
     return c;
@@ -1644,9 +1644,9 @@ static int qdr_tcp_push(void *context, qdr_link_t *link, int limit)
  * @param tc Pointer to the tcp connection state
  * @param msg Pointer to the message received from the ingress (listener) side
  */
-static void qdr_associate_plog_flows(qdr_tcp_connection_t *tc, qd_message_t *msg)
+static void qdr_associate_vflow_flows(qdr_tcp_connection_t *tc, qd_message_t *msg)
 {
-    assert(!!tc->plog);
+    assert(!!tc->vflow);
     qd_iterator_t *ap_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
     if (!ap_iter) {
         return;
@@ -1678,7 +1678,7 @@ static void qdr_associate_plog_flows(qdr_tcp_connection_t *tc, qd_message_t *msg
             }
 
             if (!!id_value) {
-                plog_set_ref_from_parsed(tc->plog, PLOG_ATTRIBUTE_COUNTERFLOW, id_value);
+                vflow_set_ref_from_parsed(tc->vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, id_value);
             }
         } while (false);
         qd_parse_free(ap);
@@ -1710,7 +1710,7 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
             tc->out_dlv_stream = delivery;
             qdr_delivery_incref(delivery, "tcp_adaptor - new out_dlv_stream");
             if (tc->ingress) {
-                plog_latency_end(tc->plog);
+                vflow_latency_end(tc->vflow);
             } else {
                 //on egress, can only set up link for the reverse
                 //direction once we receive the first part of the
@@ -1722,8 +1722,8 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 f_iter = qd_message_field_iterator(msg, QD_FIELD_REPLY_TO);
                 qdr_tcp_connection_copy_reply_to(tc, f_iter);
                 qd_iterator_free(f_iter);
-                qdr_associate_plog_flows(tc, msg);
-                plog_set_trace(tc->plog, msg);
+                qdr_associate_vflow_flows(tc, msg);
+                vflow_set_trace(tc->vflow, msg);
                 qdr_terminus_t *target = qdr_terminus(0);
                 qdr_terminus_set_address(target, tc->reply_to);
                 tc->incoming_link = qdr_link_first_attach(tc->qdr_conn,

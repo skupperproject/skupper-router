@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "qpid/dispatch/protocol_log.h"
+#include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/alloc.h"
@@ -41,72 +41,72 @@
 #define RATE_SLOT_COUNT 5
 #define IDENTITY_MAX 27
 
-typedef struct plog_identity_t {
+typedef struct vflow_identity_t {
     uint64_t record_id;
     char     source_id[ROUTER_ID_SIZE];
-} plog_identity_t;
+} vflow_identity_t;
 
-typedef struct plog_attribute_data_t {
-    DEQ_LINKS(struct plog_attribute_data_t);
-    plog_attribute_t  attribute_type;
+typedef struct vflow_attribute_data_t {
+    DEQ_LINKS(struct vflow_attribute_data_t);
+    vflow_attribute_t  attribute_type;
     uint32_t          emit_ordinal;
     union {
         uint64_t  uint_val;
         char     *string_val;
     } value;
-} plog_attribute_data_t;
+} vflow_attribute_data_t;
 
-ALLOC_DECLARE(plog_attribute_data_t);
-ALLOC_DEFINE(plog_attribute_data_t);
-DEQ_DECLARE(plog_attribute_data_t, plog_attribute_data_list_t);
+ALLOC_DECLARE(vflow_attribute_data_t);
+ALLOC_DEFINE(vflow_attribute_data_t);
+DEQ_DECLARE(vflow_attribute_data_t, vflow_attribute_data_list_t);
 
-typedef struct plog_rate_t {
-    DEQ_LINKS(struct plog_rate_t);
-    DEQ_LINKS_N(PER_RECORD, struct plog_rate_t);
-    uint64_t               slot[RATE_SLOT_COUNT];
-    int                    slot_cursor;
-    uint64_t               last_rate;
-    plog_record_t         *record;
-    plog_attribute_t       rate_attribute;
-    plog_attribute_data_t *count_attribute;
-} plog_rate_t;
+typedef struct vflow_rate_t {
+    DEQ_LINKS(struct vflow_rate_t);
+    DEQ_LINKS_N(PER_RECORD, struct vflow_rate_t);
+    uint64_t                slot[RATE_SLOT_COUNT];
+    int                     slot_cursor;
+    uint64_t                last_rate;
+    vflow_record_t         *record;
+    vflow_attribute_t       rate_attribute;
+    vflow_attribute_data_t *count_attribute;
+} vflow_rate_t;
 
-ALLOC_DECLARE(plog_rate_t);
-ALLOC_DEFINE(plog_rate_t);
-DEQ_DECLARE(plog_rate_t, plog_rate_list_t);
-DEQ_DECLARE(plog_record_t, plog_record_list_t);
+ALLOC_DECLARE(vflow_rate_t);
+ALLOC_DEFINE(vflow_rate_t);
+DEQ_DECLARE(vflow_rate_t, vflow_rate_list_t);
+DEQ_DECLARE(vflow_record_t, vflow_record_list_t);
 
-struct plog_record_t {
-    DEQ_LINKS(plog_record_t);
-    DEQ_LINKS_N(UNFLUSHED, plog_record_t);
-    plog_record_type_t          record_type;
-    plog_record_t              *parent;
-    plog_record_list_t          children;
-    plog_identity_t             identity;
-    plog_attribute_data_list_t  attributes;
-    plog_rate_list_t            rates;
-    uint64_t                    latency_start;
-    uint32_t                    emit_ordinal;
-    int                         flush_slot;
-    bool                        never_flushed;
-    bool                        never_logged;
-    bool                        force_log;
-    bool                        ended;
+struct vflow_record_t {
+    DEQ_LINKS(vflow_record_t);
+    DEQ_LINKS_N(UNFLUSHED, vflow_record_t);
+    vflow_record_type_t          record_type;
+    vflow_record_t              *parent;
+    vflow_record_list_t          children;
+    vflow_identity_t             identity;
+    vflow_attribute_data_list_t  attributes;
+    vflow_rate_list_t            rates;
+    uint64_t                     latency_start;
+    uint32_t                     emit_ordinal;
+    int                          flush_slot;
+    bool                         never_flushed;
+    bool                         never_logged;
+    bool                         force_log;
+    bool                         ended;
 };
 
-ALLOC_DECLARE(plog_record_t);
-ALLOC_DEFINE(plog_record_t);
+ALLOC_DECLARE(vflow_record_t);
+ALLOC_DEFINE(vflow_record_t);
 
-typedef struct plog_work_t plog_work_t;
+typedef struct vflow_work_t vflow_work_t;
 
-typedef void (*plog_work_handler_t) (plog_work_t *work, bool discard);
+typedef void (*vflow_work_handler_t) (vflow_work_t *work, bool discard);
 
-struct plog_work_t {
-    DEQ_LINKS(plog_work_t);
-    plog_work_handler_t  handler;
-    plog_record_t       *record;
+struct vflow_work_t {
+    DEQ_LINKS(vflow_work_t);
+    vflow_work_handler_t  handler;
+    vflow_record_t       *record;
     uint64_t             timestamp;
-    plog_attribute_t     attribute;
+    vflow_attribute_t     attribute;
     union {
         char     *string_val;
         uint64_t  int_val;
@@ -114,9 +114,9 @@ struct plog_work_t {
     } value;
 };
 
-ALLOC_DECLARE(plog_work_t);
-ALLOC_DEFINE(plog_work_t);
-DEQ_DECLARE(plog_work_t, plog_work_list_t);
+ALLOC_DECLARE(vflow_work_t);
+ALLOC_DEFINE(vflow_work_t);
+DEQ_DECLARE(vflow_work_t, vflow_work_list_t);
 
 static const char *event_address_all           = "mc/sfe.all";
 static const char *event_address_my_prefix     = "mc/sfe.";
@@ -127,34 +127,34 @@ static const int   initial_flush_interval_msec = 2000;
 static const int   rate_slot_flush_intervals   = 10;    // For a two-second slot interval
 static const int   rate_span                   = 10;    // Ten-second rolling average
 
-static qdr_core_t         *router_core;
-static sys_mutex_t        *lock;
-static sys_mutex_t        *id_lock;
-static sys_cond_t         *condition;
-static sys_thread_t       *thread;
-static bool                sleeping = false;
-static qd_log_source_t    *log;
-static plog_work_list_t    work_list    = DEQ_EMPTY;
-static plog_record_t      *local_router = 0;
-static plog_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
-static plog_rate_list_t    rate_trackers = DEQ_EMPTY;
-static int                 current_flush_slot = 0;
-static char               *site_id;
-static char               *hostname;
-static char                router_id[ROUTER_ID_SIZE];
-static uint64_t            next_identity     = 0;
-static const char         *router_area;
-static const char         *router_name;
-static qdr_watch_handle_t  all_address_watch_handle;
-static qdr_watch_handle_t  my_address_watch_handle;
-static bool                all_address_usable = false;
-static bool                my_address_usable  = false;
-static qd_timer_t         *beacon_timer = 0;
-static qd_timer_t         *flush_timer = 0;
-static uint64_t            next_message_id = 0;
+static qdr_core_t          *router_core;
+static sys_mutex_t         *lock;
+static sys_mutex_t         *id_lock;
+static sys_cond_t          *condition;
+static sys_thread_t        *thread;
+static bool                 sleeping = false;
+static qd_log_source_t     *log;
+static vflow_work_list_t    work_list    = DEQ_EMPTY;
+static vflow_record_t      *local_router = 0;
+static vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
+static vflow_rate_list_t    rate_trackers = DEQ_EMPTY;
+static int                  current_flush_slot = 0;
+static char                *site_id;
+static char                *hostname;
+static char                 router_id[ROUTER_ID_SIZE];
+static uint64_t             next_identity     = 0;
+static const char          *router_area;
+static const char          *router_name;
+static qdr_watch_handle_t   all_address_watch_handle;
+static qdr_watch_handle_t   my_address_watch_handle;
+static bool                 all_address_usable = false;
+static bool                 my_address_usable  = false;
+static qd_timer_t          *beacon_timer = 0;
+static qd_timer_t          *flush_timer = 0;
+static uint64_t             next_message_id = 0;
 
-static void _plog_set_string_TH(plog_work_t *work, bool discard);
-static void _plog_set_int_TH(plog_work_t *work, bool discard);
+static void _vflow_set_string_TH(vflow_work_t *work, bool discard);
+static void _vflow_set_int_TH(vflow_work_t *work, bool discard);
 
 /**
  * @brief Return the current timestamp in microseconds
@@ -179,9 +179,9 @@ static uint64_t _now_in_usec(void)
  *     If data has the same attribute type, overwrite this data record with new values
  *     If data has a different attribute type, insert new data record after this data record
  */
-static plog_attribute_data_t* _plog_find_attribute(plog_record_t *record, plog_attribute_t attr)
+static vflow_attribute_data_t* _vflow_find_attribute(vflow_record_t *record, vflow_attribute_t attr)
 {
-    plog_attribute_data_t *data = DEQ_TAIL(record->attributes);
+    vflow_attribute_data_t *data = DEQ_TAIL(record->attributes);
 
     while(!!data) {
         if (data->attribute_type <= attr) {
@@ -205,7 +205,7 @@ static plog_attribute_data_t* _plog_find_attribute(plog_record_t *record, plog_a
  * 
  * @param identity (out) New, unique identity
  */
-static void _plog_next_id(plog_identity_t *identity)
+static void _vflow_next_id(vflow_identity_t *identity)
 {
     sys_mutex_lock(id_lock);
     identity->record_id = next_identity++;
@@ -214,7 +214,7 @@ static void _plog_next_id(plog_identity_t *identity)
 }
 
 
-static char *_plog_id_to_new_string(const plog_identity_t *identity)
+static char *_vflow_id_to_new_string(const vflow_identity_t *identity)
 {
     char *result = (char*) malloc(IDENTITY_MAX);
     snprintf(result, IDENTITY_MAX, "%s:%"PRIu64, identity->source_id, identity->record_id);
@@ -229,7 +229,7 @@ static char *_plog_id_to_new_string(const plog_identity_t *identity)
  * @param n String size limit
  * @param id Identity to be string encoded
  */
-static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
+static void _vflow_strncat_id(char *buffer, size_t n, const vflow_identity_t *id)
 {
     char text[IDENTITY_MAX + 1];
     snprintf(text, IDENTITY_MAX, "%s:%"PRIu64, id->source_id, id->record_id);
@@ -244,7 +244,7 @@ static void _plog_strncat_id(char *buffer, size_t n, const plog_identity_t *id)
  * @param n String size limit
  * @param data Data value to extrace the attribute-type from
  */
-static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute_data_t *data)
+static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribute_data_t *data)
 {
 #define ATTR_TEXT_MAX 65
     char  text[ATTR_TEXT_MAX + 1];
@@ -262,7 +262,7 @@ static void _plog_strncat_attribute(char *buffer, size_t n, const plog_attribute
 }
 
 
-static void _plog_compose_attribute(qd_composed_field_t *field, const plog_attribute_data_t *data)
+static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_attribute_data_t *data)
 {
     if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
         qd_compose_insert_long(field, data->value.uint_val);
@@ -273,12 +273,12 @@ static void _plog_compose_attribute(qd_composed_field_t *field, const plog_attri
 
 
 /**
- * @brief Work handler for plog_start_record
+ * @brief Work handler for vflow_start_record
  * 
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
-static void _plog_start_record_TH(plog_work_t *work, bool discard)
+static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
 {
     if (discard) {
         return;
@@ -288,8 +288,8 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     // If the record type is ROUTER, this is the local-router record.  Store it.
     // Otherwise, if the parent is not specified, use the local_router as the parent.
     //
-    plog_record_t *record = work->record;
-    if (record->record_type == PLOG_RECORD_ROUTER) {
+    vflow_record_t *record = work->record;
+    if (record->record_type == VFLOW_RECORD_ROUTER) {
         local_router = record;
     } else if (record->parent == 0) {
         record->parent = local_router;
@@ -298,20 +298,20 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
     //
     // Record the creation timestamp in the record.
     //
-    plog_work_t sub_work;
-    sub_work.attribute = PLOG_ATTRIBUTE_START_TIME;
+    vflow_work_t sub_work;
+    sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
     sub_work.record    = record;
     sub_work.value.int_val = work->timestamp;
-    _plog_set_int_TH(&sub_work, false);
+    _vflow_set_int_TH(&sub_work, false);
 
     //
     // Record the parent reference.
     //
     if (!!record->parent) {
-        sub_work.attribute = PLOG_ATTRIBUTE_PARENT;
+        sub_work.attribute = VFLOW_ATTRIBUTE_PARENT;
         sub_work.record    = record;
-        sub_work.value.string_val = _plog_id_to_new_string(&record->parent->identity);
-        _plog_set_string_TH(&sub_work, false);
+        sub_work.value.string_val = _vflow_id_to_new_string(&record->parent->identity);
+        _vflow_set_string_TH(&sub_work, false);
     }
 
     //
@@ -347,27 +347,27 @@ static void _plog_start_record_TH(plog_work_t *work, bool discard)
 
 
 /**
- * @brief Work handler for plog_end_record
+ * @brief Work handler for vflow_end_record
  * 
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
-static void _plog_end_record_TH(plog_work_t *work, bool discard)
+static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
 {
     if (discard) {
         return;
     }
 
-    plog_record_t *record = work->record;
+    vflow_record_t *record = work->record;
 
     //
     // Record the deletion timestamp in the record.
     //
-    plog_work_t sub_work;
-    sub_work.attribute = PLOG_ATTRIBUTE_END_TIME;
+    vflow_work_t sub_work;
+    sub_work.attribute = VFLOW_ATTRIBUTE_END_TIME;
     sub_work.record    = record;
     sub_work.value.int_val = work->timestamp;
-    _plog_set_int_TH(&sub_work, false);
+    _vflow_set_int_TH(&sub_work, false);
 
     //
     // Mark the record as ended to designate the lifecycle end
@@ -386,38 +386,38 @@ static void _plog_end_record_TH(plog_work_t *work, bool discard)
     //
     // Free any rate trackers on this record
     //
-    plog_rate_t *rate = DEQ_HEAD(record->rates);
+    vflow_rate_t *rate = DEQ_HEAD(record->rates);
     while (!!rate) {
         DEQ_REMOVE(rate_trackers, rate);
         DEQ_REMOVE_N(PER_RECORD, record->rates, rate);
-        free_plog_rate_t(rate);
+        free_vflow_rate_t(rate);
         rate = DEQ_HEAD(record->rates);
     }
 }
 
 
 /**
- * @brief Work handler for plog_set_string
+ * @brief Work handler for vflow_set_string
  * 
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
-static void _plog_set_string_TH(plog_work_t *work, bool discard)
+static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
 {
     if (discard) {
         free(work->value.string_val);
         return;
     }
 
-    plog_record_t         *record = work->record;
-    plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
-    plog_attribute_data_t *data;
+    vflow_record_t         *record = work->record;
+    vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
+    vflow_attribute_data_t *data;
 
     if (!insert || insert->attribute_type != work->attribute) {
         //
         // The attribute does not exist, create a new one and insert appropriately
         //
-        data = new_plog_attribute_data_t();
+        data = new_vflow_attribute_data_t();
         ZERO(data);
         data->attribute_type   = work->attribute;
         data->emit_ordinal     = record->emit_ordinal;
@@ -444,26 +444,26 @@ static void _plog_set_string_TH(plog_work_t *work, bool discard)
 
 
 /**
- * @brief Work handler for plog_set_int
+ * @brief Work handler for vflow_set_int
  * 
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
-static void _plog_set_int_TH(plog_work_t *work, bool discard)
+static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
 {
     if (discard) {
         return;
     }
 
-    plog_record_t         *record = work->record;
-    plog_attribute_data_t *insert = _plog_find_attribute(record, work->attribute);
-    plog_attribute_data_t *data;
+    vflow_record_t         *record = work->record;
+    vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
+    vflow_attribute_data_t *data;
 
     if (!insert || insert->attribute_type != work->attribute) {
         //
         // The attribute does not exist, create a new one and insert appropriately
         //
-        data = new_plog_attribute_data_t();
+        data = new_vflow_attribute_data_t();
         ZERO(data);
         data->attribute_type = work->attribute;
         data->emit_ordinal   = record->emit_ordinal;
@@ -491,12 +491,12 @@ static void _plog_set_int_TH(plog_work_t *work, bool discard)
 /**
  * @brief Allocate a work object pre-loaded with a handler.
  * 
- * @param handler The handler to be called on the plog thread to do the work
- * @return plog_work_t* Pointer to the allocated work that should be posted for processing
+ * @param handler The handler to be called on the vflow thread to do the work
+ * @return vflow_work_t* Pointer to the allocated work that should be posted for processing
  */
-static plog_work_t *_plog_work(plog_work_handler_t handler)
+static vflow_work_t *_vflow_work(vflow_work_handler_t handler)
 {
-    plog_work_t *work = new_plog_work_t();
+    vflow_work_t *work = new_vflow_work_t();
     ZERO(work);
     work->handler = handler;
     return work;
@@ -504,11 +504,11 @@ static plog_work_t *_plog_work(plog_work_handler_t handler)
 
 
 /**
- * @brief Post work for processing in the plog thread
+ * @brief Post work for processing in the vflow thread
  * 
  * @param work Pointer to the work to be processed
  */
-static void _plog_post_work(plog_work_t *work)
+static void _vflow_post_work(vflow_work_t *work)
 {
     sys_mutex_lock(lock);
     DEQ_INSERT_TAIL(work_list, work);
@@ -524,9 +524,9 @@ static void _plog_post_work(plog_work_t *work)
 /**
  * @brief Create the record that represents the local router.
  */
-static void _plog_create_router_record(void)
+static void _vflow_create_router_record(void)
 {
-    plog_record_t *router = plog_start_record(PLOG_RECORD_ROUTER, 0);
+    vflow_record_t *router = vflow_start_record(VFLOW_RECORD_ROUTER, 0);
 
     const char *namespace  = getenv("POD_NAMESPACE");
     const char *image_name = getenv("APPLICATION_NAME");
@@ -536,30 +536,30 @@ static void _plog_create_router_record(void)
     strcpy(name, router_area);
     strcat(name, "/");
     strcat(name, router_name);
-    plog_set_string(router, PLOG_ATTRIBUTE_NAME, name);
+    vflow_set_string(router, VFLOW_ATTRIBUTE_NAME, name);
     free(name);
 
     if (!!site_id) {
-        plog_set_string(router, PLOG_ATTRIBUTE_PARENT, site_id);
+        vflow_set_string(router, VFLOW_ATTRIBUTE_PARENT, site_id);
     }
 
     if (!!hostname) {
-        plog_set_string(router, PLOG_ATTRIBUTE_HOST_NAME, hostname);
+        vflow_set_string(router, VFLOW_ATTRIBUTE_HOST_NAME, hostname);
     }
 
     if (!!namespace) {
-        plog_set_string(router, PLOG_ATTRIBUTE_NAMESPACE, namespace);
+        vflow_set_string(router, VFLOW_ATTRIBUTE_NAMESPACE, namespace);
     }
 
     if (!!image_name) {
-        plog_set_string(router, PLOG_ATTRIBUTE_IMAGE_NAME, image_name);
+        vflow_set_string(router, VFLOW_ATTRIBUTE_IMAGE_NAME, image_name);
     }
 
     if (!!version) {
-        plog_set_string(router, PLOG_ATTRIBUTE_IMAGE_VERSION, version);
+        vflow_set_string(router, VFLOW_ATTRIBUTE_IMAGE_VERSION, version);
     }
 
-    plog_set_string(router, PLOG_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
+    vflow_set_string(router, VFLOW_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
 }
 
 
@@ -569,7 +569,7 @@ static void _plog_create_router_record(void)
  * @param record Pointer to the record to be freed.
  * @param recursive If true, delete recursively, otherwise just remove parent references.
  */
-static void _plog_free_record_TH(plog_record_t *record, bool recursive)
+static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
 {
     //
     // If this record is a child of a parent, remove it from the parent's child list
@@ -591,13 +591,13 @@ static void _plog_free_record_TH(plog_record_t *record, bool recursive)
         // Remove all of this record's children
         //
         while (!DEQ_IS_EMPTY(record->children)) {
-            _plog_free_record_TH(DEQ_HEAD(record->children), true);
+            _vflow_free_record_TH(DEQ_HEAD(record->children), true);
         }
     } else {
         //
         // Remove the childrens' parent references
         //
-        plog_record_t *child = DEQ_HEAD(record->children);
+        vflow_record_t *child = DEQ_HEAD(record->children);
         while (!!child) {
             child->parent = 0;
             child = DEQ_NEXT(child);
@@ -607,86 +607,86 @@ static void _plog_free_record_TH(plog_record_t *record, bool recursive)
     //
     // Free all of this record's attributes
     //
-    plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
+    vflow_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (!!data) {
         DEQ_REMOVE_HEAD(record->attributes);
         if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
             free(data->value.string_val);
         }
-        free_plog_attribute_data_t(data);
+        free_vflow_attribute_data_t(data);
         data = DEQ_HEAD(record->attributes);
     }
 
     //
     // Free the record
     //
-    free_plog_record_t(record);
+    free_vflow_record_t(record);
 }
 
 
-static const char *_plog_record_type_name(const plog_record_t *record)
+static const char *_vflow_record_type_name(const vflow_record_t *record)
 {
     switch (record->record_type) {
-    case PLOG_RECORD_SITE       : return "SITE";
-    case PLOG_RECORD_ROUTER     : return "ROUTER";
-    case PLOG_RECORD_LINK       : return "LINK";
-    case PLOG_RECORD_CONTROLLER : return "CONTROLLER";
-    case PLOG_RECORD_LISTENER   : return "LISTENER";
-    case PLOG_RECORD_CONNECTOR  : return "CONNECTOR";
-    case PLOG_RECORD_FLOW       : return "FLOW";
-    case PLOG_RECORD_PROCESS    : return "PROCESS";
-    case PLOG_RECORD_IMAGE      : return "IMAGE";
-    case PLOG_RECORD_INGRESS    : return "INGRESS";
-    case PLOG_RECORD_EGRESS     : return "EGRESS";
-    case PLOG_RECORD_COLLECTOR  : return "COLLECTOR";
+    case VFLOW_RECORD_SITE       : return "SITE";
+    case VFLOW_RECORD_ROUTER     : return "ROUTER";
+    case VFLOW_RECORD_LINK       : return "LINK";
+    case VFLOW_RECORD_CONTROLLER : return "CONTROLLER";
+    case VFLOW_RECORD_LISTENER   : return "LISTENER";
+    case VFLOW_RECORD_CONNECTOR  : return "CONNECTOR";
+    case VFLOW_RECORD_FLOW       : return "FLOW";
+    case VFLOW_RECORD_PROCESS    : return "PROCESS";
+    case VFLOW_RECORD_IMAGE      : return "IMAGE";
+    case VFLOW_RECORD_INGRESS    : return "INGRESS";
+    case VFLOW_RECORD_EGRESS     : return "EGRESS";
+    case VFLOW_RECORD_COLLECTOR  : return "COLLECTOR";
     }
     return "UNKNOWN";
 }
 
 
-static const char *_plog_attribute_name(const plog_attribute_data_t *data)
+static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
 {
     switch (data->attribute_type) {
-    case PLOG_ATTRIBUTE_RECORD_TYPE      : return "recordType";
-    case PLOG_ATTRIBUTE_IDENTITY         : return "identity";
-    case PLOG_ATTRIBUTE_PARENT           : return "parent";
-    case PLOG_ATTRIBUTE_START_TIME       : return "startTime";
-    case PLOG_ATTRIBUTE_END_TIME         : return "endTime";
-    case PLOG_ATTRIBUTE_COUNTERFLOW      : return "counterflow";
-    case PLOG_ATTRIBUTE_PEER             : return "peer";
-    case PLOG_ATTRIBUTE_PROCESS          : return "process";
-    case PLOG_ATTRIBUTE_SIBLING_ORDINAL  : return "sibOrdinal";
-    case PLOG_ATTRIBUTE_LOCATION         : return "location";
-    case PLOG_ATTRIBUTE_PROVIDER         : return "provider";
-    case PLOG_ATTRIBUTE_PLATFORM         : return "platform";
-    case PLOG_ATTRIBUTE_NAMESPACE        : return "namespace";
-    case PLOG_ATTRIBUTE_MODE             : return "mode";
-    case PLOG_ATTRIBUTE_SOURCE_HOST      : return "sourceHost";
-    case PLOG_ATTRIBUTE_DESTINATION_HOST : return "destHost";
-    case PLOG_ATTRIBUTE_PROTOCOL         : return "protocol";
-    case PLOG_ATTRIBUTE_SOURCE_PORT      : return "sourcePort";
-    case PLOG_ATTRIBUTE_DESTINATION_PORT : return "destPort";
-    case PLOG_ATTRIBUTE_VAN_ADDRESS      : return "vanAddress";
-    case PLOG_ATTRIBUTE_IMAGE_NAME       : return "imageName";
-    case PLOG_ATTRIBUTE_IMAGE_VERSION    : return "imageVersion";
-    case PLOG_ATTRIBUTE_HOST_NAME        : return "hostname";
-    case PLOG_ATTRIBUTE_OCTETS           : return "octets";
-    case PLOG_ATTRIBUTE_LATENCY          : return "latency";
-    case PLOG_ATTRIBUTE_TRANSIT_LATENCY  : return "transitLatency";
-    case PLOG_ATTRIBUTE_BACKLOG          : return "backlog";
-    case PLOG_ATTRIBUTE_METHOD           : return "method";
-    case PLOG_ATTRIBUTE_RESULT           : return "result";
-    case PLOG_ATTRIBUTE_REASON           : return "reason";
-    case PLOG_ATTRIBUTE_NAME             : return "name";
-    case PLOG_ATTRIBUTE_TRACE            : return "trace";
-    case PLOG_ATTRIBUTE_BUILD_VERSION    : return "buildVersion";
-    case PLOG_ATTRIBUTE_LINK_COST        : return "linkCost";
-    case PLOG_ATTRIBUTE_DIRECTION        : return "direction";
-    case PLOG_ATTRIBUTE_OCTET_RATE       : return "octetRate";
-    case PLOG_ATTRIBUTE_OCTETS_OUT       : return "octetsOut";
-    case PLOG_ATTRIBUTE_OCTETS_UNACKED   : return "octetsUnacked";
-    case PLOG_ATTRIBUTE_WINDOW_CLOSURES  : return "windowClosures";
-    case PLOG_ATTRIBUTE_WINDOW_SIZE      : return "windowSize";
+    case VFLOW_ATTRIBUTE_RECORD_TYPE      : return "recordType";
+    case VFLOW_ATTRIBUTE_IDENTITY         : return "identity";
+    case VFLOW_ATTRIBUTE_PARENT           : return "parent";
+    case VFLOW_ATTRIBUTE_START_TIME       : return "startTime";
+    case VFLOW_ATTRIBUTE_END_TIME         : return "endTime";
+    case VFLOW_ATTRIBUTE_COUNTERFLOW      : return "counterflow";
+    case VFLOW_ATTRIBUTE_PEER             : return "peer";
+    case VFLOW_ATTRIBUTE_PROCESS          : return "process";
+    case VFLOW_ATTRIBUTE_SIBLING_ORDINAL  : return "sibOrdinal";
+    case VFLOW_ATTRIBUTE_LOCATION         : return "location";
+    case VFLOW_ATTRIBUTE_PROVIDER         : return "provider";
+    case VFLOW_ATTRIBUTE_PLATFORM         : return "platform";
+    case VFLOW_ATTRIBUTE_NAMESPACE        : return "namespace";
+    case VFLOW_ATTRIBUTE_MODE             : return "mode";
+    case VFLOW_ATTRIBUTE_SOURCE_HOST      : return "sourceHost";
+    case VFLOW_ATTRIBUTE_DESTINATION_HOST : return "destHost";
+    case VFLOW_ATTRIBUTE_PROTOCOL         : return "protocol";
+    case VFLOW_ATTRIBUTE_SOURCE_PORT      : return "sourcePort";
+    case VFLOW_ATTRIBUTE_DESTINATION_PORT : return "destPort";
+    case VFLOW_ATTRIBUTE_VAN_ADDRESS      : return "vanAddress";
+    case VFLOW_ATTRIBUTE_IMAGE_NAME       : return "imageName";
+    case VFLOW_ATTRIBUTE_IMAGE_VERSION    : return "imageVersion";
+    case VFLOW_ATTRIBUTE_HOST_NAME        : return "hostname";
+    case VFLOW_ATTRIBUTE_OCTETS           : return "octets";
+    case VFLOW_ATTRIBUTE_LATENCY          : return "latency";
+    case VFLOW_ATTRIBUTE_TRANSIT_LATENCY  : return "transitLatency";
+    case VFLOW_ATTRIBUTE_BACKLOG          : return "backlog";
+    case VFLOW_ATTRIBUTE_METHOD           : return "method";
+    case VFLOW_ATTRIBUTE_RESULT           : return "result";
+    case VFLOW_ATTRIBUTE_REASON           : return "reason";
+    case VFLOW_ATTRIBUTE_NAME             : return "name";
+    case VFLOW_ATTRIBUTE_TRACE            : return "trace";
+    case VFLOW_ATTRIBUTE_BUILD_VERSION    : return "buildVersion";
+    case VFLOW_ATTRIBUTE_LINK_COST        : return "linkCost";
+    case VFLOW_ATTRIBUTE_DIRECTION        : return "direction";
+    case VFLOW_ATTRIBUTE_OCTET_RATE       : return "octetRate";
+    case VFLOW_ATTRIBUTE_OCTETS_OUT       : return "octetsOut";
+    case VFLOW_ATTRIBUTE_OCTETS_UNACKED   : return "octetsUnacked";
+    case VFLOW_ATTRIBUTE_WINDOW_CLOSURES  : return "windowClosures";
+    case VFLOW_ATTRIBUTE_WINDOW_SIZE      : return "windowSize";
     }
     return "UNKNOWN";
 }
@@ -698,7 +698,7 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
  * @param field Pointer to the parsed field containing the serialized identity
  * @return Newly allocated string with identity, or NULL
  */
-static char *_plog_unserialize_identity(qd_parsed_field_t *field)
+static char *_vflow_unserialize_identity(qd_parsed_field_t *field)
 {
     if (!qd_parse_is_scalar(field)) {
         return 0;
@@ -714,14 +714,14 @@ static char *_plog_unserialize_identity(qd_parsed_field_t *field)
  *
  * @param record Pointer to the record to be emitted
  */
-static void _plog_emit_record_as_log_TH(plog_record_t *record)
+static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
 {
 #define LINE_MAX 1000
     char line[LINE_MAX + 1];
 
-    strcpy(line, _plog_record_type_name(record));
+    strcpy(line, _vflow_record_type_name(record));
     strcat(line, " [");
-    _plog_strncat_id(line, LINE_MAX, &record->identity);
+    _vflow_strncat_id(line, LINE_MAX, &record->identity);
     strcat(line, "]");
     if (record->never_logged) {
         strcat(line, " BEGIN");
@@ -730,13 +730,13 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
         strcat(line, " END");
     }
 
-    plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
+    vflow_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (data) {
-        if (data->attribute_type != PLOG_ATTRIBUTE_START_TIME && data->attribute_type != PLOG_ATTRIBUTE_END_TIME) {
+        if (data->attribute_type != VFLOW_ATTRIBUTE_START_TIME && data->attribute_type != VFLOW_ATTRIBUTE_END_TIME) {
             strncat(line, " ", LINE_MAX);
-            strncat(line, _plog_attribute_name(data), LINE_MAX);
+            strncat(line, _vflow_attribute_name(data), LINE_MAX);
             strncat(line, "=", LINE_MAX);
-            _plog_strncat_attribute(line, LINE_MAX, data);
+            _vflow_strncat_attribute(line, LINE_MAX, data);
         }
         data = DEQ_NEXT(data);
     }
@@ -751,7 +751,7 @@ static void _plog_emit_record_as_log_TH(plog_record_t *record)
  *
  * @param core Pointer to the core module
  */
-static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
+static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
 {
     if (DEQ_SIZE(unflushed_records[current_flush_slot]) == 0) {
         return;
@@ -759,7 +759,7 @@ static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
 
     int                  event_count = 0;
     qd_composed_field_t *field = 0;
-    plog_record_t       *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
+    vflow_record_t      *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
 
     while (!!record) {
         if (field == 0) {
@@ -789,19 +789,19 @@ static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
         // Insert the current record into the current message body.
         //
         qd_compose_start_map(field);
-        qd_compose_insert_uint(field, PLOG_ATTRIBUTE_RECORD_TYPE);
+        qd_compose_insert_uint(field, VFLOW_ATTRIBUTE_RECORD_TYPE);
         qd_compose_insert_uint(field, record->record_type);
 
-        qd_compose_insert_uint(field, PLOG_ATTRIBUTE_IDENTITY);
+        qd_compose_insert_uint(field, VFLOW_ATTRIBUTE_IDENTITY);
         char identity[IDENTITY_MAX + 1];
         snprintf(identity, IDENTITY_MAX, "%s:%"PRIu64, record->identity.source_id, record->identity.record_id);
         qd_compose_insert_string(field, identity);
 
-        plog_attribute_data_t *data = DEQ_HEAD(record->attributes);
+        vflow_attribute_data_t *data = DEQ_HEAD(record->attributes);
         while (data) {
             if (data->emit_ordinal >= record->emit_ordinal) {
                 qd_compose_insert_uint(field, data->attribute_type);
-                _plog_compose_attribute(field, data);
+                _vflow_compose_attribute(field, data);
             }
             data = DEQ_NEXT(data);
         }
@@ -855,17 +855,17 @@ static void _plog_emit_unflushed_as_events_TH(qdr_core_t *core)
  * 
  * @param core Pointer to the core module
  */
-static void _plog_flush_TH(qdr_core_t *core)
+static void _vflow_flush_TH(qdr_core_t *core)
 {
     //
     // If there is at least one collector for this router, batch up the
     // unflushed records and send them as events to the collector.
     //
     if (my_address_usable) {
-        _plog_emit_unflushed_as_events_TH(core);
+        _vflow_emit_unflushed_as_events_TH(core);
     }
 
-    plog_record_t *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
+    vflow_record_t *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
     while (!!record) {
         DEQ_REMOVE_HEAD_N(UNFLUSHED, unflushed_records[current_flush_slot]);
         assert(record->flush_slot >= 0);
@@ -876,20 +876,20 @@ static void _plog_flush_TH(qdr_core_t *core)
         //
         if (record->ended || record->force_log) {
             record->force_log = false;
-            _plog_emit_record_as_log_TH(record);
+            _vflow_emit_record_as_log_TH(record);
         }
 
         record->never_flushed = false;
         record->emit_ordinal++;
         if (record->ended) {
-            _plog_free_record_TH(record, false);
+            _vflow_free_record_TH(record, false);
         }
         record = DEQ_HEAD(unflushed_records[current_flush_slot]);
     }
 }
 
 
-static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
+static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
         qdr_core_t *core = (qdr_core_t*) work->value.pointer;
@@ -941,7 +941,7 @@ static void _plog_send_beacon_TH(plog_work_t *work, bool discard)
 }
 
 
-static void _plog_refresh_record_TH(plog_record_t *record)
+static void _vflow_refresh_record_TH(vflow_record_t *record)
 {
     record->emit_ordinal = 0;
     if (record->flush_slot == -1) {
@@ -949,28 +949,28 @@ static void _plog_refresh_record_TH(plog_record_t *record)
         DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
     }
 
-    plog_record_t *child = DEQ_HEAD(record->children);
+    vflow_record_t *child = DEQ_HEAD(record->children);
     while (!!child) {
-        _plog_refresh_record_TH(child);
+        _vflow_refresh_record_TH(child);
         child = DEQ_NEXT(child);
     }
 }
 
 
-static void _plog_refresh_events_TH(plog_work_t *work, bool discard)
+static void _vflow_refresh_events_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
-        _plog_refresh_record_TH(local_router);
+        _vflow_refresh_record_TH(local_router);
     }
 }
 
 
-static void _plog_add_rate_TH(plog_work_t *work, bool discard)
+static void _vflow_add_rate_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
-        plog_rate_t *rate = new_plog_rate_t();
+        vflow_rate_t *rate = new_vflow_rate_t();
         ZERO(rate);
-        plog_attribute_data_t *data = DEQ_HEAD(work->record->attributes);
+        vflow_attribute_data_t *data = DEQ_HEAD(work->record->attributes);
         while (!!data) {
             if (data->attribute_type == work->attribute) {
                 rate->count_attribute = data;
@@ -991,49 +991,49 @@ static void _plog_add_rate_TH(plog_work_t *work, bool discard)
 }
 
 
-static void _plog_process_rates_TH(void)
+static void _vflow_process_rates_TH(void)
 {
-    plog_rate_t *rate = DEQ_HEAD(rate_trackers);
+    vflow_rate_t *rate = DEQ_HEAD(rate_trackers);
     while(!!rate) {
         rate->slot[rate->slot_cursor] = rate->count_attribute->value.uint_val;
         uint64_t delta = rate->slot[rate->slot_cursor] - rate->slot[(rate->slot_cursor + 1) % RATE_SLOT_COUNT];
         rate->slot_cursor = (rate->slot_cursor + 1) % RATE_SLOT_COUNT;
         uint64_t average_rate = delta / rate_span;
-        plog_set_uint64(rate->record, rate->rate_attribute, average_rate);
+        vflow_set_uint64(rate->record, rate->rate_attribute, average_rate);
         rate = DEQ_NEXT(rate);
     }
 }
 
 
-static void _plog_tick_TH(plog_work_t *work, bool discard)
+static void _vflow_tick_TH(vflow_work_t *work, bool discard)
 {
     static int tick_ordinal = 0;
     if (!discard) {
-        _plog_flush_TH(router_core);
+        _vflow_flush_TH(router_core);
         current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
 
         tick_ordinal = (tick_ordinal + 1) % rate_slot_flush_intervals;
         if (tick_ordinal == 0) {
-            _plog_process_rates_TH();
+            _vflow_process_rates_TH();
         }
     }
 }
 
 
-static void _plog_on_flush(void *context)
+static void _vflow_on_flush(void *context)
 {
-    plog_work_t *work = _plog_work(_plog_tick_TH);
-    _plog_post_work(work);
+    vflow_work_t *work = _vflow_work(_vflow_tick_TH);
+    _vflow_post_work(work);
     qd_timer_schedule(flush_timer, flush_interval_msec);
 }
 
 
-static void _plog_send_beacon(qdr_core_t *core)
+static void _vflow_send_beacon(qdr_core_t *core)
 {
     if (!!beacon_timer) {
-        plog_work_t *work = _plog_work(_plog_send_beacon_TH);
+        vflow_work_t *work = _vflow_work(_vflow_send_beacon_TH);
         work->value.pointer = core;
-        _plog_post_work(work);
+        _vflow_post_work(work);
         qd_timer_schedule(beacon_timer, beacon_interval_sec * 1000);
     }
 }
@@ -1043,16 +1043,16 @@ static void _plog_send_beacon(qdr_core_t *core)
 // Module Thread
 //=====================================================================================
 /**
- * @brief Main function for the plog thread.  This thread runs for the entire
+ * @brief Main function for the vflow thread.  This thread runs for the entire
  * lifecycle of the router.
  * 
  * @param unused Unused
  * @return void* Unused
  */
-static void *_plog_thread(void *context)
+static void *_vflow_thread(void *context)
 {
     bool running = true;
-    plog_work_list_t local_work_list = DEQ_EMPTY;
+    vflow_work_list_t local_work_list = DEQ_EMPTY;
     qdr_core_t *core = (qdr_core_t*) context;
 
     qd_log(log, QD_LOG_INFO, "Protocol logging started");
@@ -1080,7 +1080,7 @@ static void *_plog_thread(void *context)
         //
         // Process the local work list with the lock not held
         //
-        plog_work_t *work = DEQ_HEAD(local_work_list);
+        vflow_work_t *work = DEQ_HEAD(local_work_list);
         while (work) {
             DEQ_REMOVE_HEAD(local_work_list);
             if (!!work->handler) {
@@ -1091,7 +1091,7 @@ static void *_plog_thread(void *context)
                 //
                 running = false;
             }
-            free_plog_work_t(work);
+            free_vflow_work_t(work);
             work = DEQ_HEAD(local_work_list);
         }
     }
@@ -1100,14 +1100,14 @@ static void *_plog_thread(void *context)
     // Flush out all of the slots
     //
     for (int i = 0; i < FLUSH_SLOT_COUNT; i++) {
-        _plog_flush_TH(core);
+        _vflow_flush_TH(core);
         current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
     }
 
     //
     // Free all remaining records in the tree
     //
-    _plog_free_record_TH(local_router, true);
+    _vflow_free_record_TH(local_router, true);
 
     qd_log(log, QD_LOG_INFO, "Protocol logging completed");
     return 0;
@@ -1128,11 +1128,11 @@ static void *_plog_thread(void *context)
  * @param remote_consumers The number of remote routers with local consumers for the address
  * @param local_producers (unused) The number of local producers for the address
  */
-static void _plog_on_all_address_watch(void     *context,
-                                       uint32_t  local_consumers,
-                                       uint32_t  in_proc_consumers,
-                                       uint32_t  remote_consumers,
-                                       uint32_t  local_producers)
+static void _vflow_on_all_address_watch(void     *context,
+                                        uint32_t  local_consumers,
+                                        uint32_t  in_proc_consumers,
+                                        uint32_t  remote_consumers,
+                                        uint32_t  local_producers)
 {
     bool now_usable = local_consumers > 0 || remote_consumers > 0;
 
@@ -1142,7 +1142,7 @@ static void _plog_on_all_address_watch(void     *context,
         //
         qd_log(log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
         all_address_usable = true;
-        _plog_send_beacon((qdr_core_t*) context);
+        _vflow_send_beacon((qdr_core_t*) context);
     } else if (!now_usable && all_address_usable) {
         //
         // Stop sending beacons.  Nobody is listening.
@@ -1166,11 +1166,11 @@ static void _plog_on_all_address_watch(void     *context,
  * @param remote_consumers The number of remote routers with local consumers for the address
  * @param local_producers (unused) The number of local producers for the address
  */
-static void _plog_on_my_address_watch(void     *context,
-                                      uint32_t  local_consumers,
-                                      uint32_t  in_proc_consumers,
-                                      uint32_t  remote_consumers,
-                                      uint32_t  local_producers)
+static void _vflow_on_my_address_watch(void     *context,
+                                       uint32_t  local_consumers,
+                                       uint32_t  in_proc_consumers,
+                                       uint32_t  remote_consumers,
+                                       uint32_t  local_producers)
 {
     bool now_usable = local_consumers > 0 || remote_consumers > 0;
 
@@ -1180,7 +1180,7 @@ static void _plog_on_my_address_watch(void     *context,
         //
         qd_log(log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
         my_address_usable = true;
-        _plog_post_work(_plog_work(_plog_refresh_events_TH));
+        _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
     } else if (!now_usable && my_address_usable) {
         //
         // Stop sending log records
@@ -1191,19 +1191,19 @@ static void _plog_on_my_address_watch(void     *context,
 }
 
 
-static void _plog_on_beacon(void *context)
+static void _vflow_on_beacon(void *context)
 {
-    _plog_send_beacon((qdr_core_t*) context);
+    _vflow_send_beacon((qdr_core_t*) context);
 }
 
 
 //=====================================================================================
 // Public Functions
 //=====================================================================================
-plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *parent)
+vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record_t *parent)
 {
-    plog_record_t *record = new_plog_record_t();
-    plog_work_t   *work   = _plog_work(_plog_start_record_TH);
+    vflow_record_t *record = new_vflow_record_t();
+    vflow_work_t   *work   = _vflow_work(_vflow_start_record_TH);
     ZERO(record);
     record->record_type   = record_type;
     record->parent        = parent;
@@ -1219,25 +1219,25 @@ plog_record_t *plog_start_record(plog_record_type_t record_type, plog_record_t *
     //
     // Assign a unique identity to the new record
     //
-    _plog_next_id(&record->identity);
+    _vflow_next_id(&record->identity);
 
-    _plog_post_work(work);
+    _vflow_post_work(work);
     return record;
 }
 
 
-void plog_end_record(plog_record_t *record)
+void vflow_end_record(vflow_record_t *record)
 {
     if (!!record) {
-        plog_work_t *work = _plog_work(_plog_end_record_TH);
+        vflow_work_t *work = _vflow_work(_vflow_end_record_TH);
         work->record    = record;
         work->timestamp = _now_in_usec();
-        _plog_post_work(work);
+        _vflow_post_work(work);
     }
 }
 
 
-void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *field)
+void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t *field)
 {
     char buffer[IDENTITY_MAX + 1];
     assert(!!record);
@@ -1248,67 +1248,67 @@ void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *f
 }
 
 
-void plog_set_ref_from_record(plog_record_t *record, plog_attribute_t attribute_type, plog_record_t *referenced_record)
+void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribute_type, vflow_record_t *referenced_record)
 {
     if (!!record && !!referenced_record) {
         assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-        plog_work_t *work = _plog_work(_plog_set_string_TH);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
-        work->value.string_val = _plog_id_to_new_string(&referenced_record->identity);
-        _plog_post_work(work);
+        work->value.string_val = _vflow_id_to_new_string(&referenced_record->identity);
+        _vflow_post_work(work);
     }
 }
 
 
-void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_type, qd_parsed_field_t *field)
+void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribute_type, qd_parsed_field_t *field)
 {
     if (!!record) {
         assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
-        plog_work_t *work = _plog_work(_plog_set_string_TH);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
 
-        work->value.string_val = _plog_unserialize_identity(field);
+        work->value.string_val = _vflow_unserialize_identity(field);
 
         if (!!work->value.string_val) {
-            _plog_post_work(work);
+            _vflow_post_work(work);
         } else {
-            free_plog_work_t(work);
+            free_vflow_work_t(work);
             qd_log(log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
         }
     }
 }
 
 
-void plog_set_string(plog_record_t *record, plog_attribute_t attribute_type, const char *value)
+void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
     if (!!record) {
         assert((uint64_t) 1 << attribute_type & (VALID_STRING_ATTRS | VALID_REF_ATTRS));
-        plog_work_t *work = _plog_work(_plog_set_string_TH);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
         work->value.string_val = !!value ? strndup(value, strnlen(value, MAX_STRING_VALUE)) : 0;
-        _plog_post_work(work);
+        _vflow_post_work(work);
     }
 }
 
 
-void plog_set_uint64(plog_record_t *record, plog_attribute_t attribute_type, uint64_t value)
+void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t value)
 {
     if (!!record) {
         assert((uint64_t) 1 << attribute_type & VALID_UINT_ATTRS);
-        plog_work_t *work = _plog_work(_plog_set_int_TH);
+        vflow_work_t *work = _vflow_work(_vflow_set_int_TH);
         work->record        = record;
         work->attribute     = attribute_type;
         work->value.int_val = value;
-        _plog_post_work(work);
+        _vflow_post_work(work);
     }
 }
 
 
-void plog_set_trace(plog_record_t *record, qd_message_t *msg)
+void vflow_set_trace(vflow_record_t *record, qd_message_t *msg)
 {
 #define MAX_TRACE_BUFFER 1000
     if (!record) {
@@ -1340,15 +1340,15 @@ void plog_set_trace(plog_record_t *record, qd_message_t *msg)
         }
     }
 
-    plog_work_t *work = _plog_work(_plog_set_string_TH);
+    vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
     work->record    = record;
-    work->attribute = PLOG_ATTRIBUTE_TRACE;
+    work->attribute = VFLOW_ATTRIBUTE_TRACE;
     work->value.string_val = strdup(trace_text_ptr);
-    _plog_post_work(work);
+    _vflow_post_work(work);
 }
 
 
-void plog_latency_start(plog_record_t *record)
+void vflow_latency_start(vflow_record_t *record)
 {
     if (!!record) {
         record->latency_start = _now_in_usec();
@@ -1356,25 +1356,25 @@ void plog_latency_start(plog_record_t *record)
 }
 
 
-void plog_latency_end(plog_record_t *record)
+void vflow_latency_end(vflow_record_t *record)
 {
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
-        plog_set_uint64(record, PLOG_ATTRIBUTE_LATENCY, now - record->latency_start);
+        vflow_set_uint64(record, VFLOW_ATTRIBUTE_LATENCY, now - record->latency_start);
     }
 }
 
 
-void plog_add_rate(plog_record_t *record, plog_attribute_t count_attribute, plog_attribute_t rate_attribute)
+void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, vflow_attribute_t rate_attribute)
 {
     if (!!record) {
         assert((uint64_t) 1 << count_attribute & VALID_UINT_ATTRS);
         assert((uint64_t) 1 << rate_attribute & VALID_UINT_ATTRS);
-        plog_work_t *work = _plog_work(_plog_add_rate_TH);
+        vflow_work_t *work = _vflow_work(_vflow_add_rate_TH);
         work->record        = record;
         work->attribute     = count_attribute;
         work->value.int_val = rate_attribute;
-        _plog_post_work(work);
+        _vflow_post_work(work);
     }
 }
 
@@ -1383,19 +1383,19 @@ void plog_add_rate(plog_record_t *record, plog_attribute_t count_attribute, plog
 // IO Module Callbacks
 //=====================================================================================
 
-static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
+static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
 {
     qdr_core_t *core = (qdr_core_t*) work->value.pointer;
 
     if (!discard) {
         event_address_my = (char*) malloc(71);
         strcpy(event_address_my, event_address_my_prefix);
-        _plog_strncat_id(event_address_my, 70, &local_router->identity);
+        _vflow_strncat_id(event_address_my, 70, &local_router->identity);
 
         all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_all_address_watch, 0, core);
+                                                          QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
         my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _plog_on_my_address_watch, 0, core);
+                                                          QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
     }
 }
 
@@ -1406,7 +1406,7 @@ static void _plog_init_address_watch_TH(plog_work_t *work, bool discard)
  * @param core Pointer to the core object
  * @param adaptor_context (out) Context set for use in finalizer
  */
-static void _plog_init(qdr_core_t *core, void **adaptor_context)
+static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 {
     router_core = core;
     hostname = getenv("HOSTNAME");
@@ -1447,17 +1447,17 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
     lock      = sys_mutex();
     id_lock   = sys_mutex();
     condition = sys_cond();
-    thread    = sys_thread(_plog_thread, core);
+    thread    = sys_thread(_vflow_thread, core);
     *adaptor_context = core;
 
-    _plog_create_router_record();
+    _vflow_create_router_record();
 
-    plog_work_t *work = _plog_work(_plog_init_address_watch_TH);
+    vflow_work_t *work = _vflow_work(_vflow_init_address_watch_TH);
     work->value.pointer = core;
-    _plog_post_work(work);
+    _vflow_post_work(work);
 
-    beacon_timer = qd_timer(qdr_core_dispatch(core), _plog_on_beacon, core);
-    flush_timer  = qd_timer(qdr_core_dispatch(core), _plog_on_flush,  core);
+    beacon_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_beacon, core);
+    flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush,  core);
     qd_timer_schedule(flush_timer, initial_flush_interval_msec);
 }
 
@@ -1467,7 +1467,7 @@ static void _plog_init(qdr_core_t *core, void **adaptor_context)
  * 
  * @param adaptor_context Contains the core module pointer
  */
-static void _plog_final(void *adaptor_context)
+static void _vflow_final(void *adaptor_context)
 {
     qdr_core_t *core = (qdr_core_t*) adaptor_context;
 
@@ -1486,7 +1486,7 @@ static void _plog_final(void *adaptor_context)
     //
     // Signal the thread to exit by posting a NULL work pointer
     //
-    _plog_post_work(_plog_work(0));
+    _vflow_post_work(_vflow_work(0));
 
     //
     // Join and free the thread
@@ -1508,4 +1508,4 @@ static void _plog_final(void *adaptor_context)
 }
 
 
-QDR_CORE_ADAPTOR_DECLARE_ORD("Protocol Logging", _plog_init, _plog_final, 10)
+QDR_CORE_ADAPTOR_DECLARE_ORD("Protocol Logging", _vflow_init, _vflow_final, 10)

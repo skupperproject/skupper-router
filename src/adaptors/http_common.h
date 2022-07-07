@@ -28,7 +28,7 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/timer.h"
-#include "qpid/dispatch/protocol_log.h"
+#include "qpid/dispatch/vanflow.h"
 
 #define QD_HTTP_LOG_SOURCE "HTTP_ADAPTOR"
 
@@ -61,7 +61,7 @@ struct qd_http_listener_t {
     sys_atomic_t               ref_count;
     qd_server_t               *server;
     pn_listener_t             *pn_listener;
-    plog_record_t             *plog;
+    vflow_record_t            *vflow;
     DEQ_LINKS(qd_http_listener_t);
 };
 DEQ_DECLARE(qd_http_listener_t, qd_http_listener_list_t);
@@ -77,7 +77,7 @@ struct qd_http_connector_t {
     qd_timer_t                   *timer;
     long                          delay;
     void                         *ctx;
-    plog_record_t                *plog;
+    vflow_record_t               *vflow;
     DEQ_LINKS(qd_http_connector_t);
 };
 DEQ_DECLARE(qd_http_connector_t, qd_http_connector_list_t);
