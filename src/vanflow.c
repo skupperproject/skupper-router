@@ -1368,7 +1368,7 @@ void vflow_latency_end(vflow_record_t *record)
 void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, vflow_attribute_t rate_attribute)
 {
     if (!!record) {
-        assert((uint64_t) 1 << count_attribute & VALID_UINT_ATTRS);
+        assert((uint64_t) 1 << count_attribute & VALID_COUNTER_ATTRS);
         assert((uint64_t) 1 << rate_attribute & VALID_UINT_ATTRS);
         vflow_work_t *work = _vflow_work(_vflow_add_rate_TH);
         work->record        = record;
