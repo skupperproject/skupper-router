@@ -331,7 +331,7 @@ void qdr_core_free(qdr_core_t *core)
     if (core->data_links_by_mask_bit)    free(core->data_links_by_mask_bit);
     if (core->neighbor_free_mask)        qd_bitmask_free(core->neighbor_free_mask);
     if (core->rnode_conns_by_mask_bit)   free(core->rnode_conns_by_mask_bit);
-    if (core->plog_links_by_mask_bit)    free(core->plog_links_by_mask_bit);
+    if (core->vflow_links_by_mask_bit)   free(core->vflow_links_by_mask_bit);
 
     sys_thread_free(core->thread);
     sys_cond_free(core->action_cond);

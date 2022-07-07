@@ -267,7 +267,7 @@ void qd_http_listener_decref(qd_http_listener_t* li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         qd_free_http_adaptor_config(li->config);
-        plog_end_record(li->plog);
+        vflow_end_record(li->vflow);
         free_qd_http_listener_t(li);
     }
 }
@@ -290,7 +290,7 @@ void qd_http_connector_decref(qd_http_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         qd_free_http_adaptor_config(c->config);
-        plog_end_record(c->plog);
+        vflow_end_record(c->vflow);
         free_qd_http_connector_t(c);
     }
 }

@@ -30,7 +30,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
-#include "qpid/dispatch/protocol_log.h"
+#include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/engine.h>
@@ -67,7 +67,7 @@ struct qd_tcp_listener_t
     sys_atomic_t              ref_count;
     qd_server_t              *server;
     qd_tcp_adaptor_config_t  *config;
-    plog_record_t            *plog;
+    vflow_record_t           *vflow;
     qdr_tcp_stats_t          *tcp_stats;
     qd_adaptor_listener_t    *adaptor_listener;
 
@@ -85,8 +85,8 @@ struct qd_tcp_connector_t
     qd_server_t              *server;
     qd_tcp_adaptor_config_t  *config;
     void                     *dispatcher_conn;
-    plog_record_t            *plog;
-    qdr_tcp_stats_t           *tcp_stats;
+    vflow_record_t           *vflow;
+    qdr_tcp_stats_t          *tcp_stats;
     DEQ_LINKS(qd_tcp_connector_t);
 };
 
