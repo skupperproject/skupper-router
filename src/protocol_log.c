@@ -696,29 +696,16 @@ static const char *_plog_attribute_name(const plog_attribute_data_t *data)
  * @brief Extract the value of a record identity from its serialized form in an iterator
  * 
  * @param field Pointer to the parsed field containing the serialized identity
- * @param identity [out] Pointer to the identity to be overwritten
- * @return True iff the serialized identity was well formed
+ * @return Newly allocated string with identity, or NULL
  */
-static bool _plog_unserialize_identity(qd_parsed_field_t *field, plog_identity_t *identity)
+static char *_plog_unserialize_identity(qd_parsed_field_t *field)
 {
-    if (!qd_parse_is_list(field) || qd_parse_sub_count(field) != 2) {
-        return false;
+    if (!qd_parse_is_scalar(field)) {
+        return 0;
     }
 
-    qd_parsed_field_t *router_id_field = qd_parse_sub_value(field, 0);
-    qd_parsed_field_t *record_id_field = qd_parse_sub_value(field, 1);
-
-    if (!qd_parse_is_scalar(router_id_field) || !qd_parse_is_scalar(record_id_field)) {
-        return false;
-    }
-
-    identity->record_id = qd_parse_as_ulong(record_id_field);
-
-    qd_iterator_t *iter = qd_parse_raw(router_id_field);
-    qd_iterator_ncopy(iter, (uint8_t*) identity->source_id, ROUTER_ID_SIZE - 1);
-    identity->source_id[ROUTER_ID_SIZE - 1] = '\0';
-
-    return true;
+    qd_iterator_t *iter = qd_parse_raw(field);
+    return (char*) qd_iterator_copy(iter);
 }
 
 
@@ -1252,12 +1239,11 @@ void plog_end_record(plog_record_t *record)
 
 void plog_serialize_identity(const plog_record_t *record, qd_composed_field_t *field)
 {
+    char buffer[IDENTITY_MAX + 1];
     assert(!!record);
     if (!!record) {
-        qd_compose_start_list(field);
-        qd_compose_insert_string(field, record->identity.source_id);
-        qd_compose_insert_ulong(field, record->identity.record_id);
-        qd_compose_end_list(field);
+        snprintf(buffer, IDENTITY_MAX, "%s:%"PRIu64, record->identity.source_id, record->identity.record_id);
+        qd_compose_insert_string(field, buffer);
     }
 }
 
@@ -1283,11 +1269,9 @@ void plog_set_ref_from_parsed(plog_record_t *record, plog_attribute_t attribute_
         work->record    = record;
         work->attribute = attribute_type;
 
-        plog_identity_t reference;
-        bool good_id = _plog_unserialize_identity(field, &reference);
-        work->value.string_val = _plog_id_to_new_string(&reference);
+        work->value.string_val = _plog_unserialize_identity(field);
 
-        if (good_id) {
+        if (!!work->value.string_val) {
             _plog_post_work(work);
         } else {
             free_plog_work_t(work);
