@@ -77,7 +77,7 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_IMAGE_NAME       = 20,  // String
     VFLOW_ATTRIBUTE_IMAGE_VERSION    = 21,  // String
     VFLOW_ATTRIBUTE_HOST_NAME        = 22,  // String
-    VFLOW_ATTRIBUTE_OCTETS           = 23,  // uint
+    VFLOW_ATTRIBUTE_OCTETS           = 23,  // uint/counter
 
     VFLOW_ATTRIBUTE_LATENCY          = 24,  // uint
     VFLOW_ATTRIBUTE_TRANSIT_LATENCY  = 25,  // uint
@@ -94,16 +94,17 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_DIRECTION        = 34,  // String
     VFLOW_ATTRIBUTE_OCTET_RATE       = 35,  // uint
 
-    VFLOW_ATTRIBUTE_OCTETS_OUT       = 36,  // uint
+    VFLOW_ATTRIBUTE_OCTETS_OUT       = 36,  // uint/counter
     VFLOW_ATTRIBUTE_OCTETS_UNACKED   = 37,  // uint
-    VFLOW_ATTRIBUTE_WINDOW_CLOSURES  = 38,  // uint
+    VFLOW_ATTRIBUTE_WINDOW_CLOSURES  = 38,  // uint/counter
     VFLOW_ATTRIBUTE_WINDOW_SIZE      = 39,  // uint
 } vflow_attribute_t;
 
-#define VALID_REF_ATTRS    0x00000000000000e6
-#define VALID_UINT_ATTRS   0x000000fa07800119
-#define VALID_STRING_ATTRS 0x00000005787ffe00
-#define VALID_TRACE_ATTRS  0x0000000080000000
+#define VALID_REF_ATTRS     0x00000000000000e6
+#define VALID_UINT_ATTRS    0x000000fa07800119
+#define VALID_COUNTER_ATTRS 0x0000005000800000
+#define VALID_STRING_ATTRS  0x00000005787ffe00
+#define VALID_TRACE_ATTRS   0x0000000080000000
 
 
 /**
