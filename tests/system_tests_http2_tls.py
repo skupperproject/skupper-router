@@ -18,9 +18,8 @@
 #
 import os
 import unittest
-from subprocess import PIPE
 
-from system_test import Qdrouterd, DIR, retry
+from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
 
 from proton import SASL
@@ -41,16 +40,19 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
         super(Http2TestTlsStandaloneRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-tls-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -110,21 +112,20 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         if skip_test():
             return
 
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server_tls"
-        os.environ["SERVER_TLS"] = "yes"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
-        os.environ['SERVER_CERTIFICATE'] = cls.ssl_file('server-certificate.pem')
-        os.environ['SERVER_PRIVATE_KEY'] = cls.ssl_file('server-private-key-no-pass.pem')
-        os.environ['SERVER_CA_CERT'] = cls.ssl_file('ca-certificate.pem')
-
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=os.getenv('SERVER_LISTEN_PORT'),
+                                                  listen_port=cls.server_port,
                                                   wait=False,
                                                   server_file="http2_server.py",
-                                                  stdin=PIPE,
-                                                  stdout=PIPE,
-                                                  stderr=PIPE)
+                                                  env_config={
+                                                      'SERVER_TLS': "yes",
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port),
+                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
+                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
+                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                  })
         inter_router_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'
         cls.http_listener_props = {'port': cls.tester.get_port(),
@@ -150,7 +151,7 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': 'localhost',
             'protocolVersion': 'HTTP2',
@@ -196,7 +197,7 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         # between curl and the server (router) is successful, curl starts speaking http2 to the server (router).
         # If this test works, it is proof that ALPN over TLS is working.
         address = self.router_qdra.http_addresses[0]
-        out = self.run_curl(address, args=self.get_all_curl_args(['--head']), http2_prior_knowledge=False)
+        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['--head']), http2_prior_knowledge=False)
         self.assertIn('HTTP/2 200', out)
         self.assertIn('server: hypercorn-h2', out)
         self.assertIn('content-type: text/html; charset=utf-8', out)
@@ -212,10 +213,10 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         # not understand. Hence it complains with the error message
         # 'Received HTTP/0.9 when not allowed'
         address = self.router_qdra.http_addresses[0]
-        out, err = self.run_curl(address,
-                                 args=self.get_all_curl_args(['--head']),
-                                 http2_prior_knowledge=False,
-                                 no_alpn=True, assert_status=False, get_err=True)
+        _, out, err = self.run_curl(address,
+                                    args=self.get_all_curl_args(['--head']),
+                                    http2_prior_knowledge=False,
+                                    no_alpn=True, assert_status=False)
         self.assertIn('Received HTTP/0.9 when not allowed', err)
 
 
@@ -241,25 +242,20 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
         super(Http2TlsQ2TwoRouterTest, cls).createSaslFiles()
 
         # Start the HTTP2 Server
-        cls.http2_server_name = "http2_server"
-        os.environ["SERVER_TLS"] = "yes"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
-        os.environ['SERVER_CERTIFICATE'] = cls.ssl_file('server-certificate.pem')
-        os.environ['SERVER_PRIVATE_KEY'] = cls.ssl_file('server-private-key-no-pass.pem')
-        os.environ['SERVER_CA_CERT'] = cls.ssl_file('ca-certificate.pem')
-        env = {
-            **os.environ
-        }
-
+        cls.server_port = cls.tester.get_port()
+        cls.http2_server_name = "http2_slow_q2_server"
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
+                                                  listen_port=cls.server_port,
                                                   wait=False,
                                                   server_file="http2_slow_q2_server.py",
-                                                  stdin=PIPE,
-                                                  stdout=PIPE,
-                                                  stderr=PIPE,
-                                                  env=env)
+                                                  env_config={
+                                                      'SERVER_TLS': "yes",
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port),
+                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
+                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
+                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                  })
 
         config_qdra = Qdrouterd.Config([
             ('router', {'id': 'QDR.A', 'mode': 'interior'}),
@@ -290,7 +286,7 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': 'localhost',
             'protocolVersion': 'HTTP2',
@@ -342,9 +338,9 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
         # curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
         # http://127.0.0.1:<port?>/upload --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0] + "/upload"
-        out = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST',
-                                                                  '-H', 'Content-Type: multipart/form-data',
-                                                                  '-F', 'data=@' + image_file('test.jpg')]))
+        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST',
+                                                                        '-H', 'Content-Type: multipart/form-data',
+                                                                        '-F', 'data=@' + image_file('test.jpg')]))
         self.assertIn('Success', out)
         num_blocked = 0
         num_unblocked = 0
@@ -399,24 +395,20 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
         b_listener_port = cls.tester.get_port()
 
         # Start the HTTP2 Server
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["SERVER_TLS"] = "yes"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
-        os.environ['SERVER_CERTIFICATE'] = cls.ssl_file('server-certificate.pem')
-        os.environ['SERVER_PRIVATE_KEY'] = cls.ssl_file('server-private-key-no-pass.pem')
-        os.environ['SERVER_CA_CERT'] = cls.ssl_file('ca-certificate.pem')
-        env = {
-            **os.environ
-        }
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=os.getenv('SERVER_LISTEN_PORT'),
+                                                  listen_port=cls.server_port,
                                                   wait=False,
                                                   server_file="http2_server.py",
-                                                  stdin=PIPE,
-                                                  stdout=PIPE,
-                                                  stderr=PIPE,
-                                                  env=env)
+                                                  env_config={
+                                                      'SERVER_TLS': "yes",
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port),
+                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
+                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
+                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                  })
         config_qdra = Qdrouterd.Config([
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
@@ -450,7 +442,7 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': 'localhost',
             'protocolVersion': 'HTTP2',
@@ -504,16 +496,20 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         super(Http2TestBase, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_TLS': "no",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-tls-auth-peer-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -555,23 +551,11 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         # This test should fail because the curl client is not presenting a client cert but the router has
         # authenticatePeer set to true.
         address = self.router_qdra.http_addresses[0]
-        out, err = self.run_curl(address,
-                                 args=self.get_all_curl_args(['--head']),
-                                 assert_status=False,
-                                 get_err=True,
-                                 timeout=5)
-        conn_closed = False
-        if "HTTP/2 stream 1 was not closed cleanly before end of the underlying stream" in err or \
-                "Connection reset by peer" in err:
-            conn_closed = True
-        self.assertTrue(conn_closed, msg="err is %s and out is %s" % (err, out))
+        rc, out, err = self.run_curl(address,
+                                     args=self.get_all_curl_args(['--head']),
+                                     assert_status=False,
+                                     timeout=5)
+        self.assertNotEqual(0, rc, f"Expected curl to fail {out} {err}")
 
-        def find_tls_error_in_log_file():
-            error = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
-            with open(self.router_qdra.logfile_path, 'r') as router_log:
-                for line_no, log_line in enumerate(router_log, start=1):
-                    if error in log_line:
-                        return True
-            return False
-
-        retry(find_tls_error_in_log_file)
+        error_log = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
+        self.router_qdra.wait_log_message(error_log)

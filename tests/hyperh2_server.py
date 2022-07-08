@@ -17,6 +17,9 @@
 # under the License.
 #
 
+# This HTTP/2 server can be configured via the following environment variables:
+# - SERVER_LISTEN_PORT: the port the server will listen on
+
 import socket
 
 import signal
@@ -64,6 +67,7 @@ def handle_events(conn, events):
 
 
 def handle(sock):
+    print("Connection accepted, socket fileno=%s!" % sock.fileno())
     config = h2.config.H2Configuration(client_side=False)
     conn = h2.connection.H2Connection(config=config)
     conn.initiate_connection()
@@ -86,6 +90,8 @@ def handle(sock):
         data_to_send = conn.data_to_send()
         if data_to_send:
             sock.sendall(data_to_send)
+    print("Closing client connection, socket fileno=%s" % sock.fileno())
+    sock.close()
 
 
 def main():
@@ -99,17 +105,17 @@ def main():
     if port is None:
         raise RuntimeError("Environment variable `SERVER_LISTEN_PORT` is not set.")
 
-    sock = socket.socket()
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('0.0.0.0', int(port)))
-    sock.listen(5)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', int(port)))
+        sock.listen(5)
 
-    while True:
-        # The accept method blocks until someone attempts to connect to our TCP
-        # port: when they do, it returns a tuple: the first element is a new
-        # socket object, the second element is a tuple of the address the new
-        # connection is from
-        handle(sock.accept()[0])
+        while True:
+            # The accept method blocks until someone attempts to connect to our TCP
+            # port: when they do, it returns a tuple: the first element is a new
+            # socket object, the second element is a tuple of the address the new
+            # connection is from
+            handle(sock.accept()[0])
 
 
 if __name__ == '__main__':
