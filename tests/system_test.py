@@ -801,6 +801,27 @@ class Qdrouterd(Process):
             assert retry(lambda c=c: self.is_connected(port=c['port'], host=c.get('host') if c.get('host') else self.get_host(c.get('socketAddressFamily'))),
                          **retry_kwargs), "Port not connected %s" % c['port']
 
+    def wait_log_message(self, pattern, logfile_path=None, **retry_kwargs):
+        """Wait for a log message matching the pattern to appear in the routers
+        log file. The log file for the DEFAULT log module is used unless
+        overridden via the (fully qualified) logfile_path parameter
+        """
+        def _is_pattern_present(f: TextIO) -> bool:
+            for line in f:
+                m = re.search(pattern, line)
+                if m:
+                    return True
+            return False
+
+        logfile_path = logfile_path or self.logfile_path
+        assert logfile_path
+
+        assert retry(lambda: pathlib.Path(logfile_path).is_file(), **retry_kwargs), \
+            f"Router logfile {logfile_path} does not exist or is not a file"
+        with open(logfile_path, 'rt') as router_log:
+            assert retry(lambda: _is_pattern_present(router_log), **retry_kwargs),\
+                f"'{pattern}' not present in router log"
+
     def wait_startup_message(self, **retry_kwargs):
         """Wait for router startup message to be printed into logfile
 
@@ -809,24 +830,16 @@ class Qdrouterd(Process):
 
         e.g. 2022-03-03 19:08:13.608655 +0100 SERVER (notice) Operational, 4 Threads Running (process ID 2190110)
         """
-        def _is_startup_line_present(f: TextIO) -> bool:
-            for line in f:
-                m = re.search(r'SERVER \(notice\) Operational, (\d+) Threads Running \(process ID (\d+)\)', line)
-                if m:
-                    return True
-            return False
+        # system_tests_log_level_update filters SERVER module logs to a
+        # separate file
+        logfile_path = None
+        for log in self.config.sections('log'):
+            if log['module'] == 'SERVER':
+                logfile_path = os.path.join(self.outdir, log.get('outputFile'))
+                break
 
-        logfile_path = self.logfile_path
-        # system_tests_log_level_update filters SERVER module logs to a separate file
-        server_log = [l for l in self.config if (l[0] == 'log' and l[1]['module'] == 'SERVER')]
-        if server_log:
-            logfile_path = os.path.join(self.outdir, server_log[0][1].get('outputFile'))
-
-        assert retry(lambda: pathlib.Path(logfile_path).is_file(), **retry_kwargs), \
-            f"Router logfile {logfile_path} does not exist or is not a file"
-        with open(logfile_path, 'rt') as router_log:
-            assert retry(lambda: _is_startup_line_present(router_log), **retry_kwargs),\
-                "Router startup line not present in router log"
+        self.wait_log_message(r'SERVER \(notice\) Operational, (\d+) Threads Running \(process ID (\d+)\)',
+                              logfile_path=logfile_path)
 
     def wait_ready(self, **retry_kwargs):
         """Wait for ports and connectors to be ready"""

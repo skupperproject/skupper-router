@@ -19,7 +19,7 @@
 import os
 import unittest
 
-from system_test import Qdrouterd, DIR, retry
+from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
 
 from proton import SASL
@@ -197,7 +197,7 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         # between curl and the server (router) is successful, curl starts speaking http2 to the server (router).
         # If this test works, it is proof that ALPN over TLS is working.
         address = self.router_qdra.http_addresses[0]
-        out = self.run_curl(address, args=self.get_all_curl_args(['--head']), http2_prior_knowledge=False)
+        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['--head']), http2_prior_knowledge=False)
         self.assertIn('HTTP/2 200', out)
         self.assertIn('server: hypercorn-h2', out)
         self.assertIn('content-type: text/html; charset=utf-8', out)
@@ -213,10 +213,10 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         # not understand. Hence it complains with the error message
         # 'Received HTTP/0.9 when not allowed'
         address = self.router_qdra.http_addresses[0]
-        out, err = self.run_curl(address,
-                                 args=self.get_all_curl_args(['--head']),
-                                 http2_prior_knowledge=False,
-                                 no_alpn=True, assert_status=False, get_err=True)
+        _, out, err = self.run_curl(address,
+                                    args=self.get_all_curl_args(['--head']),
+                                    http2_prior_knowledge=False,
+                                    no_alpn=True, assert_status=False)
         self.assertIn('Received HTTP/0.9 when not allowed', err)
 
 
@@ -338,9 +338,9 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
         # curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
         # http://127.0.0.1:<port?>/upload --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0] + "/upload"
-        out = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST',
-                                                                  '-H', 'Content-Type: multipart/form-data',
-                                                                  '-F', 'data=@' + image_file('test.jpg')]))
+        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST',
+                                                                        '-H', 'Content-Type: multipart/form-data',
+                                                                        '-F', 'data=@' + image_file('test.jpg')]))
         self.assertIn('Success', out)
         num_blocked = 0
         num_unblocked = 0
@@ -551,23 +551,11 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         # This test should fail because the curl client is not presenting a client cert but the router has
         # authenticatePeer set to true.
         address = self.router_qdra.http_addresses[0]
-        out, err = self.run_curl(address,
-                                 args=self.get_all_curl_args(['--head']),
-                                 assert_status=False,
-                                 get_err=True,
-                                 timeout=5)
-        conn_closed = False
-        if "HTTP/2 stream 1 was not closed cleanly before end of the underlying stream" in err or \
-                "Connection reset by peer" in err:
-            conn_closed = True
-        self.assertTrue(conn_closed, msg="err is %s and out is %s" % (err, out))
+        rc, out, err = self.run_curl(address,
+                                     args=self.get_all_curl_args(['--head']),
+                                     assert_status=False,
+                                     timeout=5)
+        self.assertNotEqual(0, rc, f"Expected curl to fail {out} {err}")
 
-        def find_tls_error_in_log_file():
-            error = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
-            with open(self.router_qdra.logfile_path, 'r') as router_log:
-                for line_no, log_line in enumerate(router_log, start=1):
-                    if error in log_line:
-                        return True
-            return False
-
-        retry(find_tls_error_in_log_file)
+        error_log = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
+        self.router_qdra.wait_log_message(error_log)
