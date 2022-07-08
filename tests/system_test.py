@@ -419,6 +419,7 @@ class Http2Server(HttpServer):
                  perform_teardown=True, cl_args=None,
                  server_file=None,
                  expect=Process.RUNNING,
+                 env_config=None,
                  **kwargs):
         self.name = name
         self.listen_port = listen_port
@@ -430,7 +431,11 @@ class Http2Server(HttpServer):
         self.args = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), self.server_file)]
         if self.cl_args:
             self.args += self.cl_args
-        super(Http2Server, self).__init__(self.args, name=name, expect=expect, **kwargs)
+        server_env = dict(os.environ)
+        if env_config:
+            server_env.update(env_config)
+        super(Http2Server, self).__init__(self.args, name=name, expect=expect,
+                                          env=server_env, **kwargs)
         if wait:
             self.wait_ready()
 

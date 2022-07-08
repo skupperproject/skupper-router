@@ -288,7 +288,7 @@ class CommonHttp2Tests:
         out = self.run_curl(client_addr, args=self.get_all_curl_args())
         self.assertIn(ret_string, out)
 
-    def check_connector_delete(self, client_addr, server_addr):
+    def check_connector_delete(self, client_addr, server_addr, server_port):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         # We are first making sure that the http request goes thru successfully.
         out = self.run_curl(client_addr, args=self.get_all_curl_args())
@@ -301,7 +301,7 @@ class CommonHttp2Tests:
 
         server_conn_found = False
         for conn in connections:
-            if os.environ['SERVER_LISTEN_PORT'] in conn['name']:
+            if str(server_port) in conn['name']:
                 server_conn_found = True
                 break
         self.assertTrue(server_conn_found)
@@ -321,7 +321,7 @@ class CommonHttp2Tests:
         connections = qd_manager.query('io.skupper.router.connection')
         http_server_conn_found = False
         for conn in connections:
-            if os.environ['SERVER_LISTEN_PORT'] in conn['name']:
+            if str(server_port) in conn['name']:
                 server_conn_found = True
                 break
         self.assertFalse(http_server_conn_found)
@@ -368,16 +368,19 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestOneStandaloneRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': 'http2server:app',
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-test-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -396,7 +399,8 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
         self.check_connector_delete(client_addr=self.router_qdra.http_addresses[0],
-                                    server_addr=self.router_qdra.addresses[0])
+                                    server_addr=self.router_qdra.addresses[0],
+                                    server_port=self.server_port)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_000_stats(self):
@@ -462,16 +466,19 @@ class Http2TestOneEdgeRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestOneEdgeRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -491,7 +498,8 @@ class Http2TestOneEdgeRouter(Http2TestBase, CommonHttp2Tests):
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
         self.check_connector_delete(client_addr=self.router_qdra.http_addresses[0],
-                                    server_addr=self.router_qdra.addresses[0])
+                                    server_addr=self.router_qdra.addresses[0],
+                                    server_port=self.server_port)
 
 
 class Http2TestOneInteriorRouter(Http2TestBase, CommonHttp2Tests):
@@ -500,16 +508,19 @@ class Http2TestOneInteriorRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestOneInteriorRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -529,7 +540,8 @@ class Http2TestOneInteriorRouter(Http2TestBase, CommonHttp2Tests):
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
         self.check_connector_delete(client_addr=self.router_qdra.http_addresses[0],
-                                    server_addr=self.router_qdra.addresses[0])
+                                    server_addr=self.router_qdra.addresses[0],
+                                    server_port=self.server_port)
 
 
 class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
@@ -539,14 +551,14 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         if skip_test():
             return
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        server_port = cls.tester.get_port()
-        if os.getenv('SERVER_TLS'):
-            del os.environ["SERVER_TLS"]
-        os.environ['SERVER_LISTEN_PORT'] = str(server_port)
+        cls.server_port = cls.tester.get_port()
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(server_port),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name_a = "http2-test-router-a"
         inter_router_port = cls.tester.get_port()
         cls.http_listener_port = cls.tester.get_port()
@@ -568,7 +580,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': server_port,
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -644,7 +656,8 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
         self.check_connector_delete(client_addr=self.router_qdra.http_addresses[0],
-                                    server_addr=self.router_qdrb.addresses[0])
+                                    server_addr=self.router_qdrb.addresses[0],
+                                    server_port=self.server_port)
 
 
 class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
@@ -657,12 +670,15 @@ class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestEdgeInteriorRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         inter_router_port = cls.tester.get_port()
         config_edgea = Qdrouterd.Config([
             ('router', {'mode': 'edge', 'id': 'EDGE.A'}),
@@ -679,7 +695,7 @@ class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('listener', {'role': 'edge', 'port': inter_router_port}),
             ('httpConnector',
-             {'port': os.getenv('SERVER_LISTEN_PORT'), 'address': 'examples',
+             {'port': cls.server_port, 'address': 'examples',
               'host': '127.0.0.1', 'protocolVersion': 'HTTP2'})
         ])
 
@@ -699,18 +715,21 @@ class Http2TestInteriorEdgeRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestInteriorEdgeRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         inter_router_port = cls.tester.get_port()
         config_edge = Qdrouterd.Config([
             ('router', {'mode': 'edge', 'id': 'EDGE.A'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('httpConnector',
-             {'port': os.getenv('SERVER_LISTEN_PORT'), 'address': 'examples',
+             {'port': cls.server_port, 'address': 'examples',
               'host': '127.0.0.1', 'protocolVersion': 'HTTP2'}),
             ('connector', {'name': 'connectorToA', 'role': 'edge',
                            'port': inter_router_port,
@@ -747,12 +766,15 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         super(Http2TestDoubleEdgeInteriorRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         inter_router_port = cls.tester.get_port()
         cls.edge_a_connector_name = 'connectorFromEdgeAToIntA'
         cls.edge_a_http_connector_name = 'httpConnectorFromEdgeAToHttpServer'
@@ -760,7 +782,7 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
             ('router', {'mode': 'edge', 'id': 'EDGE.A'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('httpConnector',
-             {'port': os.getenv('SERVER_LISTEN_PORT'),
+             {'port': cls.server_port,
               'address': 'examples',
               'name': cls.edge_a_http_connector_name,
               'host': '127.0.0.1',
@@ -777,7 +799,7 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
             ('router', {'mode': 'edge', 'id': 'EDGE.B'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('httpConnector',
-             {'port': os.getenv('SERVER_LISTEN_PORT'),
+             {'port': cls.server_port,
               'address': 'examples',
               'name': cls.edge_b_http_connector_name,
               'host': '127.0.0.1',
@@ -867,16 +889,19 @@ class Http2TestEdgeToEdgeViaInteriorRouter(Http2TestBase, CommonHttp2Tests):
         super(Http2TestEdgeToEdgeViaInteriorRouter, cls).setUpClass()
         if skip_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_server"
-        os.environ["QUART_APP"] = "http2server:app"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -920,7 +945,8 @@ class Http2TestEdgeToEdgeViaInteriorRouter(Http2TestBase, CommonHttp2Tests):
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_zzz_http_connector_delete(self):
         self.check_connector_delete(client_addr=self.router_qdra.http_addresses[0],
-                                    server_addr=self.router_qdrb.addresses[0])
+                                    server_addr=self.router_qdrb.addresses[0],
+                                    server_port=self.server_port)
 
 
 class Http2TestGoAway(Http2TestBase):
@@ -929,15 +955,19 @@ class Http2TestGoAway(Http2TestBase):
         super(Http2TestGoAway, cls).setUpClass()
         if skip_h2_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "hyperh2_server"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="hyperh2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="hyperh2_server.py",
+                                                  env_config={
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
+
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -972,15 +1002,18 @@ class Http2Q2OneRouterTest(Http2TestBase):
         super(Http2Q2OneRouterTest, cls).setUpClass()
         if skip_h2_test():
             return
+        cls.server_port = cls.tester.get_port()
         cls.http2_server_name = "http2_slow_q2_server"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_slow_q2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_slow_q2_server.py",
+                                                  env_config={
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         name = "http2-test-router"
         cls.connector_name = 'connectorToServer'
         cls.connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',
@@ -1031,11 +1064,14 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         super(Http2Q2TwoRouterTest, cls).setUpClass()
         if skip_h2_test():
             return
-        cls.http2_server_name = "http2_server"
-        os.environ['SERVER_LISTEN_PORT'] = str(cls.tester.get_port())
+        cls.server_port = cls.tester.get_port()
+        cls.http2_server_name = "http2_slow_qd_server"
         cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
-                                                  listen_port=int(os.getenv('SERVER_LISTEN_PORT')),
-                                                  server_file="http2_slow_q2_server.py")
+                                                  listen_port=cls.server_port,
+                                                  server_file="http2_slow_q2_server.py",
+                                                  env_config={
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port)
+                                                  })
         qdr_a = "QDR.A"
         inter_router_port = cls.tester.get_port()
         config_qdra = Qdrouterd.Config([
@@ -1051,7 +1087,7 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         qdr_b = "QDR.B"
         cls.connector_name = 'serverConnector'
         cls.http_connector_props = {
-            'port': os.getenv('SERVER_LISTEN_PORT'),
+            'port': cls.server_port,
             'address': 'examples',
             'host': '127.0.0.1',
             'protocolVersion': 'HTTP2',

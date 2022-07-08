@@ -17,6 +17,13 @@
 # under the License.
 #
 
+# This HTTP/2 server can be configured via the following environment variables:
+# - SERVER_LISTEN_PORT: the port the server will listen on
+# - SERVER_TLS: if 'yes' use TLS
+# - SERVER_CA_CERT: TLS configuration
+# - SERVER_CERTIFICATE: TLS configuration
+# - SERVER_PRIVATE_KEY: TLS configuration
+
 import socket
 import ssl
 import signal
@@ -61,6 +68,7 @@ def handle_events(conn, events):
 
 
 def handle(sock):
+    print("Connection accepted, socket fileno=%s!" % sock.fileno())
     config = h2.config.H2Configuration(client_side=False)
 
     # The default initial window per HTTP2 spec is 64K.
@@ -87,6 +95,8 @@ def handle(sock):
         data_to_send = conn.data_to_send()
         if data_to_send:
             sock.sendall(data_to_send)
+    print("Closing client connection, socket fileno=%s" % sock.fileno())
+    sock.close()
 
 
 def main():
@@ -106,8 +116,10 @@ def main():
         context.load_verify_locations(cafile=os.getenv('SERVER_CA_CERT'))
         context.load_cert_chain(certfile=os.getenv('SERVER_CERTIFICATE'), keyfile=os.getenv('SERVER_PRIVATE_KEY'))
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(('0.0.0.0', int(port)))
             sock.listen(5)
+            print(f"HTTP/2 test server listening for TLS connections on port {port}")
             with context.wrap_socket(sock, server_side=True) as ssl_sock:
                 while True:
                     # The accept method blocks until someone attempts to connect to our TCP
@@ -117,18 +129,19 @@ def main():
                     handle(ssl_sock.accept()[0])
 
     else:
-        # Clear non-TLS socket.
-        sock = socket.socket()
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('0.0.0.0', int(port)))
-        sock.listen(5)
+        # non-TLS socket.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('0.0.0.0', int(port)))
+            sock.listen(5)
+            print(f"HTTP/2 test server listening for connections on port {port}")
 
-        while True:
-            # The accept method blocks until someone attempts to connect to our TCP
-            # port: when they do, it returns a tuple: the first element is a new
-            # socket object, the second element is a tuple of the address the new
-            # connection is from
-            handle(sock.accept()[0])
+            while True:
+                # The accept method blocks until someone attempts to connect to our TCP
+                # port: when they do, it returns a tuple: the first element is a new
+                # socket object, the second element is a tuple of the address the new
+                # connection is from
+                handle(sock.accept()[0])
 
 
 if __name__ == '__main__':

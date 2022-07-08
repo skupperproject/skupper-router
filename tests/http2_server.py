@@ -16,6 +16,15 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
+# This HTTP/2 server can be configured via the following environment variables:
+# - SERVER_LISTEN_PORT: the port the server will listen on
+# - SERVER_TLS: if 'yes' use TLS
+# - SERVER_CA_CERT: TLS configuration
+# - SERVER_CERTIFICATE: TLS configuration
+# - SERVER_PRIVATE_KEY: TLS configuration
+# - QUART_*: Quart configuration
+
 import json
 import os
 import system_test
