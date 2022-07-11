@@ -25,9 +25,9 @@ from subprocess import PIPE
 from time import sleep
 
 import system_test
-from http1_tests import wait_http_listeners_up
+from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTest
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
-from system_test import curl_available, TIMEOUT, skip_test_in_ci
+from system_test import curl_available, TIMEOUT, skip_test_in_ci, Http2Server
 
 h2hyper_installed = True
 try:
@@ -1148,3 +1148,40 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         self.assertGreater(num_unblocked, 0)
         self.assertGreaterEqual(num_unblocked, num_blocked)
         self.assertGreater(unblock_line, block_line)
+
+
+class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
+    """
+    Test client connecting to adaptor listeners in various scenarios
+    """
+    PROTOCOL_VERSION = "HTTP2"
+
+    def start_server(self, connector_port):
+
+        class Http2ServerContext(Http2Server):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type, value, traceback):
+                self.teardown()
+
+        server = Http2ServerContext(name="AdaptorListenerServer",
+                                    listen_port=connector_port,
+                                    server_file="http2_server.py",
+                                    env_config={
+                                        'QUART_APP': 'http2server:app',
+                                        'SERVER_LISTEN_PORT': str(connector_port)
+                                    })
+        return server
+
+    def client_connect(self, listener_port):
+        """
+        Returns True if connection succeeds, else raises an error
+        """
+        local_args = [f"127.0.0.1:{listener_port}", "--http2-prior-knowledge"]
+        status, out, err = system_test.run_curl(local_args, timeout=TIMEOUT)
+        if status == 0:
+            return True
+        if "Connection refused" in err:
+            raise ConnectionRefusedError(err)
+        raise Exception(f"CURL ERROR {status}: {out} {err}")

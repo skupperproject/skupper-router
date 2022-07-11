@@ -40,6 +40,14 @@ from http1_tests import Http1Edge2EdgeTestBase
 from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
 from http1_tests import wait_http_listeners_up
+from http1_tests import HttpAdaptorListenerConnectTest
+
+
+class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
+    """
+    Instantiate the Adaptor Listener test for the HTTP1 adaptor
+    """
+    pass
 
 
 class Http1AdaptorManagementTest(TestCase):
