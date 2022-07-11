@@ -29,6 +29,7 @@
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/error.h"
+#include "qpid/dispatch/internal/thread_annotations.h"
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
@@ -2816,7 +2817,7 @@ void qd_message_Q2_holdoff_disable(qd_message_t *msg)
 }
 
 
-bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content)
+bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content) TA_REQ(content->lock)
 {
     const size_t buff_ct = DEQ_SIZE(content->buffers);
     assert(buff_ct >= content->protected_buffers);
@@ -2824,7 +2825,7 @@ bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content)
 }
 
 
-bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content)
+bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content) TA_REQ(content->lock)
 {
     const size_t buff_ct = DEQ_SIZE(content->buffers);
     assert(buff_ct >= content->protected_buffers);
