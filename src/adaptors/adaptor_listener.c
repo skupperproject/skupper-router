@@ -392,7 +392,10 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *li)
 qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_listener_t *li)
 {
     assert(li);
-    return li->oper_status;
+    sys_mutex_lock(li->lock);
+    const qd_listener_oper_status_t value = li->oper_status;
+    sys_mutex_unlock(li->lock);
+    return value;
 }
 
 
