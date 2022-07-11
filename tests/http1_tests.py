@@ -1634,3 +1634,194 @@ class Http1CurlTestsMixIn:
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
             self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
                           % (out, err))
+
+
+class HttpAdaptorListenerConnectTest(TestCase):
+    """
+    Test client connecting to adaptor listeners in various scenarios
+    """
+    LISTENER_TYPE = 'io.skupper.router.httpListener'
+    CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
+    PROTOCOL_VERSION = "HTTP1"
+
+    @classmethod
+    def setUpClass(cls):
+        super(HttpAdaptorListenerConnectTest, cls).setUpClass()
+
+        cls.test_name = 'HTTPListenConnTest'
+
+        # 4 router linear deployment:
+        #  EdgeA - InteriorA - InteriorB - EdgeB
+
+        cls.inter_router_port = cls.tester.get_port()
+        cls.INTA_edge_port = cls.tester.get_port()
+        cls.INTB_edge_port = cls.tester.get_port()
+
+        def router(name: str, mode: str,
+                   extra: Optional[List] = None) -> Qdrouterd:
+            config = [
+                ('router', {'mode': mode,
+                            'id': name}),
+                ('listener', {'role': 'normal',
+                              'port': cls.tester.get_port()}),
+                ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+                ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+            ]
+
+            if extra:
+                config.extend(extra)
+
+            config = Qdrouterd.Config(config)
+            return cls.tester.qdrouterd(name, config, wait=True)
+
+        cls.INTA = router('INTA', 'interior',
+                          [
+                              ('listener', {'role': 'inter-router', 'port':
+                                            cls.inter_router_port}),
+                              ('listener', {'role': 'edge', 'port':
+                                            cls.INTA_edge_port}),
+                          ])
+        cls.INTB = router('INTB', 'interior',
+                          [
+                              ('connector', {'role': 'inter-router',
+                                             'host': '127.0.0.1',
+                                             'port': cls.inter_router_port}),
+                              ('listener', {'role': 'edge', 'port':
+                                            cls.INTB_edge_port}),
+                          ])
+        cls.EdgeA = router('EdgeA', 'edge',
+                           [
+                               ('connector', {'role': 'edge',
+                                              'host': '127.0.0.1',
+                                              'port': cls.INTA_edge_port}),
+                           ])
+        cls.EdgeB = router('EdgeB', 'edge',
+                           [
+                               ('connector', {'role': 'edge',
+                                              'host': '127.0.0.1',
+                                              'port': cls.INTB_edge_port}),
+                           ])
+
+    def start_server(self, connector_port):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.settimeout(TIMEOUT)
+        server.bind(("", connector_port))
+        server.listen(1)
+        return server
+
+    def client_connect(self, listener_port):
+        """
+        Returns True if connection succeeds, else raises an error
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
+            client_conn.setblocking(True)
+            client_conn.settimeout(TIMEOUT)
+            client_conn.connect(('127.0.0.1', listener_port))
+            return True
+
+    def _test_listener_socket_lifecycle(self,
+                                        l_router: Qdrouterd,  # listener router
+                                        c_router: Qdrouterd,  # connector router
+                                        test_id: str):
+        """
+        Verify that the listener socket is active only when a connector for the
+        VAN address has been provisioned
+        """
+        listener_name = "Listener_%s" % test_id
+        connector_name = "Connector_%s" % test_id
+        van_address = "closest/%s" % test_id
+        listener_port = self.tester.get_port()
+        connector_port = self.tester.get_port()
+
+        l_mgmt = l_router.management
+        c_mgmt = c_router.management
+
+        # instantiate a listener
+
+        attributes = {'address': van_address,
+                      'port': listener_port,
+                      'protocolVersion': self.PROTOCOL_VERSION}
+        l_mgmt.create(type=self.LISTENER_TYPE,
+                      name=listener_name,
+                      attributes=attributes)
+
+        # since there is no connector present, the operational state must be
+        # down and connection attempts must be refused
+
+        listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
+        self.assertEqual('down', listener['operStatus'])
+
+        self.assertRaises(ConnectionRefusedError, self.client_connect, listener_port)
+
+        # create a connector and a server for the connector to connect to
+
+        with self.start_server(connector_port) as server:
+
+            attributes = {'address': van_address,
+                          'host': '127.0.0.1',
+                          'port': connector_port,
+                          'protocolVersion': self.PROTOCOL_VERSION}
+            c_mgmt.create(type=self.CONNECTOR_TYPE,
+                          name=connector_name,
+                          attributes=attributes)
+
+            # let the connectors address propagate to listener router
+
+            if l_router.config.router_mode == 'interior':
+                l_router.wait_address(van_address, remotes=1)
+            else:
+                l_router.wait_address(van_address, subscribers=1)
+
+            # expect the listener socket to come up
+
+            self.assertTrue(retry(lambda: l_mgmt.read(type=self.LISTENER_TYPE,
+                                                      name=listener_name)['operStatus'] == 'up'))
+
+            # ensure clients can connect successfully. There may be a delay
+            # between the operStatus going up and the actual listener socket
+            # availability, so tolerate ConnectionRefusedErrors until the
+            # connection succeeds
+
+            retry_exception(lambda: self.client_connect(listener_port),
+                            exception=ConnectionRefusedError)
+
+        # Teardown the connector, expect listener admin state to go down
+
+        c_mgmt.delete(type=self.CONNECTOR_TYPE, name=connector_name)
+        l_router.wait_address_unsubscribed(van_address)
+
+        self.assertTrue(retry(lambda: l_mgmt.read(type=self.LISTENER_TYPE,
+                                                  name=listener_name)['operStatus']
+                              == 'down'))
+
+        # attempt reconnecting until ConnectionRefused occurs
+        def _func():
+            return self.client_connect(listener_port) != True
+        self.assertRaises(ConnectionRefusedError, retry, _func)
+
+        l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
+
+    def test_02_listener_interior(self):
+        """
+        Test tcpListener socket lifecycle interior to interior
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
+
+    def test_03_listener_edge_interior(self):
+        """
+        Test tcpListener socket lifecycle edge to interior
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
+
+    def test_04_listener_interior_edge(self):
+        """
+        Test tcpListener socket lifecycle interior to edge
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
+
+    def test_05_listener_edge_edge(self):
+        """
+        Test tcpListener socket lifecycle edge to edge
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")

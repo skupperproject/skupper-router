@@ -416,7 +416,7 @@ class Http2Server(HttpServer):
     """A HTTP2 Server that will respond to requests made via the router."""
 
     def __init__(self, name=None, listen_port=None, wait=True,
-                 perform_teardown=True, cl_args=None,
+                 cl_args=None,
                  server_file=None,
                  expect=Process.RUNNING,
                  env_config=None,
@@ -425,7 +425,6 @@ class Http2Server(HttpServer):
         self.listen_port = listen_port
         self.ports_family = {self.listen_port: 'IPv4'}
         self.cl_args = cl_args
-        self.perform_teardown = perform_teardown
         self.server_file = server_file
         self._wait_ready = False
         self.args = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), self.server_file)]
@@ -535,7 +534,7 @@ class Qdrouterd(Process):
             return "".join(["%s {\n%s}\n" % (n, attributes(p, 1)) for n, p in self])
 
     def __init__(self, name=None, config=Config(), pyinclude=None, wait=True,
-                 perform_teardown=True, cl_args=None, expect=Process.RUNNING):
+                 cl_args=None, expect=Process.RUNNING):
         """
         @param name: name used for for output files, default to id from config.
         @param config: router configuration
@@ -543,7 +542,6 @@ class Qdrouterd(Process):
         """
         cl_args = cl_args or []
         self.config = copy(config)
-        self.perform_teardown = perform_teardown
         if not name:
             name = self.config.router_id
         assert name
@@ -594,9 +592,6 @@ class Qdrouterd(Process):
             except:
                 pass
             self._management = None
-
-        if not self.perform_teardown:
-            return
 
         teardown_exc = None
         try:
