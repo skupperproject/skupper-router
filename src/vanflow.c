@@ -121,6 +121,8 @@ DEQ_DECLARE(vflow_work_t, vflow_work_list_t);
 static const char *event_address_all           = "mc/sfe.all";
 static const char *event_address_my_prefix     = "mc/sfe.";
 static       char *event_address_my            = 0;
+static const char *command_address_prefix      = "sfe.";
+static       char *command_address             = 0;
 static const int   beacon_interval_sec         = 5;
 static const int   flush_interval_msec         = 200;
 static const int   initial_flush_interval_msec = 2000;
@@ -147,6 +149,7 @@ static const char          *router_area;
 static const char          *router_name;
 static qdr_watch_handle_t   all_address_watch_handle;
 static qdr_watch_handle_t   my_address_watch_handle;
+static qdr_subscription_t  *command_subscription;
 static bool                 all_address_usable = false;
 static bool                 my_address_usable  = false;
 static qd_timer_t          *beacon_timer = 0;
@@ -913,6 +916,8 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         qd_compose_insert_string(field, "ROUTER");
         qd_compose_insert_symbol(field, "address");
         qd_compose_insert_string(field, event_address_my);
+        qd_compose_insert_symbol(field, "direct");
+        qd_compose_insert_string(field, command_address);
         qd_compose_end_map(field);
 
         //
@@ -1180,7 +1185,6 @@ static void _vflow_on_my_address_watch(void     *context,
         //
         qd_log(log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
         my_address_usable = true;
-        _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
     } else if (!now_usable && my_address_usable) {
         //
         // Stop sending log records
@@ -1383,6 +1387,25 @@ void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, v
 // IO Module Callbacks
 //=====================================================================================
 
+static uint64_t _vflow_on_message(void                    *context,
+                                  qd_message_t            *msg,
+                                  int                      link_maskbit,
+                                  int                      inter_router_cost,
+                                  uint64_t                 conn_id,
+                                  const qd_policy_spec_t  *policy,
+                                  qdr_error_t            **error)
+{
+    if (qd_message_check_depth(msg, QD_DEPTH_PROPERTIES) == QD_MESSAGE_DEPTH_OK) {
+        qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
+        if (!!subject_iter) {
+            if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
+                _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
+            }
+        }
+    }
+    return PN_ACCEPTED;
+}
+
 static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
 {
     qdr_core_t *core = (qdr_core_t*) work->value.pointer;
@@ -1392,10 +1415,16 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
         strcpy(event_address_my, event_address_my_prefix);
         _vflow_strncat_id(event_address_my, 70, &local_router->identity);
 
+        command_address = (char*) malloc(71);
+        strcpy(command_address, command_address_prefix);
+        _vflow_strncat_id(command_address, 70, &local_router->identity);
+
         all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
                                                           QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
         my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M',
                                                           QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
+
+        command_subscription = qdr_core_subscribe(core, command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, _vflow_on_message, core);
     }
 }
 
@@ -1484,6 +1513,11 @@ static void _vflow_final(void *adaptor_context)
     qdr_core_unwatch_address(core, my_address_watch_handle);
 
     //
+    // Unsubscribe for command messages
+    //
+    qdr_core_unsubscribe(command_subscription);
+
+    //
     // Signal the thread to exit by posting a NULL work pointer
     //
     _vflow_post_work(_vflow_work(0));
@@ -1498,6 +1532,7 @@ static void _vflow_final(void *adaptor_context)
     // Free the allocated my-address
     //
     free(event_address_my);
+    free(command_address);
 
     //
     // Free the condition and lock variables
