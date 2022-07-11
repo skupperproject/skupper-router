@@ -3276,12 +3276,12 @@ qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adapt
 
     li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, http2_adaptor->log_source);
 
-    li->plog = plog_start_record(PLOG_RECORD_LISTENER, 0);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_PROTOCOL, "http2");
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_NAME, li->config->adaptor_config->name);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
-    plog_set_string(li->plog, PLOG_ATTRIBUTE_VAN_ADDRESS, li->config->adaptor_config->address);
+    li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http2");
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_NAME, li->config->adaptor_config->name);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, li->config->adaptor_config->host);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
+    vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS, li->config->adaptor_config->address);
 
     sys_mutex_lock(http2_adaptor->lock);
     DEQ_INSERT_TAIL(http2_adaptor->listeners, li);  // holds li refcount
