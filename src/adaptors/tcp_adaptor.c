@@ -1821,6 +1821,7 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                     // adaptor, for simplicity we ignore the section_number since
                     // all we really need is a byte offset:
                     //
+                    vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, tc->bytes_unacked);
                     tc->bytes_unacked = tc->bytes_in - dstate->section_offset;
                     qd_delivery_state_free(dstate);
                 }
