@@ -579,7 +579,8 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
     free(conn->read_buffer.bytes);
     conn->read_buffer.bytes = 0;
 
-    //need to free on core thread to avoid deleting while in use by management agent
+    // Do the actual deletion of the tcp connection instance on the core thread to prevent the core from running
+    // qdr_tcp_activate_CT on a freed tcp connection pointer:
     qdr_action_t *action = qdr_action(qdr_del_tcp_connection_CT, "delete_tcp_connection");
     action->args.general.context_1 = conn;
     qdr_action_enqueue(tcp_adaptor->core, action);
@@ -1458,23 +1459,17 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     return c;
 }
 
-static void close_egress_dispatcher_connection(qdr_tcp_connection_t *context)
-{
-    //actual close needs to happen on connection thread
-    context->connector_closed = true;
-    qd_timer_schedule(context->activate_timer, 0);
-}
-
 QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
 {
     qd_tcp_connector_t *ct = (qd_tcp_connector_t*) impl;
     if (ct) {
-        //need to close the pseudo-connection used for dispatching
-        //deliveries out to live connections:
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                "Deleted TcpConnector for %s, %s:%s",
                ct->config->adaptor_config->address, ct->config->adaptor_config->host, ct->config->adaptor_config->port);
-        close_egress_dispatcher_connection((qdr_tcp_connection_t*) ct->dispatcher_conn);
+
+        // need to close the pseudo-connection used for dispatching
+        // deliveries out to live connections:
+        handle_disconnected((qdr_tcp_connection_t*) ct->dispatcher_conn);
         ct->dispatcher_conn = 0;
         DEQ_REMOVE(tcp_adaptor->connectors, ct);
         qd_tcp_connector_decref(ct);
@@ -1888,7 +1883,9 @@ static void qdr_tcp_conn_trace(void *context, qdr_connection_t *conn, bool trace
     }
 }
 
-static void qdr_tcp_activate(void *notused, qdr_connection_t *c)
+// invoked by the Core thread to activate the TCP connection associated with 'c'
+//
+static void qdr_tcp_activate_CT(void *notused, qdr_connection_t *c)
 {
     void *context = qdr_connection_get_context(c);
     if (context) {
@@ -1896,7 +1893,7 @@ static void qdr_tcp_activate(void *notused, qdr_connection_t *c)
         LOCK(conn->activation_lock);
         if (conn->pn_raw_conn && !(IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) && IS_ATOMIC_FLAG_SET(&conn->raw_closed_write))) {
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] qdr_tcp_activate: call pn_raw_connection_wake()", conn->conn_id);
+                   "[C%"PRIu64"] qdr_tcp_activate_CT: call pn_raw_connection_wake()", conn->conn_id);
             pn_raw_connection_wake(conn->pn_raw_conn);
             UNLOCK(conn->activation_lock);
         } else if (conn->activate_timer) {
@@ -1908,15 +1905,15 @@ static void qdr_tcp_activate(void *notused, qdr_connection_t *c)
             // its associated connection must be setup), for which we
             // fake wakeup by using a timer.
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] qdr_tcp_activate: schedule activate_timer", conn->conn_id);
+                   "[C%"PRIu64"] qdr_tcp_activate_CT: schedule activate_timer", conn->conn_id);
             qd_timer_schedule(conn->activate_timer, 0);
         } else {
             UNLOCK(conn->activation_lock);
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] qdr_tcp_activate: Cannot activate", conn->conn_id);
+                   "[C%"PRIu64"] qdr_tcp_activate_CT: Cannot activate", conn->conn_id);
         }
     } else {
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "qdr_tcp_activate: no connection context");
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "qdr_tcp_activate_CT: no connection context");
         // assert(false); This is routine. TODO: Is that a problem?
     }
 }
@@ -1935,7 +1932,7 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     adaptor->adaptor = qdr_protocol_adaptor(core,
                                             "tcp",                // name
                                             adaptor,              // context
-                                            qdr_tcp_activate,
+                                            qdr_tcp_activate_CT,  // runs on Core thread
                                             qdr_tcp_first_attach,
                                             qdr_tcp_second_attach,
                                             qdr_tcp_detach,
