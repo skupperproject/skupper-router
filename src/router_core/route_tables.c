@@ -689,6 +689,8 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
                 qd_hash_insert(core->addr_hash, address->iterator, addr, &addr->hash_handle);
                 DEQ_ITEM_INIT(addr);
                 DEQ_INSERT_TAIL(core->addrs, addr);
+            } else if (aclass == QD_ITER_HASH_PREFIX_MOBILE) {
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_BECAME_LOCAL_DEST, addr);
             }
         }
         if (addr) {
@@ -709,6 +711,7 @@ static void qdr_unsubscribe_CT(qdr_core_t *core, qdr_action_t *action, bool disc
 
     if (!discard) {
         DEQ_REMOVE(sub->addr->subscriptions, sub);
+        qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST, sub->addr);
         sub->addr = 0;
         qdr_check_addr_CT(sub->core, sub->addr);
     }
