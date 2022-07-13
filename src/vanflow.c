@@ -105,7 +105,7 @@ struct vflow_work_t {
     DEQ_LINKS(vflow_work_t);
     vflow_work_handler_t  handler;
     vflow_record_t       *record;
-    uint64_t             timestamp;
+    uint64_t              timestamp;
     vflow_attribute_t     attribute;
     union {
         char     *string_val;
@@ -138,6 +138,7 @@ static bool                 sleeping = false;
 static qd_log_source_t     *log;
 static vflow_work_list_t    work_list    = DEQ_EMPTY;
 static vflow_record_t      *local_router = 0;
+static char                *local_router_id = 0;
 static vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
 static vflow_rate_list_t    rate_trackers = DEQ_EMPTY;
 static int                  current_flush_slot = 0;
@@ -168,7 +169,7 @@ static uint64_t _now_in_usec(void)
 {
     struct timeval tv;
     gettimeofday(&tv, 0);
-    return tv.tv_usec + 1000000 * tv.tv_sec;
+    return (uint64_t) tv.tv_usec + (uint64_t) (1000000L * (uint64_t) tv.tv_sec);
 }
 
 
@@ -268,7 +269,7 @@ static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribu
 static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_attribute_data_t *data)
 {
     if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
-        qd_compose_insert_long(field, data->value.uint_val);
+        qd_compose_insert_ulong(field, data->value.uint_val);
     } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
         qd_compose_insert_string(field, data->value.string_val);
     }
@@ -294,6 +295,7 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     vflow_record_t *record = work->record;
     if (record->record_type == VFLOW_RECORD_ROUTER) {
         local_router = record;
+        local_router_id = _vflow_id_to_new_string(&record->identity);
     } else if (record->parent == 0) {
         record->parent = local_router;
     }
@@ -918,6 +920,10 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         qd_compose_insert_string(field, event_address_my);
         qd_compose_insert_symbol(field, "direct");
         qd_compose_insert_string(field, command_address);
+        qd_compose_insert_symbol(field, "now");
+        qd_compose_insert_ulong(field, _now_in_usec());
+        qd_compose_insert_symbol(field, "id");
+        qd_compose_insert_string(field, local_router_id);
         qd_compose_end_map(field);
 
         //
@@ -1534,6 +1540,7 @@ static void _vflow_final(void *adaptor_context)
     //
     free(event_address_my);
     free(command_address);
+    free(local_router_id);
 
     //
     // Free the condition and lock variables
