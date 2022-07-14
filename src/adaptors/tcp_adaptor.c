@@ -149,6 +149,7 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc);
 static void detach_links(qdr_tcp_connection_t *tc);
 static void qd_tcp_connector_decref(qd_tcp_connector_t* c);
 static void qd_tcp_listener_decref(qd_tcp_listener_t* li);
+static void qdr_associate_vflow_flows(qdr_tcp_connection_t *tc, qd_message_t *msg);
 
 // is the incoming byte window full
 //
@@ -918,6 +919,20 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_log(log, QD_LOG_INFO,
                "[C%"PRIu64"] PN_RAW_CONNECTION_DISCONNECTED %s",
                conn->conn_id, qdr_tcp_connection_role_name(conn));
+
+        pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
+        if (!!cond) {
+            const char *cname = pn_condition_get_name(cond);
+            const char *cdesc = pn_condition_get_description(cond);
+
+            if (!!cname) {
+                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_RESULT, cname);
+            }
+            if (!!cdesc) {
+                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
+            }
+        }
+
         LOCK(conn->activation_lock);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
         conn->pn_raw_conn = 0;
@@ -1197,6 +1212,10 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
         vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
         vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
         vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
+
+        qd_message_t *msg = qdr_delivery_message(initial_delivery);
+        qdr_associate_vflow_flows(tc, msg);
+        vflow_set_trace(tc->vflow, msg);
 
         allocate_tcp_write_buffer(&tc->write_buffer);
         allocate_tcp_buffer(&tc->read_buffer);
@@ -1722,8 +1741,6 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 f_iter = qd_message_field_iterator(msg, QD_FIELD_REPLY_TO);
                 qdr_tcp_connection_copy_reply_to(tc, f_iter);
                 qd_iterator_free(f_iter);
-                qdr_associate_vflow_flows(tc, msg);
-                vflow_set_trace(tc->vflow, msg);
                 qdr_terminus_t *target = qdr_terminus(0);
                 qdr_terminus_set_address(target, tc->reply_to);
                 tc->incoming_link = qdr_link_first_attach(tc->qdr_conn,
