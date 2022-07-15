@@ -34,12 +34,12 @@
 // these extern variables come from glibc
 // https://github.com/ysbaddaden/gc/blob/master/include/config.h
 extern char __data_start[];
-extern char __bss_start;
+extern char __bss_start[];
 extern char _end[];
-#define DATA_START ((char *)&__data_start)
-#define DATA_END &__bss_start
-#define BSS_START &__bss_start
-#define BSS_END ((char *)&_end)
+#define DATA_START ((char *) &__data_start)
+#define DATA_END   ((char *) &__bss_start)
+#define BSS_START  ((char *) &__bss_start)
+#define BSS_END    ((char *) &_end)
 
 void reset_static_data();
 
