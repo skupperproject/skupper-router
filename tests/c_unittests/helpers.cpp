@@ -19,4 +19,34 @@
 
 #include "helpers.hpp"
 
+#include "../src/qd_asan_interface.h"
+
 std::mutex QDR::startup_shutdown_lock;
+
+// variable for quick check
+static int pepa = 42;
+
+// writes to memory between global variables are reported as buffer overflows by asan
+ATTRIBUTE_NO_SANITIZE_ADDRESS
+void reset_static_data()
+{
+    // global variable, ok to leak it
+    static char * x;
+
+    size_t s = BSS_END - DATA_START;
+
+    // memset is always sanitized, so access memory as chars in a loop
+    if (x == NULL) {
+        x = (char *) malloc(s);
+        for (size_t i = 0; i < s; i++) {
+            *(x+i) = *(DATA_START + i);
+        }
+    } else {
+        for (size_t i = 0; i < s; i++) {
+            *(DATA_START + i) = *(x+i);
+        }
+    }
+
+    // quick check, see that pepa does not grow in stderr output
+    fprintf(stderr, "pepa: %d\n", pepa++);
+}
