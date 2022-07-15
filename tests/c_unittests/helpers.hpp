@@ -321,6 +321,7 @@ class QDRMinimalEnv
         reset_static_data();
 
         qd_alloc_initialize();
+        qd_entity_cache_initialize();
         qd_log_initialize();
         qd_error_initialize();
     }
