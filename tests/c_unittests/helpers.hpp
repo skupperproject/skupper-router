@@ -30,7 +30,6 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
-#include <cstring>
 
 // these extern variables come from glibc
 // https://github.com/ysbaddaden/gc/blob/master/include/config.h
