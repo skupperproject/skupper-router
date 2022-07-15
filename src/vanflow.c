@@ -120,42 +120,46 @@ DEQ_DECLARE(vflow_work_t, vflow_work_list_t);
 
 static const char *event_address_all           = "mc/sfe.all";
 static const char *event_address_my_prefix     = "mc/sfe.";
-static       char *event_address_my            = 0;
 static const char *command_address_prefix      = "sfe.";
-static       char *command_address             = 0;
 static const int   beacon_interval_sec         = 5;
 static const int   flush_interval_msec         = 200;
 static const int   initial_flush_interval_msec = 2000;
 static const int   rate_slot_flush_intervals   = 10;    // For a two-second slot interval
 static const int   rate_span                   = 10;    // Ten-second rolling average
 
-static qdr_core_t          *router_core;
-static sys_mutex_t         *lock;
-static sys_mutex_t         *id_lock;
-static sys_cond_t          *condition;
-static sys_thread_t        *thread;
-static bool                 sleeping = false;
-static qd_log_source_t     *log;
-static vflow_work_list_t    work_list    = DEQ_EMPTY;
-static vflow_record_t      *local_router = 0;
-static char                *local_router_id = 0;
-static vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
-static vflow_rate_list_t    rate_trackers = DEQ_EMPTY;
-static int                  current_flush_slot = 0;
-static char                *site_id;
-static char                *hostname;
-static char                 router_id[ROUTER_ID_SIZE];
-static uint64_t             next_identity     = 0;
-static const char          *router_area;
-static const char          *router_name;
-static qdr_watch_handle_t   all_address_watch_handle;
-static qdr_watch_handle_t   my_address_watch_handle;
-static qdr_subscription_t  *command_subscription;
-static bool                 all_address_usable = false;
-static bool                 my_address_usable  = false;
-static qd_timer_t          *beacon_timer = 0;
-static qd_timer_t          *flush_timer = 0;
-static uint64_t             next_message_id = 0;
+typedef struct {
+    qdr_core_t          *router_core;
+    sys_mutex_t         *lock;
+    sys_mutex_t         *id_lock;
+    sys_cond_t          *condition;
+    sys_thread_t        *thread;
+    char                *event_address_my;
+    char                *command_address;
+    bool                 sleeping;
+    qd_log_source_t     *log;
+    vflow_work_list_t    work_list;
+    vflow_record_t      *local_router;
+    char                *local_router_id;
+    vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
+    vflow_rate_list_t    rate_trackers;
+    int                  current_flush_slot;
+    char                *site_id;
+    char                *hostname;
+    char                 router_id[ROUTER_ID_SIZE];
+    uint64_t             next_identity;
+    const char          *router_area;
+    const char          *router_name;
+    qdr_watch_handle_t   all_address_watch_handle;
+    qdr_watch_handle_t   my_address_watch_handle;
+    qdr_subscription_t  *command_subscription;
+    bool                 all_address_usable;
+    bool                 my_address_usable;
+    qd_timer_t          *beacon_timer;
+    qd_timer_t          *flush_timer;
+    uint64_t             next_message_id;
+} vflow_state_t;
+
+static vflow_state_t *state;
 
 static void _vflow_set_string_TH(vflow_work_t *work, bool discard);
 static void _vflow_set_int_TH(vflow_work_t *work, bool discard);
@@ -211,10 +215,10 @@ static vflow_attribute_data_t* _vflow_find_attribute(vflow_record_t *record, vfl
  */
 static void _vflow_next_id(vflow_identity_t *identity)
 {
-    sys_mutex_lock(id_lock);
-    identity->record_id = next_identity++;
-    memcpy(identity->source_id, router_id, ROUTER_ID_SIZE);
-    sys_mutex_unlock(id_lock);
+    sys_mutex_lock(state->id_lock);
+    identity->record_id = state->next_identity++;
+    memcpy(identity->source_id, state->router_id, ROUTER_ID_SIZE);
+    sys_mutex_unlock(state->id_lock);
 }
 
 
@@ -294,10 +298,10 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     //
     vflow_record_t *record = work->record;
     if (record->record_type == VFLOW_RECORD_ROUTER) {
-        local_router = record;
-        local_router_id = _vflow_id_to_new_string(&record->identity);
+        state->local_router = record;
+        state->local_router_id = _vflow_id_to_new_string(&record->identity);
     } else if (record->parent == 0) {
-        record->parent = local_router;
+        record->parent = state->local_router;
     }
 
     //
@@ -333,8 +337,8 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     if (!!record->parent && record->parent->never_logged) {
         record->parent->force_log = true;
         if (record->parent->flush_slot == -1) {
-            record->parent->flush_slot = current_flush_slot;
-            DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record->parent);
+            record->parent->flush_slot = state->current_flush_slot;
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record->parent);
         }
     }
 
@@ -345,8 +349,8 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     // is initially flushed.
     //
     if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+        record->flush_slot = state->current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
     }
 }
 
@@ -384,8 +388,8 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     // with the updated lifecycle information.
     //
     if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+        record->flush_slot = state->current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
     }
 
     //
@@ -393,7 +397,7 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     //
     vflow_rate_t *rate = DEQ_HEAD(record->rates);
     while (!!rate) {
-        DEQ_REMOVE(rate_trackers, rate);
+        DEQ_REMOVE(state->rate_trackers, rate);
         DEQ_REMOVE_N(PER_RECORD, record->rates, rate);
         free_vflow_rate_t(rate);
         rate = DEQ_HEAD(record->rates);
@@ -442,8 +446,8 @@ static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
     }
 
     if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+        record->flush_slot = state->current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
     }
 }
 
@@ -487,8 +491,8 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
     }
 
     if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+        record->flush_slot = state->current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
     }
 }
 
@@ -515,13 +519,13 @@ static vflow_work_t *_vflow_work(vflow_work_handler_t handler)
  */
 static void _vflow_post_work(vflow_work_t *work)
 {
-    sys_mutex_lock(lock);
-    DEQ_INSERT_TAIL(work_list, work);
-    bool need_signal = sleeping;
-    sys_mutex_unlock(lock);
+    sys_mutex_lock(state->lock);
+    DEQ_INSERT_TAIL(state->work_list, work);
+    bool need_signal = state->sleeping;
+    sys_mutex_unlock(state->lock);
 
     if (need_signal) {
-        sys_cond_signal(condition);
+        sys_cond_signal(state->condition);
     }
 }
 
@@ -537,19 +541,19 @@ static void _vflow_create_router_record(void)
     const char *image_name = getenv("APPLICATION_NAME");
     const char *version    = getenv("VERSION");
 
-    char *name = (char*) malloc(strlen(router_area) + strlen(router_name) + 2);
-    strcpy(name, router_area);
+    char *name = (char*) malloc(strlen(state->router_area) + strlen(state->router_name) + 2);
+    strcpy(name, state->router_area);
     strcat(name, "/");
-    strcat(name, router_name);
+    strcat(name, state->router_name);
     vflow_set_string(router, VFLOW_ATTRIBUTE_NAME, name);
     free(name);
 
-    if (!!site_id) {
-        vflow_set_string(router, VFLOW_ATTRIBUTE_PARENT, site_id);
+    if (!!state->site_id) {
+        vflow_set_string(router, VFLOW_ATTRIBUTE_PARENT, state->site_id);
     }
 
-    if (!!hostname) {
-        vflow_set_string(router, VFLOW_ATTRIBUTE_HOST_NAME, hostname);
+    if (!!state->hostname) {
+        vflow_set_string(router, VFLOW_ATTRIBUTE_HOST_NAME, state->hostname);
     }
 
     if (!!namespace) {
@@ -587,7 +591,7 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     // Remove the record from the unflushed list if needed
     //
     if (record->flush_slot >= 0) {
-        DEQ_REMOVE_N(UNFLUSHED, unflushed_records[record->flush_slot], record);
+        DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
         record->flush_slot = -1;
     }
 
@@ -747,7 +751,7 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
     }
 
     record->never_logged = false;
-    qd_log(log, QD_LOG_INFO, line);
+    qd_log(state->log, QD_LOG_INFO, line);
 }
 
 
@@ -758,13 +762,13 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
  */
 static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
 {
-    if (DEQ_SIZE(unflushed_records[current_flush_slot]) == 0) {
+    if (DEQ_SIZE(state->unflushed_records[state->current_flush_slot]) == 0) {
         return;
     }
 
     int                  event_count = 0;
     qd_composed_field_t *field = 0;
-    vflow_record_t      *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
+    vflow_record_t      *record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
 
     while (!!record) {
         if (field == 0) {
@@ -773,10 +777,10 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
             //
             field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
             qd_compose_start_list(field);
-            qd_compose_insert_long(field, next_message_id++);
-            qd_compose_insert_null(field);                      // user-id
-            qd_compose_insert_string(field, event_address_my);  // to
-            qd_compose_insert_string(field, "RECORD");          // subject
+            qd_compose_insert_long(field, state->next_message_id++);
+            qd_compose_insert_null(field);                             // user-id
+            qd_compose_insert_string(field, state->event_address_my);  // to
+            qd_compose_insert_string(field, "RECORD");                 // subject
             qd_compose_end_list(field);
 
             //
@@ -817,7 +821,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
         // we have reached the end of the unflushed list, close out the current message.
         //
         event_count++;
-        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(unflushed_records[current_flush_slot])) {
+        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(state->unflushed_records[state->current_flush_slot])) {
             event_count = 0;
 
             //
@@ -834,7 +838,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
             //
             // Send the message to all of the bound receivers
             //
-            qdr_send_to2(core, event, event_address_my, true, false);
+            qdr_send_to2(core, event, state->event_address_my, true, false);
 
             //
             // Free up used resources
@@ -866,13 +870,13 @@ static void _vflow_flush_TH(qdr_core_t *core)
     // If there is at least one collector for this router, batch up the
     // unflushed records and send them as events to the collector.
     //
-    if (my_address_usable) {
+    if (state->my_address_usable) {
         _vflow_emit_unflushed_as_events_TH(core);
     }
 
-    vflow_record_t *record = DEQ_HEAD(unflushed_records[current_flush_slot]);
+    vflow_record_t *record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
     while (!!record) {
-        DEQ_REMOVE_HEAD_N(UNFLUSHED, unflushed_records[current_flush_slot]);
+        DEQ_REMOVE_HEAD_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot]);
         assert(record->flush_slot >= 0);
         record->flush_slot = -1;
 
@@ -889,7 +893,7 @@ static void _vflow_flush_TH(qdr_core_t *core)
         if (record->ended) {
             _vflow_free_record_TH(record, false);
         }
-        record = DEQ_HEAD(unflushed_records[current_flush_slot]);
+        record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
     }
 }
 
@@ -904,7 +908,7 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         //
         qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
         qd_compose_start_list(field);
-        qd_compose_insert_long(field, next_message_id++);
+        qd_compose_insert_long(field, state->next_message_id++);
         qd_compose_insert_null(field);                       // user-id
         qd_compose_insert_string(field, event_address_all);  // to
         qd_compose_insert_string(field, "BEACON");           // subject
@@ -917,13 +921,13 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         qd_compose_insert_symbol(field, "sourceType");
         qd_compose_insert_string(field, "ROUTER");
         qd_compose_insert_symbol(field, "address");
-        qd_compose_insert_string(field, event_address_my);
+        qd_compose_insert_string(field, state->event_address_my);
         qd_compose_insert_symbol(field, "direct");
-        qd_compose_insert_string(field, command_address);
+        qd_compose_insert_string(field, state->command_address);
         qd_compose_insert_symbol(field, "now");
         qd_compose_insert_ulong(field, _now_in_usec());
         qd_compose_insert_symbol(field, "id");
-        qd_compose_insert_string(field, local_router_id);
+        qd_compose_insert_string(field, state->local_router_id);
         qd_compose_end_map(field);
 
         //
@@ -956,8 +960,8 @@ static void _vflow_refresh_record_TH(vflow_record_t *record)
 {
     record->emit_ordinal = 0;
     if (record->flush_slot == -1) {
-        record->flush_slot = current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, unflushed_records[current_flush_slot], record);
+        record->flush_slot = state->current_flush_slot;
+        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
     }
 
     vflow_record_t *child = DEQ_HEAD(record->children);
@@ -971,7 +975,7 @@ static void _vflow_refresh_record_TH(vflow_record_t *record)
 static void _vflow_refresh_events_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
-        _vflow_refresh_record_TH(local_router);
+        _vflow_refresh_record_TH(state->local_router);
     }
 }
 
@@ -996,7 +1000,7 @@ static void _vflow_add_rate_TH(vflow_work_t *work, bool discard)
             rate->slot[i] = rate->count_attribute->value.uint_val;
         }
         rate->slot_cursor = 1;
-        DEQ_INSERT_TAIL(rate_trackers, rate);
+        DEQ_INSERT_TAIL(state->rate_trackers, rate);
         DEQ_INSERT_TAIL_N(PER_RECORD, rate->record->rates, rate);
     }
 }
@@ -1004,7 +1008,7 @@ static void _vflow_add_rate_TH(vflow_work_t *work, bool discard)
 
 static void _vflow_process_rates_TH(void)
 {
-    vflow_rate_t *rate = DEQ_HEAD(rate_trackers);
+    vflow_rate_t *rate = DEQ_HEAD(state->rate_trackers);
     while(!!rate) {
         rate->slot[rate->slot_cursor] = rate->count_attribute->value.uint_val;
         uint64_t delta = rate->slot[rate->slot_cursor] - rate->slot[(rate->slot_cursor + 1) % RATE_SLOT_COUNT];
@@ -1020,8 +1024,8 @@ static void _vflow_tick_TH(vflow_work_t *work, bool discard)
 {
     static int tick_ordinal = 0;
     if (!discard) {
-        _vflow_flush_TH(router_core);
-        current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
+        _vflow_flush_TH(state->router_core);
+        state->current_flush_slot = (state->current_flush_slot + 1) % FLUSH_SLOT_COUNT;
 
         tick_ordinal = (tick_ordinal + 1) % rate_slot_flush_intervals;
         if (tick_ordinal == 0) {
@@ -1035,17 +1039,17 @@ static void _vflow_on_flush(void *context)
 {
     vflow_work_t *work = _vflow_work(_vflow_tick_TH);
     _vflow_post_work(work);
-    qd_timer_schedule(flush_timer, flush_interval_msec);
+    qd_timer_schedule(state->flush_timer, flush_interval_msec);
 }
 
 
 static void _vflow_send_beacon(qdr_core_t *core)
 {
-    if (!!beacon_timer) {
+    if (!!state->beacon_timer) {
         vflow_work_t *work = _vflow_work(_vflow_send_beacon_TH);
         work->value.pointer = core;
         _vflow_post_work(work);
-        qd_timer_schedule(beacon_timer, beacon_interval_sec * 1000);
+        qd_timer_schedule(state->beacon_timer, beacon_interval_sec * 1000);
     }
 }
 
@@ -1066,27 +1070,27 @@ static void *_vflow_thread(void *context)
     vflow_work_list_t local_work_list = DEQ_EMPTY;
     qdr_core_t *core = (qdr_core_t*) context;
 
-    qd_log(log, QD_LOG_INFO, "Protocol logging started");
+    qd_log(state->log, QD_LOG_INFO, "Protocol logging started");
 
     while (running) {
         //
         // Use the lock only to protect the condition variable and the work lists
         //
-        sys_mutex_lock(lock);
+        sys_mutex_lock(state->lock);
         for (;;) {
-            if (!DEQ_IS_EMPTY(work_list)) {
-                DEQ_MOVE(work_list, local_work_list);
+            if (!DEQ_IS_EMPTY(state->work_list)) {
+                DEQ_MOVE(state->work_list, local_work_list);
                 break;
             }
 
             //
             // Block on the condition variable when there is no work to do
             //
-            sleeping = true;
-            sys_cond_wait(condition, lock);
-            sleeping = false;
+            state->sleeping = true;
+            sys_cond_wait(state->condition, state->lock);
+            state->sleeping = false;
         }
-        sys_mutex_unlock(lock);
+        sys_mutex_unlock(state->lock);
 
         //
         // Process the local work list with the lock not held
@@ -1112,15 +1116,15 @@ static void *_vflow_thread(void *context)
     //
     for (int i = 0; i < FLUSH_SLOT_COUNT; i++) {
         _vflow_flush_TH(core);
-        current_flush_slot = (current_flush_slot + 1) % FLUSH_SLOT_COUNT;
+        state->current_flush_slot = (state->current_flush_slot + 1) % FLUSH_SLOT_COUNT;
     }
 
     //
     // Free all remaining records in the tree
     //
-    _vflow_free_record_TH(local_router, true);
+    _vflow_free_record_TH(state->local_router, true);
 
-    qd_log(log, QD_LOG_INFO, "Protocol logging completed");
+    qd_log(state->log, QD_LOG_INFO, "Protocol logging completed");
     return 0;
 }
 
@@ -1147,21 +1151,21 @@ static void _vflow_on_all_address_watch(void     *context,
 {
     bool now_usable = local_consumers > 0 || remote_consumers > 0;
 
-    if (now_usable && !all_address_usable) {
+    if (now_usable && !state->all_address_usable) {
         //
         // Start sending beacon messages to the all_address.
         //
-        qd_log(log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
-        all_address_usable = true;
+        qd_log(state->log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
+        state->all_address_usable = true;
         _vflow_send_beacon((qdr_core_t*) context);
-    } else if (!now_usable && all_address_usable) {
+    } else if (!now_usable && state->all_address_usable) {
         //
         // Stop sending beacons.  Nobody is listening.
         //
-        qd_log(log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
-        all_address_usable = false;
-        if (!!beacon_timer) {
-            qd_timer_cancel(beacon_timer);
+        qd_log(state->log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
+        state->all_address_usable = false;
+        if (!!state->beacon_timer) {
+            qd_timer_cancel(state->beacon_timer);
         }
     }
 }
@@ -1185,18 +1189,18 @@ static void _vflow_on_my_address_watch(void     *context,
 {
     bool now_usable = local_consumers > 0 || remote_consumers > 0;
 
-    if (now_usable && !my_address_usable) {
+    if (now_usable && !state->my_address_usable) {
         //
         // Start sending log records
         //
-        qd_log(log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
-        my_address_usable = true;
-    } else if (!now_usable && my_address_usable) {
+        qd_log(state->log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
+        state->my_address_usable = true;
+    } else if (!now_usable && state->my_address_usable) {
         //
         // Stop sending log records
         //
-        qd_log(log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
-        my_address_usable = false;
+        qd_log(state->log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
+        state->my_address_usable = false;
     }
 }
 
@@ -1285,7 +1289,7 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
             _vflow_post_work(work);
         } else {
             free_vflow_work_t(work);
-            qd_log(log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
+            qd_log(state->log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
         }
     }
 }
@@ -1405,7 +1409,7 @@ static uint64_t _vflow_on_message(void                    *context,
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
         if (!!subject_iter) {
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
-                qd_log(log, QD_LOG_INFO, "FLUSH request received");
+                qd_log(state->log, QD_LOG_INFO, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
             }
         }
@@ -1418,20 +1422,20 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
     qdr_core_t *core = (qdr_core_t*) work->value.pointer;
 
     if (!discard) {
-        event_address_my = (char*) malloc(71);
-        strcpy(event_address_my, event_address_my_prefix);
-        _vflow_strncat_id(event_address_my, 70, &local_router->identity);
+        state->event_address_my = (char*) malloc(71);
+        strcpy(state->event_address_my, event_address_my_prefix);
+        _vflow_strncat_id(state->event_address_my, 70, &state->local_router->identity);
 
-        command_address = (char*) malloc(71);
-        strcpy(command_address, command_address_prefix);
-        _vflow_strncat_id(command_address, 70, &local_router->identity);
+        state->command_address = (char*) malloc(71);
+        strcpy(state->command_address, command_address_prefix);
+        _vflow_strncat_id(state->command_address, 70, &state->local_router->identity);
 
-        all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
-        my_address_watch_handle  = qdr_core_watch_address(core, event_address_my,  'M',
-                                                          QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
+        state->all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
+                                                                 QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
+        state->my_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my,  'M',
+                                                                 QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
 
-        command_subscription = qdr_core_subscribe(core, command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, _vflow_on_message, core);
+        state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, _vflow_on_message, core);
     }
 }
 
@@ -1444,21 +1448,24 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
  */
 static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 {
-    router_core = core;
-    hostname = getenv("HOSTNAME");
-    size_t hostLength = !!hostname ? strlen(hostname) : 0;
+    state = NEW(vflow_state_t);
+    ZERO(state);
 
-    site_id = getenv("SKUPPER_SITE_ID");
+    state->router_core = core;
+    state->hostname = getenv("HOSTNAME");
+    size_t hostLength = !!state->hostname ? strlen(state->hostname) : 0;
+
+    state->site_id = getenv("SKUPPER_SITE_ID");
 
     //
     // If the hostname is in the form of a Kubernetes pod name, use the 5-character
     // suffix as the router-id.  Otherwise, generate a random router-id.
     //
-    if (hostLength > ROUTER_ID_SIZE && hostname[hostLength - ROUTER_ID_SIZE] == '-') {
+    if (hostLength > ROUTER_ID_SIZE && state->hostname[hostLength - ROUTER_ID_SIZE] == '-') {
         //
         // This memcpy copies the suffix and the terminating null character.
         //
-        memcpy(router_id, hostname + (hostLength - ROUTER_ID_SIZE) + 1, ROUTER_ID_SIZE);
+        memcpy(state->router_id, state->hostname + (hostLength - ROUTER_ID_SIZE) + 1, ROUTER_ID_SIZE);
     } else {
         //
         // If the router-id size is ever greater than the discriminator size, the
@@ -1468,22 +1475,22 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
         assert(QD_DISCRIMINATOR_SIZE > ROUTER_ID_SIZE);
         char discriminator[QD_DISCRIMINATOR_SIZE];
         qd_generate_discriminator(discriminator);
-        memcpy(router_id, discriminator, ROUTER_ID_SIZE - 1);
-        router_id[ROUTER_ID_SIZE - 1] = '\0';
+        memcpy(state->router_id, discriminator, ROUTER_ID_SIZE - 1);
+        state->router_id[ROUTER_ID_SIZE - 1] = '\0';
     }
 
-    router_area = qdr_core_dispatch(core)->router_area;
-    router_name = qdr_core_dispatch(core)->router_id;
+    state->router_area = qdr_core_dispatch(core)->router_area;
+    state->router_name = qdr_core_dispatch(core)->router_id;
 
     for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
-        DEQ_INIT(unflushed_records[slot]);
+        DEQ_INIT(state->unflushed_records[slot]);
     }
 
-    log       = qd_log_source("FLOW_LOG");
-    lock      = sys_mutex();
-    id_lock   = sys_mutex();
-    condition = sys_cond();
-    thread    = sys_thread(_vflow_thread, core);
+    state->log       = qd_log_source("FLOW_LOG");
+    state->lock      = sys_mutex();
+    state->id_lock   = sys_mutex();
+    state->condition = sys_cond();
+    state->thread    = sys_thread(_vflow_thread, core);
     *adaptor_context = core;
 
     _vflow_create_router_record();
@@ -1492,9 +1499,9 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     work->value.pointer = core;
     _vflow_post_work(work);
 
-    beacon_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_beacon, core);
-    flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush,  core);
-    qd_timer_schedule(flush_timer, initial_flush_interval_msec);
+    state->beacon_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_beacon, core);
+    state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush,  core);
+    qd_timer_schedule(state->flush_timer, initial_flush_interval_msec);
 }
 
 
@@ -1507,22 +1514,22 @@ static void _vflow_final(void *adaptor_context)
 {
     qdr_core_t *core = (qdr_core_t*) adaptor_context;
 
-    qd_timer_free(beacon_timer);
-    beacon_timer = 0;
+    qd_timer_free(state->beacon_timer);
+    state->beacon_timer = 0;
 
-    qd_timer_free(flush_timer);
-    flush_timer = 0;
+    qd_timer_free(state->flush_timer);
+    state->flush_timer = 0;
 
     //
     // Cancel the address watches
     //
-    qdr_core_unwatch_address(core, all_address_watch_handle);
-    qdr_core_unwatch_address(core, my_address_watch_handle);
+    qdr_core_unwatch_address(core, state->all_address_watch_handle);
+    qdr_core_unwatch_address(core, state->my_address_watch_handle);
 
     //
     // Unsubscribe for command messages
     //
-    qdr_core_unsubscribe(command_subscription);
+    qdr_core_unsubscribe(state->command_subscription);
 
     //
     // Signal the thread to exit by posting a NULL work pointer
@@ -1532,23 +1539,28 @@ static void _vflow_final(void *adaptor_context)
     //
     // Join and free the thread
     //
-    sys_thread_join(thread);
-    sys_thread_free(thread);
+    sys_thread_join(state->thread);
+    sys_thread_free(state->thread);
 
     //
     // Free the allocated my-address
     //
-    free(event_address_my);
-    free(command_address);
-    free(local_router_id);
+    free(state->event_address_my);
+    free(state->command_address);
+    free(state->local_router_id);
 
     //
     // Free the condition and lock variables
     //
-    sys_cond_free(condition);
-    sys_mutex_free(lock);
-    sys_mutex_free(id_lock);
+    sys_cond_free(state->condition);
+    sys_mutex_free(state->lock);
+    sys_mutex_free(state->id_lock);
+
+    //
+    // Free the module state
+    //
+    free(state);
 }
 
 
-QDR_CORE_ADAPTOR_DECLARE_ORD("Protocol Logging", _vflow_init, _vflow_final, 10)
+QDR_CORE_ADAPTOR_DECLARE_ORD("VanFlow Logging", _vflow_init, _vflow_final, 10)
