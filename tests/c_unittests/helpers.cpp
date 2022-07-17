@@ -23,24 +23,25 @@
 
 std::mutex QDR::startup_shutdown_lock;
 
-// disable sanitizer, otherwise writes to memory between global variables are reported as buffer overflows
+// disable sanitizer, otherwise writes to memory in between global variables
+// get reported as buffer overflows
 ATTRIBUTE_NO_SANITIZE_ADDRESS
 void reset_static_data()
 {
-    static char *x;
+    static char *stored_globals;
 
-    size_t s = BSS_END - DATA_START;
+    size_t size = BSS_END - DATA_START;
 
-    // memset is always sanitized, so access memory as chars in a loop
+    // memcpy is always sanitized, so access memory as chars in a loop
 
-    if (x == NULL) {
-        x = (char *) malloc(s);
-        for (size_t i = 0; i < s; i++) {
-            *(x + i) = *(DATA_START + i);
+    if (stored_globals == NULL) {
+        stored_globals = (char *) malloc(size);
+        for (size_t i = 0; i < size; i++) {
+            *(stored_globals + i) = *(DATA_START + i);
         }
     } else {
-        for (size_t i = 0; i < s; i++) {
-            *(DATA_START + i) = *(x + i);
+        for (size_t i = 0; i < size; i++) {
+            *(DATA_START + i) = *(stored_globals + i);
         }
     }
 }

@@ -41,6 +41,10 @@ extern char _end[];
 #define BSS_START  ((char *) &__bss_start)
 #define BSS_END    ((char *) &_end)
 
+/// First call copies global variables into a buffer allocated in heap, and
+/// subsequent calls restore the global variables from that buffer.
+///
+/// c.f. https://stackoverflow.com/questions/3704864/in-a-c-program-is-it-possible-to-reset-all-global-variables-to-default-vaues
 void reset_static_data();
 
 // assertions without stack traces when running outside doctest
