@@ -19,4 +19,29 @@
 
 #include "helpers.hpp"
 
+#include "../src/qd_asan_interface.h"
+
 std::mutex QDR::startup_shutdown_lock;
+
+// disable sanitizer, otherwise writes to memory in between global variables
+// get reported as buffer overflows
+ATTRIBUTE_NO_SANITIZE_ADDRESS
+void reset_static_data()
+{
+    static char *stored_globals;
+
+    size_t size = BSS_END - DATA_START;
+
+    // memcpy is always sanitized, so access memory as chars in a loop
+
+    if (stored_globals == NULL) {
+        stored_globals = (char *) malloc(size);
+        for (size_t i = 0; i < size; i++) {
+            *(stored_globals + i) = *(DATA_START + i);
+        }
+    } else {
+        for (size_t i = 0; i < size; i++) {
+            *(DATA_START + i) = *(stored_globals + i);
+        }
+    }
+}

@@ -31,6 +31,22 @@
 #include <mutex>
 #include <sstream>
 
+// these extern variables come from glibc
+// https://github.com/ysbaddaden/gc/blob/master/include/config.h
+extern char __data_start[];
+extern char __bss_start[];
+extern char _end[];
+#define DATA_START ((char *) &__data_start)
+#define DATA_END   ((char *) &__bss_start)
+#define BSS_START  ((char *) &__bss_start)
+#define BSS_END    ((char *) &_end)
+
+/// First call copies global variables into a buffer allocated in heap, and
+/// subsequent calls restore the global variables from that buffer.
+///
+/// c.f. https://stackoverflow.com/questions/3704864/in-a-c-program-is-it-possible-to-reset-all-global-variables-to-default-vaues
+void reset_static_data();
+
 // assertions without stack traces when running outside doctest
 #ifndef QDR_DOCTEST
 // https://stackoverflow.com/questions/3767869/adding-message-to-assert
@@ -211,6 +227,8 @@ class QDR
     /// prepare the smallest amount of things that qd_dispatch_free needs to be present
     void initialize(const std::string &config_path = "")
     {
+        reset_static_data();
+
         const std::lock_guard<std::mutex> lock(QDR::startup_shutdown_lock);
 
         qd = qd_dispatch(nullptr, false);
@@ -304,7 +322,10 @@ class QDRMinimalEnv
    public:
     QDRMinimalEnv()
     {
+        reset_static_data();
+
         qd_alloc_initialize();
+        qd_entity_cache_initialize();
         qd_log_initialize();
         qd_error_initialize();
     }
