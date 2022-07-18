@@ -1,0 +1,90 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+= Debugging router tests
+
+== rr record-reply debugger
+
+* https://rr-project.org/
+** https://github.com/rr-debugger/rr/wiki
+** https://github.com/rr-debugger/rr/wiki/Usage
+** https://github.com/rr-debugger/rr/wiki/FAQ
+
+=== rr workflow
+
+The rr workflow is to reproduce failure whilst running under rr, and then repeatedly debug the recording until the cause of the failure is understood.
+
+Start by installing the `psutil` dependency for the `scripts/sigforwarder.py` helper script.
+Router system-tests may be run under rr through adding the following CMake option
+
+[source]
+----
+-DQDROUTERD_RUNNER="/absolute/path/to/sigforwarder.py rr record --print-trace-dir=1"
+----
+
+Run a suspect test in a loop until failure (at most 100 times)
+
+[source]
+----
+ctest -VV -R system_tests_websockets --repeat until-fail:100
+----
+
+Examine test logs (`.out` files in `tests/system_test.dir`) to identify trace directory of the failing router and run rr
+
+[source]
+----
+/home/jdanek/.local/share/rr/skrouterd-70
+skrouterd: /home/jdanek/repos/skupper-router/src/posix/threading.c:58: sys_mutex_lock: Assertion `result == 0' failed.
+thread 'main' panicked at 'Subprocess did not provide exit code', scripts/sigforwarder.rs:130:38
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+----
+
+Start enhanced gdb (rr replay) session with
+
+[source]
+----
+rr --mark-stdio replay /home/jdanek/.local/share/rr/qdrouterd-70
+----
+
+Important gdb/rr commands
+
+* `when`, shows the event number for the current place where the program is paused
+* `run 42`, jumps to event 42 (by rerunning the program from beginning while ignoring breakpoints)
+* `watch -l some->object`, places hardware watchpoint at the memory location holding the variable
+* `reverse-continue`, runs debugger backwards until breakpoint is hit (e.g. watched memory location is modified)
+
+* `thread apply all bt`, show backtraces from all threads
+* `frame 42`, sets active frame to frame 42 in the backtrace (current pc is frame 0)
+* `p some->object`, prints value of `some->object`
+* `list`, shows source code (of current frame)
+
+Note that by default gdb breaks on signals and other such events, so sometimes program breaks "on its own" before your breakpoint is reached.
+
+=== rr record --chaos
+
+The `record --chaos` option randomizes thread switching according to a schedule which rr authors believe is more likely to flush out multithreading errors.
+Program execution trace is recorded and may be replayed as usual, even from a chaos run.
+
+=== rr issues
+
+* [Intermittent failure in mutex_pi_stress #1984](https://github.com/rr-debugger/rr/issues/1984)
+** Fedora rr package crashes with `-> Assertion `t->desched_rec() || is_rrcall_notify_syscall_hook_exit_syscall( t->regs().original_syscallno(), t->arch()) || t->ip() == t->vm() ->privileged_traced_syscall_ip() .increment_by_syscall_insn_length(t->arch())' failed to hold.`
+** Using rr built from source (git tip) seems to work reliably
+* [Any known rr limitations related to epoll? #3086](https://github.com/rr-debugger/rr/issues/3086)
+** Some tests would timeout trying to establish inter-router links (purely AMQP functionality) when using epoll Proton proactor, while getting past this reliably with libuv proactor
