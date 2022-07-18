@@ -203,8 +203,8 @@ typedef struct work_t {
 #define WORK_MAX 8              /* Just decouple threads, not a big buffer */
 
 typedef struct work_queue_t {
-    sys_mutex_t *lock;
-    sys_cond_t *cond;
+    sys_mutex_t lock;
+    sys_cond_t  cond;
     work_t work[WORK_MAX];
     size_t head, len;          /* Ring buffer */
 } work_queue_t;
@@ -222,26 +222,26 @@ struct qd_http_server_t {
 };
 
 static void work_queue_destroy(work_queue_t *wq) {
-    if (wq->lock) sys_mutex_free(wq->lock);
-    if (wq->cond) sys_cond_free(wq->cond);
+    sys_mutex_free(&wq->lock);
+    sys_cond_free(&wq->cond);
 }
 
 static void work_queue_init(work_queue_t *wq) {
-    wq->lock = sys_mutex();
-    wq->cond = sys_cond();
+    sys_mutex_init(&wq->lock);
+    sys_cond_init(&wq->cond);
 }
 
  /* Block till there is space */
 static void work_push(qd_http_server_t *hs, work_t w) {
     work_queue_t *wq = &hs->work;
-    sys_mutex_lock(wq->lock);
+    sys_mutex_lock(&wq->lock);
     while (wq->len == WORK_MAX) {
         lws_cancel_service(hs->context); /* Wake up the run thread to clear space */
-        sys_cond_wait(wq->cond, wq->lock);
+        sys_cond_wait(&wq->cond, &wq->lock);
     }
     wq->work[(wq->head + wq->len) % WORK_MAX] = w;
     ++wq->len;
-    sys_mutex_unlock(wq->lock);
+    sys_mutex_unlock(&wq->lock);
     lws_cancel_service(hs->context); /* Wake up the run thread to handle my work */
 }
 
@@ -249,14 +249,14 @@ static void work_push(qd_http_server_t *hs, work_t w) {
 static work_t work_pop(qd_http_server_t *hs) {
     work_t w = { W_NONE, NULL };
     work_queue_t *wq = &hs->work;
-    sys_mutex_lock(wq->lock);
+    sys_mutex_lock(&wq->lock);
     if (wq->len > 0) {
         w = wq->work[wq->head];
         wq->head = (wq->head + 1) % WORK_MAX;
         --wq->len;
-        sys_cond_signal(wq->cond);
+        sys_cond_signal(&wq->cond);
     }
-    sys_mutex_unlock(wq->lock);
+    sys_mutex_unlock(&wq->lock);
     return w;
 }
 
@@ -1016,12 +1016,12 @@ qd_http_server_t *qd_http_server(qd_server_t *s, qd_log_source_t *log) {
 qd_lws_listener_t *qd_http_server_listen(qd_http_server_t *hs, qd_listener_t *li)
 {
     hs->core = qd_dispatch_router_core(qd_server_dispatch(hs->server));
-    sys_mutex_lock(hs->work.lock);
+    sys_mutex_lock(&hs->work.lock);
     if (!hs->thread) {
         hs->thread = sys_thread("http_thread", http_thread_run, hs);
     }
     bool ok = hs->thread;
-    sys_mutex_unlock(hs->work.lock);
+    sys_mutex_unlock(&hs->work.lock);
     if (!ok) return NULL;
 
     qd_lws_listener_t *hl = qd_lws_listener(hs, li);

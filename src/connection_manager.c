@@ -645,7 +645,7 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
     int i = 1;
     int num_items = 0;
 
-    sys_mutex_lock(connector->lock);
+    sys_mutex_lock(&connector->lock);
 
     qd_failover_item_list_t   conn_info_list = connector->conn_info_list;
 
@@ -727,12 +727,12 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
         && qd_entity_set_string(entity, "connectionStatus", state_info) == 0
         && qd_entity_set_string(entity, "connectionMsg", connector->conn_msg) == 0) {
 
-        sys_mutex_unlock(connector->lock);
+        sys_mutex_unlock(&connector->lock);
         free(failover_info);
         return QD_ERROR_NONE;
     }
 
-    sys_mutex_unlock(connector->lock);
+    sys_mutex_unlock(&connector->lock);
     free(failover_info);
     return qd_error_code();
 }
@@ -823,12 +823,12 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
     qd_connector_t *connector = DEQ_HEAD(cm->connectors);
     while (connector) {
         DEQ_REMOVE_HEAD(cm->connectors);
-        sys_mutex_lock(connector->lock);
+        sys_mutex_lock(&connector->lock);
         // setting DELETED below ensures the timer callback
         // will not initiate a re-connect once we drop
         // the lock
         connector->state = CXTR_STATE_DELETED;
-        sys_mutex_unlock(connector->lock);
+        sys_mutex_unlock(&connector->lock);
         // cannot cancel timer while holding lock since the
         // callback takes the lock
         qd_timer_cancel(connector->timer);
@@ -925,16 +925,16 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         // timer callback may be running during the call to qd_timer_free
         qd_timer_t *timer = 0;
         void *dct = qd_connection_new_qd_deferred_call_t();
-        sys_mutex_lock(ct->lock);
+        sys_mutex_lock(&ct->lock);
         timer = ct->timer;
         ct->timer = 0;
         ct->state = CXTR_STATE_DELETED;
         qd_connection_t *conn = ct->qd_conn;
         if (conn && conn->pn_conn) {
             qd_connection_invoke_deferred_impl(conn, deferred_close, conn->pn_conn, dct);
-            sys_mutex_unlock(ct->lock);
+            sys_mutex_unlock(&ct->lock);
         } else {
-            sys_mutex_unlock(ct->lock);
+            sys_mutex_unlock(&ct->lock);
             qd_connection_free_qd_deferred_call_t(dct);
         }
         qd_timer_free(timer);

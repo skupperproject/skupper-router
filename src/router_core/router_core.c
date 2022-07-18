@@ -89,13 +89,13 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     //
     // Set up the threading support
     //
-    core->action_cond = sys_cond();
-    core->action_lock = sys_mutex();
+    sys_cond_init(&core->action_cond);
+    sys_mutex_init(&core->action_lock);
     core->running     = true;
     DEQ_INIT(core->action_list);
     DEQ_INIT(core->action_list_background);
 
-    core->work_lock = sys_mutex();
+    sys_mutex_init(&core->work_lock);
     DEQ_INIT(core->work_list);
     core->work_timer = qd_timer(core->qd, qdr_general_handler, core);
 
@@ -103,7 +103,7 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     // Set up the unique identifier generator
     //
     core->next_identifier = 1;
-    core->id_lock = sys_mutex();
+    sys_mutex_init(&core->id_lock);
 
     //
     // Initialize the management agent
@@ -221,14 +221,14 @@ void qdr_core_free(qdr_core_t *core)
         // If there are still any work items remaining in the link->work_list
         // remove them and free the associated link_work->error
         //
-        sys_mutex_lock(link->conn->work_lock);
+        sys_mutex_lock(&link->conn->work_lock);
         qdr_link_work_t *link_work = DEQ_HEAD(link->work_list);
         while (link_work) {
             DEQ_REMOVE_HEAD(link->work_list);
             qdr_link_work_release(link_work);
             link_work = DEQ_HEAD(link->work_list);
         }
-        sys_mutex_unlock(link->conn->work_lock);
+        sys_mutex_unlock(&link->conn->work_lock);
         if (link->user_context) {
             qdr_link_set_context(link, 0);
         }
@@ -334,10 +334,10 @@ void qdr_core_free(qdr_core_t *core)
     if (core->vflow_links_by_mask_bit)   free(core->vflow_links_by_mask_bit);
 
     sys_thread_free(core->thread);
-    sys_cond_free(core->action_cond);
-    sys_mutex_free(core->action_lock);
-    sys_mutex_free(core->work_lock);
-    sys_mutex_free(core->id_lock);
+    sys_cond_free(&core->action_cond);
+    sys_mutex_free(&core->action_lock);
+    sys_mutex_free(&core->work_lock);
+    sys_mutex_free(&core->id_lock);
     qd_timer_free(core->work_timer);
 
     free(core);
@@ -465,23 +465,23 @@ qdr_action_t *qdr_action(qdr_action_handler_t action_handler, const char *label)
 
 void qdr_action_enqueue(qdr_core_t *core, qdr_action_t *action)
 {
-    sys_mutex_lock(core->action_lock);
+    sys_mutex_lock(&core->action_lock);
     DEQ_INSERT_TAIL(core->action_list, action);
     const bool need_wake = core->sleeping;
-    sys_mutex_unlock(core->action_lock);
+    sys_mutex_unlock(&core->action_lock);
     if (need_wake)
-        sys_cond_signal(core->action_cond);
+        sys_cond_signal(&core->action_cond);
 }
 
 
 void qdr_action_background_enqueue(qdr_core_t *core, qdr_action_t *action)
 {
-    sys_mutex_lock(core->action_lock);
+    sys_mutex_lock(&core->action_lock);
     DEQ_INSERT_TAIL(core->action_list_background, action);
     const bool need_wake = core->sleeping;
-    sys_mutex_unlock(core->action_lock);
+    sys_mutex_unlock(&core->action_lock);
     if (need_wake)
-        sys_cond_signal(core->action_cond);
+        sys_cond_signal(&core->action_cond);
 }
 
 
@@ -839,9 +839,9 @@ static void qdr_general_handler(void *context)
     qdr_general_work_list_t  work_list;
     qdr_general_work_t      *work;
 
-    sys_mutex_lock(core->work_lock);
+    sys_mutex_lock(&core->work_lock);
     DEQ_MOVE(core->work_list, work_list);
-    sys_mutex_unlock(core->work_lock);
+    sys_mutex_unlock(&core->work_lock);
 
     work = DEQ_HEAD(work_list);
     while (work) {
@@ -866,11 +866,11 @@ void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work)
 {
     bool notify;
 
-    sys_mutex_lock(core->work_lock);
+    sys_mutex_lock(&core->work_lock);
     DEQ_ITEM_INIT(work);
     DEQ_INSERT_TAIL(core->work_list, work);
     notify = DEQ_SIZE(core->work_list) == 1;
-    sys_mutex_unlock(core->work_lock);
+    sys_mutex_unlock(&core->work_lock);
 
     if (notify)
         qd_timer_schedule(core->work_timer, 0);
@@ -879,9 +879,9 @@ void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work)
 
 uint64_t qdr_identifier(qdr_core_t* core)
 {
-    sys_mutex_lock(core->id_lock);
+    sys_mutex_lock(&core->id_lock);
     uint64_t id = core->next_identifier++;
-    sys_mutex_unlock(core->id_lock);
+    sys_mutex_unlock(&core->id_lock);
     return id;
 }
 

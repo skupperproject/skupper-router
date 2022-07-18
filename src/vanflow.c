@@ -129,9 +129,9 @@ static const int   rate_span                   = 10;    // Ten-second rolling av
 
 typedef struct {
     qdr_core_t          *router_core;
-    sys_mutex_t         *lock;
-    sys_mutex_t         *id_lock;
-    sys_cond_t          *condition;
+    sys_mutex_t          lock;
+    sys_mutex_t          id_lock;
+    sys_cond_t           condition;
     sys_thread_t        *thread;
     char                *event_address_my;
     char                *command_address;
@@ -215,10 +215,10 @@ static vflow_attribute_data_t* _vflow_find_attribute(vflow_record_t *record, vfl
  */
 static void _vflow_next_id(vflow_identity_t *identity)
 {
-    sys_mutex_lock(state->id_lock);
+    sys_mutex_lock(&state->id_lock);
     identity->record_id = state->next_identity++;
     memcpy(identity->source_id, state->router_id, ROUTER_ID_SIZE);
-    sys_mutex_unlock(state->id_lock);
+    sys_mutex_unlock(&state->id_lock);
 }
 
 
@@ -519,13 +519,13 @@ static vflow_work_t *_vflow_work(vflow_work_handler_t handler)
  */
 static void _vflow_post_work(vflow_work_t *work)
 {
-    sys_mutex_lock(state->lock);
+    sys_mutex_lock(&state->lock);
     DEQ_INSERT_TAIL(state->work_list, work);
     bool need_signal = state->sleeping;
-    sys_mutex_unlock(state->lock);
+    sys_mutex_unlock(&state->lock);
 
     if (need_signal) {
-        sys_cond_signal(state->condition);
+        sys_cond_signal(&state->condition);
     }
 }
 
@@ -1076,7 +1076,7 @@ static void *_vflow_thread(void *context)
         //
         // Use the lock only to protect the condition variable and the work lists
         //
-        sys_mutex_lock(state->lock);
+        sys_mutex_lock(&state->lock);
         for (;;) {
             if (!DEQ_IS_EMPTY(state->work_list)) {
                 DEQ_MOVE(state->work_list, local_work_list);
@@ -1087,10 +1087,10 @@ static void *_vflow_thread(void *context)
             // Block on the condition variable when there is no work to do
             //
             state->sleeping = true;
-            sys_cond_wait(state->condition, state->lock);
+            sys_cond_wait(&state->condition, &state->lock);
             state->sleeping = false;
         }
-        sys_mutex_unlock(state->lock);
+        sys_mutex_unlock(&state->lock);
 
         //
         // Process the local work list with the lock not held
@@ -1487,9 +1487,9 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     }
 
     state->log       = qd_log_source("FLOW_LOG");
-    state->lock      = sys_mutex();
-    state->id_lock   = sys_mutex();
-    state->condition = sys_cond();
+    sys_mutex_init(&state->lock);
+    sys_mutex_init(&state->id_lock);
+    sys_cond_init(&state->condition);
     state->thread    = sys_thread("vflow_thread", _vflow_thread, core);
     *adaptor_context = core;
 
@@ -1552,9 +1552,9 @@ static void _vflow_final(void *adaptor_context)
     //
     // Free the condition and lock variables
     //
-    sys_cond_free(state->condition);
-    sys_mutex_free(state->lock);
-    sys_mutex_free(state->id_lock);
+    sys_cond_free(&state->condition);
+    sys_mutex_free(&state->lock);
+    sys_mutex_free(&state->id_lock);
 
     //
     // Free the module state

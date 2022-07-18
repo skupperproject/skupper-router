@@ -60,8 +60,8 @@ struct qd_server_t {
     qd_log_source_t          *log_source;
     qd_log_source_t          *protocol_log_source; // Log source for the PROTOCOL module
     void                     *start_context;
-    sys_cond_t               *cond;
-    sys_mutex_t              *lock;
+    sys_cond_t                cond;
+    sys_mutex_t               lock;
     qd_connection_list_t      conn_list;
     int                       pause_requests;
     int                       threads_paused;
@@ -70,7 +70,7 @@ struct qd_server_t {
     uint64_t                  next_connection_id;
     void                     *py_displayname_obj;
     qd_http_server_t         *http;
-    sys_mutex_t              *conn_activation_lock;
+    sys_mutex_t               conn_activation_lock;
 };
 
 #define HEARTBEAT_INTERVAL 1000
@@ -572,25 +572,19 @@ qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config
     assert(ctx);
     ZERO(ctx);
     ctx->pn_conn       = pn_connection();
-    ctx->deferred_call_lock = sys_mutex();
-    ctx->role = strdup(config->role);
-    if (!ctx->pn_conn || !ctx->deferred_call_lock || !ctx->role) {
-        if (ctx->pn_conn) pn_connection_free(ctx->pn_conn);
-        if (ctx->deferred_call_lock) sys_mutex_free(ctx->deferred_call_lock);
-        free(ctx->role);
-        free_qd_connection_t(ctx);
-        return NULL;
-    }
+    assert(ctx->pn_conn);
+    sys_mutex_init(&ctx->deferred_call_lock);
+    ctx->role = qd_strdup(config->role);
     ctx->server = server;
     ctx->wake = connection_wake; /* Default, over-ridden for HTTP connections */
     pn_connection_set_context(ctx->pn_conn, ctx);
     DEQ_ITEM_INIT(ctx);
     DEQ_INIT(ctx->deferred_calls);
     DEQ_INIT(ctx->free_link_session_list);
-    sys_mutex_lock(server->lock);
+    sys_mutex_lock(&server->lock);
     ctx->connection_id = server->next_connection_id++;
     DEQ_INSERT_TAIL(server->conn_list, ctx);
-    sys_mutex_unlock(server->lock);
+    sys_mutex_unlock(&server->lock);
     decorate_connection(ctx->server, ctx->pn_conn, config);
     return ctx;
 }
@@ -693,9 +687,9 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_transport_set_server(tport);
         set_rhost_port(ctx);
 
-        sys_mutex_lock(server->lock); /* Policy check is not thread safe */
+        sys_mutex_lock(&server->lock); /* Policy check is not thread safe */
         ctx->policy_counted = qd_policy_socket_accept(server->qd->policy, ctx->rhost);
-        sys_mutex_unlock(server->lock);
+        sys_mutex_unlock(&server->lock);
         if (!ctx->policy_counted) {
             pn_transport_close_tail(tport);
             pn_transport_close_head(tport);
@@ -713,7 +707,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         //
         // Set up SASL
         //
-        sys_mutex_lock(ctx->server->lock);
+        sys_mutex_lock(&ctx->server->lock);
         pn_sasl_t *sasl = pn_sasl(tport);
         if (ctx->server->sasl_config_path)
             pn_sasl_config_path(sasl, ctx->server->sasl_config_path);
@@ -723,7 +717,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_transport_require_auth(tport, config->requireAuthentication);
         pn_transport_require_encryption(tport, config->requireEncryption);
         pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
-        sys_mutex_unlock(ctx->server->lock);
+        sys_mutex_unlock(&ctx->server->lock);
 
         qd_log(ctx->server->log_source, QD_LOG_INFO, "[C%"PRIu64"] Accepted connection to %s from %s",
                ctx->connection_id, name, ctx->rhost_port);
@@ -759,16 +753,16 @@ static void invoke_deferred_calls(qd_connection_t *conn, bool discard)
     // Lock access to deferred_calls, other threads may concurrently add to it.  Invoke
     // the calls outside of the critical section.
     //
-    sys_mutex_lock(conn->deferred_call_lock);
+    sys_mutex_lock(&conn->deferred_call_lock);
     qd_deferred_call_t *dc;
     while ((dc = DEQ_HEAD(conn->deferred_calls))) {
         DEQ_REMOVE_HEAD(conn->deferred_calls);
-        sys_mutex_unlock(conn->deferred_call_lock);
+        sys_mutex_unlock(&conn->deferred_call_lock);
         dc->call(dc->context, discard);
         free_qd_deferred_call_t(dc);
-        sys_mutex_lock(conn->deferred_call_lock);
+        sys_mutex_lock(&conn->deferred_call_lock);
     }
-    sys_mutex_unlock(conn->deferred_call_lock);
+    sys_mutex_unlock(&conn->deferred_call_lock);
 }
 
 void qd_container_handle_event(qd_container_t *container, pn_event_t *event, pn_connection_t *pn_conn, qd_connection_t *qd_conn);
@@ -875,7 +869,7 @@ static void qd_connection_free(qd_connection_t *qd_conn)
     // connection and restart the re-connect timer if necessary
 
     if (connector) {
-        sys_mutex_lock(connector->lock);
+        sys_mutex_lock(&connector->lock);
         connector->qd_conn = 0;  // this connection to be freed
         if (connector->state != CXTR_STATE_DELETED) {
             // Increment the connection index by so that we can try connecting to the failover url (if any).
@@ -891,13 +885,13 @@ static void qd_connection_free(qd_connection_t *qd_conn)
             connector->state = CXTR_STATE_CONNECTING;
             qd_timer_schedule(connector->timer, delay);
         }
-        sys_mutex_unlock(connector->lock);
+        sys_mutex_unlock(&connector->lock);
         qd_connector_decref(connector);  // drop connection's reference
     }
 
-    sys_mutex_lock(qd_server->lock);
+    sys_mutex_lock(&qd_server->lock);
     DEQ_REMOVE(qd_server->conn_list, qd_conn);
-    sys_mutex_unlock(qd_server->lock);
+    sys_mutex_unlock(&qd_server->lock);
 
     // If counted for policy enforcement, notify it has closed
     if (qd_conn->policy_counted) {
@@ -905,15 +899,15 @@ static void qd_connection_free(qd_connection_t *qd_conn)
     }
 
     invoke_deferred_calls(qd_conn, true);  // Discard any pending deferred calls
-    sys_mutex_free(qd_conn->deferred_call_lock);
+    sys_mutex_free(&qd_conn->deferred_call_lock);
     qd_policy_settings_free(qd_conn->policy_settings);
     if (qd_conn->free_user_id) free((char*)qd_conn->user_id);
     if (qd_conn->timer) qd_timer_free(qd_conn->timer);
     free(qd_conn->name);
     free(qd_conn->role);
-    sys_mutex_lock(qd_server->conn_activation_lock);
+    sys_mutex_lock(&qd_server->conn_activation_lock);
     free_qd_connection_t(qd_conn);
-    sys_mutex_unlock(qd_server->conn_activation_lock);
+    sys_mutex_unlock(&qd_server->conn_activation_lock);
 
     /* Note: pn_conn is freed by the proactor */
 }
@@ -1278,12 +1272,12 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
     //
     // Set up SASL
     //
-    sys_mutex_lock(ct->server->lock);
+    sys_mutex_lock(&ct->server->lock);
     pn_sasl_t *sasl = pn_sasl(tport);
     if (config->sasl_mechanisms)
         pn_sasl_allowed_mechs(sasl, config->sasl_mechanisms);
     pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
-    sys_mutex_unlock(ct->server->lock);
+    sys_mutex_unlock(&ct->server->lock);
 
     pn_connection_open(ctx->pn_conn);
     return true;
@@ -1308,7 +1302,7 @@ static void try_open_cb(void *context)
         return;
     }
 
-    sys_mutex_lock(ct->lock);
+    sys_mutex_lock(&ct->lock);
 
     if (ct->state == CXTR_STATE_CONNECTING || ct->state == CXTR_STATE_INIT) {
         // else deleted or failed - on failed wait until after connection is freed
@@ -1317,7 +1311,7 @@ static void try_open_cb(void *context)
         ctx = 0;  // owned by ct
     }
 
-    sys_mutex_unlock(ct->lock);
+    sys_mutex_unlock(&ct->lock);
 
     free_qd_connection_t(ctx);  // noop if ctx == 0
 }
@@ -1342,9 +1336,10 @@ qd_server_t *qd_server(qd_dispatch_t *qd, int thread_count, const char *containe
     qd_server->proactor         = pn_proactor();
     qd_server->container        = 0;
     qd_server->start_context    = 0;
-    qd_server->lock             = sys_mutex();
-    qd_server->conn_activation_lock = sys_mutex();
-    qd_server->cond             = sys_cond();
+
+    sys_mutex_init(&qd_server->lock);
+    sys_mutex_init(&qd_server->conn_activation_lock);
+    sys_cond_init(&qd_server->cond);
     DEQ_INIT(qd_server->conn_list);
 
     qd_timer_initialize();
@@ -1387,7 +1382,7 @@ void qd_server_free(qd_server_t *qd_server)
         invoke_deferred_calls(ctx, true);  // Discard any pending deferred calls
         if (ctx->free_user_id)
             free((char*)ctx->user_id);
-        sys_mutex_free(ctx->deferred_call_lock);
+        sys_mutex_free(&ctx->deferred_call_lock);
         free(ctx->name);
         free(ctx->role);
         if (ctx->policy_settings)
@@ -1401,9 +1396,9 @@ void qd_server_free(qd_server_t *qd_server)
     }
     pn_proactor_free(qd_server->proactor);
     qd_timer_finalize();
-    sys_mutex_free(qd_server->lock);
-    sys_mutex_free(qd_server->conn_activation_lock);
-    sys_cond_free(qd_server->cond);
+    sys_mutex_free(&qd_server->lock);
+    sys_mutex_free(&qd_server->conn_activation_lock);
+    sys_cond_free(&qd_server->cond);
     qd_python_lock_state_t ls = qd_python_lock();
     Py_XDECREF((PyObject *)qd_server->py_displayname_obj);
     qd_python_unlock(ls);
@@ -1419,7 +1414,7 @@ void qd_server_trace_all_connections()
 {
     qd_dispatch_t *qd = qd_dispatch_get_dispatch();
     if (qd->server) {
-        sys_mutex_lock(qd->server->lock);
+        sys_mutex_lock(&qd->server->lock);
         qd_connection_list_t  conn_list = qd->server->conn_list;
         qd_connection_t *conn = DEQ_HEAD(conn_list);
         while(conn) {
@@ -1433,7 +1428,7 @@ void qd_server_trace_all_connections()
             }
             conn = DEQ_NEXT(conn);
         }
-        sys_mutex_unlock(qd->server->lock);
+        sys_mutex_unlock(&qd->server->lock);
     }
 }
 
@@ -1590,13 +1585,13 @@ void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_t cal
     dc->call    = call;
     dc->context = context;
 
-    sys_mutex_lock(conn->deferred_call_lock);
+    sys_mutex_lock(&conn->deferred_call_lock);
     DEQ_INSERT_TAIL(conn->deferred_calls, dc);
-    sys_mutex_unlock(conn->deferred_call_lock);
+    sys_mutex_unlock(&conn->deferred_call_lock);
 
-    sys_mutex_lock(conn->server->conn_activation_lock);
+    sys_mutex_lock(&conn->server->conn_activation_lock);
     qd_server_activate(conn);
-    sys_mutex_unlock(conn->server->conn_activation_lock);
+    sys_mutex_unlock(&conn->server->conn_activation_lock);
 }
 
 
@@ -1677,9 +1672,7 @@ qd_connector_t *qd_server_connector(qd_server_t *server)
     sys_atomic_init(&connector->ref_count, 1);
     DEQ_INIT(connector->conn_info_list);
 
-    connector->lock = sys_mutex();
-    if (!connector->lock)
-        goto error;
+    sys_mutex_init(&connector->lock);
     connector->timer = qd_timer(server->qd, try_open_cb, connector);
     if (!connector->timer)
         goto error;
@@ -1709,14 +1702,14 @@ const char *qd_connector_policy_vhost(qd_connector_t* ct)
 
 bool qd_connector_connect(qd_connector_t *ct)
 {
-    sys_mutex_lock(ct->lock);
+    sys_mutex_lock(&ct->lock);
     // expect: do not attempt to connect an already connected qd_connection
     assert(ct->qd_conn == 0);
     ct->qd_conn = 0;
     ct->delay   = 0;
     ct->state   = CXTR_STATE_CONNECTING;
     qd_timer_schedule(ct->timer, ct->delay);
-    sys_mutex_unlock(ct->lock);
+    sys_mutex_unlock(&ct->lock);
     return true;
 }
 
@@ -1732,7 +1725,7 @@ void qd_connector_decref(qd_connector_t* connector)
 
         qd_server_config_free(&connector->config);
         qd_timer_free(connector->timer);
-        if (connector->lock) sys_mutex_free(connector->lock);
+        sys_mutex_free(&connector->lock);
 
         qd_failover_item_t *item = DEQ_HEAD(connector->conn_info_list);
         while (item) {
@@ -1801,9 +1794,9 @@ bool qd_connection_handle(qd_connection_t *c, pn_event_t *e) {
 uint64_t qd_server_allocate_connection_id(qd_server_t *server)
 {
     uint64_t id;
-    sys_mutex_lock(server->lock);
+    sys_mutex_lock(&server->lock);
     id = server->next_connection_id++;
-    sys_mutex_unlock(server->lock);
+    sys_mutex_unlock(&server->lock);
     return id;
 }
 
@@ -1814,7 +1807,7 @@ bool qd_connection_strip_annotations_in(const qd_connection_t *c) {
 
 sys_mutex_t *qd_server_get_activation_lock(qd_server_t * server)
 {
-    return server->conn_activation_lock;
+    return &server->conn_activation_lock;
 }
 
 uint64_t qd_connection_max_message_size(const qd_connection_t *c) {

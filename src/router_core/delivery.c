@@ -315,7 +315,7 @@ bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *dlv)
     // The lock needs to be acquired only for outgoing links
     //
     if (link->link_direction == QD_OUTGOING)
-        sys_mutex_lock(conn->work_lock);
+        sys_mutex_lock(&conn->work_lock);
 
     if (dlv->where == QDR_DELIVERY_IN_UNSETTLED) {
         DEQ_REMOVE(link->unsettled, dlv);
@@ -324,7 +324,7 @@ bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *dlv)
     }
 
     if (link->link_direction == QD_OUTGOING)
-        sys_mutex_unlock(conn->work_lock);
+        sys_mutex_unlock(&conn->work_lock);
 
     if (dlv->tracking_addr) {
         dlv->tracking_addr->outstanding_deliveries[dlv->tracking_addr_bit]--;
@@ -483,7 +483,7 @@ static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *de
     qd_bitmask_free(delivery->link_exclusion);
     qd_delivery_state_free(delivery->local_state);
     qd_delivery_state_free(delivery->remote_state);
-    sys_mutex_free(delivery->dispo_lock);
+    sys_mutex_free(&delivery->dispo_lock);
 
     free_qdr_delivery_t(delivery);
 }
@@ -1051,7 +1051,7 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
 
         qdr_link_t *peer_link = qdr_delivery_link(peer);
         if (!!peer_link) {
-            sys_mutex_lock(peer_link->conn->work_lock);
+            sys_mutex_lock(&peer_link->conn->work_lock);
             qdr_link_work_t *work     = peer->link_work;
             bool             activate = false;
 
@@ -1081,7 +1081,7 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
                     activate = true;
                 }
             }
-            sys_mutex_unlock(peer_link->conn->work_lock);
+            sys_mutex_unlock(&peer_link->conn->work_lock);
 
             if (activate)
                 qdr_connection_activate_CT(core, peer_link->conn);
@@ -1189,14 +1189,14 @@ void qdr_delivery_push_CT(qdr_core_t *core, qdr_delivery_t *dlv)
 
     bool activate = false;
 
-    sys_mutex_lock(link->conn->work_lock);
+    sys_mutex_lock(&link->conn->work_lock);
     if (dlv->where != QDR_DELIVERY_IN_UNDELIVERED) {
         qdr_delivery_incref(dlv, "qdr_delivery_push_CT - add to updated list");
         qdr_add_delivery_ref_CT(&link->updated_deliveries, dlv);
         qdr_add_link_ref(&link->conn->links_with_work[link->priority], link, QDR_LINK_LIST_CLASS_WORK);
         activate = true;
     }
-    sys_mutex_unlock(link->conn->work_lock);
+    sys_mutex_unlock(&link->conn->work_lock);
 
     //
     // Activate the connection
@@ -1226,7 +1226,7 @@ static bool qdr_delivery_set_remote_delivery_state_CT(qdr_delivery_t *dlv, uint6
 //
 qd_delivery_state_t *qdr_delivery_take_local_delivery_state(qdr_delivery_t *dlv, uint64_t *dispo)
 {
-    sys_mutex_lock(dlv->dispo_lock);
+    sys_mutex_lock(&dlv->dispo_lock);
 
     qd_delivery_state_t *dstate = dlv->local_state;
     dlv->local_state = 0;
@@ -1236,7 +1236,7 @@ qd_delivery_state_t *qdr_delivery_take_local_delivery_state(qdr_delivery_t *dlv,
     if (!qd_delivery_state_is_terminal(dlv->disposition))
         dlv->disposition = 0;
 
-    sys_mutex_unlock(dlv->dispo_lock);
+    sys_mutex_unlock(&dlv->dispo_lock);
 
     return dstate;
 }
@@ -1258,13 +1258,13 @@ bool qdr_delivery_move_delivery_state_CT(qdr_delivery_t *dlv, qdr_delivery_t *pe
     if (dispo) {
         // must lock peer when modifying local state since I/O thread may be reading
         // it at the same time
-        sys_mutex_lock(peer->dispo_lock);
+        sys_mutex_lock(&peer->dispo_lock);
 
         peer->disposition = dispo;
         qd_delivery_state_t *old = peer->local_state;
         peer->local_state = dstate;
 
-        sys_mutex_unlock(peer->dispo_lock);
+        sys_mutex_unlock(&peer->dispo_lock);
 
         if (old) {
             // old state not consumed by I/O thread?

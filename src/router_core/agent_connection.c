@@ -130,7 +130,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
     if (as_map)
         qd_compose_insert_string(body, qdr_connection_columns[col]);
 
-    sys_mutex_lock(conn->connection_info->connection_info_lock);
+    sys_mutex_lock(&conn->connection_info->connection_info_lock);
 
     switch(col) {
     case QDR_CONNECTION_NAME:
@@ -303,7 +303,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
     break;
     }
 
-    sys_mutex_unlock(conn->connection_info->connection_info_lock);
+    sys_mutex_unlock(&conn->connection_info->connection_info_lock);
 }
 
 

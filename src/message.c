@@ -1048,7 +1048,7 @@ qd_message_t *qd_message()
     }
 
     ZERO(msg->content);
-    msg->content->lock = sys_mutex();
+    sys_mutex_init(&msg->content->lock);
     sys_atomic_init(&msg->content->aborted, 0);
     sys_atomic_init(&msg->content->discard, 0);
     sys_atomic_init(&msg->content->no_body, 0);
@@ -1081,7 +1081,7 @@ void qd_message_free(qd_message_t *in_msg)
         // counts starting with the msg cursor.  If the buffer count drops to
         // zero we can free it.
         //
-        LOCK(content->lock);
+        LOCK(&content->lock);
 
         // DISPATCH-2099: ensure all outstanding stream_data items associated
         // with this message have been returned since the underlying buffers
@@ -1110,7 +1110,7 @@ void qd_message_free(qd_message_t *in_msg)
             q2_unblock = content->q2_unblocker;
         }
 
-        UNLOCK(content->lock);
+        UNLOCK(&content->lock);
     }
 
     // the Q2 handler must be invoked outside the lock
@@ -1133,7 +1133,7 @@ void qd_message_free(qd_message_t *in_msg)
         if (content->pending)
             qd_buffer_free(content->pending);
 
-        sys_mutex_free(content->lock);
+        sys_mutex_free(&content->lock);
         sys_atomic_destroy(&content->aborted);
         sys_atomic_destroy(&content->discard);
         sys_atomic_destroy(&content->no_body);
@@ -1278,7 +1278,7 @@ void qd_message_add_fanout(qd_message_t *out_msg)
 
     qd_message_content_t *content = msg->content;
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
     ++content->fanout;
 
     qd_buffer_t *buf = DEQ_HEAD(content->buffers);
@@ -1300,7 +1300,7 @@ void qd_message_add_fanout(qd_message_t *out_msg)
         buf = DEQ_NEXT(buf);
     }
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 }
 
 
@@ -1355,7 +1355,7 @@ void qd_message_set_receive_complete(qd_message_t *in_msg)
         qd_message_content_t *content = MSG_CONTENT(in_msg);
         qd_message_q2_unblocker_t  q2_unblock = {0};
 
-        LOCK(content->lock);
+        LOCK(&content->lock);
 
         SET_ATOMIC_FLAG(&content->receive_complete);
         if (content->q2_input_holdoff) {
@@ -1365,7 +1365,7 @@ void qd_message_set_receive_complete(qd_message_t *in_msg)
         content->q2_unblocker.handler = 0;
         qd_nullify_safe_ptr(&content->q2_unblocker.context);
 
-        UNLOCK(content->lock);
+        UNLOCK(&content->lock);
 
         if (q2_unblock.handler)
             q2_unblock.handler(q2_unblock.context);
@@ -1520,14 +1520,14 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
     //      have been processed and freed by outbound processing then
     //      message holdoff is cleared and receiving may continue.
     //
-    LOCK(msg->content->lock);
+    LOCK(&msg->content->lock);
     if (!qd_link_is_q2_limit_unbounded(qdl) && !msg->content->disable_q2_holdoff) {
         if (msg->content->q2_input_holdoff) {
-            UNLOCK(msg->content->lock);
+            UNLOCK(&msg->content->lock);
             return (qd_message_t*)msg;
         }
     }
-    UNLOCK(msg->content->lock);
+    UNLOCK(&msg->content->lock);
 
     // Loop until msg is complete, error seen, or incoming bytes are consumed
     qd_message_content_t *content = msg->content;
@@ -1543,7 +1543,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
         if (at_eos || recv_error) {
             // Message is complete
             qd_buffer_t * pending_free = 0; // free empty pending buffer outside of lock
-            LOCK(content->lock);
+            LOCK(&content->lock);
             {
                 // Append last buffer if any with data
                 if (content->pending) {
@@ -1570,7 +1570,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
                 // unlink message and delivery
                 pn_record_set(record, PN_DELIVERY_CTX, 0);
             }
-            UNLOCK(content->lock);
+            UNLOCK(&content->lock);
             if (!!pending_free) {
                 qd_buffer_free(pending_free);
             }
@@ -1587,18 +1587,18 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
             // Pending buffer exists
             if (qd_buffer_capacity(content->pending) == 0) {
                 // Pending buffer is full
-                LOCK(content->lock);
+                LOCK(&content->lock);
                 qd_buffer_set_fanout(content->pending, content->fanout);
                 DEQ_INSERT_TAIL(content->buffers, content->pending);
                 content->pending = 0;
                 if (_Q2_holdoff_should_block_LH(content)) {
                     if (!qd_link_is_q2_limit_unbounded(qdl)) {
                         content->q2_input_holdoff = true;
-                        UNLOCK(content->lock);
+                        UNLOCK(&content->lock);
                         break;
                     }
                 }
-                UNLOCK(content->lock);
+                UNLOCK(&content->lock);
                 content->pending = qd_buffer();
             } else {
                 // Pending buffer still has capacity
@@ -1644,11 +1644,11 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
             //
             // push what we do have for testing/processing
             if (qd_buffer_size(content->pending) > 0) {
-                LOCK(content->lock);
+                LOCK(&content->lock);
                 qd_buffer_set_fanout(content->pending, content->fanout);
                 DEQ_INSERT_TAIL(content->buffers, content->pending);
                 content->pending = 0;
-                UNLOCK(content->lock);
+                UNLOCK(&content->lock);
                 content->pending = qd_buffer();
             }
             break;
@@ -1812,7 +1812,7 @@ void qd_message_send(qd_message_t *in_msg,
             bytes_sent = pn_link_send(pnl, (const char*)msg->cursor.cursor, num_bytes_to_send);
         }
 
-        LOCK(content->lock);
+        LOCK(&content->lock);
 
         if (bytes_sent < 0) {
             //
@@ -1889,7 +1889,7 @@ void qd_message_send(qd_message_t *in_msg,
             }
         }
 
-        UNLOCK(content->lock);
+        UNLOCK(&content->lock);
     }
 
     // the Q2 handler must be invoked outside the lock
@@ -2120,9 +2120,9 @@ qd_message_depth_status_t qd_message_check_depth(const qd_message_t *in_msg, qd_
     qd_message_content_t *content = msg->content;
     qd_message_depth_status_t    result;
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
     result = qd_message_check_LH(content, depth);
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
     return result;
 }
 
@@ -2235,7 +2235,7 @@ void qd_message_compose_1(qd_message_t *msg, const char *to, qd_buffer_list_t *b
     }
 
     qd_message_content_t *content = MSG_CONTENT(msg);
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     SET_ATOMIC_FLAG(&content->receive_complete);
     qd_compose_take_buffers(field, &content->buffers);
@@ -2243,7 +2243,7 @@ void qd_message_compose_1(qd_message_t *msg, const char *to, qd_buffer_list_t *b
         // initialize the Q2 flag:
         content->q2_input_holdoff = true;
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
     qd_compose_free(field);
 }
 
@@ -2254,7 +2254,7 @@ void qd_message_compose_2(qd_message_t *msg, qd_composed_field_t *field, bool co
     qd_message_content_t *content       = MSG_CONTENT(msg);
     qd_buffer_list_t     *field_buffers = qd_compose_buffers(field);
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     content->buffers          = *field_buffers;
     SET_ATOMIC_BOOL(&content->receive_complete, complete);
@@ -2262,7 +2262,7 @@ void qd_message_compose_2(qd_message_t *msg, qd_composed_field_t *field, bool co
         // initialize the Q2 flag:
         content->q2_input_holdoff = true;
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 
     DEQ_INIT(*field_buffers); // Zero out the linkage to the now moved buffers.
 }
@@ -2275,7 +2275,7 @@ void qd_message_compose_3(qd_message_t *msg, qd_composed_field_t *field1, qd_com
     qd_buffer_list_t     *field1_buffers = qd_compose_buffers(field1);
     qd_buffer_list_t     *field2_buffers = qd_compose_buffers(field2);
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     SET_ATOMIC_BOOL(&content->receive_complete, receive_complete);
     content->buffers = *field1_buffers;
@@ -2286,7 +2286,7 @@ void qd_message_compose_3(qd_message_t *msg, qd_composed_field_t *field1, qd_com
     if (_Q2_holdoff_should_block_LH(content))
         content->q2_input_holdoff = true;
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 }
 
 
@@ -2299,7 +2299,7 @@ void qd_message_compose_4(qd_message_t *msg, qd_composed_field_t *field1, qd_com
 
     qd_message_content_t *content        = MSG_CONTENT(msg);
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     SET_ATOMIC_BOOL(&content->receive_complete, receive_complete);
     content->buffers = *field1_buffers;
@@ -2311,7 +2311,7 @@ void qd_message_compose_4(qd_message_t *msg, qd_composed_field_t *field1, qd_com
     if (_Q2_holdoff_should_block_LH(content))
         content->q2_input_holdoff = true;
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 }
 
 
@@ -2324,7 +2324,7 @@ void qd_message_compose_5(qd_message_t *msg, qd_composed_field_t *field1, qd_com
     qd_buffer_list_t     *field4_buffers = qd_compose_buffers(field4);
     qd_message_content_t *content        = MSG_CONTENT(msg);
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     SET_ATOMIC_BOOL(&content->receive_complete, receive_complete);
 
@@ -2334,7 +2334,7 @@ void qd_message_compose_5(qd_message_t *msg, qd_composed_field_t *field1, qd_com
     DEQ_APPEND(content->buffers, (*field3_buffers));
     DEQ_APPEND(content->buffers, (*field4_buffers));
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 }
 
 // Note(kgiusti): please do not add yet another
@@ -2383,7 +2383,7 @@ int qd_message_extend(qd_message_t *msg, qd_composed_field_t *field, bool *q2_bl
     if (q2_blocked)
         *q2_blocked = false;
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
     while (buf) {
         qd_buffer_set_fanout(buf, content->fanout);
         buf = DEQ_NEXT(buf);
@@ -2399,7 +2399,7 @@ int qd_message_extend(qd_message_t *msg, qd_composed_field_t *field, bool *q2_bl
             *q2_blocked = true;
     }
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
     return count;
 }
 
@@ -2538,7 +2538,7 @@ int qd_message_stream_data_buffers(qd_message_stream_data_t *stream_data, pn_raw
     qd_message_pvt_t    *owning_message = stream_data->owning_message;
 
 
-    LOCK(owning_message->content->lock);
+    LOCK(&owning_message->content->lock);
     //
     // Skip the buffer offset
     //
@@ -2569,7 +2569,7 @@ int qd_message_stream_data_buffers(qd_message_stream_data_t *stream_data, pn_raw
         buffer = DEQ_NEXT(buffer);
         idx++;
     }
-    UNLOCK(owning_message->content->lock);
+    UNLOCK(&owning_message->content->lock);
 
     return idx;
 }
@@ -2627,7 +2627,7 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
     if (start_buf == stop_buf)  // no unreferenced buffers to free
         return;
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     bool                      was_blocked = !_Q2_holdoff_should_unblock_LH(content);
     const bool                fanout      = pvt->is_fanout;
@@ -2658,7 +2658,7 @@ void qd_message_stream_data_release(qd_message_stream_data_t *stream_data)
         q2_unblock = content->q2_unblocker;
     }
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 
     if (q2_unblock.handler)
         q2_unblock.handler(q2_unblock.context);
@@ -2721,7 +2721,7 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
     bool is_footer                         = false;
     qd_message_stream_data_result_t result = QD_MESSAGE_STREAM_DATA_NO_MORE;
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     section_status = message_section_check_LH(content,
                                               &msg->body_buffer, &msg->body_cursor,
@@ -2763,7 +2763,7 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
         break;
     }
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
     return result;
 }
 
@@ -2801,7 +2801,7 @@ void qd_message_Q2_holdoff_disable(qd_message_t *msg)
     qd_message_content_t *content = msg_pvt->content;
     qd_message_q2_unblocker_t  q2_unblock = {0};
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
     if (!msg_pvt->content->disable_q2_holdoff) {
         msg_pvt->content->disable_q2_holdoff = true;
         if (content->q2_input_holdoff) {
@@ -2809,7 +2809,7 @@ void qd_message_Q2_holdoff_disable(qd_message_t *msg)
             q2_unblock = content->q2_unblocker;
         }
     }
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 
     if (q2_unblock.handler)
         q2_unblock.handler(q2_unblock.context);
@@ -2838,9 +2838,9 @@ bool qd_message_is_Q2_blocked(const qd_message_t *msg)
     qd_message_content_t *content = msg_pvt->content;
 
     bool blocked;
-    LOCK(content->lock);
+    LOCK(&content->lock);
     blocked = content->q2_input_holdoff;
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
     return blocked;
 }
 
@@ -2941,12 +2941,12 @@ void qd_message_set_q2_unblocked_handler(qd_message_t *msg,
 {
     qd_message_content_t *content = MSG_CONTENT(msg);
 
-    LOCK(content->lock);
+    LOCK(&content->lock);
 
     content->q2_unblocker.handler = callback;
     content->q2_unblocker.context = context;
 
-    UNLOCK(content->lock);
+    UNLOCK(&content->lock);
 }
 
 
@@ -2955,11 +2955,11 @@ void qd_message_clear_q2_unblocked_handler(qd_message_t *msg)
     if (msg) {
         qd_message_content_t *content = MSG_CONTENT(msg);
 
-        LOCK(content->lock);
+        LOCK(&content->lock);
 
         content->q2_unblocker.handler = 0;
         qd_nullify_safe_ptr(&content->q2_unblocker.context);
 
-        UNLOCK(content->lock);
+        UNLOCK(&content->lock);
     }
 }
