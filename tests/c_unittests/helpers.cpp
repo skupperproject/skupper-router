@@ -40,8 +40,19 @@ void reset_static_data()
             *(stored_globals + i) = *(DATA_START + i);
         }
     } else {
+        flush_coverage();
         for (size_t i = 0; i < size; i++) {
             *(DATA_START + i) = *(stored_globals + i);
         }
     }
+}
+
+// The __gcov_flush function writes the coverage counters to gcda files and then resets them to zero.
+// It is defined at https://github.com/gcc-mirror/gcc/blob/aad93da1a579b9ae23ede6b9cf8523360f0a08b4/libgcc/libgcov-interface.c
+extern "C" void __gcov_flush();
+
+void flush_coverage() {
+#if defined(QD_COVERAGE)
+    __gcov_flush();
+#endif
 }

@@ -215,6 +215,7 @@ endif()
 
 # Set up extra coverage analysis options for gcc and clang
 if (CMAKE_BUILD_TYPE MATCHES "Coverage")
+ add_compile_definitions("QD_COVERAGE")
  set (CMAKE_C_FLAGS_COVERAGE "-g -O0 --coverage")
  set (CMAKE_EXE_LINKER_FLAGS_COVERAGE "--coverage")
  set (CMAKE_MODULE_LINKER_FLAGS_COVERAGE "--coverage")
