@@ -19,6 +19,21 @@ under the License
 
 = Debugging router tests
 
+== GitHub --bisect
+
+The GitHub Action in `.github/workflows/build.yaml` can be triggered manually, with various parameters.
+Either the GitHub WebUI (see https://github.com/skupperproject/skupper-router/pull/480[screenshot in PR]) or the `gh` https://github.com/cli/cli[commandline tool] can be used.
+
+.Example invocation to build and test router main against specified Qpid Proton commit
+[source]
+----
+gh workflow run \
+  --repo skupperproject/skupper-router --ref main \
+  -f protonRepository=your_gh_name/qpid-proton \
+  -f protonBranch=005789172947c2e567ddbc6e8a8c783951313fd9 \
+  build.yaml
+----
+
 == rr record-reply debugger
 
 * https://rr-project.org/
