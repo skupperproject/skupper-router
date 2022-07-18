@@ -112,7 +112,7 @@ struct qd_container_t {
     qd_hash_t            *node_type_map;
     qd_hash_t            *node_map;
     qd_node_list_t        nodes;
-    sys_mutex_t          *lock;
+    sys_mutex_t           lock;
     qd_node_t            *default_node;
     qdc_node_type_list_t  node_type_list;
     qd_link_list_t        links;
@@ -142,9 +142,9 @@ static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
     }
 
     ZERO(link);
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     DEQ_INSERT_TAIL(container->links, link);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
     link->pn_sess    = pn_link_session(pn_link);
     link->pn_link    = pn_link;
     link->direction  = QD_OUTGOING;
@@ -180,9 +180,9 @@ static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, u
     }
 
     ZERO(link);
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     DEQ_INSERT_TAIL(container->links, link);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
     link->pn_sess    = pn_link_session(pn_link);
     link->pn_link    = pn_link;
     link->direction  = QD_INCOMING;
@@ -255,9 +255,9 @@ static void notify_opened(qd_container_t *container, qd_connection_t *conn, void
     // this particular list is only ever appended to and never has items inserted or deleted,
     // this usage is safe in this case.
     //
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
 
     while (nt_item) {
         nt = nt_item->ntype;
@@ -269,9 +269,9 @@ static void notify_opened(qd_container_t *container, qd_connection_t *conn, void
                 nt->outbound_conn_opened_handler(nt->type_context, conn, context);
         }
 
-        sys_mutex_lock(container->lock);
+        sys_mutex_lock(&container->lock);
         nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(container->lock);
+        sys_mutex_unlock(&container->lock);
     }
 }
 
@@ -291,18 +291,18 @@ static void notify_closed(qd_container_t *container, qd_connection_t *conn, void
     //
     // This assumes that pointer assignment is atomic, which it is on most platforms.
     //
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
 
     while (nt_item) {
         nt = nt_item->ntype;
         if (nt->conn_closed_handler)
             nt->conn_closed_handler(nt->type_context, conn, context);
 
-        sys_mutex_lock(container->lock);
+        sys_mutex_lock(&container->lock);
         nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(container->lock);
+        sys_mutex_unlock(&container->lock);
     }
 }
 
@@ -378,18 +378,18 @@ static void writable_handler(qd_container_t *container, pn_connection_t *conn, q
     // this particular list is only ever appended to and never has items inserted or deleted,
     // this usage is safe in this case.
     //
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
 
     while (nt_item) {
         nt = nt_item->ntype;
         if (nt->writable_handler)
             nt->writable_handler(nt->type_context, qd_conn, 0);
 
-        sys_mutex_lock(container->lock);
+        sys_mutex_lock(&container->lock);
         nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(container->lock);
+        sys_mutex_unlock(&container->lock);
     }
 }
 
@@ -764,8 +764,8 @@ qd_container_t *qd_container(qd_dispatch_t *qd)
     container->server        = qd->server;
     container->node_type_map = qd_hash(6,  4, 1);  // 64 buckets, item batches of 4
     container->node_map      = qd_hash(10, 32, 0); // 1K buckets, item batches of 32
-    container->lock          = sys_mutex();
     container->default_node  = 0;
+    sys_mutex_init(&container->lock);
     DEQ_INIT(container->nodes);
     DEQ_INIT(container->node_type_list);
 
@@ -802,7 +802,7 @@ void qd_container_free(qd_container_t *container)
     }
     qd_hash_free(container->node_map);
     qd_hash_free(container->node_type_map);
-    sys_mutex_free(container->lock);
+    sys_mutex_free(&container->lock);
     free(container);
 }
 
@@ -817,10 +817,10 @@ int qd_container_register_node_type(qd_dispatch_t *qd, const qd_node_type_t *nt)
     DEQ_ITEM_INIT(nt_item);
     nt_item->ntype = nt;
 
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     result = qd_hash_insert_const(container->node_type_map, iter, nt, 0);
     DEQ_INSERT_TAIL(container->node_type_list, nt_item);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
 
     qd_iterator_free(iter);
     if (result < 0)
@@ -876,11 +876,11 @@ qd_node_t *qd_container_create_node(qd_dispatch_t        *qd,
 
     if (name) {
         qd_iterator_t *iter = qd_iterator_string(name, ITER_VIEW_ALL);
-        sys_mutex_lock(container->lock);
+        sys_mutex_lock(&container->lock);
         result = qd_hash_insert(container->node_map, iter, node, 0);
         if (result >= 0)
             DEQ_INSERT_HEAD(container->nodes, node);
-        sys_mutex_unlock(container->lock);
+        sys_mutex_unlock(&container->lock);
         qd_iterator_free(iter);
         if (result < 0) {
             free_qd_node_t(node);
@@ -904,10 +904,10 @@ void qd_container_destroy_node(qd_node_t *node)
 
     if (node->name) {
         qd_iterator_t *iter = qd_iterator_string(node->name, ITER_VIEW_ALL);
-        sys_mutex_lock(container->lock);
+        sys_mutex_lock(&container->lock);
         qd_hash_remove(container->node_map, iter);
         DEQ_REMOVE(container->nodes, node);
-        sys_mutex_unlock(container->lock);
+        sys_mutex_unlock(&container->lock);
         qd_iterator_free(iter);
         free(node->name);
     }
@@ -961,9 +961,9 @@ qd_link_t *qd_link(qd_node_t *node, qd_connection_t *conn, qd_direction_t dir, c
     }
     ZERO(link);
 
-    sys_mutex_lock(node->container->lock);
+    sys_mutex_lock(&node->container->lock);
     DEQ_INSERT_TAIL(node->container->links, link);
-    sys_mutex_unlock(node->container->lock);
+    sys_mutex_unlock(&node->container->lock);
 
     link->pn_sess = pn_ssn;
 
@@ -987,9 +987,9 @@ void qd_link_free(qd_link_t *link)
 {
     if (!link) return;
     qd_container_t *container = link->node->container;
-    sys_mutex_lock(container->lock);
+    sys_mutex_lock(&container->lock);
     DEQ_REMOVE(container->links, link);
-    sys_mutex_unlock(container->lock);
+    sys_mutex_unlock(&container->lock);
 
     qd_node_t *node = link->node;
     node->ntype->link_abandoned_deliveries_handler(node->context, link);

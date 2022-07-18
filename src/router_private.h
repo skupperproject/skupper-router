@@ -60,7 +60,7 @@ struct qd_router_t {
     const char               *router_id;
     qd_node_t                *node;
 
-    sys_mutex_t              *lock;
+    sys_mutex_t               lock;
     qd_timer_t               *timer;
 
     //

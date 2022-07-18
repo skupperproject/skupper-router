@@ -1321,9 +1321,9 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                 " auth=%s user=%s container_id=%s",
                 connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
                         authenticated ? mech : "no", (char*) user, container);
-        sys_mutex_lock(conn->connector->lock);
+        sys_mutex_lock(&conn->connector->lock);
         strcpy(conn->connector->conn_msg, conn_msg);
-        sys_mutex_unlock(conn->connector->lock);
+        sys_mutex_unlock(&conn->connector->lock);
     }
 }
 
@@ -1578,7 +1578,7 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
     router->router_id    = id;
     router->node         = qd_container_set_default_node_type(qd, &router_node, (void*) router, QD_DIST_BOTH);
 
-    router->lock  = sys_mutex();
+    sys_mutex_init(&router->lock);
     router->timer = qd_timer(qd, qd_router_timer_handler, (void*) router);
 
     sys_atomic_init(&global_delivery_id, 1);
@@ -2096,7 +2096,7 @@ void qd_router_free(qd_router_t *router)
     qdr_core_free(router->router_core);
     qd_tracemask_free(router->tracemask);
     qd_timer_free(router->timer);
-    sys_mutex_free(router->lock);
+    sys_mutex_free(&router->lock);
     qd_router_configure_free(router);
 
     free(router);

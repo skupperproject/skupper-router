@@ -45,23 +45,23 @@ void qd_server_timeout(qd_server_t *server, qd_duration_t duration)
 
 // Timer thread - polls the timers every 10 msecs
 //
-static sys_mutex_t *ticker_lock = 0;
+static sys_mutex_t ticker_lock;
 static bool done = false;
 static void *ticker_thread(void *arg)
 {
     struct timeval period;
 
-    sys_mutex_lock(ticker_lock);
+    sys_mutex_lock(&ticker_lock);
     while (!done) {
         // 10 msec sleep
-        sys_mutex_unlock(ticker_lock);
+        sys_mutex_unlock(&ticker_lock);
         period.tv_sec = 0;
         period.tv_usec = 10 * 1000;
         select(0, 0, 0, 0, &period);
         qd_timer_visit();
-        sys_mutex_lock(ticker_lock);
+        sys_mutex_lock(&ticker_lock);
     }
-    sys_mutex_unlock(ticker_lock);
+    sys_mutex_unlock(&ticker_lock);
     return 0;
 }
 
@@ -69,22 +69,20 @@ static void *ticker_thread(void *arg)
 // global event for synchronizing with timer callback
 //
 static struct event_t {
-    sys_mutex_t *m;
-    sys_cond_t  *c;
+    sys_mutex_t m;
+    sys_cond_t  c;
 } event;
 
 static void test_setup()
 {
-    event.m = sys_mutex();
-    event.c = sys_cond();
+    sys_mutex_init(&event.m);
+    sys_cond_init(&event.c);
 }
 
 static void test_cleanup()
 {
-    sys_mutex_free(event.m);
-    event.m = 0;
-    sys_cond_free(event.c);
-    event.c = 0;
+    sys_mutex_free(&event.m);
+    sys_cond_free(&event.c);
 }
 
 
@@ -96,10 +94,10 @@ static void test_simple_cb(void *context)
 {
     int *iptr = (int *)context;
 
-    sys_mutex_lock(event.m);  // block until test_simple waits
+    sys_mutex_lock(&event.m);  // block until test_simple waits
     *iptr = 2;
-    sys_cond_signal(event.c);
-    sys_mutex_unlock(event.m);
+    sys_cond_signal(&event.c);
+    sys_mutex_unlock(&event.m);
 }
 
 static int test_simple(const char *name)
@@ -110,11 +108,11 @@ static int test_simple(const char *name)
     test_setup();
 
     qd_timer_t *t = qd_timer(0, test_simple_cb, (void *)&i);
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
 
     qd_timestamp_t start = qd_timer_now();
     qd_timer_schedule(t, 100);
-    sys_cond_wait(event.c, event.m);   // wait for cb to finish
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to finish
     qd_timestamp_t stop = qd_timer_now();
     if (i != 2) {
         fprintf(stderr, "%s failed: expected timer to run\n", name);
@@ -125,7 +123,7 @@ static int test_simple(const char *name)
         fprintf(stderr, "%s failed: expected timer ran too soon\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
     qd_timer_free(t);
 
     test_cleanup();
@@ -151,9 +149,9 @@ static void test_reschedule_internal_cb(void *context)
         break;
     case 2:
         (*iptr) += 1;
-        sys_mutex_lock(event.m);
-        sys_cond_signal(event.c);
-        sys_mutex_unlock(event.m);
+        sys_mutex_lock(&event.m);
+        sys_cond_signal(&event.c);
+        sys_mutex_unlock(&event.m);
         break;
     }
 }
@@ -165,10 +163,10 @@ static int test_reschedule_internal(const char *name)
 
     test_setup();
     reschedule_timer = qd_timer(0, test_reschedule_internal_cb, (void *)&i);
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
     qd_timestamp_t start = qd_timer_now();
     qd_timer_schedule(reschedule_timer, 100);
-    sys_cond_wait(event.c, event.m);   // wait for cb to finish
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to finish
     qd_timestamp_t stop = qd_timer_now();
 
     if (i != 3) {
@@ -180,7 +178,7 @@ static int test_reschedule_internal(const char *name)
         fprintf(stderr, "%s failed: timer expired too soon\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
     qd_timer_free(reschedule_timer);
 
     test_cleanup();
@@ -197,12 +195,12 @@ static qd_timer_t *free_timer;
 
 static void test_free_internal_cb(void *context)
 {
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
     qd_timer_free(free_timer);
     free_timer = 0;
 
-    sys_cond_signal(event.c);
-    sys_mutex_unlock(event.m);
+    sys_cond_signal(&event.c);
+    sys_mutex_unlock(&event.m);
 }
 
 static int test_free_internal(const char *name)
@@ -211,16 +209,16 @@ static int test_free_internal(const char *name)
 
     test_setup();
     free_timer = qd_timer(0, test_free_internal_cb, 0);
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
     qd_timestamp_t start = qd_timer_now();
     qd_timer_schedule(free_timer, 100);
-    sys_cond_wait(event.c, event.m);   // wait for cb to finish
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to finish
     qd_timestamp_t stop = qd_timer_now();
     if ((stop - start) < 100) {
         fprintf(stderr, "%s failed: timer expired too soon\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
     if (free_timer != 0) {
         fprintf(stderr, "%s failed: timer free failed\n", name);
         result = 1;
@@ -304,9 +302,9 @@ static void test_rerun_cb(void *context)
         abort();  // should never run
     }
     (*iptr) = 3;
-    sys_mutex_lock(event.m);
-    sys_cond_signal(event.c);
-    sys_mutex_unlock(event.m);
+    sys_mutex_lock(&event.m);
+    sys_cond_signal(&event.c);
+    sys_mutex_unlock(&event.m);
 }
 
 static int test_rerun(const char *name)
@@ -325,12 +323,12 @@ static int test_rerun(const char *name)
         result = 1;
     }
 
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
 
     i = 2;
     start = qd_timer_now();
     qd_timer_schedule(t, 100);
-    sys_cond_wait(event.c, event.m);   // wait for cb to finish
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to finish
     stop = qd_timer_now();
     if ((stop - start) < 100) {
         fprintf(stderr, "%s failed: expected timer ran too soon\n", name);
@@ -340,7 +338,7 @@ static int test_rerun(const char *name)
         fprintf(stderr, "%s failed: expected callback to finish\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
     qd_timer_free(t);
 
     test_cleanup();
@@ -359,9 +357,9 @@ static void long_running_cb(void *context)
                              .tv_usec = 2000 * 1000}; // 2 sec
 
     // wake caller
-    sys_mutex_lock(event.m);
-    sys_cond_signal(event.c);
-    sys_mutex_unlock(event.m);
+    sys_mutex_lock(&event.m);
+    sys_cond_signal(&event.c);
+    sys_mutex_unlock(&event.m);
 
     // sleep for 2 second, cancel should block for this
     select(0, 0, 0, 0, &period);
@@ -377,15 +375,15 @@ static int test_sync_cancel(const char *name)
     test_setup();
     qd_timer_t *t = qd_timer(0, long_running_cb, (void *)&flag);
 
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
     qd_timer_schedule(t, 10);
-    sys_cond_wait(event.c, event.m);   // wait for cb to start
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to start
     qd_timer_cancel(t);   // expected to block until cb finishes
     if (sys_atomic_get(&flag) != 2) {
         fprintf(stderr, "%s failed: callback still running\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
     qd_timer_free(t);
 
     test_cleanup();
@@ -407,15 +405,15 @@ static int test_sync_free(const char *name)
     test_setup();
     qd_timer_t *t = qd_timer(0, long_running_cb, (void *)&flag);
 
-    sys_mutex_lock(event.m);
+    sys_mutex_lock(&event.m);
     qd_timer_schedule(t, 10);
-    sys_cond_wait(event.c, event.m);   // wait for cb to start
+    sys_cond_wait(&event.c, &event.m);   // wait for cb to start
     qd_timer_free(t);   // expected to block until cb finishes
     if (sys_atomic_get(&flag) != 2) {
         fprintf(stderr, "%s failed: callback still running\n", name);
         result = 1;
     }
-    sys_mutex_unlock(event.m);
+    sys_mutex_unlock(&event.m);
 
     test_cleanup();
     fprintf(stderr, "Test sync free: %s\n", result ? "FAILED" : "ok");
@@ -447,7 +445,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    ticker_lock = sys_mutex();
+    sys_mutex_init(&ticker_lock);
 
     sys_thread_t *ticker = sys_thread("ticker_thread", ticker_thread, 0);
 
@@ -460,9 +458,9 @@ int main(int argc, char *argv[])
     result += test_sync_cancel(argv[0]);
     result += test_sync_free(argv[0]);
 
-    sys_mutex_lock(ticker_lock);
+    sys_mutex_lock(&ticker_lock);
     done = true;
-    sys_mutex_unlock(ticker_lock);
+    sys_mutex_unlock(&ticker_lock);
 
     sys_thread_join(ticker);
     sys_thread_free(ticker);
