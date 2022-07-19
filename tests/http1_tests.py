@@ -692,6 +692,9 @@ class CommonHttp1Edge2EdgeTest:
         """
         Verify server reconnect logic.
         """
+        if self.skip.get("test_03_server_reconnect"):
+            self.skipTest("Not supported")
+
         TESTS = {
             "GET": [
                 (RequestMsg("GET", "/GET/test_03_server_reconnect",
