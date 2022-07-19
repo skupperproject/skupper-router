@@ -846,19 +846,23 @@ class Qdrouterd(Process):
         return self
 
     def is_router_connected(self, router_id, **retry_kwargs):
-        node = None
         try:
             self.management.read(identity="router.node/%s" % router_id)
-            node = Node.connect(self.addresses[0], router_id, timeout=1)
-            return retry_exception(lambda: node.query('io.skupper.router.router'))
-        except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):
-            # proton.ConnectionException: the router is not yet accepting connections
-            # NotFoundStatus: the queried router is not yet connected
-            # TODO(DISPATCH-2119) proton.utils.LinkDetached: should be removed, currently needed for DISPATCH-2033
+        except Exception:
+            # router_id is not yet seen
             return False
-        finally:
-            if node:
-                node.close()
+
+        # TODO aconway 2015-01-29: The above check should be enough, we
+        # should not advertise a remote router in management till it is fully
+        # connected. However we still get a race where the router is not
+        # actually ready for traffic. Investigate.
+        # Meantime the following actually tests send-thru to the router.
+        try:
+            with Node.connect(self.addresses[0], router_id) as node:
+                return node.query('io.skupper.router.router')
+        except Exception as exc:
+            # router_id not completely done initializing
+            return False
 
     def wait_router_connected(self, router_id, **retry_kwargs):
         retry(lambda: self.is_router_connected(router_id), **retry_kwargs)
