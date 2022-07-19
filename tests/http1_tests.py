@@ -375,8 +375,27 @@ def wait_http_listeners_up(mgmt_address: str,
     Wait until the configured HTTP listener sockets have come up. Optionally
     filter the set of configured listeners using attribute names and values
     """
-
     LISTENER_TYPE = 'io.skupper.router.httpListener'
+    return _wait_adaptor_listeners_up(LISTENER_TYPE, mgmt_address, l_filter,
+                                      timeout)
+
+
+def wait_tcp_listeners_up(mgmt_address: str,
+                          l_filter: Optional[Mapping[str, Any]] = None,
+                          timeout: float = TIMEOUT):
+    """
+    Wait until the configured TCP listener sockets have come up. Optionally
+    filter the set of configured listeners using attribute names and values
+    """
+    LISTENER_TYPE = 'io.skupper.router.tcpListener'
+    return _wait_adaptor_listeners_up(LISTENER_TYPE, mgmt_address, l_filter,
+                                      timeout)
+
+
+def _wait_adaptor_listeners_up(listener_type,
+                               mgmt_address: str,
+                               l_filter: Optional[Mapping[str, Any]] = None,
+                               timeout: float = TIMEOUT):
     mgmt = Node.connect(mgmt_address, timeout=timeout)
     l_filter = l_filter or {}
     attributes = set(l_filter.keys())
@@ -390,7 +409,7 @@ def wait_http_listeners_up(mgmt_address: str,
         return True
 
     def _check():
-        listeners = mgmt.query(type=LISTENER_TYPE,
+        listeners = mgmt.query(type=listener_type,
                                attribute_names=list(attributes)).get_dicts()
         listeners = filter(_filter_listener, listeners)
         assert listeners, "Filter error: no listeners matched"
@@ -401,7 +420,7 @@ def wait_http_listeners_up(mgmt_address: str,
                 return False
         return True
     assert retry(_check, timeout=timeout, delay=0.25), \
-        "Timed out waiting for HTTP listener sockets to activate"
+        f"Timed out waiting for {listener_type} listener sockets to activate"
 
 
 def http1_ping(sport, cport):
@@ -722,6 +741,9 @@ class CommonHttp1Edge2EdgeTest:
         """
         Test permanent loss of server
         """
+        if self.skip.get("test_04_server_pining_for_the_fjords"):
+            self.skipTest("Not supported")
+
         TESTS = {
             "GET": [
                 (RequestMsg("GET", "/GET/test_04_fjord_pining",
@@ -1307,6 +1329,7 @@ class Http1Edge2EdgeTestBase(TestCase):
     def setUpClass(cls):
         """Start a router"""
         super(Http1Edge2EdgeTestBase, cls).setUpClass()
+        cls.skip = {}
         cls.routers = []
         cls.INTA_edge1_port   = cls.tester.get_port()
         cls.INTA_edge2_port   = cls.tester.get_port()
