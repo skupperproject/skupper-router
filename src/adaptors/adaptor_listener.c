@@ -27,7 +27,7 @@
 #include <proton/listener.h>
 #include <proton/proactor.h>
 
-#define QD_LISTENER_BACKLOG 50
+#define QD_LISTENER_BACKLOG SOMAXCONN
 
 struct qd_adaptor_listener_t {
 
