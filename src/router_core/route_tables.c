@@ -140,6 +140,7 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
                                        char                    aclass,
                                        qd_address_treatment_t  treatment,
                                        bool                    in_core,
+                                       bool                    propagate,
                                        qdr_receive_t           on_message,
                                        void                   *context)
 {
@@ -149,6 +150,7 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
     sub->on_message         = on_message;
     sub->on_message_context = context;
     sub->in_core            = in_core;
+    sub->propagate          = propagate;
 
     qdr_action_t *action = qdr_action(qdr_subscribe_CT, "subscribe");
     action->args.io.address       = qdr_field(address);
@@ -689,11 +691,14 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
                 qd_hash_insert(core->addr_hash, address->iterator, addr, &addr->hash_handle);
                 DEQ_ITEM_INIT(addr);
                 DEQ_INSERT_TAIL(core->addrs, addr);
-            } else if (aclass == QD_ITER_HASH_PREFIX_MOBILE) {
+            } else if (aclass == QD_ITER_HASH_PREFIX_MOBILE && sub->propagate) {
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_BECAME_LOCAL_DEST, addr);
             }
         }
         if (addr) {
+            if (sub->propagate) {
+                addr->propagate_local = true;
+            }
             sub->addr = addr;
             DEQ_ITEM_INIT(sub);
             DEQ_INSERT_TAIL(addr->subscriptions, sub);

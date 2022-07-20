@@ -254,7 +254,7 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
                 // If the address has more than zero attached destinations, create an
                 // incoming link from the interior to signal the presence of local consumers.
                 //
-                if (DEQ_SIZE(addr->rlinks) > 0) {
+                if (DEQ_SIZE(addr->rlinks) > 0 || (DEQ_SIZE(addr->subscriptions) > 0 && addr->propagate_local)) {
                     if (DEQ_SIZE(addr->rlinks) == 1) {
                         //
                         // If there's only one link and it's on the edge connection, ignore the address.
@@ -329,7 +329,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
         // not the link to the interior.
         //
         link_ref = DEQ_HEAD(addr->rlinks);
-        if (link_ref->link->conn != ap->edge_conn)
+        if (link_ref->link->conn != ap->edge_conn || addr->propagate_local)
             add_inlink(ap, key, addr);
         break;
 
