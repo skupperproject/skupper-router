@@ -860,7 +860,9 @@ class Qdrouterd(Process):
         try:
             with Node.connect(self.addresses[0], router_id) as node:
                 return node.query('io.skupper.router.router')
-        except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached) as exc:
+        except (proton.ConnectionException, proton.Timeout,
+                NotFoundStatus, proton.utils.LinkDetached,
+                proton.utils.SendException) as exc:
             # router_id not completely done initializing
             return False
 
