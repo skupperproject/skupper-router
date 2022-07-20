@@ -51,7 +51,7 @@ void          sys_rwlock_unlock(sys_rwlock_t *lock);
 
 typedef struct sys_thread_t sys_thread_t;
 
-sys_thread_t *sys_thread(const char * thread_name, void *(*run_function) (void *), void *arg);
+sys_thread_t *sys_thread(const char *thread_name, void *(*run_function) (void *), void *arg);
 void          sys_thread_free(sys_thread_t *thread);
 void          sys_thread_join(sys_thread_t *thread);
 sys_thread_t *sys_thread_self(void);

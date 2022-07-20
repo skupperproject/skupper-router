@@ -178,6 +178,7 @@ static void *_thread_init(void *arg)
 
 sys_thread_t *sys_thread(const char * thread_name, void *(*run_function) (void *), void *arg)
 {
+    // thread name may be at most 16 bytes, counting the final \0 byte
     assert(strlen(thread_name) < 16);
     sys_thread_t *thread = NEW(sys_thread_t);
     thread->f = run_function;

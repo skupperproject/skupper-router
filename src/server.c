@@ -1487,7 +1487,7 @@ void qd_server_run(qd_dispatch_t *qd)
     sys_thread_t **threads = (sys_thread_t **)qd_calloc(n, sizeof(sys_thread_t*));
     for (i = 0; i < n; i++) {
         char buffer[16];
-        snprintf(buffer, sizeof(buffer), "wrk %d", i);
+        snprintf(buffer, sizeof(buffer), "wrkr_%d", i);
         threads[i] = sys_thread(buffer, thread_run, qd_server);
     }
 
