@@ -493,7 +493,7 @@ jobs:
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
-            ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython}
+            ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython:-ON}
 
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
