@@ -47,10 +47,6 @@ extern char _end[];
 /// c.f. https://stackoverflow.com/questions/3704864/in-a-c-program-is-it-possible-to-reset-all-global-variables-to-default-vaues
 void reset_static_data();
 
-/// Coverage is recorded in static data, therefore `reset_static_data` would
-/// also discard coverage information. Always flush the coverage-to-date before reset.
-void flush_coverage();
-
 // assertions without stack traces when running outside doctest
 #ifndef QDR_DOCTEST
 // https://stackoverflow.com/questions/3767869/adding-message-to-assert
