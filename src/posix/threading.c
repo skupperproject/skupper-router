@@ -17,6 +17,9 @@
  * under the License.
  */
 
+// obtain access to pthread_setname_np
+#define _GNU_SOURCE
+
 //
 // Enable debug for asserts in this module regardless of what the project-wide
 // setting is.
@@ -173,12 +176,14 @@ static void *_thread_init(void *arg)
 }
 
 
-sys_thread_t *sys_thread(void *(*run_function) (void *), void *arg)
+sys_thread_t *sys_thread(const char * thread_name, void *(*run_function) (void *), void *arg)
 {
+    assert(strlen(thread_name) < 16);
     sys_thread_t *thread = NEW(sys_thread_t);
     thread->f = run_function;
     thread->arg = arg;
     pthread_create(&(thread->thread), 0, _thread_init, (void*) thread);
+    pthread_setname_np(thread->thread, thread_name);
     return thread;
 }
 
