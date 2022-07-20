@@ -138,6 +138,7 @@ typedef uint64_t (*qdr_receive_t) (void *context, qd_message_t *msg, int link_ma
  * @param aclass Address class character
  * @param treatment Treatment for the address if it be being created as a side effect of this call
  * @param in_core True iff the handler is to be run in the context of the core thread
+ * @param propagate True iff the handler expects to receive messages from remote sites in the network
  * @param on_message The handler function
  * @param context The opaque context sent to the handler on all invocations
  * @return Pointer to the subscription object
@@ -147,6 +148,7 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
                                        char                    aclass,
                                        qd_address_treatment_t  treatment,
                                        bool                    in_core,
+                                       bool                    propagate,
                                        qdr_receive_t           on_message,
                                        void                   *context);
 

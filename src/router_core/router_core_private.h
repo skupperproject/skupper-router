@@ -395,6 +395,7 @@ struct qdr_subscription_t {
     qdr_receive_t  on_message;
     void          *on_message_context;
     bool           in_core;
+    bool           propagate;
 };
 
 DEQ_DECLARE(qdr_subscription_t, qdr_subscription_list_t);
@@ -541,6 +542,7 @@ struct qdr_address_t {
     int                        ref_count;     ///< Number of entities referencing this address
     bool                       local;
     bool                       router_control_only; ///< If set, address is only for deliveries arriving on a control link
+    bool                       propagate_local;     ///< If set, propagate to the network even if there are only local subscriptions
     uint32_t                   tracked_deliveries;
     uint64_t                   cost_epoch;
 

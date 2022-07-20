@@ -336,7 +336,7 @@ static qd_message_t *qcm_mobile_sync_compose_absolute_mau(qdrm_mobile_sync_t *ms
         //
         if (qcm_mobile_sync_addr_is_mobile(addr)
             && (DEQ_SIZE(addr->rlinks) > 0
-                || DEQ_SIZE(addr->subscriptions) > 0
+                || (DEQ_SIZE(addr->subscriptions) > 0 && addr->propagate_local)
                 || BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
             && !BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
             qcm_mobile_sync_compose_addr_descriptor(addr, body, true);
@@ -935,9 +935,9 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     // Subscribe to receive messages sent to the 'qdrouter.ma' addresses
     //
     msync->message_sub1 = qdr_core_subscribe(core, "qdrouter.ma", 'L',
-                                             QD_TREATMENT_MULTICAST_ONCE, true, qcm_mobile_sync_on_message_CT, msync);
+                                             QD_TREATMENT_MULTICAST_ONCE, true, false, qcm_mobile_sync_on_message_CT, msync);
     msync->message_sub2 = qdr_core_subscribe(core, "qdrouter.ma", 'T',
-                                             QD_TREATMENT_MULTICAST_ONCE, true, qcm_mobile_sync_on_message_CT, msync);
+                                             QD_TREATMENT_MULTICAST_ONCE, true, false, qcm_mobile_sync_on_message_CT, msync);
 
     //
     // Create a log source for mobile address sync

@@ -180,7 +180,7 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
         }
 
         subscription = qdr_core_subscribe(core, "_testhook/address_watch", QD_ITER_HASH_PREFIX_LOCAL,
-                                          QD_TREATMENT_ANYCAST_CLOSEST, false, on_message, core);
+                                          QD_TREATMENT_ANYCAST_CLOSEST, false, false, on_message, core);
     }
 }
 

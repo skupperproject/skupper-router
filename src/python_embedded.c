@@ -703,7 +703,7 @@ static int IoAdapter_init(IoAdapter *self, PyObject *args, PyObject *kwds)
     if (!address) return -1;
     qd_error_clear();
     self->sub = qdr_core_subscribe(self->core, address, aclass, treatment,
-                                   false, qd_io_rx_handler, self);
+                                   false, false, qd_io_rx_handler, self);
     free(address);
     if (qd_error_code()) {
         PyErr_SetString(PyExc_RuntimeError, qd_error_message());

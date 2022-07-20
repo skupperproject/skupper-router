@@ -1435,7 +1435,7 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
         state->my_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my,  'M',
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
 
-        state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, _vflow_on_message, core);
+        state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_message, core);
     }
 }
 
