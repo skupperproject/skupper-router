@@ -29,7 +29,6 @@ from subprocess import PIPE
 from subprocess import STDOUT
 from typing import List, Optional
 
-from http1_tests import http1_ping
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
@@ -1320,24 +1319,65 @@ class TcpAdaptorManagementTest(TestCase):
 
             # test everything works
 
-            count, error = http1_ping(self.tcp_server_port,
-                                      self.tcp_listener_port)
-            self.assertEqual(1, count, "client ping failed - no response")
-            self.assertIsNone(error, f"client ping failed: {error}")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("", self.tcp_server_port))
+                server.listen(1)
 
-            # verify updated statistics
+                self.assertTrue(retry(lambda:
+                                      mgmt.read(type=LISTENER_TYPE,
+                                                name=listener_name)['operStatus']
+                                      == 'up'))
+
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                    client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    client.settimeout(TIMEOUT)
+                    client.connect(('127.0.0.1', self.tcp_listener_port))
+
+                    ssock, _ = server.accept()
+
+                    try:
+                        client.sendall(b'0123456789')
+
+                        data = b''
+                        while data != b'0123456789':
+                            data += ssock.recv(1024)
+
+                        ssock.sendall(b'ABCD')
+
+                        data = b''
+                        while data != b'ABCD':
+                            data += client.recv(1024)
+                    finally:
+                        ssock.shutdown(socket.SHUT_RDWR)
+                        ssock.close()
+
+            # Wait until the test clients have closed
+
+            def _wait_for_close():
+                if 0 == mgmt.read(type=LISTENER_TYPE,
+                                  name=listener_name)['connectionsClosed']:
+                    return False
+                if 0 == mgmt.read(type=CONNECTOR_TYPE,
+                                  name=connector_name)['connectionsClosed']:
+                    return False
+                return True
+            self.assertTrue(retry(_wait_for_close, delay=0.25))
+
+            # Verify updated statistics.
 
             l_stats = mgmt.read(type=LISTENER_TYPE, name=listener_name)
-            self.assertLess(0, l_stats['bytesIn'])
-            self.assertLess(0, l_stats['bytesOut'])
-            self.assertLess(0, l_stats['connectionsOpened'])
-            self.assertLess(0, l_stats['connectionsClosed'])
+            self.assertEqual(10, l_stats['bytesIn'])
+            self.assertEqual(4, l_stats['bytesOut'])
+            self.assertEqual(1, l_stats['connectionsOpened'])
+            self.assertEqual(1, l_stats['connectionsClosed'])
 
             c_stats = mgmt.read(type=CONNECTOR_TYPE, name=connector_name)
-            self.assertLess(0, c_stats['bytesIn'])
-            self.assertLess(0, c_stats['bytesOut'])
-            self.assertLess(1, c_stats['connectionsOpened'])  # dispatcher
-            self.assertLess(0, c_stats['connectionsClosed'])
+            self.assertEqual(4, c_stats['bytesIn'])
+            self.assertEqual(10, c_stats['bytesOut'])
+            self.assertEqual(2, c_stats['connectionsOpened'])
+            self.assertEqual(1, c_stats['connectionsClosed'])
 
             # splendid!  Not delete all the things
 
@@ -1347,12 +1387,17 @@ class TcpAdaptorManagementTest(TestCase):
             mgmt.delete(type=CONNECTOR_TYPE, name=connector_name)
             self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
 
-            # attempting to connect should fail
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
-                client_conn.setblocking(True)
-                client_conn.settimeout(TIMEOUT)
-                self.assertRaises(ConnectionRefusedError, client_conn.connect,
-                                  ('127.0.0.1', self.tcp_listener_port))
+            # attempting to connect should fail once the listener socket has
+            # been closed
+
+            def _retry_until_fail():
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                    client.setblocking(True)
+                    client.settimeout(TIMEOUT)
+                    client.connect(('127.0.0.1', self.tcp_listener_port))
+                    return False
+            with self.assertRaises(ConnectionRefusedError):
+                retry(_retry_until_fail, delay=0.25)
 
 
 class TcpAdaptorListenerConnectTest(TestCase):
