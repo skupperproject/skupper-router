@@ -71,9 +71,9 @@ static char *test_thread_id(void *context)
     result = 0;
     memset(threads, 0, sizeof(threads));
     for (intptr_t i = 0; i < thread_count; ++i) {
-        char buffer[16];
-        snprintf(buffer, sizeof(buffer), "tst_thrd %ld", i);
-        threads[i] = sys_thread(buffer, thread_id_thread, (void *)i);
+        char thread_name[16];
+        snprintf(thread_name, sizeof(thread_name), "tst_thrd %ld", i);
+        threads[i] = sys_thread(thread_name, thread_id_thread, (void *)i);
     }
 
     sys_mutex_unlock(mutex);
