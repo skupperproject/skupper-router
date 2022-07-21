@@ -564,5 +564,5 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
                                      timeout=5)
         self.assertNotEqual(0, rc, f"Expected curl to fail {out} {err}")
 
-        error_log = "SSL routines:tls_process_client_certificate:peer did not return a certificate"
+        error_log = ":peer did not return a certificate"
         self.router_qdra.wait_log_message(error_log)
