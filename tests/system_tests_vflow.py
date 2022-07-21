@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout, retry_assertion
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
@@ -120,13 +120,12 @@ class VFlowTest(MessagingHandler):
                 if self.flushed_seen == 3:
                     self.fail(None)
 
-
     def on_start(self, event):
         self.container = event.container
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
         self.conn  = event.container.connect(self.host.addresses[0])
         self.beacon_receiver = event.container.create_receiver(self.conn, 'mc/sfe.all')
- 
+
     def on_message(self, event):
         try:
             ap      = event.message.properties
