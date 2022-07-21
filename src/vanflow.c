@@ -121,7 +121,8 @@ DEQ_DECLARE(vflow_work_t, vflow_work_list_t);
 static const char *event_address_all           = "mc/sfe.all";
 static const char *event_address_my_prefix     = "mc/sfe.";
 static const char *command_address_prefix      = "sfe.";
-static const int   beacon_interval_sec         = 5;
+static const int   heartbeat_interval_sec      = 2;
+static const int   heartbeats_per_beacon       = 5;
 static const int   flush_interval_msec         = 200;
 static const int   initial_flush_interval_msec = 2000;
 static const int   rate_slot_flush_intervals   = 10;    // For a two-second slot interval
@@ -154,7 +155,7 @@ typedef struct {
     qdr_subscription_t  *command_subscription;
     bool                 all_address_usable;
     bool                 my_address_usable;
-    qd_timer_t          *beacon_timer;
+    qd_timer_t          *heartbeat_timer;
     qd_timer_t          *flush_timer;
     uint64_t             next_message_id;
 } vflow_state_t;
@@ -901,8 +902,6 @@ static void _vflow_flush_TH(qdr_core_t *core)
 static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
-        qdr_core_t *core = (qdr_core_t*) work->value.pointer;
-
         //
         // Compose the message content starting with the properties
         //
@@ -920,14 +919,12 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         qd_compose_insert_uint(field, 1);
         qd_compose_insert_symbol(field, "sourceType");
         qd_compose_insert_string(field, "ROUTER");
+        qd_compose_insert_symbol(field, "id");
+        qd_compose_insert_string(field, state->local_router_id);
         qd_compose_insert_symbol(field, "address");
         qd_compose_insert_string(field, state->event_address_my);
         qd_compose_insert_symbol(field, "direct");
         qd_compose_insert_string(field, state->command_address);
-        qd_compose_insert_symbol(field, "now");
-        qd_compose_insert_ulong(field, _now_in_usec());
-        qd_compose_insert_symbol(field, "id");
-        qd_compose_insert_string(field, state->local_router_id);
         qd_compose_end_map(field);
 
         //
@@ -945,13 +942,63 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
         //
         // Send the message to all of the bound receivers
         //
-        qdr_send_to2(core, beacon, event_address_all, true, false);
+        qdr_send_to2(state->router_core, beacon, event_address_all, true, false);
 
         //
         // Free up used resources
         //
         qd_compose_free(field);
         qd_message_free(beacon);
+    }
+}
+
+
+static void _vflow_send_heartbeat_TH(vflow_work_t *work, bool discard)
+{
+    if (!discard) {
+        //
+        // Compose the message content starting with the properties
+        //
+        qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
+        qd_compose_start_list(field);
+        qd_compose_insert_long(field, state->next_message_id++);
+        qd_compose_insert_null(field);                             // user-id
+        qd_compose_insert_string(field, state->event_address_my);  // to
+        qd_compose_insert_string(field, "HEARTBEAT");              // subject
+        qd_compose_end_list(field);
+
+        field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, field);
+        qd_compose_start_map(field);
+        qd_compose_insert_symbol(field, "v");
+        qd_compose_insert_uint(field, 1);
+        qd_compose_insert_symbol(field, "now");
+        qd_compose_insert_ulong(field, _now_in_usec());
+        qd_compose_insert_symbol(field, "id");
+        qd_compose_insert_string(field, state->local_router_id);
+        qd_compose_end_map(field);
+
+        //
+        // Append the body section to the content
+        //
+        field = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, field);
+        qd_compose_insert_null(field);
+
+        //
+        // Create a message for the content
+        //
+        qd_message_t *hbeat = qd_message();
+        qd_message_compose_2(hbeat, field, true);
+
+        //
+        // Send the message to all of the bound receivers
+        //
+        qdr_send_to2(state->router_core, hbeat, state->event_address_my, true, false);
+
+        //
+        // Free up used resources
+        //
+        qd_compose_free(field);
+        qd_message_free(hbeat);
     }
 }
 
@@ -1043,13 +1090,16 @@ static void _vflow_on_flush(void *context)
 }
 
 
-static void _vflow_send_beacon(qdr_core_t *core)
+static void _vflow_send_heartbeat(qdr_core_t *core)
 {
-    if (!!state->beacon_timer) {
-        vflow_work_t *work = _vflow_work(_vflow_send_beacon_TH);
-        work->value.pointer = core;
-        _vflow_post_work(work);
-        qd_timer_schedule(state->beacon_timer, beacon_interval_sec * 1000);
+    static int counter = 0;
+    if (!!state->heartbeat_timer) {
+        _vflow_post_work(_vflow_work(_vflow_send_heartbeat_TH));
+        counter = (counter + 1) % heartbeats_per_beacon;
+        if (counter == 0) {
+            _vflow_post_work(_vflow_work(_vflow_send_beacon_TH));
+        }
+        qd_timer_schedule(state->heartbeat_timer, heartbeat_interval_sec * 1000);
     }
 }
 
@@ -1157,15 +1207,15 @@ static void _vflow_on_all_address_watch(void     *context,
         //
         qd_log(state->log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
         state->all_address_usable = true;
-        _vflow_send_beacon((qdr_core_t*) context);
+        _vflow_send_heartbeat((qdr_core_t*) context);
     } else if (!now_usable && state->all_address_usable) {
         //
         // Stop sending beacons.  Nobody is listening.
         //
         qd_log(state->log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
         state->all_address_usable = false;
-        if (!!state->beacon_timer) {
-            qd_timer_cancel(state->beacon_timer);
+        if (!!state->heartbeat_timer) {
+            qd_timer_cancel(state->heartbeat_timer);
         }
     }
 }
@@ -1205,9 +1255,9 @@ static void _vflow_on_my_address_watch(void     *context,
 }
 
 
-static void _vflow_on_beacon(void *context)
+static void _vflow_on_heartbeat(void *context)
 {
-    _vflow_send_beacon((qdr_core_t*) context);
+    _vflow_send_heartbeat((qdr_core_t*) context);
 }
 
 
@@ -1499,7 +1549,7 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     work->value.pointer = core;
     _vflow_post_work(work);
 
-    state->beacon_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_beacon, core);
+    state->heartbeat_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_heartbeat, core);
     state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush,  core);
     qd_timer_schedule(state->flush_timer, initial_flush_interval_msec);
 }
@@ -1514,8 +1564,8 @@ static void _vflow_final(void *adaptor_context)
 {
     qdr_core_t *core = (qdr_core_t*) adaptor_context;
 
-    qd_timer_free(state->beacon_timer);
-    state->beacon_timer = 0;
+    qd_timer_free(state->heartbeat_timer);
+    state->heartbeat_timer = 0;
 
     qd_timer_free(state->flush_timer);
     state->flush_timer = 0;
