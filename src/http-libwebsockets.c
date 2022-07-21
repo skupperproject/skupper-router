@@ -1018,7 +1018,7 @@ qd_lws_listener_t *qd_http_server_listen(qd_http_server_t *hs, qd_listener_t *li
     hs->core = qd_dispatch_router_core(qd_server_dispatch(hs->server));
     sys_mutex_lock(hs->work.lock);
     if (!hs->thread) {
-        hs->thread = sys_thread(http_thread_run, hs);
+        hs->thread = sys_thread("http_thread", http_thread_run, hs);
     }
     bool ok = hs->thread;
     sys_mutex_unlock(hs->work.lock);

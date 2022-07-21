@@ -71,7 +71,9 @@ static char *test_thread_id(void *context)
     result = 0;
     memset(threads, 0, sizeof(threads));
     for (intptr_t i = 0; i < thread_count; ++i) {
-        threads[i] = sys_thread(thread_id_thread, (void *)i);
+        char thread_name[16];
+        snprintf(thread_name, sizeof(thread_name), "tst_thrd %ld", i);
+        threads[i] = sys_thread(thread_name, thread_id_thread, (void *)i);
     }
 
     sys_mutex_unlock(mutex);
@@ -140,7 +142,7 @@ static char *test_condition(void *context)
     int test = 0;
     cond_count = 0;
     result = 0;
-    sys_thread_t *thread = sys_thread(test_condition_thread, &test);
+    sys_thread_t *thread = sys_thread("tst_cond_thread", test_condition_thread, &test);
 
     sys_mutex_unlock(mutex);
 

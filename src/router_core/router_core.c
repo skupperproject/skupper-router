@@ -119,7 +119,7 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     //
     // Launch the core thread
     //
-    core->thread = sys_thread(router_core_thread, core);
+    core->thread = sys_thread("core_thread", router_core_thread, core);
 
     //
     // Setup the agents subscriptions to $management
