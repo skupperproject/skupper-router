@@ -144,12 +144,19 @@ class Node:
 
     def close(self):
         """Shut down the node"""
-        if self.client:
-            self.client.connection.close()
-            self.client = None
+        if hasattr(self, 'client'):
+            if self.client:
+                self.client.connection.close()
+                self.client = None
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, self.url)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
     @staticmethod
     def check_response(response, expect=error.OK):
