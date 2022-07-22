@@ -111,6 +111,7 @@ struct vflow_work_t {
         char     *string_val;
         uint64_t  int_val;
         void     *pointer;
+        bool      bool_val;
     } value;
 };
 
@@ -955,7 +956,7 @@ static void _vflow_send_beacon_TH(vflow_work_t *work, bool discard)
 
 static void _vflow_send_heartbeat_TH(vflow_work_t *work, bool discard)
 {
-    if (!discard) {
+    if (!discard && state->my_address_usable) {
         //
         // Compose the message content starting with the properties
         //
@@ -1090,7 +1091,7 @@ static void _vflow_on_flush(void *context)
 }
 
 
-static void _vflow_send_heartbeat(qdr_core_t *core)
+static void _vflow_send_heartbeat(void)
 {
     static int counter = 0;
     if (!!state->heartbeat_timer) {
@@ -1100,6 +1101,56 @@ static void _vflow_send_heartbeat(qdr_core_t *core)
             _vflow_post_work(_vflow_work(_vflow_send_beacon_TH));
         }
         qd_timer_schedule(state->heartbeat_timer, heartbeat_interval_sec * 1000);
+    }
+}
+
+
+static void _vflow_all_address_status_TH(vflow_work_t *work, bool discard)
+{
+    if (discard) {
+        return;
+    }
+
+    bool now_usable = work->value.bool_val;
+    if (now_usable && !state->all_address_usable) {
+        //
+        // Start sending beacon messages to the all_address.
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
+        state->all_address_usable = true;
+        _vflow_send_heartbeat();
+    } else if (!now_usable && state->all_address_usable) {
+        //
+        // Stop sending beacons.  Nobody is listening.
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
+        state->all_address_usable = false;
+        if (!!state->heartbeat_timer) {
+            qd_timer_cancel(state->heartbeat_timer);
+        }
+    }
+}
+
+
+static void _vflow_my_address_status_TH(vflow_work_t *work, bool discard)
+{
+    if (discard) {
+        return;
+    }
+
+    bool now_usable = work->value.bool_val;
+    if (now_usable && !state->my_address_usable) {
+        //
+        // Start sending log records
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
+        state->my_address_usable = true;
+    } else if (!now_usable && state->my_address_usable) {
+        //
+        // Stop sending log records
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
+        state->my_address_usable = false;
     }
 }
 
@@ -1199,25 +1250,9 @@ static void _vflow_on_all_address_watch(void     *context,
                                         uint32_t  remote_consumers,
                                         uint32_t  local_producers)
 {
-    bool now_usable = local_consumers > 0 || remote_consumers > 0;
-
-    if (now_usable && !state->all_address_usable) {
-        //
-        // Start sending beacon messages to the all_address.
-        //
-        qd_log(state->log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
-        state->all_address_usable = true;
-        _vflow_send_heartbeat((qdr_core_t*) context);
-    } else if (!now_usable && state->all_address_usable) {
-        //
-        // Stop sending beacons.  Nobody is listening.
-        //
-        qd_log(state->log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
-        state->all_address_usable = false;
-        if (!!state->heartbeat_timer) {
-            qd_timer_cancel(state->heartbeat_timer);
-        }
-    }
+    vflow_work_t *work = _vflow_work(_vflow_all_address_status_TH);
+    work->value.bool_val = local_consumers > 0 || remote_consumers > 0;
+    _vflow_post_work(work);
 }
 
 
@@ -1237,27 +1272,16 @@ static void _vflow_on_my_address_watch(void     *context,
                                        uint32_t  remote_consumers,
                                        uint32_t  local_producers)
 {
-    bool now_usable = local_consumers > 0 || remote_consumers > 0;
+    vflow_work_t *work = _vflow_work(_vflow_my_address_status_TH);
+    work->value.bool_val = local_consumers > 0 || remote_consumers > 0;
+    _vflow_post_work(work);
 
-    if (now_usable && !state->my_address_usable) {
-        //
-        // Start sending log records
-        //
-        qd_log(state->log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
-        state->my_address_usable = true;
-    } else if (!now_usable && state->my_address_usable) {
-        //
-        // Stop sending log records
-        //
-        qd_log(state->log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
-        state->my_address_usable = false;
-    }
 }
 
 
 static void _vflow_on_heartbeat(void *context)
 {
-    _vflow_send_heartbeat((qdr_core_t*) context);
+    _vflow_send_heartbeat();
 }
 
 
@@ -1549,8 +1573,8 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     work->value.pointer = core;
     _vflow_post_work(work);
 
-    state->heartbeat_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_heartbeat, core);
-    state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush,  core);
+    state->heartbeat_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_heartbeat, 0);
+    state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush, 0);
     qd_timer_schedule(state->flush_timer, initial_flush_interval_msec);
 }
 
