@@ -278,13 +278,13 @@ qd_alloc_config_t qd_alloc_default_config_small = {64, 128, -1};
 qd_alloc_config_t qd_alloc_default_config_asan  = { 1,   0,  0};
 #define BIG_THRESHOLD 2000
 
-static sys_mutex_t          *init_lock = 0;
+static sys_mutex_t           init_lock;
 static qd_alloc_type_list_t  type_list;
 static char *debug_dump = 0;
 
 static void qd_alloc_init(qd_alloc_type_desc_t *desc)
 {
-    sys_mutex_lock(init_lock);
+    sys_mutex_lock(&init_lock);
 
     if (!desc->global_pool) {
         desc->total_size = desc->type_size;
@@ -304,7 +304,7 @@ static void qd_alloc_init(qd_alloc_type_desc_t *desc)
         desc->global_pool = NEW(qd_alloc_pool_t);
         DEQ_ITEM_INIT(desc->global_pool);
         init_stack(&desc->global_pool->free_list);
-        desc->lock = sys_mutex();
+        sys_mutex_init(&desc->lock);
         DEQ_INIT(desc->tpool_list);
         desc->stats = NEW(qd_alloc_stats_t);
         ZERO(desc->stats);
@@ -324,7 +324,7 @@ static void qd_alloc_init(qd_alloc_type_desc_t *desc)
         qd_entity_cache_add(QD_ALLOCATOR_TYPE, type_item);
     }
 
-    sys_mutex_unlock(init_lock);
+    sys_mutex_unlock(&init_lock);
 }
 
 
@@ -347,9 +347,9 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         NEW_CACHE_ALIGNED(qd_alloc_pool_t, *tpool);
         DEQ_ITEM_INIT(*tpool);
         init_stack(&(*tpool)->free_list);
-        sys_mutex_lock(desc->lock);
+        sys_mutex_lock(&desc->lock);
         DEQ_INSERT_TAIL(desc->tpool_list, *tpool);
-        sys_mutex_unlock(desc->lock);
+        sys_mutex_unlock(&desc->lock);
     }
 
     qd_alloc_pool_t *pool = *tpool;
@@ -367,9 +367,9 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         item->backtrace_size = backtrace(item->backtrace, STACK_DEPTH);
         gettimeofday(&item->timestamp, NULL);
         qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
-        sys_mutex_lock(desc->lock);
+        sys_mutex_lock(&desc->lock);
         DEQ_INSERT_TAIL(qtype->allocated, item);
-        sys_mutex_unlock(desc->lock);
+        sys_mutex_unlock(&desc->lock);
         item->header = PATTERN_FRONT;
         const uint32_t pb = PATTERN_BACK;
         memcpy((char*) &item[1] + desc->total_size, &pb, sizeof(pb));
@@ -382,7 +382,7 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
     // The local free list is empty, we need to either rebalance a batch
     // of items from the global list or go to the heap to get new memory.
     //
-    sys_mutex_lock(desc->lock);
+    sys_mutex_lock(&desc->lock);
     if (DEQ_SIZE(desc->global_pool->free_list) >= desc->config->transfer_batch_size) {
         //
         // Rebalance a full batch from the global free list to the thread list.
@@ -422,7 +422,7 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
             desc->stats->total_alloc_from_heap++;
         }
     }
-    sys_mutex_unlock(desc->lock);
+    sys_mutex_unlock(&desc->lock);
 
     item = pop_stack(&pool->free_list);
     if (item) {
@@ -432,9 +432,9 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         item->backtrace_size = backtrace(item->backtrace, STACK_DEPTH);
         gettimeofday(&item->timestamp, NULL);
         qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
-        sys_mutex_lock(desc->lock);
+        sys_mutex_lock(&desc->lock);
         DEQ_INSERT_TAIL(qtype->allocated, item);
-        sys_mutex_unlock(desc->lock);
+        sys_mutex_unlock(&desc->lock);
         item->header = PATTERN_FRONT;
         const uint32_t pb = PATTERN_BACK;
         memcpy((char*) &item[1] + desc->total_size, &pb, sizeof(pb));
@@ -462,9 +462,9 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     assert (memcmp(p + desc->total_size, &pb, sizeof(pb)) == 0);
     assert (item->desc == desc);  // Check for double-free
     qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
-    sys_mutex_lock(desc->lock);
+    sys_mutex_lock(&desc->lock);
     DEQ_REMOVE(qtype->allocated, item);
-    sys_mutex_unlock(desc->lock);
+    sys_mutex_unlock(&desc->lock);
     item->desc = 0;
     QD_MEMORY_FILL(p, QD_MEMORY_FREE, desc->total_size);
 #endif
@@ -478,9 +478,9 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
         NEW_CACHE_ALIGNED(qd_alloc_pool_t, *tpool);
         DEQ_ITEM_INIT(*tpool);
         init_stack(&(*tpool)->free_list);
-        sys_mutex_lock(desc->lock);
+        sys_mutex_lock(&desc->lock);
         DEQ_INSERT_TAIL(desc->tpool_list, *tpool);
-        sys_mutex_unlock(desc->lock);
+        sys_mutex_unlock(&desc->lock);
     }
 
     qd_alloc_pool_t *pool = *tpool;
@@ -497,7 +497,7 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     // We've exceeded the maximum size of the local free list.  A batch must be
     // rebalanced back to the global list.
     //
-    sys_mutex_lock(desc->lock);
+    sys_mutex_lock(&desc->lock);
     const int moved = unordered_move_stack(&pool->free_list, &desc->global_pool->free_list,
                                            desc->config->transfer_batch_size);
     assert(moved == desc->config->transfer_batch_size);
@@ -515,7 +515,7 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
         }
     }
 
-    sys_mutex_unlock(desc->lock);
+    sys_mutex_unlock(&desc->lock);
 }
 
 #if defined(QD_DISABLE_MEMORY_POOL)
@@ -539,7 +539,7 @@ uint32_t qd_alloc_sequence(void *p)
 
 void qd_alloc_initialize(void)
 {
-    init_lock = sys_mutex();
+    sys_mutex_init(&init_lock);
     DEQ_INIT(type_list);
 }
 
@@ -664,8 +664,7 @@ void qd_alloc_finalize(void)
         // Reclaim the descriptor components
         //
         free(desc->stats);
-        sys_mutex_free(desc->lock);
-        desc->lock = 0;
+        sys_mutex_free(&desc->lock);
         desc->trailer = 0;
 
         DEQ_REMOVE_HEAD(type_list);
@@ -673,7 +672,7 @@ void qd_alloc_finalize(void)
         type_item = DEQ_HEAD(type_list);
     }
 
-    sys_mutex_free(init_lock);
+    sys_mutex_free(&init_lock);
     if (debug_dump) {
         fclose(dump_file);
         free(debug_dump);

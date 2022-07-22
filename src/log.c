@@ -196,7 +196,7 @@ struct qd_log_source_t {
 
 DEQ_DECLARE(qd_log_source_t, qd_log_source_list_t);
 
-static sys_mutex_t          *log_source_lock = 0;
+static sys_mutex_t           log_source_lock;
 static qd_log_source_list_t  source_list = {0};
 
 
@@ -378,18 +378,18 @@ static qd_log_source_t *qd_log_source_lh(const char *module)
 
 qd_log_source_t *qd_log_source(const char *module)
 {
-    sys_mutex_lock(log_source_lock);
+    sys_mutex_lock(&log_source_lock);
     qd_log_source_t* src = qd_log_source_lh(module);
-    sys_mutex_unlock(log_source_lock);
+    sys_mutex_unlock(&log_source_lock);
     return src;
 }
 
 qd_log_source_t *qd_log_source_reset(const char *module)
 {
-    sys_mutex_lock(log_source_lock);
+    sys_mutex_lock(&log_source_lock);
     qd_log_source_t* src = qd_log_source_lh(module);
     qd_log_source_defaults(src);
-    sys_mutex_unlock(log_source_lock);
+    sys_mutex_unlock(&log_source_lock);
     return src;
 }
 
@@ -434,7 +434,7 @@ void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_leve
     // could free the log_source->sink from underneath you and replace it with a new sink.
     // Once we obtain this lock, we only release the lock once the log line is written to the sink.
     //
-    sys_mutex_lock(log_source_lock);
+    sys_mutex_lock(&log_source_lock);
     entry->module = source->module ? strdup(source->module) : 0;
     entry->level  = level;
     entry->file   = file ? strdup(file) : 0;
@@ -445,7 +445,7 @@ void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_leve
     DEQ_INSERT_TAIL(entries, entry);
     if (DEQ_SIZE(entries) > LIST_MAX)
         qd_log_entry_free_lh(DEQ_HEAD(entries));
-    sys_mutex_unlock(log_source_lock);
+    sys_mutex_unlock(&log_source_lock);
 }
 
 void qd_log_impl_v1(qd_log_source_t *source, qd_log_level_t level,  const char *file, int line, const char *fmt, ...)
@@ -512,7 +512,7 @@ void qd_log_initialize(void)
     for (level_index_t i = NONE + 1; i < N_LEVELS; ++i)
         aprintf(&begin, end, ", %s", levels[i].name);
 
-    log_source_lock = sys_mutex();
+    sys_mutex_init(&log_source_lock);
 
     default_log_source = qd_log_source(SOURCE_DEFAULT);
     default_log_source->mask = levels[INFO].mask;
@@ -597,7 +597,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
         //
         // Obtain the log_source_lock lock. This lock is also used when write_log() is called.
         //
-        sys_mutex_lock(log_source_lock);
+        sys_mutex_lock(&log_source_lock);
 
         qd_log_source_t *src = qd_log_source_lh(module); /* The original(already existing) log source */
 
@@ -605,7 +605,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
             log_sink_t* sink = log_sink_lh(outputFile);
             if (!sink) {
                 error_in_output = true;
-                sys_mutex_unlock(log_source_lock);
+                sys_mutex_unlock(&log_source_lock);
                 break;
             }
 
@@ -629,7 +629,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
 
             if (mask < -1) {
                 error_in_enable = true;
-                sys_mutex_unlock(log_source_lock);
+                sys_mutex_unlock(&log_source_lock);
                 break;
             }
             else {
@@ -650,7 +650,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
             src->includeSource = include_source;
         }
 
-        sys_mutex_unlock(log_source_lock);
+        sys_mutex_unlock(&log_source_lock);
 
     } while(0);
 

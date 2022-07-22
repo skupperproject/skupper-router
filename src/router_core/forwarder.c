@@ -143,7 +143,7 @@ qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *in
     out_dlv->delivery_id = next_delivery_id();
     out_dlv->link_id     = out_link->identity;
     out_dlv->conn_id     = out_link->conn_id;
-    out_dlv->dispo_lock  = sys_mutex();
+    sys_mutex_init(&out_dlv->dispo_lock);
     qd_log(core->log, QD_LOG_DEBUG, DLV_FMT" Delivery created qdr_forward_new_delivery_CT", DLV_ARGS(out_dlv));
 
     if (in_dlv) {
@@ -238,7 +238,7 @@ static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link
 
 void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *out_link, qdr_delivery_t *out_dlv)
 {
-    sys_mutex_lock(out_link->conn->work_lock);
+    sys_mutex_lock(&out_link->conn->work_lock);
 
     //
     // If the delivery is pre-settled and the outbound link is at or above capacity,
@@ -270,7 +270,7 @@ void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *out_link, qdr_delivery
     qdr_add_link_ref(&out_link->conn->links_with_work[out_link->priority], out_link, QDR_LINK_LIST_CLASS_WORK);
 
     out_dlv->link_work = qdr_link_work_getref(work);
-    sys_mutex_unlock(out_link->conn->work_lock);
+    sys_mutex_unlock(&out_link->conn->work_lock);
 
     //
     // We are dealing here only with link routed deliveries
@@ -784,9 +784,9 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
     qdr_link_ref_t *link_ref = DEQ_HEAD(addr->rlinks);
     while (link_ref && eligible_link_value != 0) {
         qdr_link_t *link     = link_ref->link;
-        sys_mutex_lock(link->conn->work_lock);
+        sys_mutex_lock(&link->conn->work_lock);
         uint32_t    value    = DEQ_SIZE(link->undelivered) + DEQ_SIZE(link->unsettled);
-        sys_mutex_unlock(link->conn->work_lock);
+        sys_mutex_unlock(&link->conn->work_lock);
         bool        eligible = link->capacity > value;
 
         //

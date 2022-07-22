@@ -76,7 +76,7 @@ struct qdr_tcp_connection_t {
     qdr_link_t           *outgoing_link;
     uint64_t              outgoing_id;
     pn_raw_connection_t  *pn_raw_conn;
-    sys_mutex_t          *activation_lock;
+    sys_mutex_t           activation_lock;
     qdr_delivery_t       *in_dlv_stream;
     qdr_delivery_t       *out_dlv_stream;
     bool                  ingress;
@@ -135,7 +135,7 @@ typedef struct qdr_tcp_adaptor_t {
     qd_tcp_connector_list_t   connectors;
     qdr_tcp_connection_list_t connections;
     qd_log_source_t          *log_source;
-    sys_mutex_t              *listener_lock; // protect listeners list
+    sys_mutex_t               listener_lock; // protect listeners list
 } qdr_tcp_adaptor_t;
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
@@ -271,7 +271,7 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
     }
 
     // prevent the tc from being deleted while running:
-    LOCK(tc->activation_lock);
+    LOCK(&tc->activation_lock);
 
     if (tc->pn_raw_conn) {
         sys_atomic_set(&tc->q2_restart, 1);
@@ -281,7 +281,7 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
         pn_raw_connection_wake(tc->pn_raw_conn);
     }
 
-    UNLOCK(tc->activation_lock);
+    UNLOCK(&tc->activation_lock);
 }
 
 // Extract buffers and their bytes from raw connection.
@@ -311,9 +311,9 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
         conn->bytes_in      += result;
 
         qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
-        LOCK(tcp_stats->stats_lock);
+        LOCK(&tcp_stats->stats_lock);
         tcp_stats->bytes_in += result;
-        UNLOCK(tcp_stats->stats_lock);
+        UNLOCK(&tcp_stats->stats_lock);
         conn->bytes_unacked += result;
         vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, conn->bytes_in);
         vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, conn->bytes_unacked);
@@ -493,9 +493,9 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
 {
     qdr_tcp_stats_t *tcp_stats = get_tcp_stats(tc);
-    LOCK(tcp_stats->stats_lock);
+    LOCK(&tcp_stats->stats_lock);
     tcp_stats->connections_closed += 1;
-    UNLOCK(tcp_stats->stats_lock);
+    UNLOCK(&tcp_stats->stats_lock);
 
     qd_tcp_connector_decref(tc->connector);
     qd_tcp_listener_decref(tc->listener);
@@ -507,7 +507,7 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
     sys_atomic_destroy(&tc->raw_closed_read);
     sys_atomic_destroy(&tc->raw_closed_write);
     qd_timer_free(tc->activate_timer);
-    sys_mutex_free(tc->activation_lock);
+    sys_mutex_free(&tc->activation_lock);
     free(tc->write_buffer.bytes);
     free(tc->read_buffer.bytes);
     //proactor will free the socket
@@ -903,9 +903,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"][L%"PRIu64"] PN_RAW_CONNECTION_CLOSED_READ %s",
                conn->conn_id, conn->incoming_id, qdr_tcp_connection_role_name(conn));
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
-        LOCK(conn->activation_lock);
+        LOCK(&conn->activation_lock);
         conn->q2_blocked = false;
-        UNLOCK(conn->activation_lock);
+        UNLOCK(&conn->activation_lock);
         handle_incoming(conn, "PNRC_CLOSED_READ");
         break;
     }
@@ -934,10 +934,10 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             }
         }
 
-        LOCK(conn->activation_lock);
+        LOCK(&conn->activation_lock);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
         conn->pn_raw_conn = 0;
-        UNLOCK(conn->activation_lock);
+        UNLOCK(&conn->activation_lock);
         handle_disconnected(conn);
         break;
     }
@@ -965,9 +965,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                "[C%"PRIu64"] PN_RAW_CONNECTION_WAKE %s",
                conn->conn_id, qdr_tcp_connection_role_name(conn));
         if (sys_atomic_set(&conn->q2_restart, 0)) {
-            LOCK(conn->activation_lock);
+            LOCK(&conn->activation_lock);
             conn->q2_blocked = false;
-            UNLOCK(conn->activation_lock);
+            UNLOCK(&conn->activation_lock);
             // note: unit tests grep for this log!
             qd_log(log, QD_LOG_TRACE,
                    "[C%"PRIu64"] %s client link unblocked from Q2 limit",
@@ -1006,9 +1006,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             conn->last_out_time = qdr_core_uptime_ticks(tcp_adaptor->core);
             conn->bytes_out += written;
             qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
-            LOCK(tcp_stats->stats_lock);
+            LOCK(&tcp_stats->stats_lock);
             tcp_stats->bytes_out += written;
-            UNLOCK(tcp_stats->stats_lock);
+            UNLOCK(&tcp_stats->stats_lock);
 
             if (written > 0) {
                 // Tell the upstream to open its receive window.  Note: this update
@@ -1051,14 +1051,14 @@ static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *serve
     sys_atomic_init(&tc->q2_restart, 0);
     sys_atomic_init(&tc->raw_closed_read, 0);
     sys_atomic_init(&tc->raw_closed_write, 0);
-    tc->activation_lock = sys_mutex();
+    sys_mutex_init(&tc->activation_lock);
     tc->ingress = ingress;
     tc->server = server;
     tc->config = config;
     sys_atomic_inc(&tc->config->ref_count);
-    LOCK(tcp_stats->stats_lock);
+    LOCK(&tcp_stats->stats_lock);
     tcp_stats->connections_opened +=1;
-    UNLOCK(tcp_stats->stats_lock);
+    UNLOCK(&tcp_stats->stats_lock);
 
     return tc;
 }
@@ -1282,7 +1282,7 @@ static void qd_tcp_listener_decref(qd_tcp_listener_t *li)
         vflow_end_record(li->vflow);
         sys_atomic_destroy(&li->ref_count);
         qd_free_tcp_adaptor_config(li->config, tcp_adaptor->log_source);
-        sys_mutex_free(li->tcp_stats->stats_lock);
+        sys_mutex_free(&li->tcp_stats->stats_lock);
         free_qdr_tcp_stats_t(li->tcp_stats);
         free_qd_tcp_listener_t(li);
     }
@@ -1298,7 +1298,7 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->config = qd_tcp_adaptor_config();
     li->tcp_stats = new_qdr_tcp_stats_t();
     ZERO(li->tcp_stats);
-    li->tcp_stats->stats_lock = sys_mutex();
+    sys_mutex_init(&li->tcp_stats->stats_lock);
 
     //
     // Create a vflow record for this listener
@@ -1342,9 +1342,9 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->config->adaptor_config->port);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->config->adaptor_config->address);
 
-    sys_mutex_lock(tcp_adaptor->listener_lock);
+    sys_mutex_lock(&tcp_adaptor->listener_lock);
     DEQ_INSERT_TAIL(tcp_adaptor->listeners, li);  // ref_count taken
-    sys_mutex_unlock(tcp_adaptor->listener_lock);
+    sys_mutex_unlock(&tcp_adaptor->listener_lock);
 
     li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, tcp_adaptor->log_source);
     qd_adaptor_listener_listen(li->adaptor_listener, qdr_tcp_connection_ingress, (void*) li);
@@ -1363,9 +1363,9 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
     if (li) {
 
-        sys_mutex_lock(tcp_adaptor->listener_lock);
+        sys_mutex_lock(&tcp_adaptor->listener_lock);
         DEQ_REMOVE(tcp_adaptor->listeners, li);
-        sys_mutex_unlock(tcp_adaptor->listener_lock);
+        sys_mutex_unlock(&tcp_adaptor->listener_lock);
 
         qd_adaptor_listener_close(li->adaptor_listener);
         li->adaptor_listener = 0;
@@ -1382,12 +1382,12 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
 {
     qd_tcp_listener_t *listener = (qd_tcp_listener_t*)impl;
 
-    LOCK(listener->tcp_stats->stats_lock);
+    LOCK(&listener->tcp_stats->stats_lock);
     uint64_t bi = listener->tcp_stats->bytes_in;
     uint64_t bo = listener->tcp_stats->bytes_out;
     uint64_t co = listener->tcp_stats->connections_opened;
     uint64_t cc = listener->tcp_stats->connections_closed;
-    UNLOCK(listener->tcp_stats->stats_lock);
+    UNLOCK(&listener->tcp_stats->stats_lock);
 
     qd_listener_oper_status_t os = qd_adaptor_listener_oper_status(listener->adaptor_listener);
     if (   qd_entity_set_long(entity, "bytesIn",           bi) == 0
@@ -1412,7 +1412,7 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     c->config = qd_tcp_adaptor_config();
     c->tcp_stats = new_qdr_tcp_stats_t();
     ZERO(c->tcp_stats);
-    c->tcp_stats->stats_lock = sys_mutex();
+    sys_mutex_init(&c->tcp_stats->stats_lock);
     //
     // Create a vflow record for this connector
     //
@@ -1427,7 +1427,7 @@ static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         vflow_end_record(c->vflow);
         sys_atomic_destroy(&c->ref_count);
-        sys_mutex_free(c->tcp_stats->stats_lock);
+        sys_mutex_free(&c->tcp_stats->stats_lock);
         free_qdr_tcp_stats_t(c->tcp_stats);
         qd_free_tcp_adaptor_config(c->config, tcp_adaptor->log_source);
         free_qd_tcp_connector_t(c);
@@ -1480,12 +1480,12 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *i
 {
     qd_tcp_connector_t *connector = (qd_tcp_connector_t*)impl;
 
-    LOCK(connector->tcp_stats->stats_lock);
+    LOCK(&connector->tcp_stats->stats_lock);
     uint64_t bi = connector->tcp_stats->bytes_in;
     uint64_t bo = connector->tcp_stats->bytes_out;
     uint64_t co = connector->tcp_stats->connections_opened;
     uint64_t cc = connector->tcp_stats->connections_closed;
-    UNLOCK(connector->tcp_stats->stats_lock);
+    UNLOCK(&connector->tcp_stats->stats_lock);
 
 
     if (   qd_entity_set_long(entity, "bytesIn",           bi) == 0
@@ -1890,14 +1890,14 @@ static void qdr_tcp_activate_CT(void *notused, qdr_connection_t *c)
     void *context = qdr_connection_get_context(c);
     if (context) {
         qdr_tcp_connection_t* conn = (qdr_tcp_connection_t*) context;
-        LOCK(conn->activation_lock);
+        LOCK(&conn->activation_lock);
         if (conn->pn_raw_conn && !(IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) && IS_ATOMIC_FLAG_SET(&conn->raw_closed_write))) {
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    "[C%"PRIu64"] qdr_tcp_activate_CT: call pn_raw_connection_wake()", conn->conn_id);
             pn_raw_connection_wake(conn->pn_raw_conn);
-            UNLOCK(conn->activation_lock);
+            UNLOCK(&conn->activation_lock);
         } else if (conn->activate_timer) {
-            UNLOCK(conn->activation_lock);
+            UNLOCK(&conn->activation_lock);
             // On egress, the raw connection is only created once the
             // first part of the message encapsulating the
             // client->server half of the stream has been
@@ -1908,7 +1908,7 @@ static void qdr_tcp_activate_CT(void *notused, qdr_connection_t *c)
                    "[C%"PRIu64"] qdr_tcp_activate_CT: schedule activate_timer", conn->conn_id);
             qd_timer_schedule(conn->activate_timer, 0);
         } else {
-            UNLOCK(conn->activation_lock);
+            UNLOCK(&conn->activation_lock);
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    "[C%"PRIu64"] qdr_tcp_activate_CT: Cannot activate", conn->conn_id);
         }
@@ -1950,7 +1950,7 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     DEQ_INIT(adaptor->listeners);
     DEQ_INIT(adaptor->connectors);
     DEQ_INIT(adaptor->connections);
-    adaptor->listener_lock = sys_mutex();
+    sys_mutex_init(&adaptor->listener_lock);
     *adaptor_context = adaptor;
 
     tcp_adaptor = adaptor;
@@ -1988,7 +1988,7 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
 
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
     tcp_adaptor =  NULL;
-    sys_mutex_free(adaptor->listener_lock);
+    sys_mutex_free(&adaptor->listener_lock);
     free(adaptor);
 }
 

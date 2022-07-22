@@ -132,7 +132,7 @@ struct qd_connector_t {
     long                      delay;
 
     /* Connector state and ctx can be modified by I/O or management threads. */
-    sys_mutex_t              *lock;
+    sys_mutex_t               lock;
     cxtr_state_t              state;
     char                     *conn_msg;
     qd_connection_t          *qd_conn;
@@ -180,7 +180,7 @@ struct qd_connection_t {
     int                             n_receivers;
     void                            *open_container;
     qd_deferred_call_list_t         deferred_calls;
-    sys_mutex_t                     *deferred_call_lock;
+    sys_mutex_t                     deferred_call_lock;
     bool                            policy_counted;
     char                            *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
     qd_pn_free_link_session_list_t  free_link_session_list;

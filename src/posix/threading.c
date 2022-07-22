@@ -33,101 +33,81 @@
 #include <assert.h>
 #include <pthread.h>
 
-struct sys_mutex_t {
-    pthread_mutex_t mutex;
-};
 
-
-sys_mutex_t *sys_mutex(void)
+void sys_mutex_init(sys_mutex_t *mutex)
 {
-    sys_mutex_t *mutex = 0;
-    NEW_CACHE_ALIGNED(sys_mutex_t, mutex);
-    assert(mutex != 0);
-    pthread_mutex_init(&(mutex->mutex), 0);
-    return mutex;
+    int result = pthread_mutex_init(&(mutex->mutex), 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_mutex_free(sys_mutex_t *mutex)
 {
-    pthread_mutex_destroy(&(mutex->mutex));
-    FREE_CACHE_ALIGNED(mutex);
+    int result = pthread_mutex_destroy(&(mutex->mutex));
+    (void) result; assert(result == 0);
 }
 
 
 void sys_mutex_lock(sys_mutex_t *mutex)
 {
     int result = pthread_mutex_lock(&(mutex->mutex));
-    assert(result == 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_mutex_unlock(sys_mutex_t *mutex)
 {
     int result = pthread_mutex_unlock(&(mutex->mutex));
-    assert(result == 0);
+    (void) result; assert(result == 0);
 }
 
 
-struct sys_cond_t {
-    pthread_cond_t cond;
-};
-
-
-sys_cond_t *sys_cond(void)
+void sys_cond_init(sys_cond_t *cond)
 {
-    sys_cond_t *cond = 0;
-    NEW_CACHE_ALIGNED(sys_cond_t, cond);
-    pthread_cond_init(&(cond->cond), 0);
-    return cond;
+    int result = pthread_cond_init(&(cond->cond), 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_cond_free(sys_cond_t *cond)
 {
-    pthread_cond_destroy(&(cond->cond));
-    free(cond);
+    int result = pthread_cond_destroy(&(cond->cond));
+    (void) result; assert(result == 0);
 }
 
 
 void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex)
 {
     int result = pthread_cond_wait(&(cond->cond), &(held_mutex->mutex));
-    assert(result == 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_cond_signal(sys_cond_t *cond)
 {
     int result = pthread_cond_signal(&(cond->cond));
-    assert(result == 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_cond_signal_all(sys_cond_t *cond)
 {
     int result = pthread_cond_broadcast(&(cond->cond));
-    assert(result == 0);
+    (void) result; assert(result == 0);
 }
 
 
-struct sys_rwlock_t {
-    pthread_rwlock_t lock;
-};
-
-
-sys_rwlock_t *sys_rwlock(void)
+void sys_rwlock_init(sys_rwlock_t *lock)
 {
-    sys_rwlock_t *lock = NEW(sys_rwlock_t);
-    pthread_rwlock_init(&(lock->lock), 0);
-    return lock;
+    int result = pthread_rwlock_init(&(lock->lock), 0);
+    (void) result; assert(result == 0);
 }
 
 
 void sys_rwlock_free(sys_rwlock_t *lock)
 {
-    pthread_rwlock_destroy(&(lock->lock));
-    free(lock);
+    int result = pthread_rwlock_destroy(&(lock->lock));
+    (void) result; assert(result == 0);
 }
 
 

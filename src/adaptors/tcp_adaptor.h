@@ -52,7 +52,7 @@ ALLOC_DECLARE(qd_tcp_adaptor_config_t);
 
 struct qdr_tcp_stats_t {
     // run time statistics updated by connections
-    sys_mutex_t  *stats_lock;
+    sys_mutex_t   stats_lock;
     uint64_t      connections_opened;
     uint64_t      connections_closed;
     uint64_t      bytes_in;

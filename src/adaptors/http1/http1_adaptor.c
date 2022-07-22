@@ -84,7 +84,7 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
         // down. Also prevent timer callbacks from running. see
         // _core_connection_activate_CT and _do_reconnect in http1_server.c
         //
-        sys_mutex_lock(qdr_http1_adaptor->lock);
+        sys_mutex_lock(&qdr_http1_adaptor->lock);
         {
             DEQ_REMOVE(qdr_http1_adaptor->connections, hconn);
             timer = hconn->server.reconnect_timer;
@@ -99,7 +99,7 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
                 qdr_connection_set_context(hconn->qdr_conn, 0);
             hconn->qdr_conn = 0;
         }
-        sys_mutex_unlock(qdr_http1_adaptor->lock);
+        sys_mutex_unlock(&qdr_http1_adaptor->lock);
 
         // must free timer outside of lock since callback
         // attempts to take lock:
@@ -387,7 +387,7 @@ uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
 {
     // prevent the hconn from being deleted while running:
-    sys_mutex_lock(qdr_http1_adaptor->lock);
+    sys_mutex_lock(&qdr_http1_adaptor->lock);
 
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*)qd_alloc_deref_safe_ptr(&context);
     if (hconn && hconn->raw_conn) {
@@ -395,7 +395,7 @@ void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
         pn_raw_connection_wake(hconn->raw_conn);
     }
 
-    sys_mutex_unlock(qdr_http1_adaptor->lock);
+    sys_mutex_unlock(&qdr_http1_adaptor->lock);
 }
 
 
@@ -411,7 +411,7 @@ static void _core_connection_activate_CT(void *context, qdr_connection_t *conn)
 {
     bool activated = false;
 
-    sys_mutex_lock(qdr_http1_adaptor->lock);
+    sys_mutex_lock(&qdr_http1_adaptor->lock);
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_connection_get_context(conn);
     if (hconn) {
         if (hconn->raw_conn) {
@@ -423,7 +423,7 @@ static void _core_connection_activate_CT(void *context, qdr_connection_t *conn)
             activated = true;
         }
     }
-    sys_mutex_unlock(qdr_http1_adaptor->lock);
+    sys_mutex_unlock(&qdr_http1_adaptor->lock);
 
     qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] Connection %s",
            conn->identity, activated ? "activated" : "down, unable to activate");
@@ -641,7 +641,7 @@ static void qd_http1_adaptor_init(qdr_core_t *core, void **adaptor_context)
     ZERO(adaptor);
     adaptor->core    = core;
     adaptor->log = qd_log_source(QD_HTTP_LOG_SOURCE);
-    adaptor->lock = sys_mutex();
+    sys_mutex_init(&adaptor->lock);
     DEQ_INIT(adaptor->listeners);
     DEQ_INIT(adaptor->connectors);
     DEQ_INIT(adaptor->connections);
@@ -690,7 +690,7 @@ static void qd_http1_adaptor_final(void *adaptor_context)
         ct = DEQ_HEAD(adaptor->connectors);
     }
 
-    sys_mutex_free(adaptor->lock);
+    sys_mutex_free(&adaptor->lock);
     qdr_http1_adaptor =  NULL;
 
     free(adaptor);

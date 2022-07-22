@@ -33,7 +33,7 @@ struct qd_adaptor_listener_t {
 
     // the following fields are mutably shared between multiple threads and
     // must be protected by holding the lock:
-    sys_mutex_t                  *lock;
+    sys_mutex_t                   lock;
     pn_listener_t                *pn_listener;
     qd_adaptor_listener_accept_t  on_accept;
     qd_listener_admin_status_t    admin_status;  // set by mgmt
@@ -64,7 +64,7 @@ ALLOC_DEFINE(qd_adaptor_listener_t);
 
 // list of active listeners, lock must be held
 //
-static sys_mutex_t *_listeners_lock;
+static sys_mutex_t _listeners_lock;
 static qd_adaptor_listener_list_t _listeners;
 
 
@@ -89,21 +89,21 @@ static void _listener_free(qd_adaptor_listener_t *li)
     free(li->name);
     free(li->host_port);
     free(li->service_address);
-    sys_mutex_free(li->lock);
+    sys_mutex_free(&li->lock);
     free_qd_adaptor_listener_t(li);
 }
 
 static void _listener_decref(qd_adaptor_listener_t *li)
 {
     if (li) {
-        sys_mutex_lock(li->lock);
+        sys_mutex_lock(&li->lock);
         assert(li->ref_count > 0);
         if (--li->ref_count == 0) {
-            sys_mutex_unlock(li->lock);
+            sys_mutex_unlock(&li->lock);
 
-            sys_mutex_lock(_listeners_lock);
+            sys_mutex_lock(&_listeners_lock);
             DEQ_REMOVE(_listeners, li);
-            sys_mutex_unlock(_listeners_lock);
+            sys_mutex_unlock(&_listeners_lock);
 
             // expect the proton listener has been successfully closed
             assert(li->pn_listener == 0);
@@ -111,7 +111,7 @@ static void _listener_decref(qd_adaptor_listener_t *li)
             _listener_free(li);
             return;
         }
-        sys_mutex_unlock(li->lock);
+        sys_mutex_unlock(&li->lock);
     }
 }
 
@@ -129,12 +129,12 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
         switch (pn_event_type(e)) {
             case PN_LISTENER_OPEN: {
                 bool up = false;
-                sys_mutex_lock(li->lock);
+                sys_mutex_lock(&li->lock);
                 if (li->oper_status == QD_LISTENER_OPER_OPENING) {  // may have been closed
                     up              = true;
                     li->oper_status = QD_LISTENER_OPER_UP;
                 }
-                sys_mutex_unlock(li->lock);
+                sys_mutex_unlock(&li->lock);
                 if (up)
                     qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s", li->name,
                            li->host_port);
@@ -145,7 +145,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             qd_log(log, QD_LOG_INFO, "Listener %s: new incoming client connection to %s", li->name, li->host_port);
 
             // block qd_adapter_listener_close() from returning during the accept call:
-            sys_mutex_lock(li->lock);
+            sys_mutex_lock(&li->lock);
             if (li->on_accept)
                 li->on_accept(li, pn_event_listener(e), li->user_context);
             else {
@@ -156,7 +156,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 pn_raw_connection_set_context(close_me, &_conn_event_context);
                 pn_listener_raw_accept(pn_event_listener(e), close_me);
             }
-            sys_mutex_unlock(li->lock);
+            sys_mutex_unlock(&li->lock);
             break;
 
         case PN_LISTENER_CLOSE: {
@@ -169,7 +169,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                        li->host_port);
             }
 
-            sys_mutex_lock(li->lock);
+            sys_mutex_lock(&li->lock);
 
             li->ref_count += 1;  // temporary - prevent freeing
 
@@ -201,7 +201,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 }
             }
 
-            sys_mutex_unlock(li->lock);
+            sys_mutex_unlock(&li->lock);
 
             if (re_created) {
                 qd_log(log, QD_LOG_DEBUG, "Re-creating listener %s socket on address %s for service address %s",
@@ -247,7 +247,7 @@ static void _on_watched_address_update(void     *context,
                " local=%" PRIu32 " in-process=%" PRIu32 " remote=%" PRIu32,
                li->name, li->host_port, li->service_address, local_consumers, in_proc_consumers, remote_consumers);
 
-        sys_mutex_lock(li->lock);
+        sys_mutex_lock(&li->lock);
 
         bool created = false;
         bool stopped = false;
@@ -280,7 +280,7 @@ static void _on_watched_address_update(void     *context,
             }
         }
 
-        sys_mutex_unlock(li->lock);
+        sys_mutex_unlock(&li->lock);
 
         if (stopped)
             qd_log(li->log_source, QD_LOG_DEBUG, "Closing listener %s (%s) socket: no service available for address %s",
@@ -298,11 +298,11 @@ static void _on_watched_address_cancel(void *context)
     if (!_finalized) {
         qd_adaptor_listener_t *li = (qd_adaptor_listener_t*) context;
 
-        sys_mutex_lock(li->lock);
+        sys_mutex_lock(&li->lock);
         if (li->pn_listener) {
             pn_listener_close(li->pn_listener);
         }
-        sys_mutex_unlock(li->lock);
+        sys_mutex_unlock(&li->lock);
 
         _listener_decref(li);
     }
@@ -329,16 +329,16 @@ qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t *qd,
     li->service_address = qd_strdup(config->address);
     li->log_source = log_source;
 
-    li->lock = sys_mutex();
+    sys_mutex_init(&li->lock);
     li->admin_status = QD_LISTENER_ADMIN_ENABLED;
     li->oper_status = QD_LISTENER_OPER_DOWN;
 
     li->event_handler.context = li;
     li->event_handler.handler = _listener_event_handler;
 
-    sys_mutex_lock(_listeners_lock);
+    sys_mutex_lock(&_listeners_lock);
     DEQ_INSERT_TAIL(_listeners, li);
-    sys_mutex_unlock(_listeners_lock);
+    sys_mutex_unlock(&_listeners_lock);
 
     return li;
 }
@@ -348,7 +348,7 @@ void qd_adaptor_listener_listen(qd_adaptor_listener_t *li,
                                 qd_adaptor_listener_accept_t on_accept,
                                 void *context)
 {
-    sys_mutex_lock(li->lock);
+    sys_mutex_lock(&li->lock);
 
     assert(li->ref_count > 0);
     assert(!li->watched);
@@ -365,14 +365,14 @@ void qd_adaptor_listener_listen(qd_adaptor_listener_t *li,
                                               _on_watched_address_update,
                                               _on_watched_address_cancel,
                                               (void*) li);
-    sys_mutex_unlock(li->lock);
+    sys_mutex_unlock(&li->lock);
 }
 
 
 void qd_adaptor_listener_close(qd_adaptor_listener_t *li)
 {
     if (li) {
-        sys_mutex_lock(li->lock);
+        sys_mutex_lock(&li->lock);
         li->admin_status = QD_LISTENER_ADMIN_DELETED;
         li->oper_status = QD_LISTENER_OPER_DOWN;
         li->on_accept = 0;
@@ -382,7 +382,7 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *li)
         // pn_listener.
         if (li->watched)
             qdr_core_unwatch_address(qd_dispatch_router_core(li->qd), li->addr_watcher);
-        sys_mutex_unlock(li->lock);
+        sys_mutex_unlock(&li->lock);
 
         _listener_decref(li);
     }
@@ -392,16 +392,16 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *li)
 qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_listener_t *li)
 {
     assert(li);
-    sys_mutex_lock(li->lock);
+    sys_mutex_lock((sys_mutex_t *) &li->lock);
     const qd_listener_oper_status_t value = li->oper_status;
-    sys_mutex_unlock(li->lock);
+    sys_mutex_unlock((sys_mutex_t *) &li->lock);
     return value;
 }
 
 
 void qd_adaptor_listener_init()
 {
-    _listeners_lock = sys_mutex();
+    sys_mutex_init(&_listeners_lock);
     DEQ_INIT(_listeners);
     _finalized = false;
 }
@@ -416,5 +416,5 @@ void qd_adaptor_listener_finalize()
         _listener_free(li);
         li = DEQ_HEAD(_listeners);
     }
-    sys_mutex_free(_listeners_lock);
+    sys_mutex_free(&_listeners_lock);
 }

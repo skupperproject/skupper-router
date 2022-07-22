@@ -50,7 +50,7 @@ typedef struct qdr_http1_adaptor_t {
     qdr_core_t                  *core;
     qdr_protocol_adaptor_t      *adaptor;
     qd_log_source_t             *log;
-    sys_mutex_t                 *lock;  // for the lists and activation
+    sys_mutex_t                  lock;  // for the lists and activation
     qd_http_listener_list_t      listeners;
     qd_http_connector_list_t     connectors;
     qdr_http1_connection_list_t  connections;

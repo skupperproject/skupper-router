@@ -31,8 +31,8 @@
 #define thread_count 10
 static sys_thread_t *threads[thread_count] = {0};
 
-static sys_mutex_t  *mutex = 0;
-static sys_cond_t   *cond = 0;
+static sys_mutex_t   mutex;
+static sys_cond_t    cond;
 
 static char         *result;
 
@@ -44,7 +44,7 @@ void *thread_id_thread(void *arg)
     intptr_t index = (intptr_t) arg;
     assert(index < thread_count);
 
-    sys_mutex_lock(mutex);
+    sys_mutex_lock(&mutex);
 
     // check if self corresponds to my index in threads[]
     if (!sys_thread_self()) {
@@ -53,7 +53,7 @@ void *thread_id_thread(void *arg)
         result = "sys_thread_self mismatch";
     }
 
-    sys_mutex_unlock(mutex);
+    sys_mutex_unlock(&mutex);
 
     return 0;
 }
@@ -63,8 +63,8 @@ void *thread_id_thread(void *arg)
 //
 static char *test_thread_id(void *context)
 {
-    mutex = sys_mutex();
-    sys_mutex_lock(mutex);
+    sys_mutex_init(&mutex);
+    sys_mutex_lock(&mutex);
 
     // start threads and retain their addresses
     //
@@ -76,7 +76,7 @@ static char *test_thread_id(void *context)
         threads[i] = sys_thread(thread_name, thread_id_thread, (void *)i);
     }
 
-    sys_mutex_unlock(mutex);
+    sys_mutex_unlock(&mutex);
 
     for (int i = 0; i < thread_count; ++i) {
         sys_thread_join(threads[i]);
@@ -99,7 +99,7 @@ static char *test_thread_id(void *context)
         }
     }
 
-    sys_mutex_free(mutex);
+    sys_mutex_free(&mutex);
     return result;
 }
 
@@ -114,19 +114,19 @@ void *test_condition_thread(void *arg)
 {
     int *test = (int *)arg;
 
-    sys_mutex_lock(mutex);
+    sys_mutex_lock(&mutex);
     while (*test == 0) {
         // it is expected that cond_count will never be > 1 since the condition
         // is triggered only once
         cond_count += 1;
-        sys_cond_wait(cond, mutex);
+        sys_cond_wait(&cond, &mutex);
     }
     if (*test != 1) {
         result = "error expected *test to be 1";
     } else {
         *test += 1;
     }
-    sys_mutex_unlock(mutex);
+    sys_mutex_unlock(&mutex);
 
     return 0;
 }
@@ -134,22 +134,22 @@ void *test_condition_thread(void *arg)
 
 static char *test_condition(void *context)
 {
-    mutex = sys_mutex();
-    cond = sys_cond();
+    sys_mutex_init(&mutex);
+    sys_cond_init(&cond);
 
-    sys_mutex_lock(mutex);
+    sys_mutex_lock(&mutex);
 
     int test = 0;
     cond_count = 0;
     result = 0;
     sys_thread_t *thread = sys_thread("tst_cond_thread", test_condition_thread, &test);
 
-    sys_mutex_unlock(mutex);
+    sys_mutex_unlock(&mutex);
 
     // let thread run and block on condition
     sleep(1);
 
-    sys_mutex_lock(mutex);
+    sys_mutex_lock(&mutex);
 
     if (cond_count != 1) {
         result = "expected thread to wait on condition";
@@ -157,8 +157,8 @@ static char *test_condition(void *context)
 
     test = 1;
 
-    sys_cond_signal(cond);
-    sys_mutex_unlock(mutex);
+    sys_cond_signal(&cond);
+    sys_mutex_unlock(&mutex);
 
     sys_thread_join(thread);
     sys_thread_free(thread);
@@ -167,8 +167,8 @@ static char *test_condition(void *context)
         result = "expected thread to increment test variable";
     }
 
-    sys_cond_free(cond);
-    sys_mutex_free(mutex);
+    sys_cond_free(&cond);
+    sys_mutex_free(&mutex);
     return result;
 }
 

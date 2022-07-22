@@ -48,31 +48,30 @@ static entity_event_t *entity_event(action_t action, const char *type, void *obj
     return event;
 }
 
-static sys_mutex_t *event_lock = 0;
+static sys_mutex_t event_lock;
 static entity_event_list_t  event_list;
 
 void qd_entity_cache_initialize() {
-    event_lock = sys_mutex();
+    sys_mutex_init(&event_lock);
     DEQ_INIT(event_list);
 }
 
 void qd_entity_cache_free_entries() {
-    sys_mutex_lock(event_lock);
+    sys_mutex_lock(&event_lock);
     entity_event_t *event = DEQ_HEAD(event_list);
     while (event) {
         DEQ_REMOVE_HEAD(event_list);
         free(event);
         event = DEQ_HEAD(event_list);
     }
-    sys_mutex_unlock(event_lock);
+    sys_mutex_unlock(&event_lock);
 }
 
 static void push_event(action_t action, const char *type, void *object) {
-    if (!event_lock) return;    /* Unit tests don't call qd_entity_cache_initialize */
-    sys_mutex_lock(event_lock);
+    sys_mutex_lock(&event_lock);
     entity_event_t *event = entity_event(action, type, object);
     DEQ_INSERT_TAIL(event_list, event);
-    sys_mutex_unlock(event_lock);
+    sys_mutex_unlock(&event_lock);
 }
 
 void qd_entity_cache_add(const char *type, void *object) { push_event(ADD, type, object); }
@@ -84,9 +83,8 @@ void qd_entity_cache_remove(const char *type, void *object) { push_event(REMOVE,
 // Do not process any entities if return error code != 0
 // Must call qd_entity_refresh_end when done, regardless of error code.
 QD_EXPORT qd_error_t qd_entity_refresh_begin(PyObject *list) {
-    if (!event_lock) return QD_ERROR_NONE;    /* Unit tests don't call qd_entity_cache_initialize */
     qd_error_clear();
-    sys_mutex_lock(event_lock);
+    sys_mutex_lock(&event_lock);
     entity_event_t *event = DEQ_HEAD(event_list);
     while (event) {
         PyObject *tuple = Py_BuildValue("(isN)", (int)event->action, event->type, PyLong_FromVoidPtr(event->object));
@@ -102,5 +100,5 @@ QD_EXPORT qd_error_t qd_entity_refresh_begin(PyObject *list) {
 }
 
 QD_EXPORT void qd_entity_refresh_end() {
-    sys_mutex_unlock(event_lock);
+    sys_mutex_unlock(&event_lock);
 }

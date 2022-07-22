@@ -20,33 +20,43 @@
  */
 
 /**@file
- * Portable threading and locking API.
+ * Threading and locking API.
  */
 
+#include <pthread.h>
+
 typedef struct sys_mutex_t sys_mutex_t;
+struct sys_mutex_t {
+    pthread_mutex_t mutex;
+};
 
-sys_mutex_t *sys_mutex(void);
-void         sys_mutex_free(sys_mutex_t *mutex);
-void         sys_mutex_lock(sys_mutex_t *mutex);
-void         sys_mutex_unlock(sys_mutex_t *mutex);
-
+void sys_mutex_init(sys_mutex_t *mutex);
+void sys_mutex_free(sys_mutex_t *mutex);
+void sys_mutex_lock(sys_mutex_t *mutex);
+void sys_mutex_unlock(sys_mutex_t *mutex);
 
 typedef struct sys_cond_t sys_cond_t;
+struct sys_cond_t {
+    pthread_cond_t cond;
+};
 
-sys_cond_t *sys_cond(void);
-void        sys_cond_free(sys_cond_t *cond);
-void        sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex);
-void        sys_cond_signal(sys_cond_t *cond);
-void        sys_cond_signal_all(sys_cond_t *cond);
+void sys_cond_init(sys_cond_t *cond);
+void sys_cond_free(sys_cond_t *cond);
+void sys_cond_wait(sys_cond_t *cond, sys_mutex_t *held_mutex);
+void sys_cond_signal(sys_cond_t *cond);
+void sys_cond_signal_all(sys_cond_t *cond);
 
 
 typedef struct sys_rwlock_t sys_rwlock_t;
+struct sys_rwlock_t {
+    pthread_rwlock_t lock;
+};
 
-sys_rwlock_t *sys_rwlock(void);
-void          sys_rwlock_free(sys_rwlock_t *lock);
-void          sys_rwlock_wrlock(sys_rwlock_t *lock);
-void          sys_rwlock_rdlock(sys_rwlock_t *lock);
-void          sys_rwlock_unlock(sys_rwlock_t *lock);
+void sys_rwlock_init(sys_rwlock_t *lock);
+void sys_rwlock_free(sys_rwlock_t *lock);
+void sys_rwlock_wrlock(sys_rwlock_t *lock);
+void sys_rwlock_rdlock(sys_rwlock_t *lock);
+void sys_rwlock_unlock(sys_rwlock_t *lock);
 
 
 typedef struct sys_thread_t sys_thread_t;
