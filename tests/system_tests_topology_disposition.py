@@ -28,7 +28,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from skupper_router_internal.compat import UNICODE
 
-from system_test import TestCase, Qdrouterd, main_module
+from system_test import TestCase, Qdrouterd, main_module, Logger, TIMEOUT
 
 
 # ================================================
@@ -65,6 +65,10 @@ class ManagementMessageHelper:
 
     def __init__(self, reply_addr) :
         self.reply_addr = reply_addr
+
+    def make_connection_query(self):
+        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.connection'}
+        return Message(properties=ap, reply_to=self.reply_addr)
 
     def make_connector_query(self, connector_name) :
         props = {'operation': 'READ', 'type': 'io.skupper.router.connector', 'name' : connector_name}
@@ -336,6 +340,9 @@ class TopologyDispositionTests (TestCase):
         cls.router_A.wait_router_connected('B')
         cls.router_A.wait_router_connected('C')
         cls.router_A.wait_router_connected('D')
+        cls.router_B.wait_router_connected('C')
+        cls.router_B.wait_router_connected('D')
+        cls.router_C.wait_router_connected('D')
 
         cls.client_addrs = dict()
         cls.client_addrs['A'] = cls.router_A.addresses[0]
@@ -456,12 +463,9 @@ class TopologyDispositionTests (TestCase):
 
 class DeleteSpuriousConnector (MessagingHandler):
     """
-    Connect receiver (to B) and sender (to A) to router network.
-    Start sending batches of messages to router A.
-    Messages are released by router D until the route mobile
-    address closest/0 is propagated to router D.
-    Once messages are accepted then the route is fully established
-    and messages must not be released after that.
+    Delete the AD2 connector while passing traffic. Verify that all messages
+    dispositions are accounted for once the connector and its connection have
+    been removed
     """
 
     def __init__(self, test_name, client_addrs, destination, D_client_addr):
@@ -473,15 +477,17 @@ class DeleteSpuriousConnector (MessagingHandler):
         self.error               = None
         self.sender              = None
         self.receiver            = None
-        self.debug               = False
 
-        self.n_messages          = 30
         self.n_received          = 0
         self.n_accepted          = 0
         self.n_released          = 0
         self.n_sent              = 0
+        self.n_sent_post_kill    = 0
+        self.n_accepted_post_kill = 0
 
         self.burst_size          = 3
+        self.send_pause          = 0.1  # time between bursts
+        self.n_valid             = 300  # msgs accepted post conn delete
         self.timers              = dict()
         self.reactor             = None
         self.bailing             = False
@@ -494,14 +500,15 @@ class DeleteSpuriousConnector (MessagingHandler):
         self.D_management_sender     = None
         self.D_management_helper     = None
 
-        self.confirmed_kill = False
-
         self.first_released          = None
         self.first_received          = None
 
-    def debug_print(self, text) :
-        if self.debug:
-            print("%.6lf %s" % (time.time(), text))
+        self.connector_deleted = False
+        self.connection_gone = False
+        self.conn_query_outstanding = False
+
+        self.logger = Logger(title=f"DeleteSpuriousConnector-{test_name}",
+                             print_to_console=True)
 
     # Shut down everything and exit.
     def bail(self, text):
@@ -514,27 +521,28 @@ class DeleteSpuriousConnector (MessagingHandler):
         for cnx in self.connections :
             cnx.close()
 
-    # Call this from all handlers of dispositions returning to the sender.
+        if self.error:
+            self.logger.log(f"Test failed: {self.error}")
+            self.logger.dump()
+
     def bail_out_if_done(self) :
-        if self.n_accepted + self.n_released >= self.max_to_send()  :
-            # We have received everything. But! Did we get a confirmed kill on the connector?
-            if not self.confirmed_kill :
-                # This is a failure.
-                self.bail("No confirmed kill on connector.")
-            else :
-                # Success!
-                self.bail(None)
+        # check that n_valid consecutive messages were accepted to prove the
+        # router has recovered from the connection loss
+        self.logger.log(f"Checking {self.n_accepted_post_kill} >= {self.n_valid}?")
+        if self.n_accepted_post_kill >= self.n_valid:
+            # Success!
+            self.bail(None)
 
     def timeout(self, timer_name):
         # If we are in the process of punching out, ignore all other timers.
         if self.bailing :
             return
 
-        self.debug_print("timeout %s" % timer_name)
+        self.logger.log(f"timer {timer_name} expired")
 
-        # If this is the doomsday timer, just punch out.
+        # If this is the doomsday timer, fail the test
         if timer_name == 'test' :
-            self.bail(None)
+            self.bail("Test timed-out")
             return
 
         # Timer-specific actions.
@@ -546,11 +554,12 @@ class DeleteSpuriousConnector (MessagingHandler):
         stopwatch.timer = self.reactor.schedule(stopwatch.repeat_time, Timeout(self, timer_name))
 
     def on_start(self, event):
+        self.logger.log("on_start")
         self.reactor = event.reactor
 
         # This stopwatch will end the test.
         stopwatch_name = 'test'
-        init_time = 60
+        init_time = TIMEOUT
         self.timers[stopwatch_name] = \
             Stopwatch(name=stopwatch_name,
                       timer=event.reactor.schedule(init_time, Timeout(self, stopwatch_name)),
@@ -565,7 +574,7 @@ class DeleteSpuriousConnector (MessagingHandler):
             Stopwatch(name=stopwatch_name,
                       timer=event.reactor.schedule(init_time, Timeout(self, stopwatch_name)),
                       initial_time=init_time,
-                      repeat_time=0.1
+                      repeat_time=self.send_pause
                       )
 
         self.sender_connection   = event.container.connect(self.client_addrs['A'])
@@ -584,13 +593,11 @@ class DeleteSpuriousConnector (MessagingHandler):
         self.connections.append(self.D_management_connection)
 
     def on_link_opened(self, event) :
-        self.debug_print("on_link_opened")
+        self.logger.log("on_link_opened")
         if event.receiver:
-            event.receiver.flow(self.n_messages)
-
-        if event.receiver == self.D_management_receiver :
             event.receiver.flow(100)
-            self.D_management_helper = ManagementMessageHelper(event.receiver.remote_source.address)
+            if event.receiver == self.D_management_receiver:
+                self.D_management_helper = ManagementMessageHelper(event.receiver.remote_source.address)
 
     def run(self):
         Container(self).run()
@@ -598,60 +605,93 @@ class DeleteSpuriousConnector (MessagingHandler):
     def kill_the_connector(self) :
         router = 'D'
         connector = 'AD2_connector'
-        self.debug_print("killing connector %s on router %s" % (connector, router))
+        self.logger.log("killing connector %s on router %s" % (connector, router))
         msg = self.D_management_helper.make_connector_delete_command(connector)
-        self.debug_print("killing connector %s on router %s" % (connector, router))
+        msg.correlation_id = "kill"
         self.D_management_sender.send(msg)
         self.most_recent_kill = time.time()
 
-    def parse_link_query_response(self, msg) :
-        if msg.properties :
-            if "statusDescription" in msg.properties and "statusCode" in msg.properties :
-                if msg.properties["statusDescription"] == "No Content" and msg.properties["statusCode"] == 204 :
-                    self.debug_print("AD2_connector was killed")
-                    self.confirmed_kill = True
+    def query_connections(self):
+        if not self.conn_query_outstanding:
+            self.logger.log("query for active connections")
+            msg = self.D_management_helper.make_connection_query()
+            msg.correlation_id = "connections"
+            self.D_management_sender.send(msg)
+            self.conn_query_outstanding = True
+
+    def parse_mgmt_response(self, msg) :
+        # handle responses to the various mgmt requests
+        self.logger.log("parse_mgmt_response")
+        if msg.correlation_id == "kill":
+            # the connector has been deleted
+            status = msg.properties.get('statusCode')
+            if status != 204:
+                self.bail(f"Delete request failed: {status}")
+                return
+            # now wait until the corresponding connection
+            self.logger.log("AD2_connector deleted")
+            self.connector_deleted = True
+            self.query_connections()
+        elif msg.correlation_id == "connections":
+            self.conn_query_outstanding = False
+            # the connection is gone if there are only 3 inter-router
+            # connections left
+            results = msg.body.get('results')
+            if len([c for c in results if 'inter-router' in c]) == 3:
+                self.logger.log("AD2 connection gone")
+                self.connection_gone = True
+            else:
+                self.query_connections()
 
     # =======================================================
     # Sender Side
     # =======================================================
 
-    def max_to_send(self) :
-        return self.n_messages + self.n_released
-
     def send(self) :
-
-        if self.n_sent >= self.max_to_send() :
-            return
-
         for _ in range(self.burst_size) :
             if self.sender.credit > 0 :
-                if self.n_sent < self.max_to_send() :
-                    msg = Message(body=self.n_sent)
-                    self.n_sent += 1
-                    self.sender.send(msg)
-                    self.debug_print("sent: %d" % self.n_sent)
-                else :
-                    pass
+                msg = Message(body=self.n_sent)
+                self.n_sent += 1
+                self.sender.send(msg)
+                if self.connection_gone:
+                    self.n_sent_post_kill += 1
+                self.logger.log(f"sent/post-kill: {self.n_sent}:{self.n_sent_post_kill}")
             else :
-                self.debug_print("sender has no credit.")
+                self.logger.log("sender has no credit.")
 
     def on_accepted(self, event) :
-        if self.first_received is None :
-            self.first_received = time.time()
-            if self.first_released is not None :
-                self.debug_print("Accepted first message. %d messages released in %.6lf seconds" %
-                                 (self.n_released, self.first_received - self.first_released))
-        self.n_accepted += 1
-        self.debug_print("on_accepted %d" % self.n_accepted)
-        self.bail_out_if_done()
+        if event.sender == self.sender:
+            # ignore mgmt traffic
+            self.n_accepted += 1
+            self.logger.log("on_accepted %d" % self.n_accepted)
+            self.receiver.flow(1)
+            if self.first_received is None :
+                self.first_received = time.time()
+                if self.first_released is not None :
+                    self.logger.log("Accepted first message. %d messages released in %.6lf seconds" %
+                                    (self.n_released, self.first_received -
+                                     self.first_released))
+            if self.n_sent_post_kill:
+                self.n_accepted_post_kill += 1
+                self.logger.log(f"sent/acked post={self.n_sent_post_kill}/{self.n_accepted_post_kill}")
+                self.bail_out_if_done()
 
     def on_released(self, event) :
-        if self.first_released is None :
-            self.first_released = time.time()
-        self.n_released += 1
-        self.receiver.flow(1)
-        self.debug_print("on_released %d" % self.n_released)
-        self.bail_out_if_done()
+        if event.sender == self.sender:
+            # ignore mgmt traffic
+            self.n_released += 1
+            self.logger.log("on_released %d" % self.n_released)
+            self.receiver.flow(1)
+            if self.first_released is None :
+                self.first_released = time.time()
+            # reset the post kill count - the test needs to get consecutive
+            # accepts before it can succeed to ensure the path has recovered
+            # and is stable
+            self.n_accepted_post_kill = 0
+
+    def on_rejected(self, event):
+        self.logger.log("message rejected!")
+        self.bail("Unexpected message reject")
 
     # =======================================================
     # Receiver Side
@@ -659,11 +699,12 @@ class DeleteSpuriousConnector (MessagingHandler):
 
     def on_message(self, event):
         if event.receiver == self.D_management_receiver :
-            self.parse_link_query_response(event.message)
+            self.logger.log("received D_management response %s" % event.message.body)
+            self.parse_mgmt_response(event.message)
         else :
+            assert event.receiver == self.receiver
             self.n_received += 1
-            self.debug_print("received message %s" % event.message.body)
-            self.debug_print("n_received == %d" % self.n_received)
+            self.logger.log(f"n_received {self.n_received}: body={event.message.body}")
             if self.n_received == 13 :
                 self.kill_the_connector()
 
