@@ -567,23 +567,10 @@ class DeleteSpuriousConnector (MessagingHandler):
                       repeat_time=0
                       )
 
-        # This stopwatch calls the sender.
-        stopwatch_name = 'sender'
-        init_time = 2
-        self.timers[stopwatch_name] = \
-            Stopwatch(name=stopwatch_name,
-                      timer=event.reactor.schedule(init_time, Timeout(self, stopwatch_name)),
-                      initial_time=init_time,
-                      repeat_time=self.send_pause
-                      )
-
         self.sender_connection   = event.container.connect(self.client_addrs['A'])
         self.receiver_connection = event.container.connect(self.client_addrs['B'])
         self.connections.append(self.sender_connection)
         self.connections.append(self.receiver_connection)
-
-        self.sender   = event.container.create_sender(self.sender_connection, self.dest, name='sender')
-        self.receiver = event.container.create_receiver(self.receiver_connection, self.dest, name='receiver')
 
         # In this test, we send a single management command to the D router
         # to kill a 'spurious', i.e. unused, connector.
@@ -593,9 +580,23 @@ class DeleteSpuriousConnector (MessagingHandler):
         self.connections.append(self.D_management_connection)
 
     def on_link_opened(self, event) :
+        # wait for the management link to establish before starting the test
+        # clients, and start the send timer callback after the sender is opened
         self.logger.log("on_link_opened")
         if event.receiver == self.D_management_receiver:
             self.D_management_helper = ManagementMessageHelper(event.receiver.remote_source.address)
+            self.sender   = event.container.create_sender(self.sender_connection, self.dest, name='sender')
+            self.receiver = event.container.create_receiver(self.receiver_connection, self.dest, name='receiver')
+        elif event.sender == self.sender:
+            # This stopwatch calls the sender.
+            stopwatch_name = 'sender'
+            init_time = 2
+            self.timers[stopwatch_name] = \
+                Stopwatch(name=stopwatch_name,
+                          timer=event.reactor.schedule(init_time, Timeout(self, stopwatch_name)),
+                          initial_time=init_time,
+                          repeat_time=self.send_pause
+                          )
 
     def run(self):
         Container(self).run()
