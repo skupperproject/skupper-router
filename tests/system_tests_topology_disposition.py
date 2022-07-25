@@ -508,7 +508,7 @@ class DeleteSpuriousConnector (MessagingHandler):
         self.conn_query_outstanding = False
 
         self.logger = Logger(title=f"DeleteSpuriousConnector-{test_name}",
-                             print_to_console=True)
+                             print_to_console=False)
 
     # Shut down everything and exit.
     def bail(self, text):
@@ -594,10 +594,8 @@ class DeleteSpuriousConnector (MessagingHandler):
 
     def on_link_opened(self, event) :
         self.logger.log("on_link_opened")
-        if event.receiver:
-            event.receiver.flow(100)
-            if event.receiver == self.D_management_receiver:
-                self.D_management_helper = ManagementMessageHelper(event.receiver.remote_source.address)
+        if event.receiver == self.D_management_receiver:
+            self.D_management_helper = ManagementMessageHelper(event.receiver.remote_source.address)
 
     def run(self):
         Container(self).run()
@@ -664,7 +662,6 @@ class DeleteSpuriousConnector (MessagingHandler):
             # ignore mgmt traffic
             self.n_accepted += 1
             self.logger.log("on_accepted %d" % self.n_accepted)
-            self.receiver.flow(1)
             if self.first_received is None :
                 self.first_received = time.time()
                 if self.first_released is not None :
@@ -681,7 +678,6 @@ class DeleteSpuriousConnector (MessagingHandler):
             # ignore mgmt traffic
             self.n_released += 1
             self.logger.log("on_released %d" % self.n_released)
-            self.receiver.flow(1)
             if self.first_released is None :
                 self.first_released = time.time()
             # reset the post kill count - the test needs to get consecutive
