@@ -432,7 +432,7 @@ jobs:
 
       - name: Install dmesg on Fedora 35
         if: ${{ matrix.container == 'fedora' }}
-        run: dnf install -y dmesg
+        run: dnf install -y util-linux-core
 
       - name: Install Linux build dependencies
         run: |
