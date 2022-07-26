@@ -430,6 +430,10 @@ jobs:
           dnf -y install epel-release
           dnf config-manager --set-enabled powertools
 
+      - name: Install dmesg on Fedora 35
+        if: ${{ matrix.container == 'fedora' }}
+        run: dnf install -y util-linux-core
+
       - name: Install Linux build dependencies
         run: |
           dnf install -y gcc gcc-c++ cmake libuuid-devel openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
@@ -552,6 +556,10 @@ jobs:
         if: ${{ failure() }}
         run: |
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
+
+      - name: Dump dmesg (on failure)
+        if: ${{ failure() }}
+        run: dmesg
 
       - name: Upload test results
         uses: actions/upload-artifact@v3
