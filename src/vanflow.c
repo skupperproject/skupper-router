@@ -1061,8 +1061,13 @@ static void _vflow_process_rates_TH(void)
         rate->slot[rate->slot_cursor] = rate->count_attribute->value.uint_val;
         uint64_t delta = rate->slot[rate->slot_cursor] - rate->slot[(rate->slot_cursor + 1) % RATE_SLOT_COUNT];
         rate->slot_cursor = (rate->slot_cursor + 1) % RATE_SLOT_COUNT;
-        uint64_t average_rate = delta / rate_span;
-        vflow_set_uint64(rate->record, rate->rate_attribute, average_rate);
+
+        vflow_work_t work;
+        work.record        = rate->record;
+        work.attribute     = rate->rate_attribute;
+        work.value.int_val = delta / rate_span;
+        _vflow_set_int_TH(&work, false);
+
         rate = DEQ_NEXT(rate);
     }
 }
