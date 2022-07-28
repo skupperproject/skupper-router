@@ -193,7 +193,7 @@ bool send_message_data()
                 // no need to wait for acks
                 debug("stopping (presettled)...\n");
                 stop = true;
-                pn_proactor_interrupt(proactor);
+                pn_connection_wake(pn_conn);
             }
         }
         pn_dlv = 0;
@@ -284,7 +284,7 @@ static bool event_handler(pn_event_t *event)
                 // initiate clean shutdown of the endpoints
                 debug("stopping...\n");
                 stop = true;
-                pn_proactor_interrupt(proactor);
+                pn_connection_wake(pn_conn);
             }
         }
     } break;
@@ -294,7 +294,18 @@ static bool event_handler(pn_event_t *event)
     } break;
 
     case PN_CONNECTION_WAKE: {
-        if (!send_message_data()) {   // not done sending
+        if (stop) {
+            pn_proactor_cancel_timeout(proactor);
+            if (pn_conn) {
+                debug("Stop detected - closing connection...\n");
+                if (pn_link) pn_link_close(pn_link);
+                if (pn_ssn) pn_session_close(pn_ssn);
+                pn_connection_close(pn_conn);
+                pn_link = 0;
+                pn_ssn = 0;
+                pn_conn = 0;
+            }
+        } else if (!send_message_data()) {   // not done sending
             pn_proactor_set_timeout(proactor, pause_msec);
         } else if (limit == 0 || sent < limit) {
             if (pn_link_credit(pn_link) > 0) {
@@ -305,7 +316,8 @@ static bool event_handler(pn_event_t *event)
         }
     } break;
 
-    case PN_PROACTOR_INACTIVE: {
+    case PN_PROACTOR_INACTIVE:
+    case PN_PROACTOR_INTERRUPT: {
         debug("proactor inactive!\n");
         return stop;
     } break;
@@ -410,16 +422,6 @@ int main(int argc, char** argv)
 
         debug("Proactor batch processing done\n");
         pn_proactor_done(proactor, events);
-
-        if (stop && pn_conn) {
-            debug("Stop detected - closing connection...\n");
-            if (pn_link) pn_link_close(pn_link);
-            if (pn_ssn) pn_session_close(pn_ssn);
-            pn_connection_close(pn_conn);
-            pn_link = 0;
-            pn_ssn = 0;
-            pn_conn = 0;
-        }
     }
 
     debug("Send complete!\n");
