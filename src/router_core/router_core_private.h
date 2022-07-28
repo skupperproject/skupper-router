@@ -538,7 +538,7 @@ struct qdr_address_t {
     qdr_link_t_sp              edge_outlink_sp; ///< [ref] Out-link safe ptr to connected Interior router (on edge router)
     qd_address_treatment_t     treatment;
     qdr_forwarder_t           *forwarder;
-    qdr_address_watch_t       *watch;
+    qdr_address_watch_list_t   watches;
     int                        ref_count;     ///< Number of entities referencing this address
     bool                       local;
     bool                       router_control_only; ///< If set, address is only for deliveries arriving on a control link

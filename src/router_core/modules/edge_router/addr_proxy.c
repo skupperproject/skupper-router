@@ -271,8 +271,8 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
                 // to the interior to signal the presence of local producers.
                 //
                 bool add = false;
-                if (DEQ_SIZE(addr->inlinks) > 0 || !!addr->watch) {
-                    if (DEQ_SIZE(addr->inlinks) == 1 && !addr->watch) {
+                if (DEQ_SIZE(addr->inlinks) > 0 || DEQ_SIZE(addr->watches) > 0) {
+                    if (DEQ_SIZE(addr->inlinks) == 1 && DEQ_SIZE(addr->watches) == 0) {
                         //
                         // If there's only one link and it's on the edge connection, ignore the address.
                         //
@@ -358,7 +358,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
         break;
 
     case QDRC_EVENT_ADDR_NO_LONGER_SOURCE :
-        if (!addr->watch)
+        if (DEQ_SIZE(addr->watches) == 0)
             del_outlink(ap, addr);
         break;
 
@@ -368,7 +368,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
 
     case QDRC_EVENT_ADDR_ONE_SOURCE :
         link_ref = DEQ_HEAD(addr->inlinks);
-        if ((!link_ref || link_ref->link->conn == ap->edge_conn) && !addr->watch)
+        if ((!link_ref || link_ref->link->conn == ap->edge_conn) && DEQ_SIZE(addr->watches) == 0)
             del_outlink(ap, addr);
         break;
 

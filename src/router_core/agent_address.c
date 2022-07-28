@@ -176,7 +176,7 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
         break;
 
     case QDR_ADDRESS_WATCH:
-        qd_compose_insert_bool(body, !!addr->watch);
+        qd_compose_insert_bool(body, DEQ_SIZE(addr->watches) > 0);
         break;
 
     default:
