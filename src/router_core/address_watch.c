@@ -22,6 +22,7 @@
 
 struct qdr_address_watch_t {
     DEQ_LINKS(struct qdr_address_watch_t);
+    DEQ_LINKS_N(PER_ADDRESS, struct qdr_address_watch_t);
     qdr_watch_handle_t          watch_handle;
     qdr_address_t              *addr;
     qdr_address_watch_update_t  on_update;
@@ -81,9 +82,9 @@ void qdr_core_unwatch_address(qdr_core_t *core, qdr_watch_handle_t handle)
 //==================================================================================
 void qdr_trigger_address_watch_CT(qdr_core_t *core, qdr_address_t *addr)
 {
-    qdr_address_watch_t *watch = addr->watch;
+    qdr_address_watch_t *watch = DEQ_HEAD(addr->watches);
 
-    if (!!watch) {
+    while (!!watch) {
         qdr_general_work_t *work = qdr_general_work(qdr_watch_invoker);
         work->watch_update_handler = watch->on_update;
         work->context              = watch->context;
@@ -92,6 +93,7 @@ void qdr_trigger_address_watch_CT(qdr_core_t *core, qdr_address_t *addr)
         work->remote_consumers     = qd_bitmask_cardinality(addr->rnodes);
         work->local_producers      = DEQ_SIZE(addr->inlinks);
         qdr_post_general_work_CT(core, work);
+        watch = DEQ_NEXT_N(PER_ADDRESS, watch);
     }
 }
 
@@ -111,8 +113,10 @@ void qdr_address_watch_shutdown(qdr_core_t *core)
 //==================================================================================
 static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch)
 {
-    watch->addr->watch = 0;
-    qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_OFF, watch->addr);
+    DEQ_REMOVE_N(PER_ADDRESS, watch->addr->watches, watch);
+    if (DEQ_SIZE(watch->addr->watches) == 0) {
+        qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_OFF, watch->addr);
+    }
 
     watch->addr->ref_count--;
     qdr_check_addr_CT(core, watch->addr);
@@ -161,31 +165,27 @@ static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bo
         }
 
         if (!!addr) {
-            if (!addr->watch) {
-                qdr_address_watch_t *watch = new_qdr_address_watch_t();
-                ZERO(watch);
-                watch->watch_handle = action->args.io.value32_1;
-                watch->addr         = addr;
-                watch->on_update    = action->args.io.watch_handler;
-                watch->on_cancel    = action->args.io.cancel_handler;
-                watch->context      = action->args.io.context;
-                DEQ_INSERT_TAIL(core->addr_watches, watch);
+            qdr_address_watch_t *watch = new_qdr_address_watch_t();
+            ZERO(watch);
+            watch->watch_handle = action->args.io.value32_1;
+            watch->addr         = addr;
+            watch->on_update    = action->args.io.watch_handler;
+            watch->on_cancel    = action->args.io.cancel_handler;
+            watch->context      = action->args.io.context;
+            DEQ_INSERT_TAIL(core->addr_watches, watch);
 
-                addr->watch = watch;
-                addr->ref_count++;
+            DEQ_INSERT_TAIL_N(PER_ADDRESS, addr->watches, watch);
+            addr->ref_count++;
 
-                //
-                // Raise a core event to notify interested parties that this address is being watched.
-                //
-                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_ON, addr);
+            //
+            // Raise a core event to notify interested parties that this address is being watched.
+            //
+            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_WATCH_ON, addr);
 
-                //
-                // Trigger a watch callback for an initial snapshot.
-                //
-                qdr_trigger_address_watch_CT(core, addr);
-            } else {
-                qd_log(core->log, QD_LOG_CRITICAL, "Multiple watches established for the same address, later watches ignored.");
-            }
+            //
+            // Trigger a watch callback for an initial snapshot.
+            //
+            qdr_trigger_address_watch_CT(core, addr);
         }
     }
     qdr_field_free(action->args.io.address);
