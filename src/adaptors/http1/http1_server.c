@@ -413,12 +413,11 @@ static void _teardown_server_links(qdr_http1_connection_t *hconn)
 
 
 // Reconnection timer handler.
-// This timer can be scheduled either by the event loop during the
-// PN_RAW_CONNECTION_DISCONNECT event or by the core thread via
-// _core_connection_activate_CT in http1_adaptor.c.  Since timers do not run
-// concurrently this handler is guaranteed never to collide with itself. Once
-// hconn->raw_conn is set to zero by the disconnect handler it will remain zero
-// until this handler creates a new raw connection.
+// This timer can be scheduled either by the event loop during the PN_RAW_CONNECTION_DISCONNECT event or by the core
+// thread via _core_connection_activate_CT in http1_adaptor.c.  Since timers do not run concurrently this handler is
+// guaranteed never to run concurrently with itself. Once hconn->raw_conn is set to zero by the disconnect handler it
+// will remain zero until this handler creates a new raw connection. This ensures that it is impossible for the raw
+// connection event handler and this timer handler to run concurrently (race).
 //
 static void _do_reconnect(void *context)
 {
@@ -650,6 +649,15 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
             hconn->server.link_timeout = 0;
             hconn->server.reconnect_pause = 0;
             bool free_hconn = !hconn->qdr_conn;
+            if (!free_hconn)
+                // ISSUE-627: If the core thread attempts to activate the connection via pn_raw_connection_wake() while
+                // the raw connection is disconnecting we can miss that wake since once the disconnect event is
+                // processed any pending wake events will be discarded. To avoid that make the reconnect_timer handler
+                // run - it will call qdr_connection_process to satisfy the core activation but will not actually
+                // reconnect since the connection is in admin disabled state. We cannot call qdr_connection_process here
+                // safely: it cannot be called while holding the adaptor lock (deadlock) and once the lock is dropped it
+                // is possible for the timer handler to run concurrently (race).
+                qd_timer_schedule(hconn->server.reconnect_timer, 0);
             sys_mutex_unlock(qdr_http1_adaptor->lock);
             if (free_hconn) {
                 qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP/1.x server connection closed", hconn->conn_id);
