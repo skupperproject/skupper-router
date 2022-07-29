@@ -40,7 +40,7 @@ ALLOC_DEFINE(qdr_query_t);
 
 struct qdr_agent_t {
     qdr_query_list_t       outgoing_query_list;
-    sys_mutex_t           *query_lock;
+    sys_mutex_t            query_lock;
     qd_timer_t            *timer;
     qdr_manage_response_t  response_handler;
     qdr_subscription_t    *subscription_mobile;
@@ -61,12 +61,12 @@ static void qdr_agent_response_handler(void *context)
     bool         done = false;
 
     while (!done) {
-        sys_mutex_lock(agent->query_lock);
+        sys_mutex_lock(&agent->query_lock);
         query = DEQ_HEAD(agent->outgoing_query_list);
         if (query)
             DEQ_REMOVE_HEAD(agent->outgoing_query_list);
         done = DEQ_SIZE(agent->outgoing_query_list) == 0;
-        sys_mutex_unlock(agent->query_lock);
+        sys_mutex_unlock(&agent->query_lock);
 
         if (query) {
             bool more = query->more;
@@ -82,10 +82,10 @@ void qdr_agent_enqueue_response_CT(qdr_core_t *core, qdr_query_t *query)
 {
     qdr_agent_t *agent = core->mgmt_agent;
 
-    sys_mutex_lock(agent->query_lock);
+    sys_mutex_lock(&agent->query_lock);
     DEQ_INSERT_TAIL(agent->outgoing_query_list, query);
     bool notify = DEQ_SIZE(agent->outgoing_query_list) == 1;
-    sys_mutex_unlock(agent->query_lock);
+    sys_mutex_unlock(&agent->query_lock);
 
     if (notify)
         qd_timer_schedule(agent->timer, 0);
@@ -128,7 +128,7 @@ qdr_agent_t *qdr_agent(qdr_core_t *core)
     ZERO(agent);
 
     DEQ_INIT(agent->outgoing_query_list);
-    agent->query_lock  = sys_mutex();
+    sys_mutex_init(&agent->query_lock);
     agent->timer = qd_timer(core->qd, qdr_agent_response_handler, core);
     agent->log_source = qd_log_source("AGENT");
     return agent;
@@ -140,8 +140,7 @@ void qdr_agent_free(qdr_agent_t *agent)
 {
     if (agent) {
         qd_timer_free(agent->timer);
-        if (agent->query_lock)
-            sys_mutex_free(agent->query_lock);
+        sys_mutex_free(&agent->query_lock);
 
         //we can't call qdr_core_unsubscribe on the subscriptions because the action processing thread has
         //already been shut down. But, all the action would have done at this point is free the subscriptions

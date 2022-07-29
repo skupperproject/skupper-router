@@ -201,7 +201,7 @@ void *router_core_thread(void *arg)
         //
         // Use the lock only to protect the condition variable and the action lists
         //
-        sys_mutex_lock(core->action_lock);
+        sys_mutex_lock(&core->action_lock);
 
         for (;;) {
             if (!DEQ_IS_EMPTY(core->action_list)) {
@@ -224,11 +224,11 @@ void *router_core_thread(void *arg)
             // Block on the condition variable when there is no action to do
             //
             core->sleeping = true;
-            sys_cond_wait(core->action_cond, core->action_lock);
+            sys_cond_wait(&core->action_cond, &core->action_lock);
             core->sleeping = false;
         }
 
-        sys_mutex_unlock(core->action_lock);
+        sys_mutex_unlock(&core->action_lock);
 
         // bg_action is set only when there are no other actions pending
         //

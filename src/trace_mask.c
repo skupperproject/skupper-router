@@ -34,7 +34,7 @@ ALLOC_DECLARE(qdtm_router_t);
 ALLOC_DEFINE(qdtm_router_t);
 
 struct qd_tracemask_t {
-    sys_rwlock_t   *lock;
+    sys_rwlock_t    lock;
     qd_hash_t      *hash;
     qdtm_router_t **router_by_mask_bit;
 };
@@ -43,9 +43,9 @@ struct qd_tracemask_t {
 qd_tracemask_t *qd_tracemask(void)
 {
     qd_tracemask_t *tm = NEW(qd_tracemask_t);
-    tm->lock               = sys_rwlock();
     tm->hash               = qd_hash(8, 1, 0);
     tm->router_by_mask_bit = NEW_PTR_ARRAY(qdtm_router_t, qd_bitmask_width());
+    sys_rwlock_init(&tm->lock);
 
     for (int i = 0; i < qd_bitmask_width(); i++)
         tm->router_by_mask_bit[i] = 0;
@@ -62,7 +62,7 @@ void qd_tracemask_free(qd_tracemask_t *tm)
     free(tm->router_by_mask_bit);
 
     qd_hash_free(tm->hash);
-    sys_rwlock_free(tm->lock);
+    sys_rwlock_free(&tm->lock);
     free(tm);
 }
 
@@ -70,7 +70,7 @@ void qd_tracemask_free(qd_tracemask_t *tm)
 void qd_tracemask_add_router(qd_tracemask_t *tm, const char *address, int maskbit)
 {
     qd_iterator_t *iter = qd_iterator_string(address, ITER_VIEW_ADDRESS_HASH);
-    sys_rwlock_wrlock(tm->lock);
+    sys_rwlock_wrlock(&tm->lock);
     assert(maskbit < qd_bitmask_width() && tm->router_by_mask_bit[maskbit] == 0);
     if (maskbit < qd_bitmask_width() && tm->router_by_mask_bit[maskbit] == 0) {
         qdtm_router_t *router = new_qdtm_router_t();
@@ -79,14 +79,14 @@ void qd_tracemask_add_router(qd_tracemask_t *tm, const char *address, int maskbi
         qd_hash_insert(tm->hash, iter, router, &router->hash_handle);
         tm->router_by_mask_bit[maskbit] = router;
     }
-    sys_rwlock_unlock(tm->lock);
+    sys_rwlock_unlock(&tm->lock);
     qd_iterator_free(iter);
 }
 
 
 void qd_tracemask_del_router(qd_tracemask_t *tm, int maskbit)
 {
-    sys_rwlock_wrlock(tm->lock);
+    sys_rwlock_wrlock(&tm->lock);
     assert(maskbit < qd_bitmask_width() && tm->router_by_mask_bit[maskbit] != 0);
     if (maskbit < qd_bitmask_width() && tm->router_by_mask_bit[maskbit] != 0) {
         qdtm_router_t *router = tm->router_by_mask_bit[maskbit];
@@ -95,13 +95,13 @@ void qd_tracemask_del_router(qd_tracemask_t *tm, int maskbit)
         tm->router_by_mask_bit[maskbit] = 0;
         free_qdtm_router_t(router);
     }
-    sys_rwlock_unlock(tm->lock);
+    sys_rwlock_unlock(&tm->lock);
 }
 
 
 void qd_tracemask_set_link(qd_tracemask_t *tm, int router_maskbit, int link_maskbit)
 {
-    sys_rwlock_wrlock(tm->lock);
+    sys_rwlock_wrlock(&tm->lock);
     assert(router_maskbit < qd_bitmask_width() && link_maskbit < qd_bitmask_width() &&
            tm->router_by_mask_bit[router_maskbit] != 0);
     if (router_maskbit < qd_bitmask_width() && link_maskbit < qd_bitmask_width() &&
@@ -109,19 +109,19 @@ void qd_tracemask_set_link(qd_tracemask_t *tm, int router_maskbit, int link_mask
         qdtm_router_t *router = tm->router_by_mask_bit[router_maskbit];
         router->link_maskbit = link_maskbit;
     }
-    sys_rwlock_unlock(tm->lock);
+    sys_rwlock_unlock(&tm->lock);
 }
 
 
 void qd_tracemask_remove_link(qd_tracemask_t *tm, int router_maskbit)
 {
-    sys_rwlock_wrlock(tm->lock);
+    sys_rwlock_wrlock(&tm->lock);
     assert(router_maskbit < qd_bitmask_width() && tm->router_by_mask_bit[router_maskbit] != 0);
     if (router_maskbit < qd_bitmask_width() && tm->router_by_mask_bit[router_maskbit] != 0) {
         qdtm_router_t *router = tm->router_by_mask_bit[router_maskbit];
         router->link_maskbit = -1;
     }
-    sys_rwlock_unlock(tm->lock);
+    sys_rwlock_unlock(&tm->lock);
 }
 
 
@@ -133,7 +133,7 @@ qd_bitmask_t *qd_tracemask_create(qd_tracemask_t *tm, qd_parsed_field_t *traceli
 
     assert(qd_parse_is_list(tracelist));
 
-    sys_rwlock_rdlock(tm->lock);
+    sys_rwlock_rdlock(&tm->lock);
     qd_parsed_field_t *item   = qd_parse_sub_value(tracelist, idx);
     qdtm_router_t     *router = 0;
     while (item) {
@@ -150,7 +150,7 @@ qd_bitmask_t *qd_tracemask_create(qd_tracemask_t *tm, qd_parsed_field_t *traceli
         item = qd_parse_sub_value(tracelist, idx);
         first = false;
     }
-    sys_rwlock_unlock(tm->lock);
+    sys_rwlock_unlock(&tm->lock);
     return bm;
 }
 
