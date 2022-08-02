@@ -1346,7 +1346,7 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     DEQ_INSERT_TAIL(tcp_adaptor->listeners, li);  // ref_count taken
     sys_mutex_unlock(&tcp_adaptor->listener_lock);
 
-    li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, tcp_adaptor->log_source);
+    li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, tcp_adaptor->log_source, li->config->adaptor_config->backlog);
     qd_adaptor_listener_listen(li->adaptor_listener, qdr_tcp_connection_ingress, (void*) li);
 
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,

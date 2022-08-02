@@ -17,6 +17,7 @@
  * under the License.
  */
 #include <inttypes.h>
+#include <sys/socket.h>
 #include "adaptor_common.h"
 
 #include "qpid/dispatch/ctools.h"
@@ -196,6 +197,22 @@ qd_error_t qd_load_adaptor_config(qd_dispatch_t *qd, qd_adaptor_config_t *config
     config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
     config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
     config->verify_host_name  = qd_entity_opt_bool(entity, "verifyHostname", false);   CHECK();
+
+    char * backlog_str = qd_entity_opt_string(entity, "backlog", "max");
+    int    backlog_int = 0,
+           fallback = 50;
+    if (!strcmp("max", backlog_str)) {
+        backlog_int = SOMAXCONN;
+    }
+    else {
+      backlog_int = atoi(backlog_str);
+      if (0 == backlog_int) {
+          backlog_int = fallback;
+          qd_log(log_source, QD_LOG_ERROR, "backlog value '%s' should be integer >= 1. Continuing with backlog set to %d", backlog_str, backlog_int);
+      }
+      backlog_int = (backlog_int > SOMAXCONN) ? SOMAXCONN : backlog_int ;
+    }
+    config->backlog = backlog_int;
 
     int hplen = strlen(config->host) + strlen(config->port) + 2;
     config->host_port = malloc(hplen);

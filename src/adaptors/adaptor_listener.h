@@ -43,7 +43,8 @@ typedef void (*qd_adaptor_listener_accept_t)(qd_adaptor_listener_t *listener,
 //
 qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t *qd,
                                            const qd_adaptor_config_t *config,
-                                           qd_log_source_t *log_source);
+                                           qd_log_source_t *log_source,
+                                           int backlog);
 
 // Start listening on the given listener. Note that the on_accept callback may
 // be invoked during this call on another thread.

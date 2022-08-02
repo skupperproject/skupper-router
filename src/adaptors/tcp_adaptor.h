@@ -70,6 +70,7 @@ struct qd_tcp_listener_t
     vflow_record_t           *vflow;
     qdr_tcp_stats_t          *tcp_stats;
     qd_adaptor_listener_t    *adaptor_listener;
+    int                       backlog;
 
     // must hold tcp_adaptor->listener_lock during list operations:
     DEQ_LINKS(qd_tcp_listener_t);

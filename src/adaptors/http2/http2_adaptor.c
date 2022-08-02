@@ -3274,7 +3274,7 @@ qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adapt
         return 0;
     }
 
-    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, http2_adaptor->log_source);
+    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, http2_adaptor->log_source, 16); // TEMP -- replace with backlog from struct in next PR
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http2");
