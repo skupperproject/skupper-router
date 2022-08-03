@@ -60,5 +60,8 @@ addons:
       - libwebsockets-dev
       # code coverage
       - lcov
+      # tests
+      - curl
+      - ncat
 
 script: scripts/travisci_build.sh
