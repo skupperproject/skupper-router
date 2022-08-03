@@ -21,9 +21,9 @@
 image:https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml/badge.svg[
 "GitHub Actions"
 link="https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml"]
-image:https://img.shields.io/travis/skupperproject/skupper-router.svg?logo=travisci[
-"Travis",
-link="https://app.travis-ci.com/github/skupperproject/skupper-router"]
+image:https://app.travis-ci.com/skupperproject/skupper-router.svg?branch=main[
+"Travis CI",
+link="https://app.travis-ci.com/skupperproject/skupper-router"]
 image:https://img.shields.io/github/license/skupperproject/skupper-router.svg[
 "License",
 link="https://github.com/skupperproject/skupper-router/blob/main/LICENSE"]
