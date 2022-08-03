@@ -23,7 +23,7 @@ image:https://github.com/skupperproject/skupper-router/actions/workflows/build.y
 link="https://github.com/skupperproject/skupper-router/actions/workflows/build.yaml"]
 image:https://img.shields.io/travis/skupperproject/skupper-router.svg?logo=travisci[
 "Travis",
-link="https://travis-ci.com/skupperproject/skupper-router"]
+link="https://app.travis-ci.com/github/skupperproject/skupper-router"]
 image:https://img.shields.io/github/license/skupperproject/skupper-router.svg[
 "License",
 link="https://github.com/skupperproject/skupper-router/blob/main/LICENSE"]
