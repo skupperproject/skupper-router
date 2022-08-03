@@ -44,11 +44,6 @@ fi
 
 # Update pip, it may prevent issues later
 python3 -m pip install --user --upgrade pip
-python3 -m pip install --user tox virtualenv
-# Install quart to run the http2 tests.
-python3 -m pip install --user quart
-# DISPATCH-1883: Install selectors to run tcp echo server/client tools
-python3 -m pip install --user selectors
 # Install grpcio and protobuf to run the grpc tests.
 #  Installation on s390x currently broken https://github.com/grpc/grpc/pull/25363
 #  Binary wheel is not available in PyPI for s390x and source install requires fetching git submodules first
@@ -58,6 +53,7 @@ else
   python3 -m pip install --user protobuf
   sudo apt install python3-grpcio
 fi
+python3 -m pip install --user -r requirements-dev.txt
 
 echo '==='
 echo 'Build and install qpid-proton from source'
