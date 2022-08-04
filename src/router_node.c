@@ -40,9 +40,10 @@ const char *QD_ROUTER_LINK_TYPE = "router.link";
 
 static qdr_protocol_adaptor_t *amqp_direct_adaptor = 0;
 
-static char *router_role    = "inter-router";
-static char *container_role = "route-container";
-static char *edge_role      = "edge";
+static char *router_role      = "inter-router";
+static char *router_data_role = "inter-router-data";
+static char *container_role   = "route-container";
+static char *edge_role        = "edge";
 static char *direct_prefix;
 static char *node_id;
 
@@ -279,6 +280,11 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
             *strip_annotations_in  = false;
             *strip_annotations_out = false;
             *role = QDR_ROLE_INTER_ROUTER;
+            *cost = cf->inter_router_cost;
+        } else if (cf && (strcmp(cf->role, router_data_role) == 0)) {
+            *strip_annotations_in  = false;
+            *strip_annotations_out = false;
+            *role = QDR_ROLE_INTER_ROUTER_DATA;
             *cost = cf->inter_router_cost;
         } else if (cf && (strcmp(cf->role, edge_role) == 0)) {
             *strip_annotations_in  = false;
@@ -1212,7 +1218,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
             const size_t num_items = pn_data_get_map(props);
             int props_found = 0;  // once all props found exit loop
             pn_data_enter(props);
-            for (int i = 0; i < num_items / 2 && props_found < 4; ++i) {
+            for (int i = 0; i < num_items / 2 && props_found < 5; ++i) {
                 if (!pn_data_next(props)) break;
                 if (pn_data_type(props) != PN_SYMBOL) break;  // invalid properties map
                 pn_bytes_t key = pn_data_get_symbol(props);
@@ -1226,6 +1232,19 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                             const int remote_cost = (int) pn_data_get_int(props);
                             if (remote_cost > cost)
                                 cost = remote_cost;
+                        }
+                    }
+
+                } else if (key.size == strlen(QD_CONNECTION_PROPERTY_ROLE_KEY) &&
+                    strncmp(key.start, QD_CONNECTION_PROPERTY_ROLE_KEY, key.size) == 0) {
+                    props_found += 1;
+                    if (!pn_data_next(props)) break;
+                    if (role == QDR_ROLE_INTER_ROUTER) {
+                        if (pn_data_type(props) == PN_INT) {
+                            const int override_role = (int) pn_data_get_int(props);
+                            if (override_role == QDR_ROLE_INTER_ROUTER_DATA) {
+                                role = QDR_ROLE_INTER_ROUTER_DATA;
+                            }
                         }
                     }
 

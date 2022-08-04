@@ -871,7 +871,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            const char      *version,
                                            bool             streaming_links);
 
-void qdr_connection_info_group_correlator(qdr_connection_info_t *info, uint32_t correlator);
+void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, uint32_t correlator);
 
 void qd_adaptor_listener_init();
 void qd_adaptor_listener_finalize();

@@ -209,7 +209,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
 }
 
 
-void qdr_connection_info_group_correlator(qdr_connection_info_t *info, uint32_t correlator)
+void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, uint32_t correlator)
 {
     info->group_correlator = correlator;
 }
