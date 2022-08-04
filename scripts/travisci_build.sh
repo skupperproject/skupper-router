@@ -31,7 +31,6 @@ DISPATCH_CTEST_EXTRA='-E ^python-checker$'
 export NPROC=3
 export QPID_SYSTEM_TEST_TIMEOUT=300
 export QPID_SYSTEM_TEST_SKIP_FALLBACK_SWITCHOVER_TEST=True
-export QPID_SYSTEM_TEST_SKIP_HTTP2_LARGE_IMAGE_UPLOAD_TEST=True
 
 echo '==='
 echo 'Install additional prerequisites'
