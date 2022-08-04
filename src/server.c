@@ -37,6 +37,7 @@
 #include "qpid/dispatch/platform.h"
 #include "qpid/dispatch/proton_utils.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/event.h>
 #include <proton/listener.h>
@@ -480,6 +481,12 @@ static void decorate_connection(qd_server_t *qd_server, pn_connection_t *conn, c
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_COST_KEY), QD_CONNECTION_PROPERTY_COST_KEY));
         pn_data_put_int(pn_connection_properties(conn), config->inter_router_cost);
+    }
+
+    if (config && config->is_data_connector) {
+        pn_data_put_symbol(pn_connection_properties(conn),
+                           pn_bytes(strlen(QD_CONNECTION_PROPERTY_ROLE_KEY), QD_CONNECTION_PROPERTY_ROLE_KEY));
+        pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
     if (config) {
