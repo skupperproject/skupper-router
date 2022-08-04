@@ -63,5 +63,10 @@ addons:
       # tests
       - curl
       - ncat
+      # coredump analysis
+      - gdb
 
-script: scripts/travisci_build.sh
+script:
+  - ulimit -c unlimited
+  - scripts/travisci_build.sh
+  - find -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
