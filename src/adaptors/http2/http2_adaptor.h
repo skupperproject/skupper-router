@@ -139,6 +139,7 @@ struct qdr_http2_connection_t {
     qd_http2_stream_data_list_t  streams;    // A session can have many streams.
     qd_http_listener_t       *listener;
     qd_http_connector_t      *connector;
+    qd_conn_admin_status_t    admin_status;
 
     bool                      connection_established;
     bool                      grant_initial_buffers;

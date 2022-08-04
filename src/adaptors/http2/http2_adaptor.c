@@ -1625,6 +1625,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     ingress_http_conn->context.context = ingress_http_conn;
     ingress_http_conn->context.handler = &handle_connection_event;
     ingress_http_conn->listener = listener;
+    ingress_http_conn->admin_status = QD_CONN_ADMIN_ENABLED;
 
     // Incref the ref count on the listener since the qdr_http2_connection_t object is holding a ref to the listener
     sys_atomic_inc(&listener->ref_count);
@@ -1914,6 +1915,20 @@ static void qdr_http_activate(void *notused, qdr_connection_t *c)
 {
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
     qdr_http2_connection_t* conn = (qdr_http2_connection_t*) qdr_connection_get_context(c);
+    if (conn && conn->admin_status == QD_CONN_ADMIN_DELETED && conn->pn_raw_conn == 0) {
+        // ISSUE-651
+        // conn->pn_raw_conn == 0 means that handle_disconnected was called via the PN_RAW_CONNECTION_DISCONNECTED event
+        // conn->admin_status == QD_CONN_ADMIN_DELETED means that the connector was already deleted by a management request.
+        //
+        // This is the case when the connector got deleted at more less the same time the server disconnected (causing a PN_RAW_CONNECTION_DISCONNECTED event)
+        // This activation has been called but the pn raw connection is closed. We need to free the qdr_connection_t object
+        // and the qdr_http2_connection_t object and return immediately.
+        //
+        sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+        qdr_connection_closed(c);
+        free_qdr_http2_connection(conn, false);
+        return;
+    }
     if (conn) {
         if (conn->pn_raw_conn && !(IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) && IS_ATOMIC_FLAG_SET(&conn->raw_closed_write))) {
             qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Activation triggered, calling pn_raw_connection_wake()", conn->conn_id);
@@ -2987,6 +3002,7 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     egress_http_conn->context.context = egress_http_conn;
     egress_http_conn->context.handler = &handle_connection_event;
     egress_http_conn->connector = connector;
+    egress_http_conn->admin_status = QD_CONN_ADMIN_ENABLED;
 
     // Incref the ref count on the connector since the qdr_http2_connection_t object is holding a ref to the connector
     sys_atomic_inc(&connector->ref_count);
@@ -3237,8 +3253,15 @@ void qd_http2_delete_connector(qd_dispatch_t *qd, qd_http_connector_t *connector
         //
         // Deleting a connector must delete the corresponding qdr_connection_t and qdr_http2_connection_t objects also.
         //
-        if (connector->ctx)
-            qdr_core_close_connection((qdr_connection_t  *)connector->ctx);
+        if (connector->ctx) {
+            qdr_connection_t  *conn = (qdr_connection_t  *)connector->ctx;
+            qdr_http2_connection_t* http_conn = (qdr_http2_connection_t*) qdr_connection_get_context(conn);
+            sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+            http_conn->admin_status = QD_CONN_ADMIN_DELETED;
+            sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+            qdr_core_close_connection(conn);
+        }
+
         qd_http_connector_decref(connector);
     }
 }
