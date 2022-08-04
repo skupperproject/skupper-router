@@ -292,7 +292,7 @@ typedef enum {
 
 typedef enum {
     QD_CONN_ADMIN_ENABLED,
-    QD_CONN_ADMIN_DELETED
+    QD_CONN_ADMIN_DELETED,
 } qd_conn_admin_status_t;
 
 
@@ -300,14 +300,15 @@ typedef enum {
     QD_LINK_ENDPOINT,      ///< A link to a connected endpoint
     QD_LINK_CONTROL,       ///< A link to a peer router for control messages
     QD_LINK_ROUTER,        ///< A link to a peer router for routed messages
-    QD_LINK_EDGE_DOWNLINK  ///< Default link from an interior router to an edge router
+    QD_LINK_EDGE_DOWNLINK, ///< Default link from an interior router to an edge router
 } qd_link_type_t;
 
 typedef enum {
     QDR_ROLE_NORMAL,
     QDR_ROLE_INTER_ROUTER,
     QDR_ROLE_ROUTE_CONTAINER,
-    QDR_ROLE_EDGE_CONNECTION
+    QDR_ROLE_EDGE_CONNECTION,
+    QDR_ROLE_INTER_ROUTER_DATA,
 } qdr_connection_role_t;
 
 typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *token);
@@ -869,6 +870,8 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            bool             ssl,
                                            const char      *version,
                                            bool             streaming_links);
+
+void qdr_connection_info_group_correlator(qdr_connection_info_t *info, uint32_t correlator);
 
 void qd_adaptor_listener_init();
 void qd_adaptor_listener_finalize();
