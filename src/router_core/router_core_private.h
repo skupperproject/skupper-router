@@ -640,6 +640,7 @@ struct qdr_connection_info_t {
     int                         ssl_ssf; //ssl strength factor
     char                       *version; // if role is router or edge
     sys_mutex_t                 connection_info_lock;
+    uint32_t                    group_correlator;  // Used to associate inter-router-data connections to their inter-router connection
 };
 
 ALLOC_DECLARE(qdr_connection_info_t);
