@@ -25,7 +25,7 @@ repos:
     hooks:
     -   id: git_clang-format
         name: git clang-format
-        types_or: [c, c++]
+        types_or: [c, c++, json]
         stages: [commit]
         language: python
         entry: scripts/git_clang-format_hook.sh
