@@ -1365,6 +1365,18 @@ void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr)
 }
 
 
+static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    printf("qdr_connection_group_setup_CT - corr: %d\n", conn->connection_info->group_correlator);
+}
+
+
+static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    printf("qdr_connection_group_member_setup_CT - corr: %d\n", conn->connection_info->group_correlator);
+}
+
+
 static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     qdr_connection_t *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
@@ -1430,6 +1442,18 @@ static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, boo
                                               sc, priority);
                 }
             }
+
+            //
+            // Set up any connection group associated with this inter-router connection.
+            //
+            qdr_connection_group_setup_CT(core, conn);
+        }
+
+        if (conn->role == QDR_ROLE_INTER_ROUTER_DATA) {
+            //
+            // Set this connection up as a member of a group.
+            //
+            qdr_connection_group_member_setup_CT(core, conn);
         }
 
         if (conn->role == QDR_ROLE_ROUTE_CONTAINER) {
