@@ -71,7 +71,6 @@ qd_dispatch_t *qdr_core_dispatch(qdr_core_t *core);
  */
 void qdr_process_tick(qdr_core_t *core);
 
-
 /**
  * Return true iff the test hooks option is enabled for this process.
  *
@@ -101,11 +100,11 @@ typedef void (*qdr_set_mobile_seq_t)    (void *context, int router_maskbit, uint
 typedef void (*qdr_set_my_mobile_seq_t) (void *context, uint64_t mobile_seq);
 typedef void (*qdr_link_lost_t)         (void *context, int link_maskbit);
 
-void qdr_core_route_table_handlers(qdr_core_t              *core,
-                                   void                    *context,
-                                   qdr_set_mobile_seq_t     set_mobile_seq,
-                                   qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost);
+void qdr_core_route_table_handlers(qdr_core_t             *core,
+                                   void                   *context,
+                                   qdr_set_mobile_seq_t    set_mobile_seq,
+                                   qdr_set_my_mobile_seq_t set_my_mobile_seq,
+                                   qdr_link_lost_t         link_lost);
 
 /**
  ******************************************************************************

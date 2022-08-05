@@ -121,12 +121,11 @@ void qdr_core_mobile_seq_advanced(qdr_core_t *core, int router_maskbit)
     qdr_action_enqueue(core, action);
 }
 
-
-void qdr_core_route_table_handlers(qdr_core_t              *core,
-                                   void                    *context,
-                                   qdr_set_mobile_seq_t     set_mobile_seq,
-                                   qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost)
+void qdr_core_route_table_handlers(qdr_core_t             *core,
+                                   void                   *context,
+                                   qdr_set_mobile_seq_t    set_mobile_seq,
+                                   qdr_set_my_mobile_seq_t set_my_mobile_seq,
+                                   qdr_link_lost_t         link_lost)
 {
     core->rt_context           = context;
     core->rt_set_mobile_seq    = set_mobile_seq;

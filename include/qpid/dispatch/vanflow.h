@@ -106,7 +106,6 @@ typedef enum vflow_attribute {
 #define VALID_STRING_ATTRS  0x00000005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
-
 /**
  * vflow_start_record
  *
@@ -139,7 +138,6 @@ void vflow_end_record(vflow_record_t *record);
  */
 void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t *field);
 
-
 /**
  * vflow_set_ref_from_record
  *
@@ -150,7 +148,6 @@ void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t 
  * @param record Pointer to the referenced record.
  */
 void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribute_type, vflow_record_t *referenced_record);
-
 
 /**
  * vflow_set_ref_from_parsed
@@ -184,7 +181,6 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
  * @param value The unsigned integer value to be set
  */
 void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t value);
-
 
 /**
  * vflow_set_trace

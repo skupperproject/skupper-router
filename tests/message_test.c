@@ -1919,7 +1919,6 @@ exit:
     return result;
 }
 
-
 int message_tests(void)
 {
     int result = 0;

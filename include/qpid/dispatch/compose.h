@@ -25,7 +25,6 @@
 /** A linked list of buffers composing a sequence of AMQP data objects. */
 typedef struct qd_composed_field_t qd_composed_field_t;
 
-
 /**@file
  * Composing AMQP data trees.
  *

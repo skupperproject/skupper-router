@@ -19,8 +19,6 @@
  * under the License.
  */
 
-
-
 // QD_DISCRIMINATOR_SIZE includes null terminator byte. The
 // strlen() of a discriminator will be 15
 
@@ -32,6 +30,5 @@
  * identifiers, addresses, and other situations where a unique string is needed.
  */
 void qd_generate_discriminator(char *string);
-
 
 #endif

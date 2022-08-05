@@ -109,7 +109,6 @@ qd_error_t qd_policy_c_counts_refresh(qd_policy_denial_counts_t* dc, qd_entity_t
  **/
 bool qd_policy_socket_accept(qd_policy_t *context, const char *hostname);
 
-
 /** Record a closing connection.
  * A server listener is closing a socket.
  * Release the counted connection against provisioned limits
@@ -186,7 +185,6 @@ void qd_policy_amqp_open(qd_connection_t *conn);
  * Denied pn_connections are closed with a condition.
  **/
 void qd_policy_amqp_open_connector(qd_connection_t *conn);
-
 
 /** Dispose of policy settings
  *

@@ -220,7 +220,7 @@ public:
         struct func_stub *pstub;
         pstub = new func_stub;
         //start
-        reset(fn); //
+        reset(fn);  //
         pstub->fn = fn;
 
         if(distanceof(fn, fn_stub))

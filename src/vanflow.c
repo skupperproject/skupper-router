@@ -178,7 +178,6 @@ static uint64_t _now_in_usec(void)
     return (uint64_t) tv.tv_usec + (uint64_t) (1000000L * (uint64_t) tv.tv_sec);
 }
 
-
 /**
  * @brief Find either the existing attribute record or the insertion point for a new attribute.
  *
@@ -208,7 +207,6 @@ static vflow_attribute_data_t* _vflow_find_attribute(vflow_record_t *record, vfl
     //
     return 0;
 }
-
 
 /**
  * @brief Assign a unique identity for a locally-sourced record.
@@ -280,7 +278,6 @@ static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_att
         qd_compose_insert_string(field, data->value.string_val);
     }
 }
-
 
 /**
  * @brief Work handler for vflow_start_record
@@ -356,7 +353,6 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     }
 }
 
-
 /**
  * @brief Work handler for vflow_end_record
  *
@@ -406,7 +402,6 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     }
 }
 
-
 /**
  * @brief Work handler for vflow_set_string
  *
@@ -453,7 +448,6 @@ static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
     }
 }
 
-
 /**
  * @brief Work handler for vflow_set_int
  *
@@ -498,7 +492,6 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
     }
 }
 
-
 /**
  * @brief Allocate a work object pre-loaded with a handler.
  *
@@ -512,7 +505,6 @@ static vflow_work_t *_vflow_work(vflow_work_handler_t handler)
     work->handler = handler;
     return work;
 }
-
 
 /**
  * @brief Post work for processing in the vflow thread
@@ -572,7 +564,6 @@ static void _vflow_create_router_record(void)
 
     vflow_set_string(router, VFLOW_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
 }
-
 
 /**
  * @brief Recursively free the given record and all of its children
@@ -701,7 +692,6 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     }
     return "UNKNOWN";
 }
-
 
 /**
  * @brief Extract the value of a record identity from its serialized form in an iterator
@@ -859,7 +849,6 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
     }
 
 }
-
 
 /**
  * @brief Emit all of the unflushed records
@@ -1260,7 +1249,6 @@ static void _vflow_on_all_address_watch(void     *context,
     _vflow_post_work(work);
 }
 
-
 /**
  * @brief Handler for changes in reachability for this router's event multicast address.
  *        This address is used to send the log records to collectors in the network.
@@ -1519,7 +1507,6 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
     }
 }
 
-
 /**
  * @brief Module initializer
  *
@@ -1583,7 +1570,6 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush, 0);
     qd_timer_schedule(state->flush_timer, initial_flush_interval_msec);
 }
-
 
 /**
  * @brief Module finalizer

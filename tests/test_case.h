@@ -31,5 +31,4 @@ typedef char* (*testcase_t)(void *context);
         printf("PASS\n");                          \
 } while(0);
 
-
 #endif

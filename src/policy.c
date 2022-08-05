@@ -395,7 +395,6 @@ qd_parse_tree_t * qd_policy_parse_tree(const char *config_spec)
     return tree;
 }
 
-
 //
 // Functions related to authenticated connection denial.
 // An AMQP Open has been received over some connection.
@@ -450,7 +449,6 @@ bool qd_policy_lookup_vhost_alias(
 
     return res;
 }
-
 
 /** Look up user/host/vhost in python vhost database and give the AMQP Open
  *  a go-no_go decision.
@@ -1363,8 +1361,8 @@ char * qd_policy_host_pattern_lookup(qd_policy_t *policy, const char *hostPatter
     if (!matched) {
         payload = 0;
     }
-    qd_log(policy->log_source, QD_LOG_TRACE, "vhost hostname pattern '%s' lookup returned '%s'",
-           hostPattern, (payload ? (char *)payload : "null"));
+    qd_log(policy->log_source, QD_LOG_TRACE, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
+           (payload ? (char *) payload : "null"));
     return payload;
 }
 

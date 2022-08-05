@@ -475,22 +475,16 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
     //
     // Subscribe to the core events we'll need to drive this component
     //
-    ap->event_sub = qdrc_event_subscribe_CT(core,
-                                            QDRC_EVENT_CONN_EDGE_ESTABLISHED
-                                            | QDRC_EVENT_CONN_EDGE_LOST
-                                            | QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
-                                            | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
-                                            | QDRC_EVENT_ADDR_BECAME_SOURCE
-                                            | QDRC_EVENT_ADDR_NO_LONGER_SOURCE
-                                            | QDRC_EVENT_ADDR_WATCH_ON
-                                            | QDRC_EVENT_ADDR_WATCH_OFF
-                                            | QDRC_EVENT_LINK_IN_DETACHED
-                                            | QDRC_EVENT_LINK_OUT_DETACHED,
-                                            on_conn_event,
-                                            on_link_event,
-                                            on_addr_event,
-                                            0,
-                                            ap);
+    ap->event_sub = qdrc_event_subscribe_CT(
+        core,
+        QDRC_EVENT_CONN_EDGE_ESTABLISHED | QDRC_EVENT_CONN_EDGE_LOST | QDRC_EVENT_ADDR_ADDED_LOCAL_DEST | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
+            | QDRC_EVENT_ADDR_BECAME_SOURCE | QDRC_EVENT_ADDR_NO_LONGER_SOURCE  | QDRC_EVENT_ADDR_WATCH_ON | QDRC_EVENT_ADDR_WATCH_OFF
+            | QDRC_EVENT_LINK_IN_DETACHED | QDRC_EVENT_LINK_OUT_DETACHED,
+        on_conn_event,
+        on_link_event,
+        on_addr_event,
+        0,
+        ap);
 
     core->edge_conn_addr = qcm_edge_conn_addr;
     core->edge_context = ap;

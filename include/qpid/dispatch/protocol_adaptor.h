@@ -265,7 +265,6 @@ qdr_protocol_adaptor_t *qdr_protocol_adaptor(qdr_core_t                *core,
                                              qdr_connection_close_t     conn_close,
                                              qdr_connection_trace_t     conn_trace);
 
-
 /**
  * qdr_protocol_adaptor_free
  *
