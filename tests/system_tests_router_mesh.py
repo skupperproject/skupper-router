@@ -17,8 +17,6 @@
 # under the License.
 #
 
-from signal import SIGINT
-
 from proton import Message
 
 from system_test import TestCase
@@ -103,19 +101,22 @@ class ThreeRouterTest(TestCase):
         cmd = ["test-receiver",
                "-a", "%s:%s" % (self.server_host(router),
                                 self.server_port(router)),
-               "-c", str(count), "-s", address] + list(extra_args)
+               "-c", str(count), "-s", address,
+               "-d"] + list(extra_args)
         # env = dict(os.environ, PN_TRACE_FRM="1")
         # return self.popen(cmd, expect=Process.EXIT_OK, env=env)
         return self.popen(cmd, expect=Process.EXIT_OK)
 
-    def spawn_sender(self, router, count, address, *extra_args):
+    def spawn_sender(self, router, count, address, *extra_args,
+                     expect=Process.EXIT_OK):
         cmd = ["test-sender",
                "-a", "%s:%s" % (self.server_host(router),
                                 self.server_port(router)),
-               "-c", str(count), "-t", address] + list(extra_args)
+               "-c", str(count), "-t", address,
+               "-d"] + list(extra_args)
         # env = dict(os.environ, PN_TRACE_FRM="1")
-        # return self.popen(cmd, expect=Process.EXIT_OK, env=env)
-        return self.popen(cmd, expect=Process.EXIT_OK)
+        # return self.popen(cmd, expect=expect, env=env)
+        return self.popen(cmd, expect=expect)
 
     def _rx_failover(self, extra_tx_args=None, extra_rx_args=None):
         # Have a single sender transmit unsettled as fast as possible
@@ -125,21 +126,19 @@ class ThreeRouterTest(TestCase):
         extra_rx = extra_rx_args or []
         total = 100
         router_index = 0
-        tx = self.spawn_sender(self.RouterC, 0, "balanced/foo", *extra_tx)
+        tx = self.spawn_sender(self.RouterC, 0, "balanced/foo", *extra_tx,
+                               expect=Process.RUNNING)
         while total > 0:
             rx = self.spawn_receiver(self.routers[router_index], 5,
                                      "balanced/foo", *extra_rx)
-            if rx.wait(timeout=TIMEOUT):
-                raise Exception("Receiver failed to consume all messages")
+            rx.wait(timeout=TIMEOUT)
             total -= 5
             router_index += 1
             if router_index == len(self.routers):
                 router_index = 0
-        tx.send_signal(SIGINT)
-        out_text, out_err = tx.communicate(timeout=TIMEOUT)
-        if tx.returncode:
-            raise Exception("Sender failed: %s %s"
-                            % (out_text, out_err))
+
+        # will raise an error if tx is not still running
+        tx.teardown()
 
     def test_01_rx_failover_clean(self):
         """
@@ -209,24 +208,20 @@ class ThreeRouterTest(TestCase):
         total = priorities * send_batch
         rx = self.spawn_receiver(self.RouterC,
                                  total,
-                                 "closest/test_06_address",
-                                 "-d")
+                                 "closest/test_06_address")
         self.RouterA.wait_address("closest/test_06_address")
 
         senders = [self.spawn_sender(self.RouterA,
                                      send_batch,
                                      "closest/test_06_address",
-                                     "-sm", "-p%s" % p, "-d")
+                                     "-sm", "-p%s" % p)
                    for p in range(priorities)]
 
         # wait for all senders to finish first, then check the receiver
         for tx in senders:
-            out_text, out_err = tx.communicate(timeout=TIMEOUT)
-            if tx.returncode:
-                raise Exception("Sender failed: %s %s" % (out_text, out_err))
+            tx.wait(timeout=TIMEOUT)
 
-        if rx.wait(timeout=TIMEOUT):
-            raise Exception("Receiver failed to consume all messages")
+        rx.wait(timeout=TIMEOUT)
 
 
 if __name__ == '__main__':

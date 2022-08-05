@@ -119,6 +119,7 @@ void debug(const char *format, ...)
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
+    fflush(stdout);
 }
 
 
@@ -234,18 +235,10 @@ void generate_message(void)
 
 static void signal_handler(int signum)
 {
-    signal(SIGINT,  SIG_IGN);
-    signal(SIGQUIT, SIG_IGN);
-
-    switch (signum) {
-    case SIGINT:
-    case SIGQUIT:
-        stop = true;
-        if (proactor) pn_proactor_interrupt(proactor);
-        break;
-    default:
-        break;
-    }
+    signal(signum, SIG_IGN);
+    stop = true;
+    if (proactor)
+        pn_proactor_interrupt(proactor);
 }
 
 
@@ -464,6 +457,7 @@ int main(int argc, char** argv)
 
     signal(SIGQUIT, signal_handler);
     signal(SIGINT,  signal_handler);
+    signal(SIGTERM, signal_handler);
 
     char *host = host_address;
     if (strncmp(host, "amqp://", 7) == 0)

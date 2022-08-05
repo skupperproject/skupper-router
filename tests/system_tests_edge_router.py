@@ -2686,19 +2686,21 @@ class StreamingMessageTest(TestCase):
 
         # this receiver should get the streaming message
         rx1 = self.spawn_receiver(self.EB1,
-                                  count=1,
+                                  count=0,
                                   address="closest/test-address",
-                                  expect=self.SIG_TERM)
+                                  expect=Process.RUNNING)
 
         self.INT_A.wait_address("closest/test-address")
 
         clogger = self.spawn_clogger(self.EA1,
-                                     count=1,
+                                     count=0,
                                      address="closest/test-address",
                                      size=self.BODY_MAX,
                                      pause_ms=100,
-                                     expect=self.SIG_TERM)
-        sleep(0.5)
+                                     expect=Process.RUNNING)
+        # Wait for clogger to start sending data
+        # TODO(kgiusti): best to use mgmt to determine this! sleep() is a hack
+        sleep(1.0)
 
         # this receiver has less cost than rx1 since it is 1 less hop from the
         # sender
@@ -2719,11 +2721,8 @@ class StreamingMessageTest(TestCase):
         if rx2.returncode:
             raise Exception("receiver failed: %s %s" % (out_text, out_error))
 
-        rx1.terminate()
-        rx1.wait()
-
-        clogger.terminate()
-        clogger.wait()
+        clogger.teardown()
+        rx1.teardown()
 
         self._wait_address_gone(self.EA1, "closest/test-address")
         self._wait_address_gone(self.EB1,  "closest/test-address")
@@ -2744,7 +2743,7 @@ class StreamingMessageTest(TestCase):
         streaming_rx = [self.spawn_receiver(router,
                                             count=1,
                                             address="multicast/test-address",
-                                            expect=self.SIG_TERM)
+                                            expect=Process.RUNNING)
                         for router in routers]
 
         self.EB1.wait_address("multicast/test-address", subscribers=1)
@@ -2754,12 +2753,14 @@ class StreamingMessageTest(TestCase):
         # this will block all of the above receivers with a streaming message
 
         clogger = self.spawn_clogger(self.EA1,
-                                     count=1,
+                                     count=0,
                                      address="multicast/test-address",
                                      size=self.BODY_MAX,
                                      pause_ms=100,
-                                     expect=self.SIG_TERM)
-        sleep(0.5)
+                                     expect=Process.RUNNING)
+        # Wait for clogger to start sending data
+        # TODO(kgiusti): best to use mgmt to determine this! sleep() is a hack
+        sleep(1.0)
 
         # this second set of receivers should be able to receive multicast
         # messages sent _after_ the clogger's streaming message
@@ -2779,24 +2780,21 @@ class StreamingMessageTest(TestCase):
         tx = self.spawn_sender(self.EA1,
                                count=1,
                                address="multicast/test-address",
-                               expect=self.SIG_TERM)
+                               expect=Process.RUNNING)
 
         # however the second set of receivers _should_ end up getting the
-        # message, acking it and exit (count=1)
+        # message, acking it and exit (rx count=1)
         for rx in blocking_rx:
-            out_text, out_error = rx.communicate(timeout=TIMEOUT)
-            if rx.returncode:
-                raise Exception("receiver failed: %s %s" % (out_text, out_error))
+            rx.wait(timeout=TIMEOUT)
+            rx.teardown()  # will raise error if rx fails to receive the message
 
-        tx.terminate()
-        tx.wait()
+        # any of the following teardowns will error if the client is not
+        # blocked:
 
+        tx.teardown()
         for rx in streaming_rx:
-            rx.terminate()
-            rx.wait()
-
-        clogger.terminate()
-        clogger.wait()
+            rx.teardown()
+        clogger.teardown()
 
         self._wait_address_gone(self.EA1, "multicast/test-address")
         self._wait_address_gone(self.EB1,  "multicast/test-address")
@@ -2815,34 +2813,34 @@ class StreamingMessageTest(TestCase):
         balanced_rx = [self.spawn_receiver(self.EB1,
                                            count=2,
                                            address="balanced/test-address",
-                                           expect=self.SIG_TERM)
+                                           expect=Process.RUNNING)
                        for _ in range(2)]
         self.EB1.wait_address("balanced/test-address", subscribers=2)
 
         # this will block one of the above receivers with a streaming message
 
         clogger = self.spawn_clogger(self.EA1,
-                                     count=1,
+                                     count=0,
                                      address="balanced/test-address",
                                      size=self.BODY_MAX,
                                      pause_ms=100,
-                                     expect=self.SIG_TERM)
-        sleep(0.5)
+                                     expect=Process.RUNNING)
+        # Wait for clogger to start sending data
+        # TODO(kgiusti): best to use mgmt to determine this! sleep() is a hack
+        sleep(1.0)
 
-        # This sender should get its message through to the other receiver
+        # This sender should get its message through to the other receiver.
+        # when it does it will exit successfully
         tx = self.spawn_sender(self.EA1,
                                count=1,
                                address="balanced/test-address")
-        out_text, out_error = tx.communicate(timeout=TIMEOUT)
-        if tx.returncode:
-            raise Exception("sender failed: %s %s" % (out_text, out_error))
+        # these will raise an error if tx does not succeed
+        tx.wait(timeout=TIMEOUT)
+        tx.teardown()
 
         for rx in balanced_rx:
-            rx.terminate()
-            rx.wait()
-
-        clogger.terminate()
-        clogger.wait()
+            rx.teardown()
+        clogger.teardown()
 
         self._wait_address_gone(self.EA1, "balanced/test-address")
         self._wait_address_gone(self.EB1,  "balanced/test-address")

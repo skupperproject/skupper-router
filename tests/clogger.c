@@ -32,6 +32,7 @@
 #include "proton/transport.h"
 
 #include <arpa/inet.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -105,23 +106,16 @@ void debug(const char *format, ...)
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
+    fflush(stdout);
 }
 
 
 static void signal_handler(int signum)
 {
-    signal(SIGINT,  SIG_IGN);
-    signal(SIGQUIT, SIG_IGN);
-
-    switch (signum) {
-    case SIGINT:
-    case SIGQUIT:
-        stop = true;
-        if (proactor) pn_proactor_interrupt(proactor);
-        break;
-    default:
-        break;
-    }
+    signal(signum, SIG_IGN);
+    stop = true;
+    if (proactor)
+        pn_proactor_interrupt(proactor);
 }
 
 
@@ -189,6 +183,7 @@ bool send_message_data()
 
         if (presettle) {
             pn_delivery_settle(pn_dlv);
+            pn_dlv = 0;
             if (limit && sent == limit) {
                 // no need to wait for acks
                 debug("stopping (presettled)...\n");
@@ -252,10 +247,10 @@ static bool event_handler(pn_event_t *event)
     } break;
 
     case PN_DELIVERY: {
-        pn_delivery_t *dlv = pn_event_delivery(event);
-        if (pn_delivery_updated(dlv)) {
-            uint64_t rs = pn_delivery_remote_state(dlv);
-            pn_delivery_clear(dlv);
+        assert(pn_event_delivery(event) == pn_dlv);
+        if (pn_delivery_updated(pn_dlv)) {
+            uint64_t rs = pn_delivery_remote_state(pn_dlv);
+            pn_delivery_clear(pn_dlv);
 
             switch (rs) {
             case PN_RECEIVED:
@@ -267,7 +262,8 @@ static bool event_handler(pn_event_t *event)
                 debug("PN_DELIVERY: accept\n");
                 ++acked;
                 ++accepted;
-                pn_delivery_settle(dlv);
+                pn_delivery_settle(pn_dlv);
+                pn_dlv = 0;
                 break;
             case PN_REJECTED:
             case PN_RELEASED:
@@ -275,7 +271,8 @@ static bool event_handler(pn_event_t *event)
             default:
                 ++acked;
                 ++not_accepted;
-                pn_delivery_settle(dlv);
+                pn_delivery_settle(pn_dlv);
+                pn_dlv = 0;
                 debug("Message not accepted - code: 0x%lX\n", (unsigned long)rs);
                 break;
             }
@@ -379,6 +376,7 @@ int main(int argc, char** argv)
 
     signal(SIGQUIT, signal_handler);
     signal(SIGINT,  signal_handler);
+    signal(SIGTERM, signal_handler);
 
     // test infrastructure may add a "amqp[s]://" prefix to the address string.
     // That causes proactor much grief, so strip it off
@@ -429,10 +427,7 @@ int main(int argc, char** argv)
 
     if (not_accepted) {
         printf("Sent: %" PRIu64 "  Accepted: %" PRIu64 " Not Accepted: %" PRIu64 "\n", sent, accepted, not_accepted);
-        if (accepted + not_accepted != sent) {
-            printf("FAILURE! Sent: %" PRIu64 "  Acked: %" PRIu64 "\n", sent, accepted + not_accepted);
-            return 1;
-        }
     }
+
     return 0;
 }
