@@ -781,4 +781,3 @@ const char *qd_parse_router_annotations(
 
     return 0;
 }
-

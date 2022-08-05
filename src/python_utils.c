@@ -65,4 +65,3 @@ char *py_obj_2_c_string(PyObject *py_obj)
     Py_XDECREF(tmp);
     return str;
 }
-

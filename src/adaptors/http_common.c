@@ -754,4 +754,3 @@ char *qd_get_host_from_host_port(const char *host_port)
         return host;
     }
 }
-

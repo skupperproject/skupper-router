@@ -131,4 +131,3 @@ Interior routers will include the full set of router annotations -
 including the ingress-router and trace list fields - on messages sent
 to an edge router. It is expected that the edge router can safely
 ignore the ingress-router and trace field values in this case.
-

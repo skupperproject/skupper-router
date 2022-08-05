@@ -200,4 +200,3 @@ void _qdbm_next(qd_bitmask_t *b, int *v)
         }
     }
 }
-

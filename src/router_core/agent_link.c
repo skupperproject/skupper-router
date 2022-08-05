@@ -515,4 +515,3 @@ void qdra_link_update_CT(qdr_core_t            *core,
     //
     qdr_agent_enqueue_response_CT(core, query);
 }
-

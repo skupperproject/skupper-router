@@ -490,7 +490,7 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
                                             on_link_event,
                                             on_addr_event,
                                             0,
-                                            ap);                                            
+                                            ap);
 
     core->edge_conn_addr = qcm_edge_conn_addr;
     core->edge_context = ap;
@@ -505,4 +505,3 @@ void qcm_edge_addr_proxy_final(qcm_edge_addr_proxy_t *ap)
     qdrc_event_unsubscribe_CT(ap->core, ap->event_sub);
     free(ap);
 }
-

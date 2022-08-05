@@ -151,7 +151,7 @@ static void qdr_ref_detach(void *context, qdr_link_t *link, qdr_error_t *error, 
 static void qdr_ref_flow(void *context, qdr_link_t *link, int credit)
 {
     qdr_ref_adaptor_t *adaptor = (qdr_ref_adaptor_t*) context;
-    
+
     printf("qdr_ref_flow: %d credits issued\n", credit);
 
     if (link == adaptor->out_link_1) {
@@ -307,7 +307,7 @@ static uint64_t qdr_ref_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 qd_message_stream_data_release(stream_data);
                 break;
             }
-            
+
             case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
                 //
                 // A new segment has not completely arrived yet.  Check again later.
@@ -328,7 +328,7 @@ static uint64_t qdr_ref_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 qdr_link_flow(adaptor->core, link, 1, false);
                 adaptor->incoming_message = 0;
                 return PN_ACCEPTED; // This will cause the delivery to be settled
-            
+
             case QD_MESSAGE_STREAM_DATA_INVALID:
                 //
                 // The body-data is corrupt in some way.  Stop handling the delivery and reject it.

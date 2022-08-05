@@ -54,4 +54,3 @@ void qd_delivery_state_free(qd_delivery_state_t *dstate)
         free_qd_delivery_state_t(dstate);
     }
 }
-

@@ -294,7 +294,7 @@ static qd_lws_listener_t *qd_lws_listener(qd_http_server_t *hs, qd_listener_t *l
     return hl;
 }
 
-/* Linked list: first entry on each line should point to next, last line should be the 
+/* Linked list: first entry on each line should point to next, last line should be the
  * octet-stream default.
  */
 static const struct lws_protocol_vhost_options mime_types[] = {

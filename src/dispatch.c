@@ -82,7 +82,7 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     struct timeval time;
     gettimeofday(&time, NULL);
     srandom((unsigned int)time.tv_sec + ((unsigned int)time.tv_usec << 11));
-    
+
     qd = NEW(qd_dispatch_t);
     ZERO(qd);
 
@@ -204,7 +204,7 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
         case QD_ROUTER_MODE_EDGE:       mode = "Edge_";       break;
         case QD_ROUTER_MODE_ENDPOINT:   mode = "Endpoint_";   break;
         }
-        
+
         qd->router_id = (char*) malloc(strlen(mode) + QD_DISCRIMINATOR_SIZE + 2);
         strcpy(qd->router_id, mode);
         qd_generate_discriminator(qd->router_id + strlen(qd->router_id));

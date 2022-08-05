@@ -4,8 +4,8 @@ Scraper provides two analysis modes:
 
  * Normal mode: combine logs and show details.
  * Split mode: split a single log into per-connection data and show details.
- 
-Details are written to stdout in html format. 
+
+Details are written to stdout in html format.
 
 ## Apache License, Version 2.0
 
@@ -43,14 +43,14 @@ From each log file Scraper extracts:
    * Transfer traffic
    * Message disposition
    * Flow and credit propagation
-   
+
  Scraper sorts these facts with microsecond precision using the log timestamps.
- 
+
  Then Scraper merges the data from any number (as long as that number is less than 27!)
  of independent log files into a single view.
- 
+
  Next Scraper performs some higher-level analysis.
- 
+
  * Routers are identified by letter rather than by the container name: 'A', 'B', and
    so on. Log data in a file is grouped into instances and is identified by a number
    for that router instance: 'A0', 'A1', and so on.
@@ -58,11 +58,11 @@ From each log file Scraper extracts:
  * Connection data lists are searched to discover router-to-router and router-to-client
    connection pairs.
  * Per connection data are subdivided into per-session and per-link lists, sorting
-   the AMQP data into per-link-only views. This information is shown in the _Connection 
-   Details_ section. Clicking on the lozenge will expand a connection into a view that 
+   the AMQP data into per-link-only views. This information is shown in the _Connection
+   Details_ section. Clicking on the lozenge will expand a connection into a view that
    shows all the sessions. Clicking on a session lozenge will expand into a view that
    shows all the links.
-   
+
    Each link shows a lozenge that will toggle the link data visibility and a hyperlink
    that will go to the link data. When the table of links is small and visible on one
    screen then it's easy to see what's going on. But when the table of links is large,
@@ -70,13 +70,13 @@ From each log file Scraper extracts:
    When you click the lozenge you don't see the data. For larger data sets the usage
    rule is to first click the lozenge to expose the data, and then click the hyperlink
    go make the data visible.
- 
+
  * For each link the first AMQP Attach is examined to discover the link's source or
    target address. All the addresses named in all the links are aggregated into a table.
-   
+
    To view the link traffic first click the lozenge in the Link column to make the data
    visible and then click the hyperlinked link name to see the data.
- 
+
  * Bulk AMQP data may be shown or hidden on arbitrary per-connection selections.
    Note: This feature is slow when a few tens of thousands of lines are being shown or
    hidden.
@@ -158,7 +158,7 @@ and divides the connection data. Connection names include the router instance ID
 
 ## AMQP performative legend
 
-Scraper decorates performative display lines with important AMQP values. 
+Scraper decorates performative display lines with important AMQP values.
 
 | Performative | Decorations                                                         |
 |--------------|---------------------------------------------------------------------|
@@ -171,7 +171,7 @@ Scraper decorates performative display lines with important AMQP values.
 | flow         | [channel, handle] (deliveryCount, linkCredit)                       |
 | transfer     | [channel, handle] (deliveryId) .. [flags] length (settlement state) |
 | disposition  | [channel] (role firstId-lastId settleFlags settleState)             |
- 
+
 
 ## Sequence generator
 
@@ -205,7 +205,7 @@ in an acceptable order.
 * Enable router logging
 
 The routers need to generate proper logging for Scraper.
-Expose the information in router logs that Scraper requires by 
+Expose the information in router logs that Scraper requires by
 enabling specific log levels for some of the router logging modules.
 
 | Log module and level | Information exposed in logs |
@@ -240,7 +240,7 @@ enabling specific log levels for some of the router logging modules.
     usage: scraper.py [-h] [--skip-all-data] [--skip-detail] [--skip-msg-progress]
                       [--split] [--time-start TIME_START] [--time-end TIME_END]
                       [--files FILES [FILES ...]]
-    
+
     optional arguments:
       -h, --help            show this help message and exit
       --skip-all-data, -sa  Max load shedding: do not store/index transfer,
@@ -263,19 +263,19 @@ enabling specific log levels for some of the router logging modules.
 
 ### Switch --skip-all-data
     tools/scraper/scraper.py --skip-all-data -f FILE [FILE ...]
-    
+
 With _--skip-all-data_ AMQP transfer, disposition, and flow frames in the log files are
 discarded. The resulting web page still includes lots of useful information with
 connection info, link name propagation, and link state analysis.
 
 ### Switch --skip-detail
     tools/scraper/scraper.py --skip-detail -f FILE [FILE ...]
-    
+
 With _--skip-detail_ the display of per-connection, per-session, per-link tables is skipped.
 
 ### Switch --skip-msg-progress
     tools/scraper/scraper.py --skip-msg-progress -f FILE [FILE ...]
-    
+
 With _--skip-msg-progress_ the display of transfer analysis tables is skipped.
 ###  Advanced
 
@@ -299,7 +299,7 @@ qpid-dispatch self test.
 * Wow, that's a lot of data
 
 Indeed it is and good luck figuring it out. Sometimes, though, it's too much.
-The AMQP transfer data analysis is the worst offender in terms of CPU time, 
+The AMQP transfer data analysis is the worst offender in terms of CPU time,
 run-time memory usage, and monstrous html output files.
 Scraper provides command line switches to
 turn off sections of the data analysis.

@@ -75,7 +75,7 @@ ALLOC_DECLARE(qd_policy_settings_t);
 qd_error_t qd_entity_configure_policy(qd_policy_t *policy, qd_entity_t *entity);
 
 /** Memorize the address of python policy_manager object.
- * This python object gets called by C to execute user lookups 
+ * This python object gets called by C to execute user lookups
  * @param[in] policy pointer to the policy
  * @param[in] policy_manager the address of the policy_manager object
  **/
@@ -113,7 +113,7 @@ bool qd_policy_socket_accept(qd_policy_t *context, const char *hostname);
 /** Record a closing connection.
  * A server listener is closing a socket.
  * Release the counted connection against provisioned limits
- * 
+ *
  * @param[in] context the current policy
  * @param[in] conn qd_connection
  **/
@@ -189,7 +189,7 @@ void qd_policy_amqp_open_connector(qd_connection_t *conn);
 
 
 /** Dispose of policy settings
- * 
+ *
  * @param settings the settings to be destroyed
  */
 void qd_policy_settings_free(qd_policy_settings_t *settings);
@@ -259,7 +259,7 @@ bool qd_policy_approve_message_target(qd_iterator_t *address, qd_connection_t *q
 void qd_policy_count_max_size_event(pn_link_t *link, qd_connection_t *qd_conn);
 
 /**
- * Return POLICY log_source to log policy 
+ * Return POLICY log_source to log policy
  */
 qd_log_source_t *qd_policy_log_source(void);
 #endif

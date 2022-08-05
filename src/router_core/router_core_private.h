@@ -355,7 +355,7 @@ struct qdr_query_t {
     uint64_t                 in_conn;  // or perhaps a pointer???
 };
 
-DEQ_DECLARE(qdr_query_t, qdr_query_list_t); 
+DEQ_DECLARE(qdr_query_t, qdr_query_list_t);
 
 struct qdr_node_t {
     DEQ_LINKS(qdr_node_t);

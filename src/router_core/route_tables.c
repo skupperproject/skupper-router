@@ -122,7 +122,7 @@ void qdr_core_mobile_seq_advanced(qdr_core_t *core, int router_maskbit)
 }
 
 
-void qdr_core_route_table_handlers(qdr_core_t              *core, 
+void qdr_core_route_table_handlers(qdr_core_t              *core,
                                    void                    *context,
                                    qdr_set_mobile_seq_t     set_mobile_seq,
                                    qdr_set_my_mobile_seq_t  set_my_mobile_seq,
@@ -777,5 +777,3 @@ void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit)
     work->maskbit = link_maskbit;
     qdr_post_general_work_CT(core, work);
 }
-
-

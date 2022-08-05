@@ -272,4 +272,3 @@ qd_error_t qd_entity_set_map_key_value_string(qd_entity_t *entity, const char *a
 
     return ret;
 }
-

@@ -128,4 +128,3 @@ void qdr_process_tick_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
     if (timer)
         timer->delta_time_seconds--;
 }
-

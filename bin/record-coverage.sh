@@ -77,4 +77,3 @@ lcov --remove dispatch-total-raw.info "/usr/include*" "/usr/share*" "${SRCPATH}/
 # Generate report
 rm -rf html
 genhtml -p $SRCPATH -p $BLDPATH dispatch-total.info --title "Dispatch Router Test Coverage" --demangle-cpp -o html
-

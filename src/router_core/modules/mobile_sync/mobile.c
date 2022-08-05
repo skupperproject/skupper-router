@@ -832,13 +832,13 @@ static void qcm_mobile_sync_on_addr_event_CT(void          *context,
             qcm_mobile_sync_on_became_local_dest_CT(msync, addr);
         }
         break;
-        
+
     case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST:
         if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 0) {
             qcm_mobile_sync_on_no_longer_local_dest_CT(msync, addr);
         }
         break;
-        
+
     default:
         break;
     }

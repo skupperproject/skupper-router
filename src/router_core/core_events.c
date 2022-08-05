@@ -138,4 +138,3 @@ void qdrc_event_router_raise(qdr_core_t *core, qdrc_event_t event, qdr_node_t *r
         sub = DEQ_NEXT_N(ROUTER, sub);
     }
 }
-

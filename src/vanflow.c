@@ -181,7 +181,7 @@ static uint64_t _now_in_usec(void)
 
 /**
  * @brief Find either the existing attribute record or the insertion point for a new attribute.
- * 
+ *
  * @param record The record with the attribute list that should be searched
  * @param attr The attribute type to search for
  * @return data Pointer to result:
@@ -212,7 +212,7 @@ static vflow_attribute_data_t* _vflow_find_attribute(vflow_record_t *record, vfl
 
 /**
  * @brief Assign a unique identity for a locally-sourced record.
- * 
+ *
  * @param identity (out) New, unique identity
  */
 static void _vflow_next_id(vflow_identity_t *identity)
@@ -284,7 +284,7 @@ static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_att
 
 /**
  * @brief Work handler for vflow_start_record
- * 
+ *
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
@@ -359,7 +359,7 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
 
 /**
  * @brief Work handler for vflow_end_record
- * 
+ *
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
@@ -409,7 +409,7 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
 
 /**
  * @brief Work handler for vflow_set_string
- * 
+ *
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
@@ -456,7 +456,7 @@ static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
 
 /**
  * @brief Work handler for vflow_set_int
- * 
+ *
  * @param work Pointer to work context
  * @param discard Indicator that this work must be discarded
  */
@@ -501,7 +501,7 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
 
 /**
  * @brief Allocate a work object pre-loaded with a handler.
- * 
+ *
  * @param handler The handler to be called on the vflow thread to do the work
  * @return vflow_work_t* Pointer to the allocated work that should be posted for processing
  */
@@ -516,7 +516,7 @@ static vflow_work_t *_vflow_work(vflow_work_handler_t handler)
 
 /**
  * @brief Post work for processing in the vflow thread
- * 
+ *
  * @param work Pointer to the work to be processed
  */
 static void _vflow_post_work(vflow_work_t *work)
@@ -576,7 +576,7 @@ static void _vflow_create_router_record(void)
 
 /**
  * @brief Recursively free the given record and all of its children
- * 
+ *
  * @param record Pointer to the record to be freed.
  * @param recursive If true, delete recursively, otherwise just remove parent references.
  */
@@ -705,7 +705,7 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
 
 /**
  * @brief Extract the value of a record identity from its serialized form in an iterator
- * 
+ *
  * @param field Pointer to the parsed field containing the serialized identity
  * @return Newly allocated string with identity, or NULL
  */
@@ -863,7 +863,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
 
 /**
  * @brief Emit all of the unflushed records
- * 
+ *
  * @param core Pointer to the core module
  */
 static void _vflow_flush_TH(qdr_core_t *core)
@@ -1166,7 +1166,7 @@ static void _vflow_my_address_status_TH(vflow_work_t *work, bool discard)
 /**
  * @brief Main function for the vflow thread.  This thread runs for the entire
  * lifecycle of the router.
- * 
+ *
  * @param unused Unused
  * @return void* Unused
  */
@@ -1240,9 +1240,9 @@ static void *_vflow_thread(void *context)
 //=====================================================================================
 /**
  * @brief Handler for changes in reachability for the all-routers multicast address.
- *        This address is used for "beacon" messages that announce the existence of 
+ *        This address is used for "beacon" messages that announce the existence of
  *        a router in the network.
- * 
+ *
  * @param context Context for the handler (the core module pointer)
  * @param local_consumers The number of local (on this router) consumers for the address
  * @param in_proc_consumers (unused) The number of in-process consumers for the address
@@ -1264,7 +1264,7 @@ static void _vflow_on_all_address_watch(void     *context,
 /**
  * @brief Handler for changes in reachability for this router's event multicast address.
  *        This address is used to send the log records to collectors in the network.
- * 
+ *
  * @param context Context for the handler (the core module pointer)
  * @param local_consumers The number of local (on this router) consumers for the address
  * @param in_proc_consumers (unused) The number of in-process consumers for the address
@@ -1522,7 +1522,7 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
 
 /**
  * @brief Module initializer
- * 
+ *
  * @param core Pointer to the core object
  * @param adaptor_context (out) Context set for use in finalizer
  */
@@ -1587,7 +1587,7 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 
 /**
  * @brief Module finalizer
- * 
+ *
  * @param adaptor_context Contains the core module pointer
  */
 static void _vflow_final(void *adaptor_context)

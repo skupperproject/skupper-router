@@ -426,5 +426,3 @@ void qdr_route_connection_closed_CT(qdr_core_t *core, qdr_connection_t *conn)
         conn->alt_conn_id = 0;
     }
 }
-
-

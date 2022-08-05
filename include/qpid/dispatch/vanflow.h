@@ -109,10 +109,10 @@ typedef enum vflow_attribute {
 
 /**
  * vflow_start_record
- * 
+ *
  * Open a new protocol-log record, specifying the parent record that the new record is
  * a child of.
- * 
+ *
  * @param record_type The type for the newly opened record
  * @param parent Pointer to the parent record.  If NULL, it will reference the local SOURCE record.
  * @return Pointer to the new record
@@ -121,19 +121,19 @@ vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record
 
 /**
  * vflow_end_record
- * 
+ *
  * Close a record when it is no longer needed.  After a record is closed, it cannot be referenced
  * or accessed in any way thereafter.
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  */
 void vflow_end_record(vflow_record_t *record);
 
 /**
  * vflow_serialize_identity
- * 
+ *
  * Encode the identity of the indicated record into the supplied composed-field.
- * 
+ *
  * @param record Pointer to the record from which to obtain the identity
  * @param field Pointer to the composed-field into which to serialize the identity
  */
@@ -142,9 +142,9 @@ void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t 
 
 /**
  * vflow_set_ref_from_record
- * 
+ *
  * Set a reference-typed attribute in a record from the ID of another record.
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  * @param attribute_type The type of the attribute (see enumerated above) to be set
  * @param record Pointer to the referenced record.
@@ -154,9 +154,9 @@ void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribu
 
 /**
  * vflow_set_ref_from_parsed
- * 
+ *
  * Set a reference-typed attribute in a record from a parsed field (a serialized identity).
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  * @param attribute_type The type of the attribute (see enumerated above) to be set
  * @param field Pointer to a parsed field containing the serialized form of a record identity
@@ -165,9 +165,9 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
 
 /**
  * vflow_set_string
- * 
+ *
  * Set a string-typed attribute in a record.
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  * @param attribute_type The type of the attribute (see enumerated above) to be set
  * @param value The string value to be set
@@ -176,9 +176,9 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
 
 /**
  * vflow_set_uint64
- * 
+ *
  * Set a uint64-typed attribute in a record.
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  * @param attribute_type The type of the attribute (see enumerated above) to be set
  * @param value The unsigned integer value to be set
@@ -188,10 +188,10 @@ void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, 
 
 /**
  * vflow_set_trace
- * 
+ *
  * Set the VFLOW_ATTRIBUTE_TRACE attribute of the record using the trace annotation from the
  * referenced message.
- * 
+ *
  * @param record The record pointer returned by vflow_start_record
  * @param msg Pointer to a message from which to extract the path trace
  */

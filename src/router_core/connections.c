@@ -2382,4 +2382,3 @@ static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *acti
 
     qdr_link_cleanup_CT(core, link->conn, link, "Link cleanup deferred after IO processing");
 }
-

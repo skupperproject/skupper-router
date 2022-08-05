@@ -119,7 +119,7 @@ static void start_watch(const char *address)
     dw->address = strdup(address);
     dw->watch_handle = qdr_core_watch_address(core_ptr, address, QD_ITER_HASH_PREFIX_MOBILE, QD_TREATMENT_ANYCAST_BALANCED,
                                               on_dynamic_watch, on_dynamic_cancel, dw);
-    DEQ_INSERT_TAIL(dynamic_watches, dw);    
+    DEQ_INSERT_TAIL(dynamic_watches, dw);
 }
 
 

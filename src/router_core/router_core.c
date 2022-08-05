@@ -1049,5 +1049,3 @@ void qdr_link_work_release(qdr_link_work_t *work)
         }
     }
 }
-
-

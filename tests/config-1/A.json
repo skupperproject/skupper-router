@@ -33,7 +33,7 @@
 ## number of threads to 4.
 ##
 	"workerThreads": 4,
-	
+
 ##
 ## containerName - The name of the AMQP container.  If not specified,
 ## the container name will be set to a value of the container's
@@ -81,4 +81,3 @@
 	"distribution": "closest"
     }]
 ]
-

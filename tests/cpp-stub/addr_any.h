@@ -48,7 +48,7 @@ public:
     {
         return get_func_addr(SHT_SYMTAB, STB_WEAK, func_name_regex_str, result);
     }
-    
+
     int get_global_func_addr_dynsym( std::string func_name_regex_str, std::map<std::string,void*>& result)
     {
         return get_func_addr(SHT_DYNSYM, STB_GLOBAL, func_name_regex_str, result);
@@ -57,7 +57,7 @@ public:
     {
         return get_func_addr(SHT_DYNSYM, STB_WEAK, func_name_regex_str, result);
     }
-    
+
 private:
     bool demangle(std::string& s, std::string& name) {
         int status;
@@ -88,7 +88,7 @@ private:
         char                    *pathname;
         size_t                   pathname_len;
         int                      match = 0;
-        
+
         if(NULL == (fp = fopen("/proc/self/maps", "r")))
         {
             return false;
@@ -226,7 +226,7 @@ private:
         {
             return -1;
         }
-        
+
         ELFIO::Elf_Half sec_num = reader.sections.size();
         for(int i = 0; i < sec_num; ++i)
         {
@@ -245,7 +245,7 @@ private:
                     unsigned char type;
                     ELFIO::Elf_Half section_index;
                     unsigned char other;
-                    
+
                     // Read symbol properties
                     symbols.get_symbol( j, name, value, size, bind, type, section_index, other );
                     if(type == STT_FUNC && bind == stype)
@@ -272,7 +272,7 @@ private:
                 break;
             }
         }
-        
+
         return count;
     }
 private:

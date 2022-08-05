@@ -28,7 +28,7 @@ typedef struct qd_message_pvt_t qd_message_pvt_t;
 
 /** @file
  * Message representation.
- * 
+ *
  * Architecture of the message module:
  *
  *     +--------------+            +----------------------+
@@ -48,7 +48,7 @@ typedef struct qd_message_pvt_t qd_message_pvt_t;
  * one copy of the message content in memory but multiple lightweight references to the content.
  *
  * @internal
- * @{ 
+ * @{
  */
 
 typedef struct {
