@@ -32,10 +32,10 @@ pytest
 pytest-instafail
 pytest-timeout
 
-grpcio
+grpcio; platform_machine != 's390x'
 h2
 protobuf
 quart
 selectors
-websockets
+websockets>=9.1
 psutil

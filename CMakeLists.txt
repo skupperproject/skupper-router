@@ -173,7 +173,13 @@ set(QPID_DISPATCH_CONFDIR ${SYSCONF_INSTALL_DIR}/skupper-router)
 # Set up runtime checks (valgrind, sanitizers etc.)
 include(cmake/RuntimeChecks.cmake)
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SANITIZE_FLAGS}")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZE_FLAGS}")
+# DISPATCH-2196 Linking object files containing instances of the same C++ template fails on s390x with sanitizers enabled
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "s390x")
+    # set the sanitizer flags only for linking, not for compilation; this workarounds the failure
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${SANITIZE_FLAGS}")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZE_FLAGS}")
+endif()
 
 ##
 ## Include directories used by all sub-directories.

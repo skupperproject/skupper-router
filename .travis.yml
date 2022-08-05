@@ -40,7 +40,6 @@ jobs:
   allow_failures:
     - arch: arm64
     - arch: ppc64le
-    - arch: s390x
   exclude:
     - arch: s390x
       env: RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
@@ -60,5 +59,13 @@ addons:
       - libwebsockets-dev
       # code coverage
       - lcov
+      # tests
+      - curl
+      - ncat
+      # coredump analysis
+      - gdb
 
-script: scripts/travisci_build.sh
+script:
+  - ulimit -c unlimited
+  - scripts/travisci_build.sh
+  - find -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
