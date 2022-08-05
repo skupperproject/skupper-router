@@ -52,7 +52,7 @@ else
   python3 -m pip install --user protobuf
   sudo apt install python3-grpcio
 fi
-python3 -m pip install --user -r requirements-dev.txt
+python3 -m pip install --user --ignore-installed -r requirements-dev.txt
 
 echo '==='
 echo 'Build and install qpid-proton from source'
