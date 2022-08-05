@@ -267,7 +267,8 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
                                             const char            **name,
                                             bool                   *strip_annotations_in,
                                             bool                   *strip_annotations_out,
-                                            int                    *link_capacity)
+                                            int                    *link_capacity,
+                                            uint32_t               *group_correlator)
 {
     if (conn) {
         const qd_server_config_t *cf = qd_connection_config(conn);
@@ -275,6 +276,7 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
         *strip_annotations_in  = cf ? cf->strip_inbound_annotations  : true;
         *strip_annotations_out = cf ? cf->strip_outbound_annotations : true;
         *link_capacity         = cf ? cf->link_capacity : 1;
+        *group_correlator      = cf ? cf->group_correlator : 0;
 
         if (cf && (strcmp(cf->role, router_role) == 0)) {
             *strip_annotations_in  = false;
@@ -1142,6 +1144,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     qdr_connection_role_t  role = 0;
     int                    cost = 1;
     int                    link_capacity = 1;
+    uint32_t               group_correlator;
     const char            *name = 0;
     bool                   streaming_links = false;
     char                   rversion[128];
@@ -1185,7 +1188,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
 
     qd_router_connection_get_config(conn, &role, &cost, &name,
-                                    &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
+                                    &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity, &group_correlator);
 
     // check offered capabilities for streaming link support
     //
@@ -1317,6 +1320,8 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  is_ssl,
                                                                  rversion,
                                                                  streaming_links);
+
+    qdr_connection_info_set_group_correlator(connection_info, group_correlator);
 
     qdr_connection_opened(router->router_core,
                           amqp_direct_adaptor,
