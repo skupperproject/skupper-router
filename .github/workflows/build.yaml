@@ -588,6 +588,38 @@ jobs:
           path: |
             **/coredump*
 
+  clang-format:
+    name: 'clang-format (${{ matrix.os }})'
+    runs-on: '${{ matrix.os }}'
+    strategy:
+      matrix:
+        os: [ 'ubuntu-20.04' ]
+
+    env:
+      FORCE_COLOR: 1
+      COLUMNS: 160
+
+    steps:
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: python3 -m pip install clang-format
+
+      - name: Perform clang-format check
+        run: |
+          set -o pipefail
+          scripts/git-clang-format origin/main --diff | tee clang-format.patch
+
+      - name: Upload the proposed patch to Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: clang-format_patch
+          path: clang-format.patch
+
   python:
     name: 'Python Checker (${{ matrix.os }})'
     runs-on: '${{ matrix.os }}'
