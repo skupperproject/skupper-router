@@ -45,8 +45,8 @@ struct qd_adaptor_buffer_t {
     unsigned int  size;     ///< Size of data content
     //unsigned char content[4096];
     //unsigned char content[8192];
-    unsigned char content[16384];
-    //unsigned char content[32768];
+    //unsigned char content[16384];
+    unsigned char content[32768];
     //unsigned char content[65536];
     DEQ_LINKS(qd_adaptor_buffer_t);
 };

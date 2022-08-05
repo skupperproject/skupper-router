@@ -252,6 +252,7 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, const pn_raw_buffer
         }
 
         qd_raw_buffer_t *qd_raw = DEQ_HEAD(encrypted_buffs);
+        bool need_write = false;
         while(qd_raw) {
             qd_adaptor_buffer_t *encrypted_adaptor_buff = (qd_adaptor_buffer_t*) qd_raw->pn_raw_buff.context;
             qd_adaptor_buffer_insert(encrypted_adaptor_buff, qd_raw->pn_raw_buff.size);
@@ -259,10 +260,16 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, const pn_raw_buffer
             DEQ_REMOVE_HEAD(encrypted_buffs);
             free_qd_raw_buffer_t(qd_raw);
             qd_raw = DEQ_HEAD(encrypted_buffs);
+            need_write = true;
         }
 
-        // Write the encrypted buffers to the wire.
-        write_encrypted_output_buffers(conn);
+        if (need_write) {
+            // Write the encrypted buffers to the wire.
+            write_encrypted_output_buffers(conn);
+        }
+        else {
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] encrypt_outgoing_tls() no encrypted output buffers to write", conn->conn_id);
+        }
     } else {
         // process_tls returned false, there is some error in TLS processing, just close the pn_raw_connection
         qd_log(tcp_adaptor->log_source, QD_LOG_ERROR, "[C%"PRIu64"] encrypt_outgoing_tls() encyption failed, closing raw connection", conn->conn_id);
@@ -576,6 +583,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
                 // If the client sends the last of the TLS handshake data to the router and then in the same TCP frame also
                 // starts sending regular data but we are not ready to send the data out because we don't have flow or don't have a reply to
                 //
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] handle_incoming() No reply-to or credit, adding data to unsent_decrypted_buffs", conn->conn_id);
                 qd_raw_buffer_t *qd_raw_buffer = DEQ_HEAD(decrypted_buffs);
                 while(qd_raw_buffer) {
                     DEQ_REMOVE_HEAD(decrypted_buffs);
@@ -938,12 +946,15 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
 
         if (conn->outgoing_buff_count > 0) {
             // flush outgoing buffs that hold body data waiting to go out
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] conn->outgoing_buff_count > 0", conn->conn_id);
             read_more_body = copy_outgoing_buffs(conn);
         }
         while (read_more_body) {
             ZERO(conn->outgoing_buffs);
             conn->outgoing_buff_idx   = 0;
             conn->outgoing_buff_count = read_message_body(conn, msg, conn->outgoing_buffs, WRITE_BUFFERS);
+
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] conn->outgoing_buff_count=%i", conn->conn_id, conn->outgoing_buff_count);
 
             if (conn->outgoing_buff_count > 0) {
                 // Send the data just returned
@@ -1263,9 +1274,6 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_READ: {
-        qd_log(log, QD_LOG_DEBUG,
-               "[C%"PRIu64"] PN_RAW_CONNECTION_READ %s Event ",
-               conn->conn_id, qdr_tcp_connection_role_name(conn));
         int read = 0;
         if (conn->in_dlv_stream || conn->require_tls) {
             // Streaming message exists. Process read normally.
@@ -1274,8 +1282,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
 
         if (conn->require_tls) {
             qd_log(log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] PN_RAW_CONNECTION_READ Read %i decrypted bytes. Total read %"PRIu64" encrypted bytes, %"PRIu64" decrypted bytes",
-                   conn->conn_id, read, conn->encrypted_bytes_in, conn->bytes_in);
+                   "[C%"PRIu64"] PN_RAW_CONNECTION_READ on %s Read %i decrypted bytes. Total read %"PRIu64" encrypted bytes, %"PRIu64" decrypted bytes",
+                   conn->conn_id, qdr_tcp_connection_role_name(conn), read, conn->encrypted_bytes_in, conn->bytes_in);
 
         }
         else {

@@ -377,6 +377,8 @@ bool qd_tls_encrypt_outgoing(qd_tls_t *tls, const pn_raw_buffer_t *unencrypted_b
         assert (encrypt_result_buffers_count == 1);
         (void) encrypt_result_buffers_count; // prevent unused variable warning
 
+        qd_log(tls->log_source, QD_LOG_TRACE, "[C%"PRIu64"] qd_tls_encrypt_outgoing pn_tls_give_encrypt_output_buffers", tls->conn_id);
+
         //
         // Process TLS.
         //
@@ -460,7 +462,7 @@ bool qd_tls_decrypt_incoming(qd_tls_t *tls, const pn_raw_buffer_t *encrypted_buf
                 return false;
             }
 
-            qd_log(tls->log_source, QD_LOG_TRACE, "[C%"PRIu64"] qd_tls_decrypt_incoming process_tls successful, result=%zu", tls->conn_id, result);
+            qd_log(tls->log_source, QD_LOG_TRACE, "[C%"PRIu64"] qd_tls_decrypt_incoming (pn_tls_need_decrypt_output_buffers) process_tls successful, result=%zu", tls->conn_id, result);
         }
 
         if (pn_tls_is_secure(tls->tls_session)) {
@@ -497,6 +499,7 @@ bool qd_tls_decrypt_incoming(qd_tls_t *tls, const pn_raw_buffer_t *encrypted_buf
             qd_raw->pn_raw_buff.offset = decrypted_output_buff.offset;
             qd_raw->pn_raw_buff.context = decrypted_output_buff.context;
             DEQ_INSERT_TAIL(*decrypted_buffs, qd_raw);
+            qd_log(tls->log_source, QD_LOG_TRACE, "[C%"PRIu64"] qd_tls_decrypt_incoming pn_tls_take_decrypt_output_buffers, decrypt buffer size=%zu, decrypt buffer capacity=%zu", tls->conn_id, qd_raw->pn_raw_buff.size, qd_raw->pn_raw_buff.capacity);
         }
     }
 
