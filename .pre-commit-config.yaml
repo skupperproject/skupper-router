@@ -14,28 +14,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
-# under the License
+# under the License.
 #
 
-# https://pip.pypa.io/en/stable/reference/requirements-file-format
-
---prefer-binary
-
-pre-commit
-
-setuptools
-virtualenv
-wheel
-tox
-
-pytest
-pytest-instafail
-pytest-timeout
-
-grpcio
-h2
-protobuf
-quart
-selectors
-websockets
-psutil
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+# https://betterprogramming.pub/2-use-cases-of-python-pre-commit-hooks-to-tidy-up-your-git-repositories-8d86c9c4f06b
+-   repo: local
+    hooks:
+    -   id: git_clang-format
+        name: git clang-format
+        types_or: [c, c++]
+        stages: [commit]
+        language: python
+        entry: scripts/git_clang-format_hook.sh
+        additional_dependencies: [clang-format]

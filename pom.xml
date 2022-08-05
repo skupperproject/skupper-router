@@ -106,6 +106,7 @@
                       <exclude>**/cpp-stub/*</exclude>
                       <exclude>**/*_pb2*</exclude>
                       <exclude>share/index.html</exclude>
+                      <exclude>scripts/git-clang-format</exclude>
                 </excludes>
         </configuration>
             </plugin>
