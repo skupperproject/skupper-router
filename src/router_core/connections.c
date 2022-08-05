@@ -1367,13 +1367,106 @@ void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr)
 
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
-    printf("qdr_connection_group_setup_CT - corr: %d\n", conn->connection_info->group_correlator);
+    //
+    // Record the group's correlator in the core record.
+    // Check the unallocated member list for matching correlators.  Import the
+    // matches into this connection's group.
+    //
+    uint32_t correlator = conn->connection_info->group_correlator;
+    assert(core->group_correlator_by_maskbit[conn->mask_bit] == 0);
+    core->group_correlator_by_maskbit[conn->mask_bit] = correlator;
+
+    qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
+    while (!!member) {
+        qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
+        if (member->connection_info->group_correlator == correlator) {
+            DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
+            DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
+        }
+        member = next;
+    }
+
+    conn->group_cursor = DEQ_HEAD(conn->connection_group);
 }
 
 
 static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
-    printf("qdr_connection_group_member_setup_CT - corr: %d\n", conn->connection_info->group_correlator);
+    //
+    // Scan the correlators-by-maskbit to see if this member's correlator is active.
+    // If so, import this into the active group and reset the cursor.
+    // If not, put this member into the unallocated list.
+    //
+    uint32_t          correlator = conn->connection_info->group_correlator;
+    qdr_connection_t *parent = 0;
+
+    for (int maskbit = 0; maskbit < qd_bitmask_width(); maskbit++) {
+        if (core->group_correlator_by_maskbit[maskbit] == correlator) {
+            parent = core->rnode_conns_by_mask_bit[maskbit];
+            break;
+        }
+    }
+
+    if (!!parent) {
+        assert(parent->connection_info->group_correlator == correlator);
+        DEQ_INSERT_TAIL_N(GROUP, parent->connection_group, conn);
+        parent->group_cursor = DEQ_HEAD(parent->connection_group);
+    } else {
+        DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, conn);
+    }
+}
+
+
+static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    //
+    // Remove the correlator from the maskbit index.
+    // Clear the group list in this connection and nullify the cursor.
+    // Traverse the unallocated list and remove any connections with this correlator.
+    //
+    uint32_t correlator = conn->connection_info->group_correlator;
+
+    assert(core->group_correlator_by_maskbit[conn->mask_bit] == correlator);
+    core->group_correlator_by_maskbit[conn->mask_bit] = 0;
+
+    while (!!DEQ_HEAD(conn->connection_group)) {
+        DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
+    }
+    conn->group_cursor = 0;
+
+    qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
+    while (!!member) {
+        qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
+        if (member->connection_info->group_correlator == correlator) {
+            DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
+        }
+        member = next;
+    }
+}
+
+
+static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    //
+    // Search for the correlator in the maskbit index.
+    // If not found, we're done.
+    // If found, Get the parent connection and remove this connection from the group. Reset the cursor.
+    //
+    uint32_t          correlator = conn->connection_info->group_correlator;
+    qdr_connection_t *parent = 0;
+
+    for (int maskbit = 0; maskbit < qd_bitmask_width(); maskbit++) {
+        if (core->group_correlator_by_maskbit[maskbit] == correlator) {
+            parent = core->rnode_conns_by_mask_bit[maskbit];
+            break;
+        }
+    }
+
+    if (!!parent) {
+        assert(parent->connection_info->group_correlator == correlator);
+        DEQ_REMOVE_N(GROUP, parent->connection_group, conn);
+        parent->group_cursor = DEQ_HEAD(parent->connection_group);
+    }
 }
 
 
@@ -1531,6 +1624,15 @@ static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, boo
     // Deactivate routes associated with this connection
     //
     qdr_route_connection_closed_CT(core, conn);
+
+    //
+    // Do connection-group cleanup if necessary
+    //
+    if (conn->role == QDR_ROLE_INTER_ROUTER) {
+        qdr_connection_group_cleanup_CT(core, conn);
+    } else if (conn->role == QDR_ROLE_INTER_ROUTER_DATA) {
+        qdr_connection_group_member_cleanup_CT(core, conn);
+    }
 
     //
     // Give back the router mask-bit.
