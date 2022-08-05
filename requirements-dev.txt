@@ -32,7 +32,7 @@ pytest
 pytest-instafail
 pytest-timeout
 
-grpcio
+grpcio; platform_machine != 's390x'
 h2
 protobuf
 quart
