@@ -1449,8 +1449,8 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
 {
     //
     // Search for the correlator in the maskbit index.
-    // If not found, we're done.
-    // If found, Get the parent connection and remove this connection from the group. Reset the cursor.
+    // If found, get the parent connection and remove this connection from the group. Reset the cursor.
+    // If not found, remove this connection from the unallocated group
     //
     uint32_t          correlator = conn->connection_info->group_correlator;
     qdr_connection_t *parent = 0;
@@ -1466,6 +1466,16 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
         assert(parent->connection_info->group_correlator == correlator);
         DEQ_REMOVE_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
+    } else {
+        qdr_connection_t *ptr = DEQ_HEAD(core->unallocated_group_members);
+        while (!!ptr) {
+            qdr_connection_t *next = DEQ_NEXT_N(GROUP, ptr);
+            if (ptr == conn) {
+                DEQ_REMOVE_N(GROUP, core->unallocated_group_members, ptr);
+                break;
+            }
+            ptr = next;
+        }
     }
 }
 
