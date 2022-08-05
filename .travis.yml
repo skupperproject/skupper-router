@@ -40,7 +40,6 @@ jobs:
   allow_failures:
     - arch: arm64
     - arch: ppc64le
-    - arch: s390x
   exclude:
     - arch: s390x
       env: RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
