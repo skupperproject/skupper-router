@@ -28,8 +28,12 @@ arch:
   - ppc64le
   - s390x
 env:
-  - PROTON_VERSION=main BUILD_TYPE=RelWithDebInfo RUNTIME_CHECK=asan QD_ENABLE_ASSERTIONS=ON
-  - PROTON_VERSION=main BUILD_TYPE=RelWithDebInfo RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
+  global:
+    - PROTON_VERSION=main
+    - BUILD_TYPE=RelWithDebInfo
+  jobs:
+    - RUNTIME_CHECK=asan QD_ENABLE_ASSERTIONS=ON
+    - RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
 
 jobs:
   fast_finish: true
@@ -39,7 +43,7 @@ jobs:
     - arch: s390x
   exclude:
     - arch: s390x
-      env: PROTON_VERSION=main BUILD_TYPE=RelWithDebInfo RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
+      env: RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
 
 addons:
   apt:
