@@ -37,5 +37,5 @@ h2
 protobuf
 quart
 selectors
-websockets
+websockets>=10.3
 psutil
