@@ -645,9 +645,12 @@ struct qdr_connection_info_t {
 
 ALLOC_DECLARE(qdr_connection_info_t);
 
+DEQ_DECLARE(qdr_connection_t, qdr_connection_list_t);
+
 struct qdr_connection_t {
     DEQ_LINKS(qdr_connection_t);
     DEQ_LINKS_N(ACTIVATE, qdr_connection_t);
+    DEQ_LINKS_N(GROUP, qdr_connection_t);
     qdr_protocol_adaptor_t     *protocol_adaptor;
     uint64_t                    identity;
     qdr_core_t                 *core;
@@ -678,9 +681,9 @@ struct qdr_connection_t {
     bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
     qdr_link_list_t             streaming_link_pool;   ///< pool of links available for streaming messages
     const qd_policy_spec_t     *policy_spec;
+    qdr_connection_list_t       connection_group;      ///< List of associated connection group members
+    qdr_connection_t           *group_cursor;          ///< Pointer to the next group member to use for traffic allocation
 };
-
-DEQ_DECLARE(qdr_connection_t, qdr_connection_list_t);
 
 void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);
 
@@ -838,14 +841,16 @@ struct qdr_core_t {
     qdr_address_t             *router_addr_T;
     qdr_address_t             *routerma_addr_T;
 
-    qdr_node_list_t       routers;            ///< List of routers, in order of cost, from lowest to highest
-    qd_bitmask_t         *neighbor_free_mask;        ///< bits available for new conns (qd_connection_t->mask_bit values)
-    qdr_node_t          **routers_by_mask_bit;       ///< indexed by qdr_node_t->mask_bit
-    qdr_connection_t    **rnode_conns_by_mask_bit;   ///< inter-router conns indexed by conn->mask_bit
-    qdr_link_t          **control_links_by_mask_bit; ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
-    vflow_record_t      **vflow_links_by_mask_bit;   ///< indexed by qdr_node_t->mask_bit
-    qdr_priority_sheaf_t *data_links_by_mask_bit;    ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
-    uint64_t              cost_epoch;
+    qdr_node_list_t         routers;                      ///< List of routers, in order of cost, from lowest to highest
+    qd_bitmask_t           *neighbor_free_mask;           ///< bits available for new conns (qd_connection_t->mask_bit values)
+    qdr_node_t            **routers_by_mask_bit;          ///< indexed by qdr_node_t->mask_bit
+    qdr_connection_t      **rnode_conns_by_mask_bit;      ///< inter-router conns indexed by conn->mask_bit
+    qdr_link_t            **control_links_by_mask_bit;    ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
+    vflow_record_t        **vflow_links_by_mask_bit;      ///< indexed by qdr_node_t->mask_bit
+    qdr_priority_sheaf_t   *data_links_by_mask_bit;       ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
+    qdr_connection_list_t   unallocated_group_members;    ///< List of unallocated group members (i.e. before the group is given a maskbit)
+    uint32_t               *group_correlator_by_maskbit;  ///< Group correlator number indexed by conn->maskbit
+    uint64_t                cost_epoch;
 
     uint64_t              next_tag;
 
