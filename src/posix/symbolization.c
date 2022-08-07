@@ -62,8 +62,7 @@ static struct {
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <demangle.h>
-
+//#include <demangle.h>
 
 /* These global variables are used to pass information between
    translate_addresses and find_address_in_section.  */
@@ -117,8 +116,8 @@ static bool do_demangle = true;
 
 static asymbol **syms;		/* Symbol table.  */
 
-/* Flags passed to the name demangler.  */
-static int demangle_flags = DMGL_PARAMS | DMGL_ANSI;
+///* Flags passed to the name demangler.  */
+// static int demangle_flags = DMGL_PARAMS | DMGL_ANSI;
 
 /* Look for an offset in a section.  This is directly called.  */
 
@@ -202,9 +201,9 @@ translate_addresses (bfd *abfd, asection *section)
                         name = "??";
                     else if (do_demangle)
                     {
-                        alloc = bfd_demangle (abfd, name, demangle_flags);
-                        if (alloc != NULL)
-                            name = alloc;
+                        //                        alloc = bfd_demangle (abfd, name, demangle_flags);
+                        //                        if (alloc != NULL)
+                        //                            name = alloc;
                     }
 
                     printf ("%s", name);
