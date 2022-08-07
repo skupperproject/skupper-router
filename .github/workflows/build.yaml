@@ -792,3 +792,53 @@ jobs:
       - name: Output
         if: ${{ ! cancelled() }}
         run: cat target/rat.txt || echo "Unable to print output"
+
+  doxygen-build:
+
+    runs-on: ubuntu-22.04
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Run Doxygen
+        run: doxygen
+
+      - name: Upload rendered HTML
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: html/
+
+  doxygen-publish:
+
+    needs: doxygen-build
+    if: github.ref_name == 'main'
+
+    # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    # Allow one concurrent deployment
+    concurrency:
+      group: "pages"
+      cancel-in-progress: true
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
