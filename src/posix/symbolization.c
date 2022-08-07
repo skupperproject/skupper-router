@@ -339,7 +339,7 @@ slurp_symtab (bfd *abfd)
         && (storage = bfd_get_dynamic_symtab_upper_bound (abfd)) > 0)
     {
         free (syms);
-        syms = xmalloc (storage);
+        syms     = malloc(storage);
         symcount = bfd_canonicalize_dynamic_symtab (abfd, syms);
     }
 
@@ -393,7 +393,7 @@ int main2() {
             list_matching_formats (matching);
             free (matching);
         }
-        xexit (1);
+        exit(1);
     }
 
 //    if (section_name != NULL)
