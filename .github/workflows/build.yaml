@@ -348,7 +348,7 @@ jobs:
           # coverage
           - os: ubuntu-20.04
             container: 'fedora'
-            containerTag: 35
+            containerTag: 36
             buildType: Coverage
             runtimeCheck: OFF
             protonGitRef: 0.37.0
@@ -429,10 +429,6 @@ jobs:
         run: |
           dnf -y install epel-release
           dnf config-manager --set-enabled powertools
-
-      - name: Install dmesg on Fedora 35
-        if: ${{ matrix.container == 'fedora' }}
-        run: dnf install -y util-linux-core
 
       - name: Install Linux build dependencies
         run: |
