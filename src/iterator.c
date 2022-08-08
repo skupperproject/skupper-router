@@ -589,11 +589,11 @@ unsigned char qd_iterator_octet(qd_iterator_t *iter)
         if (iter->view_pointer.remaining == 0)
             return (unsigned char) 0;
 
-        unsigned char result;
+        unsigned char result = 0;
         if (iter->view_pointer.buffer) {
-            uint8_t octet;
-            (void)qd_buffer_field_octet(&iter->view_pointer, &octet);
-            result = (unsigned char) octet;
+            bool ok = qd_buffer_field_octet(&iter->view_pointer, (uint8_t *) &result);
+            (void) ok;
+            assert(ok);
         } else { // string or binary array
             result = *(iter->view_pointer.cursor)++;
             --iter->view_pointer.remaining;
