@@ -721,7 +721,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     // After each event check connection and request status
     //
     _server_request_t *hreq = (_server_request_t*) DEQ_HEAD(hconn->requests);
-    bool need_close = _process_request(hreq);
+    bool               need_close = _process_request(hreq);
     if (need_close) {
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP Request requires connection close", hconn->conn_id);
         qdr_http1_close_connection(hconn, 0);
