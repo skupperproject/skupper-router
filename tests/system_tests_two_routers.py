@@ -1659,9 +1659,7 @@ class StreamingLinkScrubberTest(TestCase):
         senders = [self.popen(cmd, env=env) for x in range(sender_count)]
 
         for tx in senders:
-            out_text, out_error = tx.communicate(timeout=TIMEOUT)
-            if tx.returncode:
-                raise Exception("Sender failed: %s %s" % (out_text, out_error))
+            tx.wait(timeout=TIMEOUT)
 
         # expect: more inter-router links opened.  Should be 12 more, but
         # depending on when the scrubber runs it may be as low as two
@@ -1674,9 +1672,7 @@ class StreamingLinkScrubberTest(TestCase):
             sleep(0.1)
             post_count = len(get_inter_router_links(self.RouterA.listener))
 
-        out_text, out_error = rx.communicate(timeout=TIMEOUT)
-        if rx.returncode:
-            raise Exception("Receiver failed: %s %s" % (out_text, out_error))
+        rx.wait(timeout=TIMEOUT)
 
 
 class TwoRouterExtensionStateTest(TestCase):
