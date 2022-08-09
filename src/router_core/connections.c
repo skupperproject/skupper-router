@@ -1374,22 +1374,24 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
     // matches into this connection's group.
     //
     const char *correlator = conn->connection_info->group_correlator;
-    assert(core->group_correlator_by_maskbit[conn->mask_bit][0] == '\0');
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
-    strncpy(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE);
+    if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
+        assert(core->group_correlator_by_maskbit[conn->mask_bit][0] == '\0');
+        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
+        strncpy(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE);
 
-    qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
-    while (!!member) {
-        qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
-        if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %x", (ulong) member);
-            DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
-            DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
+        qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
+        while (!!member) {
+            qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
+            if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
+                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %x", (ulong) member);
+                DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
+                DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
+            }
+            member = next;
         }
-        member = next;
-    }
 
-    conn->group_cursor = DEQ_HEAD(conn->connection_group);
+        conn->group_cursor = DEQ_HEAD(conn->connection_group);
+    }
 }
 
 
@@ -1432,26 +1434,26 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
     // Traverse the unallocated list and remove any connections with this correlator.
     //
     const char *correlator = conn->connection_info->group_correlator;
-    assert(strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0);
+    if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
+        assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
+        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     correlator[%d] = NULL (was %s)", conn->mask_bit, correlator);
+        core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
 
-    assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP     correlator[%d] = NULL (was %s)", conn->mask_bit, correlator);
-    core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
-
-    while (!!DEQ_HEAD(conn->connection_group)) {
-        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %x", (ulong) DEQ_HEAD(conn->connection_group));
-        DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
-    }
-    conn->group_cursor = 0;
-
-    qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
-    while (!!member) {
-        qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
-        if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing unallocated with matching correlator: %x", (ulong) member);
-            DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
+        while (!!DEQ_HEAD(conn->connection_group)) {
+            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %x", (ulong) DEQ_HEAD(conn->connection_group));
+            DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
         }
-        member = next;
+        conn->group_cursor = 0;
+
+        qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
+        while (!!member) {
+            qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
+            if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
+                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing unallocated with matching correlator: %x", (ulong) member);
+                DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
+            }
+            member = next;
+        }
     }
 }
 
