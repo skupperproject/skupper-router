@@ -26,6 +26,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/vanflow.h"
 
 #include <memory.h>
@@ -623,24 +624,24 @@ bool qdr_is_addr_treatment_multicast(qdr_address_t *addr);
 //
 
 struct qdr_connection_info_t {
-    char                       *container;
-    char                       *sasl_mechanisms;
-    char                       *host;
-    char                       *ssl_proto;
-    char                       *ssl_cipher;
-    char                       *user;
-    bool                        is_authenticated;
-    bool                        is_encrypted;
-    bool                        opened;
-    bool                        streaming_links;  // will allow streaming links
-    qd_direction_t              dir;
-    qdr_connection_role_t       role;
-    pn_data_t                  *connection_properties;
-    bool                        ssl;
-    int                         ssl_ssf; //ssl strength factor
-    char                       *version; // if role is router or edge
-    sys_mutex_t                 connection_info_lock;
-    uint32_t                    group_correlator;  // Used to associate inter-router-data connections to their inter-router connection
+    char                  *container;
+    char                  *sasl_mechanisms;
+    char                  *host;
+    char                  *ssl_proto;
+    char                  *ssl_cipher;
+    char                  *user;
+    bool                   is_authenticated;
+    bool                   is_encrypted;
+    bool                   opened;
+    bool                   streaming_links;  // will allow streaming links
+    qd_direction_t         dir;
+    qdr_connection_role_t  role;
+    pn_data_t             *connection_properties;
+    bool                   ssl;
+    int                    ssl_ssf; //ssl strength factor
+    char                  *version; // if role is router or edge
+    sys_mutex_t            connection_info_lock;
+    char                   group_correlator[QD_DISCRIMINATOR_SIZE];  // Used to associate inter-router-data connections to their inter-router connection
 };
 
 ALLOC_DECLARE(qdr_connection_info_t);
@@ -849,7 +850,7 @@ struct qdr_core_t {
     vflow_record_t        **vflow_links_by_mask_bit;      ///< indexed by qdr_node_t->mask_bit
     qdr_priority_sheaf_t   *data_links_by_mask_bit;       ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
     qdr_connection_list_t   unallocated_group_members;    ///< List of unallocated group members (i.e. before the group is given a maskbit)
-    uint32_t               *group_correlator_by_maskbit;  ///< Group correlator number indexed by conn->maskbit
+    char                  **group_correlator_by_maskbit;  ///< Group correlator number indexed by conn->maskbit
     uint64_t                cost_epoch;
 
     uint64_t              next_tag;

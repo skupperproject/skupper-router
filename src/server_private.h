@@ -30,6 +30,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/discriminator.h"
 
 #include <proton/engine.h>
 #include <proton/event.h>
@@ -144,6 +145,10 @@ struct qd_connector_t {
     /* Optional policy vhost name */
     char                     *policy_vhost;
 
+    /* Connection group state */
+    bool is_data_connector;
+    char group_correlator[QD_DISCRIMINATOR_SIZE];
+
     DEQ_LINKS(qd_connector_t);
 };
 
@@ -182,7 +187,8 @@ struct qd_connection_t {
     qd_deferred_call_list_t         deferred_calls;
     sys_mutex_t                     deferred_call_lock;
     bool                            policy_counted;
-    char                            *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
+    char                           *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
+    char                            group_correlator[QD_DISCRIMINATOR_SIZE];
     qd_pn_free_link_session_list_t  free_link_session_list;
     bool                            strip_annotations_in;
     bool                            strip_annotations_out;

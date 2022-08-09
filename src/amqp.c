@@ -38,6 +38,7 @@ const char * const QD_CONNECTION_PROPERTY_PRODUCT_VALUE         = "skupper-route
 const char * const QD_CONNECTION_PROPERTY_VERSION_KEY           = "version";
 const char * const QD_CONNECTION_PROPERTY_COST_KEY              = "qd.inter-router-cost";
 const char * const QD_CONNECTION_PROPERTY_ROLE_KEY              = "qd.inter-router-role";
+const char * const QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY  = "qd.group-correlator";
 const char * const QD_CONNECTION_PROPERTY_CONN_ID               = "qd.conn-id";
 const char * const QD_CONNECTION_PROPERTY_FAILOVER_LIST_KEY     = "failover-server-list";
 const char * const QD_CONNECTION_PROPERTY_FAILOVER_NETHOST_KEY  = "network-host";

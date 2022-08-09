@@ -267,8 +267,7 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
                                             const char            **name,
                                             bool                   *strip_annotations_in,
                                             bool                   *strip_annotations_out,
-                                            int                    *link_capacity,
-                                            uint32_t               *group_correlator)
+                                            int                    *link_capacity)
 {
     if (conn) {
         const qd_server_config_t *cf = qd_connection_config(conn);
@@ -276,7 +275,6 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
         *strip_annotations_in  = cf ? cf->strip_inbound_annotations  : true;
         *strip_annotations_out = cf ? cf->strip_outbound_annotations : true;
         *link_capacity         = cf ? cf->link_capacity : 1;
-        *group_correlator      = cf ? cf->group_correlator : 0;
 
         if (cf && (strcmp(cf->role, router_role) == 0)) {
             *strip_annotations_in  = false;
@@ -1144,7 +1142,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     qdr_connection_role_t  role = 0;
     int                    cost = 1;
     int                    link_capacity = 1;
-    uint32_t               group_correlator;
     const char            *name = 0;
     bool                   streaming_links = false;
     char                   rversion[128];
@@ -1188,7 +1185,11 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
 
     qd_router_connection_get_config(conn, &role, &cost, &name,
-                                    &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity, &group_correlator);
+                                    &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
+
+    if (conn->connector && conn->connector->config.has_data_connectors) {
+        strncpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    }
 
     // check offered capabilities for streaming link support
     //
@@ -1221,7 +1222,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
             const size_t num_items = pn_data_get_map(props);
             int props_found = 0;  // once all props found exit loop
             pn_data_enter(props);
-            for (int i = 0; i < num_items / 2 && props_found < 5; ++i) {
+            for (int i = 0; i < num_items / 2 && props_found < 6; ++i) {
                 if (!pn_data_next(props)) break;
                 if (pn_data_type(props) != PN_SYMBOL) break;  // invalid properties map
                 pn_bytes_t key = pn_data_get_symbol(props);
@@ -1248,6 +1249,17 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                             if (override_role == QDR_ROLE_INTER_ROUTER_DATA) {
                                 role = QDR_ROLE_INTER_ROUTER_DATA;
                             }
+                        }
+                    }
+
+                } else if (key.size == strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY) &&
+                    strncmp(key.start, QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY, key.size) == 0) {
+                    props_found += 1;
+                    if (!pn_data_next(props)) break;
+                    if (role == QDR_ROLE_INTER_ROUTER || role == QDR_ROLE_INTER_ROUTER_DATA) {
+                        if (pn_data_type(props) == PN_STRING) {
+                            pn_bytes_t gc = pn_data_get_string(props);
+                            strncpy(conn->group_correlator, gc.start, MIN(gc.size, QD_DISCRIMINATOR_SIZE));
                         }
                     }
 
@@ -1321,7 +1333,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  rversion,
                                                                  streaming_links);
 
-    qdr_connection_info_set_group_correlator(connection_info, group_correlator);
+    qdr_connection_info_set_group_correlator(connection_info, conn->group_correlator);
 
     qdr_connection_opened(router->router_core,
                           amqp_direct_adaptor,
