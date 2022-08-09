@@ -66,6 +66,7 @@ const char *qd_log_message_components[] =
 const char *ALL = "all";
 const char *NONE = "none";
 
+
 /**
  * Search the list of config_ssl_profiles for an ssl-profile that matches the passed in name
  */
@@ -310,7 +311,6 @@ static qd_log_bits populate_log_message(const qd_server_config_t *config)
 
 static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *config, qd_entity_t* entity, bool is_listener, const char *role_override)
 {
-    static uint32_t next_group_correlator = 1;
     qd_error_clear();
 
     bool authenticatePeer   = qd_entity_opt_bool(entity, "authenticatePeer",  false);    CHECK();
@@ -365,9 +365,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
 
     if (strcmp(config->role, "inter-router") == 0) {
         config->data_connection_count = qd_entity_opt_long(entity, "dataConnectionCount", 1); CHECK();
-        config->group_correlator      = next_group_correlator++;
         config->has_data_connectors   = true;
-        config->is_data_connector     = false;
     }
 
     set_config_host(config, entity);
@@ -769,11 +767,12 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         // If this connection has a data-connection-group, set up the group members now
         //
         if (ct->config.has_data_connectors) {
+            qd_generate_discriminator(ct->group_correlator);
             for (uint32_t i = 0; i < ct->config.data_connection_count; i++) {
                 qd_connector_t *dc = qd_server_connector(qd->server);
                 if (dc && load_server_config(qd, &dc->config, entity, false, "inter-router-data") == QD_ERROR_NONE) {
-                    dc->config.group_correlator  = ct->config.group_correlator;
-                    dc->config.is_data_connector = true;
+                    strncpy(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE);
+                    dc->is_data_connector = true;
                     DEQ_INSERT_TAIL(cm->data_connectors, dc);
                     qd_failover_item_t *item = NEW(qd_failover_item_t);
                     ZERO(item);
@@ -993,7 +992,6 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         // timer callback may be running during the call to qd_timer_free
         qd_timer_t *timer = 0;
         bool        has_data_connectors = ct->config.has_data_connectors;
-        uint32_t    correlator          = ct->config.group_correlator;
         void *dct = qd_connection_new_qd_deferred_call_t();
         sys_mutex_lock(&ct->lock);
         timer = ct->timer;
@@ -1008,7 +1006,7 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
             qd_connection_free_qd_deferred_call_t(dct);
         }
         qd_timer_free(timer);
-        if (ct->config.is_data_connector) {
+        if (ct->is_data_connector) {
             DEQ_REMOVE(qd->connection_manager->data_connectors, ct);
         } else {
             DEQ_REMOVE(qd->connection_manager->connectors, ct);
@@ -1022,7 +1020,7 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
             qd_connector_t *dc = DEQ_HEAD(qd->connection_manager->data_connectors);
             while (!!dc) {
                 qd_connector_t *next = DEQ_NEXT(dc);
-                if (dc->config.group_correlator == correlator) {
+                if (strncmp(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE) == 0) {
                     qd_connection_manager_delete_connector(qd, (void*) dc);
                 }
                 dc = next;

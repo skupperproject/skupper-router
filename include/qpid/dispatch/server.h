@@ -401,13 +401,10 @@ typedef struct qd_server_config_t {
     pn_data_t *conn_props;
 
     /**
-     * For inter-router roles only.  What's the number of data connections associated with the link.
-     * The group_correlator is computed locally and is unique for every inter-router connection.
+     * For inter-router roles only.  The number of data connections associated with the link.
      */
     uint32_t  data_connection_count;
-    uint32_t  group_correlator;
     bool      has_data_connectors;
-    bool      is_data_connector;
 
     /**
      * @name These fields are not primary configuration, they are computed.

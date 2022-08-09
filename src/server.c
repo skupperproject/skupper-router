@@ -423,8 +423,10 @@ static qd_error_t listener_setup_ssl(qd_connection_t *ctx, const qd_server_confi
 }
 
 
-static void decorate_connection(qd_server_t *qd_server, pn_connection_t *conn, const qd_server_config_t *config)
+static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *config)
 {
+    qd_server_t     *qd_server = ctx->server;
+    pn_connection_t *conn      = ctx->pn_conn;
     //
     // Set the container name
     //
@@ -483,14 +485,20 @@ static void decorate_connection(qd_server_t *qd_server, pn_connection_t *conn, c
         pn_data_put_int(pn_connection_properties(conn), config->inter_router_cost);
     }
 
-    if (config && config->is_data_connector) {
+    if (ctx->connector && ctx->connector->is_data_connector) {
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_ROLE_KEY), QD_CONNECTION_PROPERTY_ROLE_KEY));
         pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
-    if (config) {
+    if (ctx->connector && (ctx->connector->is_data_connector || ctx->connector->config.has_data_connectors)) {
+        pn_data_put_symbol(pn_connection_properties(conn),
+                           pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY), QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY));
+        pn_data_put_string(pn_connection_properties(conn),
+                           pn_bytes(QD_DISCRIMINATOR_SIZE, ctx->group_correlator));
+    }
 
+    if (config) {
         if (strcmp(config->role, "inter-router") == 0 || strcmp(config->role, "edge") == 0) {
             pn_data_put_symbol(pn_connection_properties(conn),
                                pn_bytes(strlen(QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY),
@@ -574,7 +582,7 @@ static void connection_wake(qd_connection_t *ctx) {
  * Does not allocate any managed objects and therefore
  * does not take ENTITY_CACHE lock.
  */
-qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config_t *config, qd_connection_t *ctx)
+qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config_t *config, qd_connection_t *ctx, qd_connector_t *connector)
 {
     assert(ctx);
     ZERO(ctx);
@@ -592,7 +600,11 @@ qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config
     ctx->connection_id = server->next_connection_id++;
     DEQ_INSERT_TAIL(server->conn_list, ctx);
     sys_mutex_unlock(&server->lock);
-    decorate_connection(ctx->server, ctx->pn_conn, config);
+    if (!!connector) {
+        ctx->connector = connector;
+        strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    }
+    decorate_connection(ctx, config);
     return ctx;
 }
 
@@ -604,7 +616,7 @@ qd_connection_t *qd_server_connection(qd_server_t *server, qd_server_config_t *c
 {
     qd_connection_t *ctx = new_qd_connection_t();
     if (!ctx) return NULL;
-    return qd_server_connection_impl(server, config, ctx);
+    return qd_server_connection_impl(server, config, ctx, 0);
 }
 
 static void on_accept(pn_event_t *e, qd_listener_t *listener)
@@ -1134,7 +1146,7 @@ static qd_failover_item_t *qd_connector_get_conn_info(qd_connector_t *ct) {
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
 {
     // connection until pn_proactor_connect is called below
-    qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection);
+    qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
     if (!qd_conn) {                 /* Try again later */
         qd_log(connector->server->log_source, QD_LOG_CRITICAL, "Allocation failure connecting to %s",
                connector->config.host_port);
@@ -1144,7 +1156,6 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
         return;
     }
 
-    qd_conn->connector = connector;
     sys_atomic_inc(&connector->ref_count);
 
     connector->qd_conn = qd_conn;
