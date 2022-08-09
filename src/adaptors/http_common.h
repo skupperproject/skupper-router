@@ -113,8 +113,10 @@ void qd_http_record_request(qdr_core_t *core, const char * method, uint32_t stat
                             uint64_t bytes_in, uint64_t bytes_out, uint64_t latency);
 char *qd_get_host_from_host_port(const char *host_port);
 
-qd_error_t qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t* entity, qd_log_source_t *log_source);
-void qd_http_free_adaptor_config(qd_http_adaptor_config_t *config);
+qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_entity_t *entity,
+                                                      qd_log_source_t *log_source);
+void                      qd_free_http_adaptor_config(qd_http_adaptor_config_t *config);
+
 //
 // These functions are defined in their respective HTTP adaptors:
 //
