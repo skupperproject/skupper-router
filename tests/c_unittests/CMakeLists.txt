@@ -19,7 +19,8 @@
 
 # -fno-inline: just to be extra sure, no particular reason so far
 # -fno-builtin: GCC would optimize e.g. abs() and we would not be able to stub
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector")
+# -Wno-literal-suffix allows compiling string literals such as "[C%"PRIu64"]" as C++
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector -Wno-literal-suffix")
 
 add_library(static_accessors_server_c SHARED
         static_accessors_server_c.c)
@@ -34,11 +35,14 @@ add_executable(c_unittests
         helpers.hpp
         test_amqp.cpp
         test_connection_manager_static.cpp
+        test_http_listener_connector.cpp
         test_listener_startup.cpp
         test_router_startup.cpp
         test_server.cpp
         test_terminus.cpp)
 target_link_libraries(c_unittests cpp-stub pthread skupper-router static_accessors_server_c)
+# http_common.h includes "delivery.h"
+target_include_directories(c_unittests PRIVATE ${CMAKE_SOURCE_DIR}/src/router_core)
 
 file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_silent.conf

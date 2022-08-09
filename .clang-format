@@ -39,8 +39,8 @@ IncludeCategories:
   # python-related headers must go first
   - Regex: '^<Python.h>|"qpid/dispatch/python_embedded.h"|"python_private.h"$'
     Priority: -2
-  # helpers.hpp must go before qdr_doctest.hpp
-  - Regex: 'helpers.hpp[">]$'
+  # helpers.hpp must go after qdr_doctest.hpp
+  - Regex: 'qdr_doctest.hpp[">]$'
     Priority: -1
   - Regex: '^"qpid/dispatch/?.*\.h"'
     Priority: 2
