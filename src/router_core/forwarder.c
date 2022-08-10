@@ -66,11 +66,29 @@ static inline qdr_link_t *peer_router_data_link(qdr_core_t *core,
 
 
 // Get an idle anonymous link for a streaming message. This link will come from
-// either the connections free link pool or it will be dynamically created on
+// either the connection's free link pool or it will be dynamically created on
 // the given connection.
-static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *conn)
+static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *base_conn)
 {
-    if (!conn) return 0;
+    qdr_connection_t *conn;
+    if (!base_conn) return 0;
+
+    if (DEQ_SIZE(base_conn->connection_group) == 0) {
+        //
+        // If there is no connection group associated with this base connection, simply open the
+        // new link on the base connection.
+        //
+        conn = base_conn;
+    } else {
+        //
+        // Round-robin through the connections in the group for assignment of links.
+        //
+        if (!base_conn->group_cursor) {
+            base_conn->group_cursor = DEQ_HEAD(base_conn->connection_group);
+        }
+        conn = base_conn->group_cursor;
+        base_conn->group_cursor = DEQ_NEXT_N(GROUP, base_conn->group_cursor);
+    }
 
     qdr_link_t *out_link = DEQ_HEAD(conn->streaming_link_pool);
     if (out_link) {

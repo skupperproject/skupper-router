@@ -1620,6 +1620,7 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
                                       QD_SSN_LINK_STREAMING, QDR_DEFAULT_PRIORITY);
         break;
     case QDR_ROLE_EDGE_CONNECTION:
+    case QDR_ROLE_INTER_ROUTER_DATA:
         out_link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, QD_OUTGOING,
                                       qdr_terminus(0), qdr_terminus(0),
                                       QD_SSN_LINK_STREAMING, QDR_DEFAULT_PRIORITY);
