@@ -137,8 +137,8 @@ qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_en
     qd_http_listener_t       *listener = 0;
     qd_http_adaptor_config_t *config   = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
     if (!config) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR, "Unable to create http listener: %s",
-               qd_error_message());
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
+               "Unable to create http listener: %s", qd_error_message());
         return 0;
     }
 
@@ -198,8 +198,8 @@ qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_
     qd_http_adaptor_config_t *config = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
 
     if (!config) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR, "Unable to create http connector: %s",
-               qd_error_message());
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
+               "Unable to create http connector: %s", qd_error_message());
         return 0;
     }
 
