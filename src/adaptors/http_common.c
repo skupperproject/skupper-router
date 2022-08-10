@@ -86,8 +86,8 @@ qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_enti
     //
     qd_error_t qd_error = qd_load_adaptor_config(qd, config->adaptor_config, entity, log_source);
     if (qd_error != QD_ERROR_NONE) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR, "Unable to load config information: %s",
-               qd_error_message());
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
+               "Unable to load config information: %s", qd_error_message());
         qd_free_http_adaptor_config(config);
         return 0;
     }
