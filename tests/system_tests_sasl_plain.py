@@ -336,9 +336,9 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
+        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, an inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -366,9 +366,9 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
+        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -472,9 +472,9 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 2 connections that have authenticated using SASL PLAIN. One inter-router connection
+        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(2, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -496,8 +496,8 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
         # sslProto should be TLSv1.x
         self.assertIn('TLSv1', results[0].sslProto)
 
-        # role should be inter-router
-        self.assertEqual('inter-router', results[0].role)
+        # role should be inter-router or inter-router-data
+        self.assertEqual('inter-router', results[0].role[:12])
 
         # sasl must be plain
         self.assertEqual('PLAIN', results[0].sasl)
@@ -685,8 +685,8 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         # sslProto should be TLSv1.x
         self.assertIn('TLSv1', results[N].sslProto)
 
-        # role should be inter-router
-        self.assertEqual('inter-router', results[N].role)
+        # role should be inter-router or inter-router-data
+        self.assertEqual('inter-router', results[N].role[:12])
 
         # sasl must be plain
         self.assertEqual('PLAIN', results[N].sasl)
