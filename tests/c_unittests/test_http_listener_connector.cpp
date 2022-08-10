@@ -24,14 +24,11 @@
 #include "./helpers.hpp"  // must come after ./qdr_doctest.hpp
 
 #include <map>
-#include <regex>
 #include <thread>
 #include <variant>
 
 extern "C" {
 #include "adaptors/http_common.h"
-
-#include <proton/listener.h>
 }
 
 using entity_value_t = std::variant<std::string, const char *, bool>;
