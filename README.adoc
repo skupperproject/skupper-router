@@ -119,6 +119,13 @@ $ dnf install pre-commit
 $ pre-commit install
 ----
 
+The second command will install the pre-commit script into your `./.git/hooks/pre-commit`.
+
+Hooks are configured in `.pre-commit-config.yaml`.
+The `git clang-format` hook enforces <docs/notes/code-conventions.md> for modified C code upon `git commit`.
+Every time a user attempts a commit, clang-format is run for the staged files and if an incorrectly formatted line is detected, the commit aborts.
+The changed lines are automatically formatted during this operation, so after reviewing the changes, the user can then repeat the commit.
+
 Read this https://www.redhat.com/sysadmin/git-hooks[git hooks article] on redhat.com (as well as documentation for pre-commit) to learn more.
 
 === Description of the individual test-only dependencies

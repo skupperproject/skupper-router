@@ -19,9 +19,10 @@
 
 ## C conventions
 
-Use `clang-format` to apply the styles configured in the `.clang-format` file.
+Formatting conventions are automatically enforced by a pre-commit hook and a GitHub CI job.
+See README.adoc for instructions on enabling the pre-commit hook.
 
-    $ clang-format -i <your-file>
+### Usage of `git clang-format` (per-line formatting)
 
 Use the [`git-clang-format`](https://github.com/llvm/llvm-project/blob/main/clang/tools/clang-format/git-clang-format)
 script to only reformat your outstanding modified source code lines in a git repository.
@@ -29,10 +30,21 @@ The script is likely present in your Linux distribution packages, e.g. on Fedora
 
     $ dnf install git-clang-format
 
-Reformat entire repository using the following command, then analyze how much has changed
+To see incorrectly formatted changed lines on the current branch (compared to origin/main branch), run
 
-    $ clang-format -i $(git ls-files -- '*.cpp' '*.hpp' '*.c' '*.h')
-    $ git diff -w --shortstat
+    $ git clang-format origin/main --diff
+
+Leave out the `--diff` to immediately apply the changes.
+
+### Formatting tips
+
+Parameter lists can be automatically formatted either as one item per line, or binpacked (as many items per line as will fit).
+If you want to enforce your own grouping, add an empty line comment before the newline you want preserved, e.g.
+
+```c
+qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
+       "Unable to create http listener: %s", qd_error_message());
+```
 
 To disable automatic formatting in a particular part of your file,
 bracket it with `clang-format on` and `off` commands:
@@ -40,6 +52,19 @@ bracket it with `clang-format on` and `off` commands:
     // clang-format off
     static void* do();
     // clang-format on
+
+### Usage of `clang-format` (whole-file formatting)
+
+Use `clang-format` to apply the styles configured in the `.clang-format` file.
+
+    $ clang-format -i <your-file>
+
+Reformat entire repository using the following command, then analyze how much has changed
+
+    $ clang-format -i $(git ls-files -- '*.cpp' '*.hpp' '*.c' '*.h')
+    $ git diff -w --shortstat
+
+### Format style definition file
 
 The options available in `.clang-format` file are explained in
 <https://clang.llvm.org/docs/ClangFormatStyleOptions.html> documentation page.
