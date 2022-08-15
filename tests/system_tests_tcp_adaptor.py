@@ -648,7 +648,7 @@ class TcpAdaptor(TestCase):
                             time.sleep(0.25)
                             break
 
-        cls.logger.log("**************TCP_TEST All tcpListeners are active**************")
+        cls.logger.log("^^^^^^^^^^^^^^^TCP_TEST All tcpListeners are active^^^^^^^^^^^^^")
 
     @classmethod
     def tearDownClass(cls):

@@ -584,12 +584,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
                 // starts sending regular data but we are not ready to send the data out because we don't have flow or don't have a reply to
                 //
                 qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] handle_incoming() No reply-to or credit, adding data to unsent_decrypted_buffs", conn->conn_id);
-                qd_raw_buffer_t *qd_raw_buffer = DEQ_HEAD(decrypted_buffs);
-                while(qd_raw_buffer) {
-                    DEQ_REMOVE_HEAD(decrypted_buffs);
-                    DEQ_INSERT_TAIL(conn->unsent_decrypted_buffs, qd_raw_buffer);
-                    qd_raw_buffer = DEQ_HEAD(decrypted_buffs);
-                }
+                DEQ_APPEND(conn->unsent_decrypted_buffs, decrypted_buffs);
             }
         }
     }

@@ -22,15 +22,20 @@
 
 #include "entity.h"
 
-#include "qpid/dispatch/dispatch.h"
+#include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/atomic.h"
+#include "qpid/dispatch/atomic.h"
+#include "qpid/dispatch/buffer.h"
+#include "qpid/dispatch/dispatch.h"
+#include "qpid/dispatch/log.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/alloc_pool.h"
+#include "qpid/dispatch/threading.h"
 
 #include <proton/tls.h>
 
-extern size_t QD_ADAPTOR_MAX_BUFFER_SIZE;
+extern const size_t QD_ADAPTOR_MAX_BUFFER_SIZE;
 
 typedef enum {
     QD_AGGREGATION_NONE,
@@ -42,13 +47,8 @@ typedef struct qd_adaptor_config_t     qd_adaptor_config_t;
 typedef struct qd_adaptor_buffer_t     qd_adaptor_buffer_t;
 
 struct qd_adaptor_buffer_t {
-    unsigned int  size;     ///< Size of data content
-    //unsigned char content[4096];
-    //unsigned char content[8192];
-    //unsigned char content[16384];
-    unsigned char content[32768];
-    //unsigned char content[65536];
     DEQ_LINKS(qd_adaptor_buffer_t);
+    size_t size; ///< Size of data content
 };
 
 struct qd_adaptor_config_t
@@ -79,12 +79,38 @@ void qd_free_adaptor_config(qd_adaptor_config_t *config);
 ALLOC_DECLARE(qd_adaptor_buffer_t);
 DEQ_DECLARE(qd_adaptor_buffer_t, qd_adaptor_buffer_list_t);
 
-qd_adaptor_buffer_t *qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint8_t *data, size_t len);
+// on return buflist will be empty:
+void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *buflist);
+
+/**
+ * Copies adaptor buffers in a buffer list into the passed in list of qd_buffers
+ *
+ * @param qd_adaptor_buffs - adaptor buffer list that needs to be copied into qd_buffers
+ * @param qd_bufs - The qd_buffer list to which the adaptor buffers will be copied into
+ */
+void qd_adaptor_buffers_copy_to_qd_buffers(const qd_adaptor_buffer_list_t *qd_adaptor_buffs, qd_buffer_list_t *qd_bufs);
+
+/**
+ * Copies qd_buffers in a buffer list into the passed in list of adaptor buffers
+ *
+ * @param qd_buffs - qd_buffer list that needs to be copied into adaptor buffers
+ * @param qd_adaptor_buffs - The adaptor buffer list to which the qd_buffers will be copied into
+ */
+void qd_adaptor_copy_qd_buffers_to_adaptor_buffers(const qd_buffer_list_t *qd_bufs, qd_adaptor_buffer_list_t *qd_adaptor_buffs);
+
+static inline void qd_adaptor_buffer_free(qd_adaptor_buffer_t *buf)
+{
+    if (!buf)
+        return;
+    free_qd_adaptor_buffer_t(buf);
+}
+
+void qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint8_t *data, size_t len);
 
 
 static inline unsigned char *qd_adaptor_buffer_base(const qd_adaptor_buffer_t *buf)
 {
-    return (unsigned char*) &buf->content[0];
+    return (unsigned char *) &buf[1];
 }
 
 /**
@@ -94,7 +120,7 @@ static inline unsigned char *qd_adaptor_buffer_base(const qd_adaptor_buffer_t *b
  */
 static inline unsigned char *qd_adaptor_buffer_cursor(const qd_adaptor_buffer_t *buf)
 {
-    return ( (unsigned char*) &(buf->content[0]) ) + buf->size;
+    return ((unsigned char *) &(buf[1])) + buf->size;
 }
 
 /**

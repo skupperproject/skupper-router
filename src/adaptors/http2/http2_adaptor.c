@@ -683,13 +683,12 @@ static int send_data_callback(nghttp2_session *session,
     if (length) {
         qd_adaptor_buffer_t *tail_buff = 0;
         if (require_tls) {
-            tail_buff = qd_adaptor_buffer();
-            memcpy(qd_adaptor_buffer_cursor(tail_buff), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
-            qd_adaptor_buffer_insert(tail_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
-            DEQ_INSERT_TAIL(local_buffs, tail_buff);
+            qd_adaptor_buffer_list_append(&local_buffs, framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            tail_buff = DEQ_TAIL(local_buffs);
         }
         else {
-            tail_buff = qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            tail_buff = DEQ_TAIL(conn->buffs);
         }
         size_t tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
         if (tail_buff_capacity == 0) {

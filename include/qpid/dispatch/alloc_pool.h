@@ -60,7 +60,7 @@ typedef struct {
     uint32_t              header;
     char                 *type_name;
     size_t                type_size;
-    size_t               *additional_size;
+    const size_t         *additional_size;
     size_t                total_size;
     qd_alloc_config_t    *config;
     qd_alloc_stats_t     *stats           __attribute__((aligned(64)));
