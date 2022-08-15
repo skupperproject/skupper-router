@@ -21,6 +21,7 @@
  */
 #include "adaptors/adaptor_tls.h"
 #include "adaptors/adaptor_common.h"
+#include "adaptors/adaptor_buffer.h"
 #include "adaptors/http_common.h"
 #include "server_private.h"
 
@@ -34,7 +35,6 @@
 #include "qpid/dispatch/threading.h"
 
 #include <nghttp2/nghttp2.h>
-#include <time.h>
 
 size_t HTTP2_DATA_FRAME_HEADER_LENGTH = 9;
 

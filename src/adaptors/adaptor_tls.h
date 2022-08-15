@@ -19,13 +19,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+#include <proton/tls.h>
 
 #include "qpid/dispatch/alloc.h"
 #include "adaptor_common.h"
+#include "adaptor_buffer.h"
 #include "qpid/dispatch/protocol_adaptor.h"
-
-#include <proton/tls.h>
-#include <proton/raw_connection.h>
 
 typedef struct qd_tls_t             qd_tls_t;
 typedef struct qd_raw_buffer_t      qd_raw_buffer_t;

@@ -22,6 +22,7 @@
 #include "dispatch_private.h"
 #include "timer_private.h"
 #include "adaptors/adaptor_common.h"
+#include "adaptors/adaptor_buffer.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
@@ -32,10 +33,6 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/protocol_adaptor.h"
-
-#include <proton/engine.h>
-#include <proton/event.h>
-#include <proton/ssl.h>
 
 extern const size_t TCP_BUFFER_SIZE;
 

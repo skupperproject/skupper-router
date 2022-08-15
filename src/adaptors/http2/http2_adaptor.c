@@ -26,16 +26,12 @@
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 
-#include <proton/condition.h>
 #include <proton/listener.h>
 #include <proton/netaddr.h>
 #include <proton/proactor.h>
 #include <proton/raw_connection.h>
 
-#include <inttypes.h>
 #include <nghttp2/nghttp2.h>
-#include <pthread.h>
-#include <stdio.h>
 
 const char *PATH = ":path";
 const char *METHOD = ":method";

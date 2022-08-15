@@ -24,8 +24,6 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/connection_manager.h"
 
-#include <proton/tls.h>
-
 ALLOC_DEFINE(qd_tls_t);
 ALLOC_DEFINE(qd_raw_buffer_t);
 #define NUM_ALPN_PROTOCOLS 1

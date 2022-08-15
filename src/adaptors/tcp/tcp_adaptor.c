@@ -27,15 +27,11 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/amqp.h"
 
-#include <proton/codec.h>
-#include <proton/condition.h>
 #include <proton/listener.h>
 #include <proton/netaddr.h>
 #include <proton/proactor.h>
 #include <proton/raw_connection.h>
 
-#include <inttypes.h>
-#include <stdio.h>
 
 // maximum amount of bytes to read from TCP client before backpressure
 // activates.  Note that the actual number of read bytes may exceed this value

@@ -48,6 +48,7 @@ set(qpid_dispatch_SOURCES
   adaptors/http1/http1_request_info.c
   adaptors/http2/http2_adaptor.c
   adaptors/adaptor_common.c
+  adaptors/adaptor_buffer.c
   adaptors/adaptor_tls.c
   adaptors/tcp/tcp_adaptor.c
   adaptors/test_adaptor.c
