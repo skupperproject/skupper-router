@@ -62,29 +62,29 @@ class TcpTlsAdaptor(TcpAdaptor):
                          use_client_cert=True)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
-    def test_wrong_file_on_ssl_profile(self):
-        if not ncat_available():
-            self.skipTest("Ncat utility is not available")
+    #def test_wrong_file_on_ssl_profile(self):
+    #    if not ncat_available():
+    #        self.skipTest("Ncat utility is not available")
 
-        name = "test_wrong_path_on_ssl_profile"
+    #    name = "test_wrong_path_on_ssl_profile"
 
-        self.logger.log("TCP_TEST TLS Start %s" % name)
+    #    self.logger.log("TCP_TEST TLS Start %s" % name)
 
         # Run ncat on a port which is associated with an sslProfile that has a bad cert filename.
         # The router should try to start TLS and then fail because of the bad certfile and immediately close
         # the client connection.
-        error_log = "unable to set tls trusted certificates"
-        try:
-            self.ncat_runner(name, client="INTA",
-                             server="INTA",
-                             logger=self.logger,
-                             ncat_port=self.wrong_path_in_ssl_profile_port,
-                             use_ssl=True,
-                             use_client_cert=False)
-        except Exception as e:
-            print(e)
-            pass
+    #    error_log = "unable to set tls trusted certificates"
+    #    try:
+    #        self.ncat_runner(name, client="INTA",
+    #                         server="INTA",
+    #                         logger=self.logger,
+    #                         ncat_port=self.wrong_path_in_ssl_profile_port,
+    #                         use_ssl=True,
+    #                         use_client_cert=False)
+    #    except Exception as e:
+    #        print(e)
+    #        pass
 
-        self.INTA.wait_log_message(error_log)
+    #    self.INTA.wait_log_message(error_log)
 
-        self.logger.log("TCP_TEST TLS Stop %s SUCCESS" % name)
+    #    self.logger.log("TCP_TEST TLS Stop %s SUCCESS" % name)
