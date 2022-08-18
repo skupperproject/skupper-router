@@ -21,6 +21,7 @@
 
 # This .spec file uses `rpkg` (https://pagure.io/rpkg-util) to provide
 # pleasant user experience to developers.
+# rpkg-util v3 is required, v2 will fail to recognize some macros in this file.
 #
 #  Command                  Description
 # `rpkg srpm`              Creates a *.src.rpm file in /tmp/rpkg (exact path is printed)
@@ -105,7 +106,7 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 
 cd %{_builddir}/skupper-router
 %cmake \
-    -DVERSION="%{version} (upstream rpm build)" \
+    -DVERSION="%{version}" \
     -DPython_EXECUTABLE=%{python3} \
     -DProton_USE_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
