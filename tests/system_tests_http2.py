@@ -1165,6 +1165,9 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
             def __exit__(self, type, value, traceback):
                 self.teardown()
 
+        if skip_test():
+            return
+
         server = Http2ServerContext(name="AdaptorListenerServer",
                                     listen_port=connector_port,
                                     server_file="http2_server.py",
@@ -1185,3 +1188,31 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
         if "Connection refused" in err:
             raise ConnectionRefusedError(err)
         raise Exception(f"CURL ERROR {status}: {out} {err}")
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_02_listener_interior(self):
+        """
+        Test tcpListener socket lifecycle interior to interior
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_03_listener_edge_interior(self):
+        """
+        Test tcpListener socket lifecycle edge to interior
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_04_listener_interior_edge(self):
+        """
+        Test tcpListener socket lifecycle interior to edge
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_05_listener_edge_edge(self):
+        """
+        Test tcpListener socket lifecycle edge to edge
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
