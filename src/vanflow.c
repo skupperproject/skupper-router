@@ -1491,6 +1491,7 @@ static uint64_t _vflow_on_message(void                    *context,
                 qd_log(state->log, QD_LOG_INFO, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
             }
+            qd_iterator_free(subject_iter);
         }
     }
     return PN_ACCEPTED;
