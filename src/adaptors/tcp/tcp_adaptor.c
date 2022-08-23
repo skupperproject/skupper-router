@@ -904,7 +904,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
             memcpy(conn->write_buffer.bytes + conn->write_buffer.size, conn->outgoing_buffs[used].bytes, conn->outgoing_buffs[used].size);
             conn->write_buffer.size += conn->outgoing_buffs[used].size;
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id, used+1, conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->outgoing_buffs[used].size, conn->write_buffer.size);
+                   "[C%"PRIu64"] Copying buffer %zu of %i with %i bytes (total=%zu)", conn->conn_id, used+1, conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->outgoing_buffs[used].size, conn->write_buffer.size);
             used++;
         }
 
@@ -918,7 +918,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
 
         conn->outgoing_buff_idx   += used;
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Copied %zu buffers, %i remain (total=%i)", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->write_buffer.size);
+               "[C%"PRIu64"] Copied %zu buffers, %i remain (total=%zu)", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->write_buffer.size);
     }
     return result;
 }
