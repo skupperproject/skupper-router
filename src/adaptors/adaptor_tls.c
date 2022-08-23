@@ -157,7 +157,7 @@ bool qd_tls_start(qd_tls_t                  *tls,
         assert(cm);
         qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, config->ssl_profile_name);
         if (!config_ssl_profile) {
-            qd_log(tls->log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to find ssl profile %s", tls->conn_id, config->name, config->ssl_profile_name);
+            qd_log(tls->log_source, QD_LOG_ERROR, "[C%"PRIu64"] %s %s unable to find ssl profile %s", tls->conn_id, role, config->name, config->ssl_profile_name);
             break;
         }
 
