@@ -50,7 +50,6 @@ const char *CONTENT_ENCODING = "content-encoding";
 
 ALLOC_DEFINE(qdr_http2_stream_data_t);
 ALLOC_DEFINE(qdr_http2_connection_t);
-ALLOC_DEFINE(qd_http2_buffer_t);
 
 typedef struct qdr_http2_adaptor_t {
     qdr_core_t                  *core;
@@ -179,52 +178,6 @@ static void advance_stream_status(qdr_http2_stream_data_t *stream_data)
         qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Unknown stream status", stream_data->conn->conn_id, stream_data->stream_id);
     }
 }
-
-
-qd_http2_buffer_t *qd_http2_buffer(void)
-{
-    qd_http2_buffer_t *buf = new_qd_http2_buffer_t();
-    ZERO(buf);
-    DEQ_ITEM_INIT(buf);
-    buf->size   = 0;
-    return buf;
-}
-
-qd_http2_buffer_t *qd_http2_buffer_list_append(qd_http2_buffer_list_t *buflist, const uint8_t *data, size_t len)
-{
-    //
-    // If len is zero, there's no work to do.
-    //
-    if (len == 0)
-        return DEQ_TAIL(*buflist);
-
-    //
-    // If the buffer list is empty and there's some data, add one empty buffer before we begin.
-    //
-    if (DEQ_SIZE(*buflist) == 0) {
-        qd_http2_buffer_t *buf = qd_http2_buffer();
-        DEQ_INSERT_TAIL(*buflist, buf);
-    }
-
-    qd_http2_buffer_t *tail = DEQ_TAIL(*buflist);
-
-    while (len > 0) {
-        size_t to_copy = MIN(len, qd_http2_buffer_capacity(tail));
-        if (to_copy > 0) {
-            memcpy(qd_http2_buffer_cursor(tail), data, to_copy);
-            qd_http2_buffer_insert(tail, to_copy);
-            data += to_copy;
-            len  -= to_copy;
-        }
-        if (len > 0) {
-            tail = qd_http2_buffer();
-            DEQ_INSERT_TAIL(*buflist, tail);
-        }
-    }
-
-    return DEQ_TAIL(*buflist);
-}
-
 
 // Per-message callback to resume receiving after Q2 is unblocked on the
 // incoming link (to HTTP2 app).  This routine runs on another I/O thread so it
@@ -357,15 +310,15 @@ static size_t write_buffers(qdr_http2_connection_t *conn)
     }
 
     pn_raw_buffer_t raw_buffers[num_buffs];
-    qd_http2_buffer_t *qd_http2_buff = DEQ_HEAD(conn->buffs);
+    qd_adaptor_buffer_t *qd_http2_buff = DEQ_HEAD(conn->buffs);
 
     int i = 0;
     int total_bytes = 0;
 
     while (i < num_buffs) {
         assert (qd_http2_buff != 0);
-        raw_buffers[i].bytes = (char *)qd_http2_buffer_base(qd_http2_buff);
-        size_t buffer_size = qd_http2_buffer_size(qd_http2_buff);
+        raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(qd_http2_buff);
+        size_t buffer_size      = qd_adaptor_buffer_size(qd_http2_buff);
         raw_buffers[i].capacity = buffer_size;
         raw_buffers[i].size = buffer_size;
         total_bytes += buffer_size;
@@ -494,10 +447,10 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
     DEQ_REMOVE(http2_adaptor->connections, http_conn);
     sys_mutex_unlock(&http2_adaptor->lock);
 
-    qd_http2_buffer_t *buff = DEQ_HEAD(http_conn->granted_read_buffs);
+    qd_adaptor_buffer_t *buff = DEQ_HEAD(http_conn->granted_read_buffs);
     while (buff) {
         DEQ_REMOVE_HEAD(http_conn->granted_read_buffs);
-        free_qd_http2_buffer_t(buff);
+        free_qd_adaptor_buffer_t(buff);
         buff = DEQ_HEAD(http_conn->granted_read_buffs);
     }
 
@@ -517,27 +470,27 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
 
         pn_raw_buffer_t raw_buffer;
         while (pn_tls_take_encrypt_output_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_http2_buffer_t *buf = (qd_http2_buffer_t*) raw_buffer.context;
+            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
             if(buf) {
-                free_qd_http2_buffer_t(buf);
+                free_qd_adaptor_buffer_t(buf);
             }
         }
         while (pn_tls_take_encrypt_input_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_http2_buffer_t *buf = (qd_http2_buffer_t*) raw_buffer.context;
+            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
             if(buf) {
-                free_qd_http2_buffer_t(buf);
+                free_qd_adaptor_buffer_t(buf);
             }
         }
         while (pn_tls_take_decrypt_output_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_http2_buffer_t *buf = (qd_http2_buffer_t*) raw_buffer.context;
+            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
             if(buf) {
-                free_qd_http2_buffer_t(buf);
+                free_qd_adaptor_buffer_t(buf);
             }
         }
         while (pn_tls_take_decrypt_input_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_http2_buffer_t *buf = (qd_http2_buffer_t*) raw_buffer.context;
+            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
             if(buf) {
-                free_qd_http2_buffer_t(buf);
+                free_qd_adaptor_buffer_t(buf);
             }
         }
 
@@ -715,67 +668,69 @@ static int send_data_callback(nghttp2_session *session,
     // All the http2 data is gathered into local_buffs and the local_buffs is sent to handle_outgoing_tls
     // where the outgoing data is encrypted.
     //
-    qd_http2_buffer_list_t    local_buffs;
+    qd_adaptor_buffer_list_t local_buffs;
     DEQ_INIT(local_buffs);
     bool require_tls = conn->require_tls;
 
     int bytes_sent = 0; // This should not include the header length of 9.
     bool write_buffs = false;
     if (length) {
-        qd_http2_buffer_t *tail_buff = 0;
+        qd_adaptor_buffer_t *tail_buff = 0;
         if (require_tls) {
-            tail_buff = qd_http2_buffer();
-            memcpy(qd_http2_buffer_cursor(tail_buff), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
-            qd_http2_buffer_insert(tail_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            tail_buff = qd_adaptor_buffer();
+            memcpy(qd_adaptor_buffer_cursor(tail_buff), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_insert(tail_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
             DEQ_INSERT_TAIL(local_buffs, tail_buff);
         }
         else {
-            tail_buff = qd_http2_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            tail_buff = DEQ_TAIL(conn->buffs);
         }
-        size_t tail_buff_capacity = qd_http2_buffer_capacity(tail_buff);
+        size_t tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
         if (tail_buff_capacity == 0) {
-            tail_buff = qd_http2_buffer();
+            tail_buff = qd_adaptor_buffer();
             if (require_tls) {
                 DEQ_INSERT_TAIL(local_buffs, tail_buff);
             }
             else {
                 DEQ_INSERT_TAIL(conn->buffs, tail_buff);
             }
-            tail_buff_capacity = qd_http2_buffer_capacity(tail_buff);
+            tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
         }
         size_t bytes_to_write = length;
         while (bytes_to_write > 0) {
             uint32_t octets_remaining = qd_iterator_remaining(stream_data->curr_stream_data_iter);
             size_t len = MIN(tail_buff_capacity, bytes_to_write);
             len = MIN(len, octets_remaining);
-            int copied = qd_iterator_ncopy(stream_data->curr_stream_data_iter, qd_http2_buffer_cursor(tail_buff), len);
+            int copied =
+                qd_iterator_ncopy(stream_data->curr_stream_data_iter, qd_adaptor_buffer_cursor(tail_buff), len);
             assert(copied == len);
-            qd_http2_buffer_insert(tail_buff, len);
+            qd_adaptor_buffer_insert(tail_buff, len);
             octets_remaining -= copied;
             bytes_sent += copied;
             qd_iterator_trim_view(stream_data->curr_stream_data_iter, octets_remaining);
             bytes_to_write -= len;
-            if (bytes_to_write > 0 && qd_http2_buffer_capacity(tail_buff) == 0) {
-                tail_buff = qd_http2_buffer();
+            if (bytes_to_write > 0 && qd_adaptor_buffer_capacity(tail_buff) == 0) {
+                tail_buff = qd_adaptor_buffer();
                 if (require_tls) {
                     DEQ_INSERT_TAIL(local_buffs, tail_buff);
                 }
                 else {
                     DEQ_INSERT_TAIL(conn->buffs, tail_buff);
                 }
-                tail_buff_capacity = qd_http2_buffer_capacity(tail_buff);
+                tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
             }
         }
     }
     else if (length == 0 && stream_data->out_msg_data_flag_eof) {
         if (require_tls) {
-            qd_http2_buffer_t *http2_buff = qd_http2_buffer();
+            qd_adaptor_buffer_t *http2_buff = qd_adaptor_buffer();
             DEQ_INSERT_TAIL(local_buffs, http2_buff);
-            memcpy(qd_http2_buffer_cursor(http2_buff), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
-            qd_http2_buffer_insert(http2_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            memcpy(qd_adaptor_buffer_cursor(http2_buff), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_insert(http2_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
         }
         else {
-            qd_http2_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
         }
     }
 
@@ -795,14 +750,14 @@ static int send_data_callback(nghttp2_session *session,
             //
             // Create a mapping between local http2 buffers and raw buffers.
             //
-            qd_http2_buffer_t *local_http2_buff = DEQ_HEAD(local_buffs);
+            qd_adaptor_buffer_t *local_adaptor_buff = DEQ_HEAD(local_buffs);
             for (size_t i=0; i<num_local_buffs; i++) {
-                raw_buffers[i].bytes = (char*) qd_http2_buffer_base(local_http2_buff);
-                raw_buffers[i].capacity = qd_http2_buffer_capacity(local_http2_buff);
-                raw_buffers[i].size = qd_http2_buffer_size(local_http2_buff);
+                raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(local_adaptor_buff);
+                raw_buffers[i].capacity = qd_adaptor_buffer_capacity(local_adaptor_buff);
+                raw_buffers[i].size     = qd_adaptor_buffer_size(local_adaptor_buff);
                 raw_buffers[i].offset = 0;
-                raw_buffers[i].context = (uintptr_t) local_http2_buff;
-                local_http2_buff = DEQ_NEXT(local_http2_buff);
+                raw_buffers[i].context  = (uintptr_t) local_adaptor_buff;
+                local_adaptor_buff      = DEQ_NEXT(local_adaptor_buff);
             }
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] send_data_callback require_tls, num_local_buffs=%zu", conn->conn_id, stream_data->stream_id, num_local_buffs);
 
@@ -868,7 +823,7 @@ static ssize_t send_callback(nghttp2_session *session,
         //
         // Data not being sent over a TLS session, just stick it at the end of the last buffer of conn->buffs
         //
-        qd_http2_buffer_list_append(&(conn->buffs), (uint8_t *)data, length);
+        qd_adaptor_buffer_list_append(&(conn->buffs), (uint8_t *) data, length);
     }
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 send_callback data length %zu", conn->conn_id, length);
     if (! IS_ATOMIC_FLAG_SET(&conn->delay_buffer_write)) {
@@ -1472,15 +1427,18 @@ ssize_t read_data_callback(nghttp2_session *session,
 
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback remaining_payload_length=%i, length=%zu", conn->conn_id, stream_data->stream_id, remaining_payload_length, length);
 
-                if (remaining_payload_length <= QD_HTTP2_BUFFER_SIZE) {
-                	if (length < remaining_payload_length) {
-                		bytes_to_send = length;
-                		stream_data->full_payload_handled = false;
-                	}
-                	else {
-                		bytes_to_send = remaining_payload_length;
-                		stream_data->full_payload_handled = true;
-                		qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback remaining_payload_length (%i) <= QD_HTTP2_BUFFER_SIZE(16384), bytes_to_send=%zu", conn->conn_id, stream_data->stream_id, remaining_payload_length, bytes_to_send);
+                if (remaining_payload_length <= QD_ADAPTOR_MAX_BUFFER_SIZE) {
+                    if (length < remaining_payload_length) {
+                        bytes_to_send                     = length;
+                        stream_data->full_payload_handled = false;
+                    } else {
+                        bytes_to_send                     = remaining_payload_length;
+                        stream_data->full_payload_handled = true;
+                        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+                               "[C%" PRIu64 "][S%" PRId32
+                               "] read_data_callback remaining_payload_length (%i) <= qd_adaptor_buffer_size, "
+                               "bytes_to_send=%zu",
+                               conn->conn_id, stream_data->stream_id, remaining_payload_length, bytes_to_send);
 
                         // Look ahead one body data
                         stream_data->next_stream_data_result = qd_message_next_stream_data(message, &stream_data->next_stream_data);
@@ -1496,21 +1454,23 @@ ssize_t read_data_callback(nghttp2_session *session,
                             stream_data->out_msg_body_sent = true;
                             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback, looking ahead one body data, QD_MESSAGE_STREAM_DATA_FOOTER_OK", conn->conn_id, stream_data->stream_id);
                         }
-                	}
-                }
-                else {
+                    }
+                } else {
                     // This means that there is more that 16k worth of payload in one body data.
                     // We want to send only 16k or less of data per read_data_callback.
                     // We can only send what nghttp2 allows us to send. nghttp2 might be doing http2 flow control and
                     // we abide by it.
-                    if (length < QD_HTTP2_BUFFER_SIZE) {
+                    if (length < QD_ADAPTOR_MAX_BUFFER_SIZE) {
                         bytes_to_send = length;
-                    }
-                    else {
-                        bytes_to_send = QD_HTTP2_BUFFER_SIZE;
+                    } else {
+                        bytes_to_send = QD_ADAPTOR_MAX_BUFFER_SIZE;
                     }
 
-                    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback remaining_payload_length <= QD_HTTP2_BUFFER_SIZE ELSE bytes_to_send=%zu", conn->conn_id, stream_data->stream_id, bytes_to_send);
+                    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+                           "[C%" PRIu64 "][S%" PRId32
+                           "] read_data_callback remaining_payload_length <= qd_adaptor_buffer_size ELSE "
+                           "bytes_to_send=%zu",
+                           conn->conn_id, stream_data->stream_id, bytes_to_send);
                     stream_data->full_payload_handled = false;
                 }
             }
@@ -1662,18 +1622,20 @@ static void grant_read_buffers(qdr_http2_connection_t *conn)
 		while (desired) {
 			size_t i;
 			for (i = 0; i < desired && i < READ_BUFFERS; ++i) {
-				qd_http2_buffer_t *buf = qd_http2_buffer();
-				DEQ_INSERT_TAIL(conn->granted_read_buffs, buf);
-				raw_buffers[i].bytes = (char*) qd_http2_buffer_base(buf);
-				raw_buffers[i].capacity = qd_http2_buffer_capacity(buf);
-				raw_buffers[i].size = 0;
-				raw_buffers[i].offset = 0;
-				raw_buffers[i].context = (uintptr_t) buf;
-			}
-			desired -= i;
-			qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Calling pn_raw_connection_give_read_buffers in grant_read_buffers", conn->conn_id);
-			pn_raw_connection_give_read_buffers(conn->pn_raw_conn, raw_buffers, i);
-		}
+                            qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
+                            DEQ_INSERT_TAIL(conn->granted_read_buffs, buf);
+                            raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
+                            raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
+                            raw_buffers[i].size     = 0;
+                            raw_buffers[i].offset   = 0;
+                            raw_buffers[i].context  = (uintptr_t) buf;
+                        }
+                        desired -= i;
+                        qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+                               "[C%" PRIu64 "] Calling pn_raw_connection_give_read_buffers in grant_read_buffers",
+                               conn->conn_id);
+                        pn_raw_connection_give_read_buffers(conn->pn_raw_conn, raw_buffers, i);
+                }
     }
 }
 
@@ -2336,8 +2298,10 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
     // send a buffer to nghttp2
     // return true if error was detected and logged, and connection should close
     qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
-           "[C%"PRIu64"] handle_incoming_http - Calling nghttp2_session_mem_recv"
-           "qd_http2_buffer of size %"PRIu32" ", conn->conn_id, size);
+           "[C%" PRIu64
+           "] handle_incoming_http - Calling nghttp2_session_mem_recv"
+           "qd_adaptor_buffer of size %" PRIu32 " ",
+           conn->conn_id, size);
     bool close_conn = false; // return result
     if (!conn->buffers_pushed_to_nghttp2)
         conn->buffers_pushed_to_nghttp2 = true;
@@ -2459,9 +2423,9 @@ static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffe
         }
         pn_raw_buffer_t take_unencrypted_input_buff;
         while (pn_tls_take_encrypt_input_buffers(conn->tls_session, &take_unencrypted_input_buff, 1)) {
-            qd_http2_buffer_t *http2_buff = (qd_http2_buffer_t *)take_unencrypted_input_buff.context;
+            qd_adaptor_buffer_t *http2_buff = (qd_adaptor_buffer_t *) take_unencrypted_input_buff.context;
             if (http2_buff) {
-                free_qd_http2_buffer_t(http2_buff);
+                free_qd_adaptor_buffer_t(http2_buff);
             }
         }
         conn->tls_has_output = pn_tls_is_encrypt_output_pending(conn->tls_session);
@@ -2473,9 +2437,9 @@ static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffe
         //
         // This is the raw buffer that will hold the encrypted results
         pn_raw_buffer_t encrypted_result_raw_buffer;
-        qd_http2_buffer_t *http2_buff = qd_http2_buffer();
-        encrypted_result_raw_buffer.bytes = (char*) qd_http2_buffer_base(http2_buff);
-        encrypted_result_raw_buffer.capacity = qd_http2_buffer_capacity(http2_buff);
+        qd_adaptor_buffer_t *http2_buff      = qd_adaptor_buffer();
+        encrypted_result_raw_buffer.bytes    = (char *) qd_adaptor_buffer_base(http2_buff);
+        encrypted_result_raw_buffer.capacity = qd_adaptor_buffer_capacity(http2_buff);
         encrypted_result_raw_buffer.size = 0;
         encrypted_result_raw_buffer.offset = 0;
         encrypted_result_raw_buffer.context = (uintptr_t) http2_buff;
@@ -2500,8 +2464,8 @@ static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffe
         (void)take_encrypted_result_buffers_count;
         assert(take_encrypted_result_buffers_count == 1);
 
-        qd_http2_buffer_t *encrypted_http2_buff = (qd_http2_buffer_t*) take_encrypted_result_buffer.context;
-        qd_http2_buffer_insert(encrypted_http2_buff, take_encrypted_result_buffer.size);
+        qd_adaptor_buffer_t *encrypted_http2_buff = (qd_adaptor_buffer_t *) take_encrypted_result_buffer.context;
+        qd_adaptor_buffer_insert(encrypted_http2_buff, take_encrypted_result_buffer.size);
         // This encrypted buff is ready to be written out to the wire.
         DEQ_INSERT_TAIL(conn->buffs, encrypted_http2_buff);
     }
@@ -2596,9 +2560,9 @@ bool handle_incoming_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *in
             // Give one raw buffer to tls which will be used to decrypt.
             //
             pn_raw_buffer_t decrypted_raw_buffer;
-            qd_http2_buffer_t *decrypted_http2_buf = qd_http2_buffer();
-            decrypted_raw_buffer.bytes = (char*) qd_http2_buffer_base(decrypted_http2_buf);
-            decrypted_raw_buffer.capacity = qd_http2_buffer_capacity(decrypted_http2_buf);
+            qd_adaptor_buffer_t *decrypted_http2_buf = qd_adaptor_buffer();
+            decrypted_raw_buffer.bytes               = (char *) qd_adaptor_buffer_base(decrypted_http2_buf);
+            decrypted_raw_buffer.capacity            = qd_adaptor_buffer_capacity(decrypted_http2_buf);
             decrypted_raw_buffer.size = 0;
             decrypted_raw_buffer.offset = 0;
             decrypted_raw_buffer.context = (uintptr_t) decrypted_http2_buf;
@@ -2629,9 +2593,10 @@ bool handle_incoming_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *in
                 handle_raw_connected_event(conn);
             }
             close_conn = push_rx_buffer_to_nghttp2(conn, (uint8_t*)take_decrypted_output_buff.bytes, take_decrypted_output_buff.size);
-            qd_http2_buffer_t *take_decrypt_output_http2_buff = (qd_http2_buffer_t *)take_decrypted_output_buff.context;
+            qd_adaptor_buffer_t *take_decrypt_output_http2_buff =
+                (qd_adaptor_buffer_t *) take_decrypted_output_buff.context;
             if (take_decrypt_output_http2_buff) {
-                free_qd_http2_buffer_t(take_decrypt_output_http2_buff);
+                free_qd_adaptor_buffer_t(take_decrypt_output_http2_buff);
             }
         }
     }
@@ -2676,10 +2641,10 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
 
     while ( (n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, READ_BUFFERS)) ) {
         for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
-            qd_http2_buffer_t *buf = (qd_http2_buffer_t*) raw_buffers[i].context;
+            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffers[i].context;
             DEQ_REMOVE(conn->granted_read_buffs, buf);
             uint32_t raw_buff_size = raw_buffers[i].size;
-            qd_http2_buffer_insert(buf, raw_buff_size);
+            qd_adaptor_buffer_insert(buf, raw_buff_size);
             count += raw_buff_size;
 
             if (raw_buff_size > 0 && !close_conn) {
@@ -2689,11 +2654,12 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
                     // no tls, just raw bytes. Push the bytes to nghttp2
                     if (!conn->buffers_pushed_to_nghttp2)
                         conn->buffers_pushed_to_nghttp2 = true;
-                    close_conn = push_rx_buffer_to_nghttp2(conn, qd_http2_buffer_base(buf), qd_http2_buffer_size(buf));
+                    close_conn =
+                        push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(buf), qd_adaptor_buffer_size(buf));
                 }
             }
             // Free the wire buffer
-            free_qd_http2_buffer_t(buf);
+            free_qd_adaptor_buffer_t(buf);
         }
     }
 
@@ -2832,13 +2798,13 @@ static void clean_conn_buffs(qdr_http2_connection_t* conn)
     //
     // Free all the buffers on this session. This session is closed and any unsent buffers should be freed.
     //
-    qd_http2_buffer_t *buf = DEQ_HEAD(conn->buffs);
-    qd_http2_buffer_t *curr_buf = 0;
+    qd_adaptor_buffer_t *buf      = DEQ_HEAD(conn->buffs);
+    qd_adaptor_buffer_t *curr_buf = 0;
     while (buf) {
         curr_buf = buf;
         DEQ_REMOVE_HEAD(conn->buffs);
         buf = DEQ_HEAD(conn->buffs);
-        free_qd_http2_buffer_t(curr_buf);
+        free_qd_adaptor_buffer_t(curr_buf);
     }
 }
 
@@ -3197,10 +3163,10 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         while ( (n = pn_raw_connection_take_written_buffers(conn->pn_raw_conn, buffs, WRITE_BUFFERS)) ) {
             for (size_t i = 0; i < n; ++i) {
                 written += buffs[i].size;
-                qd_http2_buffer_t *qd_http2_buff = (qd_http2_buffer_t *) buffs[i].context;
+                qd_adaptor_buffer_t *qd_http2_buff = (qd_adaptor_buffer_t *) buffs[i].context;
                 assert(qd_http2_buff);
                 if (qd_http2_buff != NULL) {
-                    free_qd_http2_buffer_t(qd_http2_buff);
+                    free_qd_adaptor_buffer_t(qd_http2_buff);
                 }
             }
         }

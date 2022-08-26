@@ -19,6 +19,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+#include "adaptors/adaptor_buffer.h"
 #include "adaptors/adaptor_common.h"
 #include "adaptors/http_common.h"
 #include "server_private.h"
@@ -33,18 +34,15 @@
 #include "qpid/dispatch/threading.h"
 
 #include <proton/tls.h>
+
 #include <nghttp2/nghttp2.h>
 #include <time.h>
 
-size_t QD_HTTP2_BUFFER_SIZE = 16384;
-size_t NUM_QD_BUFFERS_IN_ONE_HTTP2_BUFFER = 32;
-size_t MAX_BUFFERS = 16;
 size_t HTTP2_DATA_FRAME_HEADER_LENGTH = 9;
 
 
 typedef struct qdr_http2_stream_data_t  qdr_http2_stream_data_t;
 typedef struct qdr_http2_connection_t   qdr_http2_connection_t;
-typedef struct qd_http2_buffer_t        qd_http2_buffer_t;
 
 /**
  * Stream status
@@ -55,9 +53,7 @@ typedef enum {
     QD_STREAM_FULLY_CLOSED
 } qd_http2_stream_status_t;
 
-
 DEQ_DECLARE(qdr_http2_stream_data_t, qd_http2_stream_data_list_t);
-DEQ_DECLARE(qd_http2_buffer_t,       qd_http2_buffer_list_t);
 DEQ_DECLARE(qdr_http2_connection_t,  qdr_http2_connection_list_t);
 
 struct qdr_http2_stream_data_t {
@@ -131,10 +127,10 @@ struct qdr_http2_connection_t {
     qdr_http2_stream_data_t  *stream_dispatcher_stream_data;
     uint64_t                  stream_dispatcher_id;
     nghttp2_data_provider     data_prd;
-    qd_http2_buffer_list_t    granted_read_buffs; //buffers for reading
+    qd_adaptor_buffer_list_t     granted_read_buffs;  // buffers for reading
     time_t                    prev_ping; // Time the previous PING frame was sent on egress connection.
     time_t                    last_pn_raw_conn_read;  // The last time a PN_RAW_CONNECTION_READ event was invoked with more than zero bytes on an egress connection.
-    qd_http2_buffer_list_t    buffs;      // Buffers for writing
+    qd_adaptor_buffer_list_t     buffs;                  // Buffers for writing
     nghttp2_session          *session;    // A pointer to the nghttp2s' session object
     qd_http2_stream_data_list_t  streams;    // A session can have many streams.
     qd_http_listener_t       *listener;
@@ -163,64 +159,7 @@ struct qdr_http2_connection_t {
     DEQ_LINKS(qdr_http2_connection_t);
  };
 
-struct qd_http2_buffer_t {
-    unsigned int  size;     ///< Size of data content
-    unsigned char content[16393];   // 16k max content + 9 bytes for the HTTP2 header, 16384 + 9 = 16393
-    DEQ_LINKS(qd_http2_buffer_t);
-};
-
-
-static inline unsigned char *qd_http2_buffer_base(const qd_http2_buffer_t *buf)
-{
-    return (unsigned char*) &buf->content[0];
-}
-
-/**
- * Return a pointer to the first unused byte in the buffer.
- * @param buf A pointer to an allocated buffer
- * @return A pointer to the first free octet in the buffer, the insert point for new data.
- */
-static inline unsigned char *qd_http2_buffer_cursor(const qd_http2_buffer_t *buf)
-{
-    return ( (unsigned char*) &(buf->content[0]) ) + buf->size;
-}
-
-/**
- * Return remaining capacity at end of buffer.
- * @param buf A pointer to an allocated buffer
- * @return The number of octets in the buffer's free space, how many octets may be inserted.
- */
-static inline size_t qd_http2_buffer_capacity(const qd_http2_buffer_t *buf)
-{
-    return QD_HTTP2_BUFFER_SIZE - buf->size;
-}
-
-/**
- * Return the size of the buffers data content.
- * @param buf A pointer to an allocated buffer
- * @return The number of octets of data in the buffer
- */
-static inline size_t qd_http2_buffer_size(const qd_http2_buffer_t *buf)
-{
-    return buf->size;
-}
-
-/**
- * Notify the buffer that octets have been inserted at the buffer's cursor.  This will advance the
- * cursor by len octets.
- *
- * @param buf A pointer to an allocated buffer
- * @param len The number of octets that have been appended to the buffer
- */
-static inline void qd_http2_buffer_insert(qd_http2_buffer_t *buf, size_t len)
-{
-    buf->size += len;
-    assert(buf->size <= QD_HTTP2_BUFFER_SIZE + HTTP2_DATA_FRAME_HEADER_LENGTH);
-}
-
 ALLOC_DECLARE(qdr_http2_stream_data_t);
 ALLOC_DECLARE(qdr_http2_connection_t);
-ALLOC_DECLARE(qd_http2_buffer_t);
-
 
 #endif // __http2_adaptor_h__

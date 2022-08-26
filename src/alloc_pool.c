@@ -89,43 +89,29 @@ DEQ_DECLARE(qd_alloc_type_t, qd_alloc_type_list_t);
 // RUNTIME=asan testing
 //
 static const char *leaking_types[] = {
-    "qd_hash_handle_t",       // DISPATCH-1696
+    "qd_hash_handle_t",  // DISPATCH-1696
 
     // system_tests_edge_router (centos7)
     // DISPATCH-1699
 
-    "qd_message_t",
-    "qd_message_content_t",
-    "qdr_delivery_t",
-    "qd_delivery_state_t", // DISPATCH-2082: See comments in JIRA
+    "qd_message_t", "qd_message_content_t", "qdr_delivery_t",
+    "qd_delivery_state_t",  // DISPATCH-2082: See comments in JIRA
     "qd_link_ref_t",
 
     // system_tests_priority (centos7)
     // DISPATCH-1700
 
-    "qd_iterator_t",
-    "qdr_action_t",
-    "qdr_field_t",
-    "qd_buffer_t",
-    "qd_bitmask_t",
+    "qd_iterator_t", "qdr_action_t", "qdr_field_t", "qd_buffer_t", "qd_bitmask_t",
 
-    "qd_parsed_field_t",  // DISPATCH-1701
-    "qdr_delivery_ref_t", // DISPATCH-1702
+    "qd_parsed_field_t",   // DISPATCH-1701
+    "qdr_delivery_ref_t",  // DISPATCH-1702
 
     // https://github.com/skupperproject/skupper-router/issues/335
     // Please see comments in qdr_link_inbound_first_attach_CT's discard flag handling section
     // to understand why we have added this qdr_link_t suppression.
     // This suppression will be in place for release 2.0.0 of skupper-router
     // and the underlying shutdown leak must be fixed and this suppression should be removed for release 2.1.0
-    "qdr_link_t",
-
-    // This following leak occurs in the system_tests_http2.Http2TestAuthenticatePeerOneRouter
-    // The curl client connects to the router without a client cert and the router rejects this client.
-    // There is a bug in the proton TLS API which does not return a http2 buffer that is given to it
-    // and hence the qd_http2_buffer_t leak. When removing this entry make sure you set the handle_incoming_tls function
-    // to static in http2_adaptor.c
-    "qd_http2_buffer_t",
-    0};
+    "qdr_link_t", 0};
 
 //128 has been chosen because many CPUs arch use an
 //adjacent line prefetching optimization that load
