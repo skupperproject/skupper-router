@@ -382,13 +382,13 @@ class TcpAdaptor(TestCase):
         inter_router_port_BC = cls.tester.get_port()
         cls.INTB_edge_port = cls.tester.get_port()
         router('INTB', 'interior',
-               [('connector', {'role': 'inter-router', 'port': inter_router_port_AB}),
+               [('connector', {'role': 'inter-router', 'port': inter_router_port_AB, 'dataConnectionCount': 4}),
                 ('listener', {'role': 'inter-router', 'port': inter_router_port_BC}),
                 ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})])
 
         cls.INTC_edge_port = cls.tester.get_port()
         router('INTC', 'interior',
-               [('connector', {'role': 'inter-router', 'port': inter_router_port_BC}),
+               [('connector', {'role': 'inter-router', 'port': inter_router_port_BC, 'dataConnectionCount': 4}),
                 ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})])
 
         router('EA1', 'edge',

@@ -1367,6 +1367,7 @@ void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr)
 
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
+    assert(conn->role == QDR_ROLE_INTER_ROUTER);
     qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_setup_CT - %x (%s)", (ulong) conn, conn->connection_info->host);
     //
     // Record the group's correlator in the core record.
@@ -1397,6 +1398,7 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
 
 static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
+    assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
     qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %x", (ulong) conn);
     //
     // Scan the correlators-by-maskbit to see if this member's correlator is active.
@@ -1427,6 +1429,7 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
 
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
+    assert(conn->role == QDR_ROLE_INTER_ROUTER);
     qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %x", (ulong) conn);
     //
     // Remove the correlator from the maskbit index.
@@ -1460,6 +1463,7 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
 
 static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
+    assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
     qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %x", (ulong) conn);
     //
     // Search for the correlator in the maskbit index.
