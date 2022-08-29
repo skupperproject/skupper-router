@@ -654,9 +654,9 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
     if      (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_ROUTER_CONTROL)) {
         link->link_type = QD_LINK_CONTROL;
         link->priority = QDR_MAX_PRIORITY;
-    } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_ROUTER_DATA))
+    } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_ROUTER_DATA)) {
         link->link_type = QD_LINK_ROUTER;
-    else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_EDGE_DOWNLINK)) {
+    } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_EDGE_DOWNLINK)) {
         if (conn->core->router_mode == QD_ROUTER_MODE_INTERIOR &&
             conn->role == QDR_ROLE_EDGE_CONNECTION &&
             dir == QD_OUTGOING)
