@@ -211,7 +211,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
 
 void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, const char *correlator)
 {
-    strncpy(info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE);
+    memcpy(info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE);
 }
 
 

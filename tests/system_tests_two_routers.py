@@ -1664,7 +1664,7 @@ class StreamingLinkScrubberTest(TestCase):
         # expect: more inter-router links opened.  Should be 12 more, but
         # depending on when the scrubber runs it may be as low as two
         post_count = len(get_inter_router_links(self.RouterA.listener))
-        self.assertGreater(post_count, pre_count);
+        self.assertGreater(post_count, pre_count)
 
         # expect: after 5 seconds 10 of the links should be closed and 2
         # should remain (--test-hooks router option sets these parameters)
