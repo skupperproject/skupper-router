@@ -1188,7 +1188,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
     if (conn->connector && conn->connector->config.has_data_connectors) {
-        strncpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE - 1);
+        memcpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
     }
 
     // check offered capabilities for streaming link support
