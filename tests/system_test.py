@@ -1567,14 +1567,19 @@ def has_mobile_dest_in_address_table(address, dest):
 
 def get_inter_router_links(address):
     """
-    Return a list of all links with type="inter-router
+    Return a list of all links with type="inter-router" or that are on an inter-router-data connection
     :param address:
     """
     inter_router_links = []
+    inter_router_data_ids = []
     qdm = QdManager(address=address)
+    conns = qdm.query('io.skupper.router.connection')
+    for item in conns:
+        if item.get("role") == "inter-router-data":
+            inter_router_data_ids.append(item.get("identity"))
     rc = qdm.query('io.skupper.router.router.link')
     for item in rc:
-        if item.get("linkType") == "inter-router":
+        if item.get("linkType") == "inter-router" or item.get("connectionId") in inter_router_data_ids:
             inter_router_links.append(item)
 
     return inter_router_links
