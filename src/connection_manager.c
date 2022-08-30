@@ -860,9 +860,13 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
         li = DEQ_HEAD(cm->listeners);
     }
 
-    qd_connector_t *connector = DEQ_HEAD(cm->connectors);
+    qd_connector_list_t to_free;
+    DEQ_MOVE(cm->connectors, to_free);
+    DEQ_APPEND(to_free, cm->data_connectors);
+
+    qd_connector_t *connector = DEQ_HEAD(to_free);
     while (connector) {
-        DEQ_REMOVE_HEAD(cm->connectors);
+        DEQ_REMOVE_HEAD(to_free);
         sys_mutex_lock(&connector->lock);
         // setting DELETED below ensures the timer callback
         // will not initiate a re-connect once we drop
@@ -874,24 +878,7 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
         qd_timer_cancel(connector->timer);
         qd_connector_decref(connector);
 
-        connector = DEQ_HEAD(cm->connectors);
-    }
-
-    connector = DEQ_HEAD(cm->data_connectors);
-    while (connector) {
-        DEQ_REMOVE_HEAD(cm->data_connectors);
-        sys_mutex_lock(&connector->lock);
-        // setting DELETED below ensures the timer callback
-        // will not initiate a re-connect once we drop
-        // the lock
-        connector->state = CXTR_STATE_DELETED;
-        sys_mutex_unlock(&connector->lock);
-        // cannot cancel timer while holding lock since the
-        // callback takes the lock
-        qd_timer_cancel(connector->timer);
-        qd_connector_decref(connector);
-
-        connector = DEQ_HEAD(cm->data_connectors);
+        connector = DEQ_HEAD(to_free);
     }
 
     qd_config_ssl_profile_t *sslp = DEQ_HEAD(cm->config_ssl_profiles);
