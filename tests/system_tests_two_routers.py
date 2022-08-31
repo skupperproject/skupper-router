@@ -1666,9 +1666,9 @@ class StreamingLinkScrubberTest(TestCase):
         post_count = len(get_inter_router_links(self.RouterA.listener))
         self.assertGreater(post_count, pre_count)
 
-        # expect: after 5 seconds 10 of the links should be closed and 2
+        # expect: after 5 seconds 10 of the links should be closed and 4 (2 per each of 2 data connections)
         # should remain (--test-hooks router option sets these parameters)
-        while (post_count - pre_count) > 2:
+        while (post_count - pre_count) > 4:
             sleep(0.1)
             post_count = len(get_inter_router_links(self.RouterA.listener))
 

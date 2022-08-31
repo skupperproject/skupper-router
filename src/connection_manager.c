@@ -364,7 +364,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
 
     if (strcmp(config->role, "inter-router") == 0) {
-        config->data_connection_count = qd_entity_opt_long(entity, "dataConnectionCount", 1); CHECK();
+        config->data_connection_count = qd_entity_opt_long(entity, "dataConnectionCount", 2); CHECK();
         config->has_data_connectors   = true;
     }
 

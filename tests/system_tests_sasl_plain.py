@@ -336,9 +336,9 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, an inter-router-data,
+        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -366,9 +366,9 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, inter-router-data,
+        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -472,9 +472,9 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 3 connections that have authenticated using SASL PLAIN. One inter-router connection, inter-router-data,
+        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
         # and the other connection that this skstat client is making
-        self.assertEqual(3, split_list.count("test@domain.com(PLAIN)"))
+        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
