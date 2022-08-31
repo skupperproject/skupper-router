@@ -20,15 +20,19 @@
  * under the License.
  */
 
+#include "adaptors/adaptor_buffer.h"
 #include "entity.h"
 
-#include "qpid/dispatch/dispatch.h"
-#include "qpid/dispatch/threading.h"
-#include "qpid/dispatch/atomic.h"
-#include "qpid/dispatch/log.h"
 #include "qpid/dispatch/alloc_pool.h"
+#include "qpid/dispatch/atomic.h"
+#include "qpid/dispatch/dispatch.h"
+#include "qpid/dispatch/log.h"
+#include "qpid/dispatch/threading.h"
 
+#include <proton/raw_connection.h>
 #include <proton/tls.h>
+
+#define RAW_BUFFER_BATCH 4
 
 typedef enum {
     QD_AGGREGATION_NONE,
@@ -78,5 +82,23 @@ bool qd_tls_initial_setup(qd_adaptor_config_t *config,
                           bool                 is_listener,
                           bool                *tls_has_output,
                           const char          *protocols[]);
+
+/**
+ * Grants as many read qd_adaptor buffers as returned by pn_raw_connection_read_buffers_capacity() with a maximum of
+ * RAW_BUFFER_BATCH(16) read buffers. Stuffs the granted adaptor buffers into the passed in granted_read_buffs list
+ *
+ * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
+ * @param granted_read_buffs - The qd_adaptor_buffer_list which will container the granted buffs.
+ */
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs);
+
+/**
+ * Writes as many adaptor buffers as allowed by pn_raw_connection_write_buffers_capacity() with a maximum of 16 write
+ * buffers.
+ *
+ * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
+ * @param blist - qd_adaptor_buffer_list_t which contains that buffers that need to be written.
+ */
+int qd_raw_connection_write_buffers(pn_raw_connection_t *conn, qd_adaptor_buffer_list_t *blist);
 
 #endif // __adaptor_common_h__

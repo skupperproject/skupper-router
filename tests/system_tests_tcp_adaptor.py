@@ -857,7 +857,7 @@ class TcpAdaptor(TestCase):
     def test_13_tcp_EA1_EC2_500000(self):
         name = "test_12_tcp_EA1_EC2_500000"
         self.logger.log("TCP_TEST Start %s" % name)
-        pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[500000])]
+        pairs = [self.EchoPair(self.EA1, self.EC2, sizes=[500000])]
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)

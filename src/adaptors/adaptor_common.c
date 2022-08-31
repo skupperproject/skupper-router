@@ -220,3 +220,63 @@ qd_error_t qd_load_adaptor_config(qd_dispatch_t *qd, qd_adaptor_config_t *config
 error:
     return qd_error_code();
 }
+
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs)
+{
+    assert(raw_conn);
+    pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
+    size_t          desired = pn_raw_connection_read_buffers_capacity(raw_conn);
+    int             i       = 0;
+    while (desired) {
+        for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
+            qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
+            DEQ_INSERT_TAIL(*granted_read_buffs, buf);
+            raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
+            raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
+            raw_buffers[i].size     = 0;
+            raw_buffers[i].offset   = 0;
+            raw_buffers[i].context  = (uintptr_t) buf;
+        }
+        desired -= i;
+        pn_raw_connection_give_read_buffers(raw_conn, raw_buffers, i);
+    }
+
+    return i;
+}
+
+int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist)
+{
+    if (!pn_raw_conn)
+        return 0;
+
+    size_t pn_buffs_to_write     = pn_raw_connection_write_buffers_capacity(pn_raw_conn);
+    size_t qd_raw_buffs_to_write = DEQ_SIZE(*blist);
+    size_t num_buffs             = MIN(qd_raw_buffs_to_write, pn_buffs_to_write);
+
+    if (num_buffs == 0)
+        return 0;
+
+    pn_raw_buffer_t      raw_buffers[num_buffs];
+    qd_adaptor_buffer_t *qd_adaptor_buff = DEQ_HEAD(*blist);
+
+    int i           = 0;
+    int total_bytes = 0;
+
+    while (i < num_buffs) {
+        assert(qd_adaptor_buff != 0);
+        raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(qd_adaptor_buff);
+        size_t buffer_size      = qd_adaptor_buffer_size(qd_adaptor_buff);
+        raw_buffers[i].capacity = buffer_size;
+        raw_buffers[i].size     = buffer_size;
+        total_bytes += buffer_size;
+        raw_buffers[i].offset  = 0;
+        raw_buffers[i].context = (uintptr_t) qd_adaptor_buff;
+        DEQ_REMOVE_HEAD(*blist);
+        qd_adaptor_buff = DEQ_HEAD(*blist);
+        i++;
+    }
+
+    size_t num_buffers_written = pn_raw_connection_write_buffers(pn_raw_conn, raw_buffers, num_buffs);
+    assert(num_buffs == num_buffers_written);
+    return num_buffers_written;
+}
