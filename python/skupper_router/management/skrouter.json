@@ -974,7 +974,7 @@
                     "description": "For inter-router connectors only.  The number of parallel data connections to carry streaming data.",
                     "type": "integer",
                     "required": false,
-                    "default": 1,
+                    "default": 2,
                     "create": true
                 }
             }
