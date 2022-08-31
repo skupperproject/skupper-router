@@ -35,6 +35,7 @@ pytest-timeout
 grpcio; platform_machine != 's390x'
 h2
 protobuf
+hypercorn<0.14.0
 quart
 selectors
 websockets>=9.1
