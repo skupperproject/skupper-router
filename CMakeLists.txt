@@ -38,8 +38,14 @@ set(CMAKE_ENABLE_EXPORTS TRUE)
 set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
 set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
 
+# Additional compiler-specific flags
+#  -gdwarf-aranges to workaround https://sourceware.org/bugzilla/show_bug.cgi?id=22288 (backtrace line printing with libdw and clang)
+set(C_EXTRA_GNU )
+set(C_EXTRA_Clang -gdwarf-aranges)
+
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
-add_compile_options(${C_WARNING_FLAGS})
+set(C_EXTRA_FLAGS ${C_EXTRA_${CMAKE_C_COMPILER_ID}})
+add_compile_options(${C_WARNING_FLAGS} ${C_EXTRA_FLAGS})
 
 # Set default build type. Must use FORCE because project() sets default to ""
 if (NOT CMAKE_BUILD_TYPE)
@@ -124,6 +130,8 @@ find_package(LibWebSockets 4.0.1 REQUIRED)
 ##
 ## Optional dependencies
 ##
+
+find_library(dw_lib dw DOC "libdw used to symbolize QD_MEMORY_DEBUG backtraces")
 
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)

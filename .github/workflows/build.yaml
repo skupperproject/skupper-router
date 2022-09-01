@@ -138,7 +138,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev
+          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev
 
       - name: Zero ccache stats
         run: ccache -z
@@ -248,7 +248,7 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          sudo apt update; sudo apt install -y libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
+          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp1 libwebsockets15 libbenchmark1 pixz bubblewrap curl ncat gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
@@ -436,7 +436,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          dnf install -y gcc gcc-c++ cmake libuuid-devel openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
+          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
 
       - name: Install Python build dependencies
         run: python3 -m pip install setuptools wheel tox

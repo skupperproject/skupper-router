@@ -57,6 +57,8 @@ addons:
       # Dispatch requirements
       - libnghttp2-dev
       - libwebsockets-dev
+      # backtrace symbolization
+      - binutils-dev
       # code coverage
       - lcov
       # tests

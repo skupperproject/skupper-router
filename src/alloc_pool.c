@@ -37,6 +37,8 @@
 #ifdef QD_MEMORY_DEBUG
 #include "log_private.h"
 
+#include "qpid/dispatch/internal/symbolization.h"
+
 #include <execinfo.h>
 #endif
 
@@ -629,11 +631,12 @@ void qd_alloc_finalize(void)
                     qd_log_formatted_time(&item->timestamp, buf, 100);
                     fprintf(dump_file, "Leak: %s type: %s address: %p\n",
                             buf, desc->type_name, (void *)(&item[1]));
-                    for (size_t i = 0; i < item->backtrace_size; i++)
-                        fprintf(dump_file, "%s\n", strings[i]);
+                    for (int i = 0; i < item->backtrace_size; i++)
+                        qd_print_symbolized_backtrace_line(dump_file, strings[i], i, item->backtrace[i]);
                     fprintf(dump_file, "\n");
                     last_leak = desc->type_name;
                 }
+                qd_symbolize_finalize();
                 free(strings);
 
                 // free the item to prevent ASAN from also reporting this leak.
