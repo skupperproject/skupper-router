@@ -76,18 +76,20 @@ void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
     free_qd_http_adaptor_config_t(config);
 }
 
-
-qd_error_t qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t* entity, qd_log_source_t *log_source)
+qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_entity_t *entity,
+                                                      qd_log_source_t *log_source)
 {
+    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
+
     //
     // First load the common config data (common to all adaptors)
     //
     qd_error_t qd_error = qd_load_adaptor_config(qd, config->adaptor_config, entity, log_source);
     if (qd_error != QD_ERROR_NONE) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
                "Unable to load config information: %s", qd_error_message());
         qd_free_http_adaptor_config(config);
-        return qd_error;
+        return 0;
     }
 
     //
@@ -120,25 +122,23 @@ qd_error_t qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_http_adaptor_config
         aggregation_str = 0;
     }
 
-    return QD_ERROR_NONE;
+    return config;
 
 error:
     qd_free_http_adaptor_config(config);
     free(version_str);
     free(aggregation_str);
-    return qd_error_code();
-
+    return 0;
 }
 
 
 qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_listener_t *listener = 0;
-    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
-    if (qd_load_http_adaptor_config(qd, config, entity, qd_log_source(QD_HTTP_LOG_SOURCE)) != QD_ERROR_NONE) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
+    qd_http_listener_t       *listener = 0;
+    qd_http_adaptor_config_t *config   = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
+    if (!config) {
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
                "Unable to create http listener: %s", qd_error_message());
-        qd_free_http_adaptor_config(config);
         return 0;
     }
 
@@ -194,11 +194,11 @@ qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl)
 
 qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_connector_t *conn = 0;
-    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
+    qd_http_connector_t      *conn   = 0;
+    qd_http_adaptor_config_t *config = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
 
-    if (qd_load_http_adaptor_config(qd, config, entity, qd_log_source(QD_HTTP_LOG_SOURCE)) != QD_ERROR_NONE) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,
+    if (!config) {
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
                "Unable to create http connector: %s", qd_error_message());
         return 0;
     }
