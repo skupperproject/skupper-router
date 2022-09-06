@@ -91,6 +91,7 @@ static const char *qd_link_type_name(qd_link_type_t lt)
     case QD_LINK_CONTROL       : return "router-control";
     case QD_LINK_ROUTER        : return "inter-router";
     case QD_LINK_EDGE_DOWNLINK : return "edge-downlink";
+    case QD_LINK_INTER_EDGE     : return "inter-edge";
     }
 
     return "";

@@ -301,6 +301,7 @@ typedef enum {
     QD_LINK_CONTROL,       ///< A link to a peer router for control messages
     QD_LINK_ROUTER,        ///< A link to a peer router for routed messages
     QD_LINK_EDGE_DOWNLINK, ///< Default link from an interior router to an edge router
+    QD_LINK_INTER_EDGE,    ///< A link on an INTER_EDGE connection
 } qd_link_type_t;
 
 typedef enum {
@@ -309,6 +310,7 @@ typedef enum {
     QDR_ROLE_ROUTE_CONTAINER,
     QDR_ROLE_EDGE_CONNECTION,
     QDR_ROLE_INTER_ROUTER_DATA,
+    QDR_ROLE_INTER_EDGE,
 } qdr_connection_role_t;
 
 typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *token);
