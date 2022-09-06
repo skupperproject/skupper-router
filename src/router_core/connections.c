@@ -1980,7 +1980,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         // Handle incoming link cases
         //
         switch (link->link_type) {
-        case QD_LINK_ENDPOINT: {
+        case QD_LINK_ENDPOINT:
+        case QD_LINK_INTER_EDGE: {
             if (qdr_terminus_is_anonymous(target)) {
                 link->owning_addr = 0;
                 qdr_link_outbound_second_attach_CT(core, link, source, target);
@@ -2026,7 +2027,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         }
 
         switch (link->link_type) {
-        case QD_LINK_ENDPOINT: {
+        case QD_LINK_ENDPOINT:
+        case QD_LINK_INTER_EDGE: {
             if (core->addr_lookup_handler)
                 core->addr_lookup_handler(core->addr_lookup_context, conn, link, dir, source, target);
             else {
@@ -2109,6 +2111,7 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
         //
         switch (link->link_type) {
         case QD_LINK_ENDPOINT:
+        case QD_LINK_INTER_EDGE:
             if (link->auto_link) {
                 //
                 // This second-attach is the completion of an auto-link.  If the attach
@@ -2144,6 +2147,7 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
         //
         switch (link->link_type) {
         case QD_LINK_ENDPOINT:
+        case QD_LINK_INTER_EDGE:
             if (link->auto_link) {
                 //
                 // This second-attach is the completion of an auto-link.  If the attach
@@ -2264,6 +2268,7 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
         //
         switch (link->link_type) {
         case QD_LINK_ENDPOINT:
+        case QD_LINK_INTER_EDGE:
             if (addr) {
                 //
                 // Drain the undelivered list to ensure deliveries don't get dropped by a detach.
@@ -2300,6 +2305,7 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
         switch (link->link_type) {
         case QD_LINK_ENDPOINT:
         case QD_LINK_EDGE_DOWNLINK:
+        case QD_LINK_INTER_EDGE:
             if (addr) {
                 qdr_core_unbind_address_link_CT(core, addr, link);
             }

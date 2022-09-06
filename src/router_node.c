@@ -44,6 +44,7 @@ static char *router_role      = "inter-router";
 static char *router_data_role = "inter-router-data";
 static char *container_role   = "route-container";
 static char *edge_role        = "edge";
+static char *inter_edge_role  = "inter-edge";
 static char *direct_prefix;
 static char *node_id;
 
@@ -290,6 +291,11 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
             *strip_annotations_in  = false;
             *strip_annotations_out = false;
             *role = QDR_ROLE_EDGE_CONNECTION;
+            *cost = cf->inter_router_cost;
+        } else if (cf && (strcmp(cf->role, inter_edge_role) == 0)) {
+            *strip_annotations_in  = false;
+            *strip_annotations_out = false;
+            *role = QDR_ROLE_INTER_EDGE;
             *cost = cf->inter_router_cost;
         } else if (cf && (strcmp(cf->role, container_role) == 0))  // backward compat
             *role = QDR_ROLE_ROUTE_CONTAINER;
