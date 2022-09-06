@@ -225,7 +225,7 @@ static void on_activate(void *context)
 
 static void grant_read_buffers(qdr_tcp_connection_t *conn)
 {
-    if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) || conn->read_pending)
+    if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) || conn->read_pending || read_window_full(conn))
         return;
 
     conn->read_pending = true;
@@ -290,9 +290,10 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
 static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t *buffers)
 {
     pn_raw_buffer_t raw_buffer;
-    if (read_window_full(conn) || !pn_raw_connection_take_read_buffers(conn->pn_raw_conn, &raw_buffer, 1)) {
+    if (!pn_raw_connection_take_read_buffers(conn->pn_raw_conn, &raw_buffer, 1)) {
         return 0;
     }
+
     int result = raw_buffer.size;
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
         "[C%"PRIu64"] pn_raw_connection_take_read_buffers() took buffer with %i bytes", conn->conn_id, result);
@@ -306,6 +307,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
     conn->read_pending = false;
     if (result > 0) {
         // account for any incoming bytes just read
+        const bool window_was_full = read_window_full(conn);
 
         conn->last_in_time = qdr_core_uptime_ticks(tcp_adaptor->core);
         conn->bytes_in      += result;
@@ -318,7 +320,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
         vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, conn->bytes_in);
         vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, conn->bytes_unacked);
 
-        if (read_window_full(conn)) {
+        if (!window_was_full && read_window_full(conn)) {
             conn->window_closed_count++;
             vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window_closed_count);
             qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
@@ -1814,8 +1816,8 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
         // handle read window updates
 
         const bool window_was_full = read_window_full(tc);
-        tc->window_disabled = tc->window_disabled || settled || final_outcome;
 
+        tc->window_disabled = tc->window_disabled || settled || final_outcome;
         if (!tc->window_disabled) {
 
             if (disp == PN_RECEIVED) {
@@ -1844,8 +1846,11 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
         }
 
         if (window_was_full && !read_window_full(tc)) {
-            // now that the window has opened fetch any outstanding read data
-            handle_incoming(tc, "TCP RX window refresh");
+            // now that the window has opened (or has been disabled) resume reading
+            qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] TCP RX window OPENED: bytes in=%" PRIu64 " unacked=%" PRIu64, tc->conn_id,
+                   tc->bytes_in, tc->bytes_unacked);
+            grant_read_buffers(tc);
         }
     } else {
         qd_log(tcp_adaptor->log_source, QD_LOG_ERROR, "qdr_tcp_delivery_update: no link context");
