@@ -1547,7 +1547,7 @@ static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_
         edge_peer->identity = (char*) qd_iterator_copy(id_iter);
         DEQ_INSERT_TAIL(core->edge_peers, edge_peer);
         qd_log(core->log, QD_LOG_INFO, "Edge peer detected: %s", edge_peer->identity);
-        // TODO - Add id to the iterator module
+        qd_iterator_add_peer_edge(edge_peer->identity);
     }
 
     //
@@ -1579,7 +1579,7 @@ static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connectio
             }
         } else {
             qd_log(core->log, QD_LOG_INFO, "Edge peer lost: %s", edge_peer->identity);
-            // TODO - Remove id from the iterator module
+            qd_iterator_del_peer_edge(edge_peer->identity);
             DEQ_REMOVE(core->edge_peers, edge_peer);
             free(edge_peer->identity);
             free(edge_peer);

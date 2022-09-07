@@ -136,6 +136,16 @@ void qd_iterator_finalize(void);
  */
 void qd_iterator_set_address(bool edge_mode, const char *area, const char *router);
 
+/**
+ * Add and delete peer-edge router identities.  When in edge mode, peer edge routers
+ * result in different hash results than remote edge routers.  These functions are used
+ * to maintain the current set of peer edge routers.
+ *
+ * @param router The identifier of a router that is a peer-edge
+ */
+void qd_iterator_add_peer_edge(const char *router);
+void qd_iterator_del_peer_edge(const char *router);
+
 /** @} */
 /** \name lifecycle
  * Methods to control iterator lifecycle

@@ -251,6 +251,7 @@ void qdr_core_free(qdr_core_t *core)
             ref = DEQ_HEAD(edge_peer->connections);
         }
         DEQ_REMOVE_HEAD(core->edge_peers);
+        qd_iterator_del_peer_edge(edge_peer->identity);
         free(edge_peer->identity);
         free(edge_peer);
         edge_peer = DEQ_HEAD(core->edge_peers);
