@@ -66,6 +66,13 @@ struct qd_iterator_t {
 ALLOC_DECLARE(qd_iterator_t);
 ALLOC_DEFINE(qd_iterator_t);
 
+typedef struct qd_iterator_peer_edge_t {
+    DEQ_LINKS(struct qd_iterator_peer_edge_t);
+    const char *identity;
+} qd_iterator_peer_edge_t;
+
+DEQ_DECLARE(qd_iterator_peer_edge_t, qd_iterator_peer_edge_list_t);
+
 typedef enum {
     STATE_START,
     STATE_SLASH_LEFT,
@@ -80,6 +87,8 @@ typedef enum {
 static bool  edge_mode = false;
 static char *my_area   = 0;
 static char *my_router = 0;
+
+static qd_iterator_peer_edge_list_t peer_edges = DEQ_EMPTY;
 
 static const char    *SEPARATORS = "./";
 
@@ -183,7 +192,26 @@ static void parse_address_view(qd_iterator_t *iter)
             }
 
             if (edge_mode) {
-                set_to_edge_connection(iter);
+                bool is_peer = false;
+                qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
+                while (!!peer_edge) {
+                    qd_buffer_field_t save_pointer = iter->view_pointer;
+                    if (qd_iterator_prefix(iter, peer_edge->identity)) {
+                        is_peer = true;
+                        iter->view_pointer = save_pointer;
+                        break;
+                    }
+                    peer_edge = DEQ_NEXT(peer_edge);
+                }
+
+                if (is_peer) {
+                    iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
+                    iter->state  = STATE_AT_PREFIX;
+                    iter->mode   = MODE_TO_SLASH;
+                } else {
+                    set_to_edge_connection(iter);
+                }
+
                 return;
             } else {
                 iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
@@ -465,6 +493,30 @@ void qd_iterator_set_address(bool _edge_mode, const char *area, const char *rout
     my_router = qd_malloc(router_size + 2);
     sprintf(my_router, "%s/", router);
 }
+
+void qd_iterator_add_peer_edge(const char *router)
+{
+    qd_iterator_peer_edge_t *peer_edge = NEW(qd_iterator_peer_edge_t);
+    ZERO(peer_edge);
+    peer_edge->identity = router;
+    DEQ_INSERT_TAIL(peer_edges, peer_edge);
+}
+
+
+void qd_iterator_del_peer_edge(const char *router)
+{
+    qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
+
+    while (!!peer_edge) {
+        if (peer_edge->identity == router) {
+            DEQ_REMOVE(peer_edges, peer_edge);
+            free(peer_edge);
+            return;
+        }
+        peer_edge = DEQ_NEXT(peer_edge);
+    }
+}
+
 
 
 qd_iterator_t* qd_iterator_string(const char *text, qd_iterator_view_t view)

@@ -382,10 +382,22 @@ static char* test_view_address_hash_edge(void *context)
     {"_edge/router/sub",                        "L_edge"},
     {"amqp:/_edge/my-router/sub",               "Lsub"},
     {"_edge/my-router/sub",                     "Lsub"},
+    {"_edge/edgerouter-1/sub",                  "Hedgerouter-1"},
+    {"amqp:/_edge/edgerouter-2/sub",            "Hedgerouter-2"},
+    {"_edge/edgerouter-3/sub",                  "Hedgerouter-3"},
+    {"_edge/edgerouter-4/sub",                  "L_edge"},
 
     {0, 0}
     };
     int idx;
+
+    static const char *edge1 = "edgerouter-1";
+    static const char *edge2 = "edgerouter-2";
+    static const char *edge3 = "edgerouter-3";
+
+    qd_iterator_add_peer_edge(edge1);
+    qd_iterator_add_peer_edge(edge2);
+    qd_iterator_add_peer_edge(edge3);
 
     for (idx = 0; cases[idx].addr; idx++) {
         qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
@@ -406,6 +418,10 @@ static char* test_view_address_hash_edge(void *context)
         qd_iterator_free(iter);
         if (ret) return ret;
     }
+
+    qd_iterator_del_peer_edge(edge1);
+    qd_iterator_del_peer_edge(edge2);
+    qd_iterator_del_peer_edge(edge3);
 
     return 0;
 }
