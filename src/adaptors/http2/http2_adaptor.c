@@ -1825,7 +1825,6 @@ static void qdr_http_conn_close(void *context, qdr_connection_t *qdr_conn, qdr_e
             // the application can clean up buffers given to the raw connection. After that a
             // PN_RAW_CONNECTION_DISCONNECTED event will be emitted which will in turn call handle_disconnected().
             //
-            http_conn->delete_egress_connections = true;
             pn_raw_connection_close(http_conn->pn_raw_conn);
         }
     }
@@ -2825,7 +2824,6 @@ static void clean_http2_conn(qdr_http2_connection_t* conn)
 static void handle_disconnected(qdr_http2_connection_t* conn)
 {
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
-
     if (conn->pn_raw_conn) {
         qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] handle_disconnected Setting conn->pn_raw_conn=0", conn->conn_id);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
@@ -2870,6 +2868,18 @@ static void egress_conn_timer_handler(void *context)
 
     // Protect with the lock when accessing conn->pn_raw_conn
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+
+    if (conn->delete_egress_connections) {
+        //
+        // The connector that this connection is associated with has been deleted.
+        // Free the associated connections
+        // It is ok to call qdr_connection_closed from this timer callback.
+        //
+        sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+        qdr_connection_closed(conn->qdr_conn);
+        free_qdr_http2_connection(conn, false);
+        return;
+    }
 
     //
     // If there is already a conn->pn_raw_conn, don't try to connect again.
@@ -3203,8 +3213,12 @@ void qd_http2_delete_connector(qd_dispatch_t *qd, qd_http_connector_t *connector
         //
         // Deleting a connector must delete the corresponding qdr_connection_t and qdr_http2_connection_t objects also.
         //
-        if (connector->ctx)
-            qdr_core_close_connection((qdr_connection_t  *)connector->ctx);
+        if (connector->ctx) {
+            qdr_connection_t       *qdr_conn     = (qdr_connection_t *) connector->ctx;
+            qdr_http2_connection_t *http_conn    = qdr_connection_get_context(qdr_conn);
+            http_conn->delete_egress_connections = true;
+            qdr_core_close_connection(qdr_conn);
+        }
         qd_http_connector_decref(connector);
     }
 }
