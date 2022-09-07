@@ -781,6 +781,7 @@ struct qdr_edge_peer_t {
     char                      *identity;
     qdr_connection_t          *primary_conn;
     qdr_connection_ref_list_t  connections;
+    qdr_address_t             *router_addr;
     qdr_link_t                *anonymous_out_link;
 };
 
