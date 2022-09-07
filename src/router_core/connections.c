@@ -64,6 +64,14 @@ qdr_terminus_t *qdr_terminus_router_data(void)
 }
 
 
+qdr_terminus_t *qdr_terminus_inter_edge(void)
+{
+    qdr_terminus_t *term = qdr_terminus(0);
+    qdr_terminus_add_capability(term, QD_CAPABILITY_INTER_EDGE);
+    return term;
+}
+
+
 //==================================================================================
 // Interface Functions
 //==================================================================================
@@ -668,6 +676,8 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
         link->priority = QDR_MAX_PRIORITY;
     } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_ROUTER_DATA)) {
         link->link_type = QD_LINK_ROUTER;
+    } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_INTER_EDGE)) {
+        link->link_type = QD_LINK_INTER_EDGE;
     } else if (qdr_terminus_has_capability(local_terminus, QD_CAPABILITY_EDGE_DOWNLINK)) {
         if (conn->core->router_mode == QD_ROUTER_MODE_INTERIOR &&
             conn->role == QDR_ROLE_EDGE_CONNECTION &&
@@ -1530,6 +1540,10 @@ static qdr_edge_peer_t *qdr_find_edge_peer_CT(qdr_core_t *core, qd_iterator_t *i
 
 static void qdr_inter_edge_peer_activate_CT(qdr_core_t *core, qdr_edge_peer_t *edge_peer)
 {
+    edge_peer->router_addr = qdr_add_local_address_CT(core, QD_ITER_HASH_PREFIX_EDGE_SUMMARY, edge_peer->identity, QD_TREATMENT_ANYCAST_CLOSEST);
+    qdr_link_t *link = qdr_create_link_CT(core, edge_peer->primary_conn, QD_LINK_INTER_EDGE, QD_OUTGOING,
+                                          qdr_terminus_inter_edge(), qdr_terminus_inter_edge(), QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+    qdr_core_bind_address_link_CT(core, edge_peer->router_addr, link);
 }
 
 
@@ -1581,6 +1595,8 @@ static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connectio
             qd_log(core->log, QD_LOG_INFO, "Edge peer lost: %s", edge_peer->identity);
             qd_iterator_del_peer_edge(edge_peer->identity);
             DEQ_REMOVE(core->edge_peers, edge_peer);
+            edge_peer->router_addr->ref_count--;
+            qdr_check_addr_CT(core, edge_peer->router_addr);
             free(edge_peer->identity);
             free(edge_peer);
         }

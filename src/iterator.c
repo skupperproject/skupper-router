@@ -194,8 +194,8 @@ static void parse_address_view(qd_iterator_t *iter)
             if (edge_mode) {
                 bool is_peer = false;
                 qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
+                qd_buffer_field_t save_pointer = iter->view_pointer;
                 while (!!peer_edge) {
-                    qd_buffer_field_t save_pointer = iter->view_pointer;
                     if (qd_iterator_prefix(iter, peer_edge->identity)) {
                         is_peer = true;
                         iter->view_pointer = save_pointer;
