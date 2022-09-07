@@ -1513,6 +1513,81 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
 }
 
 
+static qdr_edge_peer_t *qdr_find_edge_peer_CT(qdr_core_t *core, qd_iterator_t *id_iter)
+{
+    qdr_edge_peer_t *edge_peer = DEQ_HEAD(core->edge_peers);
+
+    while (!!edge_peer) {
+        if (qd_iterator_equal(id_iter, (unsigned char*) edge_peer->identity)) {
+            break;
+        }
+        edge_peer = DEQ_NEXT(edge_peer);
+    }
+
+    return edge_peer;
+}
+
+
+static void qdr_inter_edge_peer_activate_CT(qdr_core_t *core, qdr_edge_peer_t *edge_peer)
+{
+}
+
+
+static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_field_t *container_id)
+{
+    qd_iterator_t   *id_iter   = qdr_field_iterator(container_id);
+    qdr_edge_peer_t *edge_peer = qdr_find_edge_peer_CT(core, id_iter);
+
+    if (!edge_peer) {
+        //
+        // This is the first connection we've seen from this edge-peer.  Create a new record for it.
+        //
+        edge_peer = NEW(qdr_edge_peer_t);
+        ZERO(edge_peer);
+        edge_peer->identity = (char*) qd_iterator_copy(id_iter);
+        DEQ_INSERT_TAIL(core->edge_peers, edge_peer);
+        qd_log(core->log, QD_LOG_INFO, "Edge peer detected: %s", edge_peer->identity);
+        // TODO - Add id to the iterator module
+    }
+
+    //
+    // Add this connection to the list of connections associated with this edge-peer.
+    //
+    qdr_add_connection_ref(&edge_peer->connections, conn);
+    conn->edge_peer = edge_peer;
+
+    //
+    // If there is no primary connection for this edge-peer, use this one and activate.
+    //
+    if (edge_peer->primary_conn == 0) {
+        edge_peer->primary_conn = conn;
+        qdr_inter_edge_peer_activate_CT(core, edge_peer);
+    }
+}
+
+
+static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    qdr_edge_peer_t *edge_peer = conn->edge_peer;
+
+    if (!!edge_peer) {
+        qdr_del_connection_ref(&edge_peer->connections, conn);
+        if (DEQ_SIZE(edge_peer->connections) > 0) {
+            if (edge_peer->primary_conn == conn) {
+                edge_peer->primary_conn = DEQ_HEAD(edge_peer->connections)->conn;
+                qdr_inter_edge_peer_activate_CT(core, edge_peer);
+            }
+        } else {
+            qd_log(core->log, QD_LOG_INFO, "Edge peer lost: %s", edge_peer->identity);
+            // TODO - Remove id from the iterator module
+            DEQ_REMOVE(core->edge_peers, edge_peer);
+            free(edge_peer->identity);
+            free(edge_peer);
+        }
+    }
+}
+
+
 static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     qdr_connection_t *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
@@ -1607,6 +1682,14 @@ static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, boo
             if (cid)
                 qdr_route_connection_opened_CT(core, conn, action->args.connection.container_id, action->args.connection.connection_label);
         }
+
+        if (conn->role == QDR_ROLE_INTER_EDGE) {
+            //
+            // This is an inter-edge connection.  Maintain a list of inter-edge connections indexed by the remote
+            // container-id.  Handle the case where there is more than one connection to the same peer edge.
+            //
+            qdr_inter_edge_connection_setup_CT(core, conn, action->args.connection.container_id);
+        }
     } while (false);
 
     qdrc_event_conn_raise(core, QDRC_EVENT_CONN_OPENED, conn);
@@ -1678,6 +1761,14 @@ static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, boo
         qdr_connection_group_cleanup_CT(core, conn);
     } else if (conn->role == QDR_ROLE_INTER_ROUTER_DATA) {
         qdr_connection_group_member_cleanup_CT(core, conn);
+    }
+
+    //
+    // If this is an inter-edge connection, clean up references to this connection in the list
+    // of peer-edge routers.
+    //
+    if (conn->role == QDR_ROLE_INTER_EDGE) {
+        qdr_inter_edge_connection_cleanup_CT(core, conn);
     }
 
     //
