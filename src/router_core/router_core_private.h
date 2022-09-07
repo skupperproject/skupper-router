@@ -42,6 +42,7 @@ typedef struct qdr_conn_identifier_t qdr_conn_identifier_t;
 typedef struct qdr_connection_ref_t  qdr_connection_ref_t;
 typedef struct qdr_edge_t            qdr_edge_t;
 typedef struct qdr_agent_t           qdr_agent_t;
+typedef struct qdr_edge_peer_t       qdr_edge_peer_t;
 
 ALLOC_DECLARE(qdr_address_t);
 ALLOC_DECLARE(qdr_address_config_t);
@@ -684,6 +685,7 @@ struct qdr_connection_t {
     const qd_policy_spec_t     *policy_spec;
     qdr_connection_list_t       connection_group;      ///< List of associated connection group members
     qdr_connection_t           *group_cursor;          ///< Pointer to the next group member to use for traffic allocation
+    qdr_edge_peer_t            *edge_peer;
 };
 
 void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);
@@ -774,6 +776,17 @@ struct qdr_protocol_adaptor_t {
 DEQ_DECLARE(qdr_protocol_adaptor_t, qdr_protocol_adaptor_list_t);
 
 
+struct qdr_edge_peer_t {
+    DEQ_LINKS(qdr_edge_peer_t);
+    char                      *identity;
+    qdr_connection_t          *primary_conn;
+    qdr_connection_ref_list_t  connections;
+    qdr_link_t                *anonymous_out_link;
+};
+
+DEQ_DECLARE(qdr_edge_peer_t, qdr_edge_peer_list_t);
+
+
 struct qdr_core_t {
     qd_dispatch_t     *qd;
     qd_log_source_t   *log;
@@ -799,6 +812,7 @@ struct qdr_core_t {
     qdr_connection_list_t        connections_to_activate;
     qdr_link_list_t              open_links;
     qdr_connection_ref_list_t    streaming_connections;
+    qdr_edge_peer_list_t         edge_peers;
 
     qdrc_attach_addr_lookup_t  addr_lookup_handler;
     void                      *addr_lookup_context;

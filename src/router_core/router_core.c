@@ -240,6 +240,22 @@ void qdr_core_free(qdr_core_t *core)
     // this must happen after qdrc_endpoint_do_cleanup_CT calls
     qdr_modules_finalize(core);
 
+    //
+    // Free resources related to edge-peers
+    //
+    qdr_edge_peer_t *edge_peer = DEQ_HEAD(core->edge_peers);
+    while (!!edge_peer) {
+        qdr_connection_ref_t *ref = DEQ_HEAD(edge_peer->connections);
+        while (!!ref) {
+            qdr_del_connection_ref(&edge_peer->connections, ref->conn);
+            ref = DEQ_HEAD(edge_peer->connections);
+        }
+        DEQ_REMOVE_HEAD(core->edge_peers);
+        free(edge_peer->identity);
+        free(edge_peer);
+        edge_peer = DEQ_HEAD(core->edge_peers);
+    }
+
     qdr_connection_t *conn = DEQ_HEAD(core->open_connections);
     while (conn) {
         DEQ_REMOVE_HEAD(core->open_connections);
