@@ -22,8 +22,8 @@
 #include "qpid/dispatch/ctools.h"
 
 // Buffer size will be set to 32k across all adaptors.
-// const size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 16384;
-const size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 32768;
+const size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 16384;
+// const size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 32768;
 
 ALLOC_DEFINE_CONFIG(qd_adaptor_buffer_t, sizeof(qd_adaptor_buffer_t), &QD_ADAPTOR_MAX_BUFFER_SIZE, 0);
 

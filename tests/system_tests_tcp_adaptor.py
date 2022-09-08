@@ -812,7 +812,6 @@ class TcpAdaptor(TestCase):
                 result = self.do_tcp_echo_n_routers(name, pairs)
                 if result is not None:
                     print(result)
-                    sys.stdout.flush()
                 assert result is None, "TCP_TEST test_01_tcp_basic_connectivity Stop %s FAIL: %s" % (name, result)
                 self.logger.log("TCP_TEST test_01_tcp_basic_connectivity Stop %s SUCCESS" % name)
 
@@ -825,7 +824,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -837,7 +835,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -849,7 +846,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -861,7 +857,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -874,7 +869,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -885,7 +879,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         # TODO: This test passes but in passing router INTA crashes undetected.
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
@@ -900,7 +893,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -913,7 +905,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -930,7 +921,6 @@ class TcpAdaptor(TestCase):
                                             1, self.EC2_conn_stall_listener_port)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
         # search the router log file to verify Q2 was hit
