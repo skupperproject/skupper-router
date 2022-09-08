@@ -22,7 +22,6 @@ import json
 import os
 import socket
 import subprocess
-import sys
 import time
 import traceback
 from subprocess import PIPE
@@ -812,7 +811,6 @@ class TcpAdaptor(TestCase):
                 result = self.do_tcp_echo_n_routers(name, pairs)
                 if result is not None:
                     print(result)
-                    sys.stdout.flush()
                 assert result is None, "TCP_TEST test_01_tcp_basic_connectivity Stop %s FAIL: %s" % (name, result)
                 self.logger.log("TCP_TEST test_01_tcp_basic_connectivity Stop %s SUCCESS" % name)
 
@@ -825,7 +823,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -837,7 +834,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -849,7 +845,6 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -857,11 +852,22 @@ class TcpAdaptor(TestCase):
     def test_13_tcp_EA1_EC2_500000(self):
         name = "test_12_tcp_EA1_EC2_500000"
         self.logger.log("TCP_TEST Start %s" % name)
-        pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[500000])]
+        pairs = [self.EchoPair(self.EA1, self.EC2, sizes=[500000])]
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
+        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+
+    @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
+    # This test sends and receives 5 million bytes from edge router to edge router
+    # which will make the code go in and out of the TCP window.
+    def test_14_tcp_EA2_EC1_5000000(self):
+        name = "test_12_tcp_EA2_EC1_5000000"
+        self.logger.log("TCP_TEST Start %s" % name)
+        pairs = [self.EchoPair(self.EA2, self.EC1, sizes=[5000000])]
+        result = self.do_tcp_echo_n_routers(name, pairs)
+        if result is not None:
+            print(result)
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -872,14 +878,13 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         # TODO: This test passes but in passing router INTA crashes undetected.
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     # concurrent messages
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
-    def test_50_concurrent(self):
+    def test_50_concurrent_interior(self):
         name = "test_50_concurrent_AtoA_BtoB"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA),
@@ -887,7 +892,18 @@ class TcpAdaptor(TestCase):
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
-            sys.stdout.flush()
+        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+    @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
+    def test_50_concurrent_edges(self):
+        name = "test_50_concurrent_edges_EA1toEA2_EA2toEC2"
+        self.logger.log("TCP_TEST Start %s" % name)
+        pairs = [self.EchoPair(self.EA1, self.EA2),
+                 self.EchoPair(self.EA2, self.EC2)]
+        result = self.do_tcp_echo_n_routers(name, pairs)
+        if result is not None:
+            print(result)
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -904,7 +920,6 @@ class TcpAdaptor(TestCase):
                                             1, self.EC2_conn_stall_listener_port)
         if result is not None:
             print(result)
-            sys.stdout.flush()
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
         # search the router log file to verify Q2 was hit

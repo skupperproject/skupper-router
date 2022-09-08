@@ -29,9 +29,6 @@
 // to HTTP endpoint processing.
 //
 
-#define RAW_BUFFER_BATCH  16
-
-
 /*
   HTTP/1.x <--> AMQP message mapping
 
