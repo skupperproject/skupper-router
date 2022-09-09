@@ -19,14 +19,14 @@
 
 #include "python_private.h"
 
-#include "adaptors/adaptor_utils.h"
+#include "adaptors/adaptor_common.h"
 #include "http1_private.h"
+
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/listener.h>
-#include <proton/proactor.h>
 #include <proton/netaddr.h>
-
+#include <proton/proactor.h>
 
 //
 // This file contains code specific to HTTP client processing.  The raw
@@ -255,7 +255,7 @@ void qd_http1_delete_listener(qd_dispatch_t *ignore, qd_http_listener_t *li)
 //
 static void _setup_client_connection(qdr_http1_connection_t *hconn)
 {
-    hconn->client.client_ip_addr = qda_raw_conn_get_address(hconn->raw_conn);
+    hconn->client.client_ip_addr = qd_raw_conn_get_address(hconn->raw_conn);
     qdr_connection_info_t *info = qdr_connection_info(false, //bool             is_encrypted,
                                                       false, //bool             is_authenticated,
                                                       true,  //bool             opened,
@@ -411,14 +411,11 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     case PN_RAW_CONNECTION_CONNECTED: {
         _setup_client_connection(hconn);
 
-        const struct pn_netaddr_t *na = pn_raw_connection_remote_addr(hconn->raw_conn);
-        if (na) {
-            char buf[128];
-            if (pn_netaddr_str(na, buf, sizeof(buf)) > 0) {
-                qd_log(log, QD_LOG_INFO,
-                       "[C%"PRIu64"] HTTP/1.x client connection established from %s",
-                       hconn->conn_id, buf);
-            }
+        char *conn_addr = qd_raw_conn_get_address(hconn->raw_conn);
+        if (conn_addr) {
+            qd_log(log, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x client connection established from %s", hconn->conn_id,
+                   conn_addr);
+            free(conn_addr);
         }
         break;
     }

@@ -753,18 +753,6 @@ static char *get_global_id(char *site_id, char *host_port)
     return result;
 }
 
-static char *get_address_string(pn_raw_connection_t *socket)
-{
-    const pn_netaddr_t *netaddr = pn_raw_connection_remote_addr(socket);
-    char buffer[1024];
-    int len = pn_netaddr_str(netaddr, buffer, 1024);
-    if (len <= 1024) {
-        return strdup(buffer);
-    } else {
-        return strndup(buffer, 1024);
-    }
-}
-
 static pn_data_t * qdr_tcp_conn_properties()
 {
    // Return a new tcp connection properties map.
@@ -783,7 +771,7 @@ static pn_data_t * qdr_tcp_conn_properties()
 
 static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
 {
-    tc->remote_address = get_address_string(tc->pn_raw_conn);
+    tc->remote_address = qd_raw_conn_get_address(tc->pn_raw_conn);
     tc->global_id = get_global_id(tc->config->adaptor_config->site_id, tc->remote_address);
 
     //
@@ -885,7 +873,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
 
             break;
         } else {
-            conn->remote_address = get_address_string(conn->pn_raw_conn);
+            conn->remote_address = qd_raw_conn_get_address(conn->pn_raw_conn);
             conn->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
             qd_log(log, QD_LOG_INFO,
                    "[C%"PRIu64"] PN_RAW_CONNECTION_CONNECTED Connector egress connected to %s",
