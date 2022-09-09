@@ -361,19 +361,6 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
     free_qdr_http2_stream_data_t(stream_data);
 }
 
-
-static char *get_address_string(pn_raw_connection_t *pn_raw_conn)
-{
-    const pn_netaddr_t *netaddr = pn_raw_connection_remote_addr(pn_raw_conn);
-    char buffer[1024];
-    int len = pn_netaddr_str(netaddr, buffer, 1024);
-    if (len <= 1024) {
-        return strdup(buffer);
-    } else {
-        return strndup(buffer, 1024);
-    }
-}
-
 void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdown)
 {
     // Free all the stream data associated with this connection/session.
@@ -2602,7 +2589,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
 
 qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_t* ingress_http_conn)
 {
-    ingress_http_conn->remote_address = get_address_string(ingress_http_conn->pn_raw_conn);
+    ingress_http_conn->remote_address = qd_raw_conn_get_address(ingress_http_conn->pn_raw_conn);
     qdr_connection_info_t *info = qdr_connection_info(false, //bool             is_encrypted,
                                                       false, //bool             is_authenticated,
                                                       true,  //bool             opened,

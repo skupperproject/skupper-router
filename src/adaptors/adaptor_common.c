@@ -16,11 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-#include <inttypes.h>
 #include "adaptor_common.h"
 
-#include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/connection_manager.h"
+#include "qpid/dispatch/ctools.h"
+
+#include <proton/netaddr.h>
+
+#include <inttypes.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
 
@@ -221,11 +224,11 @@ error:
     return qd_error_code();
 }
 
-int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs)
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs)
 {
-    assert(raw_conn);
+    assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-    size_t          desired = pn_raw_connection_read_buffers_capacity(raw_conn);
+    size_t          desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
     int             i       = 0;
     while (desired) {
         for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
@@ -238,7 +241,7 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adapt
             raw_buffers[i].context  = (uintptr_t) buf;
         }
         desired -= i;
-        pn_raw_connection_give_read_buffers(raw_conn, raw_buffers, i);
+        pn_raw_connection_give_read_buffers(pn_raw_conn, raw_buffers, i);
     }
 
     return i;
@@ -279,4 +282,16 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
     size_t num_buffers_written = pn_raw_connection_write_buffers(pn_raw_conn, raw_buffers, num_buffs);
     assert(num_buffs == num_buffers_written);
     return num_buffers_written;
+}
+
+char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn)
+{
+    const pn_netaddr_t *netaddr = pn_raw_connection_remote_addr(pn_raw_conn);
+    char                buffer[1024];
+    int                 len = pn_netaddr_str(netaddr, buffer, 1024);
+    if (len <= 1024) {
+        return strdup(buffer);
+    } else {
+        return strndup(buffer, 1024);
+    }
 }

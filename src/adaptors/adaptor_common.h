@@ -90,7 +90,8 @@ bool qd_tls_initial_setup(qd_adaptor_config_t *config,
  * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
  * @param granted_read_buffs - The qd_adaptor_buffer_list which will container the granted buffs.
  */
-int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs);
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t      *pn_raw_conn,
+                                         qd_adaptor_buffer_list_t *granted_read_buffs);
 
 /**
  * Writes as many adaptor buffers as allowed by pn_raw_connection_write_buffers_capacity() with a maximum of 16 write
@@ -99,6 +100,12 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *raw_conn, qd_adapt
  * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
  * @param blist - qd_adaptor_buffer_list_t which contains that buffers that need to be written.
  */
-int qd_raw_connection_write_buffers(pn_raw_connection_t *conn, qd_adaptor_buffer_list_t *blist);
+int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist);
+
+/**
+ * Get the raw connections remote address.
+ * Caller must free() the result when done.
+ */
+char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn);
 
 #endif // __adaptor_common_h__

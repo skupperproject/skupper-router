@@ -39,7 +39,6 @@ add_custom_command (
 # Build the skupper-router library.
 set(qpid_dispatch_SOURCES
   adaptors/reference_adaptor.c
-  adaptors/adaptor_utils.c
   adaptors/adaptor_buffer.c
   adaptors/http_common.c
   adaptors/http1/http1_codec.c
