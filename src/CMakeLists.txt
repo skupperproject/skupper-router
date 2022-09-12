@@ -40,6 +40,7 @@ add_custom_command (
 set(qpid_dispatch_SOURCES
   adaptors/reference_adaptor.c
   adaptors/adaptor_buffer.c
+  adaptors/adaptor_tls.c
   adaptors/http_common.c
   adaptors/http1/http1_codec.c
   adaptors/http1/http1_adaptor.c

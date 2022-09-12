@@ -57,6 +57,8 @@ struct qdr_tcp_stats_t {
     uint64_t      connections_closed;
     uint64_t      bytes_in;
     uint64_t      bytes_out;
+    uint64_t      encrypted_bytes_in;
+    uint64_t      encrypted_bytes_out;
 };
 
 ALLOC_DECLARE(qdr_tcp_stats_t);

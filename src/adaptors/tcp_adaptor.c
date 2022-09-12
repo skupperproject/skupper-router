@@ -21,7 +21,8 @@
 
 #include "adaptor_buffer.h"
 #include "adaptor_common.h"
-#include "adaptor_listener.h"
+#include "adaptors/adaptor_listener.h"
+#include "adaptors/adaptor_tls.h"
 #include "delivery.h"
 
 #include "qpid/dispatch/alloc_pool.h"
@@ -49,8 +50,7 @@
 //   time. Ideally the window would be 1/2 full at most before the ACK
 //   arrives:
 //
-const uint32_t TCP_MAX_CAPACITY = 121635 * 6 * 2;
-const size_t TCP_BUFFER_SIZE = 16384*2;
+const uint32_t TCP_MAX_CAPACITY = 121635 * 6 * 2;  // 1,459,620
 
 ALLOC_DEFINE(qdr_tcp_stats_t);
 ALLOC_DEFINE(qd_tcp_listener_t);
@@ -73,9 +73,9 @@ struct qdr_tcp_connection_t {
     qdr_connection_t     *qdr_conn;
     uint64_t              conn_id;
     qdr_link_t           *incoming_link;
-    uint64_t              incoming_id;
+    uint64_t                  incoming_link_id;
     qdr_link_t           *outgoing_link;
-    uint64_t              outgoing_id;
+    uint64_t                  outgoing_link_id;
     pn_raw_connection_t  *pn_raw_conn;
     sys_mutex_t           activation_lock;
     qdr_delivery_t       *in_dlv_stream;
@@ -94,20 +94,23 @@ struct qdr_tcp_connection_t {
     qd_timer_t           *activate_timer;
     qd_tcp_adaptor_config_t  *config;         // config
     qd_server_t          *server;
+    qd_tls_t                 *tls;
     char                 *remote_address;
     char                 *global_id;
-    uint64_t              bytes_in;       // read from raw conn
-    uint64_t              bytes_out;      // written to raw conn
+    uint64_t bytes_in;   // if this is TLS conn, the decrypted bytes read from raw conn, else just raw bytes read from
+                         // the raw conn
+    uint64_t bytes_out;  // if this is TLS conn, the decrypted bytes before writing to raw connection, else just raw
+                         // bytes written to raw conn
+    uint64_t encrypted_bytes_in;
+    uint64_t encrypted_bytes_out;
+
     uint64_t              bytes_unacked;  // not yet acked by outgoing tcp adaptor
     uint64_t              window_closed_count;
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
 
-    // We need to keep track of the granted read buffers because of a proton bug.
-    // raw connection api sometimes does not return all the read buffers that were granted to it,
-    // so we need to maintain the buffers in granted_read_buffs and free the buffers when appropriate.
-    qd_adaptor_buffer_list_t granted_read_buffs;  // buffers for reading
+    qd_adaptor_buffer_list_t granted_read_buffs;  // Buffers for writing
     qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
 
     qd_message_stream_data_t *previous_stream_data; // previous segment (received in full)
@@ -119,10 +122,9 @@ struct qdr_tcp_connection_t {
     pn_raw_buffer_t         outgoing_buffs[WRITE_BUFFERS];
     int                     outgoing_buff_count;  // number of buffers with data
     int                     outgoing_buff_idx;    // first buffer with data
-
     sys_atomic_t            q2_restart;      // signal to resume receive
     bool                    q2_blocked;      // stop reading from raw conn
-
+    bool                    require_tls;     // Is TLS required on this connection ?
     DEQ_LINKS(qdr_tcp_connection_t);
 };
 
@@ -153,6 +155,9 @@ static void detach_links(qdr_tcp_connection_t *tc);
 static void qd_tcp_connector_decref(qd_tcp_connector_t* c);
 static void qd_tcp_listener_decref(qd_tcp_listener_t* li);
 static void qdr_associate_vflow_flows(qdr_tcp_connection_t *tc, qd_message_t *msg);
+static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t *tc);
+static void handle_outgoing(qdr_tcp_connection_t *conn);
+static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff, bool write_buffers);
 
 // is the incoming byte window full
 //
@@ -176,7 +181,7 @@ static qdr_tcp_stats_t *get_tcp_stats(qdr_tcp_connection_t *conn)
 static inline uint64_t qdr_tcp_conn_linkid(const qdr_tcp_connection_t *conn)
 {
     assert(conn);
-    return conn->in_dlv_stream ? conn->incoming_id : conn->outgoing_id;
+    return conn->in_dlv_stream ? conn->incoming_link_id : conn->outgoing_link_id;
 }
 
 static inline const char * qdr_tcp_connection_role_name(const qdr_tcp_connection_t *tc)
@@ -208,14 +213,14 @@ static void on_activate(void *context)
     }
 }
 
-static void grant_read_buffers(qdr_tcp_connection_t *conn)
+static void grant_read_buffers(qdr_tcp_connection_t *conn, const char *msg)
 {
     if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) || read_window_full(conn))
         return;
-    int granted_buffers = qd_raw_connection_grant_read_buffers(conn->pn_raw_conn, &conn->granted_read_buffs);
+    int buffers = qd_raw_connection_grant_read_buffers(conn->pn_raw_conn, &conn->granted_read_buffs);
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-           "[C%" PRIu64 "] grant_read_buffers granted %i read buffers to proton raw api", conn->conn_id,
-           granted_buffers);
+           "[C%" PRIu64 "] grant_read_buffers(%s) granted %i read buffers to proton raw api", conn->conn_id, msg,
+           buffers);
 }
 
 void qd_free_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_log_source_t  *log_source)
@@ -267,31 +272,79 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
     UNLOCK(&tc->activation_lock);
 }
 
-// Extract buffers and their bytes from raw connection.
-// * Add received byte count to connection stats
-// * Return the count of bytes in the buffers list
+int copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t *conn, qd_adaptor_buffer_list_t *decrypted_buffs,
+                                             qd_buffer_list_t *buffers)
+{
+    assert(buffers);
+    int                  bytes_copied = 0;
+    qd_adaptor_buffer_t *adaptor_buff = DEQ_HEAD(*decrypted_buffs);
+    while (adaptor_buff) {
+        size_t adaptor_buffer_size = qd_adaptor_buffer_size(adaptor_buff);
+        bytes_copied += adaptor_buffer_size;
+        qd_buffer_list_append(buffers, (uint8_t *) qd_adaptor_buffer_base(adaptor_buff), adaptor_buffer_size);
+        DEQ_REMOVE_HEAD(*decrypted_buffs);
+        free_qd_adaptor_buffer_t(adaptor_buff);
+        adaptor_buff = DEQ_HEAD(*decrypted_buffs);
+    }
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] copy_decrypted_adaptor_buffs_to_qd_buffs() - DEQ_SIZE(buffers)=%zu, bytes_copied=%i",
+           conn->conn_id, DEQ_SIZE(*buffers), bytes_copied);
+
+    return bytes_copied;
+}
+
+/**
+ * Extract buffers and their bytes from raw connection.
+ * Add received byte count to connection stats.
+ * Return the count of bytes in the buffers list.
+ */
 static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t *buffers)
 {
-    pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-    size_t          n;
-    int             result = 0;
+    int result = 0;
 
-    while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
-        for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffers[i].context;
-            DEQ_REMOVE(conn->granted_read_buffs, buf);
-            uint32_t raw_buff_size = raw_buffers[i].size;
-            if (raw_buff_size > 0) {
-                result += raw_buff_size;
-                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                       "[C%" PRIu64 "] pn_raw_connection_take_read_buffers() took buffer with %lu bytes", conn->conn_id,
-                       raw_buff_size);
-                if (buffers)
-                    qd_buffer_list_append(buffers, (uint8_t *) (raw_buffers[i].bytes + raw_buffers[i].offset),
-                                          raw_buffers[i].size);
+    if (conn->require_tls) {
+        int                      encrypted_bytes_in = 0;
+        qd_adaptor_buffer_list_t decrypted_buffs;
+        DEQ_INIT(decrypted_buffs);
+        encrypted_bytes_in = qd_tls_decrypt(conn->tls, conn->pn_raw_conn, &decrypted_buffs, &conn->granted_read_buffs);
+
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] handle_incoming_raw_read() output=%i",
+               conn->conn_id, encrypted_bytes_in);
+
+        if (encrypted_bytes_in == QD_TLS_ERROR) {
+            pn_raw_connection_close(conn->pn_raw_conn);
+            return 0;
+        } else if (DEQ_SIZE(decrypted_buffs) > 0 && buffers && qd_tls_is_secure(conn->tls)) {
+            if (conn->qdr_conn && conn->qdr_conn->connection_info && !conn->qdr_conn->connection_info->ssl) {
+                set_qdr_connection_info_details(conn->tls, conn->qdr_conn->connection_info);
             }
-            // Free the wire buffer that we got back from proton.
-            free_qd_adaptor_buffer_t(buf);
+            result += copy_decrypted_adaptor_buffs_to_qd_buffs(conn, &decrypted_buffs, buffers);
+        }
+        conn->encrypted_bytes_in += encrypted_bytes_in;
+    } else {
+        //
+        // No TLS involved, just call  qd_buffer_list_append on the incoming data and send it on its way.
+        //
+        pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
+        size_t          n;
+        while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
+            for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
+                qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffers[i].context;
+                DEQ_REMOVE(conn->granted_read_buffs, buf);
+                uint32_t raw_buff_size = raw_buffers[i].size;
+                if (raw_buff_size > 0) {
+                    result += raw_buff_size;
+                    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "] pn_raw_connection_take_read_buffers() took buffer with %lu bytes",
+                           conn->conn_id, raw_buff_size);
+                    if (buffers)
+                        qd_buffer_list_append(buffers, (uint8_t *) (raw_buffers[i].bytes + raw_buffers[i].offset),
+                                              raw_buffers[i].size);
+                }
+                // Free the wire buffer that we got back from proton.
+                free_qd_adaptor_buffer_t(buf);
+            }
         }
     }
 
@@ -316,30 +369,32 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
                    conn->conn_id, conn->bytes_in, conn->bytes_unacked);
         }
     }
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] handle_incoming_raw_read() returning with result=%u",
+           conn->conn_id, result);
+
     return result;
 }
 
-
-// Fetch incoming raw incoming buffers from proton and pass them to a delivery.
-// Create a new delivery if necessary.
-// Return number of bytes read from raw connection
+/**
+ * Fetch incoming raw incoming buffers from proton and pass them to a delivery.
+ * Create a new delivery if necessary.
+ * Return number of bytes read from raw connection.
+ */
 static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 {
     qd_log_source_t *log = tcp_adaptor->log_source;
 
     qd_log(log, QD_LOG_TRACE,
-           "[C%"PRIu64"][L%"PRIu64"] handle_incoming %s for %s connection. read_closed:%s, flow_enabled:%s",
-           conn->conn_id, conn->incoming_id, msg,
-           qdr_tcp_connection_role_name(conn),
-           conn->raw_closed_read ? "T" : "F",
-           conn->flow_enabled    ? "T" : "F");
+           "[C%" PRIu64 "][L%" PRIu64 "] handle_incoming %s for %s connection. read_closed:%s, flow_enabled:%s",
+           conn->conn_id, conn->incoming_link_id, msg, qdr_tcp_connection_role_name(conn),
+           conn->raw_closed_read ? "T" : "F", conn->flow_enabled ? "T" : "F");
 
     if (conn->raw_read_shutdown) {
         // Drain all read buffers that may still be in the raw connection
         qd_log(log, QD_LOG_TRACE,
-            "[C%"PRIu64"][L%"PRIu64"] handle_incoming %s for %s connection. drain read buffers",
-            conn->conn_id, conn->incoming_id, msg,
-            qdr_tcp_connection_role_name(conn));
+               "[C%" PRIu64 "][L%" PRIu64 "] handle_incoming %s for %s connection. drain read buffers", conn->conn_id,
+               conn->incoming_link_id, msg, qdr_tcp_connection_role_name(conn));
         handle_incoming_raw_read(conn, 0);
         return 0;
     }
@@ -348,14 +403,15 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
     // if we don't yet have a reply-to address and credit.
     if (conn->ingress && !conn->reply_to) {
         qd_log(log, QD_LOG_DEBUG,
-                "[C%"PRIu64"][L%"PRIu64"] Waiting for reply-to address before initiating %s ingress stream message",
-                conn->conn_id, conn->incoming_id, qdr_tcp_connection_role_name(conn));
+               "[C%" PRIu64 "][L%" PRIu64
+               "] Waiting for reply-to address before initiating %s ingress stream message, returning",
+               conn->conn_id, conn->incoming_link_id, qdr_tcp_connection_role_name(conn));
         return 0;
     }
     if (!conn->flow_enabled) {
         qd_log(log, QD_LOG_DEBUG,
-                "[C%"PRIu64"][L%"PRIu64"] Waiting for credit before initiating %s ingress stream message",
-                conn->conn_id, conn->incoming_id, qdr_tcp_connection_role_name(conn));
+               "[C%" PRIu64 "][L%" PRIu64 "] Waiting for credit before initiating %s ingress stream message, returning",
+               conn->conn_id, conn->incoming_link_id, qdr_tcp_connection_role_name(conn));
         return 0;
     }
 
@@ -374,16 +430,18 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
             qd_compose_insert_string(props, conn->global_id);      // subject
             qd_compose_insert_string(props, conn->reply_to);       // reply-to
             qd_log(log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] Initiating listener (ingress) stream incoming link for %s connection to: %s reply: %s",
-                   conn->conn_id, conn->incoming_id, qdr_tcp_connection_role_name(conn),
+                   "[C%" PRIu64 "][L%" PRIu64
+                   "] Initiating listener (ingress) stream incoming link for %s connection to: %s reply: %s",
+                   conn->conn_id, conn->incoming_link_id, qdr_tcp_connection_role_name(conn),
                    conn->config->adaptor_config->address, conn->reply_to);
         } else {
             qd_compose_insert_string(props, conn->reply_to);  // to
             qd_compose_insert_string(props, conn->global_id); // subject
             qd_compose_insert_null(props);                    // reply-to
             qd_log(log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] Initiating connector (egress) stream incoming link for connection to: %s",
-                   conn->conn_id, conn->incoming_id, conn->reply_to);
+                   "[C%" PRIu64 "][L%" PRIu64
+                   "] Initiating connector (egress) stream incoming link for connection to: %s",
+                   conn->conn_id, conn->incoming_link_id, conn->reply_to);
         }
         //qd_compose_insert_null(props);                      // correlation-id
         //qd_compose_insert_null(props);                      // content-type
@@ -426,10 +484,9 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         conn->in_dlv_stream = qdr_link_deliver(conn->incoming_link, msg, 0, false, 0, 0, 0, 0);
 
         qd_log(log, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"][D%"PRIu32"] Initiating empty %s incoming stream message",
-               conn->conn_id, conn->incoming_id, conn->in_dlv_stream->delivery_id,
+               "[C%" PRIu64 "][L%" PRIu64 "][D%" PRIu32 "] Initiating %s side empty incoming stream message",
+               conn->conn_id, conn->incoming_link_id, conn->in_dlv_stream->delivery_id,
                qdr_tcp_connection_role_name(conn));
-
     }
 
     // Don't read from proton if in Q2 holdoff
@@ -447,7 +504,18 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
     int count = handle_incoming_raw_read(conn, &buffers);
 
     // Grant more buffers to proton for reading if read side is still open
-    grant_read_buffers(conn);
+
+    grant_read_buffers(conn, "handle_incoming");
+
+    if (conn->require_tls && !qd_tls_is_secure(conn->tls)) {
+        // We have already forwarded the amqp message header but we cannot forward the body
+        // of the message until we have a fully secure channel on the inbound side.
+        qd_log(log, QD_LOG_TRACE,
+               "[C%" PRIu64 "] handle_incoming - connection requires tls but is not secure yet, returning",
+               conn->conn_id);
+        return count;
+    }
+
     // Push the bytes just read into the streaming message
     if (count > 0) {
         qd_message_stream_data_append(qdr_delivery_message(conn->in_dlv_stream), &buffers, &conn->q2_blocked);
@@ -456,10 +524,11 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
             qd_log(log, QD_LOG_DEBUG, DLV_FMT " %s client link blocked on Q2 limit", DLV_ARGS(conn->in_dlv_stream),
                    qdr_tcp_connection_role_name(conn));
         }
-        qdr_delivery_continue(tcp_adaptor->core, conn->in_dlv_stream, false);
         qd_log(log, QD_LOG_TRACE,
                 DLV_FMT" Continuing %s message with %i bytes",
                 DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn), count);
+        qdr_delivery_continue(tcp_adaptor->core, conn->in_dlv_stream, false);
+
     } else {
         qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] handle_incoming call to handle_incoming_raw_read returned count=%i",
                conn->conn_id, count);
@@ -480,12 +549,6 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 
 static void clean_conn_in_out_buffs(qdr_tcp_connection_t *conn)
 {
-    qd_adaptor_buffer_t *buff = DEQ_HEAD(conn->granted_read_buffs);
-    while (buff) {
-        DEQ_REMOVE_HEAD(conn->granted_read_buffs);
-        free_qd_adaptor_buffer_t(buff);
-        buff = DEQ_HEAD(conn->granted_read_buffs);
-    }
     qd_adaptor_buffer_t *buf      = DEQ_HEAD(conn->out_buffs);
     qd_adaptor_buffer_t *curr_buf = 0;
     while (buf) {
@@ -493,6 +556,13 @@ static void clean_conn_in_out_buffs(qdr_tcp_connection_t *conn)
         DEQ_REMOVE_HEAD(conn->out_buffs);
         buf = DEQ_HEAD(conn->out_buffs);
         free_qd_adaptor_buffer_t(curr_buf);
+    }
+
+    qd_adaptor_buffer_t *buff = DEQ_HEAD(conn->granted_read_buffs);
+    while (buff) {
+        DEQ_REMOVE_HEAD(conn->granted_read_buffs);
+        free_qd_adaptor_buffer_t(buff);
+        buff = DEQ_HEAD(conn->granted_read_buffs);
     }
 }
 
@@ -514,10 +584,15 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
     sys_atomic_destroy(&tc->raw_closed_write);
     qd_timer_free(tc->activate_timer);
     sys_mutex_free(&tc->activation_lock);
+
+    // Free tls related stuff if need be.
+    if (tc->tls) {
+        qd_tls_stop(tc->tls);
+        qd_tls_free(tc->tls);
+    }
+
     qd_free_tcp_adaptor_config(tc->config, tcp_adaptor->log_source);
-
     clean_conn_in_out_buffs(tc);
-
     free_qdr_tcp_connection_t(tc);
 }
 
@@ -538,8 +613,8 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
 
     if (conn->in_dlv_stream) {
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] handle_disconnected - close in_dlv_stream",
-               conn->conn_id, conn->incoming_id);
+               "[C%" PRIu64 "][L%" PRIu64 "] handle_disconnected - close in_dlv_stream", conn->conn_id,
+               conn->incoming_link_id);
         qd_message_set_receive_complete(qdr_delivery_message(conn->in_dlv_stream));
         qdr_delivery_continue(tcp_adaptor->core, conn->in_dlv_stream, true);
         qdr_delivery_decref(tcp_adaptor->core, conn->in_dlv_stream, "tcp-adaptor.handle_disconnected - in_dlv_stream");
@@ -547,8 +622,8 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
     }
     if (conn->out_dlv_stream) {
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] handle_disconnected - close out_dlv_stream",
-               conn->conn_id, conn->outgoing_id);
+               "[C%" PRIu64 "][L%" PRIu64 "] handle_disconnected - close out_dlv_stream", conn->conn_id,
+               conn->outgoing_link_id);
 
         // Fun fact: the delivery pointed to by conn->initial_delivery is
         // eventually moved to conn->out_dlv_stream.  I don't trust the code
@@ -685,7 +760,13 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
                    qd_adaptor_buffer_size(adaptor_buffer));
             used++;
         }
-        DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
+
+        if (conn->require_tls) {
+            encrypt_outgoing_tls(conn, adaptor_buffer, false);
+        } else {
+            DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
+        }
+
         result = used == conn->outgoing_buff_count;
         if (result) {
             // set context only when stream data has just been consumed
@@ -705,6 +786,14 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
     if (conn->out_dlv_stream) {
         if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_write)) {
             // give no more buffers to raw connection
+            return;
+        }
+        if (conn->require_tls && !qd_tls_is_secure(conn->tls)) {
+            // We have already forwarded the amqp message header but we cannot forward the body
+            // of the message until we have a fully secure channel on the inbound side.
+            qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] handle_outgoing - connection requires tls but is not secure yet, returning",
+                   conn->conn_id);
             return;
         }
         qd_message_t *msg = qdr_delivery_message(conn->out_dlv_stream);
@@ -779,21 +868,21 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     // So, we need to call pn_data_free(tcp_conn_properties).
     //
     pn_data_t *tcp_conn_properties = qdr_tcp_conn_properties();
-    qdr_connection_info_t *info = qdr_connection_info(false,               // is_encrypted,
-                                                      false,               // is_authenticated,
-                                                      true,                // opened,
-                                                      "",                  // *sasl_mechanisms,
-                                                      QD_INCOMING,         // dir,
-                                                      tc->remote_address,  // *host,
-                                                      "",                  // *ssl_proto,
-                                                      "",                  // *ssl_cipher,
-                                                      "",                  // *user,
-                                                      "TcpAdaptor",        // *container,
-                                                      tcp_conn_properties, // *connection_properties,
-                                                      0,                   // ssl_ssf,
-                                                      false,               // ssl,
-                                                      "",                  // peer router version,
-                                                      false);              // streaming links
+    qdr_connection_info_t *info                = qdr_connection_info(tc->require_tls,      // is_encrypted,
+                                                                     false,                // is_authenticated,
+                                                                     true,                 // opened,
+                                                                     "",                   // *sasl_mechanisms,
+                                                                     QD_INCOMING,          // dir,
+                                                                     tc->remote_address,   // *host,
+                                                                     "",                   // *ssl_proto,
+                                                                     "",                   // *ssl_cipher,
+                                                                     "",                   // *user,
+                                                                     "TcpAdaptor",         // *container,
+                                                                     tcp_conn_properties,  // *connection_properties,
+                                                                     0,                    // ssl_ssf,
+                                                                     false,                // ssl,
+                                                                     "",                   // peer router version,
+                                                                     false);               // streaming links
     pn_data_free(tcp_conn_properties);
 
     tc->conn_id = qd_server_allocate_connection_id(tc->server);
@@ -821,24 +910,24 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     qdr_terminus_set_address(target, tc->config->adaptor_config->address);
 
     tc->outgoing_link = qdr_link_first_attach(conn,
-                                         QD_OUTGOING,
-                                         dynamic_source,    //qdr_terminus_t   *source,
-                                         qdr_terminus(0),   //qdr_terminus_t   *target,
-                                         "tcp.ingress.out", //const char       *name,
-                                         0,                 //const char       *terminus_addr,
-                                         false,
-                                         NULL,
-                                         &(tc->outgoing_id));
+                                              QD_OUTGOING,
+                                              dynamic_source,     // qdr_terminus_t   *source,
+                                              qdr_terminus(0),    // qdr_terminus_t   *target,
+                                              "tcp.ingress.out",  // const char       *name,
+                                              0,                  // const char       *terminus_addr,
+                                              false,
+                                              NULL,
+                                              &(tc->outgoing_link_id));
     qdr_link_set_context(tc->outgoing_link, tc);
     tc->incoming_link = qdr_link_first_attach(conn,
-                                         QD_INCOMING,
-                                         qdr_terminus(0),  //qdr_terminus_t   *source,
-                                         target,           //qdr_terminus_t   *target,
-                                         "tcp.ingress.in", //const char       *name,
-                                         0,                //const char       *terminus_addr,
-                                         false,
-                                         NULL,
-                                         &(tc->incoming_id));
+                                              QD_INCOMING,
+                                              qdr_terminus(0),   // qdr_terminus_t   *source,
+                                              target,            // qdr_terminus_t   *target,
+                                              "tcp.ingress.in",  // const char       *name,
+                                              0,                 // const char       *terminus_addr,
+                                              false,
+                                              NULL,
+                                              &(tc->incoming_link_id));
     tc->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
     qdr_link_set_context(tc->incoming_link, tc);
 
@@ -858,6 +947,61 @@ static void set_vflow_string(qdr_tcp_connection_t *conn)
     }
 }
 
+static void setup_qd_tls(qdr_tcp_connection_t *conn)
+{
+    // Create the qd_tls_t object
+    conn->tls    = qd_tls(conn, conn->conn_id, tcp_adaptor->log_source);
+    bool success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
+                                conn->listener ? true : false, 0);
+    if (success) {
+        // We were successfully able to gather the details from the associated sslProfile and start
+        // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
+        // bytes that the client is going to send us.
+        grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
+    } else {
+        // There was some problem with starting up the proton tls session.
+        // Check logs for detailed INFO level output to find out more about the failure
+        qd_log(tcp_adaptor->log_source, QD_LOG_ERROR,
+               "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
+               conn->conn_id);
+        qd_tls_free(conn->tls);
+        conn->tls = 0;
+        pn_raw_connection_close(conn->pn_raw_conn);
+    }
+}
+
+static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff, bool write_buffers)
+{
+    qd_adaptor_buffer_list_t encrypted_buffs;
+    DEQ_INIT(encrypted_buffs);
+    int bytes_out = qd_tls_encrypt(conn->tls, unencrypted_buff, &encrypted_buffs);
+    if (bytes_out == QD_TLS_ERROR) {
+        pn_raw_connection_close(conn->pn_raw_conn);
+        return;
+    }
+
+    if (unencrypted_buff) {
+        conn->bytes_out += bytes_out;
+        qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
+        LOCK(&tcp_stats->stats_lock);
+        tcp_stats->bytes_out += bytes_out;
+        UNLOCK(&tcp_stats->stats_lock);
+    }
+
+    if (DEQ_SIZE(encrypted_buffs) > 0) {
+        DEQ_APPEND(conn->out_buffs, encrypted_buffs);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] encrypt_outgoing_tls() DEQ_SIZE(conn->out_buffs)=%zu\n", conn->conn_id,
+               DEQ_SIZE(conn->out_buffs));
+    }
+
+    if (write_buffers) {
+        int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i\n",
+               conn->conn_id, num_buffers_written);
+    }
+}
+
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_tcp_connection_t *conn = (qdr_tcp_connection_t*) context;
@@ -870,7 +1014,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             qd_log(log, QD_LOG_INFO,
                    "[C%"PRIu64"] PN_RAW_CONNECTION_CONNECTED Listener ingress accepted to %s from %s (global_id=%s)",
                    conn->conn_id, conn->config->adaptor_config->host_port, conn->remote_address, conn->global_id);
-
+            if (conn->require_tls) {
+                setup_qd_tls(conn);
+            }
             break;
         } else {
             conn->remote_address = qd_raw_conn_get_address(conn->pn_raw_conn);
@@ -881,14 +1027,21 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             if (!!conn->initial_delivery) {
                 qdr_tcp_create_server_side_connection(conn);
             }
-            while (qdr_connection_process(conn->qdr_conn)) {}
-            handle_outgoing(conn);
+            if (conn->require_tls && qd_tls_has_output(conn->tls)) {
+                qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] Initiating TLS handshake on egress connection",
+                       conn->conn_id);
+                encrypt_outgoing_tls(conn, 0, true);
+                // Grant read buffers so we can read the response sent to us by the server
+                grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, egress");
+            }
+            // while (qdr_connection_process(conn->qdr_conn)) {}
+            // handle_outgoing(conn);
             break;
         }
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
-        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"][L%"PRIu64"] PN_RAW_CONNECTION_CLOSED_READ %s",
-               conn->conn_id, conn->incoming_id, qdr_tcp_connection_role_name(conn));
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
+               conn->incoming_link_id, qdr_tcp_connection_role_name(conn));
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         LOCK(&conn->activation_lock);
         conn->q2_blocked = false;
@@ -942,7 +1095,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                conn->conn_id, qdr_tcp_connection_role_name(conn));
         while (qdr_connection_process(conn->qdr_conn)) {}
         if (conn->in_dlv_stream) {
-            grant_read_buffers(conn);
+            grant_read_buffers(conn, "PN_RAW_CONNECTION_NEED_READ_BUFFERS");
             handle_incoming(conn, "PNRC_NEED_READ_BUFFERS");
         }
         break;
@@ -970,12 +1123,26 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             // Streaming message exists. Process read normally.
             read = handle_incoming(conn, "PNRC_READ");
         }
+
         qd_log(log, QD_LOG_DEBUG,
-               "[C%" PRIu64 "] %s PN_RAW_CONNECTION_READ Read %i bytes. Total read %" PRIu64 " bytes", conn->conn_id,
-               qdr_tcp_connection_role_name(conn), read, conn->bytes_in);
+               "[C%" PRIu64 "] PN_RAW_CONNECTION_READ Read %i bytes. Total read %" PRIu64
+               " bytes, Total encrypted bytes=%" PRIu64 "",
+               conn->conn_id, read, conn->bytes_in, conn->encrypted_bytes_in);
+
+        if (qd_tls_has_output(conn->tls)) {
+            qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_READ qd_tls_has_output=true", conn->conn_id);
+            encrypt_outgoing_tls(conn, 0, true);
+        }
+
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
     }
+    case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
+        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
+        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
+               conn->conn_id, drained_buffers);
+    } break;
     case PN_RAW_CONNECTION_WRITTEN: {
         pn_raw_buffer_t buffs[RAW_BUFFER_BATCH];
         size_t          written = 0;
@@ -995,29 +1162,35 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 conn->release_up_to = 0;
             }
             conn->last_out_time = qdr_core_uptime_ticks(tcp_adaptor->core);
-            conn->bytes_out += written;
-            qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
-            LOCK(&tcp_stats->stats_lock);
-            tcp_stats->bytes_out += written;
-            UNLOCK(&tcp_stats->stats_lock);
+            if (!conn->require_tls) {
+                conn->bytes_out += written;
+                qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
+                LOCK(&tcp_stats->stats_lock);
+                tcp_stats->bytes_out += written;
+                UNLOCK(&tcp_stats->stats_lock);
+            } else {
+                conn->encrypted_bytes_out += written;
+            }
             // Tell the upstream to open its receive window.  Note: this update
             // is sent to the upstream (ingress) TCP adaptor. Since this update
             // is internal to the router network (never sent to the client) we
             // do not need to use the section_number (no section numbers in a
             // TCP stream!) and use section_offset only.
             //
-            qd_delivery_state_t *dstate = qd_delivery_state();
-            dstate->section_number      = 0;
-            dstate->section_offset      = conn->bytes_out;
-            qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream, PN_RECEIVED,
-                                              false,  // settled
-                                              dstate, false);
+            if (conn->out_dlv_stream) {
+                qd_delivery_state_t *dstate = qd_delivery_state();
+                dstate->section_number      = 0;
+                dstate->section_offset      = conn->bytes_out;
+                qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream, PN_RECEIVED,
+                                                  false,  // settled
+                                                  dstate, false);
+            }
         }
         qd_log(log, QD_LOG_DEBUG,
                "[C%" PRIu64
                "] PN_RAW_CONNECTION_WRITTEN %s pn_raw_connection_take_written_buffers wrote %zu bytes. Total written "
-               "%" PRIu64 " bytes",
-               conn->conn_id, qdr_tcp_connection_role_name(conn), written, conn->bytes_out);
+               "%" PRIu64 " bytes, Total encrypted bytes=%" PRIu64 "",
+               conn->conn_id, qdr_tcp_connection_role_name(conn), written, conn->bytes_out, conn->encrypted_bytes_out);
         handle_outgoing(conn);
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
@@ -1066,6 +1239,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
     qdr_tcp_connection_t* tc = qdr_tcp_connection(true, listener->server, listener->config, listener->tcp_stats);
     tc->listener = listener;
     sys_atomic_inc(&listener->ref_count);
+    tc->require_tls = listener->config->adaptor_config->ssl_profile_name ? true : false;
 
     tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->vflow);
     vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
@@ -1101,21 +1275,21 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
     // So, we need to call pn_data_free(tcp_conn_properties)
     //
     pn_data_t *tcp_conn_properties = qdr_tcp_conn_properties();
-    qdr_connection_info_t *info = qdr_connection_info(false,       //bool             is_encrypted,
-                                                      false,       //bool             is_authenticated,
-                                                      true,        //bool             opened,
-                                                      "",          //char            *sasl_mechanisms,
-                                                      QD_OUTGOING, //qd_direction_t   dir,
-                                                      host,        //const char      *host,
-                                                      "",          //const char      *ssl_proto,
-                                                      "",          //const char      *ssl_cipher,
-                                                      "",          //const char      *user,
-                                                      "TcpAdaptor",//const char      *container,
-                                                      tcp_conn_properties,// pn_data_t *connection_properties,
-                                                      0,           //int              ssl_ssf,
-                                                      false,       //bool             ssl,
-                                                      "",          // peer router version,
-                                                      false);      // streaming links
+    qdr_connection_info_t *info                = qdr_connection_info(tc->require_tls,  // bool             is_encrypted,
+                                                                     false,        // bool             is_authenticated,
+                                                                     true,         // bool             opened,
+                                                                     "",           // char            *sasl_mechanisms,
+                                                                     QD_OUTGOING,  // qd_direction_t   dir,
+                                                                     host,         // const char      *host,
+                                                                     "",           // const char      *ssl_proto,
+                                                                     "",           // const char      *ssl_cipher,
+                                                                     "",           // const char      *user,
+                                                                     "TcpAdaptor",  // const char      *container,
+                                                                     tcp_conn_properties,  // pn_data_t *connection_properties,
+                                                                     0,                    // int              ssl_ssf,
+                                                                     false,                // bool             ssl,
+                                                                     "",                   // peer router version,
+                                                                     false);               // streaming links
     pn_data_free(tcp_conn_properties);
 
     qdr_connection_t *conn = qdr_connection_opened(tcp_adaptor->core,
@@ -1150,13 +1324,13 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
 
     tc->outgoing_link = qdr_link_first_attach(conn,
                                               QD_OUTGOING,
-                                              source,           //qdr_terminus_t   *source,
-                                              qdr_terminus(0),  //qdr_terminus_t   *target,
-                                              "tcp.egress.out", //const char       *name,
-                                              0,                //const char       *terminus_addr,
+                                              source,            // qdr_terminus_t   *source,
+                                              qdr_terminus(0),   // qdr_terminus_t   *target,
+                                              "tcp.egress.out",  // const char       *name,
+                                              0,                 // const char       *terminus_addr,
                                               !(tc->is_egress_dispatcher_conn),
                                               tc->initial_delivery,
-                                              &(tc->outgoing_id));
+                                              &(tc->outgoing_link_id));
     if (!!tc->initial_delivery) {
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                DLV_FMT" initial_delivery ownership passed to "DLV_FMT,
@@ -1168,17 +1342,18 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
     qdr_link_set_context(tc->outgoing_link, tc);
 }
 
-
 static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *connector,
                                                        qd_tcp_adaptor_config_t *config,
                                                        qd_server_t             *server,
-                                                       qdr_delivery_t          *initial_delivery)
+                                                       qdr_delivery_t          *initial_delivery,
+                                                       bool                    *tls_setup_failure)
 {
-    qdr_tcp_connection_t* tc = qdr_tcp_connection(false, server, config, connector->tcp_stats);
-    tc->connector = connector;
+    qdr_tcp_connection_t *conn = qdr_tcp_connection(false, server, config, connector->tcp_stats);
+    conn->connector            = connector;
     sys_atomic_inc(&connector->ref_count);
 
-    tc->conn_id = qd_server_allocate_connection_id(tc->server);
+    conn->conn_id     = qd_server_allocate_connection_id(conn->server);
+    conn->require_tls = connector->config->adaptor_config->ssl_profile_name ? true : false;
 
     //
     // If this is the egress dispatcher, set up the core connection now.
@@ -1191,35 +1366,59 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
         // This is not an egress dispatcher connection.
         // Real TCP traffic flows thru this connection.
         // There is one of these connection per every client that is attaching to the router
-        // network, i.e. there are N of these non-egress dispatcher connections for N clients respectively.
+        // network, i.e. there are N of these real connections (non-egress dispatcher connections) for N clients
+        // respectively.
         //
-        tc->is_egress_dispatcher_conn = false;
-        tc->initial_delivery  = initial_delivery;
+        conn->is_egress_dispatcher_conn = false;
+
+        if (conn->require_tls) {
+            // Since TLS is required on this connection, try to initialize TLS attributes
+            // from the associated sslProfile.
+            conn->tls    = qd_tls(conn, conn->conn_id, tcp_adaptor->log_source);
+            bool success = qd_tls_start(conn->tls,
+                                        conn->config->adaptor_config,
+                                        qd_server_dispatch(conn->server),
+                                        conn->listener ? true : false,
+                                        0);
+            if (!success) {
+                // There was a failure trying to setup the connector sslProfile.
+                // Look at the logs for failure reason.
+                // We cannot proceed setting up this connection, free it.
+                *tls_setup_failure = true;
+                qd_tls_free(conn->tls);
+                conn->tls = 0;
+                free_qdr_tcp_connection(conn);
+                return 0;
+            }
+        }
+
+        conn->initial_delivery = initial_delivery;
         qdr_delivery_incref(initial_delivery, "qdr_tcp_connection_egress - held initial delivery");
 
-        tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
-        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-        vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
+        conn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+        vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+        vflow_add_rate(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+        vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
         qd_message_t *msg = qdr_delivery_message(initial_delivery);
-        qdr_associate_vflow_flows(tc, msg);
-        vflow_set_trace(tc->vflow, msg);
+        qdr_associate_vflow_flows(conn, msg);
+        vflow_set_trace(conn->vflow, msg);
 
         qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
-               "[C%"PRIu64"] call pn_proactor_raw_connect(). Egress connecting to: %s",
-               tc->conn_id, tc->config->adaptor_config->host_port);
+               "[C%" PRIu64 "] qdr_tcp_connection_egress call pn_proactor_raw_connect(). Egress connecting to: %s",
+               conn->conn_id, conn->config->adaptor_config->host_port);
 
-        tc->pn_raw_conn = pn_raw_connection();
-        pn_raw_connection_set_context(tc->pn_raw_conn, tc);
+        conn->pn_raw_conn = pn_raw_connection();
+        pn_raw_connection_set_context(conn->pn_raw_conn, conn);
 
-        vflow_latency_start(tc->vflow);
+        vflow_latency_start(conn->vflow);
 
         // IMPORTANT NOTE: this next call TO pn_proactor_raw_connect may immediately schedule the connection on another I/O
         // thread. The activation_lock  must be held if you ever want to access tc immediately after the call to pn_proactor_raw_connect
         // to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
         // and freeing this qdr_tcp_connection_t from underneath.
-        pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->config->adaptor_config->host_port);
+        pn_proactor_raw_connect(qd_server_proactor(conn->server), conn->pn_raw_conn,
+                                conn->config->adaptor_config->host_port);
         return 0;
 
     } else {
@@ -1228,15 +1427,15 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
         // outgoing link can be created on it. When a delivery arrives on the outgoing link
         // in the egress dispatcher connection, it is moved to another connection/link
         //
-        tc->is_egress_dispatcher_conn = true;
-        tc->activate_timer = qd_timer(tcp_adaptor->core->qd, on_activate, tc);
+        conn->is_egress_dispatcher_conn = true;
+        conn->activate_timer            = qd_timer(tcp_adaptor->core->qd, on_activate, conn);
 
         //
         // Create a server side dispatcher connection.
         // We don't want to create any socket level connection here.
         //
-        qdr_tcp_create_server_side_connection(tc);
-        return tc;
+        qdr_tcp_create_server_side_connection(conn);
+        return conn;
     }
 }
 
@@ -1441,7 +1640,7 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
     vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
 
-    c->dispatcher_conn = qdr_tcp_connection_egress(c, c->config, c->server, NULL);
+    c->dispatcher_conn = qdr_tcp_connection_egress(c, c->config, c->server, NULL, 0);
     return c;
 }
 
@@ -1519,23 +1718,24 @@ static void qdr_tcp_second_attach(void *context, qdr_link_t *link,
     if (link_context) {
         qdr_tcp_connection_t* tc = (qdr_tcp_connection_t*) link_context;
         if (qdr_link_direction(link) == QD_OUTGOING) {
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] %s qdr_tcp_second_attach",
-                   tc->conn_id, tc->outgoing_id,
-                   qdr_tcp_quadrant_id(tc, link));
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] %s qdr_tcp_second_attach",
+                   tc->conn_id, tc->outgoing_link_id, qdr_tcp_quadrant_id(tc, link));
             if (tc->ingress) {
                 qdr_tcp_connection_copy_reply_to(tc, qdr_terminus_get_address(source));
                 // for ingress, can start reading from socket once we have
                 // a reply to address, as that is when we are able to send
                 // out a message
                 handle_incoming(tc, "qdr_tcp_second_attach");
+                if (qd_tls_has_output(tc->tls)) {
+                    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] qdr_tcp_flow qd_tls_has_output=true",
+                           tc->conn_id);
+                    encrypt_outgoing_tls(tc, 0, true);
+                }
             }
             qdr_link_flow(tcp_adaptor->core, link, 10, false);
         } else if (!tc->ingress) {
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] %s qdr_tcp_second_attach",
-                   tc->conn_id, tc->incoming_id,
-                   qdr_tcp_quadrant_id(tc, link));
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] %s qdr_tcp_second_attach",
+                   tc->conn_id, tc->incoming_link_id, qdr_tcp_quadrant_id(tc, link));
         }
     } else {
         qd_log(tcp_adaptor->log_source, QD_LOG_ERROR, "qdr_tcp_second_attach: no link context");
@@ -1559,9 +1759,14 @@ static void qdr_tcp_flow(void *context, qdr_link_t *link, int credit)
         if (!conn->flow_enabled && credit > 0) {
             conn->flow_enabled = true;
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] qdr_tcp_flow: Flow enabled, credit=%d",
-                   conn->conn_id, conn->outgoing_id, credit);
+                   "[C%" PRIu64 "][L%" PRIu64 "] qdr_tcp_flow: Flow enabled, credit=%d", conn->conn_id,
+                   conn->outgoing_link_id, credit);
             handle_incoming(conn, "qdr_tcp_flow");
+            if (qd_tls_has_output(conn->tls)) {
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] qdr_tcp_flow qd_tls_has_output=true",
+                       conn->conn_id);
+                encrypt_outgoing_tls(conn, 0, true);
+            }
         } else {
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    "[C%"PRIu64"][L%"PRIu64"] qdr_tcp_flow: No action. enabled:%s, credit:%d",
@@ -1703,10 +1908,30 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
             // will be used to communicate with the TCP server.
             //
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   DLV_FMT" tcp_adaptor initiating egress connection", DLV_ARGS(delivery));
-            qdr_tcp_connection_egress(tc->connector, tc->config, tc->server, delivery);
+                   DLV_FMT
+                   " tcp_adaptor delivery arrived on egress dispatcher connection, initiating actual egress connection",
+                   DLV_ARGS(delivery));
+
+            bool tls_setup_failure = false;
+            qdr_tcp_connection_egress(tc->connector, tc->config, tc->server, delivery, &tls_setup_failure);
+            if (tls_setup_failure) {
+                //
+                // We tried to initialize TLS on this connection but something went wrong.
+                // Usually there might be problems with the associated sslProfile where some sslProfile attribute might
+                // have had an invalid value specified or a cert could not be found on the file system or permission
+                // issues and so on. We cannot proceed. We have to release this delivery.
+                //
+                //
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                       DLV_FMT " tcp_adaptor qdr_tcp_deliver() failure setting up TLS", DLV_ARGS(delivery));
+                return PN_RELEASED;
+            }
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, DLV_FMT " tcp_adaptor delivery QD_DELIVERY_MOVED_TO_NEW_LINK",
+                   DLV_ARGS(delivery));
             return QD_DELIVERY_MOVED_TO_NEW_LINK;
         } else if (!tc->out_dlv_stream) {
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                   DLV_FMT " tcp_adaptor delivery arrived on non-egress dispatcher connection", DLV_ARGS(delivery));
             tc->out_dlv_stream = delivery;
             qdr_delivery_incref(delivery, "tcp_adaptor - new out_dlv_stream");
             if (tc->ingress) {
@@ -1725,14 +1950,14 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 qdr_terminus_t *target = qdr_terminus(0);
                 qdr_terminus_set_address(target, tc->reply_to);
                 tc->incoming_link = qdr_link_first_attach(tc->qdr_conn,
-                                                     QD_INCOMING,
-                                                     qdr_terminus(0),  //qdr_terminus_t   *source,
-                                                     target,           //qdr_terminus_t   *target,
-                                                     "tcp.egress.in",  //const char       *name,
-                                                     0,                //const char       *terminus_addr,
-                                                     false,
-                                                     NULL,
-                                                     &(tc->incoming_id));
+                                                          QD_INCOMING,
+                                                          qdr_terminus(0),  // qdr_terminus_t   *source,
+                                                          target,           // qdr_terminus_t   *target,
+                                                          "tcp.egress.in",  // const char       *name,
+                                                          0,                // const char       *terminus_addr,
+                                                          false,
+                                                          NULL,
+                                                          &(tc->incoming_link_id));
                 qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                        "[C%"PRIu64"][L%"PRIu64"] %s Created link to %s",
                        tc->conn_id, tc->incoming_link->identity,
@@ -1744,7 +1969,6 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 qdr_action_t *action = qdr_action(qdr_add_tcp_connection_CT, "add_tcp_connection");
                 action->args.general.context_1 = tc;
                 qdr_action_enqueue(tcp_adaptor->core, action);
-
                 handle_incoming(tc, "qdr_tcp_deliver");
             }
         }
@@ -1820,8 +2044,10 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                     //
                     vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, tc->bytes_unacked);
                     tc->bytes_unacked = tc->bytes_in - dstate->section_offset;
-                    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] tc->bytes_unacked=%" PRIu64 "",
-                           tc->conn_id, tc->bytes_unacked);
+                    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "] tc->bytes_in=%" PRIu64 ",  dstate->section_offset=%" PRIu64
+                           ", tc->bytes_unacked=%" PRIu64 "",
+                           tc->conn_id, tc->bytes_in, dstate->section_offset, tc->bytes_unacked);
                     qd_delivery_state_free(dstate);
                 }
             } else if (disp) {
@@ -1836,7 +2062,7 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                    "[C%" PRIu64 "] TCP RX window OPENED: bytes in=%" PRIu64 " unacked=%" PRIu64, tc->conn_id,
                    tc->bytes_in, tc->bytes_unacked);
             // Grant more buffers to proton for reading if read side is still open
-            grant_read_buffers(tc);
+            grant_read_buffers(tc, "TCP RX window OPENED");
         }
     } else {
         qd_log(tcp_adaptor->log_source, QD_LOG_ERROR, "qdr_tcp_delivery_update: no link context");
@@ -2248,16 +2474,14 @@ static void qdr_del_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bo
 static void detach_links(qdr_tcp_connection_t *conn)
 {
     if (conn->incoming_link) {
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] detaching incoming link",
-               conn->conn_id, conn->incoming_id);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] detaching incoming link",
+               conn->conn_id, conn->incoming_link_id);
         qdr_link_detach(conn->incoming_link, QD_LOST, 0);
         conn->incoming_link = 0;
     }
     if (conn->outgoing_link) {
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] detaching outgoing link",
-               conn->conn_id, conn->outgoing_id);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] detaching outgoing link",
+               conn->conn_id, conn->outgoing_link_id);
         qdr_link_detach(conn->outgoing_link, QD_LOST, 0);
         conn->outgoing_link = 0;
     }

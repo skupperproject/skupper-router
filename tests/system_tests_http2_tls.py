@@ -22,17 +22,11 @@ import unittest
 from http1_tests import wait_http_listeners_up
 from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
-
-from proton import VERSION, SASL
+from proton import SASL
 from system_tests_sasl_plain import RouterTestPlainSaslCommon
 from system_tests_http2 import skip_test, skip_h2_test, image_file
 from system_tests_http2 import Http2TestTwoRouter, Http2TestBase, CommonHttp2Tests
-
-
-def check_proton_38():
-    if VERSION >= (0, 38, 0):
-        return True
-    return False
+from system_tests_tcp_adaptor_tls import check_proton_38
 
 
 class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSslBase):

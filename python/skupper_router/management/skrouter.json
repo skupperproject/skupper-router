@@ -1229,6 +1229,28 @@
                     "graph": true,
                     "description": "The number of bytes sent from servers to clients on all connections to this listener."
                 },
+                "encryptedBytesIn": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The number of encrypted bytes sent from clients to servers on all connections to this listener. This will be zero if the tcpListener does not have an associated sslProfile."
+                },
+                "encryptedBytesOut": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The number of encrypted bytes sent from servers to clients on all connections to this listener. This will be zero if the tcpListener does not have an associated sslProfile."
+                },
+                "sslProfile": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Name of the sslProfile.",
+                    "create": true
+                },
+                "authenticatePeer": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "yes: Require the peer's identity to be authenticated; no: Do not require any authentication.",
+                    "create": true
+                },
                 "operStatus": {
                     "type": ["up", "down"],
                     "description": "The operational status of TCP socket listener: up - the service is active and incoming connections are permitted; down - the service is not active and incoming connection attempts will be refused.",
@@ -1282,6 +1304,29 @@
                     "type": "integer",
                     "graph": true,
                     "description": "The number of bytes sent from clients to servers on all connections created by this connector."
+                },
+                "encryptedBytesIn": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The number of encrypted bytes sent from servers to clients on all connections created by this connector. This will be zero if this tcpConnector does not have an associated sslProfile."
+                },
+                "encryptedBytesOut": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The number of encrypted bytes sent from clients to servers on all connections created by this connector. This will be zero if this tcpConnector does not have an associated sslProfile."
+                },
+                "sslProfile": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Name of the sslProfile.",
+                    "create": true
+                },
+                "verifyHostname": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "yes: Ensures that when initiating a connection (as a client) the host name in the URL to which this connector connects to matches the host name in the digital certificate that the peer sends back as part of the TLS connection; no: Does not perform host name verification",
+                    "deprecationName": "verifyHostName",
+                    "create": true
                 }
             }
         },
@@ -1807,7 +1852,7 @@
                     "type": "integer",
                     "graph": true,
                     "description": "The number of seconds since the connection was created."
-                },                                
+                },
                 "properties": {
                     "description": "Connection properties supplied by the peer.",
                     "type": "map"
@@ -1816,7 +1861,7 @@
                     "type": "integer",
                     "graph": true,
                     "description": "The number of seconds since a delivery was sent on this connection. Will display a - (dash) if no deliveries have been sent on the connection."
-                }                
+                }
             }
         },
 

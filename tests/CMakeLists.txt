@@ -104,8 +104,6 @@ endforeach()
 
 set(SYSTEM_TESTS_HTTP system_tests_http system_tests_websockets)
 
-set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc system_tests_http2_tls)
-
 if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})
   #nothing to do
 else()
@@ -161,7 +159,10 @@ foreach(py_test_module
     system_tests_log_level_update
     system_tests_routing_protocol
     system_tests_open_properties
-    ${SYSTEM_TESTS_HTTP2}
+    system_tests_http2
+    system_tests_grpc
+    system_tests_http2_tls
+    system_tests_tcp_adaptor_tls
     system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_tcp_adaptor

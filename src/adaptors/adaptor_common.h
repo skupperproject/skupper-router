@@ -66,25 +66,6 @@ qd_error_t qd_load_adaptor_config(qd_dispatch_t *qd, qd_adaptor_config_t *config
 void qd_free_adaptor_config(qd_adaptor_config_t *config);
 
 /**
- * Configure a connection's pn_tls objects
- *     Info log describes objects being configured
- * On success:
- *     tls_config and tls_session are set up
- * On failure:
- *     Error log is written
- *     All in-progress pn_tls objects are destroyed
- */
-bool qd_tls_initial_setup(qd_adaptor_config_t *config,
-                          qd_dispatch_t       *qd,
-                          pn_tls_config_t     **tls_config,
-                          pn_tls_t            **tls_session,
-                          qd_log_source_t     *log_source,
-                          uint64_t             conn_id,
-                          bool                 is_listener,
-                          bool                *tls_has_output,
-                          const char          *protocols[]);
-
-/**
  * Grants as many read qd_adaptor buffers as returned by pn_raw_connection_read_buffers_capacity() with a maximum of
  * RAW_BUFFER_BATCH(16) read buffers. Stuffs the granted adaptor buffers into the passed in granted_read_buffs list if
  * provided.
@@ -109,5 +90,10 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
  * Caller must free() the result when done.
  */
 char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn);
+
+/**
+ * Drains read and write buffers held by proton raw connection.
+ */
+int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn);
 
 #endif // __adaptor_common_h__

@@ -117,4 +117,27 @@ static inline void qd_adaptor_buffer_insert(qd_adaptor_buffer_t *buf, size_t len
     assert(buf->size <= QD_ADAPTOR_MAX_BUFFER_SIZE);
 }
 
+/**
+ * Sets the passed in adaptor_buffer details onto the passed in pn_raw_buffer.
+ * The context of the pn_raw_buffer is set to the passed in adaptor_buffer.
+ *
+ * @param pn_raw_buffer - pn_raw_buffer_t struct whose details are set
+ * @param adaptor_buf - qd_adaptor_buffer_t whose details need to be set to the pn_raw_buffer
+ */
+void qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer_t *pn_raw_buffer, const qd_adaptor_buffer_t *adaptor_buf);
+
+/**
+ * Creates a new adaptor buffer and sets its values into the passed in pn_raw_buffer_t.
+ * @param pn_raw_buffer - pn_raw_buffer_t struct whose details are set with the newly created adaptor buffer.
+ * @see qd_adaptor_buffer_pn_raw_buffer
+ */
+qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *pn_raw_buffer);
+
+/**
+ * Retrieves the context of the passed in pn_raw_buffer and sets the size of the adaptor buffer to the pn_raw_buffer's
+ * size.
+ * @param pn_raw_buffer - pn_raw_buffer_t struct whose context is obtained as a qd_adaptor_buffer
+ */
+qd_adaptor_buffer_t *qd_get_adaptor_buffer_from_pn_raw_buffer(const pn_raw_buffer_t *pn_raw_buffer);
+
 #endif  // __adaptor_buffer_h__
