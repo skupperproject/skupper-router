@@ -56,7 +56,7 @@ ALLOC_DEFINE(qdr_tcp_stats_t);
 ALLOC_DEFINE(qd_tcp_listener_t);
 ALLOC_DEFINE(qd_tcp_connector_t);
 
-#define WRITE_BUFFERS 64
+#define WRITE_BUFFERS 128
 
 #define LOCK   sys_mutex_lock
 #define UNLOCK sys_mutex_unlock
@@ -651,51 +651,94 @@ static int read_message_body(qdr_tcp_connection_t *conn, qd_message_t *msg, pn_r
     return used;
 }
 
+/**
+ * Copies body data in qd_buffers into larger adaptor buffers. The maximum adaptor buffers that will be added to
+ * the passed in out_adaptor_buffs is max_buffers_to_write
+ */
+static bool copy_body_data_to_adaptor_buffers(qdr_tcp_connection_t *conn, qd_adaptor_buffer_list_t *out_adaptor_buffs,
+                                              size_t max_buffers_to_write)
+{
+    if (max_buffers_to_write == 0)
+        return false;
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] Starting to qd_buffers to adaptor_buffers, max_buffers_to_write=%zu", conn->conn_id,
+           max_buffers_to_write);
+
+    qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
+    size_t               num_buffs      = 1;
+    bool                 result         = false;
+    // copy small buffers into one large adaptor buffer
+    size_t used = conn->outgoing_buff_idx;
+    while (used < conn->outgoing_buff_count
+           && ((conn->outgoing_buffs[used].size) <= qd_adaptor_buffer_capacity(adaptor_buffer))) {
+        memcpy(qd_adaptor_buffer_cursor(adaptor_buffer), conn->outgoing_buffs[used].bytes,
+               conn->outgoing_buffs[used].size);
+        qd_adaptor_buffer_insert(adaptor_buffer, conn->outgoing_buffs[used].size);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)",
+               conn->conn_id, used + 1, conn->outgoing_buff_count - conn->outgoing_buff_idx,
+               conn->outgoing_buffs[used].size, qd_adaptor_buffer_size(adaptor_buffer));
+        used++;
+
+        //
+        // Add more adaptor_buffers to get everything from one single BODY DATA
+        // A single BODY DATA cannot be more than 128 qd_buffer_t objects
+        // Do not write more buffers than max_buffers_to_write
+        //
+        if (used < conn->outgoing_buff_count && num_buffs < max_buffers_to_write
+            && (qd_adaptor_buffer_capacity(adaptor_buffer) < conn->outgoing_buffs[used].size)) {
+            num_buffs += 1;
+            DEQ_INSERT_TAIL(*out_adaptor_buffs, adaptor_buffer);
+            adaptor_buffer = qd_adaptor_buffer();
+        }
+    }
+    DEQ_INSERT_TAIL(*out_adaptor_buffs, adaptor_buffer);
+    conn->outgoing_buff_idx += used;
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] Copied %zu buffers, %i remain, max_buffers_to_write=%zu, number of buffs written=%zu",
+           conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx, max_buffers_to_write, num_buffs);
+
+    result = used == conn->outgoing_buff_count;
+    return result;
+}
 
 static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
 {
     // Send the outgoing buffs to pn_raw_conn.
     size_t pn_buffs_capacity = pn_raw_connection_write_buffers_capacity(conn->pn_raw_conn);
+    size_t buffs_to_write    = DEQ_SIZE(conn->out_buffs);
+
+    int remaining_capacity = pn_buffs_capacity - buffs_to_write;
 
     if (conn->outgoing_buff_count == 0) {
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                "[C%" PRIu64 "] No outgoing buffers to copy at present, returning true", conn->conn_id);
         return true;
-    } else if (DEQ_SIZE(conn->out_buffs) == pn_buffs_capacity) {
+    } else if (remaining_capacity <= 0) {
         //
-        // Cannot continue reading body datas because the proton raw buffer write capacity has been reached.
+        // Cannot continue reading body datas the proton raw buffer write capacity has been reached.
         //
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%" PRIu64 "] pn_raw_buffer_capacity of %zu reached, cannot copy at present, returning false",
-               conn->conn_id, pn_buffs_capacity);
+               "[C%" PRIu64
+               "] No more pn_raw_connection_write_buffers_capacity remaining, cannot continue reading BODY DATAs, "
+               "returning false",
+               conn->conn_id);
         return false;
     } else {
-        bool                 result;
-        qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
-        // copy small buffers into one large adaptor buffer
-        size_t used = conn->outgoing_buff_idx;
-        while (used < conn->outgoing_buff_count
-               && ((conn->outgoing_buffs[used].size) <= qd_adaptor_buffer_capacity(adaptor_buffer))) {
-            memcpy(qd_adaptor_buffer_cursor(adaptor_buffer), conn->outgoing_buffs[used].bytes,
-                   conn->outgoing_buffs[used].size);
-            qd_adaptor_buffer_insert(adaptor_buffer, conn->outgoing_buffs[used].size);
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id, used + 1,
-                   conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->outgoing_buffs[used].size,
-                   qd_adaptor_buffer_size(adaptor_buffer));
-            used++;
-        }
-        DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
-        result = used == conn->outgoing_buff_count;
+        // Put all the adaptor buffers in this out_adaptor_buffs list
+        // The maximum size of out_adaptor_buffs will be pn_buffs_capacity.
+        // We are only going to read as many qd_buffers as we have write capacity.
+        qd_adaptor_buffer_list_t out_adaptor_buffs;
+        DEQ_INIT(out_adaptor_buffs);
+        bool result = copy_body_data_to_adaptor_buffers(conn, &out_adaptor_buffs, remaining_capacity);
+        DEQ_APPEND(conn->out_buffs, out_adaptor_buffs);
+
         if (result) {
             // set context only when stream data has just been consumed
             conn->release_up_to        = conn->previous_stream_data;
             conn->previous_stream_data = 0;
         }
-
-        conn->outgoing_buff_idx   += used;
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Copied %zu buffers, %i remain", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx);
         return result;
     }
 }
@@ -718,7 +761,6 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
             ZERO(conn->outgoing_buffs);
             conn->outgoing_buff_idx   = 0;
             conn->outgoing_buff_count = read_message_body(conn, msg, conn->outgoing_buffs, WRITE_BUFFERS);
-
             if (conn->outgoing_buff_count > 0) {
                 // Send the data just returned
                 read_more_body = copy_outgoing_buffs(conn);
