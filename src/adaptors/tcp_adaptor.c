@@ -56,7 +56,7 @@ ALLOC_DEFINE(qdr_tcp_stats_t);
 ALLOC_DEFINE(qd_tcp_listener_t);
 ALLOC_DEFINE(qd_tcp_connector_t);
 
-#define WRITE_BUFFERS 64
+#define WRITE_BUFFERS 128
 
 #define LOCK   sys_mutex_lock
 #define UNLOCK sys_mutex_unlock
@@ -661,7 +661,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                "[C%" PRIu64 "] No outgoing buffers to copy at present, returning true", conn->conn_id);
         return true;
-    } else if (DEQ_SIZE(conn->out_buffs) == pn_buffs_capacity) {
+    } else if (DEQ_SIZE(conn->out_buffs) >= pn_buffs_capacity) {
         //
         // Cannot continue reading body datas because the proton raw buffer write capacity has been reached.
         //
@@ -684,6 +684,16 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
                    conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->outgoing_buffs[used].size,
                    qd_adaptor_buffer_size(adaptor_buffer));
             used++;
+
+            //
+            // Add more adaptor_buffers to get everything from one single BODY DATA
+            // A single BODY DATA cannot be more than 128 qd_buffer_t objects
+            //
+            if (used < conn->outgoing_buff_count
+                && qd_adaptor_buffer_capacity(adaptor_buffer) < conn->outgoing_buffs[used].size) {
+                DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
+                adaptor_buffer = qd_adaptor_buffer();
+            }
         }
         DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
         result = used == conn->outgoing_buff_count;
