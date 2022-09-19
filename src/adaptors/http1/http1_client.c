@@ -366,16 +366,6 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
                "[C%"PRIu64"][L%"PRIu64"] Read %"PRIuMAX" bytes from client (%zu buffers)",
                hconn->conn_id, hconn->in_link_id, length, DEQ_SIZE(blist));
 
-        if (HTTP1_DUMP_BUFFERS) {
-            fprintf(stdout, "\nClient raw buffer READ %"PRIuMAX" total octets\n", length);
-            qd_buffer_t *bb = DEQ_HEAD(blist);
-            while (bb) {
-                fprintf(stdout, "  buffer='%.*s'\n", (int)qd_buffer_size(bb), (char*)&bb[1]);
-                bb = DEQ_NEXT(bb);
-            }
-            fflush(stdout);
-        }
-
         hconn->in_http1_octets += length;
         error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
     }

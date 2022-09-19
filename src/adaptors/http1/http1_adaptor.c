@@ -228,58 +228,115 @@ void qdr_http1_error_response(qdr_http1_request_base_t *hreq,
 // Raw Connection Write Buffer Management
 //
 
+static uint32_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo,
+                                          qd_adaptor_buffer_list_t  *abuf_list,
+                                          size_t                     limit)
+{
+    qd_adaptor_buffer_t  *abuf         = 0;
+    qdr_http1_out_data_t *od           = 0;
+    uint32_t              total_octets = 0;
+    while (!DEQ_IS_EMPTY(*fifo) && limit > 0) {
+        if (!od)
+            od = DEQ_HEAD(*fifo);
+
+        if (!abuf)
+            abuf = qd_adaptor_buffer();
+
+        size_t data_octets = qd_iterator_remaining(od->data_iter);
+        assert(data_octets > 0);
+
+        unsigned char *abuf_cursor   = qd_adaptor_buffer_cursor(abuf);
+        size_t         abuf_capacity = qd_adaptor_buffer_capacity(abuf);
+        assert(abuf_capacity > 0);
+
+        size_t copied = qd_iterator_ncopy_octets(od->data_iter, abuf_cursor, MIN(data_octets, abuf_capacity));
+        assert(copied > 0);
+        total_octets += copied;
+
+        if (qd_iterator_remaining(od->data_iter) == 0) {
+            DEQ_REMOVE_HEAD(*fifo);
+            _free_qdr_http1_out_data(od);
+            od = 0;
+        }
+
+        qd_adaptor_buffer_insert(abuf, copied);
+        if (qd_adaptor_buffer_capacity(abuf) == 0) {
+            DEQ_INSERT_TAIL(*abuf_list, abuf);
+            abuf = 0;
+            limit -= 1;
+        }
+    }
+
+    if (abuf) {
+        DEQ_INSERT_TAIL(*abuf_list, abuf);
+    }
+    return total_octets;
+}
+
+// Give a list of output buffers to the raw connection for sending. The raw connection will take as many buffers off the
+// list as it has capacity for. Return the number of buffers taken.
+//
+static size_t qdr_http1_write_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *abuf_list)
+{
+    assert(raw_conn);
+    assert(abuf_list);
+
+    size_t buf_count = 0;
+    while (DEQ_HEAD(*abuf_list) && pn_raw_connection_write_buffers_capacity(raw_conn) > 0) {
+        qd_adaptor_buffer_t *abuf = DEQ_HEAD(*abuf_list);
+        DEQ_REMOVE_HEAD(*abuf_list);
+        pn_raw_buffer_t pn_buff = {
+            .context = (uintptr_t) abuf,
+            .bytes   = (char *) qd_adaptor_buffer_base(abuf),
+            .size    = qd_adaptor_buffer_size(abuf),
+        };
+
+        size_t rc = pn_raw_connection_write_buffers(raw_conn, &pn_buff, 1);
+        (void) rc;
+        assert(rc == 1);
+        buf_count += 1;
+    }
+
+    return buf_count;
+}
 
 // Write list of data out the raw connection, freeing entries when data is exhausted
 //
 uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo)
 {
-    size_t count = !hconn->raw_conn || pn_raw_connection_is_write_closed(hconn->raw_conn)
-        ? 0
-        : pn_raw_connection_write_buffers_capacity(hconn->raw_conn);
+    size_t limit = !hconn->raw_conn || pn_raw_connection_is_write_closed(hconn->raw_conn)
+                       ? 0
+                       : pn_raw_connection_write_buffers_capacity(hconn->raw_conn);
 
-    if (hconn->write_buf_busy || count == 0)
+    if (limit == 0)
         return 0;
 
-    const size_t max_octets = HTTP1_IO_BUF_SIZE;
-    size_t total_octets = 0;
-    while (!DEQ_IS_EMPTY(*fifo) && total_octets < max_octets) {
-        qdr_http1_out_data_t *od = DEQ_HEAD(*fifo);
-        uint32_t data_octets = qd_iterator_remaining(od->data_iter);
+    // do not create more buffers than the raw connection capacity (limit) to avoid holding on to any unused buffers
+    qd_adaptor_buffer_list_t abuf_list    = DEQ_EMPTY;
+    uint32_t                 total_octets = qdr_http1_get_out_buffers(fifo, &abuf_list, limit);
+    if (total_octets == 0)
+        return 0;
 
-        size_t len = MIN(data_octets, max_octets - total_octets);
-        int copied = qd_iterator_ncopy(od->data_iter, &hconn->write_buffer[total_octets], len);
-        assert(copied == len);
-        data_octets -= copied;
-        total_octets += copied;
+    assert(DEQ_SIZE(abuf_list) <= limit);
 
-        qd_iterator_trim_view(od->data_iter, data_octets);
-        if (qd_iterator_remaining(od->data_iter) == 0) {
-            DEQ_REMOVE_HEAD(*fifo);
-            _free_qdr_http1_out_data(od);
-        }
-    }
-
-    if (total_octets) {
-        pn_raw_buffer_t pn_buff = {0};
-        pn_buff.bytes = (char*) hconn->write_buffer;
-        pn_buff.size  = total_octets;
-
-        // keep me, you'll need it
-        if (HTTP1_DUMP_BUFFERS) {
-            fprintf(stdout, "\n[C%"PRIu64"] Raw Write: Ptr=%p len=%"PRIu32"\n  value='%.*s'\n",
-                    hconn->conn_id, (void*)pn_buff.bytes, pn_buff.size,
-                    (int) pn_buff.size, pn_buff.bytes);
+    // keep me, you'll need it
+    if (HTTP1_DUMP_BUFFERS) {
+        qd_adaptor_buffer_t *abuf = DEQ_HEAD(abuf_list);
+        while (abuf) {
+            fprintf(stdout, "\n[C%" PRIu64 "] Raw Write: Ptr=%p len=%" PRIu32 "\n  value='%.*s'\n", hconn->conn_id,
+                    (void *) qd_adaptor_buffer_base(abuf), (uint32_t) qd_adaptor_buffer_size(abuf),
+                    (int) qd_adaptor_buffer_size(abuf), (char *) qd_adaptor_buffer_base(abuf));
             fflush(stdout);
+            abuf = DEQ_NEXT(abuf);
         }
-
-        pn_raw_connection_write_buffers(hconn->raw_conn, &pn_buff, 1);
-        hconn->write_buf_busy = true;
     }
+
+    qdr_http1_write_buffers(hconn->raw_conn, &abuf_list);
+    assert(DEQ_IS_EMPTY(abuf_list));  // expect all consumed since capacity was checked above
 
     hconn->out_http1_octets += total_octets;
     return total_octets;
 }
-
 
 // The HTTP encoder has a list of buffers to be written to the raw connection.
 // Queue it to the outgoing data fifo.
@@ -321,19 +378,10 @@ void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn)
 {
     pn_raw_buffer_t pn_buff = {0};
 
-    if (pn_raw_connection_take_written_buffers(hconn->raw_conn, &pn_buff, 1) != 0) {
-        assert(hconn->write_buf_busy);  // expect write buffer in use
-
-        // keep me, you'll need it
-        if (HTTP1_DUMP_BUFFERS) {
-            char *ptr = (char*) pn_buff.bytes;
-            int len = (int) pn_buff.size;
-            fprintf(stdout, "\n[C%"PRIu64"] Raw Written: Ptr=%p len=%d c=%d o=%d\n  value='%.*s'\n",
-                    hconn->conn_id, (void*)ptr, len, pn_buff.capacity, pn_buff.offset, len, ptr);
-            fflush(stdout);
-        }
-
-        hconn->write_buf_busy = false;
+    while (pn_raw_connection_take_written_buffers(hconn->raw_conn, &pn_buff, 1) != 0) {
+        qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buff.context;
+        assert(abuf);
+        qd_adaptor_buffer_free(abuf);
     }
 }
 
@@ -342,17 +390,28 @@ void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn)
 // Raw Connection Read Buffer Management
 //
 
+static size_t _raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
+{
+    size_t       desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
+    const size_t granted = desired;
+
+    while (desired-- > 0) {
+        qd_adaptor_buffer_t *abuf   = qd_adaptor_buffer();
+        pn_raw_buffer_t      pn_buf = {
+                 .context  = (uintptr_t) abuf,
+                 .bytes    = (char *) qd_adaptor_buffer_cursor(abuf),
+                 .capacity = qd_adaptor_buffer_capacity(abuf),
+        };
+        pn_raw_connection_give_read_buffers(pn_raw_conn, &pn_buf, 1);
+    }
+
+    return granted;
+}
+
 int qdr_http1_grant_read_buffers(qdr_http1_connection_t *hconn)
 {
-    if (!hconn->read_buf_busy && hconn->raw_conn
-        && pn_raw_connection_read_buffers_capacity(hconn->raw_conn) > 0) {
-
-        pn_raw_buffer_t pn_buf = {0};
-        pn_buf.bytes = (char*) hconn->read_buffer;
-        pn_buf.capacity = HTTP1_IO_BUF_SIZE;
-        pn_raw_connection_give_read_buffers(hconn->raw_conn, &pn_buf, 1);
-        hconn->read_buf_busy = true;
-        return 1;
+    if (hconn->raw_conn) {
+        return _raw_connection_grant_read_buffers(hconn->raw_conn);
     }
     return 0;
 }
@@ -365,13 +424,23 @@ uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
     DEQ_INIT(*blist);
     uintmax_t octets = 0;
 
-    if (hconn->raw_conn && pn_raw_connection_take_read_buffers(hconn->raw_conn,
-                                                               &pn_buff, 1)) {
-        if (pn_buff.size) {
-            octets = pn_buff.size;
-            qd_buffer_list_append(blist, (uint8_t*) pn_buff.bytes, pn_buff.size);
+    if (hconn->raw_conn) {
+        while (pn_raw_connection_take_read_buffers(hconn->raw_conn, &pn_buff, 1) == 1) {
+            if (pn_buff.size) {
+                // keep me, you'll need it
+                if (HTTP1_DUMP_BUFFERS) {
+                    fprintf(stdout, "\n[C%" PRIu64 "] Raw Read: Ptr=%p len=%" PRIu32 "\n value='%.*s'\n",
+                            hconn->conn_id, (void *) pn_buff.bytes, (uint32_t) pn_buff.size, (int) pn_buff.size,
+                            (char *) pn_buff.bytes);
+                    fflush(stdout);
+                }
+
+                octets += pn_buff.size;
+                qd_buffer_list_append(blist, (uint8_t *) pn_buff.bytes, pn_buff.size);
+            }
+            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buff.context;
+            qd_adaptor_buffer_free(abuf);
         }
-        hconn->read_buf_busy = false;
     }
     return octets;
 }

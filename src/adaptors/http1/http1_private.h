@@ -38,8 +38,6 @@
 // for debug: will dump I/O buffer content to stdout if true
 #define HTTP1_DUMP_BUFFERS false
 
-#define HTTP1_IO_BUF_SIZE 16384
-
 typedef struct qdr_http1_out_data_t      qdr_http1_out_data_t;
 typedef struct qdr_http1_request_base_t  qdr_http1_request_base_t;
 typedef struct qdr_http1_connection_t    qdr_http1_connection_t;
@@ -175,14 +173,6 @@ struct qdr_http1_connection_t {
     // flags
     //
     bool trace;
-
-    //
-    //
-    bool read_buf_busy;
-    bool write_buf_busy;
-
-    uint8_t read_buffer[HTTP1_IO_BUF_SIZE];
-    uint8_t write_buffer[HTTP1_IO_BUF_SIZE];
 };
 ALLOC_DECLARE(qdr_http1_connection_t);
 
@@ -268,4 +258,5 @@ void qdr_http1_server_core_conn_close(qdr_http1_adaptor_t *adaptor,
 void qdr_http1_record_client_request_info(qdr_http1_adaptor_t *adaptor, qdr_http1_request_base_t *request);
 void qdr_http1_record_server_request_info(qdr_http1_adaptor_t *adaptor, qdr_http1_request_base_t *request);
 
+#define HTTP1_READ_BUF_MAX 2
 #endif // http1_private_H
