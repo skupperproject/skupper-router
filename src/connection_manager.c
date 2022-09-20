@@ -998,7 +998,6 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         } else {
             DEQ_REMOVE(qd->connection_manager->connectors, ct);
         }
-        qd_connector_decref(ct);
 
         //
         // Remove correlated data connectors
@@ -1013,6 +1012,8 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
                 dc = next;
             }
         }
+
+        qd_connector_decref(ct);
     }
 }
 
