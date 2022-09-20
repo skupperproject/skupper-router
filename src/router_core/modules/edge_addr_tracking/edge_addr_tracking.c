@@ -65,7 +65,7 @@ static qd_message_t *qdcm_edge_create_address_dlv(qdr_core_t *core, qdr_address_
 
     qd_compose_start_list(body);
 
-    const char *addr_str = (const char *)qd_hash_key_by_handle(addr->hash_handle);
+    const char *addr_str = (const char*) qd_hash_key_by_handle(addr->hash_handle);
 
     qd_compose_insert_string(body, addr_str);
     qd_compose_insert_bool(body, insert_addr);
@@ -99,7 +99,7 @@ static void qdrc_address_endpoint_first_attach(void              *bind_context,
                                                qdr_terminus_t   *remote_source,
                                                qdr_terminus_t   *remote_target)
 {
-    qdr_addr_tracking_module_context_t *bc = (qdr_addr_tracking_module_context_t *) bind_context;
+    qdr_addr_tracking_module_context_t *bc = (qdr_addr_tracking_module_context_t*)  bind_context;
 
     //
     // The link to hard coded address QD_TERMINUS_EDGE_ADDRESS_TRACKING should be created only if this is a receiver link
@@ -137,14 +137,14 @@ static void qdrc_address_endpoint_first_attach(void              *bind_context,
 static void qdrc_address_endpoint_on_first_detach(void *link_context,
                                               qdr_error_t *error)
 {
-    qdr_addr_endpoint_state_t *endpoint_state  = (qdr_addr_endpoint_state_t *)link_context;
+    qdr_addr_endpoint_state_t *endpoint_state  = (qdr_addr_endpoint_state_t*) link_context;
     qdrc_endpoint_detach_CT(endpoint_state->mc->core, endpoint_state->endpoint, 0);
     qdr_error_free(error);
 }
 
 static void qdrc_address_endpoint_cleanup(void *link_context)
 {
-    qdr_addr_endpoint_state_t *endpoint_state  = (qdr_addr_endpoint_state_t *)link_context;
+    qdr_addr_endpoint_state_t *endpoint_state  = (qdr_addr_endpoint_state_t*) link_context;
     if (endpoint_state) {
         qdr_addr_tracking_module_context_t *mc = endpoint_state->mc;
         assert (endpoint_state->conn);
@@ -176,8 +176,7 @@ static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *conn)
     if (DEQ_SIZE(addr->rlinks) > 1 || qd_bitmask_cardinality(addr->rnodes) > 0) {
         // There is at least one receiver for this address somewhere in the router network
         can_send = true;
-    }
-    if (!can_send) {
+    } else {
         if (DEQ_SIZE(addr->rlinks) == 1) {
             qdr_link_ref_t *link_ref = DEQ_HEAD(addr->rlinks);
             if (link_ref->link->conn != conn)
@@ -202,132 +201,74 @@ static void qdrc_send_message(qdr_core_t *core, qdr_address_t *addr, qdrc_endpoi
     qdrc_endpoint_send_CT(core, endpoint, dlv, true);
 }
 
+
+static void qdrc_update_edge_peers(qdr_core_t *core, qdr_address_t *addr, bool reachable)
+{
+    qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
+
+    while (inlink) {
+        qdr_link_t *link = inlink->link;
+        if (!!link->edge_context) {
+            qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t*) link->edge_context;
+            qdrc_endpoint_t           *endpoint       = endpoint_state->endpoint;
+            if (!!endpoint && !endpoint_state->closed) {
+                if (reachable) {
+                    if (!link->edge_reachable && qdrc_can_send_address(addr, endpoint_state->conn)) {
+                        qdrc_send_message(core, addr, endpoint, true);
+                        link->edge_reachable = true;
+                    }
+                } else {
+                    if (link->edge_reachable && !qdrc_can_send_address(addr, endpoint_state->conn)) {
+                        qdrc_send_message(core, addr, endpoint, false);
+                        link->edge_reachable = false;
+                    }
+                }
+            }
+        }
+        inlink = DEQ_NEXT(inlink);
+    }
+}
+
+
 static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr)
 {
     // We only care about mobile addresses.
-    if(!qdr_address_is_mobile_CT(addr))
+    if (!qdr_address_is_mobile_CT(addr))
         return;
 
     qdr_addr_tracking_module_context_t *addr_tracking = (qdr_addr_tracking_module_context_t*) context;
     switch (event) {
-        case QDRC_EVENT_ADDR_BECAME_LOCAL_DEST : {
+        case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST :
             //
-            // This address transitioned from zero to one local destination. If this address already has more than zero remote destinations, don't do anything
+            // If there are remote destinations or more than two local destinations, don't do anything because
+            // all edge peers have already been informed about the reachability of this address.
+            //
+            // Otherwise, we need to update all edge peers because edges may have been excluded by being the
+            // sole destination for the address.
+            //
+            if (qd_bitmask_cardinality(addr->rnodes) == 0 || DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count > 2) {
+                qdrc_update_edge_peers(addr_tracking->core, addr, true);
+            }
+            break;
+
+        case QDRC_EVENT_ADDR_ADDED_REMOTE_DEST :
+            //
+            //
+            //
+            if (qd_bitmask_cardinality(addr->rnodes) == 1) {
+                qdrc_update_edge_peers(addr_tracking->core, addr, true);
+            }
+            break;
+
+        case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST :
+        case QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST :
+            //
+            //
             //
             if (qd_bitmask_cardinality(addr->rnodes) == 0) {
-                qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
-                //
-                // Every inlink that has an edge context must be informed of the appearance of this address.
-                //
-                while (inlink) {
-                    if(inlink->link->edge_context != 0) {
-                        qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)inlink->link->edge_context;
-                        if (!endpoint_state->closed && qdrc_can_send_address(addr, endpoint_state->conn) ) {
-                            qdrc_endpoint_t *endpoint = endpoint_state->endpoint;
-                            qdrc_send_message(addr_tracking->core, addr, endpoint, true);
-                        }
-                    }
-                    inlink = DEQ_NEXT(inlink);
-                }
+                qdrc_update_edge_peers(addr_tracking->core, addr, false);
             }
             break;
-        }
-        case QDRC_EVENT_ADDR_BECAME_DEST : {
-            //
-            // This address transitioned from zero to one destination. If this address already had local destinations
-            //
-            qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
-            //
-            // Every inlink that has an edge context must be informed of the appearance of this address.
-            //
-            while (inlink) {
-                if(inlink->link->edge_context != 0) {
-                    qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)inlink->link->edge_context;
-                    if (!endpoint_state->closed && qdrc_can_send_address(addr, endpoint_state->conn) ) {
-                        qdrc_endpoint_t *endpoint = endpoint_state->endpoint;
-                        if (endpoint)
-                            qdrc_send_message(addr_tracking->core, addr, endpoint, true);
-                    }
-                }
-                inlink = DEQ_NEXT(inlink);
-            }
-        }
-        break;
-
-        case QDRC_EVENT_ADDR_NO_LONGER_DEST :
-
-            // fallthrough
-
-        case QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST : {
-            // The address no longer has any local destinations.
-            // If there are no remote destinations either, we have to tell the edge routers to delete their sender links
-            if (qd_bitmask_cardinality(addr->rnodes) == 0) {
-                qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
-                //
-                // Every inlink that has an edge context must be informed of the disappearance of this address.
-                //
-                while (inlink) {
-                    if(inlink->link->edge_context != 0) {
-                        qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)inlink->link->edge_context;
-                        if(!endpoint_state->closed) {
-                            qdrc_endpoint_t *endpoint = endpoint_state->endpoint;
-                            if (endpoint)
-                                qdrc_send_message(addr_tracking->core, addr, endpoint, false);
-                        }
-                    }
-                    inlink = DEQ_NEXT(inlink);
-                }
-            }
-
-            break;
-        }
-        case QDRC_EVENT_ADDR_ONE_LOCAL_DEST: {
-            //
-            // This address transitioned from N destinations to one local dest
-            // If this address already has non-zero remote destinations, there is no need to tell the edge routers about it
-            //
-            assert(DEQ_SIZE(addr->rlinks) == 1);
-            //
-            // There should be only one rlink in the rlinks list
-            //
-            qdr_link_ref_t *rlink_ref = DEQ_HEAD(addr->rlinks);
-            qdr_link_t *link = rlink_ref->link;
-
-            qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
-            while (inlink) {
-                if (inlink->link->edge_context != 0) {
-                    qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)inlink->link->edge_context;
-                    qdrc_endpoint_t *endpoint = endpoint_state->endpoint;
-                    if (endpoint_state->conn == link->conn && !endpoint_state->closed) {
-                        qdrc_send_message(addr_tracking->core, addr, endpoint, false);
-                        break;
-                    }
-                }
-                inlink = DEQ_NEXT(inlink);
-            }
-        }
-        break;
-        case QDRC_EVENT_ADDR_TWO_DEST: {
-            //
-            // The address transitioned from one local dest to two destinations, The second destination might be local or remote.
-            //
-            qdr_link_ref_t *rlink_ref = DEQ_HEAD(addr->rlinks);
-            qdr_link_t *link = rlink_ref->link;
-
-            qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
-            while (inlink) {
-                if(inlink->link->edge_context != 0) {
-                    qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)inlink->link->edge_context;
-                    qdrc_endpoint_t *endpoint = endpoint_state->endpoint;
-                    if (link->conn == endpoint_state->conn && !endpoint_state->closed) {
-                        qdrc_send_message(addr_tracking->core, addr, endpoint, true);
-                        break;
-                    }
-                }
-                inlink = DEQ_NEXT(inlink);
-            }
-            break;
-        }
 
         default:
             break;
@@ -339,7 +280,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
     switch (event) {
         case QDRC_EVENT_LINK_EDGE_DATA_ATTACHED :
         {
-            qdr_addr_tracking_module_context_t *mc = (qdr_addr_tracking_module_context_t *) context;
+            qdr_addr_tracking_module_context_t *mc = (qdr_addr_tracking_module_context_t*) context;
             qdr_address_t *addr = link->owning_addr;
             if (addr && qdr_address_is_mobile_CT(addr) && DEQ_SIZE(addr->subscriptions) == 0 && link->link_direction == QD_INCOMING) {
                 qdr_addr_endpoint_state_t *endpoint_state = qdrc_get_endpoint_state_for_connection(mc->endpoint_state_list, link->conn);
@@ -356,10 +297,11 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
             }
             break;
         }
+        
         case QDRC_EVENT_LINK_EDGE_DATA_DETACHED :
         {
             if (link->edge_context) {
-                qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t *)link->edge_context;
+                qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t*) link->edge_context;
                 endpoint_state->ref_count--;
                 link->edge_context = 0;
                 //
@@ -410,9 +352,12 @@ static void qdrc_edge_address_tracking_init_CT(qdr_core_t *core, void **module_c
     // Subscribe to address and link events.
     //
     context->event_sub = qdrc_event_subscribe_CT(core,
-            QDRC_EVENT_ADDR_BECAME_LOCAL_DEST | QDRC_EVENT_ADDR_ONE_LOCAL_DEST |
-            QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST | QDRC_EVENT_ADDR_BECAME_DEST | QDRC_EVENT_ADDR_TWO_DEST | QDRC_EVENT_ADDR_NO_LONGER_DEST |
-            QDRC_EVENT_LINK_EDGE_DATA_ATTACHED | QDRC_EVENT_LINK_EDGE_DATA_DETACHED,
+            QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
+            | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
+            | QDRC_EVENT_ADDR_ADDED_REMOTE_DEST
+            | QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST
+            | QDRC_EVENT_LINK_EDGE_DATA_ATTACHED
+            | QDRC_EVENT_LINK_EDGE_DATA_DETACHED,
             0,
             on_link_event,
             on_addr_event,
@@ -423,7 +368,7 @@ static void qdrc_edge_address_tracking_init_CT(qdr_core_t *core, void **module_c
 
 static void qdrc_edge_address_tracking_final_CT(void *module_context)
 {
-    qdr_addr_tracking_module_context_t *mc = ( qdr_addr_tracking_module_context_t *)module_context;
+    qdr_addr_tracking_module_context_t *mc = ( qdr_addr_tracking_module_context_t*) module_context;
 
     // If there are any endpoint states still hanging around, clean it up.
     qdr_addr_endpoint_state_t *endpoint_state = DEQ_HEAD(mc->endpoint_state_list);

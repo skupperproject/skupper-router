@@ -612,14 +612,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
                         (const char*) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
 
-                        //
-                        // Raise an address event if this is the first destination for the address
-                        //
-                        if (qd_bitmask_cardinality(addr->rnodes) + DEQ_SIZE(addr->rlinks) == 1)
-                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_BECAME_DEST, addr);
-                        else if (qd_bitmask_cardinality(addr->rnodes) == 1 && DEQ_SIZE(addr->rlinks) == 1)
-                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_TWO_DEST, addr);
-
+                        qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ADDED_REMOTE_DEST, addr);
                         qdr_trigger_address_watch_CT(msync->core, addr);
                     }
                 } while (false);
@@ -650,14 +643,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                             (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
                             (const char*) qd_hash_key_by_handle(addr->hash_handle));
 
-                            //
-                            // Raise an address event if this was the last destination for the address
-                            //
-                            if (qd_bitmask_cardinality(addr->rnodes) + DEQ_SIZE(addr->rlinks) == 0)
-                                qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_NO_LONGER_DEST, addr);
-                            else if (qd_bitmask_cardinality(addr->rnodes) == 0 && DEQ_SIZE(addr->rlinks) == 1)
-                                qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ONE_LOCAL_DEST, addr);
-
+                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST, addr);
                             qdr_trigger_address_watch_CT(msync->core, addr);
                             qdr_check_addr_CT(msync->core, addr);
                         }
@@ -685,14 +671,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
                         (const char*) qd_hash_key_by_handle(addr->hash_handle));
 
-                        //
-                        // Raise an address event if this was the last destination for the address
-                        //
-                        if (qd_bitmask_cardinality(addr->rnodes) + DEQ_SIZE(addr->rlinks) == 0)
-                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_NO_LONGER_DEST, addr);
-                        else if (qd_bitmask_cardinality(addr->rnodes) == 0 && DEQ_SIZE(addr->rlinks) == 1)
-                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ONE_LOCAL_DEST, addr);
-
+                        qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST, addr);
                         qdr_trigger_address_watch_CT(msync->core, addr);
                         qdr_check_addr_CT(msync->core, addr);
                     }
@@ -811,14 +790,7 @@ static void qcm_mobile_sync_on_router_flush_CT(qdrm_mobile_sync_t *msync, qdr_no
             router->ref_count--;
             addr->cost_epoch--;
 
-            //
-            // Raise an address event if this was the last destination for the address
-            //
-            if (qd_bitmask_cardinality(addr->rnodes) + DEQ_SIZE(addr->rlinks) == 0)
-                qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_NO_LONGER_DEST, addr);
-            else if (qd_bitmask_cardinality(addr->rnodes) == 0 && DEQ_SIZE(addr->rlinks) == 1)
-                qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ONE_LOCAL_DEST, addr);
-
+            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST, addr);
             qdr_trigger_address_watch_CT(msync->core, addr);
             qdr_check_addr_CT(msync->core, addr);
         }
@@ -855,12 +827,16 @@ static void qcm_mobile_sync_on_addr_event_CT(void          *context,
     qdrm_mobile_sync_t *msync = (qdrm_mobile_sync_t*) context;
 
     switch (event_type) {
-    case QDRC_EVENT_ADDR_BECAME_LOCAL_DEST:
-        qcm_mobile_sync_on_became_local_dest_CT(msync, addr);
+    case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST:
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 1) {
+            qcm_mobile_sync_on_became_local_dest_CT(msync, addr);
+        }
         break;
         
-    case QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST:
-        qcm_mobile_sync_on_no_longer_local_dest_CT(msync, addr);
+    case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST:
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 0) {
+            qcm_mobile_sync_on_no_longer_local_dest_CT(msync, addr);
+        }
         break;
         
     default:
@@ -915,8 +891,8 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     //  - ROUTER_MOBILE_SEQ_ADVANCED - A router has an advanced mobile-seq and needs to be queried
     //
     msync->event_sub = qdrc_event_subscribe_CT(core,
-                                               QDRC_EVENT_ADDR_BECAME_LOCAL_DEST
-                                               | QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST
+                                               QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
+                                               | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
                                                | QDRC_EVENT_ROUTER_MOBILE_FLUSH
                                                | QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED,
                                                0,

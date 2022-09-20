@@ -309,6 +309,8 @@ class DynamicAddressWatchTest(MessagingHandler):
         self.timer.cancel()
 
     def timeout(self):
+        msg = Message(subject='watch', properties={'opcode': 'watch-off', 'address': self.address})
+        self.sender.send(msg)
         self.fail("Timeout Expired - Phase: %s" % self.phase)
 
     def setup_dests(self):
@@ -417,6 +419,8 @@ class DropOneAddressWatchTest(MessagingHandler):
         self.timer.cancel()
 
     def timeout(self):
+        msg = Message(subject='watch', properties={'opcode': 'watch-off', 'address': self.address})
+        self.sender.send(msg)
         self.fail("Timeout Expired - Phase: %s" % self.phase)
 
     def setup_dests(self):

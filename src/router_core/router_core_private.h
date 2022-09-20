@@ -477,7 +477,9 @@ struct qdr_link_t {
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     terminus_survives_disconnect;
     bool                     no_route;          ///< True if this link is to not receive routed deliveries
-    bool                     no_route_bound;    // Has the no_route link been bound ? Has the link's owning address been set for no_route links ?
+    bool                     no_route_bound;    ///< Has the no_route link been bound ? Has the link's owning address been set for no_route links ?
+    bool                     proxy;             ///< True if this link represents endpoints on a remote router (used on edge router only)
+    bool                     edge_reachable;    ///< The last reachability state sent to the edge (only for edge inlinks on an interior router)
     char                    *strip_prefix;
     char                    *insert_prefix;
 
@@ -540,6 +542,8 @@ struct qdr_address_t {
     qdr_forwarder_t           *forwarder;
     qdr_address_watch_list_t   watches;
     int                        ref_count;     ///< Number of entities referencing this address
+    int                        proxy_rlink_count;
+    int                        proxy_inlink_count;
     bool                       local;
     bool                       router_control_only; ///< If set, address is only for deliveries arriving on a control link
     bool                       propagate_local;     ///< If set, propagate to the network even if there are only local subscriptions
