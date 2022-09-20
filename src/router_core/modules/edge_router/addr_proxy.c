@@ -101,6 +101,7 @@ static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_INCOMING,
                                               term, qdr_terminus_normal(0), QD_SSN_ENDPOINT,
                                               QDR_DEFAULT_PRIORITY);
+        link->proxy = true;
         qdr_core_bind_address_link_CT(ap->core, addr, link);
         set_safe_ptr_qdr_link_t(link, &addr->edge_inlink_sp);
     }
@@ -132,6 +133,7 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
         qdr_link_t *link = qdr_create_link_CT(ap->core, ap->edge_conn, QD_LINK_ENDPOINT, QD_OUTGOING,
                                               qdr_terminus_normal(0), term, QD_SSN_ENDPOINT,
                                               QDR_DEFAULT_PRIORITY);
+        link->proxy = true;
         set_safe_ptr_qdr_link_t(link, &addr->edge_outlink_sp);
     }
 }
@@ -218,6 +220,7 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
                                                   qdr_terminus(0), qdr_terminus(0),
                                                   QD_SSN_ENDPOINT,
                                                   QDR_DEFAULT_PRIORITY);
+        out_link->proxy = true;
 
         //
         // Associate the anonymous sender with the edge connection address.  This will cause
@@ -229,11 +232,12 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
         // Attach a receiving link for edge summary.  This will cause all deliveries
         // destined for this router to be delivered via the edge connection.
         //
-        (void) qdr_create_link_CT(ap->core, conn,
-                                  QD_LINK_ENDPOINT, QD_INCOMING,
-                                  qdr_terminus_edge_downlink(ap->core->router_id),
-                                  qdr_terminus_edge_downlink(0),
-                                  QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+        qdr_link_t *elink = qdr_create_link_CT(ap->core, conn,
+                                               QD_LINK_ENDPOINT, QD_INCOMING,
+                                               qdr_terminus_edge_downlink(ap->core->router_id),
+                                               qdr_terminus_edge_downlink(0),
+                                               QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+        elink->proxy = true;
 
         //
         // Attach a receiving link for edge address tracking updates.
@@ -307,7 +311,6 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
 static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr)
 {
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) context;
-    qdr_link_ref_t        *link_ref;
 
     //
     // If we don't have an established edge connection, there is no further work to be done.
@@ -323,52 +326,24 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
         return;
 
     switch (event) {
-    case QDRC_EVENT_ADDR_BECAME_LOCAL_DEST :
-        //
-        // Add an edge connection for this address only if the local destination is
-        // not the link to the interior.
-        //
-        link_ref = DEQ_HEAD(addr->rlinks);
-        if (link_ref->link->conn != ap->edge_conn || addr->propagate_local)
+    case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST :
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 1) {
             add_inlink(ap, key, addr);
+        }
         break;
 
-    case QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST :
-        del_inlink(ap, addr);
-        break;
-
-    case QDRC_EVENT_ADDR_ONE_LOCAL_DEST :
-        //
-        // If the remaining local destination is the link to the interior,
-        // remove the inlink for this address.
-        //
-        link_ref = DEQ_HEAD(addr->rlinks);
-        if (link_ref->link->conn == ap->edge_conn)
+    case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST :
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 0) {
             del_inlink(ap, addr);
-        break;
-
-    case QDRC_EVENT_ADDR_TWO_DEST :
-        add_inlink(ap, key, addr);
+        }
         break;
 
     case QDRC_EVENT_ADDR_BECAME_SOURCE :
-        link_ref = DEQ_HEAD(addr->inlinks);
-        if (!link_ref || link_ref->link->conn != ap->edge_conn)
-            add_outlink(ap, key, addr);
+        add_outlink(ap, key, addr);
         break;
 
     case QDRC_EVENT_ADDR_NO_LONGER_SOURCE :
         if (DEQ_SIZE(addr->watches) == 0)
-            del_outlink(ap, addr);
-        break;
-
-    case QDRC_EVENT_ADDR_TWO_SOURCE :
-        add_outlink(ap, key, addr);
-        break;
-
-    case QDRC_EVENT_ADDR_ONE_SOURCE :
-        link_ref = DEQ_HEAD(addr->inlinks);
-        if ((!link_ref || link_ref->link->conn == ap->edge_conn) && DEQ_SIZE(addr->watches) == 0)
             del_outlink(ap, addr);
         break;
 
@@ -377,8 +352,7 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
         break;
 
     case QDRC_EVENT_ADDR_WATCH_OFF :
-        link_ref = DEQ_HEAD(addr->inlinks);
-        if ((!link_ref || link_ref->link->conn == ap->edge_conn) && DEQ_SIZE(addr->inlinks) < 2) {
+        if (DEQ_SIZE(addr->inlinks) == addr->proxy_inlink_count) {
             del_outlink(ap, addr);
         }
         break;
@@ -434,10 +408,15 @@ static void on_transfer(void           *link_context,
                 if (addr) {
                     qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_outlink_sp);
                     if (link) {
-                        if (dest)
-                            qdr_core_bind_address_link_CT(ap->core, addr, link);
-                        else
-                            qdr_core_unbind_address_link_CT(ap->core, addr, link);
+                        if (dest) {
+                            if (link->owning_addr == 0) {
+                                qdr_core_bind_address_link_CT(ap->core, addr, link);
+                            }
+                        } else {
+                            if (link->owning_addr == addr) {
+                                qdr_core_unbind_address_link_CT(ap->core, addr, link);
+                            }
+                        }
                     }
                 }
             }
@@ -499,14 +478,10 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
     ap->event_sub = qdrc_event_subscribe_CT(core,
                                             QDRC_EVENT_CONN_EDGE_ESTABLISHED
                                             | QDRC_EVENT_CONN_EDGE_LOST
-                                            | QDRC_EVENT_ADDR_BECAME_LOCAL_DEST
-                                            | QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST
-                                            | QDRC_EVENT_ADDR_ONE_LOCAL_DEST
-                                            | QDRC_EVENT_ADDR_TWO_DEST
+                                            | QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
+                                            | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
                                             | QDRC_EVENT_ADDR_BECAME_SOURCE
                                             | QDRC_EVENT_ADDR_NO_LONGER_SOURCE
-                                            | QDRC_EVENT_ADDR_TWO_SOURCE
-                                            | QDRC_EVENT_ADDR_ONE_SOURCE
                                             | QDRC_EVENT_ADDR_WATCH_ON
                                             | QDRC_EVENT_ADDR_WATCH_OFF
                                             | QDRC_EVENT_LINK_IN_DETACHED

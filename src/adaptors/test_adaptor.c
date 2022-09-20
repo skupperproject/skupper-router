@@ -63,7 +63,8 @@ static void on_dynamic_watch(void     *context,
 {
     dynamic_watch_t *dw = (dynamic_watch_t*) context;
 
-    qd_log(log_source, QD_LOG_INFO, "On Dynamic Watch: %s", dw->address);
+    qd_log(log_source, QD_LOG_INFO, "On Dynamic Watch: %s loc: %"PRIu32" rem: %"PRIu32" prod: %"PRIu32,
+           dw->address, local_consumers, remote_consumers, local_producers);
 
     qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
     qd_compose_start_map(field);

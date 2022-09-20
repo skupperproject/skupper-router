@@ -50,16 +50,12 @@ typedef uint32_t qdrc_event_t;
  *
  * QDRC_EVENT_ADDR_ADDED                 (not implemented)
  * QDRC_EVENT_ADDR_REMOVED               (not implemented)
- * QDRC_EVENT_ADDR_BECAME_LOCAL_DEST     An address transitioned from zero to one local destination
- * QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST  An address transitioned from one to zero local destinations
- * QDRC_EVENT_ADDR_BECAME_DEST           An address transitioned from zero to one destination
- * QDRC_EVENT_ADDR_NO_LONGER_DEST        An address transitioned from one to zero destinations
- * QDRC_EVENT_ADDR_ONE_LOCAL_DEST        An address transitioned from N destinations to one local dest
- * QDRC_EVENT_ADDR_TWO_DEST              An address transisioned from one local dest to two destinations
+ * QDRC_EVENT_ADDR_ADDED_LOCAL_DEST      A local non-proxy destination was added for this address
+ * QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST    A local non-proxy destination was removed for this address
+ * QDRC_EVENT_ADDR_ADDED_REMOTE_DEST     A remote destination was added for this address
+ * QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST   A remote destination was removed for this address
  * QDRC_EVENT_ADDR_BECAME_SOURCE         An address transitioned from zero to one local source (inlink)
  * QDRC_EVENT_ADDR_NO_LONGER_SOURCE      An address transitioned from one to zero local sources (inlink)
- * QDRC_EVENT_ADDR_TWO_SOURCE            An address transitioned from one to two local sources (inlink)
- * QDRC_EVENT_ADDR_ONE_SOURCE            An address transitioned from two to one local sources (inlink)
  *
  * QDRC_EVENT_ROUTER_ADDED               A remote router has been discovered
  * QDRC_EVENT_ROUTER_REMOVED             A remote router has been lost
@@ -85,16 +81,12 @@ typedef uint32_t qdrc_event_t;
 
 #define QDRC_EVENT_ADDR_ADDED                0x00001000
 #define QDRC_EVENT_ADDR_REMOVED              0x00002000
-#define QDRC_EVENT_ADDR_BECAME_LOCAL_DEST    0x00004000
-#define QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST 0x00008000
-#define QDRC_EVENT_ADDR_BECAME_DEST          0x00010000
-#define QDRC_EVENT_ADDR_NO_LONGER_DEST       0x00020000
-#define QDRC_EVENT_ADDR_ONE_LOCAL_DEST       0x00040000
-#define QDRC_EVENT_ADDR_TWO_DEST             0x00080000
+#define QDRC_EVENT_ADDR_ADDED_LOCAL_DEST     0x00004000
+#define QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST   0x00008000
+#define QDRC_EVENT_ADDR_ADDED_REMOTE_DEST    0x00010000
+#define QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST  0x00020000
 #define QDRC_EVENT_ADDR_BECAME_SOURCE        0x00100000
 #define QDRC_EVENT_ADDR_NO_LONGER_SOURCE     0x00200000
-#define QDRC_EVENT_ADDR_TWO_SOURCE           0x00400000
-#define QDRC_EVENT_ADDR_ONE_SOURCE           0x00800000
 #define QDRC_EVENT_ADDR_WATCH_ON             0x01000000
 #define QDRC_EVENT_ADDR_WATCH_OFF            0x02000000
 #define _QDRC_EVENT_ADDR_RANGE               0x03FFF000
@@ -104,6 +96,15 @@ typedef uint32_t qdrc_event_t;
 #define QDRC_EVENT_ROUTER_MOBILE_FLUSH        0x10000000
 #define QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED 0x20000000
 #define _QDRC_EVENT_ROUTER_RANGE              0x3C000000
+
+//
+// QDRC_LOCAL_DEST_THRESHOLD
+//
+// This value is the maximum number of non-proxy destinations that will cause the raising of
+// ADDR_[ADDED,REMOVED]_LOCAL_DEST events.  When there are more than threshold destinations,
+// no more adds or removes will be reported.
+//
+#define QDRC_LOCAL_DEST_THRESHOLD 2
 
 
 /**

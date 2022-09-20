@@ -661,6 +661,7 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
 
 void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link)
 {
+    assert(core->router_mode == QD_ROUTER_MODE_EDGE || !link->proxy);
     link->owning_addr = addr;
 
     //
@@ -676,18 +677,22 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
 
     if (link->link_direction == QD_OUTGOING) {
         qdr_add_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
+        addr->proxy_rlink_count += link->proxy ? 1 : 0;
+        
         if (DEQ_SIZE(addr->rlinks) == 1) {
             qdr_addr_start_inlinks_CT(core, addr);
-            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_BECAME_LOCAL_DEST, addr);
-        } else if (DEQ_SIZE(addr->rlinks) == 2 && qd_bitmask_cardinality(addr->rnodes) == 0)
-            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_TWO_DEST, addr);
+        }
+
+        if (!link->proxy && DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count <= QDRC_LOCAL_DEST_THRESHOLD) {
+            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ADDED_LOCAL_DEST, addr);
+        }
     } else {  // link->link_direction == QD_INCOMING
         qdr_add_link_ref(&addr->inlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
+        addr->proxy_inlink_count += link->proxy ? 1 : 0;
 
-        if (DEQ_SIZE(addr->inlinks) == 1)
+        if (!link->proxy && DEQ_SIZE(addr->inlinks) - addr->proxy_inlink_count == 1) {
             qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_BECAME_SOURCE, addr);
-        else if (DEQ_SIZE(addr->inlinks) == 2)
-            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_TWO_SOURCE, addr);
+        }
     }
 
     qdr_trigger_address_watch_CT(core, addr);
@@ -696,6 +701,7 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
 
 void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link)
 {
+    assert(core->router_mode == QD_ROUTER_MODE_EDGE || !link->proxy);
     link->owning_addr = 0;
 
     //
@@ -706,18 +712,21 @@ void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_
         return;
 
     if (link->link_direction == QD_OUTGOING) {
-        qdr_del_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
-        if (DEQ_SIZE(addr->rlinks) == 0) {
-            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_NO_LONGER_LOCAL_DEST, addr);
-        } else if (DEQ_SIZE(addr->rlinks) == 1 && qd_bitmask_cardinality(addr->rnodes) == 0)
-            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ONE_LOCAL_DEST, addr);
+        bool removed = qdr_del_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
+        if (removed) {
+            addr->proxy_rlink_count -= link->proxy ? 1 : 0;
+
+            if (!link->proxy && DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count <= QDRC_LOCAL_DEST_THRESHOLD) {
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST, addr);
+            }
+        }
     } else {  // link->link_direction == QD_INCOMING
         bool removed = qdr_del_link_ref(&addr->inlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
         if (removed) {
-            if (DEQ_SIZE(addr->inlinks) == 0)
+            addr->proxy_inlink_count -= link->proxy ? 1 : 0;
+            if (!link->proxy && DEQ_SIZE(addr->inlinks) - addr->proxy_inlink_count == 0) {
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_NO_LONGER_SOURCE, addr);
-            else if (DEQ_SIZE(addr->inlinks) == 1)
-                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ONE_SOURCE, addr);
+            }
         }
     }
 
