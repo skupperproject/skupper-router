@@ -27,8 +27,6 @@
 #include <proton/listener.h>
 #include <proton/proactor.h>
 
-#define QD_LISTENER_BACKLOG SOMAXCONN
-
 struct qd_adaptor_listener_t {
 
     // the following fields are mutably shared between multiple threads and
@@ -52,6 +50,7 @@ struct qd_adaptor_listener_t {
     qd_log_source_t              *log_source;
     qd_handler_context_t          event_handler;
     qdr_watch_handle_t            addr_watcher;
+    int                           backlog;
 
     // must hold _listeners_lock:
     DEQ_LINKS(qd_adaptor_listener_t);
@@ -136,8 +135,8 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 }
                 sys_mutex_unlock(&li->lock);
                 if (up)
-                    qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s", li->name,
-                           li->host_port);
+                    qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s with backlog %d",
+                           li->name, li->host_port, li->backlog);
                 break;
             }
 
@@ -196,8 +195,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                     // Note: the call to pn_proactor_listen may cause this
                     // listener event handler to start executing immediately on
                     // another thread.
-                    pn_proactor_listen(qd_server_proactor(qd_server), li->pn_listener, li->host_port,
-                                       QD_LISTENER_BACKLOG);
+                    pn_proactor_listen(qd_server_proactor(qd_server), li->pn_listener, li->host_port, li->backlog);
                 }
             }
 
@@ -264,7 +262,8 @@ static void _on_watched_address_update(void     *context,
                         li->ref_count += 1;  // for pn_listener context reference
 
                         // Note: after this call the _listener_event_handler may be called immediately on another thread:
-                        pn_proactor_listen(qd_server_proactor(li->qd->server), li->pn_listener, li->host_port, QD_LISTENER_BACKLOG);
+                        pn_proactor_listen(qd_server_proactor(li->qd->server), li->pn_listener, li->host_port,
+                                           li->backlog);
                     }
                 }
             } else {  // close listener
@@ -328,6 +327,7 @@ qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t *qd,
     li->host_port = qd_strdup(config->host_port);
     li->service_address = qd_strdup(config->address);
     li->log_source = log_source;
+    li->backlog         = config->backlog;
 
     sys_mutex_init(&li->lock);
     li->admin_status = QD_LISTENER_ADMIN_ENABLED;
