@@ -923,9 +923,8 @@ class Qdrouterd(Process):
     def wait_router_connected(self, router_id, **retry_kwargs):
         retry(lambda: self.is_router_connected(router_id), **retry_kwargs)
 
-    def is_edge_routers_connected(self, num_edges=1, **retry_kwargs):
+    def is_edge_routers_connected(self, num_edges=1, role='edge', **retry_kwargs):
         """
-        Run this function only on an interior router.
         Checks the number of edge uplink connections equals the passed in num_edges
         :param num_edges:
         :param is_tls:
@@ -941,7 +940,7 @@ class Qdrouterd(Process):
                     dir_index = out.attribute_names.index("dir")
                     edges_num = 0
                     for conn in out.results:
-                        if "edge" == conn[role_index] and conn[dir_index] == "in":
+                        if role == conn[role_index] and conn[dir_index] == "in":
                             edges_num += 1
                         if edges_num == edges:
                             return True

@@ -37,6 +37,8 @@ from system_test import unittest
 from system_test import Process
 from test_broker import FakeBroker
 
+from message_tests import DynamicAddressTest
+
 
 class AddrTimer:
     def __init__(self, parent):
@@ -1545,53 +1547,6 @@ class ConnectivityTest(MessagingHandler):
                 self.error = "Incorrect edge count for container-id.  Expected 1, got %d" % count
             self.interior_conn.close()
             self.edge_conn.close()
-            self.timer.cancel()
-
-    def run(self):
-        Container(self).run()
-
-
-class DynamicAddressTest(MessagingHandler):
-    def __init__(self, receiver_host, sender_host):
-        super(DynamicAddressTest, self).__init__()
-        self.receiver_host = receiver_host
-        self.sender_host   = sender_host
-
-        self.receiver_conn = None
-        self.sender_conn   = None
-        self.receiver      = None
-        self.address       = None
-        self.count         = 300
-        self.n_rcvd        = 0
-        self.n_sent        = 0
-        self.error         = None
-
-    def timeout(self):
-        self.error = "Timeout Expired - n_sent=%d n_rcvd=%d addr=%s" % (self.n_sent, self.n_rcvd, self.address)
-        self.receiver_conn.close()
-        self.sender_conn.close()
-
-    def on_start(self, event):
-        self.timer         = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.receiver_conn = event.container.connect(self.receiver_host)
-        self.sender_conn   = event.container.connect(self.sender_host)
-        self.receiver      = event.container.create_receiver(self.receiver_conn, dynamic=True)
-
-    def on_link_opened(self, event):
-        if event.receiver == self.receiver:
-            self.address = self.receiver.remote_source.address
-            self.sender  = event.container.create_sender(self.sender_conn, self.address)
-
-    def on_sendable(self, event):
-        while self.n_sent < self.count:
-            self.sender.send(Message(body="Message %d" % self.n_sent))
-            self.n_sent += 1
-
-    def on_message(self, event):
-        self.n_rcvd += 1
-        if self.n_rcvd == self.count:
-            self.receiver_conn.close()
-            self.sender_conn.close()
             self.timer.cancel()
 
     def run(self):
