@@ -3180,7 +3180,8 @@ qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adapt
     DEQ_INSERT_TAIL(http2_adaptor->listeners, li);  // holds li refcount
     sys_mutex_unlock(&http2_adaptor->lock);
 
-    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Configured http2_adaptor listener on %s with backlog %d", li->config->adaptor_config->host_port, li->config->adaptor_config->backlog);
+    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Configured http2_adaptor listener on %s with backlog %d", 
+           li->config->adaptor_config->host_port, li->config->adaptor_config->backlog);
     // Note: the proactor may execute _handle_listener_accept on another thread during this call
     qd_adaptor_listener_listen(li->adaptor_listener, handle_listener_accept, (void *) li);
     return li;
