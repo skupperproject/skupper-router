@@ -25,7 +25,7 @@ from subprocess import PIPE
 from time import sleep
 
 import system_test
-from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTest
+from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, TIMEOUT, skip_test_in_ci, Http2Server
 
@@ -1150,7 +1150,7 @@ class Http2Q2TwoRouterTest(Http2TestBase):
         self.assertGreater(unblock_line, block_line)
 
 
-class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
+class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
     """
     Test client connecting to adaptor listeners in various scenarios
     """

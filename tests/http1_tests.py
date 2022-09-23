@@ -1662,7 +1662,7 @@ class Http1CurlTestsMixIn:
                           % (out, err))
 
 
-class HttpAdaptorListenerConnectTest(TestCase):
+class HttpAdaptorListenerConnectTestBase(TestCase):
     """
     Test client connecting to adaptor listeners in various scenarios
     """
@@ -1672,7 +1672,7 @@ class HttpAdaptorListenerConnectTest(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(HttpAdaptorListenerConnectTest, cls).setUpClass()
+        super(HttpAdaptorListenerConnectTestBase, cls).setUpClass()
 
         cls.test_name = 'HTTPListenConnTest'
 
@@ -1827,27 +1827,3 @@ class HttpAdaptorListenerConnectTest(TestCase):
         self.assertRaises(ConnectionRefusedError, retry, _func)
 
         l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
-
-    def test_02_listener_interior(self):
-        """
-        Test tcpListener socket lifecycle interior to interior
-        """
-        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
-
-    def test_03_listener_edge_interior(self):
-        """
-        Test tcpListener socket lifecycle edge to interior
-        """
-        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
-
-    def test_04_listener_interior_edge(self):
-        """
-        Test tcpListener socket lifecycle interior to edge
-        """
-        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
-
-    def test_05_listener_edge_edge(self):
-        """
-        Test tcpListener socket lifecycle edge to edge
-        """
-        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")

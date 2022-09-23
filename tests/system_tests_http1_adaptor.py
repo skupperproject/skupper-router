@@ -40,14 +40,36 @@ from http1_tests import Http1Edge2EdgeTestBase
 from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
 from http1_tests import wait_http_listeners_up
-from http1_tests import HttpAdaptorListenerConnectTest
+from http1_tests import HttpAdaptorListenerConnectTestBase
 
 
-class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTest):
+class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
     """
     Instantiate the Adaptor Listener test for the HTTP1 adaptor
     """
-    pass
+    def test_02_listener_interior(self):
+        """
+        Test tcpListener socket lifecycle interior to interior
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
+
+    def test_03_listener_edge_interior(self):
+        """
+        Test tcpListener socket lifecycle edge to interior
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
+
+    def test_04_listener_interior_edge(self):
+        """
+        Test tcpListener socket lifecycle interior to edge
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
+
+    def test_05_listener_edge_edge(self):
+        """
+        Test tcpListener socket lifecycle edge to edge
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
 
 
 class Http1AdaptorManagementTest(TestCase):
