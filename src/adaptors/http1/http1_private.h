@@ -257,5 +257,4 @@ void qdr_http1_server_core_conn_close(qdr_http1_adaptor_t *adaptor,
 void qdr_http1_record_client_request_info(qdr_http1_adaptor_t *adaptor, qdr_http1_request_base_t *request);
 void qdr_http1_record_server_request_info(qdr_http1_adaptor_t *adaptor, qdr_http1_request_base_t *request);
 
-#define HTTP1_READ_BUF_MAX 2
 #endif // http1_private_H
