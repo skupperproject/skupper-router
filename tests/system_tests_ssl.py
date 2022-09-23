@@ -21,22 +21,25 @@
 Provides tests related with allowed TLS protocol version restrictions.
 """
 import os
-import ssl
-import sys
-import re
 import time
+import unittest
 from subprocess import Popen, PIPE
 
-from pkg_resources import parse_version
-
 import cproton
-import proton
-from proton import SASL, Url, SSLDomain, SSLUnavailable
+from proton import SASL, Url, SSLDomain, SSLUnavailable, ConnectionException
 from proton.utils import BlockingConnection
 
 from skupper_router.management.client import Node
-from system_test import TestCase, main_module, Qdrouterd, DIR
-from system_test import unittest
+from system_test import TIMEOUT, TestCase, main_module, Qdrouterd, DIR
+from system_test import unittest, retry
+
+
+def protocol_name(proto):
+    # depending on the version of openssl the protocol name for TLSv1 may be
+    # either "TLSv1" or "TLSv1.0. Convert to "TLSv1" when needed.
+    if proto.endswith(".0"):
+        proto = proto[:-2]
+    return proto
 
 
 class RouterTestSslBase(TestCase):
@@ -46,6 +49,33 @@ class RouterTestSslBase(TestCase):
     # If unable to determine which protocol versions are allowed system wide
     DISABLE_SSL_TESTING = False
     DISABLE_REASON = "Unable to determine MinProtocol"
+
+    @classmethod
+    def setUpClass(cls):
+        super(RouterTestSslBase, cls).setUpClass()
+
+        cls.PROTON_VERSIONS = []
+
+        # Determine those TLS versions that Proton recognizes. Restrict the
+        # tested protocol versions to those that are no longer considered
+        # insecure since support for older versions is going away.
+        all_versions = ['TLSv1.2',
+                        'TLSv1.3']
+        for version in all_versions:
+            try:
+                dummydomain = SSLDomain(SSLDomain.MODE_CLIENT)
+                rc = cproton.pn_ssl_domain_set_protocols(dummydomain._domain,
+                                                         version)
+                if rc == cproton.PN_OK:
+                    cls.PROTON_VERSIONS.append(version)
+            except SSLUnavailable:
+                cls.DISABLE_SSL_TESTING = True
+                cls.DISABLE_REASON = "Proton SSL Unavailable"
+                return
+
+        cls.assertTrue(len(cls.PROTON_VERSIONS) > 0,
+                       "Failed to find any supported protocol versions!")
+        cls.ALL_VERSIONS = ' '.join(cls.PROTON_VERSIONS)
 
     @staticmethod
     def ssl_file(name):
@@ -95,91 +125,6 @@ class RouterTestSslClient(RouterTestSslBase):
     Then it runs multiple tests to validate that only the allowed protocol versions
     are being accepted through the related listener.
     """
-    # Listener ports for each TLS protocol definition
-    PORT_TLS1 = 0
-    PORT_TLS11 = 0
-    PORT_TLS12 = 0
-    PORT_TLS13 = 0
-    PORT_TLS1_TLS11 = 0
-    PORT_TLS1_TLS12 = 0
-    PORT_TLS11_TLS12 = 0
-    PORT_TLS_ALL = 0
-    PORT_TLS_SASL = 0
-    PORT_SSL3 = 0
-    TIMEOUT = 3
-
-    # If using OpenSSL 1.1 or greater, TLSv1.2 is always being allowed
-    OPENSSL_OUT_VER = None
-    try:
-        OPENSSL_VER_1_1_GT = ssl.OPENSSL_VERSION_INFO[:2] >= (1, 1)
-    except AttributeError:
-        OPENSSL_VER_1_1_GT = False
-
-    # If still False, try getting it from "openssl version" (command output)
-    # The version from ssl.OPENSSL_VERSION_INFO reflects OpenSSL version in which
-    # Python was compiled with, not the one installed in the system.
-    if not OPENSSL_VER_1_1_GT:
-        print("Python libraries SSL Version < 1.1")
-        try:
-            p = Popen(['openssl', 'version'], stdout=PIPE, universal_newlines=True)
-            openssl_out = p.communicate()[0]
-            m = re.search(r'[0-9]+\.[0-9]+\.[0-9]+', openssl_out)
-            assert m is not None
-            OPENSSL_OUT_VER = m.group(0)
-            OPENSSL_VER_1_1_GT = parse_version(OPENSSL_OUT_VER) >= parse_version('1.1')
-            print("OpenSSL Version found = %s" % OPENSSL_OUT_VER)
-        except:
-            pass
-
-    # Following variables define TLS versions allowed by openssl
-    OPENSSL_MIN_VER = 0
-    OPENSSL_MAX_VER = 9999
-    OPENSSL_ALLOW_TLSV1 = True
-    OPENSSL_ALLOW_TLSV1_1 = True
-    OPENSSL_ALLOW_TLSV1_2 = True
-    OPENSSL_ALLOW_TLSV1_3 = False
-
-    # Test if OpenSSL has TLSv1_3
-    #  (see https://mypy.readthedocs.io/en/stable/common_issues.html#python-version-and-system-platform-checks for mypy considerations)
-    OPENSSL_HAS_TLSV1_3 = OPENSSL_VER_1_1_GT and sys.version_info >= (3, 7) and ssl.HAS_TLSv1_3
-
-    # Test if Proton supports TLSv1_3
-    try:
-        dummydomain = SSLDomain(SSLDomain.MODE_CLIENT)
-        PROTON_HAS_TLSV1_3 = cproton.PN_OK == cproton.pn_ssl_domain_set_protocols(dummydomain._domain, "TLSv1.3")
-        print("TLSV1_3? Proton has: %s, OpenSSL has: %s" % (PROTON_HAS_TLSV1_3, OPENSSL_HAS_TLSV1_3))
-    except SSLUnavailable:
-        PROTON_HAS_TLSV1_3 = False
-
-    # When using OpenSSL >= 1.1 and python >= 3.7, we can retrieve OpenSSL min and max protocols
-    if OPENSSL_VER_1_1_GT:
-        if sys.version_info >= (3, 7):
-            if OPENSSL_HAS_TLSV1_3 and not PROTON_HAS_TLSV1_3:
-                # If OpenSSL has 1.3 but proton won't let us turn it on and off then
-                # this test fails because v1.3 runs unexpectedly.
-                RouterTestSslBase.DISABLE_SSL_TESTING = True
-                RouterTestSslBase.DISABLE_REASON = "Proton version does not support TLSv1.3 but OpenSSL does"
-            else:
-                OPENSSL_CTX = ssl.create_default_context()
-                OPENSSL_MIN_VER = OPENSSL_CTX.minimum_version
-                OPENSSL_MAX_VER = OPENSSL_CTX.maximum_version if OPENSSL_CTX.maximum_version > 0 else 9999
-                OPENSSL_ALLOW_TLSV1 = OPENSSL_MIN_VER <= ssl.TLSVersion.TLSv1 <= OPENSSL_MAX_VER
-                OPENSSL_ALLOW_TLSV1_1 = OPENSSL_MIN_VER <= ssl.TLSVersion.TLSv1_1 <= OPENSSL_MAX_VER
-                OPENSSL_ALLOW_TLSV1_2 = OPENSSL_MIN_VER <= ssl.TLSVersion.TLSv1_2 <= OPENSSL_MAX_VER
-                OPENSSL_ALLOW_TLSV1_3 = OPENSSL_HAS_TLSV1_3 and PROTON_HAS_TLSV1_3 \
-                    and OPENSSL_MIN_VER <= ssl.TLSVersion.TLSv1_3 <= OPENSSL_MAX_VER
-        else:
-            # At this point we are not able to precisely determine what are the minimum and maximum
-            # TLS versions allowed in the system, so tests will be disabled
-            RouterTestSslBase.DISABLE_SSL_TESTING = True
-            RouterTestSslBase.DISABLE_REASON = "OpenSSL >= 1.1 but Python < 3.7 - Unable to determine MinProtocol"
-    else:
-        if OPENSSL_HAS_TLSV1_3 and not PROTON_HAS_TLSV1_3:
-            # If OpenSSL has 1.3 but proton won't let us turn it on and off then
-            # this test fails because v1.3 runs unexpectedly.
-            RouterTestSslBase.DISABLE_SSL_TESTING = True
-            RouterTestSslBase.DISABLE_REASON = "Proton version does not support TLSv1.3 but OpenSSL does"
-
     @classmethod
     def setUpClass(cls):
         """
@@ -188,567 +133,399 @@ class RouterTestSslClient(RouterTestSslBase):
         """
         super(RouterTestSslClient, cls).setUpClass()
 
-        cls.routers = []
-
         if SASL.extended():
-            router = ('router', {'id': 'QDR.A',
-                                 'mode': 'interior',
-                                 'saslConfigName': 'tests-mech-PLAIN',
-                                 'saslConfigDir': os.getcwd()})
+            conf = [('router', {'id': 'QDR.A',
+                                'mode': 'interior',
+                                'saslConfigName': 'tests-mech-PLAIN',
+                                'saslConfigDir': os.getcwd()})]
 
             # Generate authentication DB
             super(RouterTestSslClient, cls).create_sasl_files()
         else:
-            router = ('router', {'id': 'QDR.A',
-                                 'mode': 'interior'})
+            conf = [('router', {'id': 'QDR.A',
+                                'mode': 'interior'})]
 
-        # Saving listener ports for each TLS definition
-        cls.PORT_TLS1 = cls.tester.get_port()
-        cls.PORT_TLS11 = cls.tester.get_port()
-        cls.PORT_TLS12 = cls.tester.get_port()
-        cls.PORT_TLS13 = cls.tester.get_port()
-        cls.PORT_TLS1_TLS11 = cls.tester.get_port()
-        cls.PORT_TLS1_TLS12 = cls.tester.get_port()
-        cls.PORT_TLS11_TLS12 = cls.tester.get_port()
-        cls.PORT_TLS_ALL = cls.tester.get_port()
-        cls.PORT_TLS_SASL = cls.tester.get_port()
-        cls.PORT_SSL3 = cls.tester.get_port()
-
-        conf = [
-            router,
-            # TLSv1 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS1,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls1'}),
-            # TLSv1.1 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS11,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls11'}),
-            # TLSv1.2 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS12,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls12'}),
-            # TLSv1 and TLSv1.1 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS1_TLS11,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls1-tls11'}),
-            # TLSv1 and TLSv1.2 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS1_TLS12,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls1-tls12'}),
-            # TLSv1.1 and TLSv1.2 only
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS11_TLS12,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls11-tls12'}),
-            # All TLS versions
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS_ALL,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-tls-all'}),
-            # Invalid protocol version
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_SSL3,
-                          'authenticatePeer': 'no',
-                          'sslProfile': 'ssl-profile-ssl3'})
-        ]
-
-        # Adding SASL listener only when SASL is available
-        if SASL.extended():
-            conf += [
-                # TLS 1 and 1.2 with SASL PLAIN authentication for proton client validation
-                ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS_SASL,
-                              'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
-                              'requireSsl': 'yes', 'requireEncryption': 'yes',
-                              'sslProfile': 'ssl-profile-tls1-tls12'})
-            ]
-
-        # Adding SSL profiles
         conf += [
-            # SSL Profile for TLSv1
-            ('sslProfile', {'name': 'ssl-profile-tls1',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1.1
-            ('sslProfile', {'name': 'ssl-profile-tls11',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.1',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.2',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1 and TLSv1.1
-            ('sslProfile', {'name': 'ssl-profile-tls1-tls11',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1 TLSv1.1',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1 and TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls1-tls12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1 TLSv1.2',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1.1 and TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls11-tls12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.1 TLSv1.2',
-                            'password': 'server-password'}),
-            # SSL Profile for all TLS versions (protocols element not defined)
-            ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': 'server-password'}),
-            # SSL Profile for invalid protocol version SSLv23
-            ('sslProfile', {'name': 'ssl-profile-ssl3',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'SSLv23',
-                            'password': 'server-password'})
+            # for management access:
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                          cls.tester.get_port()})
         ]
 
-        if cls.OPENSSL_ALLOW_TLSV1_3:
+        # generate listeners for each protocol version supported by Proton
+
+        cls.TLS_PORT_VERSION_MAP = {}
+        for version in cls.PROTON_VERSIONS:
+            cls.TLS_PORT_VERSION_MAP[version] = cls.tester.get_port()
             conf += [
-                # TLSv1.3 only
-                ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_TLS13,
-                              'authenticatePeer': 'no',
-                              'sslProfile': 'ssl-profile-tls13'}),
-                # SSL Profile for TLSv1.3
-                ('sslProfile', {'name': 'ssl-profile-tls13',
+                ('sslProfile', {'name': f"ssl-profile-{version}",
                                 'caCertFile': cls.ssl_file('ca-certificate.pem'),
                                 'certFile': cls.ssl_file('server-certificate.pem'),
                                 'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                                'protocols': 'TLSv1.3',
-                                'password': 'server-password'})
+                                'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
+                                'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
+                                'protocols': version,
+                                'password': 'server-password'}),
+                ('listener', {'host': '0.0.0.0', 'role': 'normal',
+                              'port': cls.TLS_PORT_VERSION_MAP[version],
+                              'authenticatePeer': 'no',
+                              'requireSsl': 'yes',
+                              'sslProfile': f"ssl-profile-{version}"})
+            ]
 
+        # Adding SASL listener only when SASL is available
+        if SASL.extended():
+            cls.PORT_TLS_SASL = cls.tester.get_port()
+            conf += [
+                # TLS SASL PLAIN authentication for proton client validation
+                ('sslProfile', {'name': 'ssl-profile-tls-all',
+                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                                'certFile': cls.ssl_file('server-certificate.pem'),
+                                'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                                'password': 'server-password'}),
+                ('listener', {'host': '0.0.0.0', 'role': 'normal',
+                              'port': cls.PORT_TLS_SASL,
+                              'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
+                              'requireSsl': 'yes',
+                              'requireEncryption': 'yes',
+                              'sslProfile': 'ssl-profile-tls-all'}),
             ]
 
         config = Qdrouterd.Config(conf)
+        cls.router = cls.tester.qdrouterd("A", config, wait=False)
+        cls.router.wait_ports()
 
-        cls.routers.append(cls.tester.qdrouterd("A", config, wait=False))
-        cls.routers[0].wait_ports()
+    def check_tls_protocol(self, mgmt, listener_port, tls_protocol,
+                           sasl_enabled=False, sasl_user=None,
+                           sasl_mechs=None, client_password=None):
+        """ Uses a Proton client to connect to the router via the provided TCP
+        port using the specified TLS protocol version(s). If the connection
+        succeeds the resulting connection's encryption and sasl state returned
+        to the caller for verification. If the connection fails None is
+        returned.
 
-    def get_allowed_protocols(self, listener_port):
-        """
-        Loops through TLSv1, TLSv1.1 and TLSv1.2 and attempts to connect
-        to the listener_port using each version. The result is a boolean list
-        with results in respective order for TLSv1 [0], TLSv1.1 [1] and TLSv1.2 [2].
-        :param listener_port:
-        :return:
-        """
-        results = []
+        tls_protocol is a space separated string of TLS protocol version names,
+        example: 'TLSv1.2 TLSv13.'. If tls_protocol is None, then there is no
+        restriction of the protocol to use and the router will pick the best
+        available protocol.
 
-        for proto in ['TLSv1', 'TLSv1.1', 'TLSv1.2']:
-            results.append(self.is_proto_allowed(listener_port, proto))
-        if self.OPENSSL_ALLOW_TLSV1_3:
-            results.append(self.is_proto_allowed(listener_port, 'TLSv1.3'))
-        else:
-            results.append(False)
-        return results
+        If sasl_enabled is true use client authentication via SASL.
+        """
+        ATTR_NAMES = ['ssl', 'sslProto', 'sasl', 'isAuthenticated',
+                      'isEncrypted', 'user']
 
-    def is_proto_allowed(self, listener_port, tls_protocol):
-        """
-        Opens a simple proton client connection to the provided TCP port using
-        a specific TLS protocol version and returns True in case connection
-        was established and accepted or False otherwise.
-        :param listener_port: TCP port number
-        :param tls_protocol: TLSv1, TLSv1.1 or TLSv1.2 (string)
-        :return:
-        """
+        CONN_TYPE = 'io.skupper.router.connection'
+
         # Management address to connect using the given TLS protocol
         url = Url("amqps://0.0.0.0:%d/$management" % listener_port)
+
         # Preparing SSLDomain (client cert) and SASL authentication info
         domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        if sasl_enabled:
+            domain.set_credentials(self.ssl_file('client-certificate.pem'),
+                                   self.ssl_file('client-private-key.pem'),
+                                   'client-password')
         domain.set_trusted_ca_db(self.ssl_file('ca-certificate.pem'))
         domain.set_peer_authentication(SSLDomain.VERIFY_PEER)
-        # Enforcing given TLS protocol
-        cproton.pn_ssl_domain_set_protocols(domain._domain, tls_protocol)
+
+        # Restrict client to using only the given TLS protocol version.
+        if tls_protocol:
+            ok = cproton.pn_ssl_domain_set_protocols(domain._domain,
+                                                     tls_protocol)
+            self.assertEqual(ok, cproton.PN_OK,
+                             f"Test error: {tls_protocol} not supported")
 
         # Try opening the secure and authenticated connection
         try:
-            connection = BlockingConnection(url, sasl_enabled=False, ssl_domain=domain, timeout=self.TIMEOUT)
-        except proton.Timeout:
-            return False
-        except proton.ConnectionException:
-            return False
-        except:
-            return False
+            connection = BlockingConnection(url, sasl_enabled=sasl_enabled,
+                                            ssl_domain=domain, timeout=TIMEOUT,
+                                            allowed_mechs=sasl_mechs,
+                                            user=sasl_user,
+                                            password=client_password)
+        except Exception as exc:
+            # Connection failed
+            return None
 
-        # TLS version provided was accepted
+        # get the TLS/SASL state for the new connection. This check assumes
+        # that the new connection is the only tls connection present on the
+        # router!
+
+        def _get_tls_conn():
+            conns = mgmt.query(type=CONN_TYPE,
+                               attribute_names=ATTR_NAMES).get_entities()
+            ssl_conns = [c for c in conns if c['ssl']]
+            if ssl_conns:
+                self.assertEqual(1, len(ssl_conns),
+                                 f"Test expects 1 TLS conn: {ssl_conns}")
+                return ssl_conns[0]
+            return None
+        ssl_conn = retry(_get_tls_conn)
+        self.assertIsNotNone(ssl_conn, "Failed to find new SSL connection")
+
         connection.close()
-        return True
 
-    def is_ssl_sasl_client_accepted(self, listener_port, tls_protocol):
-        """
-        Attempts to connect a proton client to the management address
-        on the given listener_port using the specific tls_protocol provided.
-        If connection was established and accepted, returns True and False otherwise.
-        :param listener_port:
-        :param tls_protocol:
-        :return:
-        """
-        # Management address to connect using the given TLS protocol
-        url = Url("amqps://0.0.0.0:%d/$management" % listener_port)
-        # Preparing SSLDomain (client cert) and SASL authentication info
-        domain = SSLDomain(SSLDomain.MODE_CLIENT)
-        domain.set_credentials(self.ssl_file('client-certificate.pem'),
-                               self.ssl_file('client-private-key.pem'),
-                               'client-password')
-        domain.set_trusted_ca_db(self.ssl_file('ca-certificate.pem'))
-        domain.set_peer_authentication(SSLDomain.VERIFY_PEER)
-        # Enforcing given TLS protocol
-        cproton.pn_ssl_domain_set_protocols(domain._domain, tls_protocol)
+        # Cleanup: wait until the SSL connection is cleaned up on the router so it will
+        # not interfere with other tests
 
-        # Try opening the secure and authenticated connection
-        try:
-            connection = BlockingConnection(url,
-                                            sasl_enabled=True,
-                                            ssl_domain=domain,
-                                            allowed_mechs='PLAIN',
-                                            user='test@domain.com',
-                                            password='password')
-        except proton.ConnectionException:
+        def _wait_conn_gone():
+            conns = mgmt.query(type=CONN_TYPE,
+                               attribute_names=ATTR_NAMES).get_entities()
+            if len([c for c in conns if c['ssl']]) == 0:
+                return True
             return False
+        gone = retry(_wait_conn_gone)
+        self.assertTrue(gone, "Failed to clean up test SSL connection")
+        return ssl_conn
 
-        # TLS version provided was accepted
-        connection.close()
-        return True
+    def test_tls_protocol_versions_client(self):
+        """
+        Test all available protocols via client connections to the
+        router. Ensure that the configured TLS protocol versions are used.
+        """
+        if self.DISABLE_SSL_TESTING:
+            self.skipTest(self.DISABLE_REASON)
 
-    def get_expected_tls_result(self, expected_results):
-        """
-        Expects a list with three boolean elements, representing
-        TLSv1, TLSv1.1 and TLSv1.2 (in the respective order).
-        When using OpenSSL >= 1.1.x, allowance of a given TLS version is
-        based on MinProtocol / MaxProtocol definitions.
-        It is also important
-        to mention that TLSv1.2 is being allowed even when not specified in a
-        listener when using OpenSSL >= 1.1.x.
+        mgmt = self.router.management
 
-        :param expected_results:
-        :return:
-        """
-        (tlsv1, tlsv1_1, tlsv1_2, tlsv1_3) = expected_results
-        return [self.OPENSSL_ALLOW_TLSV1 and tlsv1,
-                self.OPENSSL_ALLOW_TLSV1_1 and tlsv1_1,
-                self.OPENSSL_ALLOW_TLSV1_2 and tlsv1_2,
-                self.OPENSSL_ALLOW_TLSV1_3 and tlsv1_3]
+        # for every listener ensure that the router will allow clients
+        # to connect using only the allowed version
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls1_only(self):
-        """
-        Expects TLSv1 only is allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([True, False, False, False]),
-                         self.get_allowed_protocols(self.PORT_TLS1))
+        for version, port in self.TLS_PORT_VERSION_MAP.items():
+            result = self.check_tls_protocol(mgmt, port, self.ALL_VERSIONS)
+            self.assertIsNotNone(result,
+                                 f"Failed to connect with version {version}")
+            self.assertTrue(result['isEncrypted'],
+                            f"Connection not encrypted {result}")
+            self.assertEqual(version, protocol_name(result['sslProto']),
+                             f"Unexpected sslProto value: {result}")
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls11_only(self):
-        """
-        Expects TLSv1.1 only is allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([False, True, False, False]),
-                         self.get_allowed_protocols(self.PORT_TLS11))
+            # attempt to connect a non-secured client, expect failure:
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls12_only(self):
-        """
-        Expects TLSv1.2 only is allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([False, False, True, False]),
-                         self.get_allowed_protocols(self.PORT_TLS12))
+            url = Url("amqps://0.0.0.0:%d/$management" % port)
+            with self.assertRaises(ConnectionException, msg="Expected connection failure"):
+                connection = BlockingConnection(url, ssl_domain=None, timeout=TIMEOUT)
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls13_only(self):
+    def test_tls_ssl_sasl_client(self):
         """
-        Expects TLSv1.3 only is allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([False, False, False, True]),
-                         self.get_allowed_protocols(self.PORT_TLS13))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls1_tls11_only(self):
-        """
-        Expects TLSv1 and TLSv1.1 only are allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([True, True, False, False]),
-                         self.get_allowed_protocols(self.PORT_TLS1_TLS11))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls1_tls12_only(self):
-        """
-        Expects TLSv1 and TLSv1.2 only are allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([True, False, True, False]),
-                         self.get_allowed_protocols(self.PORT_TLS1_TLS12))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls11_tls12_only(self):
-        """
-        Expects TLSv1.1 and TLSv1.2 only are allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([False, True, True, False]),
-                         self.get_allowed_protocols(self.PORT_TLS11_TLS12))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_tls_all(self):
-        """
-        Expects all supported versions: TLSv1, TLSv1.1, TLSv1.2 and TLSv1.3 to be allowed
-        """
-        self.assertEqual(self.get_expected_tls_result([True, True, True, True]),
-                         self.get_allowed_protocols(self.PORT_TLS_ALL))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING, RouterTestSslBase.DISABLE_REASON)
-    def test_ssl_invalid(self):
-        """
-        Expects connection is rejected as SSL is no longer supported
-        """
-        self.assertEqual(False, self.is_proto_allowed(self.PORT_SSL3, 'SSLv3'))
-
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING or not SASL.extended(),
-                     "Cyrus library not available. skipping test")
-    def test_ssl_sasl_client_valid(self):
-        """
-        Attempts to connect a Proton client using a valid SASL authentication info
+        Attempts connecting a Proton client using a valid SASL authentication info
         and forcing the TLS protocol version, which should be accepted by the listener.
         :return:
         """
+        if self.DISABLE_SSL_TESTING:
+            self.skipTest(self.DISABLE_REASON)
+
         if not SASL.extended():
             self.skipTest("Cyrus library not available. skipping test")
 
-        exp_tls_results = self.get_expected_tls_result([True, False, True, False])
-        self.assertEqual(exp_tls_results[0], self.is_ssl_sasl_client_accepted(self.PORT_TLS_SASL, "TLSv1"))
-        self.assertEqual(exp_tls_results[2], self.is_ssl_sasl_client_accepted(self.PORT_TLS_SASL, "TLSv1.2"))
+        mgmt = self.router.management
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING or not SASL.extended(),
-                     "Cyrus library not available. skipping test")
-    def test_ssl_sasl_client_invalid(self):
-        """
-        Attempts to connect a Proton client using a valid SASL authentication info
-        and forcing the TLS protocol version, which should be rejected by the listener.
-        :return:
-        """
-        if not SASL.extended():
-            self.skipTest("Cyrus library not available. skipping test")
+        # Verify that SASL succeeds for all supported TLS versions
 
-        exp_tls_results = self.get_expected_tls_result([True, False, True, False])
-        self.assertEqual(exp_tls_results[1], self.is_ssl_sasl_client_accepted(self.PORT_TLS_SASL, "TLSv1.1"))
+        for version in self.PROTON_VERSIONS:
+            result = self.check_tls_protocol(mgmt,
+                                             self.PORT_TLS_SASL,
+                                             version,
+                                             sasl_enabled=True,
+                                             sasl_user='test@domain.com',
+                                             sasl_mechs='PLAIN',
+                                             client_password='password')
+            self.assertIsNotNone(result, f"Failed to connect with {version}")
+            self.assertTrue(result['isEncrypted'],
+                            f"Connection not encrypted {result}")
+            self.assertEqual(version, protocol_name(result['sslProto']),
+                             f"Unexpected sslProto value: {result}")
+            self.assertEqual("PLAIN", result['sasl'],
+                             f"Wrong SASL mechanism: {result['sasl']}")
+            self.assertTrue(result['isAuthenticated'], "SASL not authenticated properly")
+            self.assertEqual('test@domain.com', result['user'],
+                             "Unexpected SASL user")
+
+        # ensure that the connection fails if client attempts non-SSL connection
+
+        url = Url("amqps://0.0.0.0:%d/$management" % self.PORT_TLS_SASL)
+        with self.assertRaises(ConnectionException, msg="Expected connection failure"):
+            connection = BlockingConnection(url,
+                                            ssl_domain=None,
+                                            sasl_enabled=True,
+                                            user='test@domain.com',
+                                            allowed_mechs='PLAIN',
+                                            password='password',
+                                            timeout=TIMEOUT)
 
 
 class RouterTestSslInterRouter(RouterTestSslBase):
     """
-    Starts 5 routers with several listeners and connectors and validate if communication
-    between them is working as expected.
+    Verifies that the SSL/TLS configurations on inter-router connections are
+    correctly implemented.
     """
-    # Listener ports for each TLS protocol definition
-    PORT_NO_SSL = 0
-    PORT_TLS_ALL = 0
-    PORT_TLS12 = 0
-    PORT_TLS1_TLS12 = 0
 
     @classmethod
     def setUpClass(cls):
         """
-        Prepares 5 routers to form a network. One of them will provide listeners with
-        multiple sslProfiles, and the other 4 will try to connect with a respective listener.
-        It expects that routers A to D will connect successfully, while E will not succeed due
-        to an SSL handshake failure (as allowed TLS protocol versions won't match).
         """
         super(RouterTestSslInterRouter, cls).setUpClass()
 
-        if not SASL.extended():
+        if not SASL.extended() or cls.DISABLE_SSL_TESTING:
             return
 
         os.environ["ENV_SASL_PASSWORD"] = "password"
 
+        # expect 3 connections per connector: 1 inter-router, 2 inter-router-data
+        cls.inter_router_conn_count = 3
+
         # Generate authentication DB
         super(RouterTestSslInterRouter, cls).create_sasl_files()
 
-        # Router expected to be connected
-        cls.connected_tls_sasl_routers = ['QDR.A', 'QDR.B', 'QDR.C', 'QDR.D']
-
-        # Generated router list
-        cls.routers = []
-
-        # Saving listener ports for each TLS definition
-        cls.PORT_NO_SSL = cls.tester.get_port()
         cls.PORT_TLS_ALL = cls.tester.get_port()
-        cls.PORT_TLS12 = cls.tester.get_port()
-        cls.PORT_TLS1_TLS12 = cls.tester.get_port()
 
-        config_a = Qdrouterd.Config([
+        conf = [
             ('router', {'id': 'QDR.A',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
                         'saslConfigDir': os.getcwd()}),
-            # No auth and no SSL
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_NO_SSL}),
-            # All TLS versions
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL,
+
+            # For management access:
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                          cls.tester.get_port()}),
+
+            # Listener allowing all TLS supported versions
+            ('listener', {'host': '0.0.0.0', 'role': 'inter-router',
+                          'port': cls.PORT_TLS_ALL,
                           'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
                           'requireEncryption': 'yes', 'requireSsl': 'yes',
                           'sslProfile': 'ssl-profile-tls-all'}),
-            # TLSv1.2 only
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS12,
-                          'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
-                          'requireEncryption': 'yes', 'requireSsl': 'yes',
-                          'sslProfile': 'ssl-profile-tls12'}),
-            # TLSv1 and TLSv1.2 only
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS1_TLS12,
-                          'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
-                          'requireEncryption': 'yes', 'requireSsl': 'yes',
-                          'sslProfile': 'ssl-profile-tls1-tls12'}),
-            # SSL Profile for all TLS versions (protocols element not defined)
             ('sslProfile', {'name': 'ssl-profile-tls-all',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'password': 'server-password'}),
-            # SSL Profile for TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.2',
-                            'password': 'server-password'}),
-            # SSL Profile for TLSv1 and TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls1-tls12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1 TLSv1.2',
-                            'password': 'server-password'})
+        ]
 
-        ])
+        # create inter-router listeners that restrict the allowed TLS version
 
-        # Router B will connect to listener that allows all protocols
-        config_b = Qdrouterd.Config([
-            ('router', {'id': 'QDR.B',
-                        'mode': 'interior'}),
-            # Connector to All TLS versions allowed listener
-            ('connector', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL,
-                           'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
-                           'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
-            # SSL Profile for all TLS versions (protocols element not defined)
-            ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': 'client-password'})
-        ])
+        cls.TLS_PORT_VERSION_MAP = {}
+        for version in cls.PROTON_VERSIONS:
+            cls.TLS_PORT_VERSION_MAP[version] = cls.tester.get_port()
+            conf += [
+                ('sslProfile', {'name': f"ssl-profile-{version}",
+                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                                'certFile': cls.ssl_file('server-certificate.pem'),
+                                'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                                'protocols': version,
+                                'password': 'server-password'}),
+                ('listener', {'host': '0.0.0.0', 'role': 'inter-router',
+                              'port': cls.TLS_PORT_VERSION_MAP[version],
+                              'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
+                              'requireEncryption': 'yes', 'requireSsl': 'yes',
+                              'sslProfile': f"ssl-profile-{version}"})
+            ]
 
-        # Router C will connect to listener that allows TLSv1.2 only
-        config_c = Qdrouterd.Config([
-            ('router', {'id': 'QDR.C',
-                        'mode': 'interior'}),
-            # Connector to listener that allows TLSv1.2 only
-            ('connector', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS12,
-                           'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
-                           'saslUsername': 'test@domain.com', 'saslPassword': 'env:ENV_SASL_PASSWORD',
-                           'sslProfile': 'ssl-profile-tls12'}),
-            # SSL Profile for TLSv1.2
-            ('sslProfile', {'name': 'ssl-profile-tls12',
+        conf = Qdrouterd.Config(conf)
+        cls.router_a = cls.tester.qdrouterd("A", conf, wait=True)
+
+        # create a router that will connect to the unrestricted TLS listener:
+
+        conf = [
+            ('router', {'id': 'UNRESTRICTED', 'mode': 'interior'}),
+
+            # For management access:
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                          cls.tester.get_port()}),
+
+            ('sslProfile', {'name': "ssl-profile-tls-all",
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('client-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.2',
-                            'password': 'client-password'})
-        ])
+                            'password': 'client-password'}),
 
-        # Router D will connect to listener that allows TLSv1 and TLS1.2 only using TLSv1
-        config_d = Qdrouterd.Config([
-            ('router', {'id': 'QDR.D',
-                        'mode': 'interior'}),
-            # Connector to listener that allows TLSv1 and TLSv1.2 only
-            ('connector', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS1_TLS12,
+            ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
+                           'port': cls.PORT_TLS_ALL,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
-                           'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls1'}),
-            # SSL Profile for TLSv1
-            ('sslProfile', {'name': 'ssl-profile-tls1',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1',
-                            'password': 'client-password'})
-        ])
+                           'saslPassword': 'env:ENV_SASL_PASSWORD',
+                           'saslUsername': 'test@domain.com',
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'})
+        ]
+        conf = Qdrouterd.Config(conf)
+        cls.router_unrestricted = cls.tester.qdrouterd("UNRESTRICTED", conf, wait=False)
+        cls.router_unrestricted.wait_ports()
 
-        # Router E will try connect to listener that allows TLSv1 and TLS1.2 only using TLSv1.1
-        config_e = Qdrouterd.Config([
-            ('router', {'id': 'QDR.E',
-                        'mode': 'interior'}),
-            # Connector to listener that allows TLSv1 and TLSv1.2 only
-            ('connector', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS1_TLS12,
+        cls.routers_any = {}
+        cls.routers_only = {}
+        for version in cls.PROTON_VERSIONS:
+
+            # allow any, connection to 'version'
+            conf = [
+                ('router', {'id': f'ANY-{version}', 'mode': 'interior'}),
+
+                # For management access:
+                ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                              cls.tester.get_port()}),
+
+                ('sslProfile', {'name': "ssl-profile-all",
+                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                                'certFile': cls.ssl_file('client-certificate.pem'),
+                                'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                                'password': 'client-password'}),
+
+                ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
+                               'port': cls.TLS_PORT_VERSION_MAP[version],
+                               'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
+                               'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
+                               'sslProfile': 'ssl-profile-all',
+                               'dataConnectionCount': '2'})
+            ]
+            conf = Qdrouterd.Config(conf)
+            cls.routers_any[version] = cls.tester.qdrouterd(f"ANY-{version}",
+                                                            conf, wait=False)
+            cls.routers_any[version].wait_ports()
+
+            # allow only 'version'
+            conf = [
+                ('router', {'id': f'ONLY-{version}', 'mode': 'interior'}),
+
+                # For management access:
+                ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                              cls.tester.get_port()}),
+
+                ('sslProfile', {'name': f"ssl-profile-{version}",
+                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                                'certFile': cls.ssl_file('client-certificate.pem'),
+                                'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                                'protocols': version,
+                                'password': 'client-password'}),
+
+                ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
+                               'port': cls.TLS_PORT_VERSION_MAP[version],
+                               'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
+                               'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
+                               'sslProfile': f'ssl-profile-{version}',
+                               'dataConnectionCount': '2'})
+            ]
+            conf = Qdrouterd.Config(conf)
+            cls.routers_only[version] = cls.tester.qdrouterd(f"ONLY-{version}",
+                                                             conf, wait=False)
+            cls.routers_only[version].wait_ports()
+
+        # finally, create a router that does not use TLS
+
+        conf = [
+            ('router', {'id': 'BAD-ROUTER', 'mode': 'interior'}),
+
+            # For management access:
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port':
+                          cls.tester.get_port()}),
+
+            ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
+                           'port': cls.PORT_TLS_ALL,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
-                           'saslUsername': 'test@domain.com', 'saslPassword': 'password',
-                           'sslProfile': 'ssl-profile-tls11'}),
-            # SSL Profile for TLSv1.1
-            ('sslProfile', {'name': 'ssl-profile-tls11',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'protocols': 'TLSv1.1',
-                            'password': 'client-password'})
-        ])
+                           'saslPassword': 'env:ENV_SASL_PASSWORD',
+                           'saslUsername': 'test@domain.com',
+                           'dataConnectionCount': '2'})
+        ]
 
-        cls.routers.append(cls.tester.qdrouterd("A", config_a, wait=False))
-        cls.routers.append(cls.tester.qdrouterd("B", config_b, wait=False))
-        cls.routers.append(cls.tester.qdrouterd("C", config_c, wait=False))
-        cls.routers.append(cls.tester.qdrouterd("D", config_d, wait=False))
-        cls.routers.append(cls.tester.qdrouterd("E", config_e, wait=False))
-
-        # Wait till listener is running and all expected connectors are connected
-        cls.routers[0].wait_ports()
-        for router in cls.connected_tls_sasl_routers[1:]:
-            # get the start time
-            st = time.time()
-            cls.routers[0].wait_router_connected(router)
-            # get the end time
-            et = time.time()
-            elapsed_time = et - st
-            print('QDR.A to ', router, 'connecting time:', elapsed_time, 'seconds')
+        conf = Qdrouterd.Config(conf)
+        cls.bad_router = cls.tester.qdrouterd("BAD-ROUTER", conf, wait=False)
+        cls.bad_router.wait_ports()
 
     def get_router_nodes(self):
         """
@@ -767,38 +544,71 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         node.close()
         return router_nodes
 
-    @unittest.skipIf(RouterTestSslBase.DISABLE_SSL_TESTING or not SASL.extended(),
-                     "Cyrus library not available. skipping test")
     def test_connected_tls_sasl_routers(self):
         """
-        Validates if all expected routers are connected in the network
+        Validates if all expected routers are connected in the network with the
+        proper TLS/SASL settings on the inter-router connections
         """
-        # get the start time
-        st = time.time()
+        if self.DISABLE_SSL_TESTING:
+            self.skipTest(self.DISABLE_REASON)
+
         if not SASL.extended():
             self.skipTest("Cyrus library not available. skipping test")
 
-        router_nodes = self.get_router_nodes()
-        self.assertTrue(router_nodes)
-        for node in router_nodes:
-            self.assertIn(node, self.connected_tls_sasl_routers)
+        def _get_ssl_conns(mgmt):
+            # query all inter-router connections, wait until all expected
+            # connections have come up
+            conns = mgmt.query(type='io.skupper.router.connection',
+                               attribute_names=['role',
+                                                'ssl',
+                                                'sslProto',
+                                                'sasl',
+                                                'isAuthenticated',
+                                                'isEncrypted',
+                                                'user']).get_dicts()
+            conns = [c for c in conns
+                     if 'inter-router' in c['role']]
+            return conns if len(conns) == self.inter_router_conn_count else None
 
-        # Router A and B are always expected (no tls version restriction)
-        expected_nodes = len(self.connected_tls_sasl_routers)
+        # wait for the routers that should connect successfully, and verify
+        # the resulting connection's TLS/SASL config
 
-        # Router C only if TLSv1.2 is allowed
-        if not RouterTestSslClient.OPENSSL_ALLOW_TLSV1_2:
-            expected_nodes -= 1
+        self.router_unrestricted.wait_router_connected("QDR.A")
+        conns = retry(lambda mgmt=self.router_unrestricted.management: _get_ssl_conns(mgmt))
+        self.assertIsNotNone(conns)
+        for c in conns:
+            self.assertTrue(c['isEncrypted'], f"Not encrypted {c}")
+            self.assertTrue(c['isAuthenticated'], f"Not authed {c}")
+            self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
+            self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
 
-        # Router D only if TLSv1.1 is allowed
-        if not RouterTestSslClient.OPENSSL_ALLOW_TLSV1_1:
-            expected_nodes -= 1
+        for version, router in self.routers_any.items():
+            router.wait_router_connected("QDR.A")
+            conns = retry(lambda mgmt=router.management: _get_ssl_conns(mgmt))
+            self.assertIsNotNone(conns)
+            for c in conns:
+                self.assertTrue(c['isEncrypted'], f"Not encrypted {c}")
+                self.assertTrue(c['isAuthenticated'], f"Not authed {c}")
+                self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
+                self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
+                self.assertEqual(version, c['sslProto'], f"wrong proto {c}")
 
-        self.assertEqual(len(router_nodes), expected_nodes)
+        for version, router in self.routers_only.items():
+            router.wait_router_connected("QDR.A")
+            conns = retry(lambda mgmt=router.management: _get_ssl_conns(mgmt))
+            self.assertIsNotNone(conns)
+            for c in conns:
+                self.assertTrue(c['isEncrypted'], f"Not encrypted {c}")
+                self.assertTrue(c['isAuthenticated'], f"Not authed {c}")
+                self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
+                self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
+                self.assertEqual(version, c['sslProto'], f"wrong proto {c}")
 
-        et = time.time()
-        elapsed_time = et - st
-        print('test_connected_tls_sasl_routers Execution time:', elapsed_time, 'seconds')
+        # wait for the bad router to log that the connection to QDR.A has
+        # failed
+
+        self.bad_router.wait_log_message(f"Connection to 0.0.0.0:{self.PORT_TLS_ALL} failed")
+        self.router_a.wait_log_message("Connection from .* failed: amqp:connection:policy-error Client connection unencrypted")
 
 
 class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
@@ -883,14 +693,17 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
                            'port': cls.PORT_TLS_ALL_1,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
             # Connector to All TLS versions allowed listener
             ('connector', {'name': 'connector2',
                            'host': cls.CONNECTOR_HOST, 'role': 'inter-router',
                            'port': cls.PORT_TLS_ALL_2,
                            'verifyHostname': 'yes', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
+
             # SSL Profile with an invalid caCertFile file path. The correct file path here would allow this
             # router to connect. The object is to trigger a specific failure in the ssl
             # setup chain of calls to pn_ssl_domain_* functions.
@@ -1044,7 +857,8 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
             ('connector', {'host': 'localhost', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
             # SSL Profile with caCertFile to cert that does not sign the server cert. The correct path here would allow this
             # router to connect. The object is to trigger a certificate verification failure while hostname verification is off.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
