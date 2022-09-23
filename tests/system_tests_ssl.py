@@ -369,6 +369,9 @@ class RouterTestSslInterRouter(RouterTestSslBase):
 
         os.environ["ENV_SASL_PASSWORD"] = "password"
 
+        # expect 3 connections per connector: 1 inter-router, 2 inter-router-data
+        cls.inter_router_conn_count = 3
+
         # Generate authentication DB
         super(RouterTestSslInterRouter, cls).create_sasl_files()
 
@@ -439,7 +442,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslPassword': 'env:ENV_SASL_PASSWORD',
                            'saslUsername': 'test@domain.com',
-                           'sslProfile': 'ssl-profile-tls-all'})
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'})
         ]
         conf = Qdrouterd.Config(conf)
         cls.router_unrestricted = cls.tester.qdrouterd("UNRESTRICTED", conf, wait=False)
@@ -467,7 +471,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                                'port': cls.TLS_PORT_VERSION_MAP[version],
                                'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                                'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                               'sslProfile': 'ssl-profile-all'})
+                               'sslProfile': 'ssl-profile-all',
+                               'dataConnectionCount': '2'})
             ]
             conf = Qdrouterd.Config(conf)
             cls.routers_any[version] = cls.tester.qdrouterd(f"ANY-{version}",
@@ -493,7 +498,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                                'port': cls.TLS_PORT_VERSION_MAP[version],
                                'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                                'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                               'sslProfile': f'ssl-profile-{version}'})
+                               'sslProfile': f'ssl-profile-{version}',
+                               'dataConnectionCount': '2'})
             ]
             conf = Qdrouterd.Config(conf)
             cls.routers_only[version] = cls.tester.qdrouterd(f"ONLY-{version}",
@@ -513,7 +519,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                            'port': cls.PORT_TLS_ALL,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslPassword': 'env:ENV_SASL_PASSWORD',
-                           'saslUsername': 'test@domain.com'})
+                           'saslUsername': 'test@domain.com',
+                           'dataConnectionCount': '2'})
         ]
 
         conf = Qdrouterd.Config(conf)
@@ -539,7 +546,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
 
     def test_connected_tls_sasl_routers(self):
         """
-        Validates if all expected routers are connected in the network
+        Validates if all expected routers are connected in the network with the
+        proper TLS/SASL settings on the inter-router connections
         """
         if self.DISABLE_SSL_TESTING:
             self.skipTest(self.DISABLE_REASON)
@@ -548,6 +556,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
             self.skipTest("Cyrus library not available. skipping test")
 
         def _get_ssl_conns(mgmt):
+            # query all inter-router connections, wait until all expected
+            # connections have come up
             conns = mgmt.query(type='io.skupper.router.connection',
                                attribute_names=['role',
                                                 'ssl',
@@ -556,9 +566,9 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                                                 'isAuthenticated',
                                                 'isEncrypted',
                                                 'user']).get_dicts()
-            return [c for c in conns
-                    if c['ssl']
-                    and c['role'] == 'inter-router'] or None
+            conns = [c for c in conns
+                     if 'inter-router' in c['role']]
+            return conns if len(conns) == self.inter_router_conn_count else None
 
         # wait for the routers that should connect successfully, and verify
         # the resulting connection's TLS/SASL config
@@ -683,14 +693,17 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
                            'port': cls.PORT_TLS_ALL_1,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
             # Connector to All TLS versions allowed listener
             ('connector', {'name': 'connector2',
                            'host': cls.CONNECTOR_HOST, 'role': 'inter-router',
                            'port': cls.PORT_TLS_ALL_2,
                            'verifyHostname': 'yes', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
+
             # SSL Profile with an invalid caCertFile file path. The correct file path here would allow this
             # router to connect. The object is to trigger a specific failure in the ssl
             # setup chain of calls to pn_ssl_domain_* functions.
@@ -844,7 +857,8 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
             ('connector', {'host': 'localhost', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
+                           'sslProfile': 'ssl-profile-tls-all',
+                           'dataConnectionCount': '2'}),
             # SSL Profile with caCertFile to cert that does not sign the server cert. The correct path here would allow this
             # router to connect. The object is to trigger a certificate verification failure while hostname verification is off.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
