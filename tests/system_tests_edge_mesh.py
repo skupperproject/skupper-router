@@ -18,7 +18,8 @@
 #
 
 from system_test import TestCase, Qdrouterd, main_module, unittest
-from message_tests import DynamicAddressTest
+from message_tests import DynamicAddressTest, MobileAddressAnonymousTest, MobileAddressTest
+from message_tests import MobileAddressOneSenderTwoReceiversTest, MobileAddressMulticastTest
 
 
 class StandaloneMeshTest(TestCase):
@@ -31,6 +32,7 @@ class StandaloneMeshTest(TestCase):
 
             config = [
                 ('router', {'mode': mode, 'id': name}),
+                ('address', {'prefix': 'mc', 'distribution': 'multicast'}),
                 ('listener', {'port': cls.tester.get_port()})
             ]
 
@@ -100,6 +102,86 @@ class StandaloneMeshTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_09_mobile_address_anon_same_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[0].addresses[0], 'test_09')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_10_mobile_address_anon_different_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[1].addresses[0], 'test_10')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_11_mobile_address_same_edge(self):
+        test = MobileAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0], 'test_11')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_12_mobile_address_different_edge(self):
+        test = MobileAddressTest(self.routers[1].addresses[0], self.routers[2].addresses[0], 'test_12')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_13_mobile_address_two_receivers_1(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[1].addresses[0],
+                                                      self.routers[0].addresses[0],
+                                                      'test_13')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_14_mobile_address_two_receivers_2(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[2].addresses[0],
+                                                      self.routers[1].addresses[0],
+                                                      self.routers[0].addresses[0],
+                                                      'test_14')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_15_mobile_address_two_receivers_3(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[2].addresses[0],
+                                                      self.routers[0].addresses[0],
+                                                      self.routers[0].addresses[0],
+                                                      'test_15')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_16_mobile_address_multicast_1(self):
+        test = MobileAddressMulticastTest(self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          'mc.test_16')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_17_mobile_address_multicast_2(self):
+        test = MobileAddressMulticastTest(self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[0].addresses[0],
+                                          'mc.test_17')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_18_mobile_address_multicast_3(self):
+        test = MobileAddressMulticastTest(self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[0].addresses[0],
+                                          'mc.test_18')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_19_mobile_address_multicast_4(self):
+        test = MobileAddressMulticastTest(self.routers[2].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[0].addresses[0],
+                                          self.routers[0].addresses[0],
+                                          'mc.test_19')
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class ConnectedMeshTest(TestCase):
     @classmethod
@@ -111,6 +193,7 @@ class ConnectedMeshTest(TestCase):
 
             config = [
                 ('router', {'mode': mode, 'id': name}),
+                ('address', {'prefix': 'mc', 'distribution': 'multicast'}),
                 ('listener', {'port': cls.tester.get_port()})
             ]
 

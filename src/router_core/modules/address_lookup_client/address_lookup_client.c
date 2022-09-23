@@ -232,6 +232,14 @@ static void qdr_link_react_to_first_attach_CT(qdr_core_t       *core,
         qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
     } else {
         //
+        // Prior to binding, check to see if this is an inter-edge connection.  If so,
+        // mark the link as a proxy.
+        //
+        if (link->conn->role == QDR_ROLE_INTER_EDGE) {
+            link->proxy = true;
+        }
+
+        //
         // Associate the link with the address.  With this association, it will be unnecessary
         // to do an address lookup for deliveries that arrive on this link.
         //

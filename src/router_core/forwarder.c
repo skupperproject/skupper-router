@@ -445,7 +445,10 @@ static uint8_t qdr_forward_effective_priority(qd_message_t *msg, qdr_address_t *
 static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *out_link)
 {
     qdr_link_t *link = in_dlv ? safe_deref_qdr_link_t(in_dlv->link_sp) : 0;
-    return (in_dlv && in_dlv->via_edge && link && link->conn == out_link->conn);
+    return (in_dlv
+            && link
+            && ((in_dlv->via_edge && link->conn == out_link->conn)
+                || (link->conn->role == QDR_ROLE_INTER_EDGE && out_link->proxy)));
 }
 
 

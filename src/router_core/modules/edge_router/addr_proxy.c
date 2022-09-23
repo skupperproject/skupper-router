@@ -59,6 +59,9 @@
 //    6) Handle address tracking updates indicating which producer-addresses have destinations
 //       reachable via the edge connection.
 //
+//    7) For addresses that have at least one local non-proxy destination, maintain inbound links
+//       on each open inter-edge connection.
+//
 
 #define INITIAL_CREDIT 32
 
@@ -149,6 +152,57 @@ static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
     }
 }
 
+
+static void proxy_addr_on_inter_edge_connection(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr, qdr_connection_t *conn)
+{
+    const char     *key  = (const char*) qd_hash_key_by_handle(addr->hash_handle);
+    qdr_terminus_t *term = qdr_terminus_normal(key + 1);
+
+    qdr_link_t *link = qdr_create_link_CT(ap->core, conn, QD_LINK_ENDPOINT, QD_INCOMING,
+                                          term, qdr_terminus_normal(0), QD_SSN_ENDPOINT,
+                                          QDR_DEFAULT_PRIORITY);
+    link->proxy = true;
+    qdr_core_bind_address_link_CT(ap->core, addr, link);
+}
+
+
+static void proxy_addr_on_all_inter_edge_connections(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+{
+    qdr_edge_peer_t *edge_peer = DEQ_HEAD(ap->core->edge_peers);
+    while (!!edge_peer) {
+        proxy_addr_on_inter_edge_connection(ap, addr, edge_peer->primary_conn);
+        edge_peer = DEQ_NEXT(edge_peer);
+    }
+}
+
+
+static void remove_proxies_for_addr(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+{
+    qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);
+    while (!!ref) {
+        qdr_link_ref_t *next = DEQ_NEXT(ref);
+        qdr_link_t     *link = ref->link;
+        if (link->conn && link->conn->role == QDR_ROLE_INTER_EDGE) {
+            qdr_core_unbind_address_link_CT(ap->core, addr, link);
+            qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
+        }
+        ref = next;
+    }
+}
+
+
+static void on_inter_edge_connection_opened(qcm_edge_addr_proxy_t *ap, qdr_connection_t *conn)
+{
+    qdr_address_t *addr = DEQ_HEAD(ap->core->addrs);
+    while (!!addr) {
+        if (qdr_address_is_mobile_CT(addr) && DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count > 0) {
+            proxy_addr_on_inter_edge_connection(ap, addr, conn);
+        }
+        addr = DEQ_NEXT(addr);
+    }
+}
+
+
 static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
 {
     if (!link || !link->conn)
@@ -205,6 +259,12 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) context;
 
     switch (event) {
+    case QDRC_EVENT_CONN_OPENED :
+        if (conn->role == QDR_ROLE_INTER_EDGE) {
+            on_inter_edge_connection_opened(ap, conn);
+        }
+        break;
+
     case QDRC_EVENT_CONN_EDGE_ESTABLISHED : {
         //
         // Flag the edge connection as being established.
@@ -259,7 +319,7 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
                 // incoming link from the interior to signal the presence of local consumers.
                 //
                 if (DEQ_SIZE(addr->rlinks) > 0 || (DEQ_SIZE(addr->subscriptions) > 0 && addr->propagate_local)) {
-                    if (DEQ_SIZE(addr->rlinks) == 1) {
+                    if (DEQ_SIZE(addr->rlinks) == 1) { // TODO - fix this logic
                         //
                         // If there's only one link and it's on the edge connection, ignore the address.
                         //
@@ -313,17 +373,38 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) context;
 
     //
+    // If the address is not in the Mobile class, no further processing is needed.
+    //
+    if (!qdr_address_is_mobile_CT(addr))
+        return;
+
+    //
+    // The following actions need to be done even if there is no established edge connection.
+    //
+    switch (event) {
+    case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST :
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 1) {
+            proxy_addr_on_all_inter_edge_connections(ap, addr);
+        }
+        break;
+
+    case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST :
+        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 0) {
+            remove_proxies_for_addr(ap, addr);
+        }
+        break;
+
+    default:
+        break;
+    }
+    
+    //
     // If we don't have an established edge connection, there is no further work to be done.
     //
     if (!ap->edge_conn_established)
         return;
 
-    //
-    // If the address is not in the Mobile class, no further processing is needed.
-    //
     const char *key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-    if (*key != QD_ITER_HASH_PREFIX_MOBILE)
-        return;
 
     switch (event) {
     case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST :
@@ -478,6 +559,7 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
     ap->event_sub = qdrc_event_subscribe_CT(core,
                                             QDRC_EVENT_CONN_EDGE_ESTABLISHED
                                             | QDRC_EVENT_CONN_EDGE_LOST
+                                            | QDRC_EVENT_CONN_OPENED
                                             | QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
                                             | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
                                             | QDRC_EVENT_ADDR_BECAME_SOURCE
