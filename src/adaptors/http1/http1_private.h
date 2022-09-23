@@ -191,8 +191,7 @@ void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn);
 void qdr_http1_enqueue_buffer_list(qdr_http1_out_data_list_t *fifo, qd_buffer_list_t *blist, uintmax_t octets);
 void qdr_http1_enqueue_stream_data(qdr_http1_out_data_list_t *fifo, qd_message_stream_data_t *stream_data);
 uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo);
-void qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
-int qdr_http1_grant_read_buffers(qdr_http1_connection_t *hconn);
+void      qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
 uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
                                      qd_buffer_list_t *blist);
 

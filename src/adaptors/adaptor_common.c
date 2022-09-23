@@ -235,11 +235,14 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn, qd_ad
     assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
     size_t          desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
-    int             i       = 0;
+    const size_t    granted = desired;
+
     while (desired) {
+        int i;
         for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
             qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
-            DEQ_INSERT_TAIL(*granted_read_buffs, buf);
+            if (granted_read_buffs)
+                DEQ_INSERT_TAIL(*granted_read_buffs, buf);
             raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
             raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
             raw_buffers[i].size     = 0;
@@ -250,7 +253,7 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn, qd_ad
         pn_raw_connection_give_read_buffers(pn_raw_conn, raw_buffers, i);
     }
 
-    return i;
+    return granted;
 }
 
 int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist)
@@ -268,17 +271,15 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
     pn_raw_buffer_t      raw_buffers[num_buffs];
     qd_adaptor_buffer_t *qd_adaptor_buff = DEQ_HEAD(*blist);
 
-    int i           = 0;
-    int total_bytes = 0;
+    int i = 0;
 
     while (i < num_buffs) {
         assert(qd_adaptor_buff != 0);
         raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(qd_adaptor_buff);
         size_t buffer_size      = qd_adaptor_buffer_size(qd_adaptor_buff);
-        raw_buffers[i].capacity = buffer_size;
         raw_buffers[i].size     = buffer_size;
-        total_bytes += buffer_size;
-        raw_buffers[i].offset  = 0;
+        raw_buffers[i].offset   = 0;
+        raw_buffers[i].capacity = 0;
         raw_buffers[i].context = (uintptr_t) qd_adaptor_buff;
         DEQ_REMOVE_HEAD(*blist);
         qd_adaptor_buff = DEQ_HEAD(*blist);

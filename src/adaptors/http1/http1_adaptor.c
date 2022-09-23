@@ -273,33 +273,6 @@ static uint32_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo,
     return total_octets;
 }
 
-// Give a list of output buffers to the raw connection for sending. The raw connection will take as many buffers off the
-// list as it has capacity for. Return the number of buffers taken.
-//
-static size_t qdr_http1_write_buffers(pn_raw_connection_t *raw_conn, qd_adaptor_buffer_list_t *abuf_list)
-{
-    assert(raw_conn);
-    assert(abuf_list);
-
-    size_t buf_count = 0;
-    while (DEQ_HEAD(*abuf_list) && pn_raw_connection_write_buffers_capacity(raw_conn) > 0) {
-        qd_adaptor_buffer_t *abuf = DEQ_HEAD(*abuf_list);
-        DEQ_REMOVE_HEAD(*abuf_list);
-        pn_raw_buffer_t pn_buff = {
-            .context = (uintptr_t) abuf,
-            .bytes   = (char *) qd_adaptor_buffer_base(abuf),
-            .size    = qd_adaptor_buffer_size(abuf),
-        };
-
-        size_t rc = pn_raw_connection_write_buffers(raw_conn, &pn_buff, 1);
-        (void) rc;
-        assert(rc == 1);
-        buf_count += 1;
-    }
-
-    return buf_count;
-}
-
 // Write list of data out the raw connection, freeing entries when data is exhausted
 //
 uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo)
@@ -331,7 +304,7 @@ uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_d
         }
     }
 
-    qdr_http1_write_buffers(hconn->raw_conn, &abuf_list);
+    qd_raw_connection_write_buffers(hconn->raw_conn, &abuf_list);
     assert(DEQ_IS_EMPTY(abuf_list));  // expect all consumed since capacity was checked above
 
     hconn->out_http1_octets += total_octets;
@@ -389,32 +362,6 @@ void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn)
 //
 // Raw Connection Read Buffer Management
 //
-
-static size_t _raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
-{
-    size_t       desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
-    const size_t granted = desired;
-
-    while (desired-- > 0) {
-        qd_adaptor_buffer_t *abuf   = qd_adaptor_buffer();
-        pn_raw_buffer_t      pn_buf = {
-                 .context  = (uintptr_t) abuf,
-                 .bytes    = (char *) qd_adaptor_buffer_cursor(abuf),
-                 .capacity = qd_adaptor_buffer_capacity(abuf),
-        };
-        pn_raw_connection_give_read_buffers(pn_raw_conn, &pn_buf, 1);
-    }
-
-    return granted;
-}
-
-int qdr_http1_grant_read_buffers(qdr_http1_connection_t *hconn)
-{
-    if (hconn->raw_conn) {
-        return _raw_connection_grant_read_buffers(hconn->raw_conn);
-    }
-    return 0;
-}
 
 // take incoming data from raw connection
 uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
