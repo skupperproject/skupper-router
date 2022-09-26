@@ -366,16 +366,6 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
                "[C%"PRIu64"][L%"PRIu64"] Read %"PRIuMAX" bytes from client (%zu buffers)",
                hconn->conn_id, hconn->in_link_id, length, DEQ_SIZE(blist));
 
-        if (HTTP1_DUMP_BUFFERS) {
-            fprintf(stdout, "\nClient raw buffer READ %"PRIuMAX" total octets\n", length);
-            qd_buffer_t *bb = DEQ_HEAD(blist);
-            while (bb) {
-                fprintf(stdout, "  buffer='%.*s'\n", (int)qd_buffer_size(bb), (char*)&bb[1]);
-                bb = DEQ_NEXT(bb);
-            }
-            fflush(stdout);
-        }
-
         hconn->in_http1_octets += length;
         error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
     }
@@ -386,9 +376,11 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
 // handle PN_RAW_CONNECTION_NEED_READ_BUFFERS
 static void _handle_conn_need_read_buffers(qdr_http1_connection_t *hconn)
 {
+    assert(hconn->raw_conn);
+
     // @TODO(kgiusti): backpressure if no credit
     if (hconn->client.reply_to_addr || hconn->cfg.event_channel /* && hconn->in_link_credit > 0 */) {
-        int granted = qdr_http1_grant_read_buffers(hconn);
+        int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn, 0);
         qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %d read buffers granted",
                hconn->conn_id, granted);
     }
@@ -1017,8 +1009,8 @@ void qdr_http1_client_core_link_flow(qdr_http1_adaptor_t    *adaptor,
 
     hconn->in_link_credit += credit;
     if (hconn->in_link_credit > 0) {
-
-        _handle_conn_need_read_buffers(hconn);
+        if (hconn->raw_conn)
+            _handle_conn_need_read_buffers(hconn);
 
         // is the current request message blocked by lack of credit?
 

@@ -528,9 +528,11 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
 // handle PN_RAW_CONNECTION_NEED_READ_BUFFERS
 static void _handle_conn_need_read_buffers(qdr_http1_connection_t *hconn)
 {
+    assert(hconn->raw_conn);
+
     // @TODO(kgiusti): backpressure if no credit
     // if (hconn->in_link_credit > 0 */)
-    int granted = qdr_http1_grant_read_buffers(hconn);
+    int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn, 0);
     qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %d read buffers granted",
            hconn->conn_id, granted);
 }
@@ -1202,8 +1204,8 @@ void qdr_http1_server_core_link_flow(qdr_http1_adaptor_t    *adaptor,
            hconn->conn_id, hconn->in_link_id, hconn->in_link_credit);
 
     if (hconn->in_link_credit > 0) {
-
-        _handle_conn_need_read_buffers(hconn);
+        if (hconn->raw_conn)
+            _handle_conn_need_read_buffers(hconn);
 
         // check for pending responses that are blocked for credit
 
