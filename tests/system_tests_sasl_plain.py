@@ -451,32 +451,36 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
         """
         Make skstat use sasl plain authentication over ssl.
         """
-        p = self.popen(
-            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c',
-             # The following are SASL args
-             '--sasl-mechanisms=PLAIN',
-             '--sasl-username=test@domain.com',
-             '--sasl-password=password',
-             # The following are SSL args
-             '--ssl-disable-peer-name-verify',
-             '--ssl-trustfile=' + self.ssl_file('ca-certificate.pem'),
-             '--ssl-certificate=' + self.ssl_file('client-certificate.pem'),
-             '--ssl-key=' + self.ssl_file('client-private-key.pem'),
-             '--ssl-password=client-password'],
-            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
-            universal_newlines=True)
+        def check_sasl_on_connections():
+            p = self.popen(
+                ['skstat', '-b', str(self.routers[0].addresses[2]), '-c',
+                 # The following are SASL args
+                 '--sasl-mechanisms=PLAIN',
+                 '--sasl-username=test@domain.com',
+                 '--sasl-password=password',
+                 # The following are SSL args
+                 '--ssl-disable-peer-name-verify',
+                 '--ssl-trustfile=' + self.ssl_file('ca-certificate.pem'),
+                 '--ssl-certificate=' + self.ssl_file('client-certificate.pem'),
+                 '--ssl-key=' + self.ssl_file('client-private-key.pem'),
+                 '--ssl-password=client-password'],
+                name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
+                universal_newlines=True)
 
-        out = p.communicate()[0]
-        assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
+            out = p.communicate()[0]
+            assert p.returncode == 0, \
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
+            split_list = out.split()
+            # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
+            # and the other connection that this skstat client is making
+            self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
+            self.assertEqual(1, split_list.count("inter-router"))
+            self.assertEqual(1, split_list.count("normal"))
 
-        split_list = out.split()
-
-        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
-        # and the other connection that this skstat client is making
-        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
-        self.assertEqual(1, split_list.count("inter-router"))
-        self.assertEqual(1, split_list.count("normal"))
+        # Even though we deleted the connector, it might take a bit of time for the actual connection
+        # object to be deleted since there might be some latency with the core thread. Retry the
+        # connection query till TIMEOUT seconds.
+        retry_assertion(check_sasl_on_connections, delay=2)
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_plain_over_ssl_exists(self):
