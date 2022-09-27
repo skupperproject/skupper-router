@@ -285,7 +285,7 @@ class TcpEchoClient:
 
         self.is_running = False
 
-    def wait(self, timeout=TIMEOUT * 2):
+    def wait(self, timeout=TIMEOUT):
         self.logger.log("%s Client is shutting down" % self.prefix)
         self.keep_running = False
         self._thread.join(timeout)

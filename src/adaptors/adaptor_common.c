@@ -155,7 +155,7 @@ int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
         for (size_t i = 0; i < n; ++i) {
             buffers_drained++;
             qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
-            free_qd_adaptor_buffer_t(qd_adaptor_buffer);
+            qd_adaptor_buffer_free(qd_adaptor_buffer);
         }
     }
 
@@ -163,7 +163,7 @@ int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
         for (size_t i = 0; i < n; ++i) {
             buffers_drained++;
             qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
-            free_qd_adaptor_buffer_t(qd_adaptor_buffer);
+            qd_adaptor_buffer_free(qd_adaptor_buffer);
         }
     }
     return buffers_drained;

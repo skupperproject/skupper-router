@@ -123,7 +123,7 @@ class EchoClientRunner:
     def __init__(self, test_name, client_n, logger, client, server, size,
                  count,
                  print_client_logs=True,
-                 timeout=TIMEOUT * 2,
+                 timeout=TIMEOUT,
                  port_override=None,
                  test_ssl=False):
         """
