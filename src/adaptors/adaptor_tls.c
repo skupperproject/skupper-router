@@ -286,25 +286,25 @@ void qd_tls_stop(qd_tls_t *tls)
     while (pn_tls_take_encrypt_output_buffers(tls->tls_session, &raw_buffer, 1)) {
         qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
         if (buf) {
-            free_qd_adaptor_buffer_t(buf);
+            qd_adaptor_buffer_free(buf);
         }
     }
     while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &raw_buffer, 1)) {
         qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
         if (buf) {
-            free_qd_adaptor_buffer_t(buf);
+            qd_adaptor_buffer_free(buf);
         }
     }
     while (pn_tls_take_decrypt_output_buffers(tls->tls_session, &raw_buffer, 1)) {
         qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
         if (buf) {
-            free_qd_adaptor_buffer_t(buf);
+            qd_adaptor_buffer_free(buf);
         }
     }
     while (pn_tls_take_decrypt_input_buffers(tls->tls_session, &raw_buffer, 1)) {
         qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
         if (buf) {
-            free_qd_adaptor_buffer_t(buf);
+            qd_adaptor_buffer_free(buf);
         }
     }
     pn_tls_free(tls->tls_session);
@@ -348,7 +348,7 @@ static void take_back_input_encrypt_buffs(qd_tls_t *tls)
         assert(take_input_count == 1);
         (void) take_input_count;  // prevent unused variable warning
         qd_adaptor_buffer_t *adaptor_buff = (qd_adaptor_buffer_t *) take_incoming_buf.context;
-        free_qd_adaptor_buffer_t(adaptor_buff);
+        qd_adaptor_buffer_free(adaptor_buff);
     }
 }
 
@@ -364,7 +364,7 @@ static void take_back_input_decrypt_buffs(qd_tls_t *tls)
         assert(take_input_count == 1);
         (void) take_input_count;  // prevent unused variable warning
         qd_adaptor_buffer_t *adaptor_buff = (qd_adaptor_buffer_t *) take_incoming_buf.context;
-        free_qd_adaptor_buffer_t(adaptor_buff);
+        qd_adaptor_buffer_free(adaptor_buff);
     }
 }
 
@@ -423,7 +423,7 @@ int qd_tls_decrypt(qd_tls_t                 *tls,
                        "[C%" PRIu64 "] qd_tls_decrypt raw buffer size=%zu, did not sent this buffer to TLS, freeing it",
                        tls->conn_id,
                        raw_buffers[i].size);
-                free_qd_adaptor_buffer_t(adaptor_buff);
+                qd_adaptor_buffer_free(adaptor_buff);
             }
         }
 

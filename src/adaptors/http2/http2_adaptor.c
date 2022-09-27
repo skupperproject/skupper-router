@@ -403,7 +403,7 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
     qd_adaptor_buffer_t *buff = DEQ_HEAD(http_conn->granted_read_buffs);
     while (buff) {
         DEQ_REMOVE_HEAD(http_conn->granted_read_buffs);
-        free_qd_adaptor_buffer_t(buff);
+        qd_adaptor_buffer_free(buff);
         buff = DEQ_HEAD(http_conn->granted_read_buffs);
     }
 
@@ -2276,7 +2276,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
                     close_conn = push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(adaptor_buff), buffer_size);
                 }
                 DEQ_REMOVE_HEAD(decrypted_buffs);
-                free_qd_adaptor_buffer_t(adaptor_buff);
+                qd_adaptor_buffer_free(adaptor_buff);
                 adaptor_buff = DEQ_HEAD(decrypted_buffs);
                 if (adaptor_buff)
                     buffer_size = qd_adaptor_buffer_size(adaptor_buff);
@@ -2324,7 +2324,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
                         push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(buf), qd_adaptor_buffer_size(buf));
                 }
                 // Free the wire buffer
-                free_qd_adaptor_buffer_t(buf);
+                qd_adaptor_buffer_free(buf);
             }
         }
     }
@@ -2475,7 +2475,7 @@ static void clean_conn_buffs(qdr_http2_connection_t* conn)
         curr_buf = buf;
         DEQ_REMOVE_HEAD(conn->out_buffs);
         buf = DEQ_HEAD(conn->out_buffs);
-        free_qd_adaptor_buffer_t(curr_buf);
+        qd_adaptor_buffer_free(curr_buf);
     }
 }
 
@@ -2884,7 +2884,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 written += buffs[i].size;
                 qd_adaptor_buffer_t *qd_http2_buff = (qd_adaptor_buffer_t *) buffs[i].context;
                 assert(qd_http2_buff);
-                free_qd_adaptor_buffer_t(qd_http2_buff);
+                qd_adaptor_buffer_free(qd_http2_buff);
             }
         }
         qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_WRITTEN Wrote %zu bytes", conn->conn_id, written);

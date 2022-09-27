@@ -283,7 +283,7 @@ int copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t *conn, qd_adap
         bytes_copied += adaptor_buffer_size;
         qd_buffer_list_append(buffers, (uint8_t *) qd_adaptor_buffer_base(adaptor_buff), adaptor_buffer_size);
         DEQ_REMOVE_HEAD(*decrypted_buffs);
-        free_qd_adaptor_buffer_t(adaptor_buff);
+        qd_adaptor_buffer_free(adaptor_buff);
         adaptor_buff = DEQ_HEAD(*decrypted_buffs);
     }
 
@@ -343,7 +343,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
                                               raw_buffers[i].size);
                 }
                 // Free the wire buffer that we got back from proton.
-                free_qd_adaptor_buffer_t(buf);
+                qd_adaptor_buffer_free(buf);
             }
         }
     }
@@ -555,13 +555,13 @@ static void clean_conn_in_out_buffs(qdr_tcp_connection_t *conn)
         curr_buf = buf;
         DEQ_REMOVE_HEAD(conn->out_buffs);
         buf = DEQ_HEAD(conn->out_buffs);
-        free_qd_adaptor_buffer_t(curr_buf);
+        qd_adaptor_buffer_free(curr_buf);
     }
 
     qd_adaptor_buffer_t *buff = DEQ_HEAD(conn->granted_read_buffs);
     while (buff) {
         DEQ_REMOVE_HEAD(conn->granted_read_buffs);
-        free_qd_adaptor_buffer_t(buff);
+        qd_adaptor_buffer_free(buff);
         buff = DEQ_HEAD(conn->granted_read_buffs);
     }
 }
@@ -1158,7 +1158,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 written += buffs[i].size;
                 qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
                 assert(qd_adaptor_buffer);
-                free_qd_adaptor_buffer_t(qd_adaptor_buffer);
+                qd_adaptor_buffer_free(qd_adaptor_buffer);
             }
         }
 
