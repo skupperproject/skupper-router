@@ -1112,7 +1112,13 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             qd_log(log, QD_LOG_TRACE,
                    "[C%"PRIu64"] %s client link unblocked from Q2 limit",
                    conn->conn_id, qdr_tcp_connection_role_name(conn));
-            handle_incoming(conn, "PNRC_WAKE after Q2 unblock");
+            int read = handle_incoming(conn, "PNRC_WAKE after Q2 unblock");
+
+            qd_log(log, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] PN_RAW_CONNECTION_WAKE Read %i bytes. Total read %" PRIu64
+                   " bytes, Total encrypted bytes=%" PRIu64 "",
+                   conn->conn_id, read, conn->bytes_in, conn->encrypted_bytes_in);
+
         }
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
