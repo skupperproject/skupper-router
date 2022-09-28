@@ -381,7 +381,7 @@ static void _handle_conn_need_read_buffers(qdr_http1_connection_t *hconn)
 
     // @TODO(kgiusti): backpressure if no credit
     if (hconn->client.reply_to_addr || hconn->cfg.event_channel /* && hconn->in_link_credit > 0 */) {
-        int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn, 0);
+        int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
         qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %d read buffers granted",
                hconn->conn_id, granted);
     }

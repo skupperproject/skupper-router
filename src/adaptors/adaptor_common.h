@@ -85,19 +85,16 @@ bool qd_tls_initial_setup(qd_adaptor_config_t *config,
                           const char          *protocols[]);
 
 /**
- * Grants as many read qd_adaptor buffers as returned by pn_raw_connection_read_buffers_capacity() with a maximum of
- * RAW_BUFFER_BATCH(16) read buffers. Stuffs the granted adaptor buffers into the passed in granted_read_buffs list if
- * provided.
+ * Grants as many read qd_adaptor buffers as returned by pn_raw_connection_read_buffers_capacity().
+ * Maximum read capacity is set to 16 in proton raw api.
  *
  * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
- * @param granted_read_buffs - (optional) the qd_adaptor_buffer_list which will container the granted buffs, else 0
  */
-int qd_raw_connection_grant_read_buffers(pn_raw_connection_t      *pn_raw_conn,
-                                         qd_adaptor_buffer_list_t *granted_read_buffs);
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn);
 
 /**
- * Writes as many adaptor buffers as allowed by pn_raw_connection_write_buffers_capacity() with a maximum of 16 write
- * buffers.
+ * Writes as many adaptor buffers as allowed by pn_raw_connection_write_buffers_capacity().
+ * Maximum write capacity is set to 16 in proton raw api.
  *
  * @param raw_conn - The pn_raw_connection_t to which read buffers are granted.
  * @param blist - qd_adaptor_buffer_list_t which contains that buffers that need to be written.

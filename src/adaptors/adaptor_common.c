@@ -230,7 +230,7 @@ error:
     return qd_error_code();
 }
 
-int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *granted_read_buffs)
+int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 {
     assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
@@ -241,8 +241,6 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn, qd_ad
         int i;
         for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
             qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
-            if (granted_read_buffs)
-                DEQ_INSERT_TAIL(*granted_read_buffs, buf);
             raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
             raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
             raw_buffers[i].size     = 0;
