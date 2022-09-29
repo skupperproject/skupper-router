@@ -552,18 +552,14 @@ class InvalidRouterAnnotationsTest(TestCase):
         self.assertIsNone(test.error)
         self.assertEqual("amqp:invalid-field", test.reject_name)
 
-    def test_06_bogus_ra_too_long(self):
+    def test_06_bogus_ra_too_short(self):
         """Invalid size of RA"""
-        _name = "test_06_bogus_ra_too_long"
+        _name = "test_06_bogus_ra_too_short"
         encoded = RouterAnnotationsSection.SECTION_HEADER
         ras = Data()
         ras.put_list()
         ras.enter()
         ras.put_uint(0)
-        ras.put_string("to-override")
-        ras.put_string("0/ingress-router")
-        ras.put_sequence([])
-        ras.put_null()
         ras.exit()
         encoded += ras.encode()
         # body holding uint0
