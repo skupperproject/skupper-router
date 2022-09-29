@@ -270,20 +270,19 @@ class SkstatTest(SkstatTestBase):
         # flow actually stops.
         logger = Logger(title="test_yy_query_many_links", print_to_console=True)
 
-        logger.log("Starrting test_yy_query_many_links")
+        logger.log("Starting test_yy_query_many_links")
 
         # This test will fail without the fix for DISPATCH-974
         c = BlockingConnection(self.router.addresses[0])
         count = 0
         links = []
-        COUNT = 5000
+        COUNT = 2000
 
         ADDRESS_SENDER = "examples-sender"
         ADDRESS_RECEIVER = "examples-receiver"
 
         logger.log("Starting to create senders and receivers")
 
-        # This loop creates 5000 consumer and 5000 producer links
         while True:
             count += 1
             r = c.create_receiver(ADDRESS_RECEIVER + str(count))
@@ -296,7 +295,7 @@ class SkstatTest(SkstatTestBase):
         logger.log(f"{count} senders and receivers created")
 
         # Now we run skstat command and check if we got back details
-        # about all the 10000 links
+        # about all the links
         # We do not specify the limit which means unlimited
         # which means get everything that is there.
         outs = self.run_skstat(['--links'])
@@ -315,13 +314,13 @@ class SkstatTest(SkstatTestBase):
         self.assertEqual(in_links, COUNT)
         self.assertEqual(out_links, COUNT)
 
-        logger.log("Number of sender and receiver links match {count}")
+        logger.log(f"Number of sender and receiver links match {COUNT}")
 
-        # Run skstat with a limit more than 10,000
-        outs = self.run_skstat(['--links', '--limit=15000'])
+        # Run skstat with a limit more than 4,000
+        outs = self.run_skstat(['--links', '--limit=6000'])
         out_list = outs.split("\n")
 
-        logger.log("Ran skstat with limit 15000 to retrieve all link information from the router")
+        logger.log("Ran skstat with limit 6000 to retrieve all link information from the router")
 
         out_links = 0
         in_links = 0
@@ -334,24 +333,25 @@ class SkstatTest(SkstatTestBase):
         self.assertEqual(in_links, COUNT)
         self.assertEqual(out_links, COUNT)
 
-        logger.log("Number of sender and receiver links still match {count}")
+        logger.log(f"Number of sender and receiver links still match {COUNT}")
 
-        # Run skstat with a limit less than 10,000
-        outs = self.run_skstat(['--links', '--limit=2000'])
+        # Run skstat with a limit less than 4000
+        count = 1500
+        outs = self.run_skstat(['--links', '--limit=' + str(count)])
         out_list = outs.split("\n")
 
-        logger.log("Ran skstat with limit 2000 to retrieve link information from the router")
+        logger.log("Ran skstat with limit " + str(count) + " to retrieve link information from the router")
 
         links = 0
         for out in out_list:
             if "endpoint" in out and "examples" in out:
                 links += 1
 
-        self.assertEqual(links, 2000)
+        self.assertEqual(links, count)
 
-        logger.log("Number of sender and receiver links match 2000")
+        logger.log("Number of sender and receiver links match " + str(count))
 
-        # Run skstat with a limit less than 10,000
+        # Run skstat --csv with a limit less than 4000
         # repeat with --csv
         outs = self.run_skstat(['--links', '--limit=2000', '--csv'])
         out_list = outs.split("\n")
@@ -399,41 +399,42 @@ class SkstatTest(SkstatTestBase):
         self.assertEqual(links, 700)
 
         logger.log("Number of sender and receiver links still match 700")
-
-        # Run skstat with a limit of 500 because 700
+        count = 200
+        # Run skstat with a limit of 200 because 700
         # is the maximum number of rows we get per request
         # and we want to try something less than 700
-        outs = self.run_skstat(['--links', '--limit=500'])
+        outs = self.run_skstat(['--links', '--limit=' + str(count)])
         out_list = outs.split("\n")
 
-        logger.log("Ran skstat with limit 500 to retrieve link information from the router")
+        logger.log("Ran skstat with limit " + str(count) + " to retrieve link information from the router")
 
         links = 0
         for out in out_list:
             if "endpoint" in out and "examples" in out:
                 links += 1
 
-        self.assertEqual(links, 500)
+        self.assertEqual(links, count)
 
-        logger.log("Number of sender and receiver links match 500")
+        logger.log("Number of sender and receiver links match " + str(count))
 
         # Run skstat with a limit of 500 because 700
         # is the maximum number of rows we get per request
         # and we want to try something less than 700
         # repeat with --csv
-        outs = self.run_skstat(['--links', '--limit=500', '--csv'])
+
+        outs = self.run_skstat(['--links', '--limit=' + str(count), '--csv'])
         out_list = outs.split("\n")
 
-        logger.log("Ran skstat with limit 500 and csv option to retrieve all link information from the router")
+        logger.log('Ran skstat with limit ' + str(count) + 'and csv option to retrieve all link information from the router')
 
         links = 0
         for out in out_list:
             if "endpoint" in out and "examples" in out:
                 links += 1
 
-        self.assertEqual(links, 500)
+        self.assertEqual(links, count)
 
-        logger.log("Number of sender and receiver links still match 500")
+        logger.log(f"Number of sender and receiver links still match {count}")
 
         # DISPATCH-1485. Try to run skstat with a limit=0. Without the fix for DISPATCH-1485
         # this following command will hang and the test will fail.
