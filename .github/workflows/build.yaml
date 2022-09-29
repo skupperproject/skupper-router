@@ -611,7 +611,7 @@ jobs:
       - name: Perform clang-format check
         run: |
           set -o pipefail
-          scripts/git-clang-format origin/main --extensions=c,h,cpp,hpp --diff | tee clang-format.patch
+          scripts/git-clang-format origin/main --diff | tee clang-format.patch
 
       - name: Upload the proposed patch to Artifacts
         if: ${{ failure() }}

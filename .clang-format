@@ -17,6 +17,11 @@
 ## under the License.
 ##
 
+DisableFormat: true
+---
+
+Language: Cpp
+DisableFormat: false
 BasedOnStyle: Google
 IndentWidth: 4
 ColumnLimit: 120
