@@ -336,7 +336,7 @@ class SkstatTest(SkstatTestBase):
         logger.log(f"Number of sender and receiver links still match {COUNT}")
 
         # Run skstat with a limit less than 4000
-        count=1500
+        count = 1500
         outs = self.run_skstat(['--links', '--limit=' + str(count)])
         out_list = outs.split("\n")
 
