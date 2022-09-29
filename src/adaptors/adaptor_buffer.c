@@ -46,15 +46,27 @@ void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *list)
     DEQ_INIT(*list);
 }
 
-qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *buffer)
+void qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer_t *pn_raw_buffer, const qd_adaptor_buffer_t *adaptor_buff)
+{
+    pn_raw_buffer->size     = qd_adaptor_buffer_size(adaptor_buff);
+    pn_raw_buffer->capacity = qd_adaptor_buffer_capacity(adaptor_buff);
+    pn_raw_buffer->offset   = 0;
+    pn_raw_buffer->bytes    = (char *) qd_adaptor_buffer_base(adaptor_buff);
+    pn_raw_buffer->context  = (uintptr_t) adaptor_buff;
+}
+
+qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *pn_raw_buffer)
 {
     qd_adaptor_buffer_t *adaptor_buff = qd_adaptor_buffer();
-    buffer->bytes                     = (char *) qd_adaptor_buffer_base(adaptor_buff);
-    buffer->capacity                  = qd_adaptor_buffer_capacity(adaptor_buff);
-    buffer->size                      = 0;
-    buffer->offset                    = 0;
-    buffer->context                   = (uintptr_t) adaptor_buff;
+    qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer, adaptor_buff);
     return adaptor_buff;
+}
+
+qd_adaptor_buffer_t *qd_get_adaptor_buffer_from_pn_raw_buffer(const pn_raw_buffer_t *pn_raw_buffer)
+{
+    qd_adaptor_buffer_t *adaptor_buffer = (qd_adaptor_buffer_t *) pn_raw_buffer->context;
+    qd_adaptor_buffer_insert(adaptor_buffer, pn_raw_buffer->size);
+    return adaptor_buffer;
 }
 
 void qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint8_t *data, size_t len)
