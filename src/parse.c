@@ -725,8 +725,9 @@ const char *qd_parse_router_annotations(
     if (ra_list.tag != QD_AMQP_LIST8 && ra_list.tag != QD_AMQP_LIST32)
         return "Invalid router annotations section: non-list type";
 
-    // Version #2 only defines 4 fields
-    if (ra_list.count != 4)
+    // Version #2 defines 4 fields, allow future extensions at the end
+    // of the list.
+    if (ra_list.count < 4)
         return "Invalid router annotations section: wrong list count";
 
     // The order of the annotations within the list is fixed and described in
