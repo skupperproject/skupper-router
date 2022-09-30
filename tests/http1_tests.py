@@ -314,7 +314,6 @@ class TestServer:
                 except Exception as exc:
                     self._logger.log("TestServer %s crash: %s" %
                                      (self._server_addr, exc))
-                    self._logger.dump()
                     # do not bother raising here since this is an internal
                     # thread context:
                     self._server_error = exc
@@ -330,8 +329,10 @@ class TestServer:
             # should not happen unless the shutdown request failed due to
             # a router error
             logging.log(logging.ERROR, "Failed to shutdown test http.server")
+            self._logger.dump()
             raise RuntimeError("HTTP/1 TestServer failed to shut down")
         if self._server_error:
+            self._logger.dump()
             raise RuntimeError("HTTP/1 TestServer fatal exception") from self._server_error
 
     def _send_shutdown_request(self):
@@ -344,6 +345,7 @@ class TestServer:
         """
         shutdown_request = b'POST /SHUTDOWN HTTP/1.1\r\n' \
             + b'Content-Length: 0\r\n' \
+            + b'Connection: close\r\n' \
             + b'\r\n'
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
@@ -356,9 +358,14 @@ class TestServer:
             client.sendall(shutdown_request, socket.MSG_WAITALL)
             reply = b''
             while True:
-                reply += client.recv(4096)
-                if b'Server Closed' in reply:
+                rc = client.recv(4096)
+                if not rc:
+                    # socket closed (response complete)
                     break
+                reply += rc
+            if b'Server Closed' not in reply:
+                if self._server_error is None:  # do not overwrite first error
+                    self._server_error = f"bad shutdown response {reply}"
 
     def __enter__(self):
         return self
