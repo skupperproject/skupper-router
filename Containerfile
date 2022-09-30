@@ -30,7 +30,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
 
 WORKDIR /build
 COPY . .
-ENV PROTON_VERSION=0.37.0
+ENV PROTON_VERSION=main
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.1
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
