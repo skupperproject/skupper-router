@@ -183,10 +183,10 @@ async fn test_h2spec() {
     let h2spec_exit_code = get_container_exit_code(&docker, &container_h2spec).await;
     println!("container h2spec finished with exit code {:?}", h2spec_exit_code);
 
-    // run the router container until completion
-    docker.kill_container(&*container_skrouterd.id, Some(KillContainerOptions { signal: "SIGTERM" })).await.unwrap();
-    // stop the http2 server container right away
+    // stop the http2 server container so that router frees connection-related data
     docker.stop_container(&*container_nghttpd.id, None::<StopContainerOptions>).await.unwrap();
+    // run the router container until completion; shutting router first would cause leaks report
+    docker.kill_container(&*container_skrouterd.id, Some(KillContainerOptions { signal: "SIGTERM" })).await.unwrap();
     while let Some(msg) = stream.next().await {
         println!("{}", msg);
     }

@@ -29,7 +29,7 @@ user podman socket, and configure it in your environment:
 [source,shell script]
 ----
 systemctl --user enable --now podman.socket
-export DOCKER_HOST=/run/user/${UID}/podman/podman.sock
+export DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock
 ----
 
 ## atomic test containers
