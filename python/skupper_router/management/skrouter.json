@@ -1001,6 +1001,13 @@
                     "type": "string",
                     "create": true
                 },
+                "backlog": {
+                    "description": "Sets the value of the backlog parameter in call to listen(). This controls the maximum queue depth the OS will use for some stages of TCP connection creation.  Value should be integer >= 0. If 0, the value will be set to the upper limit allowed by the OS. Otherwise it will be the value provided. Higher values significantly improve connections-per-second.",
+                    "type": "integer",
+                    "default": 0,
+                    "create": true,
+                    "required": false
+                },
                 "siteId": {
                     "type": "string",
                     "required": false,
