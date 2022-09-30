@@ -25,6 +25,7 @@
 // strlen() of a discriminator will be 15
 
 #define QD_DISCRIMINATOR_SIZE 16
+#define QD_DISCRIMINATOR_BYTES (QD_DISCRIMINATOR_SIZE - 1)
 
 /**
  * Generate a random discriminator in the supplied string, not to exceed

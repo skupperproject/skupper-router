@@ -161,8 +161,9 @@ extern const char * const QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY;
 /** @name Terminus Addresses */
 /// @{
 extern const char * const QD_TERMINUS_EDGE_ADDRESS_TRACKING;
-extern const char * const QD_TERMINUS_ADDRESS_LOOKUP;
 extern const char * const QD_TERMINUS_HEARTBEAT;
+extern const char * const QD_TERMINUS_MESH_ID_NEGOTIATION;
+extern const char * const QD_TERMINUS_MESH_DISCOVERY;
 /// @}
 
 /** @name AMQP error codes. */
@@ -210,6 +211,13 @@ extern const char * const QD_AMQP_COND_MESSAGE_SIZE_EXCEEDED;
 #define QDR_N_PRIORITIES     10
 #define QDR_MAX_PRIORITY     (QDR_N_PRIORITIES - 1)
 #define QDR_DEFAULT_PRIORITY  4
+/// @};
+
+/** @name Key names used in internal protocols. */
+/// @{
+extern const char * const QD_KEY_MESH_ID_NEGOTIATION_ORDINAL;
+extern const char * const QD_KEY_MESH_ID_NEGOTIATION_IDENTIFIER;
+extern const char * const QD_KEY_MESH_ID_ANNOUNCE_IDENTIFIER;
 /// @};
 
 #endif

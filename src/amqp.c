@@ -51,8 +51,10 @@ const char * const QD_CONNECTION_PROPERTY_TCP_ADAPTOR_VALUE     = "tcp";
 const char * const QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY = "qd.annotations-version";
 
 const char * const QD_TERMINUS_EDGE_ADDRESS_TRACKING = "_$qd.edge_addr_tracking";
-const char * const QD_TERMINUS_ADDRESS_LOOKUP        = "_$qd.addr_lookup";
 const char * const QD_TERMINUS_HEARTBEAT             = "_$qd.edge_heartbeat";
+const char * const QD_TERMINUS_MESH_ID_NEGOTIATION   = "_$qd.mesh_id_negotiation";
+const char * const QD_TERMINUS_MESH_DISCOVERY        = "_$qd.mesh_discovery";
+
 
 const qd_amqp_error_t QD_AMQP_OK = { 200, "OK" };
 const qd_amqp_error_t QD_AMQP_CREATED = { 201, "Created" };
@@ -82,6 +84,11 @@ const char * const QD_AMQP_PORT_STR = "5672";
 const char * const QD_AMQPS_PORT_STR = "5671";
 
 const char * const QD_AMQP_DFLT_PROTO = "tcp";
+
+const char * const QD_KEY_MESH_ID_NEGOTIATION_ORDINAL    = "ordinal";
+const char * const QD_KEY_MESH_ID_NEGOTIATION_IDENTIFIER = "id";
+const char * const QD_KEY_MESH_ID_ANNOUNCE_IDENTIFIER    = "meshid";
+
 
 /// Obtains port number from protocol name using getservbyname_r
 static inline int qd_getservbyname(const char *name, const char *proto) {

@@ -40,7 +40,7 @@ typedef struct qdrc_endpoint_t qdrc_endpoint_t;
  * @param endpoint A new endpoint object for the link.  If the link is accepted, this
  *                 object must be stored for later use.
  * @param link_context [out] Handler-provided opaque context to be associated with the endpoint
- * @param repote_source Pointer to the remote source terminus of the link
+ * @param remote_source Pointer to the remote source terminus of the link
  * @param remote_target Pointer to the remote target terminus of the link
  */
 typedef void (*qdrc_first_attach_t) (void             *bind_context,
