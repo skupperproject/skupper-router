@@ -51,7 +51,7 @@ jobs:
           # build, run tests and if all worked publish a custom image
           export PROJECT_TAG="${DOCKER_TAG}"
           # Use {GITHUB_SHA::8} for shorter SHA
-          export VERSION="${GITHUB_SHA}"
+          export VERSION="${DOCKER_TAG}"
           ./.github/scripts/image.sh
         env:
           DOCKER_USER: '${{ secrets.DOCKER_USER }}'
