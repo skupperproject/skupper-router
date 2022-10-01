@@ -277,7 +277,7 @@ jobs:
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
-          path: ${{env.RouterBuildDir}}/Testing/**/*.xml
+          path: ${{env.RouterBuildDir}}/tests/junitxmls/*.xml
 
       - name: Delete logs from passing tests
         if: ${{ failure() }}
@@ -289,7 +289,7 @@ jobs:
         with:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
-            skupper-router/build/tests
+            ${{env.RouterBuildDir}}/tests
 
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v3
@@ -566,7 +566,7 @@ jobs:
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
-          path: ${{env.RouterBuildDir}}/Testing/**/*.xml
+          path: ${{env.RouterBuildDir}}/tests/junitxmls/*.xml
 
       - name: Delete logs from passing tests
         if: ${{ failure() }}
@@ -578,7 +578,7 @@ jobs:
         with:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
-            skupper-router/build/tests
+            ${{env.RouterBuildDir}}/tests
 
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v3
