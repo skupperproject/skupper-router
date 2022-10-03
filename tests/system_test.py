@@ -64,10 +64,15 @@ from proton.reactor import AtLeastOnce, Container
 from proton.reactor import AtMostOnce
 
 from skupper_router.management.client import Node
-from skupper_router.management.error import NotFoundStatus
+from skupper_router.management.error import NotFoundStatus, BadRequestStatus
 
 # Optional modules
 MISSING_MODULES = []
+HTTP_LISTENER_TYPE = 'io.skupper.router.httpListener'
+TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
+HTTP_CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
+TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
+CONNECTION_TYPE = 'io.skupper.router.connection'
 
 try:
     import qpidtoollibs  # pylint: disable=unused-import
@@ -567,6 +572,7 @@ class Qdrouterd(Process):
         args = shlex.split(os.environ.get('QPID_DISPATCH_RUNNER', '')) + args
         super(Qdrouterd, self).__init__(args, name=name, expect=expect)
         self._management = None
+        self._qd_manager = None
         self._wait_ready = False
         if wait:
             self.wait_ready()
@@ -577,6 +583,20 @@ class Qdrouterd(Process):
 
     def __exit__(self, *_):
         self.teardown()
+
+    @property
+    def qd_manager(self):
+        if not self._qd_manager:
+            try:
+                self._qd_manager = QdManager(address=self.addresses[0])
+            except Exception as e:
+                # As it stands now, not all router configs are expected to have a valid amqp listening
+                # port on self.addresses[0]. So for now, it is ok to return None
+                # In the future we might require all routers to have a valid amqp listening port available
+                # on self.addresses[0] at which point, we should remove this except clause and
+                # force a failure if there is no self.addresses[0]
+                return None
+        return self._qd_manager
 
     @property
     def management(self):
@@ -594,6 +614,31 @@ class Qdrouterd(Process):
             self._management = None
 
         teardown_exc = None
+
+        try:
+            if self.qd_manager:
+                # Delete all adaptor connectors and listeners before shutting down the router
+                long_types = [HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
+                for long_type in long_types:
+                    self.qd_manager.delete_all_entities(long_type)
+                retry_assertion(self.qd_manager.delete_adaptor_connections)
+        except (IndexError, TypeError, BadRequestStatus):
+            # The router might not have any amqp listeners at all
+            # These are known exceptions we can ignore.
+            pass
+        except Exception as e:
+            # QdManager class wraps all exceptions in Exception.
+            # BadRequestStatus happens when you are trying to delete a connection that is already deleted.
+            # The delete of the connector might delete the connection and we might try to delete that connection
+            # again and that is ok.
+            exception_string = str(e)
+            if "ConnectionException" in exception_string or \
+                    "LinkDetached" in exception_string or \
+                    "ConnectionClosed" in exception_string or \
+                    "BadRequestStatus" in exception_string:
+                pass
+            else:
+                raise e
         try:
             super(Qdrouterd, self).teardown()
         except Exception as exc:
@@ -1452,6 +1497,27 @@ class QdManager:
         if limit:
             cmd += " limit=%s" % limit
         return json.loads(self(cmd))
+
+    def delete_all_entities(self, long_entity_type):
+        # First, query the router to get all entities of entity type
+        results = self.query(long_entity_type)
+        for result in results:
+            entity_name = result.get('name')
+            if entity_name:
+                self.delete(long_entity_type, name=entity_name)
+
+    def delete_adaptor_connections(self):
+        results = self.query(CONNECTION_TYPE)
+        for result in results:
+            if result['protocol'] != 'amqp':
+                identity = result.get("identity")
+                self.update(CONNECTION_TYPE, {"adminStatus": "deleted"}, identity=identity)
+        results = self.query(CONNECTION_TYPE)
+        num_adaptor_connections = 0
+        for result in results:
+            if result['protocol'] != 'amqp':
+                num_adaptor_connections += 1
+        assert num_adaptor_connections == 0
 
 
 class MgmtMsgProxy:

@@ -104,10 +104,6 @@ struct qdr_tcp_connection_t {
     uint64_t              last_in_time;
     uint64_t              last_out_time;
 
-    // We need to keep track of the granted read buffers because of a proton bug.
-    // raw connection api sometimes does not return all the read buffers that were granted to it,
-    // so we need to maintain the buffers in granted_read_buffs and free the buffers when appropriate.
-    qd_adaptor_buffer_list_t granted_read_buffs;  // buffers for reading
     qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
 
     qd_message_stream_data_t *previous_stream_data; // previous segment (received in full)
@@ -212,7 +208,7 @@ static void grant_read_buffers(qdr_tcp_connection_t *conn)
 {
     if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) || read_window_full(conn))
         return;
-    int granted_buffers = qd_raw_connection_grant_read_buffers(conn->pn_raw_conn, &conn->granted_read_buffs);
+    int granted_buffers = qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
            "[C%" PRIu64 "] grant_read_buffers granted %i read buffers to proton raw api", conn->conn_id,
            granted_buffers);
@@ -278,8 +274,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
 
     while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
         for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffers[i].context;
-            DEQ_REMOVE(conn->granted_read_buffs, buf);
+            qd_adaptor_buffer_t *buf           = (qd_adaptor_buffer_t *) raw_buffers[i].context;
             uint32_t raw_buff_size = raw_buffers[i].size;
             if (raw_buff_size > 0) {
                 result += raw_buff_size;
@@ -480,12 +475,6 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 
 static void clean_conn_in_out_buffs(qdr_tcp_connection_t *conn)
 {
-    qd_adaptor_buffer_t *buff = DEQ_HEAD(conn->granted_read_buffs);
-    while (buff) {
-        DEQ_REMOVE_HEAD(conn->granted_read_buffs);
-        free_qd_adaptor_buffer_t(buff);
-        buff = DEQ_HEAD(conn->granted_read_buffs);
-    }
     qd_adaptor_buffer_t *buf      = DEQ_HEAD(conn->out_buffs);
     qd_adaptor_buffer_t *curr_buf = 0;
     while (buf) {
@@ -1047,7 +1036,6 @@ static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *serve
     tcp_stats->connections_opened +=1;
     UNLOCK(&tcp_stats->stats_lock);
     DEQ_INIT(tc->out_buffs);
-    DEQ_INIT(tc->granted_read_buffs);
     return tc;
 }
 

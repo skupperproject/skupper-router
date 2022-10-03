@@ -126,8 +126,7 @@ struct qdr_http2_connection_t {
     uint64_t                  dummy_link_id;
     qdr_http2_stream_data_t  *stream_dispatcher_stream_data;
     uint64_t                  stream_dispatcher_id;
-    nghttp2_data_provider     data_prd;
-    qd_adaptor_buffer_list_t     granted_read_buffs;  // buffers for reading
+    nghttp2_data_provider        data_prd;
     time_t                    prev_ping; // Time the previous PING frame was sent on egress connection.
     time_t                    last_pn_raw_conn_read;  // The last time a PN_RAW_CONNECTION_READ event was invoked with more than zero bytes on an egress connection.
     qd_adaptor_buffer_list_t     buffs;                  // Buffers for writing

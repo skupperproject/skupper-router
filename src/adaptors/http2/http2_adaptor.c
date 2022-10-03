@@ -386,13 +386,6 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
     DEQ_REMOVE(http2_adaptor->connections, http_conn);
     sys_mutex_unlock(&http2_adaptor->lock);
 
-    qd_adaptor_buffer_t *buff = DEQ_HEAD(http_conn->granted_read_buffs);
-    while (buff) {
-        DEQ_REMOVE_HEAD(http_conn->granted_read_buffs);
-        free_qd_adaptor_buffer_t(buff);
-        buff = DEQ_HEAD(http_conn->granted_read_buffs);
-    }
-
     sys_atomic_destroy(&http_conn->activate_scheduled);
     sys_atomic_destroy(&http_conn->raw_closed_read);
     sys_atomic_destroy(&http_conn->raw_closed_write);
@@ -1537,7 +1530,6 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     sys_atomic_init(&ingress_http_conn->delay_buffer_write, 0);
     DEQ_INIT(ingress_http_conn->buffs);
     DEQ_INIT(ingress_http_conn->streams);
-    DEQ_INIT(ingress_http_conn->granted_read_buffs);
     ingress_http_conn->data_prd.read_callback = read_data_callback;
 
     sys_mutex_lock(&http2_adaptor->lock);
@@ -2549,8 +2541,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
 
    while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
        for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
-           qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffers[i].context;
-           DEQ_REMOVE(conn->granted_read_buffs, buf);
+           qd_adaptor_buffer_t *buf           = (qd_adaptor_buffer_t *) raw_buffers[i].context;
            uint32_t raw_buff_size = raw_buffers[i].size;
            qd_adaptor_buffer_insert(buf, raw_buff_size);
            count += raw_buff_size;
@@ -2576,7 +2567,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
     }
     else {
         if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read)) {
-            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn, &conn->granted_read_buffs);
+            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
         }
     }
 
@@ -2883,7 +2874,6 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     egress_http_conn->data_prd.read_callback = read_data_callback;
     DEQ_INIT(egress_http_conn->buffs);
     DEQ_INIT(egress_http_conn->streams);
-    DEQ_INIT(egress_http_conn->granted_read_buffs);
     sys_atomic_init(&egress_http_conn->raw_closed_read, 0);
     sys_atomic_init(&egress_http_conn->raw_closed_write, 0);
     sys_atomic_init(&egress_http_conn->delay_buffer_write, 0);
@@ -3044,7 +3034,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_NEED_READ_BUFFERS: {
         qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_NEED_READ_BUFFERS Need read buffers", conn->conn_id);
         if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read)) {
-            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn, &conn->granted_read_buffs);
+            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
         }
         break;
     }

@@ -272,14 +272,26 @@ void qdr_record_link_credit(qdr_core_t *core, qdr_link_t *link)
 
 void qdr_close_connection_CT(qdr_core_t *core, qdr_connection_t  *conn)
 {
+    bool conn_already_closed = false;
     sys_mutex_lock(&conn->work_lock);
-    conn->closed = true;
-    conn->error  = qdr_error(QD_AMQP_COND_CONNECTION_FORCED, "Connection forced-closed by management request");
+    //
+    // In some cases, this function can be called on an already closed connection in which case
+    // we don't want to leak a qdr_error_t object
+    //
+    if (conn->closed) {
+        conn_already_closed = true;
+    } else {
+        conn->closed = true;
+        conn->error  = qdr_error(QD_AMQP_COND_CONNECTION_FORCED, "Connection forced-closed by management request");
+    }
+
     conn->admin_status = QD_CONN_ADMIN_DELETED;
     sys_mutex_unlock(&conn->work_lock);
 
-    //Activate the connection, so the I/O threads can finish the job.
-    qdr_connection_activate_CT(core, conn);
+    if (!conn_already_closed) {
+        // Activate the connection, so the I/O threads can finish the job.
+        qdr_connection_activate_CT(core, conn);
+    }
 }
 
 
