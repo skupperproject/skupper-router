@@ -121,6 +121,7 @@ set(qpid_dispatch_SOURCES
   router_core/modules/test_hooks/core_test_hooks.c
   router_core/modules/edge_addr_tracking/edge_addr_tracking.c
   router_core/modules/mesh_discovery/mesh_discovery_edge.c
+  router_core/modules/mesh_discovery/mesh_discovery_interior.c
   router_core/modules/address_lookup_client/address_lookup_client.c
   router_core/modules/heartbeat_edge/heartbeat_edge.c
   router_core/modules/heartbeat_server/heartbeat_server.c

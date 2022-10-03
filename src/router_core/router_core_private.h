@@ -686,6 +686,7 @@ struct qdr_connection_t {
     qdr_connection_list_t       connection_group;      ///< List of associated connection group members
     qdr_connection_t           *group_cursor;          ///< Pointer to the next group member to use for traffic allocation
     qdr_edge_peer_t            *edge_peer;             ///< Edge routers only - Mesh-peer that this connection links to
+    char                        edge_mesh_id[QD_DISCRIMINATOR_BYTES]; ///< Interior, edge-role only - Identity of the connected mesh
 };
 
 void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);
