@@ -107,4 +107,9 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
  */
 char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn);
 
+/**
+ * Drains read and write buffers held by proton raw connection.
+ */
+int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn);
+
 #endif // __adaptor_common_h__
