@@ -232,8 +232,8 @@ static void on_transfer(void *link_context, qdr_delivery_t *delivery, qd_message
         qd_iterator_t     *iter = qd_message_field_iterator(message, QD_FIELD_APPLICATION_PROPERTIES);
         qd_parsed_field_t *ap   = qd_parse(iter);
          if (!!ap) {
-            if (qd_parse_is_map(ap) && qd_parse_sub_count(ap) == 2) {
-                for (int i = 0; i < 2; i++) {
+            if (qd_parse_is_map(ap)) {
+                for (int i = 0; i < qd_parse_sub_count(ap); i++) {
                     qd_iterator_t     *key_iter = qd_parse_raw(qd_parse_sub_key(ap, i));
                     qd_parsed_field_t *value    = qd_parse_sub_value(ap, i);
 
