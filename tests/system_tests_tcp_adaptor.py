@@ -859,12 +859,12 @@ class TcpAdaptor(TestCase):
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
-    # This test sends and receives 5 million bytes from edge router to edge router
+    # This test sends and receives 2 million bytes from edge router to edge router
     # which will make the code go in and out of the TCP window.
-    def test_14_tcp_EA2_EC1_5000000(self):
-        name = "test_12_tcp_EA2_EC1_5000000"
+    def test_14_tcp_EA2_EC1_2000000(self):
+        name = "test_12_tcp_EA2_EC1_2000000"
         self.logger.log("TCP_TEST Start %s" % name)
-        pairs = [self.EchoPair(self.EA2, self.EC1, sizes=[5000000])]
+        pairs = [self.EchoPair(self.EA2, self.EC1, sizes=[2000000])]
         result = self.do_tcp_echo_n_routers(name, pairs)
         if result is not None:
             print(result)
