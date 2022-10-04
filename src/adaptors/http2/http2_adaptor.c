@@ -3049,6 +3049,12 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
     }
+    case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
+        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
+        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
+               conn->conn_id, drained_buffers);
+    } break;
     case PN_RAW_CONNECTION_READ: {
     	// We don't want to read when we are q2 blocked.
     	if (conn->q2_blocked) {

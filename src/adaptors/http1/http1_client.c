@@ -467,6 +467,12 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         _handle_conn_need_read_buffers(hconn);
         break;
     }
+    case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
+        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
+        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
+               hconn->conn_id, drained_buffers);
+    } break;
     case PN_RAW_CONNECTION_READ: {
         if (!hconn->q2_blocked) {
             int error = _handle_conn_read_event(hconn);
