@@ -21,7 +21,7 @@
 
 #include "dispatch_private.h"
 #include "timer_private.h"
-#include "adaptor_common.h"
+#include "adaptors/adaptor_common.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
