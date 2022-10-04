@@ -19,9 +19,8 @@
 
 #include "tcp_adaptor.h"
 
-#include "adaptor_buffer.h"
-#include "adaptor_common.h"
-#include "adaptor_listener.h"
+#include "adaptors/adaptor_buffer.h"
+#include "adaptors/adaptor_listener.h"
 #include "delivery.h"
 
 #include "qpid/dispatch/alloc_pool.h"

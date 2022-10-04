@@ -18,7 +18,7 @@
  */
 
 #include "adaptors/http1/http1_private.h"
-#include "adaptors/tcp_adaptor.h"
+#include "adaptors/tcp/tcp_adaptor.h"
 #include "agent_address.h"
 #include "agent_config_address.h"
 #include "agent_config_auto_link.h"
