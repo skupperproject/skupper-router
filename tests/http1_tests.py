@@ -23,7 +23,6 @@ import uuid
 import weakref
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
-from http.client import HTTPException
 from threading import Thread, Event
 from time import sleep, time
 
@@ -56,6 +55,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _execute_request(self, tests):
         for req, resp, val in tests:
             if req.target == self.path:
+                self.server.logger.log(f"target={req.target}")
                 req.rx_count += 1
                 xhdrs = None
                 if "test-echo" in self.headers:
@@ -65,19 +65,26 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if not isinstance(resp, list):
                     resp = [resp]
                 for r in resp:
+                    octets = len(r.body) if r.body else 0
+                    self.server.logger.log(f"sending response: {r.status}: {r.reason} {octets} octets")
                     r.send_response(self, extra_headers=xhdrs)
+                self.server.logger.log(f"target={req.target} complete!")
                 self.server.request_count += 1
                 return
+        self.server.logger.log(f"request failed: {self.path} not found")
         self.send_error(404, "Not Found")
 
     def do_GET(self):
+        self.server.logger.log("Executing GET request")
         self._execute_request(self.server.system_tests["GET"])
 
     def do_HEAD(self):
+        self.server.logger.log("Executing HEAD request")
         self._execute_request(self.server.system_tests["HEAD"])
 
     def do_POST(self):
         if self.path == "/SHUTDOWN":
+            self.server.logger.log("SHUTDOWN request received!")
             self.send_response(200, "OK")
             self.send_header("Content-Length", "13")
             self.end_headers()
@@ -86,9 +93,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.close_connection = True  # server will close connection from router
             self.server.server_killed = True  # server will not accept a reconnect
             return
+        self.server.logger.log("Executing POST request")
         self._execute_request(self.server.system_tests["POST"])
 
     def do_PUT(self):
+        self.server.logger.log("Executing PUT request")
         self._execute_request(self.server.system_tests["PUT"])
 
     # these overrides just quiet the test output
@@ -109,6 +118,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         for key, value in self.headers.items():
             if key.lower() == 'content-length':
+                self.server.logger.log(f"reading {value} body octets")
                 return self.rfile.read(int(value))
 
             if key.lower() == 'transfer-encoding'  \
@@ -117,12 +127,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 while True:
                     header = self.rfile.readline().strip().split(b';')[0]
                     hlen = int(header, base=16)
+                    self.server.logger.log(f"reading {hlen} chunk octets")
                     if hlen > 0:
                         data = self.rfile.read(hlen + 2)  # 2 = \r\n
                         body += data[:-2]
                     else:
                         self.rfile.readline()  # discard last \r\n
                         break
+                self.server.logger.log(f"body read: {len(body)} octets")
                 return body
         return b''
 
@@ -137,13 +149,14 @@ class RequestHandler10(RequestHandler):
 class MyHTTPServer(HTTPServer):
     """Adds a switch to the HTTPServer to allow it to exit gracefully"""
 
-    def __init__(self, addr, handler_cls, testcases):
+    def __init__(self, addr, handler_cls, testcases, logger):
         super().__init__(addr, handler_cls)
         self._client_sockets: List[socket.socket] = []
 
         self.server_killed = False
         self.system_tests = testcases
         self.request_count = 0
+        self.logger = logger
 
     def get_request(self) -> Tuple[socket.socket, Any]:
         """Remember the client socket"""
@@ -173,15 +186,15 @@ class ThreadedTestClient:
     """
 
     def __init__(self, tests, port, repeat=1, wait=True, timeout=TIMEOUT):
+        self.error = None
         self._id = uuid.uuid4().hex
         self._conn_addr = ("127.0.0.1:%s" % port)
         self._tests = tests
         self._repeat = repeat
+        self._count = 0
         self._logger = Logger(title="TestClient: %s" % self._id,
                               print_to_console=False)
         self._thread = Thread(target=self._run, args=(wait, timeout), daemon=True)
-        self.error = None
-        self.count = 0
         self._thread.start()
 
     def _run(self, wait, timeout):
@@ -215,7 +228,7 @@ class ThreadedTestClient:
                         self._logger.log("TestClient getting %s response" % op)
                         try:
                             rsp = client.getresponse()
-                        except HTTPException as exc:
+                        except Exception as exc:
                             self._logger.log("TestClient response failed: %s" % exc)
                             self.error = str(exc)
                             return
@@ -234,19 +247,28 @@ class ThreadedTestClient:
                                                  % "body present!")
                                 self.error = "error: body present!"
                                 return
-                        self.count += 1
+                        self._count += 1
                         self._logger.log("TestClient request %s %s completed!" %
                                          (op, req.target))
         finally:
             client.close()
             self._logger.log("TestClient to %s closed" % self._conn_addr)
 
-    def wait(self, timeout=TIMEOUT):
+    def wait(self, timeout=TIMEOUT, dump_on_error=True):
         self._thread.join(timeout=timeout)
         self._logger.log("TestClient %s shut down" % self._conn_addr)
+        if dump_on_error and self.error:
+            self.dump_log()
 
     def dump_log(self):
         self._logger.dump()
+
+    def check_count(self, expected_count):
+        if expected_count != self._count:
+            msg = f"Expected {expected_count} requests, got {self._count}"
+            self._logger.log(msg)
+            self.dump_log()
+            raise AssertionError(msg)
 
 
 class TestServer:
@@ -255,8 +277,9 @@ class TestServer:
     _active_servers: Mapping[int, 'TestServer'] = weakref.WeakValueDictionary()
 
     def __init__(self, server_port, client_port, tests, handler_cls=None):
-        self.request_count = 0
-        self._logger = Logger(title="TestServer", print_to_console=False)
+        self._request_count = 0
+        self._logger = Logger(title=f"TestServer:{server_port}",
+                              print_to_console=False)
         self._client_port = client_port
         self._server_addr = ("", server_port)
         self._server_error = None
@@ -300,8 +323,7 @@ class TestServer:
     def _run(self, tests, handler_cls):
         self._logger.log("TestServer listening on %s:%s" % self._server_addr)
 
-        with MyHTTPServer(self._server_addr, handler_cls, tests) as server:
-
+        with MyHTTPServer(self._server_addr, handler_cls, tests, self._logger) as server:
             server.allow_reuse_address = True
             server.timeout = TIMEOUT
             server.server_killed = False
@@ -318,7 +340,7 @@ class TestServer:
                     # thread context:
                     self._server_error = exc
                     server.server_killed = True
-            self.request_count = server.request_count
+            self._request_count = server.request_count
             self._logger.log("TestServer %s:%s closed" % self._server_addr)
 
     def wait(self, timeout=TIMEOUT):
@@ -328,12 +350,22 @@ class TestServer:
         if self._thread.is_alive():
             # should not happen unless the shutdown request failed due to
             # a router error
-            logging.log(logging.ERROR, "Failed to shutdown test http.server")
+            logging.log(logging.ERROR, "Failed to shutdown HTTP/1 TestServer")
             self._logger.dump()
             raise RuntimeError("HTTP/1 TestServer failed to shut down")
         if self._server_error:
             self._logger.dump()
             raise RuntimeError("HTTP/1 TestServer fatal exception") from self._server_error
+
+    def dump_log(self):
+        self._logger.dump()
+
+    def check_count(self, expected_count):
+        if expected_count != self._request_count:
+            msg = f"Expected {expected_count} requests, got {self._request_count}"
+            self._logger.log(msg)
+            self.dump_log()
+            raise AssertionError(msg)
 
     def _send_shutdown_request(self):
         """Sends a POST request instructing the test HTTPServer to shut down.
@@ -449,8 +481,7 @@ def http1_ping(sport, cport):
     with TestServer.new_server(sport, cport, TEST) as server:
         client = ThreadedTestClient(tests=TEST, port=cport)
         client.wait()
-
-    return client.count, client.error
+        client.check_count(1)
 
 
 class ResponseMsg:
@@ -651,19 +682,12 @@ class CommonHttp1Edge2EdgeTest:
                                                   repeat=repeat_ct))
                 for client in clients:
                     client.wait()
-                    try:
-                        self.assertIsNone(client.error)
-                        self.assertEqual(repeat_ct * REQ_CT, client.count)
-                    except Exception:
-                        client.dump_log()
-                        raise
+                    client.check_count(repeat_ct * REQ_CT)
 
             server11.wait()
-            self.assertEqual(client_ct * repeat_ct * REQ_CT,
-                             server11.request_count)
+            server11.check_count(client_ct * repeat_ct * REQ_CT)
             server10.wait()
-            self.assertEqual(client_ct * repeat_ct * REQ_CT,
-                             server10.request_count)
+            server10.check_count(client_ct * repeat_ct * REQ_CT)
 
     def test_02_credit_replenish(self):
         """
@@ -692,8 +716,7 @@ class CommonHttp1Edge2EdgeTest:
                                         self.http_listener11_port,
                                         repeat=300)
             client.wait()
-            self.assertIsNone(client.error)
-            self.assertEqual(300, client.count)
+            client.check_count(300)
 
     def test_03_server_reconnect(self):
         """
@@ -725,8 +748,7 @@ class CommonHttp1Edge2EdgeTest:
                                         self.http_listener11_port,
                                         repeat=2)
             client.wait()
-            self.assertIsNone(client.error)
-            self.assertEqual(2, client.count)
+            client.check_count(2)
 
         # server has been closed due to exiting the with block (simulate server
         # loss).  Fire up a client which should be granted credit since the
@@ -744,8 +766,7 @@ class CommonHttp1Edge2EdgeTest:
                                    self.http_listener11_port, TESTS) as server:
 
             client.wait()
-            self.assertIsNone(client.error)
-            self.assertEqual(2, client.count)
+            client.check_count(2)
 
     def test_04_server_pining_for_the_fjords(self):
         """
@@ -775,8 +796,7 @@ class CommonHttp1Edge2EdgeTest:
 
             client = ThreadedTestClient(TESTS, self.http_listener11_port)
             client.wait()
-            self.assertIsNone(client.error)
-            self.assertEqual(1, client.count)
+            client.check_count(1)
 
         # After the server has exited issue client requests. These requests
         # will be held on the server's outgoing links until they expire (2.5
@@ -797,8 +817,7 @@ class CommonHttp1Edge2EdgeTest:
 
         client = ThreadedTestClient(TESTS_FAIL, self.http_listener11_port)
         client.wait()
-        self.assertIsNone(client.error)
-        self.assertEqual(1, client.count)
+        client.check_count(1)
 
         # ensure links recover once the server re-appears
         with TestServer.new_server(self.http_server11_port,
@@ -807,8 +826,7 @@ class CommonHttp1Edge2EdgeTest:
 
             client = ThreadedTestClient(TESTS, self.http_listener11_port)
             client.wait()
-            self.assertIsNone(client.error)
-            self.assertEqual(1, client.count)
+            client.check_count(1)
 
     def test_05_large_streaming_msg(self):
         """
@@ -883,15 +901,13 @@ class CommonHttp1Edge2EdgeTest:
                                           self.http_listener11_port,
                                           repeat=2)
             client11.wait()
-            self.assertIsNone(client11.error)
-            self.assertEqual(4, client11.count)
+            client11.check_count(4)
 
             client10 = ThreadedTestClient(TESTS_10,
                                           self.http_listener10_port,
                                           repeat=2)
             client10.wait()
-            self.assertIsNone(client10.error)
-            self.assertEqual(4, client10.count)
+            client10.check_count(4)
 
 
 class CommonHttp1OneRouterTest:

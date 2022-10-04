@@ -146,10 +146,7 @@ class Http1AdaptorManagementTest(TestCase):
         self.assertEqual(1, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
         self.assertEqual(1, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
 
-        count, error = http1_ping(sport=self.http_server_port,
-                                  cport=self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+        http1_ping(sport=self.http_server_port, cport=self.http_listener_port)
 
         # now check the interior router for the closest/http1Service address
         self.i_router.wait_address("closest/http1Service", subscribers=1)
@@ -218,10 +215,7 @@ class Http1AdaptorManagementTest(TestCase):
         self.assertEqual(1, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
         self.assertEqual(1, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
 
-        count, error = http1_ping(sport=self.http_server_port,
-                                  cport=self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+        http1_ping(sport=self.http_server_port, cport=self.http_listener_port)
 
         self.i_router.wait_address("closest/http1Service", subscribers=1)
 
@@ -574,16 +568,12 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                                   + b'Bad Server')
                 self.request_sent = True
 
-        count, error = http1_ping(self.http_server_port,
-                                  self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+        http1_ping(self.http_server_port, self.http_listener_port)
+
         server = UnsolicitedResponse('127.0.0.1', self.http_server_port)
         self.assertTrue(server.request_sent)
-        count, error = http1_ping(self.http_server_port,
-                                  self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+
+        http1_ping(self.http_server_port, self.http_listener_port)
 
     def test_02_bad_request_message(self):
         """
@@ -642,10 +632,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             # self.assertEqual(1, ts.rejected);
 
         # verify router is still sane:
-        count, error = http1_ping(self.http_server_port,
-                                  self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+        http1_ping(self.http_server_port, self.http_listener_port)
 
     def test_03_bad_response_message(self):
         """
@@ -679,7 +666,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                              message=resp)
         ts.wait()
         self.assertEqual(1, ts.rejected)
-        client.wait()
+        client.wait(dump_on_error=False)
         self.assertIsNotNone(client.error)
 
         # missing application properties
@@ -695,7 +682,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                              message=resp)
         ts.wait()
         self.assertEqual(1, ts.rejected)
-        client.wait()
+        client.wait(dump_on_error=False)
         self.assertIsNotNone(client.error)
 
         # no status application property
@@ -711,7 +698,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                              message=resp)
         ts.wait()
         self.assertEqual(1, ts.rejected)
-        client.wait()
+        client.wait(dump_on_error=False)
         self.assertIsNotNone(client.error)
 
         # TODO: fix body parsing (returns NEED_MORE)
@@ -735,10 +722,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         sleep(0.5)  # fudge factor allow socket close to complete
 
         # verify router is still sane:
-        count, error = http1_ping(self.http_server_port,
-                                  self.http_listener_port)
-        self.assertIsNone(error)
-        self.assertEqual(1, count)
+        http1_ping(self.http_server_port, self.http_listener_port)
 
     def test_04_client_request_close(self):
         """
