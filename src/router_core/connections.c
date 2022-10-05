@@ -1653,6 +1653,8 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
             qdr_add_connection_ref(&core->streaming_connections, conn);
             conn->has_streaming_links = true;
         }
+        qd_log(core->log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Created new outgoing streaming link %s",
+               conn->identity, out_link->identity, out_link->name);
     }
     return out_link;
 }
