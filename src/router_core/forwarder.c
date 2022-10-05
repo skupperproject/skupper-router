@@ -94,6 +94,8 @@ static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_conn
     if (out_link) {
         DEQ_REMOVE_HEAD_N(STREAMING_POOL, conn->streaming_link_pool);
         out_link->in_streaming_pool = false;
+        qd_log(core->log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Taking streaming link %s from free pool",
+               conn->identity, out_link->identity, out_link->name);
     } else {
         // no free links - create a new one
         out_link = qdr_connection_new_streaming_link_CT(core, conn);

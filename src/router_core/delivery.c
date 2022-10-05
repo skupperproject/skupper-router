@@ -1051,6 +1051,7 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
 
         qdr_link_t *peer_link = qdr_delivery_link(peer);
         if (!!peer_link) {
+            bool reuse_link = false;
             sys_mutex_lock(&peer_link->conn->work_lock);
             qdr_link_work_t *work     = peer->link_work;
             bool             activate = false;
@@ -1063,6 +1064,7 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
                     // indefinitely by the current message.
                     DEQ_INSERT_TAIL_N(STREAMING_POOL, peer_link->conn->streaming_link_pool, peer_link);
                     peer_link->in_streaming_pool = true;
+                    reuse_link                   = true;
                 }
             }
 
@@ -1082,6 +1084,10 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
                 }
             }
             sys_mutex_unlock(&peer_link->conn->work_lock);
+
+            if (reuse_link)
+                qd_log(core->log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Returning streaming link %s to free pool",
+                       peer_link->conn->identity, peer_link->identity, peer_link->name);
 
             if (activate)
                 qdr_connection_activate_CT(core, peer_link->conn);
