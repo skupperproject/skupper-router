@@ -1576,6 +1576,7 @@ static void qdr_inter_edge_connection_setup_CT(qdr_core_t *core, qdr_connection_
     if (edge_peer->primary_conn == 0) {
         edge_peer->primary_conn = conn;
         qdr_inter_edge_peer_activate_CT(core, edge_peer);
+        qdrc_event_conn_raise(core, QDRC_EVENT_CONN_MESH_PEER_ESTABLISHED, conn);
     }
 }
 
@@ -1588,8 +1589,10 @@ static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connectio
         qdr_del_connection_ref(&edge_peer->connections, conn);
         if (DEQ_SIZE(edge_peer->connections) > 0) {
             if (edge_peer->primary_conn == conn) {
+                qdrc_event_conn_raise(core, QDRC_EVENT_CONN_MESH_PEER_LOST, conn);
                 edge_peer->primary_conn = DEQ_HEAD(edge_peer->connections)->conn;
                 qdr_inter_edge_peer_activate_CT(core, edge_peer);
+                qdrc_event_conn_raise(core, QDRC_EVENT_CONN_MESH_PEER_ESTABLISHED, edge_peer->primary_conn);
             }
         } else {
             qd_log(core->log, QD_LOG_INFO, "Edge peer lost: %s", edge_peer->identity);
