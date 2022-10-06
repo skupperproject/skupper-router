@@ -258,6 +258,17 @@ static void qdr_forward_drop_presettled_CT_LH(qdr_core_t *core, qdr_link_t *link
 
 void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *out_link, qdr_delivery_t *out_dlv)
 {
+    //
+    // If we are an edge router and the outgoing link is an edge connection to the interior,
+    // the message needs to be annotated with this edge's mesh identifier.  This will be used
+    // by the interior network to prevent the message from being looped back down to this mesh.
+    //
+    if (core->router_mode == QD_ROUTER_MODE_EDGE
+        && out_link->conn->role == QDR_ROLE_EDGE_CONNECTION
+        && core->edge_mesh_identifier[0] != '\0') {
+        qd_message_set_ingress_mesh(out_dlv->msg, core->edge_mesh_identifier);
+    }
+
     sys_mutex_lock(&out_link->conn->work_lock);
 
     //
@@ -444,11 +455,21 @@ static uint8_t qdr_forward_effective_priority(qd_message_t *msg, qdr_address_t *
  */
 static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *out_link)
 {
-    qdr_link_t *link = in_dlv ? safe_deref_qdr_link_t(in_dlv->link_sp) : 0;
-    return (in_dlv
-            && link
-            && ((in_dlv->via_edge && link->conn == out_link->conn)
-                || (link->conn->role == QDR_ROLE_INTER_EDGE && out_link->proxy)));
+    qdr_link_t *link      = in_dlv ? safe_deref_qdr_link_t(in_dlv->link_sp) : 0;
+    bool        mesh_loop = false;
+
+    if (!in_dlv || !link) {
+        return false;
+    }
+
+    if (out_link->conn->role == QDR_ROLE_EDGE_CONNECTION && out_link->conn->edge_mesh_id[0] != '\0') {
+        qd_parsed_field_t *mesh_id = qd_message_get_ingress_mesh(in_dlv->msg);
+        mesh_loop = !!mesh_id && qd_iterator_equal_n(qd_parse_raw(mesh_id), (unsigned char*) out_link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+    }
+
+    return (((in_dlv->via_edge && link->conn == out_link->conn)
+              || mesh_loop
+              || (link->conn->role == QDR_ROLE_INTER_EDGE && out_link->proxy)));
 }
 
 
