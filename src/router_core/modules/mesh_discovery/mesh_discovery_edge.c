@@ -23,6 +23,9 @@
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/discriminator.h"
+#include "qpid/dispatch/alloc.h"
+#include "qpid/dispatch/router_core.h"
+#include "qpid/dispatch/protocol_adaptor.h"
 
 #include <stdio.h>
 
@@ -56,10 +59,9 @@ static struct {
     int                        interior_sender_credit; // Credits available to send on the interior_sender
     bool                       interior_needs_update;  // If true, the interior is due an update
     mesh_peer_list_t           peers;                  // List of active connected mesh peers
-    long                       my_negotiation_ordinal;                      // This router's negotiating ordinal
-    char                       my_mesh_id[QD_DISCRIMINATOR_BYTES];          // This router's proposed mesh ID
-    long                       winning_negotiation_ordinal;                 // The winning ordinal in the negotiation
-    char                       winning_mesh_id[QD_DISCRIMINATOR_BYTES + 1]; // The winning mesh identifier (extra byte for terminating null for logging)
+    long                       my_negotiation_ordinal;             // This router's negotiating ordinal
+    char                       my_mesh_id[QD_DISCRIMINATOR_BYTES]; // This router's proposed mesh ID
+    long                       winning_negotiation_ordinal;        // The winning ordinal in the negotiation (the winning id is in *core)
 } state;
 
 
@@ -86,7 +88,7 @@ static void send_mesh_id_to_interior(void)
         qd_composed_field_t *content = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
         qd_compose_start_map(content);
         qd_compose_insert_symbol(content, QD_KEY_MESH_ID_ANNOUNCE_IDENTIFIER);
-        qd_compose_insert_string_n(content, state.winning_mesh_id, QD_DISCRIMINATOR_BYTES);
+        qd_compose_insert_string_n(content, state.core->edge_mesh_identifier, QD_DISCRIMINATOR_BYTES);
         qd_compose_end_map(content);
 
         qd_message_compose_2(msg, content, true);
@@ -98,7 +100,7 @@ static void send_mesh_id_to_interior(void)
         state.interior_sender_credit--;
         state.interior_needs_update = false;
 
-        qd_log(state.core->log, QD_LOG_INFO, "EDGE_MESH - Mesh identifier sent to Interior: %s", state.winning_mesh_id);
+        qd_log(state.core->log, QD_LOG_INFO, "EDGE_MESH - Mesh identifier sent to Interior: %s", state.core->edge_mesh_identifier);
     } else {
         state.interior_needs_update = true;
     }
@@ -147,7 +149,7 @@ static void start_negotiation(void)
     // Begin the process of negotiation.  Start by assuming we are the winner.
     //
     state.winning_negotiation_ordinal = state.my_negotiation_ordinal;
-    memcpy(state.winning_mesh_id, state.my_mesh_id, QD_DISCRIMINATOR_BYTES);
+    memcpy(state.core->edge_mesh_identifier, state.my_mesh_id, QD_DISCRIMINATOR_BYTES);
 
     //
     // If possible, send our present results to the interior
@@ -267,7 +269,7 @@ static void on_transfer(void *link_context, qdr_delivery_t *delivery, qd_message
                 // notify the interior.
                 //
                 state.winning_negotiation_ordinal = ordinal;
-                memcpy(state.winning_mesh_id, id, QD_DISCRIMINATOR_BYTES);
+                memcpy(state.core->edge_mesh_identifier, id, QD_DISCRIMINATOR_BYTES);
                 send_mesh_id_to_interior();
             }
         }
@@ -346,16 +348,12 @@ static void on_interior_connection_lost(qdr_connection_t *conn)
 static void on_connection_event(void *context, qdrc_event_t event, qdr_connection_t *conn)
 {
     switch(event) {
-    case QDRC_EVENT_CONN_OPENED:
-        if (conn->role == QDR_ROLE_INTER_EDGE) {
-            on_peer_connection_opened(conn);
-        }
+    case QDRC_EVENT_CONN_MESH_PEER_ESTABLISHED:
+        on_peer_connection_opened(conn);
         break;
 
-    case QDRC_EVENT_CONN_CLOSED:
-        if (conn->role == QDR_ROLE_INTER_EDGE) {
-            on_peer_connection_closed(conn);
-        }
+    case QDRC_EVENT_CONN_MESH_PEER_LOST:
+        on_peer_connection_closed(conn);
         break;
 
     case QDRC_EVENT_CONN_EDGE_ESTABLISHED:
@@ -384,7 +382,7 @@ static void mesh_discovery_edge_init_CT(qdr_core_t *core, void **module_context)
     ZERO(&state);
 
     state.core = core;
-    state.winning_mesh_id[QD_DISCRIMINATOR_BYTES] = '\0';
+    state.core->edge_mesh_identifier[QD_DISCRIMINATOR_BYTES] = '\0';
 
     //
     // Bind to the static address QD_TERMINUS_EDGE_MESH_PING.
@@ -400,8 +398,8 @@ static void mesh_discovery_edge_init_CT(qdr_core_t *core, void **module_context)
     // Subscribe to core events.
     //
     state.event_sub = qdrc_event_subscribe_CT(core,
-                                              QDRC_EVENT_CONN_OPENED
-                                              | QDRC_EVENT_CONN_CLOSED
+                                              QDRC_EVENT_CONN_MESH_PEER_ESTABLISHED
+                                              | QDRC_EVENT_CONN_MESH_PEER_LOST
                                               | QDRC_EVENT_CONN_EDGE_ESTABLISHED
                                               | QDRC_EVENT_CONN_EDGE_LOST,
                                               on_connection_event,
