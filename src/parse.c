@@ -707,14 +707,16 @@ qd_parsed_field_t *qd_parse_value_by_key(qd_parsed_field_t *field, const char *k
 const char *qd_parse_router_annotations(
     qd_buffer_field_t  *ra_field,
     qd_parsed_field_t **ra_ingress,
+    qd_parsed_field_t **ra_ingress_mesh,
     qd_parsed_field_t **ra_to_override,
     qd_parsed_field_t **ra_trace,
     qd_parsed_field_t **ra_flags)
 {
-    *ra_ingress     = 0;
-    *ra_to_override = 0;
-    *ra_trace       = 0;
-    *ra_flags       = 0;
+    *ra_ingress      = 0;
+    *ra_ingress_mesh = 0;
+    *ra_to_override  = 0;
+    *ra_trace        = 0;
+    *ra_flags        = 0;
 
     // ra_field should be pointing to the encoded RA list
     qd_amqp_field_t ra_list;
@@ -778,6 +780,16 @@ const char *qd_parse_router_annotations(
     }
     if (!all_str)
         return "Invalid router trace annotation: list contains non-string entries";
+
+    // index 4: ingress mesh id
+    if (ra_list.count >= 5) {
+        (*ra_ingress_mesh) = qd_parse_internal(&ra_fields, 0);
+        if (!qd_parse_ok(*ra_ingress_mesh)) {
+            return (*ra_ingress_mesh)->parse_error;
+        } else if (!qd_parse_is_string(*ra_ingress_mesh)) {
+            return "Invalid ingress-mesh annotation: wrong type";
+        }
+    }
 
     return 0;
 }

@@ -127,6 +127,7 @@ typedef struct {
     qd_parsed_field_t   *ra_pf_to_override;              // optional dest address override
     qd_parsed_field_t   *ra_pf_trace;                    // the fields from the trace list
     qd_parsed_field_t   *ra_pf_flags;                    // misc control flags
+    qd_parsed_field_t   *ra_pf_ingress_mesh;             // mesh_id of ingress edge router
     bool                 ra_disabled;                    // true: link routing - no router annotations involved.
     bool                 ra_parsed;
 
@@ -158,6 +159,7 @@ struct qd_message_pvt_t {
     qd_message_content_t          *content;         // Singleton content shared by reference between
                                                     //  incoming and all outgoing copies
     char                          *ra_to_override;  // new outgoing value for to-override annotation
+    char                          *ra_ingress_mesh; // new outgoing value for ingress_mesh annotation
     uint32_t                       ra_flags;        // new outgoing value for flag annotation
     bool                           strip_annotations_in;
     bool                           ra_sent;         // false == router annotation section not yet sent

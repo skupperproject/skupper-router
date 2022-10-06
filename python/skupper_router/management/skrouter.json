@@ -1797,6 +1797,10 @@
                     "type": ["in", "out"]
                 },
                 "role": {"type": "string"},
+                "meshId": {
+                    "description": "If this is an edge connection on an interior router, the meshId is the identifier of the connected edge-mesh.",
+                    "type": "string"
+                },
                 "isAuthenticated": {
                     "description": "Indicates whether the identity of the connection's user is authentic.",
                     "type": "boolean"

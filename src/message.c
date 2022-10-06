@@ -32,6 +32,7 @@
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/discriminator.h"
 
 #include <proton/object.h>
 
@@ -1073,6 +1074,7 @@ void qd_message_free(qd_message_t *in_msg)
     qd_message_q2_unblocker_t  q2_unblock = {0};
 
     free(msg->ra_to_override);
+    free(msg->ra_ingress_mesh);
 
     sys_atomic_destroy(&msg->send_complete);
 
@@ -1126,6 +1128,8 @@ void qd_message_free(qd_message_t *in_msg)
             qd_parse_free(content->ra_pf_ingress);
         if (content->ra_pf_to_override)
             qd_parse_free(content->ra_pf_to_override);
+        if (content->ra_pf_ingress_mesh)
+            qd_parse_free(content->ra_pf_ingress_mesh);
         if (content->ra_pf_trace)
             qd_parse_free(content->ra_pf_trace);
         if (content->ra_pf_flags)
@@ -1215,6 +1219,7 @@ const char *qd_message_parse_router_annotations(qd_message_t *in_msg)
 
     const char *err = qd_parse_router_annotations(&ra_list,
                                                   &content->ra_pf_ingress,
+                                                  &content->ra_pf_ingress_mesh,
                                                   &content->ra_pf_to_override,
                                                   &content->ra_pf_trace,
                                                   &content->ra_pf_flags);
@@ -1235,6 +1240,17 @@ void qd_message_set_to_override_annotation(qd_message_t *in_msg, const char *to_
     qd_message_pvt_t *msg = (qd_message_pvt_t*) in_msg;
     free(msg->ra_to_override);
     msg->ra_to_override = to_field ? qd_strdup(to_field) : 0;
+}
+
+
+void qd_message_set_ingress_mesh(qd_message_t *in_msg, const char *mesh_identifier)
+{
+    qd_message_pvt_t *msg = (qd_message_pvt_t*) in_msg;
+    free(msg->ra_ingress_mesh);
+    if (!!mesh_identifier) {
+        msg->ra_ingress_mesh = (char*) malloc(QD_DISCRIMINATOR_BYTES);
+        memcpy(msg->ra_ingress_mesh, mesh_identifier, QD_DISCRIMINATOR_BYTES);
+    }
 }
 
 
@@ -1723,6 +1739,16 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
         }
         qd_compose_insert_string(ra, qd_router_id());
         qd_compose_end_list(ra);
+    }
+
+    // index 4: edge-mesh identifier
+    if (!!msg->ra_ingress_mesh) {
+        qd_compose_insert_string(ra, msg->ra_ingress_mesh);
+    } else if (!!content->ra_pf_ingress_mesh) {
+        qd_buffer_field_t bf = qd_parse_typed_field(content->ra_pf_ingress_mesh);
+        qd_compose_insert_buffer_field(ra, &bf, 1);
+    } else {
+        // qd_compose_insert_null(ra);   // Un-comment this line if more fields are added after this one.
     }
 
     qd_compose_end_list(ra);
@@ -2786,6 +2812,12 @@ qd_parsed_field_t *qd_message_get_to_override(qd_message_t *msg)
 qd_parsed_field_t *qd_message_get_trace(qd_message_t *msg)
 {
     return ((qd_message_pvt_t*) msg)->content->ra_pf_trace;
+}
+
+
+qd_parsed_field_t *qd_message_get_ingress_mesh(qd_message_t *msg)
+{
+    return ((qd_message_pvt_t*) msg)->content->ra_pf_ingress_mesh;
 }
 
 
