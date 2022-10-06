@@ -37,7 +37,7 @@ class RouterTest(TestCase):
         def router(name, connection):
 
             config = [
-                ('router', {'mode': 'interior', 'id': name}),
+                ('router', {'mode': 'interior', 'id': name, "helloMaxAgeSeconds": '10'}),
                 ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'spread', 'distribution': 'balanced'}),
@@ -65,14 +65,16 @@ class RouterTest(TestCase):
         self.assertIsNone(test.error)
 
     def test_02_dynamic_target_one_router_test(self):
-        test = DynamicTargetTest(self.routers[0].addresses[0], self.routers[0].addresses[0])
+        test_name = "test_02_dynamic_target_one_router_test"
+        test = DynamicTargetTest(self.routers[0].addresses[0], self.routers[0].addresses[0], container_id=test_name)
         test.run()
         if test.skip:
             self.skipTest(test.skip)
         self.assertIsNone(test.error)
 
     def test_03_dynamic_target_two_router_test(self):
-        test = DynamicTargetTest(self.routers[0].addresses[0], self.routers[1].addresses[0])
+        test_name = "test_03_dynamic_target_two_router_test"
+        test = DynamicTargetTest(self.routers[0].addresses[0], self.routers[1].addresses[0], container_id=test_name)
         test.run()
         if test.skip:
             self.skipTest(test.skip)
@@ -163,10 +165,11 @@ class DynamicTarget(LinkOption):
 
 
 class DynamicTargetTest(MessagingHandler):
-    def __init__(self, sender_host, receiver_host):
+    def __init__(self, sender_host, receiver_host, container_id=None):
         super(DynamicTargetTest, self).__init__()
         self.sender_host   = sender_host
         self.receiver_host = receiver_host
+        self.container_id = container_id
 
         self.error         = None
         self.skip          = None
@@ -175,6 +178,7 @@ class DynamicTargetTest(MessagingHandler):
         self.sender        = None
         self.receiver      = None
         self.address       = None
+        self.timer         = None
 
         self.count      = 10
         self.n_sent     = 0
@@ -221,7 +225,13 @@ class DynamicTargetTest(MessagingHandler):
             self.timer.cancel()
 
     def run(self):
-        Container(self).run()
+        container = Container(self)
+        # When the router log is large, I found it easy to search the log for a particular test if that
+        # test name is provided as the container id. The container ids can be found in the AMQP open
+        # and hence easily searchable.
+        if self.container_id:
+            container.container_id = self.container_id
+        container.run()
 
 
 if __name__ == '__main__':
