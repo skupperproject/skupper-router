@@ -280,6 +280,7 @@ qd_parsed_field_t *qd_parse_value_by_key(qd_parsed_field_t *field, const char *k
 const char *qd_parse_router_annotations(
     qd_buffer_field_t  *ra_field,
     qd_parsed_field_t **ra_ingress,
+    qd_parsed_field_t **ra_ingress_mesh,
     qd_parsed_field_t **ra_to_override,
     qd_parsed_field_t **ra_trace,
     qd_parsed_field_t **ra_flags);

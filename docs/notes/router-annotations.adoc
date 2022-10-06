@@ -47,6 +47,11 @@ the *to* field in the message properties section.
 a *streaming message*. This provides a hint to the downstream router
 to avoid unnecessary buffering of the message before forwarding it.
 
+* The identifier for the ingress-mesh.  This is added by the ingress
+router for the message when that router is an edge router in an edge-mesh.
+This identifier is used to prevent deliveries from looping back to an
+edge-mesh via a different connection or router.
+
 == Implementation Goals
 
 The implementation should prioritize minimizing the overhead of parsing
@@ -94,7 +99,8 @@ The definition of this custom section follows:
     <field name="flags" type="uint" default="0" mandatory="true"/>
     <field name="to-override" type="str32-utf8" mandatory="false"/>
     <field name="ingress-router" type="str8-utf8" mandatory="false"/>
-    <field name="trace" type="list" mandatory="true"/>
+    <field name="trace" type="list" mandatory="false"/>
+    <field name="ingress-mesh" type="str8-utf8" mandatory="false"/>
  </type>
 
 * The flags field is used for passing boolean flags.  The least
@@ -123,7 +129,7 @@ be a null list (AMQP list0, code 0x45) when sent by an edge router
 
 An edge router will include a router annotations section in all
 messages sent to an interior router. However the edge router will only
-populate the flags and to-override entries.  The ingress-router field
+populate the flags, to-override, and ingress-mesh entries.  The ingress-router field
 MUST be set to the AMQP null value (code 0x40). The trace list must be
 sent as an empty list.
 

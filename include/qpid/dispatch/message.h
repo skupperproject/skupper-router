@@ -168,6 +168,15 @@ const char *qd_message_parse_router_annotations(qd_message_t *msg);
 void qd_message_set_to_override_annotation(qd_message_t *msg, const char *to_field);
 
 /**
+ * Set the value for the ingress_mesh annotation for this message.
+ *
+ * @param msg Pointer to an outgoing message.
+ * @param mesh_identifier Pointer to a character string holding ascii characters and of
+ * a length equal to QD_DISCRIMINATOR_BYTES.
+ */
+void qd_message_set_ingress_mesh(qd_message_t *msg, const char *mesh_identifier);
+
+/**
  * Classify the message as streaming.
  *
  * Marking a message as streaming will prevent downstream routers from manually
@@ -462,6 +471,14 @@ qd_parsed_field_t *qd_message_get_to_override(qd_message_t *msg);
  * @return the parsed field
  */
 qd_parsed_field_t *qd_message_get_trace(qd_message_t *msg);
+
+/**
+ * Accessor for ingress edge-mesh annotation
+ *
+ * @param msg A pointer to the received message
+ * @return the parsed field
+ */
+qd_parsed_field_t *qd_message_get_ingress_mesh(qd_message_t *msg);
 
 /**
  * Should the message be discarded.

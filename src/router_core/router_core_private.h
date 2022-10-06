@@ -814,6 +814,7 @@ struct qdr_core_t {
     qdr_link_list_t              open_links;
     qdr_connection_ref_list_t    streaming_connections;
     qdr_edge_peer_list_t         edge_peers;
+    char                         edge_mesh_identifier[QD_DISCRIMINATOR_BYTES + 1];
 
     qdrc_attach_addr_lookup_t  addr_lookup_handler;
     void                      *addr_lookup_context;

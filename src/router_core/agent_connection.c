@@ -48,6 +48,7 @@
 #define QDR_CONNECTION_UPTIME_SECONDS        21
 #define QDR_CONNECTION_LAST_DLV_SECONDS      22
 #define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 23
+#define QDR_CONNECTION_MESH_ID               24
 
 
 const char * const QDR_CONNECTION_DIR_IN  = "in";
@@ -94,6 +95,7 @@ const char *qdr_connection_columns[] =
      "uptimeSeconds",
      "lastDlvSeconds",
      "enableProtocolTrace",
+     "meshId",
      0};
 
 const char *CONNECTION_TYPE = "io.skupper.router.connection";
@@ -303,6 +305,14 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         qd_compose_end_map(body);
     }
     break;
+
+    case QDR_CONNECTION_MESH_ID:
+        if (core->router_mode == QD_ROUTER_MODE_INTERIOR && conn->role == QDR_ROLE_EDGE_CONNECTION && conn->edge_mesh_id[0] != '\0') {
+            qd_compose_insert_string_n(body, conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+        } else {
+            qd_compose_insert_null(body);
+        }
+        break;
     }
 
     sys_mutex_unlock(&conn->connection_info->connection_info_lock);
