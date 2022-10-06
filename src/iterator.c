@@ -745,7 +745,43 @@ bool qd_iterator_equal(qd_iterator_t *iter, const unsigned char *string)
     // otherwise there raw field data.  Check for a match on the field and be sure
     // there is not anything left over in the iterator after the string.
     bool match = (in_field_data(iter)
-                  && iterator_field_equal(iter, string, strlen((char *)string))
+                  && iterator_field_equal(iter, string, strlen((char*) string))
+                  && iterator_at_end(iter));
+
+    qd_iterator_reset(iter);
+    return match;
+}
+
+
+bool qd_iterator_equal_n(qd_iterator_t *iter, const unsigned char *string, size_t n)
+{
+    if (!iter || qd_iterator_length(iter) != n) {
+        return false;
+    }
+
+    size_t remaining = n;
+    qd_iterator_reset(iter);
+
+    while (!in_field_data(iter) &&
+           *string &&
+           !iterator_at_end(iter)) {
+        if (*string != qd_iterator_octet(iter)) {
+            qd_iterator_reset(iter);
+            return false;
+        }
+        ++string;
+        --remaining;
+    }
+
+    if (remaining == 0 && iterator_at_end(iter)) {
+        qd_iterator_reset(iter);
+        return true;
+    }
+
+    // otherwise there raw field data.  Check for a match on the field and be sure
+    // there is not anything left over in the iterator after the string.
+    bool match = (in_field_data(iter)
+                  && iterator_field_equal(iter, string, remaining)
                   && iterator_at_end(iter));
 
     qd_iterator_reset(iter);

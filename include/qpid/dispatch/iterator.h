@@ -293,6 +293,17 @@ int qd_iterator_length(const qd_iterator_t *iter);
 bool qd_iterator_equal(qd_iterator_t *iter, const unsigned char *string);
 
 /**
+ * @brief Compare n bytes of the input string to the iterator's view.  Return true iff they are equal.
+ *
+ * Note: This function can be used to compare to strings that are not null-terminated.
+ *
+ * @param iter Any iterator
+ * @param string A byte array of at least n bytes
+ * @param n The number of bytes to be compared
+ */
+bool qd_iterator_equal_n(qd_iterator_t *iter, const unsigned char *string, size_t n);
+
+/**
  * Return true iff the string matches the characters at the current location in the view.
  * This function ignores octets beyond the length of the prefix.
  * This function does not alter the position of the iterator if the prefix does not match,
