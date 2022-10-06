@@ -63,16 +63,34 @@ static char* test_view_global_dns(void *context)
         return "ITER_VIEW_ALL failed";
     }
 
+    qd_iterator_reset_view(iter, ITER_VIEW_ALL);
+    if (!qd_iterator_equal_n(iter, (unsigned char*) "amqp://host/global/subxxxxy", 22)) {
+        qd_iterator_free(iter);
+        return "ITER_VIEW_ALL failed on equal_n";
+    }
+
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_NO_HOST);
     if (!qd_iterator_equal(iter, (unsigned char*) "global/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_NO_HOST failed";
     }
 
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_NO_HOST);
+    if (!qd_iterator_equal_n(iter, (unsigned char*) "global/subbbb", 10)) {
+        qd_iterator_free(iter);
+        return "ITER_VIEW_ADDRESS_NO_HOST failed on equal_n";
+    }
+
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
     if (!qd_iterator_equal(iter, (unsigned char*) "Mglobal/sub")) {
         qd_iterator_free(iter);
         return "ITER_VIEW_ADDRESS_HASH failed";
+    }
+
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
+    if (!qd_iterator_equal_n(iter, (unsigned char*) "Mglobal/subabc", 11)) {
+        qd_iterator_free(iter);
+        return "ITER_VIEW_ADDRESS_HASH failed on equal_n";
     }
 
     qd_iterator_free(iter);
