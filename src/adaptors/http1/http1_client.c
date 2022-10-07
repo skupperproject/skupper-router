@@ -1211,9 +1211,9 @@ static void _encode_multipart_response(_client_request_t *hreq)
                 break;
 
             case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
-                qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
-                       "[C%"PRIu64"][L%"PRIu64"] Ignoring incomplete body data in aggregated response.",
-                       hconn->conn_id, hconn->out_link_id);
+                qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+                       "[C%" PRIu64 "][L%" PRIu64 "] Ignoring incomplete body data in aggregated response%s.",
+                       hconn->conn_id, hconn->out_link_id, qd_message_is_Q2_blocked(msg) ? " (Q2 Blocked)" : "");
                 done = true;
                 break;  // wait for more
 
@@ -1531,8 +1531,8 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
 
         case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] body data need more",
-                   hconn->conn_id, hconn->out_link_id);
+                   "[C%" PRIu64 "][L%" PRIu64 "] body data incomplete, waiting for more%s.", hconn->conn_id,
+                   hconn->out_link_id, qd_message_is_Q2_blocked(msg) ? " (Q2 Blocked)" : "");
             return 0;  // wait for more
 
         case QD_MESSAGE_STREAM_DATA_INVALID:

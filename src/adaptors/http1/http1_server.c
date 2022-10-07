@@ -1554,6 +1554,9 @@ static void _encode_request_message(_server_request_t *hreq)
             break;
 
         case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
+            qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+                   "[C%" PRIu64 "][L%" PRIu64 "] body data incomplete, waiting for more%s.", hconn->conn_id,
+                   hconn->out_link_id, qd_message_is_Q2_blocked(msg) ? " (Q2 Blocked)" : "");
             return;  // wait for more
 
         case QD_MESSAGE_STREAM_DATA_INVALID:
