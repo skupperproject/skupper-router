@@ -630,11 +630,6 @@ static void _client_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
         return;
     }
 
-    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%"PRIu64"][L%"PRIu64"] %u response octets encoded",
-           hconn->conn_id, hconn->out_link_id, len);
-
-
     _client_response_msg_t *rmsg;
     if (hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
         // responses are decoded one at a time - the current response it at the
@@ -648,6 +643,9 @@ static void _client_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
         rmsg = DEQ_HEAD(hreq->responses);
     }
     assert(rmsg);
+    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+           "[C%"PRIu64"][L%"PRIu64"] Enqueued %u outgoing octets",
+           hconn->conn_id, hconn->out_link_id, len);
     qdr_http1_enqueue_buffer_list(&rmsg->out_data, blist, len);
 
     // if this happens to be the current outgoing response try writing to the
@@ -673,11 +671,6 @@ static void _client_tx_stream_data_cb(h1_codec_request_state_t *hrs, qd_message_
         return;
     }
 
-    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%"PRIu64"][L%"PRIu64"] Sending body data to client",
-           hconn->conn_id, hconn->out_link_id);
-
-
     _client_response_msg_t *rmsg;
     if (hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
         // responses are decoded one at a time - the current response it at the
@@ -691,6 +684,9 @@ static void _client_tx_stream_data_cb(h1_codec_request_state_t *hrs, qd_message_
         rmsg = DEQ_HEAD(hreq->responses);
     }
     assert(rmsg);
+    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+           "[C%"PRIu64"][L%"PRIu64"] Enqueued an outgoing body data",
+           hconn->conn_id, hconn->out_link_id);
     qdr_http1_enqueue_stream_data(&rmsg->out_data, stream_data);
 
     // if this happens to be the current outgoing response try writing to the
@@ -1191,7 +1187,7 @@ static void _encode_multipart_response(_client_request_t *hreq)
             case QD_MESSAGE_STREAM_DATA_BODY_OK:
 
                 qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                       "[C%"PRIu64"][L%"PRIu64"] Encoding response body data",
+                       "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_BODY_OK: response data body received",
                        hconn->conn_id, hconn->out_link_id);
 
                 if (h1_codec_tx_body(hreq->base.lib_rs, body_data)) {
@@ -1205,7 +1201,7 @@ static void _encode_multipart_response(_client_request_t *hreq)
             case QD_MESSAGE_STREAM_DATA_NO_MORE:
                 // indicate this message is complete
                 qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                       "[C%"PRIu64"][L%"PRIu64"] response message encoding completed",
+                       "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_NO_MORE: aggregated response message encode completed",
                        hconn->conn_id, hconn->out_link_id);
                 done = true;
                 break;
@@ -1506,7 +1502,7 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
         case QD_MESSAGE_STREAM_DATA_BODY_OK:
 
             qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] Encoding response body data",
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_BODY_OK: response body data received",
                    hconn->conn_id, hconn->out_link_id);
 
             if (h1_codec_tx_body(hreq->base.lib_rs, stream_data)) {
@@ -1525,19 +1521,19 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
         case QD_MESSAGE_STREAM_DATA_NO_MORE:
             // indicate this message is complete
             qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] response message encoding completed",
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_NO_MORE: response body data encode completed",
                    hconn->conn_id, hconn->out_link_id);
             return PN_ACCEPTED;
 
         case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%" PRIu64 "][L%" PRIu64 "] body data incomplete, waiting for more%s.", hconn->conn_id,
+                   "[C%" PRIu64 "][L%" PRIu64 "] STREAM_DATA_INCOMPLETE: waiting for more%s.", hconn->conn_id,
                    hconn->out_link_id, qd_message_is_Q2_blocked(msg) ? " (Q2 Blocked)" : "");
             return 0;  // wait for more
 
         case QD_MESSAGE_STREAM_DATA_INVALID:
             qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
-                   "[C%"PRIu64"][L%"PRIu64"] Rejecting corrupted body data.",
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_INVALID: Rejecting corrupted body data.",
                    hconn->conn_id, hconn->out_link_id);
             return PN_REJECTED;
         }
@@ -1707,7 +1703,8 @@ static void _write_pending_response(_client_request_t *hreq)
         if (rmsg && DEQ_HEAD(rmsg->out_data)) {
             uint64_t written = qdr_http1_write_out_data(hreq->base.hconn, &rmsg->out_data);
             hreq->base.out_http1_octets += written;
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %"PRIu64" octets written",
+            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                   "[C%"PRIu64"] %"PRIu64" octets written to client raw conn",
                    hreq->base.hconn->conn_id, written);
         }
     }

@@ -859,7 +859,7 @@ static void _server_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
         qd_buffer_list_free_buffers(blist);
     else {
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-               "[C%"PRIu64"][L%"PRIu64"] Sending %u octets to server",
+               "[C%"PRIu64"][L%"PRIu64"] Enqueued %u outgoing octets",
                hconn->conn_id, hconn->out_link_id, len);
         qdr_http1_enqueue_buffer_list(&hreq->out_data, blist, len);
     }
@@ -877,7 +877,7 @@ static void _server_tx_stream_data_cb(h1_codec_request_state_t *hrs, qd_message_
         qd_message_stream_data_release(stream_data);
     else {
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-               "[C%"PRIu64"][L%"PRIu64"] Sending body data to server",
+               "[C%"PRIu64"][L%"PRIu64"] Enqueued an outgoing body data",
                hconn->conn_id, hconn->out_link_id);
         qdr_http1_enqueue_stream_data(&hreq->out_data, stream_data);
     }
@@ -1529,7 +1529,7 @@ static void _encode_request_message(_server_request_t *hreq)
         case QD_MESSAGE_STREAM_DATA_BODY_OK: {
 
             qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] Encoding request body data",
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_BODY_OK: request data body received",
                    hconn->conn_id, hconn->out_link_id);
 
             if (h1_codec_tx_body(hreq->base.lib_rs, stream_data)) {
@@ -1548,20 +1548,20 @@ static void _encode_request_message(_server_request_t *hreq)
         case QD_MESSAGE_STREAM_DATA_NO_MORE:
             // indicate this message is complete
             qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] Request %p body data encode complete",
-                   hconn->conn_id, hconn->out_link_id, (void*) hreq);
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_NO_MORE: request body data encode complete",
+                   hconn->conn_id, hconn->out_link_id);
             hreq->request_dispo = PN_ACCEPTED;
             break;
 
         case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%" PRIu64 "][L%" PRIu64 "] body data incomplete, waiting for more%s.", hconn->conn_id,
+                   "[C%" PRIu64 "][L%" PRIu64 "] STREAM_DATA_INCOMPLETE: waiting for more%s.", hconn->conn_id,
                    hconn->out_link_id, qd_message_is_Q2_blocked(msg) ? " (Q2 Blocked)" : "");
             return;  // wait for more
 
         case QD_MESSAGE_STREAM_DATA_INVALID:
             qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
-                   "[C%"PRIu64"][L%"PRIu64"] Rejecting corrupted body data.",
+                   "[C%"PRIu64"][L%"PRIu64"] STREAM_DATA_INVALID: rejecting corrupted body data.",
                    hconn->conn_id, hconn->out_link_id);
             hreq->request_dispo = PN_REJECTED;
             break;
@@ -1737,7 +1737,7 @@ static void _write_pending_request(_server_request_t *hreq)
         hreq->base.out_http1_octets += written;
         if (written)
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] %"PRIu64" request octets written to server",
+                   "[C%"PRIu64"][L%"PRIu64"] %"PRIu64" octets written to server raw conn",
                    hreq->base.hconn->conn_id, hreq->base.hconn->out_link_id, written);
     }
 }
