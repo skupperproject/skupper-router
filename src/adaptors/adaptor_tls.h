@@ -86,6 +86,8 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
  * Encrypts a passed in single unencrypted qd_adaptor_buffer_t and populates the passed in qd_adaptor_buffer_list_t with
  * the encrypted buffers. Can be called with a zero unencrypted_buff during the initiation of TLS handshake when the
  * router is acting as the TLS client and needs to send out the initial hanshake frames.
+ * Also may need to be called at any time with zero buffers if required by the TLS protocol, not just during handshake, i.e.
+ * any time we need to process input from peer, there is a chance that extra protocol bytes get generated regardless of the presence of application output.
  *
  * @param tls - The qd_tls_t which contains the tls session information
  * @param encrypted_buff - a pointer to a single unencrypted qd_adaptor buffer
