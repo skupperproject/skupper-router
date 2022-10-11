@@ -104,7 +104,6 @@ endforeach()
 
 set(SYSTEM_TESTS_HTTP system_tests_http system_tests_websockets)
 
-set(SYSTEM_TESTS_HTTP2 system_tests_http2 system_tests_grpc system_tests_http2_tls)
 
 if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_POLICY})
   #nothing to do
@@ -116,6 +115,14 @@ if(DEFINED ENV{SKUPPER_SYSTEM_TEST_SKIP_DELIVERY_ABORT})
   #nothing to do
 else()
   set(SYSTEM_TESTS_DELIVERY_ABORT system_tests_delivery_abort)
+endif()
+
+# There are some bugs in the Proton TLS 0.37.0 code
+# We are not going to run any TLS tests when router is compiled with Proton 0.37.0 
+if(${Proton_VERSION} VERSION_LESS "0.38.0")
+  #nothing to do
+else()
+  set(SYSTEM_TESTS_ADAPTOR_TLS_TESTS system_tests_tcp_adaptor_tls system_tests_http2_tls)
 endif()
 
 # System test python modules
@@ -161,10 +168,12 @@ foreach(py_test_module
     system_tests_log_level_update
     system_tests_routing_protocol
     system_tests_open_properties
-    ${SYSTEM_TESTS_HTTP2}
+    system_tests_http2 
+    system_tests_grpc 
     system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_tcp_adaptor
+    ${SYSTEM_TESTS_ADAPTOR_TLS_TESTS}
     system_tests_heartbeats
     system_tests_address_watch
     system_tests_router_annotations

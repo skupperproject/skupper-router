@@ -102,15 +102,20 @@ void qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint
     }
 }
 
-void qd_adaptor_buffers_copy_to_qd_buffers(const qd_adaptor_buffer_list_t *adaptor_buffs, qd_buffer_list_t *qd_bufs)
+size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_buffs, qd_buffer_list_t *qd_bufs)
 {
     DEQ_INIT(*qd_bufs);
-
+    size_t               bytes_copied = 0;
     qd_adaptor_buffer_t *a_buf = DEQ_HEAD(*adaptor_buffs);
     while (a_buf) {
-        qd_buffer_list_append(qd_bufs, (uint8_t *) qd_adaptor_buffer_base(a_buf), qd_adaptor_buffer_size(a_buf));
-        a_buf = DEQ_NEXT(a_buf);
+        size_t adaptor_buffer_size = qd_adaptor_buffer_size(a_buf);
+        bytes_copied += adaptor_buffer_size;
+        qd_buffer_list_append(qd_bufs, (uint8_t *) qd_adaptor_buffer_base(a_buf), adaptor_buffer_size);
+        DEQ_REMOVE_HEAD(*adaptor_buffs);
+        qd_adaptor_buffer_free(a_buf);
+        a_buf = DEQ_HEAD(*adaptor_buffs);
     }
+    return bytes_copied;
 }
 
 void qd_adaptor_copy_qd_buffers_to_adaptor_buffers(const qd_buffer_list_t   *qd_bufs,

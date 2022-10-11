@@ -24,6 +24,7 @@ import selectors
 import signal
 import socket
 import sys
+import ssl
 import time
 import traceback
 from threading import Condition, Thread
@@ -81,9 +82,15 @@ def split_chunk_for_display(raw_bytes):
 
 
 class TcpEchoServer:
-
-    def __init__(self, prefix="ECHO_SERVER", port: Union[str, int] = "0", echo_count=0, timeout=0.0, logger=None,
-                 conn_stall=0.0, close_on_conn=False, close_on_data=False) -> None:
+    def __init__(self, prefix="ECHO_SERVER",
+                 port: Union[str, int] = "0",
+                 echo_count=0,
+                 timeout=0.0,
+                 logger=None,
+                 conn_stall=0.0,
+                 close_on_conn=False,
+                 close_on_data=False,
+                 ssl_info=None) -> None:
         """
         Start echo server in separate thread
 
@@ -108,8 +115,14 @@ class TcpEchoServer:
         self._is_running = None
         self.exit_status = None
         self.error = None
+        self.ssl_info = ssl_info
+        self.ssl_sock = None
+        self.total_bytes_received = 0
+        self.sel = selectors.DefaultSelector()
         self._thread = Thread(target=self.run)
         self._thread.daemon = True
+        # Note: do not add any code after the following thread.start()
+        # The run() method starts running immediately after call to start().
         self._thread.start()
 
     @property
@@ -144,13 +157,29 @@ class TcpEchoServer:
 
             # set up listening socket
             try:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.bind((self.HOST, self.port))
-                self.sock.listen()
-                if self.port == 0:
-                    self.port = self.get_listening_port()
-                self.sock.setblocking(False)
-                self.logger.log('%s Listening on host:%s, port:%s' % (self.prefix, self.HOST, self.port))
+                if self.ssl_info:
+                    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                    context.load_verify_locations(cafile=self.ssl_info['CA_CERT'])
+                    context.load_cert_chain(certfile=self.ssl_info['SERVER_CERTIFICATE'],
+                                            keyfile=self.ssl_info['SERVER_PRIVATE_KEY'])
+                    sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+                    sck.bind((self.HOST, int(self.port)))
+                    self.sock = context.wrap_socket(sck, server_side=True)
+                    self.sock.listen(5)
+                    self.sock.setblocking(False)
+                    self.sel.register(self.sock, selectors.EVENT_READ, data=None)
+                    if self.port == 0:
+                        self.port = self.get_listening_port()
+                    self.logger.log(' %s Listening on host:%s, TLS enabled port:%s' % (self.prefix, self.HOST, self.port))
+                else:
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.bind((self.HOST, self.port))
+                    self.sock.listen(5)
+                    if self.port == 0:
+                        self.port = self.get_listening_port()
+                    self.sock.setblocking(False)
+                    self.sel.register(self.sock, selectors.EVENT_READ, data=None)
+                    self.logger.log(' %s Listening on host:%s, port:%s' % (self.prefix, self.HOST, self.port))
             except Exception:
                 self.error = ('%s Opening listen socket %s:%s exception: %s' %
                               (self.prefix, self.HOST, self.port, traceback.format_exc()))
@@ -159,11 +188,6 @@ class TcpEchoServer:
 
             # notify whoever is waiting on the condition variable for this
             self.is_running = True
-
-            # set up selector
-            sel = selectors.DefaultSelector()
-            sel.register(self.sock, selectors.EVENT_READ, data=None)
-
             # event loop
             while True:
                 if not self.keep_running:
@@ -178,21 +202,27 @@ class TcpEchoServer:
                     if total_echoed >= self.echo_count:
                         self.exit_status = "Exiting due to echo byte count. Total echoed = %d" % total_echoed
                         break
-                events = sel.select(timeout=0.1)
+                events = self.sel.select(timeout=1)
                 if events:
                     for key, mask in events:
                         if key.data is None:
                             if key.fileobj is self.sock:
-                                self.do_accept(key.fileobj, sel, self.logger, self.conn_stall, self.close_on_conn)
+                                self.do_accept(key.fileobj,
+                                               self.sel,
+                                               self.logger,
+                                               self.conn_stall,
+                                               self.close_on_conn,
+                                               self.ssl_info)
                             else:
                                 pass  # Only listener 'sock' has None in opaque data field
                         else:
-                            n_echoed = self.do_service(key, mask, sel, self.logger, self.close_on_data)
-                            total_echoed += n_echoed if n_echoed > 0 else 0
+                            n_echoed = self.do_service(key, mask, self.sel, self.logger, self.close_on_data, self.ssl_info)
+                            total_echoed += n_echoed
                 else:
                     pass   # select timeout. probably.
 
-            sel.unregister(self.sock)
+            self.logger.log(' %s unregistering selector' % self.prefix)
+            self.sel.unregister(self.sock)
             self.sock.close()
 
         except Exception:
@@ -200,11 +230,12 @@ class TcpEchoServer:
 
         self.is_running = False
 
-    def do_accept(self, sock, sel, logger, conn_stall, close_on_conn):
+    def do_accept(self, sock, sel, logger, conn_stall, close_on_conn, ssl_info=None):
         conn, addr = sock.accept()
-        logger.log('%s Accepted connection from %s:%d' % (self.prefix, addr[0], addr[1]))
+        tls_string = "TLS" if ssl_info else ''
+        logger.log('%s Accepted %s connection from %s:%d' % (self.prefix, tls_string, addr[0], addr[1]))
         if conn_stall > 0.0:
-            logger.log('%s Connection from %s:%d stall start' % (self.prefix, addr[0], addr[1]))
+            logger.log(' %s Connection from %s:%d stall start' % (self.prefix, addr[0], addr[1]))
             time.sleep(conn_stall)
             logger.log('%s Connection from %s:%d stall end' % (self.prefix, addr[0], addr[1]))
         if close_on_conn:
@@ -214,36 +245,56 @@ class TcpEchoServer:
         conn.setblocking(False)
         events = selectors.EVENT_READ | selectors.EVENT_WRITE
         sel.register(conn, events, data=ClientRecord(addr))
+        self.logger.log("%s registered %s selector" % (self.prefix, tls_string))
 
-    def do_service(self, key, mask, sel, logger, close_on_data):
+    def do_service(self, key, mask, sel, logger, close_on_data, ssl_info=None):
         retval = 0
         sock = key.fileobj
         data = key.data
         if mask & selectors.EVENT_READ:
+            ssl_want_read = False
             try:
-                recv_data = sock.recv(1024)
+                if ssl_info:
+                    try:
+                        recv_data = b''
+                        while True:
+                            rcv_data = sock.recv(1024)
+                            if rcv_data:
+                                recv_data += rcv_data
+                            else:
+                                break
+                    except ssl.SSLWantReadError:
+                        ssl_want_read = True
+                        len_recv_data = len(recv_data) if recv_data else 0
+                        self.logger.log("ECHO SERVER ssl.SSLWantReadError, recv_data=%d" % len_recv_data)
+                else:
+                    recv_data = sock.recv(1024)
             except IOError:
-                logger.log('%s Connection to %s:%d IOError: %s' %
+                logger.log(' %s Connection to %s:%d IOError: %s' %
                            (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
                 sel.unregister(sock)
                 sock.close()
                 return 0
             except Exception:
-                self.error = ('%s Connection to %s:%d exception: %s' %
+                self.error = (' %s Connection to %s:%d exception: %s' %
                               (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
                 logger.log(self.error)
                 sel.unregister(sock)
                 sock.close()
                 return 1
             if recv_data:
+                self.total_bytes_received += len(recv_data)
                 data.outb += recv_data
+                logger.log('%s read from: %s:%d len:%d: %s, bytes received so far=%d' % (self.prefix, data.addr[0],
+                                                                                         data.addr[1], len(recv_data),
+                                                                                         split_chunk_for_display(recv_data),
+                                                                                         self.total_bytes_received))
                 if close_on_data:
                     logger.log('%s Connection to %s:%d closed due to close_on_data' % (self.prefix, data.addr[0], data.addr[1]))
                     sel.unregister(sock)
                     sock.close()
                     return 0
-                logger.log('%s read from: %s:%d len:%d: %s' % (self.prefix, data.addr[0], data.addr[1], len(recv_data),
-                                                               split_chunk_for_display(recv_data)))
+
                 sel.modify(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
             else:
                 while data.outb:
@@ -264,9 +315,13 @@ class TcpEchoServer:
                         sel.unregister(sock)
                         sock.close()
                         return 1
-                logger.log('%s Client closed: closing connection to %s:%d' % (self.prefix, data.addr[0], data.addr[1]))
-                sel.unregister(sock)
-                sock.close()
+                if not ssl_want_read:
+                    # If you did not receive any data from a socket on a READ event, it means that the other side
+                    # has closed its connection but that is not true for SSL connections.
+                    logger.log(
+                        ' %s Client closed: closing connection to %s:%d' % (self.prefix, data.addr[0], data.addr[1]))
+                    sel.unregister(sock)
+                    sock.close()
                 return 0
         if mask & selectors.EVENT_WRITE:
             if data.outb:
@@ -285,10 +340,11 @@ class TcpEchoServer:
                     sel.unregister(sock)
                     sock.close()
                     return 1
-                retval += sent
+                if sent:
+                    retval += sent
                 if sent > 0:
-                    logger.log('%s write to : %s:%d len:%d: %s' % (self.prefix, data.addr[0], data.addr[1], sent,
-                                                                   split_chunk_for_display(data.outb[:sent])))
+                    logger.log('%s write to: %s:%d len:%d: %s' % (self.prefix, data.addr[0], data.addr[1], sent,
+                                                                  split_chunk_for_display(data.outb[:sent])))
                 else:
                     logger.log('%s write to : %s:%d len:0' % (self.prefix, data.addr[0], data.addr[1]))
                 data.outb = data.outb[sent:]
@@ -297,7 +353,7 @@ class TcpEchoServer:
         return retval
 
     def wait(self, timeout=TIMEOUT):
-        self.logger.log("%s Server is shutting down" % self.prefix)
+        self.logger.log(" %s Server is shutting down" % self.prefix)
         self.keep_running = False
         self._thread.join(timeout)
 
@@ -369,22 +425,22 @@ def main(argv):
         while keep_running:
             time.sleep(0.1)
             if server.error is not None:
-                logger.log("%s Server stopped with error: %s" % (prefix, server.error))
+                logger.log("ECHO SERVER %s stopped with error: %s" % (prefix, server.error))
                 keep_running = False
                 retval = 1
             if server.exit_status is not None:
-                logger.log("%s Server stopped with status: %s" % (prefix, server.exit_status))
+                logger.log("ECHO SERVER  %s stopped with status: %s" % (prefix, server.exit_status))
                 keep_running = False
             if signaller.kill_now:
-                logger.log("%s Process killed with signal" % prefix)
+                logger.log("ECHO SERVER  %s Process killed with signal" % prefix)
                 keep_running = False
             if keep_running and not server.is_running:
-                logger.log("%s Server stopped with no error or status" % prefix)
+                logger.log("ECHO SERVER  %s stopped with no error or status" % prefix)
                 keep_running = False
 
     except Exception:
         if logger is not None:
-            logger.log("%s Exception: %s" % (prefix, traceback.format_exc()))
+            logger.log("ECHO SERVER  %s Exception: %s" % (prefix, traceback.format_exc()))
         retval = 1
 
     if server is not None and server.sock is not None:

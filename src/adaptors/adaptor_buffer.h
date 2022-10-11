@@ -44,12 +44,15 @@ DEQ_DECLARE(qd_adaptor_buffer_t, qd_adaptor_buffer_list_t);
 void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *buflist);
 
 /**
- * Copies adaptor buffers in a buffer list into the passed in list of qd_buffers
+ * Copies adaptor buffers in a buffer list into the passed in list of qd_buffers. Frees all adaptor
+ * buffers in the passed in qd_adaptor_buffs list.
  *
  * @param qd_adaptor_buffs - adaptor buffer list that needs to be copied into qd_buffers
  * @param qd_bufs - The qd_buffer list to which the adaptor buffers will be copied into
+ *
+ * @return the total number of bytes copied from qd_adaptor_buffs to qd_bufs
  */
-void qd_adaptor_buffers_copy_to_qd_buffers(const qd_adaptor_buffer_list_t *qd_adaptor_buffs, qd_buffer_list_t *qd_bufs);
+size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *qd_adaptor_buffs, qd_buffer_list_t *qd_bufs);
 
 /**
  * Copies qd_buffers in a buffer list into the passed in list of adaptor buffers
