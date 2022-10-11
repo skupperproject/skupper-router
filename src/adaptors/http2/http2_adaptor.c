@@ -18,11 +18,12 @@
  */
 #include "http2_adaptor.h"
 
+#include "adaptors/adaptor_common.h"
 #include "adaptors/http_common.h"
 
 #include "qpid/dispatch/buffer.h"
-#include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/connection_manager.h"
+#include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <proton/condition.h>
@@ -71,11 +72,22 @@ const char *protocols[] = {"h2"};
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context);
 static void _http_record_request(qdr_http2_connection_t *conn, qdr_http2_stream_data_t *stream_data);
 static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on_shutdown);
-static void clean_conn_buffs(qdr_http2_connection_t* conn);
 static void handle_raw_connected_event(qdr_http2_connection_t *conn);
-static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *outgoing_buff, size_t outgoing_buff_size, bool can_write_buffers);
+static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff,
+                                 bool write_buffers);
 static bool schedule_activation(qdr_http2_connection_t *conn, qd_duration_t msec);
 static void cancel_activation(qdr_http2_connection_t *conn);
+static void setup_qd_tls(qdr_http2_connection_t *conn);
+
+static void grant_read_buffers(qdr_http2_connection_t *conn, const char *msg)
+{
+    if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_read))
+        return;
+    int buffers = qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
+    qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] grant_read_buffers(%s) granted %i read buffers to proton raw api", conn->conn_id, msg,
+           buffers);
+}
 
 /**
  * If an ALPN protocol was detected by the TLS API, we make sure that the protocol matches the "h2" (short for http2) protocol.
@@ -84,11 +96,12 @@ static void cancel_activation(qdr_http2_connection_t *conn);
  * we still continue sending http2 frames and close the connection if the response to those http2 frames is non-http2.
  *
  */
-static void check_alpn_protocol(qdr_http2_connection_t *http_conn) {
-
+static bool is_alpn_protocol_match(qdr_http2_connection_t *http_conn)
+{
     const char *protocol_name;
     size_t protocol_name_length;
-    if (pn_tls_get_alpn_protocol(http_conn->tls_session, &protocol_name, &protocol_name_length)) {
+    bool        alpn_protocol_match = true;
+    if (pn_tls_get_alpn_protocol(qd_tls_get_pn_tls_session(http_conn->tls), &protocol_name, &protocol_name_length)) {
         //
         // An ALPN protocol was present. We want to match it to "h2" protocol.
         //
@@ -101,17 +114,17 @@ static void check_alpn_protocol(qdr_http2_connection_t *http_conn) {
             // The protocol received from ALPN is not h2, we will log an error and close this connection.
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"] conn->ingress=%i, Error in ALPN: was expecting protocol %s but got %s", http_conn->conn_id, http_conn->ingress, protocols[0], alpn_protocol);
             nghttp2_submit_goaway(http_conn->session, 0, 0, NGHTTP2_PROTOCOL_ERROR, (uint8_t *)"TLS Protocol Error", 18);
-            pn_raw_connection_read_close(http_conn->pn_raw_conn);
+            alpn_protocol_match = false;
         }
         free(alpn_protocol);
-    }
-    else {
+    } else {
         //
         // No protocol was received via ALPN. This could mean that the other side does not do ALPN and that is ok.
         //
         qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] No ALPN protocol was returned", http_conn->conn_id);
     }
     http_conn->alpn_check_complete = true;
+    return alpn_protocol_match;
 }
 
 static void free_all_connection_streams(qdr_http2_connection_t *http_conn, bool on_shutdown)
@@ -185,11 +198,11 @@ static void advance_stream_status(qdr_http2_stream_data_t *stream_data)
 static void qdr_http2_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
 {
     // prevent the conn from being deleted while running:
-	sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+    sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
 
     qdr_http2_connection_t *conn = (qdr_http2_connection_t*)qd_alloc_deref_safe_ptr(&context);
     if (conn && conn->pn_raw_conn) {
-    	SET_ATOMIC_FLAG(&conn->q2_restart);
+        SET_ATOMIC_FLAG(&conn->q2_restart);
         pn_raw_connection_wake(conn->pn_raw_conn);
     }
 
@@ -199,15 +212,15 @@ static void qdr_http2_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
 /**
  * HTTP :path is mapped to the AMQP 'to' field.
  */
-qd_composed_field_t  *qd_message_compose_amqp(qdr_http2_connection_t *conn,
-											  qd_message_t *msg,
-                                              const char *to,
-                                              const char *subject,
-                                              const char *reply_to,
-                                              const char *content_type,
-                                              const char *content_encoding,
-                                              int32_t  correlation_id,
-                                              const char* group_id)
+qd_composed_field_t *qd_message_compose_amqp(qdr_http2_connection_t *conn,
+                                             qd_message_t           *msg,
+                                             const char             *to,
+                                             const char             *subject,
+                                             const char             *reply_to,
+                                             const char             *content_type,
+                                             const char             *content_encoding,
+                                             int32_t                 correlation_id,
+                                             const char             *group_id)
 {
     qd_composed_field_t  *field   = qd_compose(QD_PERFORMATIVE_HEADER, 0);
     qd_message_content_t *content = MSG_CONTENT(msg);
@@ -355,7 +368,8 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
 
         qd_message_stream_data_release(stream_data->next_stream_data);
         stream_data->next_stream_data = 0;
-    	qdr_delivery_decref(http2_adaptor->core, stream_data->out_dlv, "HTTP2 adaptor out_dlv - free_http2_stream_data");
+        qdr_delivery_decref(http2_adaptor->core, stream_data->out_dlv,
+                            "HTTP2 adaptor out_dlv - free_http2_stream_data");
     }
 
     free_qdr_http2_stream_data_t(stream_data);
@@ -365,7 +379,7 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
 {
     // Free all the stream data associated with this connection/session.
     free_all_connection_streams(http_conn, on_shutdown);
-    clean_conn_buffs(http_conn);
+    qd_adaptor_buffer_list_free_buffers(&http_conn->out_buffs);
 
     if(http_conn->remote_address) {
         free(http_conn->remote_address);
@@ -392,47 +406,9 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
     sys_atomic_destroy(&http_conn->q2_restart);
     sys_atomic_destroy(&http_conn->delay_buffer_write);
 
-    //
-    // Stop the TLS session and take back and free all the remaining http2 buffers.
-    //
-    if (http_conn->tls_session) {
-        // The http connection is being freed, this is when we need
-        // to call pn_tls_stop
-        pn_tls_stop(http_conn->tls_session);
-
-        pn_raw_buffer_t raw_buffer;
-        while (pn_tls_take_encrypt_output_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
-            if(buf) {
-                free_qd_adaptor_buffer_t(buf);
-            }
-        }
-        while (pn_tls_take_encrypt_input_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
-            if(buf) {
-                free_qd_adaptor_buffer_t(buf);
-            }
-        }
-        while (pn_tls_take_decrypt_output_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
-            if(buf) {
-                free_qd_adaptor_buffer_t(buf);
-            }
-        }
-        while (pn_tls_take_decrypt_input_buffers(http_conn->tls_session, &raw_buffer, 1)) {
-            qd_adaptor_buffer_t *buf = (qd_adaptor_buffer_t *) raw_buffer.context;
-            if(buf) {
-                free_qd_adaptor_buffer_t(buf);
-            }
-        }
-
-        if (http_conn->tls_session) {
-            pn_tls_free(http_conn->tls_session);
-        }
-
-        if (http_conn->tls_config) {
-            pn_tls_config_free(http_conn->tls_config);
-        }
+    // Free tls related stuff if need be.
+    if (http_conn->tls) {
+        qd_tls_free(http_conn->tls);
     }
 
     //
@@ -482,9 +458,11 @@ static qdr_http2_stream_data_t *create_http2_stream_data(qdr_http2_connection_t 
  */
 static int on_error_callback(nghttp2_session *session, int lib_error_code, const char *msg, size_t len, void *user_data)
 {
-	qdr_http2_connection_t *conn = (qdr_http2_connection_t *)user_data;
-	qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"] Error generated in the on_error_callback, lib_error_code=%i, error_msg=%s", conn->conn_id, lib_error_code, msg);
-	return 0;
+    qdr_http2_connection_t *conn = (qdr_http2_connection_t *) user_data;
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR,
+           "[C%" PRIu64 "] Error generated in the on_error_callback, lib_error_code=%i, error_msg=%s", conn->conn_id,
+           lib_error_code, msg);
+    return 0;
 }
 
 
@@ -501,7 +479,7 @@ static int on_invalid_frame_recv_callback(nghttp2_session *session, const nghttp
         const char*str_error = nghttp2_http2_strerror(lib_error_code);
         nghttp2_submit_goaway(session, 0, 0, NGHTTP2_FLOW_CONTROL_ERROR, (uint8_t *)str_error, strlen(str_error));
         nghttp2_session_send(conn->session);
-        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->buffs);
+        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
     }
 
     return lib_error_code;
@@ -525,7 +503,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session,
         return 0;
 
     if(stream_data->stream_force_closed)
-    	return 0;
+        return 0;
 
     stream_data->bytes_in += len;
 
@@ -590,13 +568,12 @@ static int send_data_callback(nghttp2_session *session,
     // The frame is a DATA frame to send. The framehd is the serialized frame header (9 bytes).
     // The length is the length of application data to send (this does not include padding)
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *)user_data;
-    qdr_http2_stream_data_t *stream_data = (qdr_http2_stream_data_t *)source->ptr;
-
+    qdr_http2_stream_data_t *stream_data = (qdr_http2_stream_data_t *) source->ptr;
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] send_data_callback length=%zu", conn->conn_id, stream_data->stream_id, length);
 
     //
     // local_buffs is used in the case when TLS encryption is required before sending the data out.
-    // All the http2 data is gathered into local_buffs and the local_buffs is sent to handle_outgoing_tls
+    // All the http2 data is gathered into local_buffs and the local_buffs is sent to qd_tls_encrypt
     // where the outgoing data is encrypted.
     //
     qd_adaptor_buffer_list_t local_buffs;
@@ -614,8 +591,8 @@ static int send_data_callback(nghttp2_session *session,
             DEQ_INSERT_TAIL(local_buffs, tail_buff);
         }
         else {
-            qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
-            tail_buff = DEQ_TAIL(conn->buffs);
+            qd_adaptor_buffer_list_append(&(conn->out_buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            tail_buff = DEQ_TAIL(conn->out_buffs);
         }
         size_t tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
         if (tail_buff_capacity == 0) {
@@ -624,7 +601,7 @@ static int send_data_callback(nghttp2_session *session,
                 DEQ_INSERT_TAIL(local_buffs, tail_buff);
             }
             else {
-                DEQ_INSERT_TAIL(conn->buffs, tail_buff);
+                DEQ_INSERT_TAIL(conn->out_buffs, tail_buff);
             }
             tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
         }
@@ -647,7 +624,7 @@ static int send_data_callback(nghttp2_session *session,
                     DEQ_INSERT_TAIL(local_buffs, tail_buff);
                 }
                 else {
-                    DEQ_INSERT_TAIL(conn->buffs, tail_buff);
+                    DEQ_INSERT_TAIL(conn->out_buffs, tail_buff);
                 }
                 tail_buff_capacity = qd_adaptor_buffer_capacity(tail_buff);
             }
@@ -661,7 +638,7 @@ static int send_data_callback(nghttp2_session *session,
             qd_adaptor_buffer_insert(http2_buff, HTTP2_DATA_FRAME_HEADER_LENGTH);
         }
         else {
-            qd_adaptor_buffer_list_append(&(conn->buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
+            qd_adaptor_buffer_list_append(&(conn->out_buffs), framehd, HTTP2_DATA_FRAME_HEADER_LENGTH);
         }
     }
 
@@ -673,27 +650,13 @@ static int send_data_callback(nghttp2_session *session,
     }
 
     if (require_tls) {
-        size_t num_local_buffs = DEQ_SIZE(local_buffs);
-        if (num_local_buffs > 0) {
-            // num_local_buffs should usually be 1 (16k) but can go to max of 4 (64k)
-            pn_raw_buffer_t raw_buffers[num_local_buffs];
-
-            //
-            // Create a mapping between local http2 buffers and raw buffers.
-            //
-            qd_adaptor_buffer_t *local_adaptor_buff = DEQ_HEAD(local_buffs);
-            for (size_t i=0; i<num_local_buffs; i++) {
-                raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(local_adaptor_buff);
-                raw_buffers[i].capacity = qd_adaptor_buffer_capacity(local_adaptor_buff);
-                raw_buffers[i].size     = qd_adaptor_buffer_size(local_adaptor_buff);
-                raw_buffers[i].offset = 0;
-                raw_buffers[i].context  = (uintptr_t) local_adaptor_buff;
-                local_adaptor_buff      = DEQ_NEXT(local_adaptor_buff);
-            }
-            qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] send_data_callback require_tls, num_local_buffs=%zu", conn->conn_id, stream_data->stream_id, num_local_buffs);
-
-            // Hand over the raw bufferst to be encrypted.
-            handle_outgoing_tls(conn, raw_buffers, num_local_buffs, write_buffs);
+        qd_adaptor_buffer_t *local_adaptor_buff = DEQ_HEAD(local_buffs);
+        while (local_adaptor_buff) {
+            // local_adaptor_buff will be freed once you call encrypt_outgoing_tls with it
+            // so get the next buff right now.
+            qd_adaptor_buffer_t *next_adaptor_buff = DEQ_NEXT(local_adaptor_buff);
+            encrypt_outgoing_tls(conn, local_adaptor_buff, true);
+            local_adaptor_buff = next_adaptor_buff;
         }
     }
 
@@ -713,7 +676,7 @@ static int send_data_callback(nghttp2_session *session,
         stream_data->payload_handled = 0;
     }
     else {
-    	stream_data->payload_handled += bytes_sent;
+        stream_data->payload_handled += bytes_sent;
     }
 
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 send_data_callback finished, length=%zu, bytes_sent=%i, stream_data=%p", conn->conn_id, stream_data->stream_id, length, bytes_sent, (void *)stream_data);
@@ -723,7 +686,7 @@ static int send_data_callback(nghttp2_session *session,
     }
 
     if (write_buffs) {
-        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->buffs);
+        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
     }
 
     return 0;
@@ -738,27 +701,23 @@ static ssize_t send_callback(nghttp2_session *session,
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *)user_data;
     bool require_tls = conn->require_tls;
     if (require_tls) {
-        pn_raw_buffer_t out_raw_buff;
-        out_raw_buff.bytes = (char *)data;
-        out_raw_buff.capacity = length;
-        out_raw_buff.size = length;
-        out_raw_buff.offset = 0;
-        out_raw_buff.context = 0;
-        //(void)out_raw_buff;
+        qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
+        memcpy(qd_adaptor_buffer_base(adaptor_buffer), data, length);
+        qd_adaptor_buffer_insert(adaptor_buffer, length);
         //
         // This data is being sent over a TLS session. It needs to be encrypted before it is sent out on the wire.
         //
-        handle_outgoing_tls(conn, &out_raw_buff, 1, false);
+        encrypt_outgoing_tls(conn, adaptor_buffer, false);
     }
     else {
         //
-        // Data not being sent over a TLS session, just stick it at the end of the last buffer of conn->buffs
+        // Data not being sent over a TLS session, just stick it at the end of the last buffer of conn->out_buffs
         //
-        qd_adaptor_buffer_list_append(&(conn->buffs), (uint8_t *) data, length);
+        qd_adaptor_buffer_list_append(&(conn->out_buffs), (uint8_t *) data, length);
     }
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 send_callback data length %zu", conn->conn_id, length);
     if (! IS_ATOMIC_FLAG_SET(&conn->delay_buffer_write)) {
-        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->buffs);
+        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
     }
     return (ssize_t)length;
 }
@@ -936,10 +895,10 @@ static bool compose_and_deliver(qdr_http2_connection_t *conn, qdr_http2_stream_d
                 qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"][L%"PRIu64"] receive_complete = false and has stream_data->body_buffers in compose_and_deliver", conn->conn_id, stream_data->stream_id, stream_data->in_link->identity);
                 bool q2_blocked;
                 if (stream_data->footer_properties) {
-                	if (!stream_data->entire_footer_arrived) {
-                		qd_compose_free(header_and_props);
-                		return false;
-                	}
+                    if (!stream_data->entire_footer_arrived) {
+                        qd_compose_free(header_and_props);
+                        return false;
+                    }
 
                     qd_message_compose_3(stream_data->message, header_and_props, stream_data->app_properties, receive_complete);
                     qd_message_stream_data_append(stream_data->message, &stream_data->body_buffers, &q2_blocked);
@@ -949,8 +908,9 @@ static bool compose_and_deliver(qdr_http2_connection_t *conn, qdr_http2_stream_d
                     qd_message_stream_data_footer_append(stream_data->message, &existing_buffers);
                 }
                 else {
-                	qd_message_compose_3(stream_data->message, header_and_props, stream_data->app_properties, receive_complete);
-                	qd_message_stream_data_append(stream_data->message, &stream_data->body_buffers, &q2_blocked);
+                    qd_message_compose_3(stream_data->message, header_and_props, stream_data->app_properties,
+                                         receive_complete);
+                    qd_message_stream_data_append(stream_data->message, &stream_data->body_buffers, &q2_blocked);
                 }
                 stream_data->body_data_added_to_msg = true;
                 if (q2_blocked && !conn->q2_blocked) {
@@ -960,11 +920,10 @@ static bool compose_and_deliver(qdr_http2_connection_t *conn, qdr_http2_stream_d
             }
             else {
                 if (stream_data->footer_properties) {
-
-                	if (!stream_data->entire_footer_arrived) {
-                		qd_compose_free(header_and_props);
-                		return false;
-                	}
+                    if (!stream_data->entire_footer_arrived) {
+                        qd_compose_free(header_and_props);
+                        return false;
+                    }
 
                     //
                     // The footer has already arrived but there was no body. Insert an empty body
@@ -1054,9 +1013,12 @@ static void create_settings_frame(qdr_http2_connection_t *conn)
 
 static void send_settings_frame(qdr_http2_connection_t *conn)
 {
-    create_settings_frame(conn);
-    nghttp2_session_send(conn->session);
-    qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->buffs);
+    if (!conn->initial_settings_frame_sent) {
+        create_settings_frame(conn);
+        nghttp2_session_send(conn->session);
+        conn->initial_settings_frame_sent = true;
+    }
+    // qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
 }
 
 static void _http_record_request(qdr_http2_connection_t *conn, qdr_http2_stream_data_t *stream_data)
@@ -1412,21 +1374,24 @@ ssize_t read_data_callback(nghttp2_session *session,
         }
 
         case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
-        	qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_FOOTER_OK", conn->conn_id, stream_data->stream_id);
-        	if (!stream_data->out_msg_has_footer) {
-        	    stream_data->out_msg_has_footer = true;
-        	    stream_data->next_stream_data_result = qd_message_next_stream_data(message, &stream_data->next_stream_data);
-        	}
+            qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "][S%" PRId32 "] read_data_callback QD_MESSAGE_STREAM_DATA_FOOTER_OK", conn->conn_id,
+                   stream_data->stream_id);
+            if (!stream_data->out_msg_has_footer) {
+                stream_data->out_msg_has_footer = true;
+                stream_data->next_stream_data_result =
+                    qd_message_next_stream_data(message, &stream_data->next_stream_data);
+            }
 
             if (stream_data->next_stream_data) {
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_FOOTER_OK, we have a next_stream_data", conn->conn_id, stream_data->stream_id);
             }
             if (stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_INVALID) {
-            	stream_data->out_msg_has_footer = false;
-				if (stream_data->next_stream_data) {
-					qd_message_stream_data_release(stream_data->next_stream_data);
-					stream_data->next_stream_data = 0;
-				}
+                stream_data->out_msg_has_footer = false;
+                if (stream_data->next_stream_data) {
+                    qd_message_stream_data_release(stream_data->next_stream_data);
+                    stream_data->next_stream_data = 0;
+                }
             }
             break;
 
@@ -1482,7 +1447,7 @@ ssize_t read_data_callback(nghttp2_session *session,
                 qd_message_stream_data_release(stream_data->curr_stream_data);
                 qd_iterator_free(stream_data->curr_stream_data_iter);
                 stream_data->curr_stream_data_iter = 0;
-            	stream_data->curr_stream_data = 0;
+                stream_data->curr_stream_data      = 0;
             }
             stream_data->out_dlv_local_disposition = PN_REJECTED;
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_INVALID", conn->conn_id, stream_data->stream_id);
@@ -1528,7 +1493,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     sys_atomic_init(&ingress_http_conn->raw_closed_write, 0);
     sys_atomic_init(&ingress_http_conn->q2_restart, 0);
     sys_atomic_init(&ingress_http_conn->delay_buffer_write, 0);
-    DEQ_INIT(ingress_http_conn->buffs);
+    DEQ_INIT(ingress_http_conn->out_buffs);
     DEQ_INIT(ingress_http_conn->streams);
     ingress_http_conn->data_prd.read_callback = read_data_callback;
 
@@ -1802,27 +1767,26 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
     qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Connecting to %s", conn->conn_id, conn->config->adaptor_config->host_port);
     if (conn->require_tls) {
-
-
-        bool tls_setup_success = qd_tls_initial_setup(conn->config->adaptor_config,
-                                                      qd_server_dispatch(conn->server),
-                                                      &conn->tls_config,
-                                                      &conn->tls_session,
-                                                      http2_adaptor->protocol_log_source,
-                                                      conn->conn_id,
-                                                      conn->listener ? true: false,
-                                                      &conn->tls_has_output,
-                                                      protocols);
-
+        // Create the qd_tls_t object
+        conn->tls              = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
+        bool tls_setup_success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
+                                              conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS);
         if (tls_setup_success) {
             // Call pn_raw_connection() only if we were successfully able to configure TLS
             // with the information provided in the sslProfile.
             conn->pn_raw_conn = pn_raw_connection();
             pn_raw_connection_set_context(conn->pn_raw_conn, conn);
+            qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+                   "[C%" PRIu64
+                   "] Success setting up sslProfile on connector %s to %s, now initiating actual connection via "
+                   "pn_proactor_raw_connect()",
+                   conn->conn_id, conn->config->adaptor_config->name, conn->config->adaptor_config->host_port);
             pn_proactor_raw_connect(qd_server_proactor(conn->server), conn->pn_raw_conn, conn->config->adaptor_config->host_port);
         }
         else {
             // TLS was not configured successfully using the details in the connector and SSLProfile.
+            qd_tls_free(conn->tls);
+            conn->tls = 0;
             qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Error setting up TLS on connector %s to %s", conn->conn_id, conn->config->adaptor_config->name, conn->config->adaptor_config->host_port);
         }
     }
@@ -1843,8 +1807,8 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
 {
     qdr_http2_connection_t *conn = stream_data->conn;
 
-	if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_write))
-		return 0;
+    if (IS_ATOMIC_FLAG_SET(&conn->raw_closed_write))
+        return 0;
 
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] Starting to handle_outgoing_http", conn->conn_id);
     if (stream_data->out_dlv) {
@@ -1953,7 +1917,7 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
             }
 
             nghttp2_session_send(conn->session);
-            conn->client_magic_sent = true;
+            conn->initial_settings_frame_sent = true;
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Headers submitted", conn->conn_id, stream_data->stream_id);
 
             qd_iterator_free(app_properties_iter);
@@ -2122,10 +2086,23 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
 {
     qdr_http2_stream_data_t *stream_data =  (qdr_http2_stream_data_t*)qdr_link_get_context(link);
 
-    if (!stream_data)
+    qd_log(http2_adaptor->log_source, QD_LOG_DEBUG, DLV_FMT " qdr_http_deliver", DLV_ARGS(delivery));
+
+    if (!stream_data) {
         return 0;
+    }
 
     qdr_http2_connection_t *conn = stream_data->conn;
+
+    if (conn->require_tls) {
+        if (!qd_tls_is_secure(conn->tls)) {
+            qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+                   DLV_FMT " qdr_http_deliver - delivery cannot be sent, connection is not secure yet, returning",
+                   DLV_ARGS(delivery));
+            return 0;
+        }
+        send_settings_frame(conn);
+    }
 
     if (link == stream_data->conn->stream_dispatcher) {
         //
@@ -2169,22 +2146,29 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
                                                      0,
                                                      &(stream_data->incoming_id));
         qdr_link_set_context(stream_data->in_link, stream_data);
+        qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+               DLV_FMT " qdr_http_deliver, returning QD_DELIVERY_MOVED_TO_NEW_LINK", DLV_ARGS(delivery));
         return QD_DELIVERY_MOVED_TO_NEW_LINK;
     }
 
-	if (conn->ingress) {
-		if (!stream_data->out_dlv) {
-			stream_data->out_dlv = delivery;
-			qdr_delivery_incref(delivery, "ingress out_dlv referenced by HTTP2 adaptor");
-		}
-	}
-	qd_log(http2_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"][S%"PRId32"] qdr_http_deliver - call handle_outgoing_http", conn->conn_id, stream_data->stream_id);
-	uint64_t disp = handle_outgoing_http(stream_data);
-	if (stream_data->status == QD_STREAM_FULLY_CLOSED && disp == PN_ACCEPTED) {
-		qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] qdr_http_deliver - calling free_http2_stream_data", conn->conn_id, stream_data->stream_id);
-		free_http2_stream_data(stream_data, false);
-	}
-	return disp;
+    if (conn->ingress) {
+        if (!stream_data->out_dlv) {
+            stream_data->out_dlv = delivery;
+            qdr_delivery_incref(delivery, "ingress out_dlv referenced by HTTP2 adaptor");
+        }
+    }
+    qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+           "[C%" PRIu64 "][S%" PRId32 "] qdr_http_deliver - call handle_outgoing_http", conn->conn_id,
+           stream_data->stream_id);
+
+    uint64_t disp = handle_outgoing_http(stream_data);
+    if (stream_data->status == QD_STREAM_FULLY_CLOSED && disp == PN_ACCEPTED) {
+        qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "][S%" PRId32 "] qdr_http_deliver - calling free_http2_stream_data", conn->conn_id,
+               stream_data->stream_id);
+        free_http2_stream_data(stream_data, false);
+    }
+    return disp;
 }
 
 
@@ -2199,7 +2183,7 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
     // return true if error was detected and logged, and connection should close
     qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
            "[C%" PRIu64
-           "] handle_incoming_http - Calling nghttp2_session_mem_recv"
+           "] handle_incoming_http - Calling nghttp2_session_mem_recv "
            "qd_adaptor_buffer of size %" PRIu32 " ",
            conn->conn_id, size);
     bool close_conn = false; // return result
@@ -2207,6 +2191,10 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
         conn->buffers_pushed_to_nghttp2 = true;
 
     int rv = nghttp2_session_mem_recv(conn->session, buf, size);
+
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] nghttp2_session_mem_recv rv=%i",
+           conn->conn_id, rv);
+
     if (rv < 0) {
         qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR,
                "[C%"PRIu64"] Error in nghttp2_session_mem_recv rv=%i", conn->conn_id, rv);
@@ -2230,7 +2218,12 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
                    "[C%"PRIu64"] HTTP2 NGHTTP2_ERR_BAD_CLIENT_MAGIC, closing connection", conn->conn_id);
             nghttp2_submit_goaway(conn->session, 0, 0,
                                   NGHTTP2_PROTOCOL_ERROR, (uint8_t *)"Bad Client Magic", 16);
+        } else if (rv == NGHTTP2_ERR_FRAME_SIZE_ERROR) {
+            qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR,
+                   "[C%" PRIu64 "] HTTP2 NGHTTP2_ERR_FRAME_SIZE_ERROR, closing connection", conn->conn_id);
+            nghttp2_submit_goaway(conn->session, 0, 0, NGHTTP2_ERR_FRAME_SIZE_ERROR, (uint8_t *) "Bad Frame Size", 14);
         }
+
         else {
             nghttp2_submit_goaway(conn->session, 0, 0,
                                   NGHTTP2_PROTOCOL_ERROR, (uint8_t *)"Protocol Error", 14);
@@ -2245,329 +2238,100 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
     return close_conn;
 }
 
-
-/**
- * Call pn_tls_process and closes the raw connection if there is tls error.
- * Also puts out the log statement which contains the exact error generated by the proton TLS library.
- */
-static bool process_tls(qdr_http2_connection_t *conn)
-{
-    int err = pn_tls_process(conn->tls_session);
-    if (err && !conn->tls_error) {
-        conn->tls_error = true;
-        // Stop all application data processing.
-        // Close input.  Continue non-application output in case we have a TLS protocol error to send to peer.
-        char error_msg[256];
-        pn_tls_get_session_error_string(conn->tls_session, error_msg, sizeof(error_msg));
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"] conn->ingress=%i, Error processing TLS: %s", conn->conn_id, conn->ingress, error_msg);
-        conn->tls_has_output = pn_tls_is_encrypt_output_pending(conn->tls_session);
-        pn_raw_connection_read_close(conn->pn_raw_conn);
-        return false;
-    }
-    return true;
-}
-
-
-static void take_back_input_decrypt_buff(qdr_http2_connection_t *conn)
-{
-    pn_raw_buffer_t take_incoming_buf;
-    size_t take_input_count = pn_tls_take_decrypt_input_buffers(conn->tls_session, &take_incoming_buf, 1);
-    (void)take_input_count;   // prevent unused variable warning
-}
-
-/**
- * Encrypts all outgoing data and writes the encrypted data immediately out to the wire based on can_write_result_buffers flag.
- * Encrypts data going out from router to http2 server (when the router is acting as a client and also encrypts data that is going out from
- * router to http2 client.
- * Handles handshake when acting as a client.
- *
- */
-static void handle_outgoing_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *unencrypted_buffs, size_t unencrypted_buff_count, bool can_write_result_buffers)
-{
-    if (conn->tls_error)
-        return;
-
-    if (pn_tls_is_secure(conn->tls_session)) {
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_outgoing_tls pn_tls_can_encrypt(conn->tls_session)", conn->conn_id);
-        // A TLS session has already been negotiated. We are ready to encrypt the HTTP2 data
-        // and send the encrypted data out to the peer
-        if (!conn->ingress) {
-            if (!conn->handled_connected_event) {
-                qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_outgoing_tls calling handle_raw_connected_event", conn->conn_id);
-                handle_raw_connected_event(conn);
-            }
-        }
-
-        size_t processed_unencrypted_buffs_count = 0;
-        while (processed_unencrypted_buffs_count < unencrypted_buff_count && unencrypted_buff_count) {
-
-            size_t encrypt_input_buff_capacity = pn_tls_get_encrypt_input_buffer_capacity(conn->tls_session);
-            assert (encrypt_input_buff_capacity > 0);
-
-            size_t num_buffs_to_process = MIN(encrypt_input_buff_capacity, unencrypted_buff_count-processed_unencrypted_buffs_count);
-            if (num_buffs_to_process == 0)
-                break;
-
-            size_t consumed = pn_tls_give_encrypt_input_buffers(conn->tls_session, &unencrypted_buffs[processed_unencrypted_buffs_count], num_buffs_to_process);
-
-            (void)consumed; // prevent unused variable warning
-            assert (consumed == num_buffs_to_process);
-
-            processed_unencrypted_buffs_count += num_buffs_to_process;
-
-            //
-            // Process TLS.
-            //
-            if (!process_tls(conn))
-                return;
-        }
-        pn_raw_buffer_t take_unencrypted_input_buff;
-        while (pn_tls_take_encrypt_input_buffers(conn->tls_session, &take_unencrypted_input_buff, 1)) {
-            qd_adaptor_buffer_t *http2_buff = (qd_adaptor_buffer_t *) take_unencrypted_input_buff.context;
-            if (http2_buff) {
-                free_qd_adaptor_buffer_t(http2_buff);
-            }
-        }
-        conn->tls_has_output = pn_tls_is_encrypt_output_pending(conn->tls_session);
-    }
-
-    while (pn_tls_need_encrypt_output_buffers(conn->tls_session)) {
-        //
-        // We will give just one result buffer
-        //
-        // This is the raw buffer that will hold the encrypted results
-        pn_raw_buffer_t encrypted_result_raw_buffer;
-        qd_adaptor_buffer_t *http2_buff      = qd_adaptor_buffer();
-        encrypted_result_raw_buffer.bytes    = (char *) qd_adaptor_buffer_base(http2_buff);
-        encrypted_result_raw_buffer.capacity = qd_adaptor_buffer_capacity(http2_buff);
-        encrypted_result_raw_buffer.size = 0;
-        encrypted_result_raw_buffer.offset = 0;
-        encrypted_result_raw_buffer.context = (uintptr_t) http2_buff;
-
-        //
-        // Send the empty raw_buffers to proton. Proton will put the encrypted data into encrypted_result_raw_buffers
-        //
-        size_t encrypt_result_buffers_count = pn_tls_give_encrypt_output_buffers(conn->tls_session, &encrypted_result_raw_buffer, 1);
-        assert (encrypt_result_buffers_count == 1);
-        (void) encrypt_result_buffers_count; // prevent unused variable warning
-
-        //
-        // Process TLS.
-        //
-        if (!process_tls(conn))
-            return;
-
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_outgoing_tls process_tls successful", conn->conn_id);
-
-        pn_raw_buffer_t take_encrypted_result_buffer;
-        size_t take_encrypted_result_buffers_count = pn_tls_take_encrypt_output_buffers(conn->tls_session, &take_encrypted_result_buffer, 1);
-        (void)take_encrypted_result_buffers_count;
-        assert(take_encrypted_result_buffers_count == 1);
-
-        qd_adaptor_buffer_t *encrypted_http2_buff = (qd_adaptor_buffer_t *) take_encrypted_result_buffer.context;
-        qd_adaptor_buffer_insert(encrypted_http2_buff, take_encrypted_result_buffer.size);
-        // This encrypted buff is ready to be written out to the wire.
-        DEQ_INSERT_TAIL(conn->buffs, encrypted_http2_buff);
-    }
-
-    if (can_write_result_buffers)
-        qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->buffs);
-}
-
-static void set_qdr_connection_info_details(qdr_http2_connection_t *conn)
-{
-    const char *protocol_info;
-    size_t protocol_info_length;
-    char *protocol_ver = 0;
-    char *protocol_cipher = 0;
-    //
-    // Ask the Proton TLS API for protocol version and protol cipher.
-    //
-    if (pn_tls_get_protocol_version(conn->tls_session, &protocol_info, &protocol_info_length)) {
-        protocol_ver = qd_calloc(protocol_info_length + 1, sizeof(char));
-        memmove(protocol_ver, protocol_info, protocol_info_length);
-    }
-    if (pn_tls_get_cipher(conn->tls_session, &protocol_info, &protocol_info_length)) {
-        protocol_cipher = qd_calloc(protocol_info_length + 1, sizeof(char));
-        memmove(protocol_cipher, protocol_info, protocol_info_length);
-    }
-
-    qdr_connection_info_t *conn_info = conn->qdr_conn->connection_info;
-
-    //
-    // Lock using the connection_info_lock before setting the values on the
-    // connection_info. This same lock is being used in the agent_connection.c's qdr_connection_insert_column_CT
-    //
-    sys_mutex_lock(&conn_info->connection_info_lock);
-    free(conn_info->ssl_cipher);
-    conn_info->ssl_cipher = 0;
-    free(conn_info->ssl_proto);
-    conn_info->ssl_proto = 0;
-    conn_info->ssl = true;
-    conn_info->is_encrypted = true;
-    if (protocol_cipher) {
-        conn_info->ssl_cipher = protocol_cipher;
-    }
-    if (protocol_ver) {
-        conn_info->ssl_proto = protocol_ver;
-    }
-    if (conn->config->adaptor_config->authenticate_peer) {
-        conn_info->is_authenticated = true;
-    }
-    sys_mutex_unlock(&conn_info->connection_info_lock);
-}
-
-/**
- * Decrypts incoming TLS and feeds the decrypted data to nghttp2 which then invokes its callbacks.
- * The incoming encrypted data can come from either a client trying to make a request or from a
- * server sending a response.
- */
-bool handle_incoming_tls(qdr_http2_connection_t *conn, const pn_raw_buffer_t *incoming_buf)
-{
-    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_incoming_tls incoming_buf.size=%zu", conn->conn_id, incoming_buf->size);
-
-    if (conn->tls_error)
-        return true;
-
-    // encrypted data is in the incoming_buf raw buffer.
-    bool close_conn = false;
-    size_t input_buff_capacity = pn_tls_get_decrypt_input_buffer_capacity(conn->tls_session);
-    (void)input_buff_capacity;   // prevent unused variable warning
-    assert(input_buff_capacity > 0);
-
-    size_t consumed = pn_tls_give_decrypt_input_buffers(conn->tls_session, incoming_buf, 1);
-    (void)consumed;   // prevent unused variable warning
-    assert(consumed == 1);
-
-    size_t result_decrypt_buff_capacity = pn_tls_get_decrypt_output_buffer_capacity(conn->tls_session);
-
-    if (result_decrypt_buff_capacity == 0) {
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_incoming_tls result_decrypt_buff_capacity == 0", conn->conn_id);
-    }
-    else {
-        //
-        // Process TLS.
-        //
-        if (!process_tls(conn)) {
-            take_back_input_decrypt_buff(conn);
-            return false;
-        }
-
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_incoming_tls process_tls successful", conn->conn_id);
-
-        while (pn_tls_need_decrypt_output_buffers(conn->tls_session)) {
-            //
-            // Give one raw buffer to tls which will be used to decrypt.
-            //
-            pn_raw_buffer_t decrypted_raw_buffer;
-            qd_adaptor_buffer_t *decrypted_http2_buf = qd_adaptor_buffer();
-            decrypted_raw_buffer.bytes               = (char *) qd_adaptor_buffer_base(decrypted_http2_buf);
-            decrypted_raw_buffer.capacity            = qd_adaptor_buffer_capacity(decrypted_http2_buf);
-            decrypted_raw_buffer.size = 0;
-            decrypted_raw_buffer.offset = 0;
-            decrypted_raw_buffer.context = (uintptr_t) decrypted_http2_buf;
-
-            size_t result = pn_tls_give_decrypt_output_buffers(conn->tls_session, &decrypted_raw_buffer, 1);
-            (void)result;   // prevent unused variable warning
-
-            //
-            // Process TLS and log an error if any.
-            //
-            if (!process_tls(conn)) {
-                take_back_input_decrypt_buff(conn);
-                return false;
-            }
-            if (!conn->alpn_check_complete)
-                check_alpn_protocol(conn);
-
-            if (conn->qdr_conn && conn->qdr_conn->connection_info && !conn->qdr_conn->connection_info->ssl) {
-                set_qdr_connection_info_details(conn);
-            }
-
-            qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_incoming_tls process_tls successful, result=%zu", conn->conn_id, result);
-        }
-
-        pn_raw_buffer_t take_decrypted_output_buff;
-        while (pn_tls_take_decrypt_output_buffers(conn->tls_session, &take_decrypted_output_buff, 1)) {
-            if (!conn->handled_connected_event) {
-                handle_raw_connected_event(conn);
-            }
-            close_conn = push_rx_buffer_to_nghttp2(conn, (uint8_t*)take_decrypted_output_buff.bytes, take_decrypted_output_buff.size);
-            qd_adaptor_buffer_t *take_decrypt_output_http2_buff =
-                (qd_adaptor_buffer_t *) take_decrypted_output_buff.context;
-            if (take_decrypt_output_http2_buff) {
-                free_qd_adaptor_buffer_t(take_decrypt_output_http2_buff);
-            }
-        }
-    }
-
-    conn->tls_has_output = pn_tls_is_encrypt_output_pending(conn->tls_session);
-
-    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] HTTP2 handle_incoming_tls conn->tls_has_output=%i", conn->conn_id, conn->tls_has_output);
-
-    take_back_input_decrypt_buff(conn);
-
-    return close_conn;
-}
-
 static int handle_incoming_http(qdr_http2_connection_t *conn)
 {
-    if (!conn->pn_raw_conn)
+    if (!conn->pn_raw_conn) {
+        qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "] In handle_incoming_http, no pn raw connection, returning", conn->conn_id);
         return 0;
-    //
-    // This fix is a for nodejs server (router acting as client).
+    }
+    int  count      = 0;
+    bool close_conn = false;
+    if (conn->require_tls) {
+        int                      encrypted_bytes_in = 0;
+        qd_adaptor_buffer_list_t decrypted_buffs;
+        DEQ_INIT(decrypted_buffs);
+        encrypted_bytes_in = qd_tls_decrypt(conn->tls, conn->pn_raw_conn, &decrypted_buffs);
+        if (encrypted_bytes_in == QD_TLS_ERROR) {
+            pn_raw_connection_close(conn->pn_raw_conn);
+            return 0;
+        } else if (DEQ_SIZE(decrypted_buffs) > 0 && qd_tls_is_secure(conn->tls)) {
+            if (!conn->alpn_check_complete)
+                close_conn = !is_alpn_protocol_match(conn);
+            if (!close_conn && !conn->initial_settings_frame_sent) {
+                send_settings_frame(conn);
+            }
+            if (!close_conn && conn->qdr_conn && conn->qdr_conn->connection_info
+                && !conn->qdr_conn->connection_info->ssl) {
+                set_qdr_connection_info_details(conn->tls, conn->qdr_conn->connection_info);
+            }
+            qd_adaptor_buffer_t *adaptor_buff = DEQ_HEAD(decrypted_buffs);
+            size_t               buffer_size  = qd_adaptor_buffer_size(adaptor_buff);
+            count += buffer_size;
 
-    // This is what happens -
-    // 1. nodejs sends a SETTINGS frame immediately after we open the connection. (this is legal)
-    // 2. Router sends -
-    //     2a. Client magic
-    //     2b. SETTINGS frame with ack=true (here the router is responding to the SETTINGS frame from nodejs in step 1)
-    //     2c. SETTINGS frame ack=false(this is the router's inital settings frame)
-    //     2d. GET request
-    // 3. Nodejs responds with GOAWAY. Not sure why
-    // To remedy this problem, when nodejs sends the initial SETTINGS frame, we don't tell nghttp2 about it. So step 2c happens before step 2b and nodejs is now happy
-    //
-    if (!conn->ingress && !conn->tls_session) {
-       if (!conn->client_magic_sent) {
-           return 0;
-       }
-   }
+            while (adaptor_buff) {
+                if (!close_conn) {
+                    close_conn = push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(adaptor_buff), buffer_size);
+                }
+                DEQ_REMOVE_HEAD(decrypted_buffs);
+                qd_adaptor_buffer_free(adaptor_buff);
+                adaptor_buff = DEQ_HEAD(decrypted_buffs);
+                if (adaptor_buff)
+                    buffer_size = qd_adaptor_buffer_size(adaptor_buff);
+            }
+        }
+        conn->encrypted_bytes_in += encrypted_bytes_in;
+    } else {
+        // No TLS case, no need to decrypt data first, directly hand data to nghttp2.
 
-   pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-   size_t          n;
-   int             count = 0;
+        //
+        // This fix is a for nodejs server (router acting as client).
 
-   bool close_conn = false;
+        // This is what happens -
+        // 1. nodejs sends a SETTINGS frame immediately after we open the connection. (this is allowed)
+        // 2. Router sends -
+        //     2a. Client magic
+        //     2b. SETTINGS frame with ack=true (here the router is responding to the SETTINGS frame from nodejs in step
+        //     1) 2c. SETTINGS frame ack=false(this is the router's inital settings frame) 2d. GET request
+        // 3. Nodejs responds with GOAWAY. Not sure why
+        // To remedy this problem, when nodejs sends the initial SETTINGS frame, we don't tell nghttp2 about it. So step
+        // 2c happens before step 2b and nodejs is now happy
+        //
+        if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) && !conn->ingress && !conn->tls) {
+            if (!conn->initial_settings_frame_sent) {
+                return 0;
+            }
+        }
 
-   while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
-       for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
-           qd_adaptor_buffer_t *buf           = (qd_adaptor_buffer_t *) raw_buffers[i].context;
-           uint32_t raw_buff_size = raw_buffers[i].size;
-           qd_adaptor_buffer_insert(buf, raw_buff_size);
-           count += raw_buff_size;
+        pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
+        size_t          n;
 
-           if (raw_buff_size > 0 && !close_conn) {
-               if (conn->tls_session) {
-                   close_conn = handle_incoming_tls(conn, &raw_buffers[i]);
-               } else {
-                   // no tls, just raw bytes. Push the bytes to nghttp2
-                   if (!conn->buffers_pushed_to_nghttp2)
-                       conn->buffers_pushed_to_nghttp2 = true;
-                   close_conn =
-                       push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(buf), qd_adaptor_buffer_size(buf));
-               }
-           }
-           // Free the wire buffer
-           free_qd_adaptor_buffer_t(buf);
-       }
-   }
+        while ((n = pn_raw_connection_take_read_buffers(conn->pn_raw_conn, raw_buffers, RAW_BUFFER_BATCH))) {
+            for (size_t i = 0; i < n && raw_buffers[i].bytes; ++i) {
+                qd_adaptor_buffer_t *buf           = (qd_adaptor_buffer_t *) raw_buffers[i].context;
+                uint32_t             raw_buff_size = raw_buffers[i].size;
+                qd_adaptor_buffer_insert(buf, raw_buff_size);
+                count += raw_buff_size;
+
+                if (raw_buff_size > 0 && !close_conn) {
+                    // no tls, just raw bytes. Push the bytes to nghttp2
+                    if (!conn->buffers_pushed_to_nghttp2)
+                        conn->buffers_pushed_to_nghttp2 = true;
+                    close_conn =
+                        push_rx_buffer_to_nghttp2(conn, qd_adaptor_buffer_base(buf), qd_adaptor_buffer_size(buf));
+                }
+                // Free the wire buffer
+                qd_adaptor_buffer_free(buf);
+            }
+        }
+    }
 
     if (close_conn) {
         pn_raw_connection_close(conn->pn_raw_conn);
     }
     else {
         if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read)) {
-            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
+            grant_read_buffers(conn, "handle_incoming_http");
         }
     }
 
@@ -2617,6 +2381,9 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
     ingress_http_conn->conn_id = conn->identity;
     qdr_connection_set_context(conn, ingress_http_conn);
     ingress_http_conn->connection_established = true;
+    qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+           "[C%" PRIu64 "] qdr_http_connection_ingress_accept, qdr_connection_t object created ",
+           ingress_http_conn->conn_id);
     return ingress_http_conn;
 }
 
@@ -2684,29 +2451,14 @@ static void close_connections(qdr_http2_connection_t* conn)
         conn->dummy_link = 0;
     }
 
-	qdr_connection_set_context(conn->qdr_conn, 0);
-	if (conn->qdr_conn) {
-	    qdr_connection_closed(conn->qdr_conn);
-	    conn->qdr_conn = 0;
-	}
+    qdr_connection_set_context(conn->qdr_conn, 0);
+    if (conn->qdr_conn) {
+        qdr_connection_closed(conn->qdr_conn);
+        conn->qdr_conn = 0;
+    }
     qdr_action_t *action = qdr_action(qdr_del_http2_connection_CT, "delete_http2_connection");
     action->args.general.context_1 = conn;
     qdr_action_enqueue(http2_adaptor->core, action);
-}
-
-static void clean_conn_buffs(qdr_http2_connection_t* conn)
-{
-    //
-    // Free all the buffers on this session. This session is closed and any unsent buffers should be freed.
-    //
-    qd_adaptor_buffer_t *buf      = DEQ_HEAD(conn->buffs);
-    qd_adaptor_buffer_t *curr_buf = 0;
-    while (buf) {
-        curr_buf = buf;
-        DEQ_REMOVE_HEAD(conn->buffs);
-        buf = DEQ_HEAD(conn->buffs);
-        free_qd_adaptor_buffer_t(curr_buf);
-    }
 }
 
 static void clean_http2_conn(qdr_http2_connection_t* conn)
@@ -2719,7 +2471,13 @@ static void clean_http2_conn(qdr_http2_connection_t* conn)
     //
     nghttp2_session_del(conn->session);
     conn->session = 0;
-    clean_conn_buffs(conn);
+    qd_adaptor_buffer_list_free_buffers(&conn->out_buffs);
+
+    // Free tls related stuff if need be.
+    if (conn->tls) {
+        qd_tls_free(conn->tls);
+        conn->tls = 0;
+    }
 }
 
 
@@ -2872,7 +2630,7 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     egress_http_conn->config = connector->config;
     egress_http_conn->server = connector->server;
     egress_http_conn->data_prd.read_callback = read_data_callback;
-    DEQ_INIT(egress_http_conn->buffs);
+    DEQ_INIT(egress_http_conn->out_buffs);
     DEQ_INIT(egress_http_conn->streams);
     sys_atomic_init(&egress_http_conn->raw_closed_read, 0);
     sys_atomic_init(&egress_http_conn->raw_closed_write, 0);
@@ -2925,27 +2683,83 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
 
 static void handle_raw_connected_event(qdr_http2_connection_t *conn)
 {
-    qd_log_source_t *log = http2_adaptor->log_source;
-    conn->handled_connected_event = true;
     if (conn->ingress) {
         qdr_http_connection_ingress_accept(conn);
-        send_settings_frame(conn);
-        qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] Accepted Ingress ((PN_RAW_CONNECTION_CONNECTED)) from %s", conn->conn_id, conn->remote_address);
+        if (conn->require_tls) {
+            setup_qd_tls(conn);
+        } else {
+            send_settings_frame(conn);
+        }
     } else {
         CLEAR_ATOMIC_FLAG(&conn->raw_closed_read);
         CLEAR_ATOMIC_FLAG(&conn->raw_closed_write);
-        if (!conn->session) {
-            nghttp2_session_client_new(&conn->session, (nghttp2_session_callbacks *)http2_adaptor->callbacks, (void *)conn);
-            send_settings_frame(conn);
-            conn->client_magic_sent = true;
-            qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] nghttp2_session_client_new", conn->conn_id);
-        }
         conn->connection_established = true;
         create_stream_dispatcher_link(conn);
-        qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Created stream dispatcher link in PN_RAW_CONNECTION_CONNECTED", conn->conn_id);
+        qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "] Created stream dispatcher link in PN_RAW_CONNECTION_CONNECTED", conn->conn_id);
+        if (!conn->session) {
+            nghttp2_session_client_new(&conn->session, (nghttp2_session_callbacks *)http2_adaptor->callbacks, (void *)conn);
+            qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%" PRIu64 "] nghttp2_session_client_new", conn->conn_id);
+        }
+        if (conn->require_tls && qd_tls_has_output(conn->tls)) {
+            qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] Initiating TLS handshake on egress connection", conn->conn_id);
+            encrypt_outgoing_tls(conn, 0, true);
+            // Grant read buffers so we can read the tls handshake response sent to us by the other side
+            grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, egress");
+        }
         while (qdr_connection_process(conn->qdr_conn)) {}
     }
+}
 
+static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff,
+                                 bool write_buffers)
+{
+    qd_adaptor_buffer_list_t encrypted_buffs;
+    DEQ_INIT(encrypted_buffs);
+    int bytes_out = qd_tls_encrypt(conn->tls, unencrypted_buff, &encrypted_buffs);
+    if (bytes_out == QD_TLS_ERROR) {
+        pn_raw_connection_close(conn->pn_raw_conn);
+        return;
+    }
+
+    if (unencrypted_buff) {
+        conn->bytes_out += bytes_out;
+    }
+
+    if (DEQ_SIZE(encrypted_buffs) > 0) {
+        DEQ_APPEND(conn->out_buffs, encrypted_buffs);
+        qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] encrypt_outgoing_tls() DEQ_SIZE(conn->out_buffs)=%zu\n", conn->conn_id,
+               DEQ_SIZE(conn->out_buffs));
+    }
+
+    if (write_buffers) {
+        int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
+        qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i\n", conn->conn_id, num_buffers_written);
+    }
+}
+
+static void setup_qd_tls(qdr_http2_connection_t *conn)
+{
+    // Create the qd_tls_t object
+    conn->tls    = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
+    bool success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
+                                conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS);
+    if (success) {
+        // We were successfully able to gather the details from the associated sslProfile and start
+        // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
+        // bytes that the client is going to send us.
+        grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
+    } else {
+        // There was some problem with starting up the proton tls session.
+        // Check logs for detailed INFO level output to find out more about the failure
+        qd_log(http2_adaptor->log_source, QD_LOG_ERROR,
+               "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
+               conn->conn_id);
+        pn_raw_connection_close(conn->pn_raw_conn);
+    }
 }
 
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
@@ -2954,48 +2768,17 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     qd_log_source_t *log = http2_adaptor->log_source;
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
-        conn->alpn_check_complete = false;
-        conn->goaway_received = false;
-        if (conn->require_tls) {
-            conn->tls_error = false;
-            if (conn->ingress) {
-
-                bool tls_setup_success = qd_tls_initial_setup(conn->config->adaptor_config,
-                                                              qd_server_dispatch(conn->server),
-                                                              &conn->tls_config,
-                                                              &conn->tls_session,
-                                                              http2_adaptor->protocol_log_source,
-                                                              conn->conn_id,
-                                                              conn->listener ? true: false,
-                                                              &conn->tls_has_output,
-                                                              protocols);
-
-                if (!tls_setup_success) {
-                    if (conn->pn_raw_conn) {
-                        pn_raw_connection_close(conn->pn_raw_conn);
-                    }
-                }
-            }
-            else {
-                if (conn->tls_has_output) {
-                    qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Initiating TLS handshake on egress connection", conn->conn_id);
-                    handle_outgoing_tls(conn, 0, 0, true);
-                }
-            }
-        }
-        else {
-            if (!conn->handled_connected_event) {
-                handle_raw_connected_event(conn);
-            }
-        }
-        break;
-    }
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED %s", conn->conn_id,
+               conn->ingress ? "ingress" : "egress");
+        handle_raw_connected_event(conn);
+    } break;
     case PN_RAW_CONNECTION_CLOSED_READ: {
         if (conn->q2_blocked) {
             conn->q2_blocked = false;
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] q2 is unblocked on this connection (PN_RAW_CONNECTION_CLOSED_READ)", conn->conn_id);
         }
-    	SET_ATOMIC_FLAG(&conn->raw_closed_read);
+        SET_ATOMIC_FLAG(&conn->raw_closed_read);
+        handle_incoming_http(conn);
         if (conn->pn_raw_conn)
             pn_raw_connection_close(conn->pn_raw_conn);
         qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_READ", conn->conn_id);
@@ -3007,13 +2790,12 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
-        conn->handled_connected_event = false;
         if (conn->ingress) {
-            qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Ingress PN_RAW_CONNECTION_DISCONNECTED", conn->conn_id);
+            qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED Ingress", conn->conn_id);
         }
         else {
-            qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] Egress PN_RAW_CONNECTION_DISCONNECTED", conn->conn_id);
-            conn->client_magic_sent = false;
+            qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED Egress", conn->conn_id);
+            conn->initial_settings_frame_sent = false;
             if (conn->delete_egress_connections) {
                 // The egress connection has been deleted, cancel any pending timer
                 cancel_activation(conn);
@@ -3034,7 +2816,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_NEED_READ_BUFFERS: {
         qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_NEED_READ_BUFFERS Need read buffers", conn->conn_id);
         if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read)) {
-            qd_raw_connection_grant_read_buffers(conn->pn_raw_conn);
+            grant_read_buffers(conn, "PN_RAW_CONNECTION_NEED_READ_BUFFERS");
         }
         break;
     }
@@ -3049,27 +2831,26 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
     }
+    case PN_RAW_CONNECTION_READ: {
+        // We don't want to read when we are q2 blocked.
+        if (conn->q2_blocked) {
+            return;
+        }
+        int read = handle_incoming_http(conn);
+        qd_log(log, QD_LOG_TRACE,
+               "[C%" PRIu64 "] PN_RAW_CONNECTION_READ Read %i bytes, Total %" PRIu64 " encrypted bytes", conn->conn_id,
+               read, conn->encrypted_bytes_in);
+        if (qd_tls_has_output(conn->tls)) {
+            encrypt_outgoing_tls(conn, 0, true);
+        }
+        break;
+    }
     case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
         pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
         int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
         qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
                conn->conn_id, drained_buffers);
     } break;
-    case PN_RAW_CONNECTION_READ: {
-    	// We don't want to read when we are q2 blocked.
-    	if (conn->q2_blocked) {
-    		return;
-    	}
-        int read = handle_incoming_http(conn);
-        qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_READ Read %i bytes", conn->conn_id, read);
-        if (conn->tls_has_output) {
-            handle_outgoing_tls(conn, 0, 0, true);
-        }
-        if (conn->tls_error) {
-            pn_raw_connection_write_close(conn->pn_raw_conn);
-        }
-        break;
-    }
     case PN_RAW_CONNECTION_WRITTEN: {
         pn_raw_buffer_t buffs[WRITE_BUFFERS];
         size_t n;
@@ -3084,13 +2865,10 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 written += buffs[i].size;
                 qd_adaptor_buffer_t *qd_http2_buff = (qd_adaptor_buffer_t *) buffs[i].context;
                 assert(qd_http2_buff);
-                if (qd_http2_buff != NULL) {
-                    free_qd_adaptor_buffer_t(qd_http2_buff);
-                }
+                qd_adaptor_buffer_free(qd_http2_buff);
             }
         }
-
-        qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_WRITTEN Wrote %zu bytes, DEQ_SIZE(conn->buffs) = %zu", conn->conn_id, written, DEQ_SIZE(conn->buffs));
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_WRITTEN Wrote %zu bytes", conn->conn_id, written);
         restart_streams(conn);
         break;
     }
@@ -3176,8 +2954,8 @@ qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adapt
     DEQ_INSERT_TAIL(http2_adaptor->listeners, li);  // holds li refcount
     sys_mutex_unlock(&http2_adaptor->lock);
 
-    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Configured http2_adaptor listener on %s with backlog %d",
-           li->config->adaptor_config->host_port, li->config->adaptor_config->backlog);
+    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "Configured http2_adaptor listener on %s",
+           li->config->adaptor_config->host_port);
     // Note: the proactor may execute _handle_listener_accept on another thread during this call
     qd_adaptor_listener_listen(li->adaptor_listener, handle_listener_accept, (void *) li);
     return li;
@@ -3235,7 +3013,7 @@ static void qdr_http2_adaptor_final(void *adaptor_context)
             http_conn->stream_dispatcher_stream_data = 0;
         }
         qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Freeing http2 connection (calling free_qdr_http2_connection)", http_conn->conn_id);
-        clean_conn_buffs(http_conn);
+        qd_adaptor_buffer_list_free_buffers(&http_conn->out_buffs);
         free_qdr_http2_connection(http_conn, true);
         http_conn = DEQ_HEAD(adaptor->connections);
     }

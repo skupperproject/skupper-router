@@ -21,6 +21,7 @@
  */
 #include "adaptors/adaptor_buffer.h"
 #include "adaptors/adaptor_common.h"
+#include "adaptors/adaptor_tls.h"
 #include "adaptors/http_common.h"
 #include "server_private.h"
 
@@ -115,30 +116,38 @@ struct qdr_http2_connection_t {
     qdr_connection_t        *qdr_conn;
     pn_raw_connection_t     *pn_raw_conn;
     pn_raw_buffer_t          read_buffers[4];
-    qd_timer_t              *activate_timer;
-    qd_timer_t              *ping_timer;  // This timer is used to send a ping frame on the egress connection every 4 seconds.
+    qd_timer_t               *activate_timer;
     qd_http_adaptor_config_t *config;
     qd_server_t             *server;
-    uint64_t                 conn_id;
+
     char                     *remote_address;
     qdr_link_t               *stream_dispatcher;
     qdr_link_t               *dummy_link;
-    uint64_t                  dummy_link_id;
+
     qdr_http2_stream_data_t  *stream_dispatcher_stream_data;
-    uint64_t                  stream_dispatcher_id;
+
     nghttp2_data_provider        data_prd;
-    time_t                    prev_ping; // Time the previous PING frame was sent on egress connection.
-    time_t                    last_pn_raw_conn_read;  // The last time a PN_RAW_CONNECTION_READ event was invoked with more than zero bytes on an egress connection.
-    qd_adaptor_buffer_list_t     buffs;                  // Buffers for writing
+    qd_adaptor_buffer_list_t     out_buffs;  // Buffers for writing
     nghttp2_session          *session;    // A pointer to the nghttp2s' session object
     qd_http2_stream_data_list_t  streams;    // A session can have many streams.
     qd_http_listener_t       *listener;
     qd_http_connector_t      *connector;
+    qd_tls_t                    *tls;
+
+    uint64_t bytes_in;   // if this is TLS conn, the decrypted bytes read from raw conn, else just raw bytes read from
+                         // the raw conn
+    uint64_t bytes_out;  // if this is TLS conn, the decrypted bytes before writing to raw connection, else just raw
+                         // bytes written to raw conn
+    uint64_t encrypted_bytes_in;  // If this is a TLS connection, the total encrypted bytes received on this connection,
+                                  // zero otherwise
+    uint64_t encrypted_bytes_out;  // If this is a TLS connection, the total encrypted bytes sent on this connection,
+                                   // zero otherwise
+    uint64_t conn_id;
+    uint64_t stream_dispatcher_id;
+    uint64_t dummy_link_id;
 
     bool                      connection_established;
-    bool                      grant_initial_buffers;
     bool                      ingress;
-    bool                      client_magic_sent;
     bool                      delete_egress_connections;  // If set to true, the egress qdr_connection_t and qdr_http2_connection_t objects will be deleted
     bool                      goaway_received;
     bool                      tls_error;
@@ -149,11 +158,9 @@ struct qdr_http2_connection_t {
     sys_atomic_t              q2_restart;      // signal to resume receive
     sys_atomic_t              delay_buffer_write;   // if true, buffers will not be written to proton.
     bool                      require_tls;
-    pn_tls_t                 *tls_session;
     pn_tls_config_t          *tls_config;
-    bool                      tls_has_output;
     bool                      buffers_pushed_to_nghttp2;
-    bool                      handled_connected_event;
+    bool                      initial_settings_frame_sent;
     bool                      alpn_check_complete;
     DEQ_LINKS(qdr_http2_connection_t);
  };
