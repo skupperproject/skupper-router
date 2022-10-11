@@ -392,9 +392,6 @@ static size_t get_pn_raw_buffer_fetch_size(qd_tls_t *tls)
 
 int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *decrypted_buffs)
 {
-    if (tls->tls_error)
-        return QD_TLS_ERROR;
-
     int    encrypted_bytes_in = 0;
     size_t fetch_size         = get_pn_raw_buffer_fetch_size(tls);
 
