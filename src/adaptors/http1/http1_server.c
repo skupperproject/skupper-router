@@ -1652,6 +1652,9 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             hreq->request_dlv = delivery;
             qdr_delivery_set_context(delivery, (void*) hreq);
             qdr_delivery_incref(delivery, "HTTP1 server referencing request delivery");
+
+            // workaround for Q2 stall, ISSUE #754/#758
+            qd_message_Q2_holdoff_disable(msg);
             break;
         }
 

@@ -1594,6 +1594,10 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             qdr_delivery_set_context(delivery, hreq);
             qdr_delivery_incref(delivery, "HTTP1 client referencing response delivery");
             DEQ_INSERT_TAIL(hreq->responses, rmsg);
+
+            // workaround for Q2 stall, ISSUE #754/#758
+            qd_message_Q2_holdoff_disable(msg);
+
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                    "[C%"PRIu64"][L%"PRIu64"] HTTP received response for msg-id=%"PRIu64,
                    hconn->conn_id, hconn->out_link_id, hreq->base.msg_id);
