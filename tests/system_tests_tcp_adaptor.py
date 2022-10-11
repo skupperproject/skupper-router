@@ -1132,7 +1132,6 @@ class CommonTcpTests:
                 # it is allowed to have zero connectionsOpened
                 if output['address'] != 'ES_INTA':
                     assert output["connectionsOpened"] > 0
-                #assert output["connectionsOpened"] == output["connectionsClosed"] + 1
                 assert output["bytesIn"] == output["bytesOut"]
         self.assertEqual(es_inta_connections_opened, 7)
 

@@ -281,25 +281,16 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
  * Takes in a list of qd_adaptor_buffer_t objects and copies its contents into the passed in list of qd_buffer_t
  * objects.
  */
-static int copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t     *conn,
+static size_t copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t     *conn,
                                                     qd_adaptor_buffer_list_t *decrypted_buffs,
-                                                    qd_buffer_list_t         *buffers)
+                                                    qd_buffer_list_t         *qd_buffers)
 {
-    assert(buffers);
-    int                  bytes_copied = 0;
-    qd_adaptor_buffer_t *adaptor_buff = DEQ_HEAD(*decrypted_buffs);
-    while (adaptor_buff) {
-        size_t adaptor_buffer_size = qd_adaptor_buffer_size(adaptor_buff);
-        bytes_copied += adaptor_buffer_size;
-        qd_buffer_list_append(buffers, (uint8_t *) qd_adaptor_buffer_base(adaptor_buff), adaptor_buffer_size);
-        DEQ_REMOVE_HEAD(*decrypted_buffs);
-        qd_adaptor_buffer_free(adaptor_buff);
-        adaptor_buff = DEQ_HEAD(*decrypted_buffs);
-    }
+    assert(qd_buffers);
+    size_t bytes_copied = qd_adaptor_buffers_copy_to_qd_buffers(decrypted_buffs, qd_buffers);
 
     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-           "[C%" PRIu64 "] copy_decrypted_adaptor_buffs_to_qd_buffs() - DEQ_SIZE(buffers)=%zu, bytes_copied=%i",
-           conn->conn_id, DEQ_SIZE(*buffers), bytes_copied);
+           "[C%" PRIu64 "] copy_decrypted_adaptor_buffs_to_qd_buffs() - DEQ_SIZE(qd_buffers)=%zu, bytes_copied=%zu",
+           conn->conn_id, DEQ_SIZE(*qd_buffers), bytes_copied);
 
     return bytes_copied;
 }
