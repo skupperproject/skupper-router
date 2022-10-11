@@ -105,7 +105,7 @@ void qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint
 size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_buffs, qd_buffer_list_t *qd_bufs)
 {
     DEQ_INIT(*qd_bufs);
-    size_t                  bytes_copied = 0;
+    size_t               bytes_copied = 0;
     qd_adaptor_buffer_t *a_buf = DEQ_HEAD(*adaptor_buffs);
     while (a_buf) {
         size_t adaptor_buffer_size = qd_adaptor_buffer_size(a_buf);

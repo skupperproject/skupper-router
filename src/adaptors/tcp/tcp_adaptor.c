@@ -282,8 +282,8 @@ void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
  * objects.
  */
 static size_t copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t     *conn,
-                                                    qd_adaptor_buffer_list_t *decrypted_buffs,
-                                                    qd_buffer_list_t         *qd_buffers)
+                                                       qd_adaptor_buffer_list_t *decrypted_buffs,
+                                                       qd_buffer_list_t         *qd_buffers)
 {
     assert(qd_buffers);
     size_t bytes_copied = qd_adaptor_buffers_copy_to_qd_buffers(decrypted_buffs, qd_buffers);
