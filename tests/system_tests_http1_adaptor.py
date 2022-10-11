@@ -841,6 +841,10 @@ class Http1AdaptorQ2Standalone(TestCase):
         """
         Trigger Q2 backpressure against the HTTP client.
         """
+        # Q2 is disabled on egress http1 messages to prevent an
+        # irrecoverable stall - see Issue #754
+        self.skipTest("ISSUE #754 workaround causes this test to fail")
+
         router, listener_port, server_port = self.create_router("Q2Router1")
 
         # create a listener socket to act as the server service
@@ -921,6 +925,10 @@ class Http1AdaptorQ2Standalone(TestCase):
         """
         Trigger Q2 backpressure against the HTTP server.
         """
+        # Q2 is disabled on egress http1 messages to prevent an
+        # irrecoverable stall - see Issue #754
+        self.skipTest("ISSUE #754 workaround causes this test to fail")
+
         router, listener_port, server_port = self.create_router("Q2Router2")
 
         small_get_req = b'GET / HTTP/1.1\r\nContent-Length: 0\r\n\r\n'
