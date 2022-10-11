@@ -212,7 +212,7 @@ class LatencyMeasure
 /// There is only one request in flight at all times, so this is the
 ///  lowest conceivable latency at the most ideal condition
 /// In addition, all sends are of the same (tiny) size
-static void BM_TCPEchoServerLatencyWithoutQDR(benchmark::State &state)
+static void DISABLED_BM_TCPEchoServerLatencyWithoutQDR(benchmark::State &state)
 {
     EchoServerThread est;
 
@@ -220,7 +220,7 @@ static void BM_TCPEchoServerLatencyWithoutQDR(benchmark::State &state)
     lm.latencyMeasureLoop(state, est.port());
 }
 
-BENCHMARK(BM_TCPEchoServerLatencyWithoutQDR)->Unit(benchmark::kMillisecond);
+BENCHMARK(DISABLED_BM_TCPEchoServerLatencyWithoutQDR)->Unit(benchmark::kMillisecond);
 
 class DispatchRouterThreadTCPLatencyTest
 {
@@ -285,13 +285,13 @@ class DispatchRouterSubprocessTcpLatencyTest
     }
 };
 
-static void BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
+static void DISABLED_BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
 {
     auto est                        = make_unique<EchoServerThread>();
     unsigned short tcpConnectorPort = est->port();
     unsigned short tcpListenerPort  = findFreePort();
 
-    std::string configName          = "BM_TCPEchoServerLatency1QDRThread";
+    std::string       configName    = "DISABLED_BM_TCPEchoServerLatency1QDRThread";
     std::stringstream router_config = oneRouterTcpConfig(tcpConnectorPort, tcpListenerPort);
     writeRouterConfig(configName, router_config);
 
@@ -314,15 +314,15 @@ static void BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
     est.reset();
 }
 
-BENCHMARK(BM_TCPEchoServerLatency1QDRThread)->Unit(benchmark::kMillisecond);
+BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRThread)->Unit(benchmark::kMillisecond);
 
-static void BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &state)
+static void DISABLED_BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &state)
 {
     EchoServerThread est;
     unsigned short tcpConnectorPort = est.port();
     unsigned short tcpListenerPort  = findFreePort();
 
-    std::string configName          = "BM_TCPEchoServerLatency1QDRSubprocess.conf";
+    std::string       configName    = "DISABLED_BM_TCPEchoServerLatency1QDRSubprocess.conf";
     std::stringstream router_config = oneRouterTcpConfig(tcpConnectorPort, tcpListenerPort);
     writeRouterConfig(configName, router_config);
 
@@ -334,9 +334,9 @@ static void BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &state)
     }
 }
 
-BENCHMARK(BM_TCPEchoServerLatency1QDRSubprocess)->Unit(benchmark::kMillisecond);
+BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRSubprocess)->Unit(benchmark::kMillisecond);
 
-static void BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
+static void DISABLED_BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
 {
     EchoServerThread est;
 
@@ -360,4 +360,4 @@ static void BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
     }
 }
 
-BENCHMARK(BM_TCPEchoServerLatency2QDRSubprocess)->Unit(benchmark::kMillisecond);
+BENCHMARK(DISABLED_BM_TCPEchoServerLatency2QDRSubprocess)->Unit(benchmark::kMillisecond);
