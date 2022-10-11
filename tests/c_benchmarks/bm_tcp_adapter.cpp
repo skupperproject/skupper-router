@@ -214,6 +214,7 @@ class LatencyMeasure
 /// In addition, all sends are of the same (tiny) size
 static void DISABLED_BM_TCPEchoServerLatencyWithoutQDR(benchmark::State &state)
 {
+    return;  // disabled
     EchoServerThread est;
 
     LatencyMeasure lm;
@@ -287,11 +288,12 @@ class DispatchRouterSubprocessTcpLatencyTest
 
 static void DISABLED_BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
 {
+    return;  // disabled
     auto est                        = make_unique<EchoServerThread>();
     unsigned short tcpConnectorPort = est->port();
     unsigned short tcpListenerPort  = findFreePort();
 
-    std::string       configName    = "DISABLED_BM_TCPEchoServerLatency1QDRThread";
+    std::string       configName    = "BM_TCPEchoServerLatency1QDRThread";
     std::stringstream router_config = oneRouterTcpConfig(tcpConnectorPort, tcpListenerPort);
     writeRouterConfig(configName, router_config);
 
@@ -318,6 +320,7 @@ BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRThread)->Unit(benchmark::kMillisec
 
 static void DISABLED_BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &state)
 {
+    return;  // disabled
     EchoServerThread est;
     unsigned short tcpConnectorPort = est.port();
     unsigned short tcpListenerPort  = findFreePort();
@@ -338,6 +341,7 @@ BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRSubprocess)->Unit(benchmark::kMill
 
 static void DISABLED_BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
 {
+    return;  // disabled
     EchoServerThread est;
 
     unsigned short listener_2    = findFreePort();
