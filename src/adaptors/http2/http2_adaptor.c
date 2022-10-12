@@ -127,6 +127,16 @@ static bool is_alpn_protocol_match(qdr_http2_connection_t *http_conn)
     return alpn_protocol_match;
 }
 
+// invoked once when tls session handshake completes successfully
+static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
+{
+    qdr_http2_connection_t *conn = (qdr_http2_connection_t *) user_context;
+    assert(conn);
+    if (conn->qdr_conn && conn->qdr_conn->connection_info) {
+        qd_tls_update_connection_info(conn->tls, conn->qdr_conn->connection_info);
+    }
+}
+
 static void free_all_connection_streams(qdr_http2_connection_t *http_conn, bool on_shutdown)
 {
     // Free all the stream data associated with this connection/session.
@@ -1769,8 +1779,9 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
     if (conn->require_tls) {
         // Create the qd_tls_t object
         conn->tls              = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
-        bool tls_setup_success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                                              conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS);
+        bool tls_setup_success =
+            qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
+                         conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS, on_tls_connection_secured);
         if (tls_setup_success) {
             // Call pn_raw_connection() only if we were successfully able to configure TLS
             // with the information provided in the sslProfile.
@@ -2261,10 +2272,6 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
             if (!close_conn && !conn->initial_settings_frame_sent) {
                 send_settings_frame(conn);
             }
-            if (!close_conn && conn->qdr_conn && conn->qdr_conn->connection_info
-                && !conn->qdr_conn->connection_info->ssl) {
-                set_qdr_connection_info_details(conn->tls, conn->qdr_conn->connection_info);
-            }
             qd_adaptor_buffer_t *adaptor_buff = DEQ_HEAD(decrypted_buffs);
             size_t               buffer_size  = qd_adaptor_buffer_size(adaptor_buff);
             count += buffer_size;
@@ -2745,8 +2752,9 @@ static void setup_qd_tls(qdr_http2_connection_t *conn)
 {
     // Create the qd_tls_t object
     conn->tls    = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
-    bool success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                                conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS);
+    bool success =
+        qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
+                     conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS, on_tls_connection_secured);
     if (success) {
         // We were successfully able to gather the details from the associated sslProfile and start
         // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake

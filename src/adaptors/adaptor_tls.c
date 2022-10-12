@@ -31,13 +31,14 @@
 #define TLS_MAX_INPUT_CAPACITY 4
 
 struct qd_tls_t {
-    pn_tls_t        *tls_session;
-    pn_tls_config_t *tls_config;
-    void            *user_context;
-    qd_log_source_t *log_source;
-    uint64_t         conn_id;
-    bool             tls_has_output;
-    bool             tls_error;
+    pn_tls_t              *tls_session;
+    pn_tls_config_t       *tls_config;
+    void                  *user_context;
+    qd_log_source_t       *log_source;
+    uint64_t               conn_id;
+    qd_tls_on_secure_cb_t *on_secure_cb;
+    bool                   tls_has_output;
+    bool                   tls_error;
 };
 
 ALLOC_DECLARE(qd_tls_t);
@@ -63,7 +64,8 @@ bool qd_tls_start(qd_tls_t                  *tls,
                   const qd_dispatch_t       *qd,
                   bool                       is_listener,
                   const char                *alpn_protocols[],
-                  size_t                     alpn_protocol_count)
+                  size_t                     alpn_protocol_count,
+                  qd_tls_on_secure_cb_t     *on_secure)
 {
     const char *role = is_listener ? "listener" : "connector";
     qd_log(tls->log_source,
@@ -74,6 +76,7 @@ bool qd_tls_start(qd_tls_t                  *tls,
            config->name,
            config->ssl_profile_name);
 
+    tls->on_secure_cb = on_secure;
     do {
         // find the ssl profile
         assert(qd);
@@ -247,7 +250,7 @@ bool qd_tls_start(qd_tls_t                  *tls,
     return false;
 }
 
-void set_qdr_connection_info_details(qd_tls_t *tls, qdr_connection_info_t *conn_info)
+void qd_tls_update_connection_info(qd_tls_t *tls, qdr_connection_info_t *conn_info)
 {
     const char *protocol_info;
     size_t      protocol_info_length;
@@ -309,6 +312,8 @@ void qd_tls_free(qd_tls_t *tls)
  */
 static bool process_tls(qd_tls_t *tls)
 {
+    const bool check_if_secure = tls->on_secure_cb && !pn_tls_is_secure(tls->tls_session);
+
     int err = pn_tls_process(tls->tls_session);
     if (err && !tls->tls_error) {
         tls->tls_error = true;
@@ -324,6 +329,11 @@ static bool process_tls(qd_tls_t *tls)
                error_msg,
                tls->tls_has_output);
         return false;
+    }
+
+    if (check_if_secure && pn_tls_is_secure(tls->tls_session)) {
+        tls->on_secure_cb(tls, tls->user_context);
+        tls->on_secure_cb = 0;  // one shot
     }
     return true;
 }

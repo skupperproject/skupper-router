@@ -50,6 +50,7 @@ qd_tls_t *qd_tls(void *context, uint64_t conn_id, qd_log_source_t *log_source);
  * @param alpn_protocols - An array of protocols supported by the application layer used when performing
  * Application-Layer Protocol Negotiation (ALPN).
  * @param alpn_protocol_count - The count of elements in the alpn_protocols array.
+ * @param on_secure - optional callback invoked when TLS session becomes secure
  *
  * @return
  *   On success:
@@ -60,12 +61,14 @@ qd_tls_t *qd_tls(void *context, uint64_t conn_id, qd_log_source_t *log_source);
  *     All in-progress pn_tls objects are destroyed.
  *     Returns false.
  */
-bool qd_tls_start(qd_tls_t                  *tls,
-                  const qd_adaptor_config_t *config,
-                  const qd_dispatch_t       *qd,
-                  bool                       is_listener,
-                  const char                *alpn_protocols[],
-                  size_t                     alpn_protocol_count);
+typedef void qd_tls_on_secure_cb_t(qd_tls_t *tls, void *user_context);
+bool         qd_tls_start(qd_tls_t                  *tls,
+                          const qd_adaptor_config_t *config,
+                          const qd_dispatch_t       *qd,
+                          bool                       is_listener,
+                          const char                *alpn_protocols[],
+                          size_t                     alpn_protocol_count,
+                          qd_tls_on_secure_cb_t     *on_secure);
 
 /**
  * Takes as many read buffers from the raw connection that is allowed by pn_tls_get_decrypt_input_buffer_capacity and
@@ -123,9 +126,9 @@ bool qd_tls_is_error(const qd_tls_t *tls);
 
 /**
  * Sets some fields in the passed connection_info object.
- * The details set on the connection_info object appear in the output of sktat -c command.
+ * The details set on the connection_info object appear in the output of skstat -c command.
  */
-void set_qdr_connection_info_details(qd_tls_t *tls, qdr_connection_info_t *conn_info);
+void qd_tls_update_connection_info(qd_tls_t *tls, qdr_connection_info_t *conn_info);
 
 /**
  * Returns the proton tls session object.
