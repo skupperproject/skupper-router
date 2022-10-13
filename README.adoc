@@ -45,6 +45,7 @@ To build skupper router on a yum-based Linux system, you need the following pack
 - cmake
 - make
 - gcc
+- gcc-c++
 - python3-devel
 - cyrus-sasl-plain
 - cyrus-sasl-devel
