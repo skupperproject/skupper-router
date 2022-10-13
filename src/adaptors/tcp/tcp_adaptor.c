@@ -318,9 +318,6 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
             pn_raw_connection_close(conn->pn_raw_conn);
             return 0;
         } else if (DEQ_SIZE(decrypted_buffs) > 0 && buffers && qd_tls_is_secure(conn->tls)) {
-            if (conn->qdr_conn && conn->qdr_conn->connection_info && !conn->qdr_conn->connection_info->ssl) {
-                set_qdr_connection_info_details(conn->tls, conn->qdr_conn->connection_info);
-            }
             result += copy_decrypted_adaptor_buffs_to_qd_buffs(conn, &decrypted_buffs, buffers);
         }
         conn->encrypted_bytes_in += encrypted_bytes_in;
@@ -945,12 +942,22 @@ static void set_vflow_string(qdr_tcp_connection_t *conn)
     }
 }
 
+// invoked once when tls session handshake completes successfully
+static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
+{
+    qdr_tcp_connection_t *conn = (qdr_tcp_connection_t *) user_context;
+    assert(conn);
+    if (conn->qdr_conn && conn->qdr_conn->connection_info) {
+        qd_tls_update_connection_info(conn->tls, conn->qdr_conn->connection_info);
+    }
+}
+
 static void setup_qd_tls(qdr_tcp_connection_t *conn)
 {
     // Create the qd_tls_t object
     conn->tls    = qd_tls(conn, conn->conn_id, tcp_adaptor->log_source);
     bool success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                                conn->listener ? true : false, 0, 0);
+                                conn->listener ? true : false, 0, 0, on_tls_connection_secured);
     if (success) {
         // We were successfully able to gather the details from the associated sslProfile and start
         // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
@@ -1376,7 +1383,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *
             // from the associated sslProfile.
             tc->tls      = qd_tls(tc, tc->conn_id, tcp_adaptor->log_source);
             bool success = qd_tls_start(tc->tls, tc->config->adaptor_config, qd_server_dispatch(tc->server),
-                                        tc->listener ? true : false, 0, 0);
+                                        tc->listener ? true : false, 0, 0, on_tls_connection_secured);
             if (!success) {
                 // There was a failure trying to setup the connector sslProfile.
                 // Look at the logs for failure reason.
