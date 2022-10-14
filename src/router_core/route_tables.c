@@ -678,7 +678,9 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
     qdr_field_t        *address = action->args.io.address;
     qdr_subscription_t *sub     = action->args.io.subscription;
 
-    if (!discard) {
+    if (discard) {
+        free(sub);
+    } else {
         char aclass         = action->args.io.address_class;
         qdr_address_t *addr = 0;
 
