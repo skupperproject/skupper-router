@@ -46,6 +46,7 @@ void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *buflist);
 /**
  * Copies adaptor buffers in a buffer list into the passed in list of qd_buffers. Frees all adaptor
  * buffers in the passed in qd_adaptor_buffs list.
+ * Frees the buffers in the passed in adaptor buffer list.
  *
  * @param qd_adaptor_buffs - adaptor buffer list that needs to be copied into qd_buffers
  * @param qd_bufs - The qd_buffer list to which the adaptor buffers will be copied into
@@ -55,13 +56,16 @@ void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *buflist);
 size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *qd_adaptor_buffs, qd_buffer_list_t *qd_bufs);
 
 /**
- * Copies qd_buffers in a buffer list into the passed in list of adaptor buffers
+ * Copies qd_buffers in the passed qd_buffer list into the passed in list of adaptor buffers.
+ * Frees the buffers in the passed in qd_buffer list.
  *
  * @param qd_buffs - qd_buffer list that needs to be copied into adaptor buffers
  * @param qd_adaptor_buffs - The adaptor buffer list to which the qd_buffers will be copied into
+ *
+ * @return the total number of bytes copied from qd_bufs to qd_adaptor_buffs
  */
-void qd_adaptor_copy_qd_buffers_to_adaptor_buffers(const qd_buffer_list_t   *qd_bufs,
-                                                   qd_adaptor_buffer_list_t *qd_adaptor_buffs);
+size_t qd_adaptor_copy_qd_buffers_to_adaptor_buffers(qd_buffer_list_t         *qd_bufs,
+                                                     qd_adaptor_buffer_list_t *qd_adaptor_buffs);
 
 static inline void qd_adaptor_buffer_free(qd_adaptor_buffer_t *buf)
 {

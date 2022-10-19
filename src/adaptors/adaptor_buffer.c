@@ -48,6 +48,8 @@ void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *list)
 
 void qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer_t *pn_raw_buffer, const qd_adaptor_buffer_t *adaptor_buff)
 {
+    assert(pn_raw_buffer);
+    assert(adaptor_buff);
     pn_raw_buffer->size     = qd_adaptor_buffer_size(adaptor_buff);
     pn_raw_buffer->capacity = qd_adaptor_buffer_capacity(adaptor_buff);
     pn_raw_buffer->offset   = 0;
@@ -57,6 +59,7 @@ void qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer_t *pn_raw_buffer, const qd_ad
 
 qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *pn_raw_buffer)
 {
+    assert(pn_raw_buffer);
     qd_adaptor_buffer_t *adaptor_buff = qd_adaptor_buffer();
     qd_adaptor_buffer_pn_raw_buffer(pn_raw_buffer, adaptor_buff);
     return adaptor_buff;
@@ -64,6 +67,7 @@ qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *pn_raw_buffer)
 
 qd_adaptor_buffer_t *qd_get_adaptor_buffer_from_pn_raw_buffer(const pn_raw_buffer_t *pn_raw_buffer)
 {
+    assert(pn_raw_buffer);
     qd_adaptor_buffer_t *adaptor_buffer = (qd_adaptor_buffer_t *) pn_raw_buffer->context;
     qd_adaptor_buffer_insert(adaptor_buffer, pn_raw_buffer->size);
     return adaptor_buffer;
@@ -102,7 +106,7 @@ void qd_adaptor_buffer_list_append(qd_adaptor_buffer_list_t *buflist, const uint
     }
 }
 
-size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_buffs, qd_buffer_list_t *qd_bufs)
+size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_buffs, qd_buffer_list_t *qd_buffs)
 {
     assert(adaptor_buffs);
     size_t               bytes_copied = 0;
@@ -110,7 +114,7 @@ size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_b
     while (a_buf) {
         size_t adaptor_buffer_size = qd_adaptor_buffer_size(a_buf);
         bytes_copied += adaptor_buffer_size;
-        qd_buffer_list_append(qd_bufs, (uint8_t *) qd_adaptor_buffer_base(a_buf), adaptor_buffer_size);
+        qd_buffer_list_append(qd_buffs, (uint8_t *) qd_adaptor_buffer_base(a_buf), adaptor_buffer_size);
         DEQ_REMOVE_HEAD(*adaptor_buffs);
         qd_adaptor_buffer_free(a_buf);
         a_buf = DEQ_HEAD(*adaptor_buffs);
@@ -118,13 +122,19 @@ size_t qd_adaptor_buffers_copy_to_qd_buffers(qd_adaptor_buffer_list_t *adaptor_b
     return bytes_copied;
 }
 
-void qd_adaptor_copy_qd_buffers_to_adaptor_buffers(const qd_buffer_list_t   *qd_bufs,
-                                                   qd_adaptor_buffer_list_t *adaptor_buffs)
+size_t qd_adaptor_copy_qd_buffers_to_adaptor_buffers(qd_buffer_list_t         *qd_buffs,
+                                                     qd_adaptor_buffer_list_t *adaptor_buffs)
 {
-    DEQ_INIT(*adaptor_buffs);
-    qd_buffer_t *q_buf = DEQ_HEAD(*qd_bufs);
+    assert(qd_buffs);
+    size_t       bytes_copied = 0;
+    qd_buffer_t *q_buf        = DEQ_HEAD(*qd_buffs);
     while (q_buf) {
-        qd_adaptor_buffer_list_append(adaptor_buffs, (uint8_t *) qd_buffer_base(q_buf), qd_buffer_size(q_buf));
-        q_buf = DEQ_NEXT(q_buf);
+        size_t qd_buff_size = qd_buffer_size(q_buf);
+        bytes_copied += qd_buff_size;
+        qd_adaptor_buffer_list_append(adaptor_buffs, (uint8_t *) qd_buffer_base(q_buf), qd_buff_size);
+        DEQ_REMOVE_HEAD(*qd_buffs);
+        qd_buffer_free(q_buf);
+        q_buf = DEQ_HEAD(*qd_buffs);
     }
+    return bytes_copied;
 }
