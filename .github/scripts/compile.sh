@@ -19,13 +19,15 @@
 # under the License.
 #
 
-set -euxo pipefail
+# https://sipb.mit.edu/doc/safe-shell
+set -Eefuxo pipefail
 
-WORKING=$(pwd)
-eval "$(rpmbuild --eval '%set_build_flags')"
+WORKING="$(pwd)"
+BUILD_FLAGS="$(rpmbuild --eval '%set_build_flags')"
+eval "${BUILD_FLAGS}"
 
 #region libwebsockets
-wget ${LWS_SOURCE_URL} -O libwebsockets.tar.gz
+wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
 tar -zxf libwebsockets.tar.gz --one-top-level=lws-src --strip-components 1
 
 cmake -S "$WORKING/lws-src" -B "$WORKING/lws_build" \
@@ -47,12 +49,12 @@ cmake -S "$WORKING/lws-src" -B "$WORKING/lws_build" \
 cmake --build "$WORKING/lws_build" --parallel "$(nproc)" --verbose
 cmake --install "$WORKING/lws_build"
 
-DESTDIR=$WORKING/lws_install cmake --install "$WORKING/lws_build"
-tar -z -C $WORKING/lws_install -cf /libwebsockets-image.tar.gz usr
+DESTDIR="$WORKING/lws_install" cmake --install "$WORKING/lws_build"
+tar -z -C "$WORKING/lws_install" -cf /libwebsockets-image.tar.gz usr
 #endregion
 
 #region qpid-proton and skupper-router
-wget ${PROTON_SOURCE_URL} -O qpid-proton.tar.gz
+wget "${PROTON_SOURCE_URL}" -O qpid-proton.tar.gz
 tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
 
 do_patch () {
@@ -106,11 +108,11 @@ export CXXFLAGS="${CXXFLAGS} ${common_sanitizer_flags}"
 do_build "_asan" asan
 do_build "_tsan" tsan
 
-tar -z -C $WORKING/proton_install -cf /qpid-proton-image.tar.gz usr
+tar -z -C "$WORKING/proton_install" -cf /qpid-proton-image.tar.gz usr
 
 DESTDIR=$WORKING/staging/ cmake --install $WORKING/build
 cp "$WORKING/build_asan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_asan"
 cp "$WORKING/build_tsan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_tsan"
 cp --target-directory="$WORKING/staging/" "$WORKING/tests/tsan.supp" "$WORKING/build_asan/tests/lsan.supp"
-tar -z -C $WORKING/staging/ -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
+tar -z -C "$WORKING/staging/" -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
 #endregion
