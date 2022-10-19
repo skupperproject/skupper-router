@@ -27,6 +27,8 @@ extern "C" {
 #include <stdlib.h>
 
 #include <cstdio>
+#include <string>
+using std::string_literals::operator""s;
 
 namespace test_backtrace
 {
@@ -66,8 +68,8 @@ TEST_CASE("qd_symbolize_backtrace_line")
         qd_symbolize_finalize();
         return;
     }
-    CHECK(res.source_filename == __FILE__);
-    CHECK(res.object_function == "probe");
+    CHECK(res.source_filename == std::string{__FILE__});
+    CHECK(res.object_function == "probe"s);
     CHECK(std::abs(probe_line - res.source_line) <= 3);  // require reasonable precision
     qd_symbolize_finalize();
 }

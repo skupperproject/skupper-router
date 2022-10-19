@@ -18,7 +18,11 @@
  */
 
 #include "qdr_doctest.hpp"
+
 #include "cpp_stub.h"
+
+#include <string>
+using std::string_literals::operator""s;
 
 extern "C" {
 #include "qpid/dispatch/router_core.h"
@@ -51,19 +55,19 @@ TEST_CASE("test_safe_snprintf") {
         SUBCASE("") {
             len = safe_snprintf(output, LEN + 10, TEST_MESSAGE);
             CHECK(LEN == len);
-            CHECK(output == TEST_MESSAGE);
+            CHECK(output == std::string{TEST_MESSAGE});
         }
 
         SUBCASE("") {
             len = safe_snprintf(output, LEN + 1, TEST_MESSAGE);
             CHECK(LEN == len);
-            CHECK(output == TEST_MESSAGE);
+            CHECK(output == std::string{TEST_MESSAGE});
         }
 
         SUBCASE("") {
             len = safe_snprintf(output, LEN, TEST_MESSAGE);
             CHECK(LEN - 1 == len);
-            CHECK(output == "somethin");
+            CHECK(output == "somethin"s);
         }
 
         SUBCASE("") {
@@ -105,7 +109,7 @@ TEST_CASE("test_qdr_terminus_format") {
         SUBCASE("") {
             qdr_terminus_format(NULL, output, &size);
 
-            CHECK(output == "{}");
+            CHECK(output == "{}"s);
             CHECK(size == 1);
         }
     }

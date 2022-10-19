@@ -21,8 +21,7 @@
 #define QDR_DOCTEST
 
 // this must be defined globally
-// https://github.com/onqtam/doctest/blob/master/doc/markdown/configuration.md#doctest_config_treat_char_star_as_string
-#define DOCTEST_CONFIG_TREAT_CHAR_STAR_AS_STRING
+// https://github.com/onqtam/doctest/blob/master/doc/markdown/configuration.md
 #define DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 
 #include "doctest.h"
