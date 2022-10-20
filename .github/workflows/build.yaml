@@ -531,7 +531,7 @@ jobs:
           
           threads=12
           if [[ "${{ matrix.runtimeCheck }}" == "tsan" ]]; then
-            threads=2
+            threads=6
           fi
 
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
