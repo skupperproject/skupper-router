@@ -134,8 +134,8 @@ struct qdr_http1_connection_t {
     // State if connected to an HTTP client
     //
     struct {
-        char *client_ip_addr;
-        char *reply_to_addr;   // set once link is up
+        char    *client_ip_addr;
+        char    *reply_to_addr;  // set once link is up
         uint64_t next_msg_id;
     } client;
 
@@ -167,12 +167,13 @@ struct qdr_http1_connection_t {
 
     // statistics
     //
-    uint64_t  in_http1_octets;
-    uint64_t  out_http1_octets;
+    uint64_t out_http1_octets;
+    uint64_t in_http1_octets;
 
     // flags
     //
     bool trace;
+    bool require_tls;
 };
 ALLOC_DECLARE(qdr_http1_connection_t);
 
@@ -208,6 +209,9 @@ bool             qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
                                      void                           *get_output_context,
                                      qd_adaptor_buffer_list_t       *input_data,
                                      uint64_t                       *input_octets);
+
+#define HTTP1_NUM_ALPN_PROTOCOLS 2
+extern const char *http1_alpn_protocols[HTTP1_NUM_ALPN_PROTOCOLS];
 
 // http1_client.c protocol adaptor callbacks
 //

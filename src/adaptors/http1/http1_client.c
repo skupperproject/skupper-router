@@ -20,6 +20,7 @@
 #include "python_private.h"
 
 #include "adaptors/adaptor_common.h"
+#include "adaptors/adaptor_tls.h"
 #include "http1_private.h"
 
 #include "qpid/dispatch/protocol_adaptor.h"
@@ -147,8 +148,8 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
     hconn->handler_context.handler = &_handle_connection_events;
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
-
     hconn->client.next_msg_id = 1;
+    hconn->require_tls        = !!li->tls_domain;
 
     // configure the HTTP/1.x library
 
@@ -205,6 +206,16 @@ static void _handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_
 //
 qd_http_listener_t *qd_http1_configure_listener(qd_http_listener_t *li, qd_dispatch_t *qd, qd_entity_t *entity)
 {
+    if (li->config->adaptor_config->ssl_profile_name) {
+        li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, qdr_http1_adaptor->log, http1_alpn_protocols,
+                                       HTTP1_NUM_ALPN_PROTOCOLS, true);
+        if (!li->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_http_listener_decref(li);
+            return 0;
+        }
+    }
+
     li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, qdr_http1_adaptor->log);
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);

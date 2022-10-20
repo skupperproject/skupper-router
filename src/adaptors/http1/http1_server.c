@@ -17,6 +17,7 @@
  * under the License.
  */
 
+#include "adaptors/adaptor_tls.h"
 #include "http1_private.h"
 
 #include <proton/proactor.h>
@@ -139,7 +140,6 @@ static void _send_request_message(_server_request_t *hreq);
 // HTTP/1.x Server Connector
 ////////////////////////////////////////////////////////
 
-
 // An HttpConnector has been created.  Create an qdr_http_connection_t and a
 // qdr_connection_t for it.
 //
@@ -149,11 +149,11 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
     assert(hconn);
 
     ZERO(hconn);
-    hconn->type = HTTP1_CONN_SERVER;
-    hconn->admin_status = QD_CONN_ADMIN_ENABLED;
-    hconn->oper_status = QD_CONN_OPER_DOWN;  // until TCP connection ready
-    hconn->qd_server = qd->server;
-    hconn->adaptor = qdr_http1_adaptor;
+    hconn->type                    = HTTP1_CONN_SERVER;
+    hconn->admin_status            = QD_CONN_ADMIN_ENABLED;
+    hconn->oper_status             = QD_CONN_OPER_DOWN;  // until TCP connection ready
+    hconn->qd_server               = qd->server;
+    hconn->adaptor                 = qdr_http1_adaptor;
     hconn->handler_context.handler = &_handle_connection_events;
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
@@ -189,7 +189,7 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
                                                       "",                  // peer router version,
                                                       false);              // streaming links
 
-    hconn->conn_id = qd_server_allocate_connection_id(hconn->qd_server);
+    hconn->conn_id  = qd_server_allocate_connection_id(hconn->qd_server);
     hconn->qdr_conn = qdr_connection_opened(qdr_http1_adaptor->core,
                                             qdr_http1_adaptor->adaptor,
                                             false,  // incoming
@@ -221,6 +221,16 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
 qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector, qd_dispatch_t *qd,
                                                   qd_entity_t *entity)
 {
+    if (connector->config->adaptor_config->ssl_profile_name) {
+        connector->tls_domain = qd_tls_domain(connector->config->adaptor_config, qd, qdr_http1_adaptor->log,
+                                              http1_alpn_protocols, HTTP1_NUM_ALPN_PROTOCOLS, false);
+        if (!connector->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_http_connector_decref(connector);
+            return 0;
+        }
+    }
+
     qdr_http1_connection_t *hconn = _create_server_connection(connector, qd);
     assert(hconn);
 

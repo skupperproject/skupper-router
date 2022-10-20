@@ -53,6 +53,7 @@
      adaptor for meta-data.
  */
 
+const char *http1_alpn_protocols[HTTP1_NUM_ALPN_PROTOCOLS] = {"http/1.1", "http/1.0"};
 
 ALLOC_DEFINE(qdr_http1_out_data_t);
 ALLOC_DEFINE(qdr_http1_connection_t);
@@ -637,8 +638,15 @@ static void qd_http1_adaptor_init(qdr_core_t *core, void **adaptor_context)
 
 static void qd_http1_adaptor_final(void *adaptor_context)
 {
+    qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Shutting down HTTP/1.x protocol adaptor");
+
     qdr_http1_adaptor_t *adaptor = (qdr_http1_adaptor_t*) adaptor_context;
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
+
+    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+           "HTTP/1.x %zu connections %zu listeners %zu connectors still active",
+           DEQ_SIZE(adaptor->connections), DEQ_SIZE(adaptor->listeners),
+           DEQ_SIZE(adaptor->connectors));
 
     qdr_http1_connection_t *hconn = DEQ_HEAD(adaptor->connections);
     while (hconn) {
