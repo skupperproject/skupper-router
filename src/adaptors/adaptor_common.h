@@ -54,7 +54,6 @@ struct qd_adaptor_config_t
 
     //TLS related info
     char              *ssl_profile_name;
-    bool               require_tls;
     bool               authenticate_peer;
     bool               verify_host_name;
 };

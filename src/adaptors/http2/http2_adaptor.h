@@ -158,7 +158,6 @@ struct qdr_http2_connection_t {
     sys_atomic_t              q2_restart;      // signal to resume receive
     sys_atomic_t              delay_buffer_write;   // if true, buffers will not be written to proton.
     bool                      require_tls;
-    pn_tls_config_t          *tls_config;
     bool                      buffers_pushed_to_nghttp2;
     bool                      initial_settings_frame_sent;
     bool                      alpn_check_complete;

@@ -41,6 +41,7 @@ from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
 from http1_tests import wait_http_listeners_up
 from http1_tests import HttpAdaptorListenerConnectTestBase
+from http1_tests import HttpTlsBadConfigTestsBase
 
 
 class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
@@ -1002,6 +1003,26 @@ class Http1AdaptorQ2Standalone(TestCase):
 
         router.teardown()
         self.check_logs("server", router.logfile_path)
+
+
+class Http1TlsBadConfigTests(HttpTlsBadConfigTestsBase):
+    PROTOCOL_VERSION = "HTTP1"
+
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TlsBadConfigTests, cls).setUpClass()
+
+    def test_connector_mgmt_missing_ssl_profile(self):
+        self._test_connector_mgmt_missing_ssl_profile()
+
+    def test_connector_mgmt_missing_ca_file(self):
+        self._test_connector_mgmt_missing_ca_file()
+
+    def test_listener_mgmt_missing_ssl_profile(self):
+        self._test_listener_mgmt_missing_ssl_profile()
+
+    def test_listener_mgmt_missing_ca_file(self):
+        self._test_listener_mgmt_missing_ca_file()
 
 
 if __name__ == '__main__':

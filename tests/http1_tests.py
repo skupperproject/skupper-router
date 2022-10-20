@@ -1850,3 +1850,93 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
         self.assertRaises(ConnectionRefusedError, retry, _func)
 
         l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
+
+
+class HttpTlsBadConfigTestsBase(TestCase):
+    """
+    Negative test for invalid HTTP connector and listener configurations
+    """
+
+    # TestCase subclasses must provide the correct value for PROTOCOL_VERSION
+    PROTOCOL_VERSION = None
+
+    @classmethod
+    def setUpClass(cls):
+        super(HttpTlsBadConfigTestsBase, cls).setUpClass()
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'BadConfigRouter'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        cls.router = cls.tester.qdrouterd('BadConfigRouter',
+                                          Qdrouterd.Config(config), wait=True)
+
+    def _test_connector_mgmt_missing_ssl_profile(self):
+        """Attempt to create a connector with a bad sslProfile"""
+        assert self.PROTOCOL_VERSION is not None
+        port = self.tester.get_port()
+        mgmt = self.router.qd_manager
+        self.assertRaises(Exception, mgmt.create, "httpConnector",
+                          {'address': 'foo',
+                           'host': '127.0.0.1',
+                           'port': port,
+                           'protocolVersion': self.PROTOCOL_VERSION,
+                           'sslProfile': "NotFound"})
+        self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
+        self.assertIn("Invalid httpConnector configuration", mgmt.stdout)
+
+    def _test_connector_mgmt_missing_ca_file(self):
+        """Attempt to create a connector with an invalid CA file"""
+        assert self.PROTOCOL_VERSION is not None
+        port = self.tester.get_port()
+        mgmt = self.router.qd_manager
+
+        mgmt.create("sslProfile",
+                    {'name': 'BadCAFile',
+                     'caCertFile': '/bad/path/CA.pem'})
+        self.assertRaises(Exception, mgmt.create, "httpConnector",
+                          {'address': 'foo',
+                           'host': '127.0.0.1',
+                           'port': port,
+                           'protocolVersion': self.PROTOCOL_VERSION,
+                           'sslProfile': "BadCAFile"})
+        self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
+        self.assertIn("Invalid httpConnector configuration", mgmt.stdout)
+        mgmt.delete("sslProfile", name='BadCAFile')
+
+    def _test_listener_mgmt_missing_ssl_profile(self):
+        """Attempt to create a listener with a bad sslProfile"""
+        assert self.PROTOCOL_VERSION is not None
+        port = self.tester.get_port()
+        mgmt = self.router.qd_manager
+        self.assertRaises(Exception, mgmt.create, "httpListener",
+                          {'address': 'foo',
+                           'host': '0.0.0.0',
+                           'port': port,
+                           'protocolVersion': self.PROTOCOL_VERSION,
+                           'sslProfile': "NotFound"})
+        self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
+        self.assertIn("Invalid httpListener configuration", mgmt.stdout)
+
+    def _test_listener_mgmt_missing_ca_file(self):
+        """Attempt to create a listener with an invalid CA file"""
+        assert self.PROTOCOL_VERSION is not None
+        port = self.tester.get_port()
+        mgmt = self.router.qd_manager
+
+        mgmt.create("sslProfile",
+                    {'name': 'BadCAFile',
+                     'caCertFile': '/bad/path/CA.pem'})
+        self.assertRaises(Exception, mgmt.create, "httpListener",
+                          {'address': 'foo',
+                           'host': '0.0.0.0',
+                           'port': port,
+                           'protocolVersion': self.PROTOCOL_VERSION,
+                           'sslProfile': "BadCAFile"})
+        self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
+        self.assertIn("Invalid httpListener configuration", mgmt.stdout)
+        mgmt.delete("sslProfile", name='BadCAFile')

@@ -17,6 +17,7 @@
  * under the License.
  */
 
+#include "adaptors/adaptor_tls.h"
 #include "http1_private.h"
 
 #include <proton/proactor.h>
@@ -149,25 +150,27 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
     assert(hconn);
 
     ZERO(hconn);
-    hconn->type = HTTP1_CONN_SERVER;
-    hconn->admin_status = QD_CONN_ADMIN_ENABLED;
-    hconn->oper_status = QD_CONN_OPER_DOWN;  // until TCP connection ready
-    hconn->qd_server = qd->server;
-    hconn->adaptor = qdr_http1_adaptor;
+    hconn->type                    = HTTP1_CONN_SERVER;
+    hconn->require_tls             = !!connector->tls_domain;
+    hconn->admin_status            = QD_CONN_ADMIN_ENABLED;
+    hconn->oper_status             = QD_CONN_OPER_DOWN;  // until TCP connection ready
+    hconn->qd_server               = qd->server;
+    hconn->adaptor                 = qdr_http1_adaptor;
+    hconn->server.connector        = connector;
+    connector->ctx                 = (void *) hconn;
     hconn->handler_context.handler = &_handle_connection_events;
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
-    hconn->cfg.host    = qd_strdup(connector->config->adaptor_config->host);
-    hconn->cfg.port    = qd_strdup(connector->config->adaptor_config->port);
-    hconn->cfg.address = qd_strdup(connector->config->adaptor_config->address);
-    hconn->cfg.site =
-        connector->config->adaptor_config->site_id ? qd_strdup(connector->config->adaptor_config->site_id) : 0;
+
+    hconn->cfg.host          = qd_strdup(connector->config->adaptor_config->host);
+    hconn->cfg.port          = qd_strdup(connector->config->adaptor_config->port);
+    hconn->cfg.address       = qd_strdup(connector->config->adaptor_config->address);
     hconn->cfg.host_port     = qd_strdup(connector->config->adaptor_config->host_port);
-    hconn->server.connector  = connector;
-    connector->ctx           = (void *) hconn;
     hconn->cfg.event_channel = connector->config->event_channel;
     hconn->cfg.aggregation   = connector->config->aggregation;
     hconn->cfg.host_override = connector->config->host_override ? qd_strdup(connector->config->host_override) : 0;
+    hconn->cfg.site =
+        connector->config->adaptor_config->site_id ? qd_strdup(connector->config->adaptor_config->site_id) : 0;
 
     // for initiating a connection to the server
     hconn->server.reconnect_timer = qd_timer(qdr_http1_adaptor->core->qd, _do_reconnect, hconn);
@@ -221,6 +224,16 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
 qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector, qd_dispatch_t *qd,
                                                   qd_entity_t *entity)
 {
+    if (connector->config->adaptor_config->ssl_profile_name) {
+        connector->tls_domain = qd_tls_domain(connector->config->adaptor_config, qd, qdr_http1_adaptor->log,
+                                              http1_alpn_protocols, HTTP1_NUM_ALPN_PROTOCOLS, false);
+        if (!connector->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_http_connector_decref(connector);
+            return 0;
+        }
+    }
+
     qdr_http1_connection_t *hconn = _create_server_connection(connector, qd);
     assert(hconn);
 

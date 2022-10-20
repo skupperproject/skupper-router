@@ -880,7 +880,6 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                                      false);               // streaming links
     pn_data_free(tcp_conn_properties);
 
-    tc->conn_id = qd_server_allocate_connection_id(tc->server);
     qdr_connection_t *conn = qdr_connection_opened(tcp_adaptor->core,
                                                    tcp_adaptor->adaptor,
                                                    true,            // incoming
@@ -952,29 +951,6 @@ static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
     }
 }
 
-static void setup_qd_tls(qdr_tcp_connection_t *conn)
-{
-    // Create the qd_tls_t object
-    conn->tls    = qd_tls(conn, conn->conn_id, tcp_adaptor->log_source);
-    bool success = qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                                conn->listener ? true : false, 0, 0, on_tls_connection_secured);
-    if (success) {
-        // We were successfully able to gather the details from the associated sslProfile and start
-        // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
-        // bytes that the client is going to send us.
-        grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
-    } else {
-        // There was some problem with starting up the proton tls session.
-        // Check logs for detailed INFO level output to find out more about the failure
-        qd_log(tcp_adaptor->log_source, QD_LOG_ERROR,
-               "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
-               conn->conn_id);
-        qd_tls_free(conn->tls);
-        conn->tls = 0;
-        pn_raw_connection_close(conn->pn_raw_conn);
-    }
-}
-
 static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff, bool write_buffers)
 {
     qd_adaptor_buffer_list_t encrypted_buffs;
@@ -1020,9 +996,22 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                    "[C%"PRIu64"] PN_RAW_CONNECTION_CONNECTED Listener ingress accepted to %s from %s (global_id=%s)",
                    conn->conn_id, conn->config->adaptor_config->host_port, conn->remote_address, conn->global_id);
             if (conn->require_tls) {
-                setup_qd_tls(conn);
+                assert(!conn->tls);
+                conn->tls = qd_tls(conn->listener->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+                if (conn->tls) {
+                    // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
+                    // bytes that the client is going to send us.
+                    grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
+                } else {
+                    // There was some problem with starting up the proton tls session.
+                    // Check logs for detailed INFO level output to find out more about the failure
+                    qd_log(tcp_adaptor->log_source, QD_LOG_ERROR,
+                           "[C%" PRIu64
+                           "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
+                           conn->conn_id);
+                    pn_raw_connection_close(conn->pn_raw_conn);
+                }
             }
-            break;
         } else {
             conn->remote_address = qd_raw_conn_get_address(conn->pn_raw_conn);
             conn->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
@@ -1039,8 +1028,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 // Grant read buffers so we can read the response sent to us by the server
                 grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, egress");
             }
-            break;
         }
+        break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
         qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
@@ -1214,6 +1203,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *serve
 {
     qdr_tcp_connection_t* tc = new_qdr_tcp_connection_t();
     ZERO(tc);
+    tc->conn_id         = qd_server_allocate_connection_id(server);
     tc->context.context = tc;
     tc->context.handler = &handle_connection_event;
     sys_atomic_init(&tc->q2_restart, 0);
@@ -1246,7 +1236,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
     qdr_tcp_connection_t* tc = qdr_tcp_connection(true, listener->server, listener->config, listener->tcp_stats);
     tc->listener = listener;
     sys_atomic_inc(&listener->ref_count);
-    tc->require_tls = listener->config->adaptor_config->ssl_profile_name ? true : false;
+    tc->require_tls = !!listener->tls_domain;
 
     tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->vflow);
     vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
@@ -1349,99 +1339,98 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
     qdr_link_set_context(tc->outgoing_link, tc);
 }
 
-static qdr_tcp_connection_t *qdr_tcp_connection_egress(qd_tcp_connector_t      *connector,
-                                                       qd_tcp_adaptor_config_t *config,
-                                                       qd_server_t             *server,
-                                                       qdr_delivery_t          *initial_delivery,
-                                                       bool                    *tls_setup_failure)
+// Create a new TCP connection to the server (egress). Note that the actual qd_tcp_connection_t instance is NOT returned
+// from this function: doing so would cause a race since the new connection is scheduled on a different proactor thread
+// by this call. That thread may have deleted the new connection (if an error occurs) before this function returns.
+//
+// Returns true if the connection was successfully created and scheduled, otherwise false on error.
+//
+static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t      *connector,
+                                             qd_tcp_adaptor_config_t *config,
+                                             qd_server_t             *server,
+                                             qdr_delivery_t          *initial_delivery)
+{
+    assert(initial_delivery);
+    qdr_tcp_connection_t *tc = qdr_tcp_connection(false, server, config, connector->tcp_stats);
+    tc->connector            = connector;
+    sys_atomic_inc(&connector->ref_count);
+
+    // This is not an egress dispatcher connection.
+    // Real TCP traffic flows thru this connection.
+    // There is one of these connection per every client that is attaching to the router
+    // network, i.e. there are N of these real connections (non-egress dispatcher connections) for N clients
+    // respectively.
+    //
+    tc->is_egress_dispatcher_conn = false;
+
+    tc->require_tls = !!connector->tls_domain;
+    if (tc->require_tls) {
+        // Since TLS is required on this connection, try to initialize TLS attributes
+        // from the associated sslProfile.
+        tc->tls = qd_tls(connector->tls_domain, tc, tc->conn_id, on_tls_connection_secured);
+        if (!tc->tls) {
+            // There was a failure trying to setup the connector sslProfile.  Look at the logs for failure reason.
+            // We cannot proceed setting up this connection, free it.
+            free_qdr_tcp_connection(tc);  // this will undo the connector incref
+            return false;
+        }
+    }
+
+    tc->initial_delivery = initial_delivery;
+    qdr_delivery_incref(initial_delivery, "qdr_tcp_connection_egress_create - held initial delivery");
+
+    tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+    vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
+
+    qd_message_t *msg = qdr_delivery_message(initial_delivery);
+    qdr_associate_vflow_flows(tc, msg);
+    vflow_set_trace(tc->vflow, msg);
+
+    qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
+           "[C%" PRIu64 "] qdr_tcp_connection_egress call pn_proactor_raw_connect(). Egress connecting to: %s",
+           tc->conn_id, tc->config->adaptor_config->host_port);
+
+    tc->pn_raw_conn = pn_raw_connection();
+    pn_raw_connection_set_context(tc->pn_raw_conn, tc);
+
+    vflow_latency_start(tc->vflow);
+
+    // IMPORTANT NOTE: this next call TO pn_proactor_raw_connect may immediately schedule the connection on another I/O
+    // thread. The activation_lock  must be held if you ever want to access tc immediately after the call to
+    // pn_proactor_raw_connect to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running and freeing
+    // this qdr_tcp_connection_t from underneath.
+    pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->config->adaptor_config->host_port);
+    return true;
+}
+
+// Create the dispatcher pseudo connection. This connection is used by the core to deliver new messages to this
+// adaptor. There is no actual network connection associated with this connection.
+//
+static qdr_tcp_connection_t *qdr_tcp_create_dispatcher_connection(qd_tcp_connector_t      *connector,
+                                                                  qd_tcp_adaptor_config_t *config,
+                                                                  qd_server_t             *server)
 {
     qdr_tcp_connection_t *tc = qdr_tcp_connection(false, server, config, connector->tcp_stats);
     tc->connector            = connector;
     sys_atomic_inc(&connector->ref_count);
 
-    tc->conn_id     = qd_server_allocate_connection_id(tc->server);
-    tc->require_tls = connector->config->adaptor_config->ssl_profile_name ? true : false;
+    //
+    // This is just an egress dispatcher connection. It is initially created so an
+    // outgoing link can be created on it. When a delivery arrives on the outgoing link
+    // in the egress dispatcher connection, it is moved to another connection/link
+    //
+    tc->is_egress_dispatcher_conn = true;
+    tc->activate_timer            = qd_timer(tcp_adaptor->core->qd, on_activate, tc);
 
     //
-    // If this is the egress dispatcher, set up the core connection now.
-    // Otherwise, set up a physical raw connection and wait until we are
-    // running in that connection's context to set up the core
-    // connection.
+    // Create a server side dispatcher connection.
+    // We don't want to create any socket level connection here.
     //
-    if (initial_delivery) {
-        //
-        // This is not an egress dispatcher connection.
-        // Real TCP traffic flows thru this connection.
-        // There is one of these connection per every client that is attaching to the router
-        // network, i.e. there are N of these real connections (non-egress dispatcher connections) for N clients
-        // respectively.
-        //
-        tc->is_egress_dispatcher_conn = false;
-
-        if (tc->require_tls) {
-            // Since TLS is required on this connection, try to initialize TLS attributes
-            // from the associated sslProfile.
-            tc->tls      = qd_tls(tc, tc->conn_id, tcp_adaptor->log_source);
-            bool success = qd_tls_start(tc->tls, tc->config->adaptor_config, qd_server_dispatch(tc->server),
-                                        tc->listener ? true : false, 0, 0, on_tls_connection_secured);
-            if (!success) {
-                // There was a failure trying to setup the connector sslProfile.
-                // Look at the logs for failure reason.
-                // We cannot proceed setting up this connection, free it.
-                *tls_setup_failure = true;
-                qd_tls_free(tc->tls);
-                tc->tls = 0;
-                free_qdr_tcp_connection(tc);
-                return 0;
-            }
-        }
-
-        tc->initial_delivery = initial_delivery;
-        qdr_delivery_incref(initial_delivery, "qdr_tcp_connection_egress - held initial delivery");
-
-        tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
-        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-        vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-        vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
-
-        qd_message_t *msg = qdr_delivery_message(initial_delivery);
-        qdr_associate_vflow_flows(tc, msg);
-        vflow_set_trace(tc->vflow, msg);
-
-        qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
-               "[C%" PRIu64 "] qdr_tcp_connection_egress call pn_proactor_raw_connect(). Egress connecting to: %s",
-               tc->conn_id, tc->config->adaptor_config->host_port);
-
-        tc->pn_raw_conn = pn_raw_connection();
-        pn_raw_connection_set_context(tc->pn_raw_conn, tc);
-
-        vflow_latency_start(tc->vflow);
-
-        // IMPORTANT NOTE: this next call TO pn_proactor_raw_connect may immediately schedule the connection on another I/O
-        // thread. The activation_lock  must be held if you ever want to access tc immediately after the call to pn_proactor_raw_connect
-        // to prevent the code in PN_RAW_CONNECTION_DISCONNECTED handler from running
-        // and freeing this qdr_tcp_connection_t from underneath.
-        pn_proactor_raw_connect(qd_server_proactor(tc->server), tc->pn_raw_conn, tc->config->adaptor_config->host_port);
-        return 0;
-
-    } else {
-        //
-        // This is just an egress dispatcher connection. It is initially created so an
-        // outgoing link can be created on it. When a delivery arrives on the outgoing link
-        // in the egress dispatcher connection, it is moved to another connection/link
-        //
-        tc->is_egress_dispatcher_conn = true;
-        tc->activate_timer            = qd_timer(tcp_adaptor->core->qd, on_activate, tc);
-
-        //
-        // Create a server side dispatcher connection.
-        // We don't want to create any socket level connection here.
-        //
-        qdr_tcp_create_server_side_connection(tc);
-        return tc;
-    }
+    qdr_tcp_create_server_side_connection(tc);
+    return tc;
 }
-
 
 static qd_tcp_adaptor_config_t *qd_tcp_adaptor_config()
 {
@@ -1469,6 +1458,7 @@ static void qd_tcp_listener_decref(qd_tcp_listener_t *li)
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         vflow_end_record(li->vflow);
         sys_atomic_destroy(&li->ref_count);
+        qd_tls_domain_decref(li->tls_domain);
         qd_free_tcp_adaptor_config(li->config, tcp_adaptor->log_source);
         sys_mutex_free(&li->tcp_stats->stats_lock);
         free_qdr_tcp_stats_t(li->tcp_stats);
@@ -1515,6 +1505,16 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
         qd_tcp_listener_decref(li);
         return 0;
     }
+
+    if (li->config->adaptor_config->ssl_profile_name) {
+        li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, tcp_adaptor->log_source, 0, 0, true);
+        if (!li->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_tcp_listener_decref(li);
+            return 0;
+        }
+    }
+
     DEQ_ITEM_INIT(li);
     log_tcp_adaptor_config(tcp_adaptor->log_source, li->config, "TcpListener");
 
@@ -1611,6 +1611,7 @@ static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         vflow_end_record(c->vflow);
         sys_atomic_destroy(&c->ref_count);
+        qd_tls_domain_decref(c->tls_domain);
         sys_mutex_free(&c->tcp_stats->stats_lock);
         free_qdr_tcp_stats_t(c->tcp_stats);
         qd_free_tcp_adaptor_config(c->config, tcp_adaptor->log_source);
@@ -1627,6 +1628,16 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
         qd_tcp_connector_decref(c);
         return 0;
     }
+
+    if (c->config->adaptor_config->ssl_profile_name) {
+        c->tls_domain = qd_tls_domain(c->config->adaptor_config, qd, tcp_adaptor->log_source, 0, 0, false);
+        if (!c->tls_domain) {
+            // note qd_tls_domain() logged the error
+            qd_tcp_connector_decref(c);
+            return 0;
+        }
+    }
+
     DEQ_ITEM_INIT(c);
     DEQ_INSERT_TAIL(tcp_adaptor->connectors, c);
     log_tcp_adaptor_config(tcp_adaptor->log_source, c->config, "TcpConnector");
@@ -1639,7 +1650,11 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
     vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
 
-    c->dispatcher_conn = qdr_tcp_connection_egress(c, c->config, c->server, NULL, 0);
+    c->dispatcher_conn = qdr_tcp_create_dispatcher_connection(c, c->config, c->server);
+    if (!c->dispatcher_conn) {
+        qd_tcp_connector_decref(c);
+        return 0;
+    }
     return c;
 }
 
@@ -1911,23 +1926,20 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                    " tcp_adaptor delivery arrived on egress dispatcher connection, initiating actual egress connection",
                    DLV_ARGS(delivery));
 
-            bool tls_setup_failure = false;
-            qdr_tcp_connection_egress(tc->connector, tc->config, tc->server, delivery, &tls_setup_failure);
-            if (tls_setup_failure) {
-                //
-                // We tried to initialize TLS on this connection but something went wrong.
-                // Usually there might be problems with the associated sslProfile where some sslProfile attribute might
-                // have had an invalid value specified or a cert could not be found on the file system or permission
-                // issues and so on. We cannot proceed. We have to release this delivery.
-                //
-                //
+            if (qdr_tcp_create_egress_connection(tc->connector, tc->config, tc->server, delivery)) {
                 qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                       DLV_FMT " tcp_adaptor qdr_tcp_deliver() failure setting up TLS", DLV_ARGS(delivery));
+                       DLV_FMT " tcp_adaptor delivery QD_DELIVERY_MOVED_TO_NEW_LINK", DLV_ARGS(delivery));
+                return QD_DELIVERY_MOVED_TO_NEW_LINK;
+            } else {
+                //
+                // Unable to create a new egress connection. We cannot proceed. We have to release this delivery.
+                //
+                qd_log(tcp_adaptor->log_source, QD_LOG_ERROR,
+                       DLV_FMT
+                       " Failed to create a new TCP connection to %s, cannot forward this delivery - releasing it",
+                       DLV_ARGS(delivery), tc->config->adaptor_config->host_port);
                 return PN_RELEASED;
             }
-            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, DLV_FMT " tcp_adaptor delivery QD_DELIVERY_MOVED_TO_NEW_LINK",
-                   DLV_ARGS(delivery));
-            return QD_DELIVERY_MOVED_TO_NEW_LINK;
         } else if (!tc->out_dlv_stream) {
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    DLV_FMT " tcp_adaptor delivery arrived on non-egress dispatcher connection", DLV_ARGS(delivery));
