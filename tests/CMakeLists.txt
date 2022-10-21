@@ -66,8 +66,8 @@ target_link_libraries(clogger ${Proton_LIBRARIES})
 add_executable(threaded_timer_test threaded_timer_test.c)
 target_link_libraries(threaded_timer_test skupper-router)
 
-add_executable(adaptor_buffer_tests adaptor_buffer_test.c)
-target_link_libraries(adaptor_buffer_tests skupper-router)
+add_executable(adaptor_buffer_test adaptor_buffer_test.c)
+target_link_libraries(adaptor_buffer_test skupper-router)
 
 # Bubblewrap is an unprivileged sandboxing tool for Linux. Setting --unshare-net allows
 # running tests in parallel (the ctest -j option) without port clashes
@@ -91,7 +91,7 @@ add_test(unit_tests            ${TEST_WRAP} unit_tests ${CMAKE_CURRENT_SOURCE_DI
 
 # stand alone tests
 add_test(threaded_timer_test   ${TEST_WRAP} threaded_timer_test ${CMAKE_CURRENT_SOURCE_DIR}/dummy.conf)
-add_test(adaptor_buffer_tests  ${TEST_WRAP} adaptor_buffer_tests)
+add_test(adaptor_buffer_test  ${TEST_WRAP} adaptor_buffer_test)
 
 # Unit test python modules
 foreach(py_test_module
