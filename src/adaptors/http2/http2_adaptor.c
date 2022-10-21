@@ -2941,15 +2941,9 @@ void qd_http2_delete_listener(qd_dispatch_t *qd, qd_http_listener_t *li)
 /**
  * Create listener via Management request
  */
-qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
+qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *li, qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_listener_t *li = qd_http_listener(qd->server, config);
-    if (!li) {
-        qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "Unable to create http listener: no memory");
-        return 0;
-    }
-
-    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, http2_adaptor->log_source);
+    li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, http2_adaptor->log_source);
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http2");
@@ -2969,16 +2963,8 @@ qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *qd, qd_http_adapt
     return li;
 }
 
-
-qd_http_connector_t *qd_http2_configure_connector(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
+qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *c, qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_connector_t *c = qd_http_connector(qd->server);
-    if (!c) {
-        qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "Unable to create http connector: no memory");
-        return 0;
-    }
-    c->config = config;
-    DEQ_ITEM_INIT(c);
     DEQ_INSERT_TAIL(http2_adaptor->connectors, c);
     qdr_http_connection_egress(c);
     return c;

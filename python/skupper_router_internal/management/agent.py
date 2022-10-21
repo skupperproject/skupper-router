@@ -506,7 +506,10 @@ class AllocatorEntity(EntityAdapter):
 
 class HttpListenerEntity(EntityAdapter):
     def create(self):
-        return self._qd.qd_dispatch_configure_http_listener(self._dispatch, self)
+        http_listener = self._qd.qd_dispatch_configure_http_listener(self._dispatch, self)
+        if http_listener is None:
+            raise ValidationError("Invalid httpListener configuration: see logs for details.")
+        return http_listener
 
     def _identifier(self):
         return _host_port_name_identifier(self)
@@ -521,6 +524,8 @@ class HttpListenerEntity(EntityAdapter):
 class TcpListenerEntity(EntityAdapter):
     def create(self):
         config_listener = self._qd.qd_dispatch_configure_tcp_listener(self._dispatch, self)
+        if config_listener is None:
+            raise ValidationError("Invalid tcpListener configuration: see logs for details.")
         return config_listener
 
     def _identifier(self):
@@ -536,6 +541,8 @@ class TcpListenerEntity(EntityAdapter):
 class TcpConnectorEntity(EntityAdapter):
     def create(self):
         config_connector = self._qd.qd_dispatch_configure_tcp_connector(self._dispatch, self)
+        if config_connector is None:
+            raise ValidationError("Invalid tcpConnector configuration: see logs for details.")
         return config_connector
 
     def _identifier(self):
@@ -550,7 +557,10 @@ class TcpConnectorEntity(EntityAdapter):
 
 class HttpConnectorEntity(EntityAdapter):
     def create(self):
-        return self._qd.qd_dispatch_configure_http_connector(self._dispatch, self)
+        http_connector = self._qd.qd_dispatch_configure_http_connector(self._dispatch, self)
+        if http_connector is None:
+            raise ValidationError("Invalid httpConnector configuration: see logs for details.")
+        return http_connector
 
     def _identifier(self):
         return _host_port_name_identifier(self)
