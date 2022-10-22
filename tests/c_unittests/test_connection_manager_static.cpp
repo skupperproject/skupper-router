@@ -33,7 +33,9 @@ extern "C" {
 #include <sys/mman.h>
 
 #include <set>
+#include <string>
 #include <thread>
+using std::string_literals::operator""s;
 
 extern "C" {
 QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity);
@@ -50,7 +52,7 @@ static void check_password(qd_dispatch_t *qd, const char *password, const char *
     qd_config_ssl_profile_t *profile = qd_dispatch_configure_ssl_profile(qd, entity);
     if (expect_success) {
         REQUIRE(profile != nullptr);
-        CHECK(profile->ssl_password == expected);
+        CHECK(profile->ssl_password == std::string{expected});
         qd_connection_manager_delete_ssl_profile(qd, profile);
     } else {
         REQUIRE(profile == nullptr);
@@ -97,7 +99,7 @@ TEST_CASE("qd_dispatch_configure_ssl_profile")
                             return "";
                         }
 
-                        CHECK(name == "some_env_variable");
+                        CHECK(name == "some_env_variable"s);
                         return "some_password";
                     });
                 check_password(qd, "env:some_env_variable", "some_password");
@@ -112,8 +114,8 @@ TEST_CASE("qd_dispatch_configure_ssl_profile")
                     Stub s{};
                     s.set(
                         fopen, +[](const char *name, const char *mode) {
-                            CHECK(name == "/some/file");
-                            CHECK(mode == "r");
+                            CHECK(name == "/some/file"s);
+                            CHECK(mode == "r"s);
 
                             // create fake file in memory and return it
                             int fd           = memfd_create("tmpfile", 0);
