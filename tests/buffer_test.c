@@ -424,8 +424,7 @@ exit:
     return result;
 }
 
-
-int buffer_tests()
+int buffer_tests(void)
 {
     int result = 0;
     char *test_group = "buffer_tests";

@@ -34,7 +34,7 @@ typedef struct qd_backtrace_fileline {
 
 /// Call qd_symbolize_finalize when you are done, to free global state.
 /// This also invalidates all const char pointers previously returned.
-void qd_symbolize_finalize();
+void qd_symbolize_finalize(void);
 
 void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc);
 qd_backtrace_fileline_t qd_symbolize_backtrace_line(void *target_address);

@@ -112,7 +112,7 @@ static bool timer_cancel_LH(qd_timer_t *timer)
 
 
 /* Adjust timer's time_base and delays for the current time. */
-static void timer_adjust_now_LH()
+static void timer_adjust_now_LH(void)
 {
     qd_timestamp_t now = qd_timer_now();
     if (time_base != 0 && now > time_base) {
@@ -282,8 +282,7 @@ void qd_timer_cancel(qd_timer_t *timer)
 // Private Functions from timer_private.h
 //=========================================================================
 
-
-void qd_timer_initialize()
+void qd_timer_initialize(void)
 {
     sys_mutex_init(&lock);
     DEQ_INIT(scheduled_timers);

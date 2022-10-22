@@ -153,7 +153,7 @@ void start_message(void)
 
 
 /* return true when message transmit is complete */
-bool send_message_data()
+bool send_message_data(void)
 {
     static const char zero_block[DEFAULT_MAX_FRAME] = {0};
 
