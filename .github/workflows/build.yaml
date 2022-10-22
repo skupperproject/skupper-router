@@ -313,7 +313,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         container: ['fedora']
-        containerTag: ['37']
+        containerTag: ['39']
         cc: [gcc]
         cxx: [g++]
         buildType: [RelWithDebInfo]
@@ -391,7 +391,7 @@ jobs:
           # unittest coverage
           - os: ubuntu-22.04
             container: 'fedora'
-            containerTag: 37
+            containerTag: 39
             cc: gcc
             cxx: g++
             buildType: Coverage
@@ -404,7 +404,7 @@ jobs:
           # clang
           - os: ubuntu-22.04
             container: 'fedora'
-            containerTag: 37
+            containerTag: 39
             cc: clang
             cxx: clang++
             buildType: RelWithDebInfo
@@ -414,7 +414,7 @@ jobs:
             shards: 2
           - os: ubuntu-22.04
             container: 'fedora'
-            containerTag: 37
+            containerTag: 39
             cc: clang
             cxx: clang++
             buildType: RelWithDebInfo
@@ -773,7 +773,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         container: ['fedora']
-        containerTag: ['37']
+        containerTag: ['39']
         buildType: [RelWithDebInfo]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
