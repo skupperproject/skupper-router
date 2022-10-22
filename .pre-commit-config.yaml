@@ -29,4 +29,5 @@ repos:
         stages: [commit]
         language: python
         entry: scripts/git_clang-format_hook.sh
+        require_serial: true
         additional_dependencies: [clang-format]
