@@ -1598,13 +1598,12 @@ int h1_codec_tx_end_multipart(h1_codec_request_state_t *hrs)
     return 0;
 }
 
-
-uint64_t h1_codec_tx_multipart_section_boundary_length()
+uint64_t h1_codec_tx_multipart_section_boundary_length(void)
 {
     return QD_DISCRIMINATOR_SIZE + 4 + 2;
 }
 
-uint64_t h1_codec_tx_multipart_end_boundary_length()
+uint64_t h1_codec_tx_multipart_end_boundary_length(void)
 {
     return QD_DISCRIMINATOR_SIZE + 4 + 4;
 }

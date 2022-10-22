@@ -873,9 +873,8 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
 
 void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, const char *correlator);
 
-void qd_adaptor_listener_init();
-void qd_adaptor_listener_finalize();
-
+void qd_adaptor_listener_init(void);
+void qd_adaptor_listener_finalize(void);
 
 /**
  ******************************************************************************

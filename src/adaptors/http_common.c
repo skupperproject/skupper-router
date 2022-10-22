@@ -39,7 +39,7 @@ ALLOC_DEFINE(qd_http_adaptor_config_t);
 
 #define CHECK() if (qd_error_code()) goto error
 
-static qd_http_adaptor_config_t *qd_http_adaptor_config()
+static qd_http_adaptor_config_t *qd_http_adaptor_config(void)
 {
     qd_http_adaptor_config_t *http_config = new_qd_http_adaptor_config_t();
     assert(http_config);
@@ -367,7 +367,7 @@ typedef struct {
 
 static http_request_info_records_t* request_info = 0;
 
-static http_request_info_records_t *_get_request_info()
+static http_request_info_records_t *_get_request_info(void)
 {
     if (!request_info) {
         request_info = NEW(http_request_info_records_t);
@@ -677,7 +677,7 @@ static void _add_http_request_info(qdr_core_t *core, qdr_http_request_info_t* re
     qdr_action_enqueue(core, action);
 }
 
-static qdr_http_request_info_t* _new_qdr_http_request_info_t()
+static qdr_http_request_info_t *_new_qdr_http_request_info_t(void)
 {
     qdr_http_request_info_t* record = NEW(qdr_http_request_info_t);
     ZERO(record);

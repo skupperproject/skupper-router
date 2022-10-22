@@ -118,8 +118,7 @@ static void signal_handler(int signum)
         pn_proactor_interrupt(proactor);
 }
 
-
-void start_message()
+void start_message(void)
 {
     static long tag = 0;  // a simple tag generator
 

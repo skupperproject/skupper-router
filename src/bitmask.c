@@ -41,8 +41,7 @@ ALLOC_DEFINE(qd_bitmask_t);
 #define FIRST_NONE    -1
 #define FIRST_UNKNOWN -2
 
-
-int qd_bitmask_width()
+int qd_bitmask_width(void)
 {
     return QD_BITMASK_BITS;
 }

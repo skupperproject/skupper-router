@@ -35,7 +35,7 @@ struct qd_adaptor_buffer_t {
 };
 
 qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *buffer);
-qd_adaptor_buffer_t *qd_adaptor_buffer();
+qd_adaptor_buffer_t *qd_adaptor_buffer(void);
 
 ALLOC_DECLARE(qd_adaptor_buffer_t);
 DEQ_DECLARE(qd_adaptor_buffer_t, qd_adaptor_buffer_list_t);

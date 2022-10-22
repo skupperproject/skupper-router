@@ -837,7 +837,7 @@ static char *get_global_id(char *site_id, char *host_port)
     return result;
 }
 
-static pn_data_t * qdr_tcp_conn_properties()
+static pn_data_t *qdr_tcp_conn_properties(void)
 {
    // Return a new tcp connection properties map.
     pn_data_t *props = pn_data(0);
@@ -1432,7 +1432,7 @@ static qdr_tcp_connection_t *qdr_tcp_create_dispatcher_connection(qd_tcp_connect
     return tc;
 }
 
-static qd_tcp_adaptor_config_t *qd_tcp_adaptor_config()
+static qd_tcp_adaptor_config_t *qd_tcp_adaptor_config(void)
 {
     qd_tcp_adaptor_config_t *tcp_config = new_qd_tcp_adaptor_config_t();
     if (!tcp_config)
