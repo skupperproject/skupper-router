@@ -49,8 +49,9 @@ static const char *HAVE_SEQ   = "have_seq";
 //
 #define ADDR_SYNC_ADDRESS_IN_ADD_LIST     0x00000001
 #define ADDR_SYNC_ADDRESS_IN_DEL_LIST     0x00000002
-#define ADDR_SYNC_ADDRESS_TO_BE_DELETED   0x00000004
-#define ADDR_SYNC_ADDRESS_MOBILE_TRACKING 0x00000008
+#define ADDR_SYNC_ADDRESS_IN_UPDATE_LIST  0x00000004
+#define ADDR_SYNC_ADDRESS_TO_BE_DELETED   0x00000008
+#define ADDR_SYNC_ADDRESS_MOBILE_TRACKING 0x00000010
 
 //
 // qdr_node_t.sync_mask bit values
@@ -70,8 +71,7 @@ typedef struct {
     qdr_subscription_t        *message_sub2;
     qd_log_source_t           *log;
     uint64_t                   mobile_seq;
-    qdr_address_list_t         added_addrs;
-    qdr_address_list_t         deleted_addrs;
+    qdr_address_list_t         sync_addrs;
 } qdrm_mobile_sync_t;
 
 /**
@@ -190,12 +190,13 @@ static qd_composed_field_t *qcm_mobile_sync_message_headers(const char *address,
 
 /**
  * An address descriptor is a list with positional identification of values.
- *   Position    Value
- *   ================================
- *    0          Address hash key
- *    1          Treatment value
- *    2          Local in-link count
- *    3          Local out-link capacity
+ *   Position    Value                     Type
+ *   =============================================
+ *    0          Address hash key          string
+ *    1          Treatment value           int
+ *    2          Local in-link count       int
+ *    3          Local out-link capacity   int
+ *    4          Sole destination mesh     string (mesh-id)
  */
 static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, qd_composed_field_t *field, bool is_added)
 {
@@ -243,21 +244,25 @@ static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *f
 
 static void qcm_mobile_sync_compose_diff_addr_list(qdrm_mobile_sync_t *msync, qd_composed_field_t *field, bool is_added)
 {
-    qdr_address_list_t *list = is_added ? &msync->added_addrs : &msync->deleted_addrs;
-
     qd_compose_start_list(field);
-    qdr_address_t *addr = DEQ_HEAD(*list);
+    qdr_address_t *addr = DEQ_HEAD(msync->sync_addrs);
     while (addr) {
-        qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
+        qdr_address_t *next = DEQ_NEXT_N(SYNC, addr);
         if (is_added) {
-            DEQ_REMOVE_HEAD_N(SYNC_ADD, *list);
-            BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
+            if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
+                qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
+                DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
+                BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
+            }
         } else {
-            DEQ_REMOVE_HEAD_N(SYNC_DEL, *list);
-            BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
-            qcm_mobile_sync_stop_tracking(msync->core, addr);
+            if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST)) {
+                qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
+                DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
+                BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
+                qcm_mobile_sync_stop_tracking(msync->core, addr);
+            }
         }
-        addr = DEQ_HEAD(*list);
+        addr = next;
     }
     qd_compose_end_list(field);
 }
@@ -397,10 +402,9 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     // Check the add and delete lists.  If they are empty, nothing of note occured in the last
     // interval.  Exit the handler function.
     //
-    size_t added_count   = DEQ_SIZE(msync->added_addrs);
-    size_t deleted_count = DEQ_SIZE(msync->deleted_addrs);
+    size_t sync_count = DEQ_SIZE(msync->sync_addrs);
 
-    if (added_count == 0 && deleted_count == 0)
+    if (sync_count == 0)
         return;
 
     //
@@ -430,8 +434,8 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     //
     // Trace log the activity of this sequence update.
     //
-    qd_log(msync->log, QD_LOG_DEBUG, "New mobile sequence: mobile_seq=%"PRIu64", addrs_added=%ld, addrs_deleted=%ld, fanout=%d",
-           msync->mobile_seq, added_count, deleted_count, fanout);
+    qd_log(msync->log, QD_LOG_DEBUG, "New mobile sequence: mobile_seq=%"PRIu64", addrs_synced=%ld, fanout=%d",
+           msync->mobile_seq, sync_count, fanout);
 }
 
 
@@ -741,10 +745,10 @@ static void qcm_mobile_sync_on_became_local_dest_CT(qdrm_mobile_sync_t *msync, q
         //
         // If the address was deleted since the last update, simply forget that it was deleted.
         //
-        DEQ_REMOVE_N(SYNC_DEL, msync->deleted_addrs, addr);
+        DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
         BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
     } else {
-        DEQ_INSERT_TAIL_N(SYNC_ADD, msync->added_addrs, addr);
+        DEQ_INSERT_TAIL_N(SYNC, msync->sync_addrs, addr);
         BIT_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
         qcm_mobile_sync_start_tracking(addr);
     }
@@ -765,11 +769,11 @@ static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync
         //
         // If the address was added since the last update, simply forget that it was added.
         //
-        DEQ_REMOVE_N(SYNC_ADD, msync->added_addrs, addr);
+        DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
         BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
         qcm_mobile_sync_stop_tracking(msync->core, addr);
     } else {
-        DEQ_INSERT_TAIL_N(SYNC_DEL, msync->deleted_addrs, addr);
+        DEQ_INSERT_TAIL_N(SYNC, msync->sync_addrs, addr);
         BIT_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
     }
 }
@@ -885,8 +889,8 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     //
     // Subscribe to core events:
     //
-    //  - ADDR_BECAME_LOCAL_DEST     - Indicates a new address needs to tbe sync'ed with other routers
-    //  - ADDR_NO_LONGER_LOCAL_DEST  - Indicates an address needs to be un-sync'd with other routers
+    //  - ADDR_ADDED_LOCAL_DEST      - Indicates a new address might need to be sync'ed with other routers
+    //  - ADDR_REMOVED_LOCAL_DEST    - Indicates an address might need to be un-sync'd with other routers
     //  - ROUTER_MOBILE_FLUSH        - All addresses associated with the router must be unmapped
     //  - ROUTER_MOBILE_SEQ_ADVANCED - A router has an advanced mobile-seq and needs to be queried
     //
