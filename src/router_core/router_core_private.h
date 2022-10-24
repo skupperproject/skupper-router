@@ -555,8 +555,7 @@ struct qdr_address_t {
     //
     // State for mobile-address synchronization
     //
-    DEQ_LINKS_N(SYNC_ADD, qdr_address_t);
-    DEQ_LINKS_N(SYNC_DEL, qdr_address_t);
+    DEQ_LINKS_N(SYNC, qdr_address_t);
     uint32_t sync_mask;
 
     //
