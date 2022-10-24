@@ -22,15 +22,50 @@
 # https://sipb.mit.edu/doc/safe-shell
 set -Eefuxo pipefail
 
-WORKING="$(pwd)"
 BUILD_FLAGS="$(rpmbuild --eval '%set_build_flags')"
 eval "${BUILD_FLAGS}"
 
-#region libwebsockets
-wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
-tar -zxf libwebsockets.tar.gz --one-top-level=lws-src --strip-components 1
+if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
+  # If no REMOTE_SOURCES_DIR present in env, we use $(pwd) as working dir
+  WORKING_DIR="$(pwd)"
+  SKUPPER_DIR="$WORKING_DIR"
+  PROTON_DIR="$WORKING_DIR/proton/app"
+  LWS_DIR="$WORKING_DIR/libwebsockets/app"
+  # $REMOTE_SOURCES_DIR was not provided, we will have to download the libwebsockets source from ${LWS_SOURCE_URL}
+  # Get the libwebsockets source into a libwebsockets.tar.gz file
+  # and untar it into the libwebsockets folder
+  wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
+  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}" --strip-components 1
 
-cmake -S "$WORKING/lws-src" -B "$WORKING/lws_build" \
+  # No $REMOTE_SOURCES_DIR was provided, we will have to download the proton source tar.gz from ${PROTON_SOURCE_URL}
+  wget "${PROTON_SOURCE_URL}" -O qpid-proton.tar.gz
+  tar -zxf qpid-proton.tar.gz --one-top-level="${PROTON_DIR}" --strip-components 1
+else
+  # If the env contains REMOTE_SOURCES_DIR, we will use that as the working dir
+  # If REMOTE_SOURCES_DIR is provided, this scripts expects the following -
+  # 1. proton sources to be in $REMOTE_SOURCES_DIR/app/proton
+  # 2. libwebsockets sources to be in $REMOTE_SOURCES_DIR/app/libwebsockets
+  # 3. skupper-router sources to be in $REMOTE_SOURCES_DIR/app/skupper-router
+  WORKING_DIR="${REMOTE_SOURCES_DIR}"
+  SKUPPER_DIR="${WORKING_DIR}/skupper-router/app"
+  PROTON_DIR="${WORKING_DIR}/proton/app"
+  LWS_DIR="${WORKING_DIR}/libwebsockets/app"
+  cd "${WORKING_DIR}"
+fi
+
+LWS_BUILD_DIR="${LWS_DIR}/build"
+LWS_INSTALL_DIR="${LWS_DIR}/install"
+
+PROTON_INSTALL_DIR="${PROTON_DIR}/proton_install"
+PROTON_BUILD_DIR="${PROTON_DIR}/build"
+SKUPPER_BUILD_DIR="${SKUPPER_DIR}/build"
+
+
+#region libwebsockets
+# Build libwebsockets library.
+# Source folder (cmake -S) is $LWS_DIR
+# Build dir (cmake -B) is $LWS_BUILD_DIR
+cmake -S "${LWS_DIR}" -B "${LWS_BUILD_DIR}" \
   -DLWS_LINK_TESTAPPS_DYNAMIC=ON \
   -DLWS_WITH_LIBUV=OFF \
   -DLWS_WITHOUT_BUILTIN_GETIFADDRS=ON \
@@ -46,36 +81,32 @@ cmake -S "$WORKING/lws-src" -B "$WORKING/lws_build" \
   -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=ON \
   -DLWS_WITHOUT_TEST_PING=ON \
   -DLWS_WITHOUT_TEST_CLIENT=ON
-cmake --build "$WORKING/lws_build" --parallel "$(nproc)" --verbose
-cmake --install "$WORKING/lws_build"
+cmake --build "${LWS_BUILD_DIR}" --parallel "$(nproc)" --verbose
+cmake --install "${LWS_BUILD_DIR}"
 
-DESTDIR="$WORKING/lws_install" cmake --install "$WORKING/lws_build"
-tar -z -C "$WORKING/lws_install" -cf /libwebsockets-image.tar.gz usr
-#endregion
-
-#region qpid-proton and skupper-router
-wget "${PROTON_SOURCE_URL}" -O qpid-proton.tar.gz
-tar -zxf qpid-proton.tar.gz --one-top-level=qpid-proton-src --strip-components 1
+DESTDIR="${LWS_INSTALL_DIR}" cmake --install "${LWS_BUILD_DIR}"
+tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
+#endregion libwebsockets
 
 do_patch () {
     PATCH_DIR=$1
     PATCH_SRC=$2
     if [ -d "${PATCH_DIR}" ]
     then
-        for patch in $(find ${PATCH_DIR} -type f -name "*.patch"); do
-            echo Applying patch ${patch}
-            patch -f -d "${PATCH_SRC}" -p1 < $patch
+        for patch in $(find "${PATCH_DIR}" -type f -name "*.patch"); do
+            echo Applying patch "${patch}"
+            patch -f -d "${PATCH_SRC}" -p1 < "$patch"
         done;
     fi
 }
 
-do_patch "patches/proton" qpid-proton-src
+do_patch "patches/proton" "${PROTON_DIR}"
 
 do_build () {
   local suffix=${1}
   local runtime_check=${2}
 
-  cmake -S "$WORKING/qpid-proton-src" -B "$WORKING/proton_build${suffix}" \
+  cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DENABLE_LINKTIME_OPTIMIZATION=ON \
@@ -83,22 +114,24 @@ do_build () {
     -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
     -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_INSTALL_PREFIX=/usr
-  cmake --build "proton_build${suffix}" --parallel "$(nproc)" --verbose
-  DESTDIR="$WORKING/proton_install${suffix}" cmake --install "proton_build${suffix}"
+  cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
 
-  cmake -S "$WORKING/" -B "$WORKING/build${suffix}" \
+  DESTDIR="$PROTON_INSTALL_DIR${suffix}" cmake --install "$PROTON_BUILD_DIR${suffix}"
+
+  cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DSANITIZE_PYTHON=OFF \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DProton_USE_STATIC_LIBS=ON \
-    -DProton_DIR="$WORKING/proton_install${suffix}/usr/lib64/cmake/Proton" \
+    -DProton_DIR="${PROTON_INSTALL_DIR}${suffix}/usr/lib64/cmake/Proton" \
     -DBUILD_TESTING=OFF \
     -DVERSION="${VERSION}" \
     -DCMAKE_INSTALL_PREFIX=/usr
-  cmake --build "$WORKING/build${suffix}" --parallel "$(nproc)" --verbose
+  cmake --build "${SKUPPER_BUILD_DIR}${suffix}" --verbose
 }
 
+# Do a regular build without asan or tsan.
 do_build "" OFF
 
 # talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
@@ -108,11 +141,11 @@ export CXXFLAGS="${CXXFLAGS} ${common_sanitizer_flags}"
 do_build "_asan" asan
 do_build "_tsan" tsan
 
-tar -z -C "$WORKING/proton_install" -cf /qpid-proton-image.tar.gz usr
+tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
-DESTDIR=$WORKING/staging/ cmake --install $WORKING/build
-cp "$WORKING/build_asan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_asan"
-cp "$WORKING/build_tsan/router/skrouterd" "$WORKING/staging/usr/sbin/skrouterd_tsan"
-cp --target-directory="$WORKING/staging/" "$WORKING/tests/tsan.supp" "$WORKING/build_asan/tests/lsan.supp"
-tar -z -C "$WORKING/staging/" -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
-#endregion
+DESTDIR="${SKUPPER_DIR}/staging/" cmake --install "${SKUPPER_BUILD_DIR}"
+cp "${SKUPPER_BUILD_DIR}_asan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_asan"
+cp "${SKUPPER_BUILD_DIR}_tsan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_tsan"
+cp --target-directory="${SKUPPER_DIR}/staging/" "${SKUPPER_DIR}/tests/tsan.supp" "${SKUPPER_BUILD_DIR}_asan/tests/lsan.supp"
+tar -z -C "${SKUPPER_DIR}/staging/" -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
+#endregion qpid-proton and skupper-router
