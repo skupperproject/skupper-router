@@ -26,8 +26,8 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from system_test import TestTimeout, Logger
-from system_test import TIMEOUT
-
+#from system_test import TIMEOUT
+TIMEOUT = 10.0
 
 class CustomTimeout:
     def __init__(self, parent):
@@ -522,7 +522,7 @@ class MobileAddressMulticastTest(MessagingHandler):
 
     def timeout(self):
         if self.dup_msg:
-            self.error = "%s received  duplicate message %s" % \
+            self.error = "%s received duplicate message %s" % \
                          (self.receiver_name, self.dup_msg)
         else:
             if not self.error:

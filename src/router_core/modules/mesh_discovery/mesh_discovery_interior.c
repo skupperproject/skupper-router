@@ -57,11 +57,11 @@ static void on_first_attach(void             *bind_context,
 
 static void on_transfer(void *link_context, qdr_delivery_t *delivery, qd_message_t *message)
 {
-    qdrc_endpoint_t *endpoint = (qdrc_endpoint_t*) link_context;
-    char id[QD_DISCRIMINATOR_BYTES];
-    int  values_found = 0;
-    qdr_link_t       *link = qdr_delivery_link(delivery);
-    qdr_connection_t *conn = !!link ? link->conn : 0;
+    qdrc_endpoint_t  *endpoint = (qdrc_endpoint_t*) link_context;
+    char              id[QD_DISCRIMINATOR_BYTES];
+    int               values_found = 0;
+    qdr_link_t       *link         = qdr_delivery_link(delivery);
+    qdr_connection_t *conn         = !!link ? link->conn : 0;
 
     if (!!conn) {
         if (qd_message_check_depth(message, QD_DEPTH_APPLICATION_PROPERTIES) == QD_MESSAGE_DEPTH_OK) {
