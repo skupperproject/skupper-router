@@ -312,6 +312,143 @@ class ConnectedMeshTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_15_mobile_address_anon_same_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[0].addresses[0], 'test_15')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_16_mobile_address_anon_different_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[1].addresses[0], 'test_16')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_17_mobile_address_anon_int_to_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[3].addresses[0], self.routers[1].addresses[0], 'test_17')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_18_mobile_address_anon_edge_to_int(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[3].addresses[0], 'test_18')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_19_mobile_address_anon_far_int_to_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[4].addresses[0], self.routers[1].addresses[0], 'test_19')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_20_mobile_address_anon_edge_to_far_int(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[4].addresses[0], 'test_20')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_21_mobile_address_anon_edge_to_far_edge(self):
+        test = MobileAddressAnonymousTest(self.routers[0].addresses[0], self.routers[5].addresses[0], 'test_21')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_22_mobile_address_same_edge(self):
+        test = MobileAddressTest(self.routers[0].addresses[0], self.routers[0].addresses[0], 'test_22')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_23_mobile_address_different_edge(self):
+        test = MobileAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], 'test_23')
+        test.run()
+        if test.error is not None:
+            test.logger.dump()
+        self.assertIsNone(test.error)
+
+    def test_24_mobile_address_int_to_edge(self):
+        test = MobileAddressTest(self.routers[3].addresses[0], self.routers[1].addresses[0], 'test_24')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_25_mobile_address_edge_to_int(self):
+        test = MobileAddressTest(self.routers[0].addresses[0], self.routers[3].addresses[0], 'test_25')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_26_mobile_address_far_int_to_edge(self):
+        test = MobileAddressTest(self.routers[4].addresses[0], self.routers[1].addresses[0], 'test_26')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_27_mobile_address_edge_to_far_int(self):
+        test = MobileAddressTest(self.routers[0].addresses[0], self.routers[4].addresses[0], 'test_27')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_28_mobile_address_edge_to_far_edge(self):
+        test = MobileAddressTest(self.routers[0].addresses[0], self.routers[5].addresses[0], 'test_28')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_29_mobile_address_two_receivers_same_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[1].addresses[0],
+                                                      self.routers[0].addresses[0],
+                                                      'test_29')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_30_mobile_address_two_receivers_int_to_same_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[2].addresses[0],
+                                                      self.routers[3].addresses[0],
+                                                      'test_30')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_31_mobile_address_two_receivers_int_to_self_and_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[3].addresses[0],
+                                                      self.routers[3].addresses[0],
+                                                      'test_31')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_32_mobile_address_two_receivers_far_int_to_int_and_far_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[3].addresses[0],
+                                                      self.routers[4].addresses[0],
+                                                      'test_32')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_33_mobile_address_two_receivers_far_mesh_to_int_and_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[3].addresses[0],
+                                                      self.routers[5].addresses[0],
+                                                      'test_33')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_34_mobile_address_two_receivers_int_to_near_and_far_meshes(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[5].addresses[0],
+                                                      self.routers[4].addresses[0],
+                                                      'test_34')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_35_mobile_address_two_receivers_same_mesh_and_far_mesh(self):
+        test = MobileAddressOneSenderTwoReceiversTest(self.routers[1].addresses[0],
+                                                      self.routers[5].addresses[0],
+                                                      self.routers[5].addresses[0],
+                                                      'test_35')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_36_mobile_address_multicast_same_mesh(self):
+        test = MobileAddressMulticastTest(self.routers[0].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          'mc.test_36')
+        test.run()
+        self.assertIsNone(test.error)
+
 
 if __name__ == '__main__':
     unittest.main(main_module())

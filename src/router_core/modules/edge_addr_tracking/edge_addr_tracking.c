@@ -167,19 +167,37 @@ static void qdrc_address_endpoint_cleanup(void *link_context)
 }
 
 
-static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *conn)
+/**
+ * @brief Determine if deliveries to the specified address coming in on the specified connection
+ * can be successfully forwarded to a valid destination.  A destination is valid if it is not
+ * on the same edge-mesh as the delivery's origin.
+ * 
+ * @param addr 
+ * @param in_conn 
+ * @return true 
+ * @return false 
+ */
+static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *in_conn)
 {
     if (!addr)
         return false;
 
+    //
+    // If there is at least one remote interior router with a consumer for this address,
+    // the answer to the question is always "yes".
+    //
+    if (qd_bitmask_cardinality(addr->rnodes) > 0) {
+        return true;
+    }
+
     bool can_send = false;
-    if (DEQ_SIZE(addr->rlinks) > 1 || qd_bitmask_cardinality(addr->rnodes) > 0) {
+    if (DEQ_SIZE(addr->rlinks) > 1) {
         // There is at least one receiver for this address somewhere in the router network
         can_send = true;
     } else {
         if (DEQ_SIZE(addr->rlinks) == 1) {
             qdr_link_ref_t *link_ref = DEQ_HEAD(addr->rlinks);
-            if (link_ref->link->conn != conn)
+            if (link_ref->link->conn != in_conn)
                 can_send=true;
         }
     }
