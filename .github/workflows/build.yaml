@@ -352,7 +352,7 @@ jobs:
             buildType: Coverage
             runtimeCheck: OFF
             protonGitRef: 0.37.0
-            routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|router_engine_test|management_test|router_policy_test|test_command'"
+            routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|adaptor_buffer_test|router_engine_test|management_test|router_policy_test|test_command'"
             shard: 1
             shards: 1
 

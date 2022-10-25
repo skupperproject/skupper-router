@@ -37,6 +37,7 @@ qd_adaptor_buffer_t *qd_adaptor_buffer()
 
 void qd_adaptor_buffer_list_free_buffers(qd_adaptor_buffer_list_t *list)
 {
+    assert(list);
     qd_adaptor_buffer_t *buf = DEQ_HEAD(*list);
     while (buf) {
         qd_adaptor_buffer_t *next = DEQ_NEXT(buf);
