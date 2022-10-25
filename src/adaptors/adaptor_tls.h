@@ -69,7 +69,7 @@ void qd_tls_domain_decref(qd_tls_domain_t *tls_domain);
  *
  * @param tls_domain - the qd_tls_domain_t to use for this TLS session.
  * @param context - the user context object
- * @oaram conn_id - the connection id of the connection that creates the qd_tls_t
+ * @param conn_id - the connection id of the connection that creates the qd_tls_t
  * @param on_secure - optional callback invoked when TLS session becomes secure
  *
  * @returns a new qd_tls_t instance, or 0 on error.
