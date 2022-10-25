@@ -99,7 +99,8 @@ class RouterAnnotationsSection:
         obj = Data()
         obj.decode(data)
         lcount = obj.get_list()
-        assert lcount == 4
+        print("lcount == %d" % lcount)
+        assert lcount == 4 or lcount == 5
         obj.enter()
 
         ras = RouterAnnotationsSection()
