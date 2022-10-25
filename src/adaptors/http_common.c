@@ -38,15 +38,11 @@ ALLOC_DEFINE(qd_http_adaptor_config_t);
 static qd_http_adaptor_config_t *qd_http_adaptor_config()
 {
     qd_http_adaptor_config_t *http_config = new_qd_http_adaptor_config_t();
-    if (!http_config)
-        return 0;
+    assert(http_config);
     ZERO(http_config);
 
     qd_adaptor_config_t *adaptor_config = new_qd_adaptor_config_t();
-    if (!adaptor_config) {
-        free_qd_http_adaptor_config_t(http_config);
-        return 0;
-    }
+    assert(adaptor_config);
     ZERO(adaptor_config);
 
     http_config->adaptor_config = adaptor_config;
@@ -54,7 +50,7 @@ static qd_http_adaptor_config_t *qd_http_adaptor_config()
     return http_config;
 }
 
-void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
+static void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
 {
     if (!config)
         return;
@@ -63,12 +59,10 @@ void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
             "Deleted HTTP adaptor configuration '%s' for address %s, %s, siteId %s.",
            config->adaptor_config->name, config->adaptor_config->address, config->adaptor_config->host_port, config->adaptor_config->site_id);
 
-
     //
     // Free the common adaptor configuration
     //
-    if (config->adaptor_config)
-        qd_free_adaptor_config(config->adaptor_config);
+    qd_free_adaptor_config(config->adaptor_config);
 
     //
     // Free the adaptor config that is common to http1 and http2
@@ -76,31 +70,30 @@ void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
     free_qd_http_adaptor_config_t(config);
 }
 
-qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_entity_t *entity,
-                                                      qd_log_source_t *log_source)
+static qd_error_t qd_load_http_adaptor_config(qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
-    qd_http_adaptor_config_t *config = qd_http_adaptor_config();
-
+    assert(config);
     //
     // First load the common config data (common to all adaptors)
     //
-    qd_error_t qd_error = qd_load_adaptor_config(qd, config->adaptor_config, entity, log_source);
+    qd_error_t qd_error = qd_load_adaptor_config(config->adaptor_config, entity);
     if (qd_error != QD_ERROR_NONE) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
-               "Unable to load config information: %s", qd_error_message());
-        qd_free_http_adaptor_config(config);
-        return 0;
+        return qd_error;
     }
 
     //
     // Now, load http1/http2 specific config.
     //
     char *aggregation_str = 0;
-    char *version_str         = qd_entity_opt_string(entity, "protocolVersion", 0);    CHECK();
+    char *version_str     = qd_entity_opt_string(entity, "protocolVersion", "HTTP1");
+    CHECK();
     if (strcmp(version_str, "HTTP2") == 0) {
         config->http_version = HTTP2;
     } else if (strcmp(version_str, "HTTP1") == 0) {
         config->http_version = HTTP1;
+    } else {
+        qd_error_code(QD_ERROR_CONFIG, "Invalid value for HTTP version: %s, expected 'HTTP1' or 'HTTP2'", version_str);
+        goto error;
     }
     free(version_str);
     version_str = 0;
@@ -122,37 +115,39 @@ qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_enti
         aggregation_str = 0;
     }
 
-    return config;
+    return QD_ERROR_NONE;
 
 error:
     qd_free_http_adaptor_config(config);
     free(version_str);
     free(aggregation_str);
-    return 0;
+    return qd_error_code();
 }
 
 
 qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_listener_t       *listener = 0;
-    qd_http_adaptor_config_t *config   = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
-    if (!config) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
-               "Unable to create http listener: %s", qd_error_message());
+    qd_http_listener_t *listener = qd_http_listener(qd->server);
+    assert(listener);
+
+    if (qd_load_http_adaptor_config(listener->config, entity) != QD_ERROR_NONE) {
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR, "Unable to configure a new httpListener: %s",
+               qd_error_message());
+        qd_http_listener_decref(listener);
         return 0;
     }
 
-    switch (config->http_version) {
-    case HTTP1:
-        listener = qd_http1_configure_listener(qd, config, entity);
-        break;
-    case HTTP2:
-        listener = qd_http2_configure_listener(qd, config, entity);
-        break;
+    switch (listener->config->http_version) {
+        case HTTP1:
+            listener = qd_http1_configure_listener(listener, qd, entity);
+            break;
+        case HTTP2:
+            listener = qd_http2_configure_listener(listener, qd, entity);
+            break;
+        default:
+            assert(false);  // qd_load_http_adaptor_config will detect bad version
+            break;
     }
-
-    if (!listener)
-        qd_free_http_adaptor_config(config);
 
     return listener;
 }
@@ -170,8 +165,10 @@ void qd_dispatch_delete_http_listener(qd_dispatch_t *qd, void *impl)
             qd_http2_delete_listener(qd, listener);
             break;
         default:
+            assert(false);
             break;
         }
+        // it is expected that the calls above have properly decremented the listener reference count
     }
 }
 
@@ -194,26 +191,27 @@ qd_error_t qd_entity_refresh_httpListener(qd_entity_t* entity, void *impl)
 
 qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_connector_t      *conn   = 0;
-    qd_http_adaptor_config_t *config = qd_load_http_adaptor_config(qd, entity, qd_log_source(QD_HTTP_LOG_SOURCE));
+    qd_http_connector_t *conn = qd_http_connector(qd->server);
+    assert(conn);
 
-    if (!config) {
-        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR,  //
-               "Unable to create http connector: %s", qd_error_message());
+    if (qd_load_http_adaptor_config(conn->config, entity) != QD_ERROR_NONE) {
+        qd_log(qd_log_source(QD_HTTP_LOG_SOURCE), QD_LOG_ERROR, "Unable to configure a new httpConnector: %s",
+               qd_error_message());
+        qd_http_connector_decref(conn);
         return 0;
     }
 
-    switch (config->http_version) {
-    case HTTP1:
-        conn = qd_http1_configure_connector(qd, config, entity);
-        break;
-    case HTTP2:
-        conn = qd_http2_configure_connector(qd, config, entity);
-        break;
+    switch (conn->config->http_version) {
+        case HTTP1:
+            conn = qd_http1_configure_connector(conn, qd, entity);
+            break;
+        case HTTP2:
+            conn = qd_http2_configure_connector(conn, qd, entity);
+            break;
+        default:
+            assert(false);  // qd_load_http_adaptor_config will detect bad version
+            break;
     }
-
-    if (!conn)
-        qd_free_http_adaptor_config(config);
 
     return conn;
 }
@@ -232,8 +230,10 @@ void qd_dispatch_delete_http_connector(qd_dispatch_t *qd, void *impl)
             qd_http2_delete_connector(qd, conn);
             break;
         default:
+            assert(false);
             break;
         }
+        // it is expected that the calls above have properly decremented the connector reference count
     }
 }
 
@@ -246,15 +246,14 @@ qd_error_t qd_entity_refresh_httpConnector(qd_entity_t* entity, void *impl)
 // qd_http_listener_t constructor
 //
 
-qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_http_adaptor_config_t *config)
+qd_http_listener_t *qd_http_listener(qd_server_t *server)
 {
     qd_http_listener_t *li = new_qd_http_listener_t();
-    if (!li)
-        return 0;
+    assert(li);
     ZERO(li);
     sys_atomic_init(&li->ref_count, 1);
     li->server = server;
-    li->config = config;
+    li->config = qd_http_adaptor_config();
     DEQ_ITEM_INIT(li);
 
     return li;
@@ -265,6 +264,7 @@ void qd_http_listener_decref(qd_http_listener_t *li)
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         qd_free_http_adaptor_config(li->config);
         vflow_end_record(li->vflow);
+        sys_atomic_destroy(&li->ref_count);
         free_qd_http_listener_t(li);
     }
 }
@@ -276,10 +276,12 @@ void qd_http_listener_decref(qd_http_listener_t *li)
 qd_http_connector_t *qd_http_connector(qd_server_t *server)
 {
     qd_http_connector_t *c = new_qd_http_connector_t();
-    if (!c) return 0;
+    assert(c);
     ZERO(c);
     sys_atomic_init(&c->ref_count, 1);
-    c->server      = server;
+    c->server = server;
+    c->config = qd_http_adaptor_config();
+    DEQ_ITEM_INIT(c);
     return c;
 }
 
@@ -288,6 +290,7 @@ void qd_http_connector_decref(qd_http_connector_t* c)
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         qd_free_http_adaptor_config(c->config);
         vflow_end_record(c->vflow);
+        sys_atomic_destroy(&c->ref_count);
         free_qd_http_connector_t(c);
     }
 }

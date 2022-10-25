@@ -101,8 +101,6 @@ void qdra_tcp_connection_get_CT(qdr_core_t          *core,
                                 qdr_query_t         *query,
                                 const char          *qdr_tcp_connection_columns[]);
 
-void qd_free_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_log_source_t  *log_source);
-qd_error_t qd_load_tcp_adaptor_config(qd_dispatch_t *qd, qd_tcp_adaptor_config_t *config, qd_entity_t* entity);
 #define QDR_TCP_CONNECTION_COLUMN_COUNT 10
 extern const char *qdr_tcp_connection_columns[QDR_TCP_CONNECTION_COLUMN_COUNT + 1];
 

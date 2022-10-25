@@ -196,15 +196,9 @@ static void _handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_
 // Note that this runs on the Management Agent thread, which may be running concurrently with the
 // I/O and timer threads.
 //
-qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
+qd_http_listener_t *qd_http1_configure_listener(qd_http_listener_t *li, qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_http_listener_t *li = qd_http_listener(qd->server, config);
-    if (!li) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR, "Unable to create http listener: no memory");
-        return 0;
-    }
-
-    li->adaptor_listener = qd_adaptor_listener(qd, config->adaptor_config, qdr_http1_adaptor->log);
+    li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, qdr_http1_adaptor->log);
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL,         "http1");
@@ -221,9 +215,9 @@ qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *qd, qd_http_adapt
            li->config->adaptor_config->host_port, li->config->adaptor_config->backlog);
     // Note: the proactor may execute _handle_listener_accept on another thread during this call
     qd_adaptor_listener_listen(li->adaptor_listener, _handle_listener_accept, (void *) li);
+
     return li;
 }
-
 
 // Management Agent API - Delete
 //

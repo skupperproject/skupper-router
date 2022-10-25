@@ -279,6 +279,68 @@ class RouterConfigTest(TestCase):
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_9, wait=False, expect=Process.EXIT_FAIL))
 
+        # A tcpConnector must supply an 'address' value
+        name = "test-router-10"
+        config_10 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('tcpConnector', {'port': cls.tester.get_port(),
+                              'host': '127.0.0.1'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_10, wait=False, expect=Process.EXIT_FAIL))
+
+        # A tcpListener must supply an 'address' value
+        name = "test-router-11"
+        config_11 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('tcpListener', {'port': cls.tester.get_port(),
+                             'host': '0.0.0.0'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_11, wait=False, expect=Process.EXIT_FAIL))
+
+        # An httpListener must supply a valid 'protocolVersion' value
+        name = "test-router-12"
+        config_12 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('httpListener', {'port': cls.tester.get_port(),
+                              'host': '0.0.0.0',
+                              'address': 'myAddress',
+                              'protocolVersion': 'bad-version'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_12, wait=False, expect=Process.EXIT_FAIL))
+
+        # An httpConnector must supply a valid 'protocolVersion' value
+        name = "test-router-13"
+        config_13 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('httpListener', {'port': cls.tester.get_port(),
+                              'host': '0.0.0.0',
+                              'address': 'myAddress',
+                              'protocolVersion': 'bad-version'})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_13, wait=False, expect=Process.EXIT_FAIL))
+
+        # httpConnector must supply an 'address' value
+        for index in [14, 15]:
+            name = f"test-router-{index}"
+            cfg = Qdrouterd.Config([
+                ('router', {'mode': 'interior', 'id': name}),
+                ('httpConnector', {'host': '127.0.0.1',
+                                   'port': 9999,
+                                   'protocolVersion': 'HTTP1' if index == 14 else 'HTTP2'})
+            ])
+            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+
+        # httpListener must supply an 'address' value
+        for index in [16, 17]:
+            name = f"test-router-{index}"
+            cfg = Qdrouterd.Config([
+                ('router', {'mode': 'interior', 'id': name}),
+                ('httpListener', {'host': '0.0.0.0',
+                                  'port': 9999,
+                                  'protocolVersion': 'HTTP1' if index == 16 else 'HTTP2'})
+            ])
+            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+
         # Give some time for the test to write to the .out file. Without this, the tests execute too
         # fast and find that nothing has yet been written to the .out files.
         for router in cls.routers:
@@ -365,7 +427,19 @@ class RouterConfigTest(TestCase):
                 if error_string in line:
                     test_pass = True
                     break
+
         self.assertTrue(test_pass)
+
+        # a short timeout is OK since the router has exited the outfile is
+        # completely written!
+
+        err = r"Router start-up failed: Python: .* KeyError: \('address'"
+        for index in [10, 11, 14, 15, 16, 17]:
+            self.routers[index].wait_log_message(err, timeout=1.0)
+
+        err = r"Invalid value for enum\['HTTP1', 'HTTP2'\]: 'bad-version'"
+        self.routers[12].wait_log_message(err, self.routers[12].outfile + '.out', timeout=1.0)
+        self.routers[13].wait_log_message(err, self.routers[13].outfile + '.out', timeout=1.0)
 
 
 class OneRouterTest(TestCase):

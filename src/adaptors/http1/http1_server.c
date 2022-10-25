@@ -143,11 +143,10 @@ static void _send_request_message(_server_request_t *hreq);
 // An HttpConnector has been created.  Create an qdr_http_connection_t and a
 // qdr_connection_t for it.
 //
-static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ctor,
-                                                         qd_dispatch_t *qd,
-                                                         const qd_http_adaptor_config_t *config)
+static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *connector, qd_dispatch_t *qd)
 {
     qdr_http1_connection_t *hconn = new_qdr_http1_connection_t();
+    assert(hconn);
 
     ZERO(hconn);
     hconn->type = HTTP1_CONN_SERVER;
@@ -158,16 +157,17 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ct
     hconn->handler_context.handler = &_handle_connection_events;
     hconn->handler_context.context = hconn;
     sys_atomic_init(&hconn->q2_restart, 0);
-    hconn->cfg.host = qd_strdup(config->adaptor_config->host);
-    hconn->cfg.port = qd_strdup(config->adaptor_config->port);
-    hconn->cfg.address = qd_strdup(config->adaptor_config->address);
-    hconn->cfg.site = config->adaptor_config->site_id ? qd_strdup(config->adaptor_config->site_id) : 0;
-    hconn->cfg.host_port = qd_strdup(config->adaptor_config->host_port);
-    hconn->server.connector = ctor;
-    ctor->ctx = (void*)hconn;
-    hconn->cfg.event_channel = config->event_channel;
-    hconn->cfg.aggregation = config->aggregation;
-    hconn->cfg.host_override = config->host_override ? qd_strdup(config->host_override) : 0;
+    hconn->cfg.host    = qd_strdup(connector->config->adaptor_config->host);
+    hconn->cfg.port    = qd_strdup(connector->config->adaptor_config->port);
+    hconn->cfg.address = qd_strdup(connector->config->adaptor_config->address);
+    hconn->cfg.site =
+        connector->config->adaptor_config->site_id ? qd_strdup(connector->config->adaptor_config->site_id) : 0;
+    hconn->cfg.host_port     = qd_strdup(connector->config->adaptor_config->host_port);
+    hconn->server.connector  = connector;
+    connector->ctx           = (void *) hconn;
+    hconn->cfg.event_channel = connector->config->event_channel;
+    hconn->cfg.aggregation   = connector->config->aggregation;
+    hconn->cfg.host_override = connector->config->host_override ? qd_strdup(connector->config->host_override) : 0;
 
     // for initiating a connection to the server
     hconn->server.reconnect_timer = qd_timer(qdr_http1_adaptor->core->qd, _do_reconnect, hconn);
@@ -218,69 +218,58 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *ct
 //
 // Note that this runs on the Management Agent thread, which may be running concurrently with the
 // I/O and timer threads.
-qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *qd, qd_http_adaptor_config_t *config, qd_entity_t *entity)
+qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector, qd_dispatch_t *qd,
+                                                  qd_entity_t *entity)
 {
-    qd_http_connector_t *c = qd_http_connector(qd->server);
-    if (!c) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR, "Unable to create http connector: no memory");
-        return 0;
-    }
-    c->config = config;
-    DEQ_ITEM_INIT(c);
+    qdr_http1_connection_t *hconn = _create_server_connection(connector, qd);
+    assert(hconn);
 
-    qdr_http1_connection_t *hconn = _create_server_connection(c, qd, config);
-    if (hconn) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Initiating connection to HTTP server %s",
-               hconn->conn_id, hconn->cfg.host_port);
+    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
+           hconn->conn_id, hconn->cfg.host_port);
 
-        c->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
-        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
-        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_NAME,             c->config->adaptor_config->name);
-        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, c->config->adaptor_config->host);
-        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, c->config->adaptor_config->port);
-        vflow_set_string(c->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      c->config->adaptor_config->address);
+    connector->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_NAME, connector->config->adaptor_config->name);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, connector->config->adaptor_config->host);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->config->adaptor_config->port);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS, connector->config->adaptor_config->address);
 
-        // lock out the core activation thread.  Up until this point the core
-        // thread cannot activate the qdr_connection_t since the
-        // qdr_connection_t context has not been set (see
-        // _core_connection_activate_CT in http1_adaptor.c). This keeps the
-        // core from attempting to schedule the connection until we finish
-        // setup.
-        sys_mutex_lock(&qdr_http1_adaptor->lock);
-        DEQ_INSERT_TAIL(qdr_http1_adaptor->connections, hconn);
-        DEQ_INSERT_TAIL(qdr_http1_adaptor->connectors, c);
-        qdr_connection_set_context(hconn->qdr_conn, hconn);
-        qd_timer_schedule(hconn->server.reconnect_timer, 0);
-        sys_mutex_unlock(&qdr_http1_adaptor->lock);
-        // setup complete - core thread can activate the connection
-        return c;
-    } else {
-        qd_http_connector_decref(c);
-        c = 0;
-    }
+    // lock out the core activation thread.  Up until this point the core
+    // thread cannot activate the qdr_connection_t since the
+    // qdr_connection_t context has not been set (see
+    // _core_connection_activate_CT in http1_adaptor.c). This keeps the
+    // core from attempting to schedule the connection until we finish
+    // setup.
+    sys_mutex_lock(&qdr_http1_adaptor->lock);
+    DEQ_INSERT_TAIL(qdr_http1_adaptor->connections, hconn);
+    DEQ_INSERT_TAIL(qdr_http1_adaptor->connectors, connector);
+    qdr_connection_set_context(hconn->qdr_conn, hconn);
+    qd_timer_schedule(hconn->server.reconnect_timer, 0);
+    sys_mutex_unlock(&qdr_http1_adaptor->lock);
+    // setup complete - core thread can activate the connection
 
-    return c;
+    return connector;
 }
-
 
 // Management Agent API - Delete
 //
 // Note that this runs on the Management Agent thread, which may be running concurrently with the
 // I/O and timer threads.
-void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *ct)
+void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *connector)
 {
-    if (ct) {
-        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s", ct->config->adaptor_config->address, ct->config->adaptor_config->host, ct->config->adaptor_config->port);
+    if (connector) {
+        qd_log(qdr_http1_adaptor->log, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s",
+               connector->config->adaptor_config->address, connector->config->adaptor_config->host,
+               connector->config->adaptor_config->port);
 
         sys_mutex_lock(&qdr_http1_adaptor->lock);
-        DEQ_REMOVE(qdr_http1_adaptor->connectors, ct);
-        qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) ct->ctx;
+        DEQ_REMOVE(qdr_http1_adaptor->connectors, connector);
+        qdr_http1_connection_t *hconn    = (qdr_http1_connection_t *) connector->ctx;
         qdr_connection_t *qdr_conn = 0;
         if (hconn) {
             hconn->admin_status = QD_CONN_ADMIN_DELETED;
             hconn->server.connector = 0;
-            ct->ctx = 0;
+            connector->ctx          = 0;
             qdr_conn = hconn->qdr_conn;
         }
         sys_mutex_unlock(&qdr_http1_adaptor->lock);
@@ -288,7 +277,7 @@ void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *ct)
         if (qdr_conn)
             // this will cause the core thread to activate the connection and call qdr_http1_server_core_conn_close()
             qdr_core_close_connection(qdr_conn);
-        qd_http_connector_decref(ct);
+        qd_http_connector_decref(connector);
     }
 }
 

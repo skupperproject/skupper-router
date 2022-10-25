@@ -62,7 +62,7 @@ struct qd_adaptor_config_t
 
 ALLOC_DECLARE(qd_adaptor_config_t);
 
-qd_error_t qd_load_adaptor_config(qd_dispatch_t *qd, qd_adaptor_config_t *config, qd_entity_t* entity, qd_log_source_t *log_source);
+qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *entity);
 void qd_free_adaptor_config(qd_adaptor_config_t *config);
 
 /**

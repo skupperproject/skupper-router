@@ -87,7 +87,7 @@ TEST_CASE("Configure and start HTTP_ADAPTOR listener")
 
             // check logging
             std::string       logging = css.str();
-            const std::string unable  = R"EOS(HTTP_ADAPTOR (error) Unable to load config information)EOS";
+            const std::string unable  = R"EOS(HTTP_ADAPTOR (error) Unable to configure a new httpListener)EOS";
             CHECK_MESSAGE(logging.find(unable) != std::string::npos, unable, " not found in ", logging);
         }
 
@@ -150,7 +150,7 @@ TEST_CASE("Configure and start HTTP connector")
 
         // check logging
         std::string       logging = css.str();
-        const std::string unable  = R"EOS(HTTP_ADAPTOR (error) Unable to load config information)EOS";
+        const std::string unable  = R"EOS(HTTP_ADAPTOR (error) Unable to configure a new httpConnector)EOS";
         CHECK_MESSAGE(logging.find(unable) != std::string::npos, unable, " not found in ", logging);
     }
 

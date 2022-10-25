@@ -65,7 +65,7 @@ struct qd_http_listener_t {
 };
 DEQ_DECLARE(qd_http_listener_t, qd_http_listener_list_t);
 
-qd_http_listener_t *qd_http_listener(qd_server_t *server, qd_http_adaptor_config_t *config);
+qd_http_listener_t *qd_http_listener(qd_server_t *server);
 void                qd_http_listener_decref(qd_http_listener_t *li);
 
 typedef struct qd_http_connector_t qd_http_connector_t;
@@ -113,22 +113,18 @@ void qd_http_record_request(qdr_core_t *core, const char * method, uint32_t stat
                             uint64_t bytes_in, uint64_t bytes_out, uint64_t latency);
 char *qd_get_host_from_host_port(const char *host_port);
 
-qd_http_adaptor_config_t *qd_load_http_adaptor_config(qd_dispatch_t *qd, qd_entity_t *entity,
-                                                      qd_log_source_t *log_source);
-void                      qd_free_http_adaptor_config(qd_http_adaptor_config_t *config);
-
 //
 // These functions are defined in their respective HTTP adaptors:
 //
 
-qd_http_listener_t *qd_http1_configure_listener(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
-qd_http_listener_t *qd_http2_configure_listener(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
+qd_http_listener_t *qd_http1_configure_listener(qd_http_listener_t *, qd_dispatch_t *, qd_entity_t *);
+qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *, qd_dispatch_t *, qd_entity_t *);
 
 void qd_http1_delete_listener(qd_dispatch_t *, qd_http_listener_t *);
 void qd_http2_delete_listener(qd_dispatch_t *, qd_http_listener_t *);
 
-qd_http_connector_t *qd_http1_configure_connector(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
-qd_http_connector_t *qd_http2_configure_connector(qd_dispatch_t *, qd_http_adaptor_config_t *, qd_entity_t *);
+qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *, qd_dispatch_t *, qd_entity_t *);
+qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *, qd_dispatch_t *, qd_entity_t *);
 
 void qd_http1_delete_connector(qd_dispatch_t *, qd_http_connector_t *);
 void qd_http2_delete_connector(qd_dispatch_t *, qd_http_connector_t *);
