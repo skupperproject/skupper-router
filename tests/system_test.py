@@ -1435,8 +1435,6 @@ class QdManager:
                  timeout: Optional[float] = TIMEOUT,
                  router_id: Optional[str] = None,
                  edge_router_id: Optional[str] = None) -> None:
-        # 'tester' - can be 'self' when called in a test,
-        # or an instance any class derived from Process (like Qdrouterd)
         self._timeout = timeout
         self._address = address
         self.router_id = router_id
@@ -1446,11 +1444,14 @@ class QdManager:
             self.router = self.router + ['--router', self.router_id]
         elif self.edge_router_id:
             self.router = self.router + ['--edge-router', self.edge_router_id]
+        self.returncode = 0  # the returncode from skmanage call
+        self.stdout = ''  # of skmanage
+        self.stderr = ''  # of skmanage
 
     def __call__(self, cmd: str,
                  address: Optional[str] = None,
                  input: Optional[str] = None,
-                 timeout: Optional[float] = None) -> str:
+                 timeout: Optional[float] = None) -> Optional[str]:
         addr = address or self._address
         assert addr, "address missing"
         with subprocess.Popen(['skmanage'] + cmd.split(' ') + self.router
@@ -1458,10 +1459,11 @@ class QdManager:
                                  str(timeout or self._timeout)], stdin=PIPE,
                               stdout=PIPE, stderr=STDOUT,
                               universal_newlines=True) as p:
-            rc = p.communicate(input)
-            if p.returncode != 0:
-                raise Exception("%s %s" % rc)
-            return rc[0]
+            self.stdout, self.stderr = p.communicate(input)
+            self.returncode = p.returncode
+            if self.returncode != 0:
+                raise Exception(f"{self.stdout} {self.stderr}")
+            return self.stdout
 
     def create(self, long_type, kwargs):
         cmd = "CREATE --type=%s" % long_type

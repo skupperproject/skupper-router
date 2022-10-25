@@ -28,8 +28,6 @@
 
 ALLOC_DEFINE(qd_adaptor_config_t);
 
-#define NUM_ALPN_PROTOCOLS 1
-
 void qd_free_adaptor_config(qd_adaptor_config_t *config)
 {
     if (!config)

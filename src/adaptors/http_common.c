@@ -18,9 +18,13 @@
  */
 
 #include "http_common.h"
+
 #include "adaptor_common.h"
+#include "adaptor_tls.h"
+
 #include <proton/listener.h>
 #include <proton/tls.h>
+
 #include <stdio.h>
 
 ALLOC_DECLARE(qd_http_listener_t);
@@ -118,7 +122,6 @@ static qd_error_t qd_load_http_adaptor_config(qd_http_adaptor_config_t *config, 
     return QD_ERROR_NONE;
 
 error:
-    qd_free_http_adaptor_config(config);
     free(version_str);
     free(aggregation_str);
     return qd_error_code();
@@ -264,6 +267,7 @@ void qd_http_listener_decref(qd_http_listener_t *li)
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         qd_free_http_adaptor_config(li->config);
         vflow_end_record(li->vflow);
+        qd_tls_domain_decref(li->tls_domain);
         sys_atomic_destroy(&li->ref_count);
         free_qd_http_listener_t(li);
     }
@@ -290,6 +294,7 @@ void qd_http_connector_decref(qd_http_connector_t* c)
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
         qd_free_http_adaptor_config(c->config);
         vflow_end_record(c->vflow);
+        qd_tls_domain_decref(c->tls_domain);
         sys_atomic_destroy(&c->ref_count);
         free_qd_http_connector_t(c);
     }

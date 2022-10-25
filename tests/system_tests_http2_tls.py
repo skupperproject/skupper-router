@@ -19,7 +19,7 @@
 import os
 import unittest
 
-from http1_tests import wait_http_listeners_up
+from http1_tests import wait_http_listeners_up, HttpTlsBadConfigTestsBase
 from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
 
@@ -573,3 +573,23 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         self.assertNotEqual(0, rc, f"Expected curl to fail {out} {err}")
         error_log = ":peer did not return a certificate"
         self.router_qdra.wait_log_message(error_log)
+
+
+class Http2TlsBadConfigTests(HttpTlsBadConfigTestsBase):
+    PROTOCOL_VERSION = "HTTP2"
+
+    @classmethod
+    def setUpClass(cls):
+        super(Http2TlsBadConfigTests, cls).setUpClass()
+
+    def test_connector_mgmt_missing_ca_file(self):
+        self._test_connector_mgmt_missing_ca_file()
+
+    def test_connector_mgmt_missing_ssl_profile(self):
+        self._test_connector_mgmt_missing_ssl_profile()
+
+    def test_listener_mgmt_missing_ssl_profile(self):
+        self._test_listener_mgmt_missing_ssl_profile()
+
+    def test_listener_mgmt_missing_ca_file(self):
+        self._test_listener_mgmt_missing_ca_file()

@@ -27,48 +27,55 @@
 
 #define QD_TLS_ERROR -1
 
+typedef struct qd_tls_domain_t qd_tls_domain_t;
 typedef struct qd_tls_t qd_tls_t;
 
 /**
- * Constructor to create a new qd_tls_t object.
- * @param context - the context object
- * @oaram conn_id - the connection id of the connection that creates the qd_tls_t
- * @param log_source - the log source for TLS related logging.
- */
-qd_tls_t *qd_tls(void *context, uint64_t conn_id, qd_log_source_t *log_source);
-
-/**
- * Configure proton pn_tls objects using passed in config.
- * and start the tls session by calling the pn_tls_start function.
- * Searches for the sslProfile in the passed in config and loads the details from that sslProfile.
- * Logs sslProfile configuration failures at INFO level.
+ * Constructor to create a new qd_tls_domain_t instance.
  *
- * @param tls - Pointer to the qd_tls_t object which contains the tls session information.
- * @param config   - Pointer to the qd_adaptor_config_t object which contains the sslProfile information.
- * @param qd -     - Pointer to the qd_dispatch_t object.
- * @param is_listener - set this flag to true if the tls session is initialized on an adaptor listener, false otherwise.
+ * Creates a new qd_tls_domain instance that can be used to allocate one or more qd_tls_t TLS sessions.  Searches for
+ * the sslProfile in the passed in config and loads the details from that sslProfile.  Logs sslProfile configuration
+ * failures to log_source at ERROR level. The returned qd_tls_domain_t instance may be used to create multiple qd_tls_t
+ * instances.  The caller must call qd_tls_domain_decref() on the returned qd_tls_domain_t instance to free it.
+ *
+ * @param config - Pointer to the qd_adaptor_config_t object which contains the sslProfile information.
+ * @param qd - Pointer to the qd_dispatch_t object.
+ * @param log_source - the log source for logging. Adopted by all child qd_tls_t instances.
  * @param alpn_protocols - An array of protocols supported by the application layer used when performing
  * Application-Layer Protocol Negotiation (ALPN).
  * @param alpn_protocol_count - The count of elements in the alpn_protocols array.
+ * @param is_listener - set this flag to true if the domain will operate as a client (ex. TcpListener), false otherwise.
+ *
+ * @return qd_tls_domain_t instance on success, else 0.
+ */
+qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
+                               const qd_dispatch_t       *qd,
+                               qd_log_source_t           *log_source,
+                               const char                *alpn_protocols[],
+                               size_t                     alpn_protocol_count,
+                               bool                       is_listener);
+
+/**
+ * Drop the reference to the qd_tls_domain_t instance. This can free the instance so it must not be referenced after
+ * this call is made.
+ *
+ * @param - Pointer to the qd_tls_domain_t instance to release.
+ */
+void qd_tls_domain_decref(qd_tls_domain_t *tls_domain);
+
+/**
+ * Constructor to create a new TLS session using the given domain. The returned qd_tls_t instance can be freed by
+ * calling qd_tls_free().
+ *
+ * @param tls_domain - the qd_tls_domain_t to use for this TLS session.
+ * @param context - the user context object
+ * @param conn_id - the connection id of the connection that creates the qd_tls_t
  * @param on_secure - optional callback invoked when TLS session becomes secure
  *
- * @return
- *   On success:
- *     pn_tls_config and pn_tls_session objects in tls are set up.
- *     Returns true
- *   On failure:
- *     Error log is written
- *     All in-progress pn_tls objects are destroyed.
- *     Returns false.
+ * @returns a new qd_tls_t instance, or 0 on error.
  */
-typedef void qd_tls_on_secure_cb_t(qd_tls_t *tls, void *user_context);
-bool         qd_tls_start(qd_tls_t                  *tls,
-                          const qd_adaptor_config_t *config,
-                          const qd_dispatch_t       *qd,
-                          bool                       is_listener,
-                          const char                *alpn_protocols[],
-                          size_t                     alpn_protocol_count,
-                          qd_tls_on_secure_cb_t     *on_secure);
+typedef void qd_tls_on_secure_cb_t(qd_tls_t *tls, void *context);
+qd_tls_t    *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, qd_tls_on_secure_cb_t *on_secure);
 
 /**
  * Takes as many read buffers from the raw connection that is allowed by pn_tls_get_decrypt_input_buffer_capacity and

@@ -77,7 +77,6 @@ static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer
                                  bool write_buffers);
 static bool schedule_activation(qdr_http2_connection_t *conn, qd_duration_t msec);
 static void cancel_activation(qdr_http2_connection_t *conn);
-static void setup_qd_tls(qdr_http2_connection_t *conn);
 
 static void grant_read_buffers(qdr_http2_connection_t *conn, const char *msg)
 {
@@ -1486,8 +1485,9 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     qdr_http2_connection_t* ingress_http_conn = new_qdr_http2_connection_t();
     ZERO(ingress_http_conn);
 
+    ingress_http_conn->conn_id         = qd_server_allocate_connection_id(listener->server);
     ingress_http_conn->ingress = true;
-    ingress_http_conn->require_tls = listener->config->adaptor_config->ssl_profile_name ? true: false;
+    ingress_http_conn->require_tls     = !!listener->tls_domain;
     ingress_http_conn->context.context = ingress_http_conn;
     ingress_http_conn->context.handler = &handle_connection_event;
     ingress_http_conn->listener = listener;
@@ -1774,15 +1774,13 @@ static int qdr_http_push(void *context, qdr_link_t *link, int limit)
 
 static void http_connector_establish(qdr_http2_connection_t *conn)
 {
-    sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
     qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Connecting to %s", conn->conn_id, conn->config->adaptor_config->host_port);
+    sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
     if (conn->require_tls) {
         // Create the qd_tls_t object
-        conn->tls              = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
-        bool tls_setup_success =
-            qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                         conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS, on_tls_connection_secured);
-        if (tls_setup_success) {
+        assert(!conn->tls);
+        conn->tls = qd_tls(conn->connector->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+        if (conn->tls) {
             // Call pn_raw_connection() only if we were successfully able to configure TLS
             // with the information provided in the sslProfile.
             conn->pn_raw_conn = pn_raw_connection();
@@ -1793,11 +1791,9 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
                    "pn_proactor_raw_connect()",
                    conn->conn_id, conn->config->adaptor_config->name, conn->config->adaptor_config->host_port);
             pn_proactor_raw_connect(qd_server_proactor(conn->server), conn->pn_raw_conn, conn->config->adaptor_config->host_port);
-        }
-        else {
-            // TLS was not configured successfully using the details in the connector and SSLProfile.
-            qd_tls_free(conn->tls);
-            conn->tls = 0;
+        } else {
+            // TLS was not configured successfully using the details in the connector and SSLProfile. See the logs for
+            // additional detail
             qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Error setting up TLS on connector %s to %s", conn->conn_id, conn->config->adaptor_config->name, conn->config->adaptor_config->host_port);
         }
     }
@@ -1809,7 +1805,6 @@ static void http_connector_establish(qdr_http2_connection_t *conn)
     }
     sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
 }
-
 
 /**
  * Converts the AMQP message into a HTTP request or response
@@ -2373,7 +2368,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                    true,
                                                    QDR_ROLE_NORMAL,
                                                    1,
-                                                   qd_server_allocate_connection_id(ingress_http_conn->server),
+                                                   ingress_http_conn->conn_id,
                                                    0,
                                                    0,
                                                    false,
@@ -2385,7 +2380,6 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                    0);
 
     ingress_http_conn->qdr_conn = conn;
-    ingress_http_conn->conn_id = conn->identity;
     qdr_connection_set_context(conn, ingress_http_conn);
     ingress_http_conn->connection_established = true;
     qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
@@ -2624,8 +2618,9 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
 {
     qdr_http2_connection_t* egress_http_conn = new_qdr_http2_connection_t();
     ZERO(egress_http_conn);
+    egress_http_conn->conn_id         = qd_server_allocate_connection_id(connector->server);
     egress_http_conn->activate_timer = qd_timer(http2_adaptor->core->qd, egress_conn_timer_handler, egress_http_conn);
-    egress_http_conn->require_tls = connector->config->adaptor_config->ssl_profile_name ? true: false;
+    egress_http_conn->require_tls     = !!connector->tls_domain;
     egress_http_conn->ingress = false;
     egress_http_conn->context.context = egress_http_conn;
     egress_http_conn->context.handler = &handle_connection_event;
@@ -2664,25 +2659,24 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
                                                       "",                  // peer router version,
                                                       false);              // streaming links
 
-    qdr_connection_t *conn = qdr_connection_opened(http2_adaptor->core,
-                                                   http2_adaptor->adaptor,
-                                                   true,
-                                                   QDR_ROLE_NORMAL,
-                                                   1,
-                                                   qd_server_allocate_connection_id(egress_http_conn->server),
-                                                   0,
-                                                   0,
-                                                   false,
-                                                   false,
-                                                   250,
-                                                   0,
-                                                   info,
-                                                   0,
-                                                   0);
+    qdr_connection_t *conn     = qdr_connection_opened(http2_adaptor->core,
+                                                       http2_adaptor->adaptor,
+                                                       true,
+                                                       QDR_ROLE_NORMAL,
+                                                       1,
+                                                       egress_http_conn->conn_id,
+                                                       0,
+                                                       0,
+                                                       false,
+                                                       false,
+                                                       250,
+                                                       0,
+                                                       info,
+                                                       0,
+                                                       0);
     egress_http_conn->qdr_conn = conn;
     connector->ctx = conn;
 
-    egress_http_conn->conn_id = conn->identity;
     qdr_connection_set_context(conn, egress_http_conn);
     create_dummy_link_on_egress_conn(egress_http_conn);
     return egress_http_conn;
@@ -2693,7 +2687,21 @@ static void handle_raw_connected_event(qdr_http2_connection_t *conn)
     if (conn->ingress) {
         qdr_http_connection_ingress_accept(conn);
         if (conn->require_tls) {
-            setup_qd_tls(conn);
+            assert(!conn->tls);
+            conn->tls = qd_tls(conn->listener->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+            if (conn->tls) {
+                // We were successfully able to gather the details from the associated sslProfile and start
+                // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
+                // bytes that the client is going to send us.
+                grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
+            } else {
+                // There was some problem with starting up the proton tls session.
+                // Check logs for detailed INFO level output to find out more about the failure
+                qd_log(http2_adaptor->log_source, QD_LOG_ERROR,
+                       "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
+                       conn->conn_id);
+                pn_raw_connection_close(conn->pn_raw_conn);
+            }
         } else {
             send_settings_frame(conn);
         }
@@ -2745,28 +2753,6 @@ static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer
         int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
         qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
                "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i\n", conn->conn_id, num_buffers_written);
-    }
-}
-
-static void setup_qd_tls(qdr_http2_connection_t *conn)
-{
-    // Create the qd_tls_t object
-    conn->tls    = qd_tls(conn, conn->conn_id, http2_adaptor->log_source);
-    bool success =
-        qd_tls_start(conn->tls, conn->config->adaptor_config, qd_server_dispatch(conn->server),
-                     conn->listener ? true : false, protocols, NUM_ALPN_PROTOCOLS, on_tls_connection_secured);
-    if (success) {
-        // We were successfully able to gather the details from the associated sslProfile and start
-        // a pn_tls_session. Grant read buffers so that we can now start reading the initial TLS handshake
-        // bytes that the client is going to send us.
-        grant_read_buffers(conn, "PN_RAW_CONNECTION_CONNECTED, ingress");
-    } else {
-        // There was some problem with starting up the proton tls session.
-        // Check logs for detailed INFO level output to find out more about the failure
-        qd_log(http2_adaptor->log_source, QD_LOG_ERROR,
-               "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED ingress failed to start TLS, closing raw connection",
-               conn->conn_id);
-        pn_raw_connection_close(conn->pn_raw_conn);
     }
 }
 
@@ -2943,6 +2929,16 @@ void qd_http2_delete_listener(qd_dispatch_t *qd, qd_http_listener_t *li)
  */
 qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *li, qd_dispatch_t *qd, qd_entity_t *entity)
 {
+    if (li->config->adaptor_config->ssl_profile_name) {
+        li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, http2_adaptor->log_source, protocols,
+                                       NUM_ALPN_PROTOCOLS, true);
+        if (!li->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_http_listener_decref(li);
+            return 0;
+        }
+    }
+
     li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, http2_adaptor->log_source);
 
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
@@ -2960,11 +2956,21 @@ qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *li, qd_dispa
            li->config->adaptor_config->host_port);
     // Note: the proactor may execute _handle_listener_accept on another thread during this call
     qd_adaptor_listener_listen(li->adaptor_listener, handle_listener_accept, (void *) li);
+
     return li;
 }
 
 qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *c, qd_dispatch_t *qd, qd_entity_t *entity)
 {
+    if (c->config->adaptor_config->ssl_profile_name) {
+        c->tls_domain = qd_tls_domain(c->config->adaptor_config, qd, http2_adaptor->log_source, protocols,
+                                      NUM_ALPN_PROTOCOLS, false);
+        if (!c->tls_domain) {
+            // note qd_tls_domain logged the error
+            qd_http_connector_decref(c);
+            return 0;
+        }
+    }
     DEQ_INSERT_TAIL(http2_adaptor->connectors, c);
     qdr_http_connection_egress(c);
     return c;
