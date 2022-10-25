@@ -53,7 +53,6 @@
      adaptor for meta-data.
  */
 
-const char *http1_alpn_protocols[HTTP1_NUM_ALPN_PROTOCOLS] = {"http/1.1", "http/1.0"};
 
 ALLOC_DEFINE(qdr_http1_out_data_t);
 ALLOC_DEFINE(qdr_http1_connection_t);

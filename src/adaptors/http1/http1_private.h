@@ -41,7 +41,6 @@
 typedef struct qdr_http1_out_data_t      qdr_http1_out_data_t;
 typedef struct qdr_http1_request_base_t  qdr_http1_request_base_t;
 typedef struct qdr_http1_connection_t    qdr_http1_connection_t;
-typedef struct qd_tls_t                  qd_tls_t;
 
 DEQ_DECLARE(qdr_http1_connection_t, qdr_http1_connection_list_t);
 
@@ -114,7 +113,6 @@ struct qdr_http1_connection_t {
     pn_raw_connection_t   *raw_conn;
     qdr_connection_t      *qdr_conn;
     qdr_http1_adaptor_t   *adaptor;
-    qd_tls_t              *tls;
 
     uint64_t               conn_id;
     qd_handler_context_t   handler_context;
@@ -175,7 +173,6 @@ struct qdr_http1_connection_t {
     // flags
     //
     bool trace;
-    bool require_tls;
 };
 ALLOC_DECLARE(qdr_http1_connection_t);
 
@@ -208,9 +205,6 @@ void qdr_http1_error_response(qdr_http1_request_base_t *hreq,
 void qdr_http1_rejected_response(qdr_http1_request_base_t *hreq,
                                  const qdr_error_t *error);
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context);
-
-#define HTTP1_NUM_ALPN_PROTOCOLS 2
-extern const char *http1_alpn_protocols[HTTP1_NUM_ALPN_PROTOCOLS];
 
 // http1_client.c protocol adaptor callbacks
 //
