@@ -1040,6 +1040,7 @@ class CommonTcpTests:
     def run_ncat(self,
                  port,
                  logger,
+                 name="run_ncat",
                  expect=Process.EXIT_OK,
                  timeout=10,
                  data=b'abcd',
@@ -1055,12 +1056,12 @@ class CommonTcpTests:
                 ncat_cmd.append('--ssl-key')
                 ncat_cmd.append(CLIENT_PRIVATE_KEY_NO_PASS)
         if len(data) > 4:
-            logger.log(f"Starting ncat {ncat_cmd} and large input len={len(data)}")
+            logger.log(f"Starting ncat {ncat_cmd} and large input len={len(data)}, name={name}")
         else:
-            logger.log(f"Starting ncat {ncat_cmd} and input {data}")
+            logger.log(f"Starting ncat {ncat_cmd} and input {data}, name={name}")
         p = self.popen(
             ncat_cmd,
-            stdin=PIPE, stdout=PIPE, stderr=PIPE, expect=expect)
+            stdin=PIPE, stdout=PIPE, stderr=PIPE, expect=expect, name=name)
         out, err = p.communicate(input=data, timeout=timeout)
         try:
             p.teardown()
@@ -1085,7 +1086,8 @@ class CommonTcpTests:
         out = self.run_ncat(ncat_port, logger,
                             data=large_msg if use_large_msg else data,
                             use_ssl=use_ssl,
-                            use_client_cert=use_client_cert)
+                            use_client_cert=use_client_cert,
+                            name=name)
         if use_large_msg:
             logger.log(f"run_ncat large_msg returns length: {len(out)}")
         else:
