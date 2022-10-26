@@ -183,25 +183,29 @@ static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *in_conn
         return false;
 
     //
-    // If there is at least one remote interior router with a consumer for this address,
-    // the answer to the question is always "yes".
+    // Determine if there is a mesh-loop, where all of the local or remote destinations
+    // go back to the mesh from which the connection comes.
     //
-    if (qd_bitmask_cardinality(addr->rnodes) > 0) {
+    bool mesh_loop = (addr->remote_sole_destination_mesh || addr->local_sole_destination_mesh)
+                     && memcmp(addr->destination_mesh_id, in_conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES) == 0;
+
+    //
+    // If there is at least one remote destination and not all remote destinations go to the same mesh,
+    // sending is allowed.
+    //
+    if (qd_bitmask_cardinality(addr->rnodes) > 0 && (!mesh_loop || !addr->remote_sole_destination_mesh)) {
         return true;
     }
 
-    bool can_send = false;
-    if (DEQ_SIZE(addr->rlinks) > 1) {
-        // There is at least one receiver for this address somewhere in the router network
-        can_send = true;
-    } else {
-        if (DEQ_SIZE(addr->rlinks) == 1) {
-            qdr_link_ref_t *link_ref = DEQ_HEAD(addr->rlinks);
-            if (link_ref->link->conn != in_conn)
-                can_send=true;
-        }
+    //
+    // If there is at least one local destination and not all local destinations go to the same mesh,
+    // sending is allowed.
+    //
+    if (DEQ_SIZE(addr->rlinks) > 0 && (!mesh_loop || !addr->local_sole_destination_mesh)) {
+        return true;
     }
-    return can_send;
+
+    return false;
 }
 
 
@@ -237,6 +241,38 @@ static void qdrc_update_edge_peers(qdr_core_t *core, qdr_address_t *addr, bool r
                     }
                 } else {
                     if (link->edge_reachable && !qdrc_can_send_address(addr, endpoint_state->conn)) {
+                        qdrc_send_message(core, addr, endpoint, false);
+                        link->edge_reachable = false;
+                    }
+                }
+            }
+        }
+        inlink = DEQ_NEXT(inlink);
+    }
+}
+
+
+/**
+ * Some address state has changed.  If the can-send-message state for any incoming link has changed,
+ * notify the edge peer of the change.
+ */
+static void qdrc_check_edge_peers(qdr_core_t *core, qdr_address_t *addr)
+{
+    qdr_link_ref_t *inlink = DEQ_HEAD(addr->inlinks);
+
+    while (inlink) {
+        qdr_link_t *link = inlink->link;
+        if (!!link->edge_context) {
+            qdr_addr_endpoint_state_t *endpoint_state = (qdr_addr_endpoint_state_t*) link->edge_context;
+            qdrc_endpoint_t           *endpoint       = endpoint_state->endpoint;
+            if (!!endpoint && !endpoint_state->closed) {
+                if (!link->edge_reachable) {
+                    if (qdrc_can_send_address(addr, endpoint_state->conn)) {
+                        qdrc_send_message(core, addr, endpoint, true);
+                        link->edge_reachable = true;
+                    }
+                } else {
+                    if (!qdrc_can_send_address(addr, endpoint_state->conn)) {
                         qdrc_send_message(core, addr, endpoint, false);
                         link->edge_reachable = false;
                     }
@@ -288,6 +324,11 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
             }
             break;
 
+        case QDRC_EVENT_ADDR_LOCAL_CHANGED:
+        case QDRC_EVENT_ADDR_REMOTE_CHANGED:
+            qdrc_check_edge_peers(addr_tracking->core, addr);
+            break;
+
         default:
             break;
     }
@@ -310,6 +351,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
                     endpoint_state->ref_count++;
                     if (qdrc_can_send_address(addr, link->conn)) {
                         qdrc_send_message(mc->core, addr, endpoint_state->endpoint, true);
+                        link->edge_reachable = true;
                     }
                 }
             }
@@ -374,6 +416,8 @@ static void qdrc_edge_address_tracking_init_CT(qdr_core_t *core, void **module_c
             | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
             | QDRC_EVENT_ADDR_ADDED_REMOTE_DEST
             | QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST
+            | QDRC_EVENT_ADDR_LOCAL_CHANGED
+            | QDRC_EVENT_ADDR_REMOTE_CHANGED
             | QDRC_EVENT_LINK_EDGE_DATA_ATTACHED
             | QDRC_EVENT_LINK_EDGE_DATA_DETACHED,
             0,

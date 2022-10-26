@@ -26,8 +26,8 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from system_test import TestTimeout, Logger
-#from system_test import TIMEOUT
-TIMEOUT = 10.0
+from system_test import TIMEOUT
+
 
 class CustomTimeout:
     def __init__(self, parent):

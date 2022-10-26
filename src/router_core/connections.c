@@ -1387,6 +1387,41 @@ void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr)
 }
 
 
+/**
+ * Process local and remote attributes for this address to see if action is needed.
+ * 
+ * This function should be called whenever the local_sole_destination_mesh flag changes state
+ * or a remote sole_destination_mesh value is changed.
+ */
+void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
+{
+    //
+    // The address has a remote sole-destination-mesh if ALL of the remote routers
+    // in rnodes have the same sole-destination.
+    //
+    bool new_value = qd_bitmask_cardinality(addr->rnodes) > 0;
+
+    int router_bit, c;
+    for (QD_BITMASK_EACH(addr->rnodes, router_bit, c)) {
+        if (addr->remote_sole_destination_meshes == 0) {
+            new_value = false;
+            break;
+        }
+
+        char *ptr = addr->remote_sole_destination_meshes + (router_bit * QD_DISCRIMINATOR_BYTES);
+        if (memcmp(ptr, addr->destination_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
+            new_value = false;
+            break;
+        }
+    }
+
+    if (new_value != addr->remote_sole_destination_mesh) {
+        addr->remote_sole_destination_mesh = new_value;
+        qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_REMOTE_CHANGED, addr);
+    }
+}
+
+
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);

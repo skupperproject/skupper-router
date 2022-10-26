@@ -678,7 +678,62 @@ void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr)
 
     free(addr->add_prefix);
     free(addr->del_prefix);
+    free(addr->remote_sole_destination_meshes);
     free_qdr_address_t(addr);
+}
+
+
+/**
+ * The edge router attached via the connection has reported a new negotiated mesh
+ * identifier.  We must re-compute the state related to sole-edge-mesh for each
+ * address represented by outbound links on the connection.
+ */
+void qdr_core_edge_mesh_id_changed_CT(qdr_core_t *core, qdr_connection_t *conn)
+{
+    //
+    // We can assume that the connection has a valid edge-mesh-id.
+    //
+    assert(conn->edge_mesh_id[0] != '\0');
+
+    qdr_link_ref_t *link_ref = DEQ_HEAD(conn->links);
+    while (!!link_ref) {
+        qdr_link_t *link = link_ref->link;
+        if (link->link_direction == QD_OUTGOING && !!link->owning_addr) {
+            qdr_address_t *addr = link->owning_addr;
+
+            //
+            // Check all of the links from this address to see if they reference the same
+            // mesh (the new ID) and set the local-sole-destination-mesh accordingly.
+            //
+            bool not_sole = false;
+            qdr_link_ref_t *inner_ref = DEQ_HEAD(addr->rlinks);
+            while (!!inner_ref && !not_sole) {
+                qdr_link_t *inner_link = inner_ref->link;
+                if (inner_link != link) {
+                    if (memcmp(inner_link->conn->edge_mesh_id, conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
+                        not_sole = true;
+                    }
+                }
+                inner_ref = DEQ_NEXT(inner_ref);
+            }
+
+            bool sole_local = !not_sole && !DEQ_IS_EMPTY(addr->rlinks);
+
+            //
+            // If there has been a change in state for this address, raise a core event.
+            //
+            if (sole_local != addr->local_sole_destination_mesh) {
+                addr->local_sole_destination_mesh = sole_local;
+                if (sole_local) {
+                    memcpy(addr->destination_mesh_id, conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+                } else {
+                    addr->destination_mesh_id[0] = '\0';
+                }
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_LOCAL_CHANGED, addr);
+            }
+        }
+        link_ref = DEQ_NEXT(link_ref);
+    }
 }
 
 
@@ -701,9 +756,35 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
     if (link->link_direction == QD_OUTGOING) {
         qdr_add_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
         addr->proxy_rlink_count += link->proxy ? 1 : 0;
-        
+
         if (DEQ_SIZE(addr->rlinks) == 1) {
+            //
+            // If this is the only local destination for this address and the connection goes to an edge mesh,
+            // this address has a local-sole-destination-mesh.
+            //
+            if (link->conn->edge_mesh_id[0] != '\0') {
+                addr->local_sole_destination_mesh = true;
+                memcpy(addr->destination_mesh_id, link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+                qdr_process_addr_attributes_CT(core, addr);
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_LOCAL_CHANGED, addr);
+            }
+
+            //
+            // This is the first outgoing link for this address, start the flow of incoming deliveries.
+            //
             qdr_addr_start_inlinks_CT(core, addr);
+        } else {
+            //
+            // This is an additional local destination for the address.  If this destination does not go
+            // to the same edge mesh as all the existing destinations, clear the local-sole-destination-mesh
+            // state.
+            //
+            if (addr->local_sole_destination_mesh && memcmp(addr->destination_mesh_id, link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
+                addr->local_sole_destination_mesh = false;
+                addr->destination_mesh_id[0] = '\0';
+                qdr_process_addr_attributes_CT(core, addr);
+                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_LOCAL_CHANGED, addr);
+            }
         }
 
         if (!link->proxy && DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count <= QDRC_LOCAL_DEST_THRESHOLD) {
@@ -738,6 +819,45 @@ void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_
         bool removed = qdr_del_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
         if (removed) {
             addr->proxy_rlink_count -= link->proxy ? 1 : 0;
+
+            if (!addr->local_sole_destination_mesh) {
+                //
+                // If this address previously did not have a local-sole-destination-mesh, it may now have one.
+                // We need to check the remaining destinations to see if they all go to the same edge mesh.
+                //
+                if (DEQ_SIZE(addr->rlinks) > 0) {
+                    qdr_link_ref_t *ref       = DEQ_HEAD(addr->rlinks);
+                    bool            same_mesh = ref->link->conn->edge_mesh_id[0] != '\0';
+
+                    if (same_mesh) {
+                        memcpy(addr->destination_mesh_id, ref->link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+                        while (!!ref && same_mesh) {
+                            if (memcmp(addr->destination_mesh_id, ref->link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
+                                same_mesh = false;
+                                addr->destination_mesh_id[0] = '\0';
+                            }
+                            ref = DEQ_NEXT(ref);
+                        }
+
+                        if (same_mesh) {
+                            addr->local_sole_destination_mesh = true;
+                            qdr_process_addr_attributes_CT(core, addr);
+                            qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_LOCAL_CHANGED, addr);
+                        }
+                    }
+                }
+            } else {
+                //
+                // If this address previously had a local-sole-destination-mesh and the last destination was just
+                // removed, the flag must be cleared.
+                //
+                if (DEQ_SIZE(addr->rlinks) == 0) {
+                    addr->local_sole_destination_mesh = false;
+                    addr->destination_mesh_id[0] = '\0';
+                    qdr_process_addr_attributes_CT(core, addr);
+                    qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_LOCAL_CHANGED, addr);
+                }
+            }
 
             if (!link->proxy && DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count <= QDRC_LOCAL_DEST_THRESHOLD) {
                 qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST, addr);

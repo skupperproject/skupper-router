@@ -87,6 +87,7 @@ static void on_transfer(void *link_context, qdr_delivery_t *delivery, qd_message
 
     if (values_found == 1) {
         memcpy(conn->edge_mesh_id, id, QD_DISCRIMINATOR_BYTES);
+        qdr_core_edge_mesh_id_changed_CT(state.core, conn);
     }
 
     qdrc_endpoint_settle_CT(state.core, delivery, PN_ACCEPTED);
