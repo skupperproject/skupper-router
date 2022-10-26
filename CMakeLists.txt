@@ -35,8 +35,12 @@ set(CMAKE_ENABLE_EXPORTS TRUE)
 
 
 # Set warning compile flags
-set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors -Wimplicit-fallthrough=3 -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
-set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
+set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors
+        $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes> $<$<COMPILE_LANGUAGE:C>:-Wold-style-definition> -Wimplicit-fallthrough=3
+        -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
+set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic
+        -Wstrict-prototypes -Wold-style-definition
+        -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
 
 # Additional compiler-specific flags
 #  -gdwarf-aranges to workaround https://sourceware.org/bugzilla/show_bug.cgi?id=22288 (backtrace line printing with libdw and clang)
