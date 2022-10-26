@@ -167,14 +167,14 @@ static char *test_qd_adaptor_buffer_list_append(void *context)
     }
 
     if (DEQ_SIZE(adaptor_buffs) != num_buffs) {
-        return "Expected number of buffers not there in adaptor_buffs";
         qd_adaptor_buffer_list_free_buffers(&adaptor_buffs);
+        return "Expected number of buffers not there in adaptor_buffs";
     }
 
     tail_buff = DEQ_TAIL(adaptor_buffs);
     if (qd_adaptor_buffer_size(tail_buff) != left_over_world) {
-        return "tail adaptor buffer size did not match expected size";
         qd_adaptor_buffer_list_free_buffers(&adaptor_buffs);
+        return "tail adaptor buffer size did not match expected size";
     }
     qd_adaptor_buffer_list_free_buffers(&adaptor_buffs);
 
