@@ -178,7 +178,7 @@ ALLOC_DECLARE(qd_message_content_t);
 #define MSG_FLAG_STREAMING 0x01u
 
 /** Initialize logging */
-void qd_message_initialize();
+void qd_message_initialize(void);
 
 //
 // Internal API - exported for unit testing ONLY:

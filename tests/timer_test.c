@@ -33,7 +33,8 @@ static qd_timer_t      *timers[16];
 
 
 /* Dummy out the now and timeout functions */
-qd_timestamp_t qd_timer_now() {
+qd_timestamp_t qd_timer_now(void)
+{
     return time_value;
 }
 
@@ -282,8 +283,7 @@ static char* test_big(void *context)
     return 0;
 }
 
-
-int timer_tests()
+int timer_tests(void)
 {
     char *test_group = "timer_tests";
     int result = 0;

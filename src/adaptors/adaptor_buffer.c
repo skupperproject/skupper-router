@@ -27,7 +27,7 @@ const size_t QD_ADAPTOR_MAX_BUFFER_SIZE = 16384;
 
 ALLOC_DEFINE_CONFIG(qd_adaptor_buffer_t, sizeof(qd_adaptor_buffer_t), &QD_ADAPTOR_MAX_BUFFER_SIZE, 0);
 
-qd_adaptor_buffer_t *qd_adaptor_buffer()
+qd_adaptor_buffer_t *qd_adaptor_buffer(void)
 {
     qd_adaptor_buffer_t *adaptor_buff = new_qd_adaptor_buffer_t();
     DEQ_ITEM_INIT(adaptor_buff);

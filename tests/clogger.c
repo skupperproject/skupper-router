@@ -118,8 +118,7 @@ static void signal_handler(int signum)
         pn_proactor_interrupt(proactor);
 }
 
-
-void start_message()
+void start_message(void)
 {
     static long tag = 0;  // a simple tag generator
 
@@ -154,7 +153,7 @@ void start_message()
 
 
 /* return true when message transmit is complete */
-bool send_message_data()
+bool send_message_data(void)
 {
     static const char zero_block[DEFAULT_MAX_FRAME] = {0};
 

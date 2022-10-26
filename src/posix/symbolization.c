@@ -34,7 +34,7 @@ static struct {
     Dwfl_Callbacks dwfl_callbacks;  ///< struct holding libdfl callbacks
 } state = {0};
 
-bool ensure_libdwfl_intialized()
+bool ensure_libdwfl_intialized(void)
 {
     if (!state.libdwlf_inited) {
         state.dwfl_callbacks.find_elf       = &dwfl_linux_proc_find_elf;
@@ -127,7 +127,7 @@ void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_sy
     fprintf(dump_file, "   %s\n", fallback_symbolization);
 }
 
-void qd_symbolize_finalize()
+void qd_symbolize_finalize(void)
 {
     if (state.libdwlf_inited) {
         dwfl_end(state.dwfl);

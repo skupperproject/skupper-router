@@ -52,9 +52,12 @@ typedef void (*qdr_adaptor_final_t) (void *adaptor_context);
  * @param on_init Pointer to a function for adaptor initialization, called at core thread startup
  * @param on_final Pointer to a function for adaptor finalization, called at core thread shutdown
  */
-#define QDR_CORE_ADAPTOR_DECLARE_ORD(name,on_init,on_final,ord)      \
-    static void adaptorstart() __attribute__((constructor)); \
-    void adaptorstart() { qdr_register_adaptor(name, on_init, on_final, ord); }
+#define QDR_CORE_ADAPTOR_DECLARE_ORD(name, on_init, on_final, ord) \
+    static void adaptorstart(void) __attribute__((constructor));   \
+    void        adaptorstart(void)                                 \
+    {                                                              \
+        qdr_register_adaptor(name, on_init, on_final, ord);        \
+    }
 #define QDR_CORE_ADAPTOR_DECLARE(name,on_init,on_final) QDR_CORE_ADAPTOR_DECLARE_ORD(name,on_init,on_final,100)
 void qdr_register_adaptor(const char         *name,
                           qdr_adaptor_init_t  on_init,

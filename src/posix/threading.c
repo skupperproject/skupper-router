@@ -168,8 +168,7 @@ sys_thread_t *sys_thread(const char *thread_name, void *(*run_function) (void *)
     return thread;
 }
 
-
-sys_thread_t *sys_thread_self()
+sys_thread_t *sys_thread_self(void)
 {
     return _self;
 }

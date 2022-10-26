@@ -717,8 +717,7 @@ exit:
     return result;
 }
 
-
-int parse_tests()
+int parse_tests(void)
 {
     int result = 0;
     char *test_group = "parse_tests";

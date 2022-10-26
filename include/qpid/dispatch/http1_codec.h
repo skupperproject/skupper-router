@@ -259,8 +259,7 @@ int h1_codec_tx_begin_multipart_section(h1_codec_request_state_t *hrs);
 //
 int h1_codec_tx_end_multipart(h1_codec_request_state_t *hrs);
 
-uint64_t h1_codec_tx_multipart_section_boundary_length();
-uint64_t h1_codec_tx_multipart_end_boundary_length();
-
+uint64_t h1_codec_tx_multipart_section_boundary_length(void);
+uint64_t h1_codec_tx_multipart_end_boundary_length(void);
 
 #endif // http1_codec_H

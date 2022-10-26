@@ -88,7 +88,10 @@ ALLOC_DECLARE(qd_timer_t);
 ALLOC_DEFINE(qd_timer_t);
 
 /// For tests only
-sys_mutex_t* qd_timer_lock() { return &lock; }
+sys_mutex_t *qd_timer_lock(void)
+{
+    return &lock;
+}
 
 //=========================================================================
 // Private static functions
@@ -109,7 +112,7 @@ static bool timer_cancel_LH(qd_timer_t *timer)
 
 
 /* Adjust timer's time_base and delays for the current time. */
-static void timer_adjust_now_LH()
+static void timer_adjust_now_LH(void)
 {
     qd_timestamp_t now = qd_timer_now();
     if (time_base != 0 && now > time_base) {
@@ -199,9 +202,9 @@ void qd_timer_free(qd_timer_t *timer)
     sys_mutex_unlock(&lock);
 }
 
-
-__attribute__((weak)) // permit replacement by dummy implementation in unit_tests
-qd_timestamp_t qd_timer_now()
+__attribute__((weak))  // permit replacement by dummy implementation in unit_tests
+qd_timestamp_t
+qd_timer_now(void)
 {
     return pn_proactor_now_64();
 }
@@ -279,8 +282,7 @@ void qd_timer_cancel(qd_timer_t *timer)
 // Private Functions from timer_private.h
 //=========================================================================
 
-
-void qd_timer_initialize()
+void qd_timer_initialize(void)
 {
     sys_mutex_init(&lock);
     DEQ_INIT(scheduled_timers);
@@ -295,7 +297,7 @@ void qd_timer_finalize(void)
 
 
 /* Execute all timers that are ready and set up next timeout. */
-void qd_timer_visit()
+void qd_timer_visit(void)
 {
     sys_mutex_lock(&lock);
     callback_thread = sys_thread_self();

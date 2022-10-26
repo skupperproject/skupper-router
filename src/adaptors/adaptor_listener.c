@@ -398,16 +398,14 @@ qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_liste
     return value;
 }
 
-
-void qd_adaptor_listener_init()
+void qd_adaptor_listener_init(void)
 {
     sys_mutex_init(&_listeners_lock);
     DEQ_INIT(_listeners);
     _finalized = false;
 }
 
-
-void qd_adaptor_listener_finalize()
+void qd_adaptor_listener_finalize(void)
 {
     _finalized = true;
     qd_adaptor_listener_t *li = DEQ_HEAD(_listeners);

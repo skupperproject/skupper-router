@@ -62,9 +62,7 @@ struct qd_dispatch_t {
     char  *metadata;
 };
 
-qd_dispatch_t *qd_dispatch_get_dispatch();
-
-
+qd_dispatch_t *qd_dispatch_get_dispatch(void);
 
 /**
  * Configure the router node from a configuration entity.
