@@ -31,4 +31,4 @@ void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_sy
     fprintf(dump_file, "   %s\n", fallback_symbolization);
 }
 
-void qd_symbolize_finalize() {}
+void qd_symbolize_finalize(void) {}

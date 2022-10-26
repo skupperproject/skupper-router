@@ -23,7 +23,7 @@
 
 void qd_log_initialize(void);
 void qd_log_finalize(void);
-void qd_error_initialize();
+void qd_error_initialize(void);
 void qd_router_id_finalize(void);
 
 static char *test_qd_adaptor_buffer(void *context)
@@ -330,7 +330,7 @@ static char *test_qd_adaptor_copy_qd_buffers_to_adaptor_buffers(void *context)
     return 0;
 }
 
-int adaptor_buffer_tests()
+int adaptor_buffer_tests(void)
 {
     int   result     = 0;
     char *test_group = "adaptor_buffer_tests";
