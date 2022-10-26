@@ -1087,7 +1087,7 @@ class CommonTcpTests:
                  logger,
                  name="run_ncat",
                  expect=Process.EXIT_OK,
-                 timeout=10,
+                 timeout=TIMEOUT,
                  data=b'abcd',
                  use_ssl=False,
                  use_client_cert=False,
