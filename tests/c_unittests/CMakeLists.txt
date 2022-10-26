@@ -20,7 +20,9 @@
 # -fno-inline: just to be extra sure, no particular reason so far
 # -fno-builtin: GCC would optimize e.g. abs() and we would not be able to stub
 # -Wno-literal-suffix allows compiling string literals such as "[C%"PRIu64"]" as C++
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector -Wno-literal-suffix")
+set(CXX_WARNING_GNU "-Wno-literal-suffix")
+set(CXX_WARNING_Clang "-Wno-error=reserved-user-defined-literal") # https://sourcecodeartisan.com/2021/03/06/invalid-suffix-on-literal.html
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} -fno-inline -fno-builtin -fno-stack-protector ${CXX_WARNING_${CMAKE_C_COMPILER_ID}}")
 
 if(NOT dw_lib)
     add_compile_definitions("QD_SKIP_LIBDW_TESTS")
