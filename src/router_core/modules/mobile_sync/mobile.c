@@ -59,9 +59,9 @@ static const char *HAVE_SEQ   = "have_seq";
 #define ADDR_SYNC_ROUTER_MA_REQUESTED     0x00000001
 #define ADDR_SYNC_ROUTER_VERSION_LOGGED   0x00000002
 
-#define BIT_SET(M,B)   M |= B
-#define BIT_CLEAR(M,B) M &= ~B
-#define BIT_IS_SET(M,B) (M & B)
+#define BIT_SET(M,B)    (M) |= (B)
+#define BIT_CLEAR(M,B)  (M) &= ~(B)
+#define BIT_IS_SET(M,B) ((M) & (B))
 
 typedef struct {
     qdr_core_t                *core;
@@ -190,29 +190,33 @@ static qd_composed_field_t *qcm_mobile_sync_message_headers(const char *address,
 
 /**
  * An address descriptor is a list with positional identification of values.
- *   Position    Value                     Type
- *   =============================================
- *    0          Address hash key          string
- *    1          Treatment value           int
- *    2          Local in-link count       int
- *    3          Local out-link capacity   int
- *    4          Sole destination mesh     string (mesh-id)
+ *   Position    Value                     Type      Remarks/Units
+ *   ===============================================================================
+ *    0          Address hash key          string    hash-view of the address
+ *    1          Treatment value           int       enumerated treatments
+ *    2          Local in-link count       int       number of links
+ *    3          Local out-link capacity   int       number of delivery credits
+ *    4          Sole destination mesh     string    mesh-id
  */
-static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, qd_composed_field_t *field, bool is_added)
+static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, qd_composed_field_t *field, bool include_attributes)
 {
     const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
 
     qd_compose_start_list(field);
     qd_compose_insert_string(field, hash_key);
-    if (is_added) {
+    if (include_attributes) {
         qd_compose_insert_int(field, addr->treatment);
         qd_compose_insert_int(field, DEQ_SIZE(addr->inlinks));
+        if (addr->local_sole_destination_mesh) {
+            qd_compose_insert_null(field); // out-link capacity
+            qd_compose_insert_string_n(field, addr->destination_mesh_id, QD_DISCRIMINATOR_BYTES);
+        }
     }
     qd_compose_end_list(field);
 }
 
 
-static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *field, int *treatment, int *inlink_count)
+static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *field, int *treatment, int *inlink_count, char *sole_destination_mesh)
 {
     qd_iterator_t *iter = 0;
     if (qd_parse_is_list(field)) {
@@ -228,11 +232,21 @@ static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *f
             }
 
             case 1:
-                *treatment = qd_parse_as_int(qd_parse_sub_value(field, i));
+                if (!!treatment) {
+                    *treatment = qd_parse_as_int(qd_parse_sub_value(field, i));
+                }
                 break;
 
             case 2:
-                *inlink_count = qd_parse_as_int(qd_parse_sub_value(field, i));
+                if (!!inlink_count) {
+                    *inlink_count = qd_parse_as_int(qd_parse_sub_value(field, i));
+                }
+                break;
+
+            case 4:
+                if (!!sole_destination_mesh) {
+                    qd_iterator_ncopy(qd_parse_raw(qd_parse_sub_value(field, i)), (uint8_t*) sole_destination_mesh, QD_DISCRIMINATOR_BYTES);
+                }
                 break;
             }
         }
@@ -242,25 +256,34 @@ static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *f
 }
 
 
-static void qcm_mobile_sync_compose_diff_addr_list(qdrm_mobile_sync_t *msync, qd_composed_field_t *field, bool is_added)
+static void qcm_mobile_sync_compose_diff_addr_list_add(qdrm_mobile_sync_t *msync, qd_composed_field_t *field)
 {
     qd_compose_start_list(field);
     qdr_address_t *addr = DEQ_HEAD(msync->sync_addrs);
     while (addr) {
         qdr_address_t *next = DEQ_NEXT_N(SYNC, addr);
-        if (is_added) {
-            if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST)) {
-                qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
-                DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
-                BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
-            }
-        } else {
-            if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST)) {
-                qcm_mobile_sync_compose_addr_descriptor(addr, field, is_added);
-                DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
-                BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
-                qcm_mobile_sync_stop_tracking(msync->core, addr);
-            }
+        if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST | ADDR_SYNC_ADDRESS_IN_UPDATE_LIST)) {
+            qcm_mobile_sync_compose_addr_descriptor(addr, field, true);
+            DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
+            BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST | ADDR_SYNC_ADDRESS_IN_UPDATE_LIST);
+        }
+        addr = next;
+    }
+    qd_compose_end_list(field);
+}
+
+
+static void qcm_mobile_sync_compose_diff_addr_list_del(qdrm_mobile_sync_t *msync, qd_composed_field_t *field)
+{
+    qd_compose_start_list(field);
+    qdr_address_t *addr = DEQ_HEAD(msync->sync_addrs);
+    while (addr) {
+        qdr_address_t *next = DEQ_NEXT_N(SYNC, addr);
+        if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST)) {
+            qcm_mobile_sync_compose_addr_descriptor(addr, field, false);
+            DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
+            BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
+            qcm_mobile_sync_stop_tracking(msync->core, addr);
         }
         addr = next;
     }
@@ -291,10 +314,10 @@ static qd_message_t *qcm_mobile_sync_compose_differential_mau(qdrm_mobile_sync_t
     qd_compose_insert_long(body, msync->mobile_seq);
 
     qd_compose_insert_symbol(body, ADD);
-    qcm_mobile_sync_compose_diff_addr_list(msync, body, true);
+    qcm_mobile_sync_compose_diff_addr_list_add(msync, body);
 
     qd_compose_insert_symbol(body, DEL);
-    qcm_mobile_sync_compose_diff_addr_list(msync, body, false);
+    qcm_mobile_sync_compose_diff_addr_list_del(msync, body);
 
     qd_compose_end_map(body);
 
@@ -382,6 +405,38 @@ static qd_message_t *qcm_mobile_sync_compose_mar(qdrm_mobile_sync_t *msync, qdr_
     qd_compose_free(headers);
     qd_compose_free(body);
     return msg;
+}
+
+
+static void qcm_mobile_sync_process_addr_attributes_CT(qdrm_mobile_sync_t *msync,
+                                                       int                 router_mask_bit,
+                                                       qdr_address_t      *addr,
+                                                       int                 inlink_count,
+                                                       char               *sole_destination_mesh)
+{
+    //
+    // If there is a sole_destination_mesh attribute and the array on the address
+    // has not yet been allocated, allocate it now.
+    //
+    if (sole_destination_mesh[0] != '\0' && addr->remote_sole_destination_meshes == 0) {
+        addr->remote_sole_destination_meshes = (char*) malloc(QD_DISCRIMINATOR_BYTES * qd_bitmask_width());
+        for (int i = 0; i < qd_bitmask_width(); i++) {
+            addr->remote_sole_destination_meshes[i * QD_DISCRIMINATOR_BYTES] = '\0';
+        }
+    }
+
+    //
+    // If there are values stored in the address's array, check to see if the array
+    // will be changed.  If so, make the change and call out to the function that recomputes
+    // global results.
+    //
+    if (!!addr->remote_sole_destination_meshes) {
+        char *ptr = addr->remote_sole_destination_meshes + (QD_DISCRIMINATOR_BYTES * router_mask_bit);
+        if ((*ptr != '\0' || *sole_destination_mesh != '\0') && memcmp(ptr, sole_destination_mesh, QD_DISCRIMINATOR_BYTES) != 0) {
+            memcpy(ptr, sole_destination_mesh, QD_DISCRIMINATOR_BYTES);
+            qdr_process_addr_attributes_CT(msync->core, addr);
+        }
+    }
 }
 
 
@@ -581,7 +636,10 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             while (!!addr_field) {
                 int            treatment_hint;
                 int            inlink_count;
-                qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count);
+                char           sole_destination_mesh[QD_DISCRIMINATOR_BYTES];
+
+                sole_destination_mesh[0] = '\0';
+                qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count, sole_destination_mesh);
                 qdr_address_t *addr = 0;
 
                 do {
@@ -593,31 +651,42 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                                                                            iter,
                                                                            qcm_mobile_sync_default_treatment(msync->core, treatment_hint),
                                                                            &addr_config);
-                        qd_log(msync->log, QD_LOG_DEBUG, "Treatment: %d", treatment);
                         addr = qdr_address_CT(msync->core, treatment, addr_config);
-                        if (!addr) {
-                            qd_log(msync->log, QD_LOG_CRITICAL, "map_destination: ignored");
-                            assert(false);
-                            break;
+
+                        if (!!addr) {
+                            qd_hash_insert(msync->core->addr_hash, iter, addr, &addr->hash_handle);
+                            DEQ_ITEM_INIT(addr);
+                            DEQ_INSERT_TAIL(msync->core->addrs, addr);
                         }
-                        qd_hash_insert(msync->core->addr_hash, iter, addr, &addr->hash_handle);
-                        DEQ_ITEM_INIT(addr);
-                        DEQ_INSERT_TAIL(msync->core->addrs, addr);
                     }
 
-                    BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_TO_BE_DELETED);
-                    if (!qd_bitmask_value(addr->rnodes, router->mask_bit)) {
-                        qd_bitmask_set_bit(addr->rnodes, router->mask_bit);
-                        router->ref_count++;
-                        addr->cost_epoch--;
-                        qdr_addr_start_inlinks_CT(msync->core, addr);
+                    if (!!addr) {
+                        //
+                        // Spare this address from being deleted during processing of an absolute MAU
+                        //
+                        BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_TO_BE_DELETED);
 
-                        qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' added to address '%s', treatment: %d",
-                        (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
-                        (const char*) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
+                        //
+                        // Do the address processing related to the provided addributes
+                        //
+                        qcm_mobile_sync_process_addr_attributes_CT(msync, router->mask_bit, addr, inlink_count, sole_destination_mesh);
 
-                        qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ADDED_REMOTE_DEST, addr);
-                        qdr_trigger_address_watch_CT(msync->core, addr);
+                        //
+                        // If the remote router is not already set in the rnodes bitmask, add the new destination router
+                        //
+                        if (!qd_bitmask_value(addr->rnodes, router->mask_bit)) {
+                            qd_bitmask_set_bit(addr->rnodes, router->mask_bit);
+                            router->ref_count++;
+                            addr->cost_epoch--;
+                            qdr_addr_start_inlinks_CT(msync->core, addr);
+
+                            qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' added to address '%s', treatment: %d",
+                            (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                            (const char*) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
+
+                            qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ADDED_REMOTE_DEST, addr);
+                            qdr_trigger_address_watch_CT(msync->core, addr);
+                        }
                     }
                 } while (false);
 
@@ -631,9 +700,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             if (!!del_field) {
                 addr_field = qd_field_first_child(del_field);
                 while (!!addr_field) {
-                    int            treatment_hint;
-                    int            inlink_count;
-                    qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count);
+                    qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, 0, 0, 0);
                     qdr_address_t *addr = 0;
 
                     qd_hash_retrieve(msync->core->addr_hash, iter, (void**) &addr);
@@ -738,7 +805,7 @@ static void qcm_mobile_sync_on_became_local_dest_CT(qdrm_mobile_sync_t *msync, q
 
     qd_log(msync->log, QD_LOG_DEBUG, "Became Local Dest: %s", (const char*) qd_hash_key_by_handle(addr->hash_handle));
 
-    if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST))
+    if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST | ADDR_SYNC_ADDRESS_IN_UPDATE_LIST))
         return;
 
     if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST)) {
@@ -772,10 +839,41 @@ static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync
         DEQ_REMOVE_N(SYNC, msync->sync_addrs, addr);
         BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST);
         qcm_mobile_sync_stop_tracking(msync->core, addr);
+    } else if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_UPDATE_LIST)) {
+        //
+        // Move the address from the update list to the delete list
+        //
+        BIT_CLEAR(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_UPDATE_LIST);
+        BIT_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
     } else {
         DEQ_INSERT_TAIL_N(SYNC, msync->sync_addrs, addr);
         BIT_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST);
     }
+}
+
+
+static void qcm_mobile_sync_on_address_local_change_CT(qdrm_mobile_sync_t *msync, qdr_address_t *addr)
+{
+    if (!qcm_mobile_sync_addr_is_mobile(addr)) {
+        return;
+    }
+
+    if (!BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_MOBILE_TRACKING)) {
+        //
+        // If this address is not being tracked, ignore this update.
+        //
+        return;
+    }
+
+    if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST | ADDR_SYNC_ADDRESS_IN_DEL_LIST | ADDR_SYNC_ADDRESS_IN_UPDATE_LIST)) {
+        //
+        // If the address is already in any pending list, just leave it there and do nothing.
+        //
+        return;
+    }
+
+    DEQ_INSERT_TAIL_N(SYNC, msync->sync_addrs, addr);
+    BIT_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_UPDATE_LIST);
 }
 
 
@@ -842,7 +940,11 @@ static void qcm_mobile_sync_on_addr_event_CT(void          *context,
             qcm_mobile_sync_on_no_longer_local_dest_CT(msync, addr);
         }
         break;
-        
+
+    case QDRC_EVENT_ADDR_LOCAL_CHANGED:
+        qcm_mobile_sync_on_address_local_change_CT(msync, addr);
+        break;
+
     default:
         break;
     }
@@ -897,6 +999,7 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     msync->event_sub = qdrc_event_subscribe_CT(core,
                                                QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
                                                | QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST
+                                               | QDRC_EVENT_ADDR_LOCAL_CHANGED
                                                | QDRC_EVENT_ROUTER_MOBILE_FLUSH
                                                | QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED,
                                                0,

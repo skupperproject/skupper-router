@@ -555,8 +555,13 @@ struct qdr_address_t {
     //
     // State for mobile-address synchronization
     //
-    DEQ_LINKS_N(SYNC, qdr_address_t);
-    uint32_t sync_mask;
+    DEQ_LINKS_N(SYNC, qdr_address_t);                          ///< Links for storage in lists for synchronization
+    uint32_t      sync_mask;                                   ///< Mask of bits used to store synchronization-related state
+    char          destination_mesh_id[QD_DISCRIMINATOR_BYTES]; ///< Mesh-id of edge destination if there is a sole-destination-mesh
+    bool          local_sole_destination_mesh;                 ///< If set, the only local destinations for this address are on the same mesh
+                                                               ///  This is used to drive the state sent via MAU to other routers
+    bool          remote_sole_destination_mesh;                ///< If set, the only destinations for this address are on the same mesh
+    char         *remote_sole_destination_meshes;              ///< Per-remote sole-destination-mesh identities used to compute the global flag
 
     //
     // State for "closest" treatment
@@ -597,6 +602,7 @@ qdr_address_t *qdr_address_CT(qdr_core_t *core, qd_address_treatment_t treatment
 qdr_address_t *qdr_add_local_address_CT(qdr_core_t *core, char aclass, const char *addr, qd_address_treatment_t treatment);
 qdr_address_t *qdr_add_mobile_address_CT(qdr_core_t *core, const char* prefix, const char *addr, qd_address_treatment_t treatment, bool edge);
 void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr);
+void qdr_core_edge_mesh_id_changed_CT(qdr_core_t *core, qdr_connection_t *conn);
 void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
 void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
 
@@ -946,6 +952,7 @@ void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit);
 
 void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work);
 void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr);
+void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr);
 bool qdr_is_addr_treatment_multicast(qdr_address_t *addr);
 qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *peer, qdr_link_t *link, qd_message_t *msg);
 void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv);

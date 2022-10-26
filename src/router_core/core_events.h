@@ -56,6 +56,10 @@ typedef uint32_t qdrc_event_t;
  * QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST   A remote destination was removed for this address
  * QDRC_EVENT_ADDR_BECAME_SOURCE         An address transitioned from zero to one local source (inlink)
  * QDRC_EVENT_ADDR_NO_LONGER_SOURCE      An address transitioned from one to zero local sources (inlink)
+ * QDRC_EVENT_ADDR_WATCH_ON              A watch was started for an address
+ * QDRC_EVENT_ADDR_WATCH_OFF             A watch was ended for an address
+ * QDRC_EVENT_ADDR_LOCAL_CHANGED         An attribute (MAU address descriptor data) was updated for an address
+ * QDRC_EVENT_ADDR_REMOTE_CHANGED        Remote attributes for the address were updated
  *
  * QDRC_EVENT_ROUTER_ADDED               A remote router has been discovered
  * QDRC_EVENT_ROUTER_REMOVED             A remote router has been lost
@@ -89,13 +93,15 @@ typedef uint32_t qdrc_event_t;
 #define QDRC_EVENT_ADDR_NO_LONGER_SOURCE      0x00200000
 #define QDRC_EVENT_ADDR_WATCH_ON              0x01000000
 #define QDRC_EVENT_ADDR_WATCH_OFF             0x02000000
-#define _QDRC_EVENT_ADDR_RANGE                0x03FFF000
+#define QDRC_EVENT_ADDR_LOCAL_CHANGED         0x04000000
+#define QDRC_EVENT_ADDR_REMOTE_CHANGED        0x08000000
+#define _QDRC_EVENT_ADDR_RANGE                0x0FFFF000
 
-#define QDRC_EVENT_ROUTER_ADDED               0x04000000
-#define QDRC_EVENT_ROUTER_REMOVED             0x08000000
-#define QDRC_EVENT_ROUTER_MOBILE_FLUSH        0x10000000
-#define QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED 0x20000000
-#define _QDRC_EVENT_ROUTER_RANGE              0x3C000000
+#define QDRC_EVENT_ROUTER_ADDED               0x10000000
+#define QDRC_EVENT_ROUTER_REMOVED             0x20000000
+#define QDRC_EVENT_ROUTER_MOBILE_FLUSH        0x40000000
+#define QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED 0x80000000
+#define _QDRC_EVENT_ROUTER_RANGE              0xF0000000
 
 //
 // QDRC_LOCAL_DEST_THRESHOLD
