@@ -71,6 +71,7 @@ SERVER_PRIVATE_KEY_PASSWORD = 'server-password'
 CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
 CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
 CLIENT_PRIVATE_KEY_NO_PASS = RouterTestSslBase.ssl_file('client-private-key-no-pass.pem')
+BAD_CA_CERT = RouterTestSslBase.ssl_file('bad-ca-certificate.pem')
 CLIENT_PRIVATE_KEY_PASSWORD = 'client-password'
 CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
 
@@ -433,6 +434,9 @@ class TcpAdaptorBase(TestCase):
 
         inter_router_port_AB = cls.tester.get_port()
         cls.authenticate_peer_port = cls.tester.get_port()
+        cls.bad_server_port = cls.tester.get_port()
+        cls.good_server_port = cls.tester.get_port()
+        cls.bad_cert_port = cls.tester.get_port()
         cls.wrong_path_in_ssl_profile_port = cls.tester.get_port()
         cls.INTA_edge_port = cls.tester.get_port()
         cls.INTA_conn_stall_listener_port = cls.tester.get_port()
@@ -443,12 +447,53 @@ class TcpAdaptorBase(TestCase):
                                          'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})]
 
         if cls.test_ssl:
+            # This listener will be used to test the authenticatePeer functionality.
             int_a_config.append(('tcpListener',
                                  {'host': "localhost",
                                   'port': cls.authenticate_peer_port,
                                   'sslProfile': 'tcp-listener-ssl-profile',
                                   'authenticatePeer': 'yes',
                                   'address': 'ES_INTA',
+                                  'siteId': cls.site}))
+
+            # SSL Profile with caCertFile to cert that does not sign the correct server cert.
+            # This is a bad ca cert. The router will try to present this bad cert to the
+            # echo server and the echo server present its cert and the router will find that the ca certs don't match.
+            # The objective is to trigger a certificate verification failure on the connector side.
+            int_a_config.append(('sslProfile', {'name': 'bad-server-cert-connector-ssl-profile',
+                                                'caCertFile': BAD_CA_CERT}))
+            int_a_config.append(('tcpConnector',
+                                 {'name': "bad-connector",
+                                  'host': "localhost",
+                                  'port': cls.tcp_server_listener_ports['INTA'],
+                                  'address': 'ES_BAD_CONNECTOR_CERT_INTA',
+                                  'sslProfile': 'bad-server-cert-connector-ssl-profile',
+                                  'siteId': cls.site}))
+
+            # This tcpListener has all the good certs but the corresponding connector has bad certs
+            int_a_config.append(('tcpListener',
+                                 {'name': "bad-cert-test",
+                                  'host': "localhost",
+                                  'port': cls.bad_server_port,
+                                  'sslProfile': 'tcp-listener-ssl-profile',
+                                  'address': 'ES_BAD_CONNECTOR_CERT_INTA',
+                                  'siteId': cls.site}))
+
+            int_a_config.append(('tcpConnector',
+                                 {'name': "good-connector",
+                                  'host': "localhost",
+                                  'port': cls.tcp_server_listener_ports['INTA'],
+                                  'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
+                                  'sslProfile': 'tcp-connector-ssl-profile',
+                                  'siteId': cls.site}))
+
+            # This tcpListener has all the good certs and the corresponding connector has good certs as well.
+            int_a_config.append(('tcpListener',
+                                 {'name': "good-cert-test",
+                                  'host': "localhost",
+                                  'port': cls.good_server_port,
+                                  'sslProfile': 'tcp-listener-ssl-profile',
+                                  'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
                                   'siteId': cls.site}))
 
         # Launch the routers using the sea of router ports
@@ -593,7 +638,7 @@ class TcpAdaptorBase(TestCase):
                 # examine what this router can see; signal poll loop to continue or not
                 lines = out.split("\n")
                 server_lines = [line for line in lines if "mobile" in line and "ES_" in line]
-                if not len(server_lines) == len(cls.router_order):
+                if len(server_lines) < len(cls.router_order):
                     found_all = False
                     seen = []
                     for line in server_lines:
@@ -1045,11 +1090,16 @@ class CommonTcpTests:
                  timeout=10,
                  data=b'abcd',
                  use_ssl=False,
-                 use_client_cert=False):
+                 use_client_cert=False,
+                 use_bad_ca_cert=False,
+                 error_ok=False):
         ncat_cmd = ['ncat', 'localhost', str(port)]
         if use_ssl:
             ncat_cmd.append('--ssl-trustfile')
-            ncat_cmd.append(CA_CERT)
+            if use_bad_ca_cert:
+                ncat_cmd.append(BAD_CA_CERT)
+            else:
+                ncat_cmd.append(CA_CERT)
             if use_client_cert:
                 ncat_cmd.append('--ssl-cert')
                 ncat_cmd.append(CLIENT_CERTIFICATE)
@@ -1066,15 +1116,18 @@ class CommonTcpTests:
         try:
             p.teardown()
         except Exception as e:
-            raise Exception("ncat failed:"
-                            " stdout='%s' stderr='%s' returncode=%d" % (out, err, p.returncode)
-                            if out or err else str(e))
+            if not error_ok:
+                raise Exception("ncat failed:"
+                                " stdout='%s' stderr='%s' returncode=%d" % (out, err, p.returncode)
+                                if out or err else str(e))
         return out
 
     def ncat_runner(self, tname, client, server, logger,
                     ncat_port=None,
                     use_ssl=False,
                     use_client_cert=False,
+                    use_bad_ca_cert=False,
+                    error_ok=False,
                     use_large_msg=False):
         name = "%s_%s_%s" % (tname, client, server)
         logger.log(name + " Start")
@@ -1087,16 +1140,19 @@ class CommonTcpTests:
                             data=large_msg if use_large_msg else data,
                             use_ssl=use_ssl,
                             use_client_cert=use_client_cert,
-                            name=name)
+                            name=name,
+                            use_bad_ca_cert=use_bad_ca_cert,
+                            error_ok=error_ok)
         if use_large_msg:
             logger.log(f"run_ncat large_msg returns length: {len(out)}")
         else:
             logger.log("run_ncat returns: '%s'" % out)
-        assert len(out) > 0
-        if use_large_msg:
-            self.assertEqual(len(large_msg), len(out))
-        else:
-            assert data in out
+        if not error_ok:
+            assert len(out) > 0
+            if use_large_msg:
+                self.assertEqual(len(large_msg), len(out))
+            else:
+                assert data in out
         logger.log(tname + " Stop")
 
     # half-closed handling
@@ -1132,7 +1188,8 @@ class CommonTcpTests:
                 assert "connectionsOpened" in output
                 # There is a listener with authenticatePeer:yes and we have not run any tests on it yet, so
                 # it is allowed to have zero connectionsOpened
-                if output['address'] != 'ES_INTA':
+                if output['address'] != 'ES_INTA' and output['address'] != 'ES_BAD_CONNECTOR_CERT_INTA' \
+                        and output['address'] != 'ES_GOOD_CONNECTOR_CERT_INTA':
                     assert output["connectionsOpened"] > 0
                 assert output["bytesIn"] == output["bytesOut"]
         self.assertEqual(es_inta_connections_opened, 7)

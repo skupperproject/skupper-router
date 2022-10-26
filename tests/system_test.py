@@ -841,16 +841,19 @@ class Qdrouterd(Process):
             assert retry(lambda c=c: self.is_connected(port=c['port'], host=c.get('host') if c.get('host') else self.get_host(c.get('socketAddressFamily'))),
                          **retry_kwargs), "Port not connected %s" % c['port']
 
-    def wait_log_message(self, pattern, logfile_path=None, **retry_kwargs):
-        """Wait for a log message matching the pattern to appear in the routers
-        log file. The log file for the DEFAULT log module is used unless
+    def wait_log_message(self, pattern, logfile_path=None, num_occurrence=1, **retry_kwargs):
+        """Wait for a log message to appear num_occurrence times in the router's log file matching the pattern.
+        The log file for the DEFAULT log module is used unless
         overridden via the (fully qualified) logfile_path parameter
         """
-        def _is_pattern_present(f: TextIO) -> bool:
+        def _is_pattern_present(f: TextIO, num_times=1) -> bool:
+            count = 0
             for line in f:
                 m = re.search(pattern, line)
                 if m:
-                    return True
+                    count += 1
+                    if count == num_times:
+                        return True
             return False
 
         logfile_path = logfile_path or self.logfile_path
@@ -859,7 +862,7 @@ class Qdrouterd(Process):
         assert retry(lambda: pathlib.Path(logfile_path).is_file(), **retry_kwargs), \
             f"Router logfile {logfile_path} does not exist or is not a file"
         with open(logfile_path, 'rt') as router_log:
-            assert retry(lambda: _is_pattern_present(router_log), **retry_kwargs),\
+            assert retry(lambda: _is_pattern_present(router_log, num_times=num_occurrence), **retry_kwargs),\
                 f"'{pattern}' not present in router log"
 
     def wait_startup_message(self, **retry_kwargs):

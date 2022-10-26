@@ -30,13 +30,99 @@ class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
             self.skipTest("Ncat utility is not available")
         name = "test_authenticate_peer"
         self.logger.log("TCP_TEST TLS Start %s" % name)
-        # Now, run ncat with a client cert and this time it should pass.
-        self.ncat_runner(name, client="INTA",
+        # Now, run ncat with a client cert and it should pass.
+        self.ncat_runner(name,
+                         client="INTA",
                          server="INTA",
                          logger=self.logger,
                          ncat_port=self.authenticate_peer_port,
                          use_ssl=True,
                          use_client_cert=True)
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+    def test_authenticate_peer_fail(self):
+        if not ncat_available():
+            self.skipTest("Ncat utility is not available")
+        name = "test_authenticate_peer_fail"
+        self.logger.log("TCP_TEST TLS Start %s" % name)
+        # Now, run ncat without a client cert and it should fail.
+        self.ncat_runner(name,
+                         client="INTA",
+                         server="INTA",
+                         logger=self.logger,
+                         ncat_port=self.authenticate_peer_port,
+                         use_ssl=True,
+                         use_client_cert=False,
+                         error_ok=True)
+        # Look for a log line that proves the peer did not return a certificate.
+        self.INTA.wait_log_message("peer did not return a certificate")
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+    def test_connector_bad_server_cert(self):
+        if not ncat_available():
+            self.skipTest("Ncat utility is not available")
+        name = "test_connector_bad_server_cert"
+        self.logger.log("TCP_TEST TLS Start %s" % name)
+
+        # The router presents a cert to the echo server but the echo server is
+        # responding back with a different ca cert that the router cannot verify.
+        # Hence the router side TLS fails certificate verification.
+        self.ncat_runner(name,
+                         client="INTA",
+                         server="INTA",
+                         logger=self.logger,
+                         ncat_port=self.bad_server_port,
+                         use_ssl=True,
+                         use_client_cert=False,
+                         error_ok=True)
+        # Look for a log line that proves the certificate verification failure.
+        self.INTA.wait_log_message("certificate verify failed")
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+    def test_xxx_present_bad_cert_to_good_listener_good_connector(self):
+        if not ncat_available():
+            self.skipTest("Ncat utility is not available")
+        name = "test_xxx_present_bad_cert_to_good_listener_good_connector"
+        self.logger.log("TCP_TEST TLS Start %s" % name)
+
+        # Run the ncat command using a bad ca certificate to a tcpListener that is good
+        # and a tcpConnector that is good. The router must reject the connection made by
+        # ncat since it presents an unknown certificate.
+        self.ncat_runner(name,
+                         client="INTA",
+                         server="INTC",
+                         logger=self.logger,
+                         ncat_port=self.good_server_port,
+                         use_ssl=True,
+                         use_client_cert=False,
+                         use_bad_ca_cert=True,
+                         error_ok=True)
+        # Look for a log line that says "certificate unknown"
+        self.INTA.wait_log_message("certificate unknown")
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+    def test_yyy_present_bad_cert_to_good_listener_bad_connector(self):
+        if not ncat_available():
+            self.skipTest("Ncat utility is not available")
+        name = "test_yyy_present_bad_cert_to_good_listener_bad_connector"
+        self.logger.log("TCP_TEST TLS Start %s" % name)
+
+        # Run the ncat command using a bad ca certificate to a tcpListener that is good
+        # and a tcpConnector that is bad. This test is mostly similar to
+        # test_xxx_present_bad_cert_to_good_listener_good_connector except that this test has a tcpConnector that has
+        # a bad ca cert. The router must reject the connection made by
+        # ncat since it presents an unknown certificate.
+        self.ncat_runner(name,
+                         client="INTA",
+                         server="INTC",
+                         logger=self.logger,
+                         ncat_port=self.bad_server_port,
+                         use_ssl=True,
+                         use_client_cert=False,
+                         use_bad_ca_cert=True,
+                         error_ok=True)
+        # Look for a log line that says "certificate unknown"
+        self.INTA.wait_log_message("certificate unknown", num_occurrence=2)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
 
