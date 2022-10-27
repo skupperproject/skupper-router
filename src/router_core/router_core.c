@@ -684,7 +684,7 @@ void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_li
     if (link->link_direction == QD_OUTGOING) {
         qdr_add_link_ref(&addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
         addr->proxy_rlink_count += link->proxy ? 1 : 0;
-        
+
         if (DEQ_SIZE(addr->rlinks) == 1) {
             qdr_addr_start_inlinks_CT(core, addr);
         }

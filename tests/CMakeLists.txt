@@ -122,7 +122,7 @@ else()
 endif()
 
 # There are some bugs in the Proton TLS 0.37.0 code
-# We are not going to run any TLS tests when router is compiled with Proton 0.37.0 
+# We are not going to run any TLS tests when router is compiled with Proton 0.37.0
 if(${Proton_VERSION} VERSION_LESS "0.38.0")
   #nothing to do
 else()
@@ -172,8 +172,8 @@ foreach(py_test_module
     system_tests_log_level_update
     system_tests_routing_protocol
     system_tests_open_properties
-    system_tests_http2 
-    system_tests_grpc 
+    system_tests_http2
+    system_tests_grpc
     system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_tcp_adaptor

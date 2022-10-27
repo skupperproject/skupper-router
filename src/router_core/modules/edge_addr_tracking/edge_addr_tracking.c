@@ -297,7 +297,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
             }
             break;
         }
-        
+
         case QDRC_EVENT_LINK_EDGE_DATA_DETACHED :
         {
             if (link->edge_context) {
