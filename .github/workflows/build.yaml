@@ -528,7 +528,7 @@ jobs:
         run: |
           echo "coredump.%e.%p" > /proc/sys/kernel/core_pattern
           ulimit -c unlimited
-          
+
           threads=12
           if [[ "${{ matrix.runtimeCheck }}" == "tsan" ]]; then
             threads=6

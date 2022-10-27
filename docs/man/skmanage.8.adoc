@@ -31,9 +31,9 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-An AMQP management client for use with the skupper-router daemon 
-('skrouterd'). Sends AMQP management operations requests and prints 
-the response in JSON format. This is a generic AMQP management tool 
+An AMQP management client for use with the skupper-router daemon
+('skrouterd'). Sends AMQP management operations requests and prints
+the response in JSON format. This is a generic AMQP management tool
 and can be used with any AMQP endpoint that follows the AMQP Management
 specification, not just with 'skrouterd'.
 

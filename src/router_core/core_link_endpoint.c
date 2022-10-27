@@ -242,5 +242,3 @@ void qdrc_endpoint_do_cleanup_CT(qdr_core_t *core, qdrc_endpoint_t *ep)
     ep->link->core_endpoint = 0;
     free_qdrc_endpoint_t(ep);
 }
-
-

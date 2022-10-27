@@ -112,4 +112,3 @@ void qcm_edge_conn_mgr_final(qcm_edge_conn_mgr_t *cm)
     qdrc_event_unsubscribe_CT(cm->core, cm->event_sub);
     free(cm);
 }
-

@@ -150,7 +150,7 @@ public:
     Stub()
     {
 #ifdef _WIN32
-        SYSTEM_INFO sys_info;  
+        SYSTEM_INFO sys_info;
         GetSystemInfo(&sys_info);
         m_pagesize = sys_info.dwPageSize;
 #else
@@ -220,7 +220,7 @@ public:
         struct func_stub *pstub;
         pstub = new func_stub;
         //start
-        reset(fn); // 
+        reset(fn);  //
         pstub->fn = fn;
 
         if(distanceof(fn, fn_stub))

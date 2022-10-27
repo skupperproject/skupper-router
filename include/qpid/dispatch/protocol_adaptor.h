@@ -265,13 +265,12 @@ qdr_protocol_adaptor_t *qdr_protocol_adaptor(qdr_core_t                *core,
                                              qdr_connection_close_t     conn_close,
                                              qdr_connection_trace_t     conn_trace);
 
-
 /**
  * qdr_protocol_adaptor_free
  *
  * Free the resources used for a protocol adaptor.  This should be called during adaptor
  * finalization.
- * 
+ *
  * @param core Pointer to the core object
  * @param adaptor Pointer to a protocol adaptor object returned by qdr_protocol_adaptor
  */

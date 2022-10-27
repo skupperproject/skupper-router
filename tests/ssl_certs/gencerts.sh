@@ -50,4 +50,3 @@ keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass c
 openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -passout pass:client-password -out client-private-key.pem
 # Create a client private key without a password
 openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -nodes -out client-private-key-no-pass.pem
-

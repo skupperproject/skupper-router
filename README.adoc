@@ -75,7 +75,7 @@ From the `<build>` directory you can run all the system- and unit-tests with:
 $ ctest -VV
 ----
 
-The `ctest` tool uses the script `<build>/test/run.py` to set up the correct environment for tests. 
+The `ctest` tool uses the script `<build>/test/run.py` to set up the correct environment for tests.
 You can use it to run tests individually from the `<build>/tests` directory.
 
 .Example
@@ -185,8 +185,8 @@ And run the following command to generate grpc code:
 python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. ./friendship.proto
 ----
 
-The system tests are implemented using Python's unittest library. 
-This library is used to run the tests by default. 
+The system tests are implemented using Python's unittest library.
+This library is used to run the tests by default.
 The tests can be also run using `xmlrunner` or `pytest`.
 Pytest can generate a JUnit-compatible XML report containing an entry for each Python test method.
 After running the tests, all XML reports can be found under `tests/junitxmls` in your build directory:
@@ -209,7 +209,7 @@ cmake .. -DQDROUTERD_RUNNER="gdb -quiet -iex 'set pagination off' -iex 'set debu
 
 === Test Suite Code Coverage (GNU tools only)
 
-Use coverage analysis to ensure that all code paths are exercised by the test suite. 
+Use coverage analysis to ensure that all code paths are exercised by the test suite.
 To run the tests and perform code coverage analysis:
 
 . Install the lcov package
@@ -250,11 +250,11 @@ This script then does the following:
 The CTest test suite can be configured to enable extra run time
 validation checks against the skupper router.
 
-Since run time validation slows down `skrouterd` considerably it is disabled by default.  
+Since run time validation slows down `skrouterd` considerably it is disabled by default.
 
 It can be enabled by setting the `RUNTIME_CHECK` build flag via the `cmake` command.
 
-NOTE: Depending on your environment the `ctest` suite may time out if validation is enabled due to the additional run time overhead it adds. 
+NOTE: Depending on your environment the `ctest` suite may time out if validation is enabled due to the additional run time overhead it adds.
 You can extend the default test time via the `ctest --timeout`
 option.
 
@@ -269,7 +269,7 @@ The Skupper Router test suite supports the following run time validation tools:
 ==== Valgrind Memcheck
 
 Memcheck runs `skrouterd` under Valgrind's memcheck leak checker during the CTest suite.
-This causes tests to fail if a memory error is encountered.  
+This causes tests to fail if a memory error is encountered.
 Use the grinder tool (in the bin directory) to create a summary of the errors found during the test run.
 
 The valgrind toolset must be installed in order to use memcheck.
@@ -281,7 +281,7 @@ To enable memcheck set the RUNTIME_CHECK build flag to "memcheck":
 cmake .. -DRUNTIME_CHECK=memcheck
 ----
 
-If valgrind detects errors, the `skrouterd` process exits with an exit code of `42` and a message is displayed in the CTest output. 
+If valgrind detects errors, the `skrouterd` process exits with an exit code of `42` and a message is displayed in the CTest output.
 For example:
 
 [source]

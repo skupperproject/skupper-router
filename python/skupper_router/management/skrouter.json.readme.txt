@@ -86,4 +86,3 @@ The two types are often related. For example `listener` and `connector` extend
 `configurationEntity`, they express the intent to make or receive
 connections. `connection` extends `operationalEntity`, it holds information
 the actual connection status.
-

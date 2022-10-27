@@ -714,4 +714,3 @@ static void qd_http1_adaptor_final(void *adaptor_context)
  * Declare the adaptor so that it will self-register on process startup.
  */
 QDR_CORE_ADAPTOR_DECLARE("http1.x-adaptor", qd_http1_adaptor_init, qd_http1_adaptor_final)
-

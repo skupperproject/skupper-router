@@ -542,4 +542,3 @@ static void qdrh_query_get_next_CT(qdr_core_t *core, qdr_action_t *action, bool 
         }
     }
 }
-

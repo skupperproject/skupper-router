@@ -71,10 +71,9 @@ qd_dispatch_t *qdr_core_dispatch(qdr_core_t *core);
  */
 void qdr_process_tick(qdr_core_t *core);
 
-
 /**
  * Return true iff the test hooks option is enabled for this process.
- * 
+ *
  * @param core Pointer to the core object returned by qd_core()
  * @return true iff test hooks are enabled
  */
@@ -101,11 +100,11 @@ typedef void (*qdr_set_mobile_seq_t)    (void *context, int router_maskbit, uint
 typedef void (*qdr_set_my_mobile_seq_t) (void *context, uint64_t mobile_seq);
 typedef void (*qdr_link_lost_t)         (void *context, int link_maskbit);
 
-void qdr_core_route_table_handlers(qdr_core_t              *core, 
-                                   void                    *context,
-                                   qdr_set_mobile_seq_t     set_mobile_seq,
-                                   qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost);
+void qdr_core_route_table_handlers(qdr_core_t             *core,
+                                   void                   *context,
+                                   qdr_set_mobile_seq_t    set_mobile_seq,
+                                   qdr_set_my_mobile_seq_t set_my_mobile_seq,
+                                   qdr_link_lost_t         link_lost);
 
 /**
  ******************************************************************************
@@ -184,7 +183,7 @@ typedef uint32_t qdr_watch_handle_t;
 
 /**
  * Handler for updates on watched addresses.  This function shall be invoked on an IO thread.
- * 
+ *
  * Note:  This function will be invoked when a watched address has a change in reachability.
  * It is possible that the function may be called when no change occurs, particularly when an
  * address is removed from the core address table.
@@ -216,7 +215,7 @@ typedef void (*qdr_address_watch_cancel_t)(void *context);
  *
  * Subscribe to watch for changes in the reachability for an address.  It is safe to invoke this
  * function from an IO thread.
- * 
+ *
  * @param core Pointer to the core module
  * @param address The address to be watched
  * @param aclass Address class character
@@ -235,12 +234,12 @@ qdr_watch_handle_t qdr_core_watch_address(qdr_core_t                 *core,
 
 /**
  * qdr_core_unwatch_address
- * 
+ *
  * Cancel an address watch subscription.  It is safe to invoke this function from an IO thread.
  *
  * Note that it is possible for the watch update handler to be invoked after the unwatch call is made.
  * Wait until the on_cancel handler is invoked to clean up any related resources.
- * 
+ *
  * @param core Pointer to the core module
  * @param handle Watch handle returned by qdr_core_watch_address
  */

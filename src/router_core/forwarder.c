@@ -993,4 +993,3 @@ int qdr_forward_message_CT(qdr_core_t *core, qdr_address_t *addr, qd_message_t *
         fanout = addr->forwarder->forward_message(core, addr, msg, in_delivery, exclude_inprocess, control);
     return fanout;
 }
-

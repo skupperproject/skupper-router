@@ -45,4 +45,3 @@ QD_EXPORT qd_error_t qd_entity_refresh_router(qd_entity_t* entity, void *impl) {
         return QD_ERROR_NONE;
     return qd_error_code();
 }
-

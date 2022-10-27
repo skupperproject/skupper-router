@@ -486,4 +486,3 @@ qd_error_t qd_pyrouter_tick(qd_router_t *router)
     }
     return err;
 }
-

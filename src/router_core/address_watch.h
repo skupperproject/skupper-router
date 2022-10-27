@@ -27,10 +27,10 @@ DEQ_DECLARE(qdr_address_watch_t, qdr_address_watch_list_t);
 
 /**
  * qdr_trigger_address_watch_CT
- * 
+ *
  * This function is invoked after changes have been made to the address that affect
  * reachability (i.e. local and remote senders and receivers).
- * 
+ *
  * @param core Pointer to the router core state
  * @param addr Pointer to the address record that was modified
  */

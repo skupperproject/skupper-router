@@ -34,7 +34,7 @@ How does the router shut down when interrupted with ctrl-C ?
    including itself as one of the worker threads.
 
 ... thread_run() +
-    is in a loop processing batches of events, calling 
+    is in a loop processing batches of events, calling
     handle() on each event.
 
 .... handle() +
@@ -43,9 +43,9 @@ How does the router shut down when interrupted with ctrl-C ?
      thread, and then returns 'false'.
 
 ... thread_run() receives false return from handle(), indicating
-    that the thread is no longer running. It drops out of the 
-    running loop. If there is a connection, it calls 
-    qd_conn_event_batch_complete() with last arg false, indicating that 
+    that the thread is no longer running. It drops out of the
+    running loop. If there is a connection, it calls
+    qd_conn_event_batch_complete() with last arg false, indicating that
     the connection has not closed. It then calls pn_proactor_done()
     and returns, to be joined by qd_server_run().
 
@@ -61,8 +61,8 @@ How does the router shut down when interrupted with ctrl-C ?
 
 . main_process() +
   nulls out and dispatch pointer, and calls qd_dispatch_free().
-  It then flushes any remaining content in stdout, disables its 
-  SIGINT handler, and sends SIGINT 
+  It then flushes any remaining content in stdout, disables its
+  SIGINT handler, and sends SIGINT
   to itself, terminating the qdrouterd process.
 
 .. qd_dispatch_free() +
@@ -126,9 +126,3 @@ How does the router shut down when interrupted with ctrl-C ?
 
 ... qd_alloc_finalize() +
     All allocated items should have been released by now, and there should be only a single thread running. No locking will be done. Clean up all items on the types list. Reclaim the items on the global free pool. Reclaim items on thread pools. Check stats to detect allocated items that have not been freed.
-
-
-    
-
-
-

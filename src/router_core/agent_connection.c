@@ -171,7 +171,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_SASL_MECHANISMS:
-        if (conn->connection_info->sasl_mechanisms) 
+        if (conn->connection_info->sasl_mechanisms)
             qd_compose_insert_string(body, conn->connection_info->sasl_mechanisms);
 	else
 	    qd_compose_insert_null(body);
@@ -663,4 +663,3 @@ void qdra_connection_update_CT(qdr_core_t      *core,
     //
     qdr_agent_enqueue_response_CT(core, query);
 }
-

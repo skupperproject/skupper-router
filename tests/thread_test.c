@@ -182,4 +182,3 @@ int thread_tests(void)
 
     return result;
 }
-

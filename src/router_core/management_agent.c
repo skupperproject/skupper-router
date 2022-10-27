@@ -533,4 +533,3 @@ uint64_t qdr_management_agent_on_message(void *context, qd_message_t *msg, int u
     qd_parse_free(properties_fld);
     return PN_ACCEPTED;
 }
-

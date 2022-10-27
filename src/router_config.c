@@ -197,4 +197,3 @@ void qd_router_configure_free(qd_router_t *router)
     // All configuration to be freed is now in the router core.
     //
 }
-

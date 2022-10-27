@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -74,7 +74,7 @@ static char* test_core_timer(void *context)
         results[3] != 0 ||
         results[4] != 1)
         return "Expected zero-length timer to fire once";
-    
+
     //
     // Test 1-timer
     //
@@ -90,7 +90,7 @@ static char* test_core_timer(void *context)
     // Cancel 10-timer
     //
     qdr_core_timer_cancel_CT(core, timers[1]);
-    
+
     //
     // Test 5-timer
     //
@@ -186,4 +186,3 @@ int core_timer_tests(void)
 
     return result;
 }
-

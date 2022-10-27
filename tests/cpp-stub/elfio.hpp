@@ -4890,4 +4890,3 @@ class dump
 #endif // ELFIO_DUMP_HPP
 
 /*** End of inlined file: elfio_dump.hpp ***/
-

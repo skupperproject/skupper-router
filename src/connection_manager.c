@@ -1022,4 +1022,3 @@ const char *qd_connector_name(qd_connector_t *ct)
 {
     return ct ? ct->config.name : 0;
 }
-

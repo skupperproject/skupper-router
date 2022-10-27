@@ -8,9 +8,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -30,7 +30,7 @@
 #include <proton/raw_connection.h>
 
 /**@file
- * Message representation. 
+ * Message representation.
  *
  * @defgroup message message
  *
@@ -582,7 +582,7 @@ uint8_t qd_message_get_priority(qd_message_t *msg);
 /**
  * True if message is larger that maxMessageSize
  * @param msg A pointer to the message
- * @return 
+ * @return
  */
 bool qd_message_oversize(const qd_message_t *msg);
 

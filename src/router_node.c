@@ -86,7 +86,6 @@ static void qdr_node_connect_deliveries(qd_link_t *link, qdr_delivery_t *qdlv, p
     pn_delivery_set_context(pdlv, ref);
     qdr_delivery_set_context(qdlv, pdlv);
     qdr_delivery_incref(qdlv, "referenced by a pn_delivery");
-    
 }
 
 
@@ -1651,12 +1650,11 @@ static void CORE_connection_activate(void *context, qdr_connection_t *conn)
     sys_mutex_unlock(qd_server_get_activation_lock(router->qd->server));
 }
 
-
-static void CORE_link_first_attach(void             *context,
-                                   qdr_connection_t *conn,
-                                   qdr_link_t       *link, 
-                                   qdr_terminus_t   *source,
-                                   qdr_terminus_t   *target,
+static void CORE_link_first_attach(void              *context,
+                                   qdr_connection_t  *conn,
+                                   qdr_link_t        *link,
+                                   qdr_terminus_t    *source,
+                                   qdr_terminus_t    *target,
                                    qd_session_class_t ssn_class)
 {
     qd_router_t     *router = (qd_router_t*) context;
@@ -2187,7 +2185,7 @@ void qd_connection_log_policy_denial(qd_link_t *link, const char *text)
         if (rlink->conn) {
             c_id = rlink->conn->identity;
         }
-    }    
+    }
     qd_log(qd_policy_log_source(), QD_LOG_WARNING, "[C%"PRIu64"][L%"PRIu64"] %s",
            c_id, l_id, text);
 }
