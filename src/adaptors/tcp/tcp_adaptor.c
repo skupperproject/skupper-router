@@ -983,6 +983,14 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
     }
 }
 
+static void drain_buffers(qdr_tcp_connection_t *conn, pn_event_t *e, qd_log_source_t *log)
+{
+    pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
+    int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
+    qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] drain_buffers() drained a total of %i buffers", conn->conn_id,
+           drained_buffers);
+}
+
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_tcp_connection_t *conn = (qdr_tcp_connection_t*) context;
@@ -1039,6 +1047,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         conn->q2_blocked = false;
         UNLOCK(&conn->activation_lock);
         handle_incoming(conn, "PNRC_CLOSED_READ");
+        drain_buffers(conn, e, log);
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
@@ -1046,6 +1055,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_WRITE %s",
                conn->conn_id, qdr_tcp_connection_role_name(conn));
         SET_ATOMIC_FLAG(&conn->raw_closed_write);
+        drain_buffers(conn, e, log);
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
@@ -1115,10 +1125,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
-        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
-        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
-        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
-               conn->conn_id, drained_buffers);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS %s", conn->conn_id,
+               qdr_tcp_connection_role_name(conn));
+        drain_buffers(conn, e, log);
     } break;
     case PN_RAW_CONNECTION_READ: {
         int read = 0;

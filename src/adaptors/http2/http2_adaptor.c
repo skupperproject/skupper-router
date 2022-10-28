@@ -2756,6 +2756,14 @@ static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer
     }
 }
 
+static void drain_buffers(qdr_http2_connection_t *conn, pn_event_t *e, qd_log_source_t *log)
+{
+    pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
+    int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
+    qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] drain_buffers() drained a total of %i buffers", conn->conn_id,
+           drained_buffers);
+}
+
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_http2_connection_t *conn = (qdr_http2_connection_t*) context;
@@ -2773,6 +2781,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         }
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         handle_incoming_http(conn);
+        drain_buffers(conn, e, log);
         if (conn->pn_raw_conn)
             pn_raw_connection_close(conn->pn_raw_conn);
         qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_READ", conn->conn_id);
@@ -2781,6 +2790,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
         qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_WRITE", conn->conn_id);
         SET_ATOMIC_FLAG(&conn->raw_closed_write);
+        drain_buffers(conn, e, log);
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
@@ -2840,10 +2850,10 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
-        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
-        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
-        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
-               conn->conn_id, drained_buffers);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS ingress=%i", conn->conn_id,
+               conn->ingress);
+        drain_buffers(conn, e, log);
+
     } break;
     case PN_RAW_CONNECTION_WRITTEN: {
         pn_raw_buffer_t buffs[WRITE_BUFFERS];
