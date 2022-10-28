@@ -519,11 +519,10 @@ static void _handle_conn_need_read_buffers(qdr_http1_connection_t *hconn)
 {
     assert(hconn->raw_conn);
 
-    // @TODO(kgiusti): backpressure if no credit
-    // if (hconn->in_link_credit > 0 */)
-    int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
-    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %d read buffers granted",
-           hconn->conn_id, granted);
+    if (!hconn->q2_blocked) {
+        int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
+        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%" PRIu64 "] %d read buffers granted", hconn->conn_id, granted);
+    }
 }
 
 
@@ -554,11 +553,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
-        if (hconn->q2_blocked) {
-            hconn->q2_blocked = false;
-            // drain any pending buffers blocked by Q2
-            _handle_conn_read_event(hconn);
-        }
+        hconn->q2_blocked = false;
         // notify the codec so it can complete the current response
         // message (response body terminated on connection closed)
         h1_codec_connection_rx_closed(hconn->http_conn);
@@ -667,26 +662,17 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     }
     case PN_RAW_CONNECTION_WAKE: {
         // Note: wake events may occur before the raw connection is established
-        int error = 0;
-        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Wake-up", hconn->conn_id);
-
         if (sys_atomic_set(&hconn->q2_restart, 0)) {
             // note: unit tests grep for this log!
             qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] server link unblocked from Q2 limit", hconn->conn_id);
             hconn->q2_blocked = false;
-            error = _handle_conn_read_event(hconn);  // restart receiving
-            if (!error)
-                // room for more incoming data
-                _handle_conn_need_read_buffers(hconn);
+            _handle_conn_need_read_buffers(hconn);  // restart receiver flow
         }
 
         // note that when qdr_connection_process() handles the connection close
         // the hconn->qdr_conn pointer will be zeroed.
         while (hconn->qdr_conn && qdr_connection_process(hconn->qdr_conn))
             ;
-
-        if (error)
-            qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
 
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Connection processing complete", hconn->conn_id);
         break;
@@ -698,11 +684,9 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                hconn->conn_id, drained_buffers);
     } break;
     case PN_RAW_CONNECTION_READ: {
-        if (!hconn->q2_blocked) {
-            int error = _handle_conn_read_event(hconn);
-            if (error)
-                qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
-        }
+        int error = _handle_conn_read_event(hconn);
+        if (error)
+            qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
         break;
     }
     case PN_RAW_CONNECTION_WRITTEN: {

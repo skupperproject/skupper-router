@@ -335,19 +335,6 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
     // to grant buffers to the raw connection
 }
 
-
-static void _handle_conn_read_close(qdr_http1_connection_t *hconn)
-{
-    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] Closed for reading", hconn->conn_id);
-}
-
-
-static void _handle_conn_write_close(qdr_http1_connection_t *hconn)
-{
-    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] Closed for writing", hconn->conn_id);
-}
-
-
 // handle PN_RAW_CONNECTION_READ
 static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
 {
@@ -373,8 +360,7 @@ static void _handle_conn_need_read_buffers(qdr_http1_connection_t *hconn)
 {
     assert(hconn->raw_conn);
 
-    // @TODO(kgiusti): backpressure if no credit
-    if (hconn->client.reply_to_addr || hconn->cfg.event_channel /* && hconn->in_link_credit > 0 */) {
+    if (!hconn->q2_blocked && (hconn->client.reply_to_addr || hconn->cfg.event_channel)) {
         int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
         qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %d read buffers granted",
                hconn->conn_id, granted);
@@ -407,12 +393,11 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
-        _handle_conn_read_close(hconn);
+        hconn->q2_blocked = false;
         pn_raw_connection_close(hconn->raw_conn);
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
-        _handle_conn_write_close(hconn);
         pn_raw_connection_close(hconn->raw_conn);
         break;
     }
@@ -468,34 +453,20 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                hconn->conn_id, drained_buffers);
     } break;
     case PN_RAW_CONNECTION_READ: {
-        if (!hconn->q2_blocked) {
-            int error = _handle_conn_read_event(hconn);
-            if (error)
-                qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
-            else
-                // room for more incoming data
-                _handle_conn_need_read_buffers(hconn);
-        }
+        int error = _handle_conn_read_event(hconn);
+        if (error)
+            qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
         break;
     }
     case PN_RAW_CONNECTION_WAKE: {
-        int error = 0;
-        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Wake-up", hconn->conn_id);
-
         if (sys_atomic_set(&hconn->q2_restart, 0)) {
             // note: unit tests grep for this log!
             qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] client link unblocked from Q2 limit", hconn->conn_id);
             hconn->q2_blocked = false;
-            error = _handle_conn_read_event(hconn);  // restart receiving
-            if (!error)
-                // room for more incoming data
-                _handle_conn_need_read_buffers(hconn);
+            _handle_conn_need_read_buffers(hconn);  // restart receiver flow
         }
 
         while (qdr_connection_process(hconn->qdr_conn)) {}
-
-        if (error)
-            qdr_http1_close_connection(hconn, "Incoming request message failed to parse");
 
         qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Processing done", hconn->conn_id);
         break;
