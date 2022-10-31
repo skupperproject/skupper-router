@@ -2773,22 +2773,22 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         }
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         handle_incoming_http(conn);
+        int num_drained_read_buffers = qd_raw_connection_drain_read_buffers(conn->pn_raw_conn);
         if (conn->pn_raw_conn)
             pn_raw_connection_close(conn->pn_raw_conn);
-        qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_READ", conn->conn_id);
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ, drained %i read buffers",
+               conn->conn_id, num_drained_read_buffers);
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
-        qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_WRITE", conn->conn_id);
         SET_ATOMIC_FLAG(&conn->raw_closed_write);
+        int num_drained_write_buffers = qd_raw_connection_drain_write_buffers(conn->pn_raw_conn);
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_WRITE, drained %i write buffers",
+               conn->conn_id, num_drained_write_buffers);
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
-        if (conn->ingress) {
-            qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED Ingress", conn->conn_id);
-        }
-        else {
-            qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED Egress", conn->conn_id);
+        if (!conn->ingress) {
             conn->initial_settings_frame_sent = false;
             if (conn->delete_egress_connections) {
                 // The egress connection has been deleted, cancel any pending timer
@@ -2800,6 +2800,11 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             }
         }
         conn->connection_established = false;
+        // If somehow the PN_RAW_CONNECTION_CLOSED_WRITE and the PN_RAW_CONNECTION_CLOSED_READ events did not come by,
+        // we will drain the buffers here just as a backup.
+        int drained_buffers = qd_raw_connection_drain_read_write_buffers(conn->pn_raw_conn);
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED, ingress=%i, drained_buffers=%i",
+               conn->conn_id, conn->ingress, drained_buffers);
         handle_disconnected(conn);
         break;
     }
