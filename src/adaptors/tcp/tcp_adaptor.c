@@ -1032,27 +1032,25 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
-        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
-               conn->incoming_link_id, qdr_tcp_connection_role_name(conn));
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         LOCK(&conn->activation_lock);
         conn->q2_blocked = false;
         UNLOCK(&conn->activation_lock);
         handle_incoming(conn, "PNRC_CLOSED_READ");
+        int num_drained_read_buffers = qd_raw_connection_drain_read_buffers(conn->pn_raw_conn);
+        qd_log(log, QD_LOG_DEBUG,
+               "[C%" PRIu64 "][L%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s, drained %i read bufers", conn->conn_id,
+               conn->incoming_link_id, qdr_tcp_connection_role_name(conn), num_drained_read_buffers);
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
-        qd_log(log, QD_LOG_DEBUG,
-               "[C%"PRIu64"] PN_RAW_CONNECTION_CLOSED_WRITE %s",
-               conn->conn_id, qdr_tcp_connection_role_name(conn));
         SET_ATOMIC_FLAG(&conn->raw_closed_write);
+        int num_drained_write_buffers = qd_raw_connection_drain_write_buffers(conn->pn_raw_conn);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_WRITE %s, drained %i write buffers",
+               conn->conn_id, qdr_tcp_connection_role_name(conn), num_drained_write_buffers);
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
-        qd_log(log, QD_LOG_INFO,
-               "[C%"PRIu64"] PN_RAW_CONNECTION_DISCONNECTED %s",
-               conn->conn_id, qdr_tcp_connection_role_name(conn));
-
         pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
         if (!!cond) {
             const char *cname = pn_condition_get_name(cond);
@@ -1065,6 +1063,11 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
+        // If somehow the PN_RAW_CONNECTION_CLOSED_WRITE and the PN_RAW_CONNECTION_CLOSED_READ events did not come by,
+        // we will drain the buffers here just as a backup.
+        int drained_buffers = qd_raw_connection_drain_read_write_buffers(conn->pn_raw_conn);
+        qd_log(log, QD_LOG_INFO, "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED %s, drained_buffers=%i", conn->conn_id,
+               qdr_tcp_connection_role_name(conn), drained_buffers);
 
         LOCK(&conn->activation_lock);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
