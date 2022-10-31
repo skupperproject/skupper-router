@@ -142,26 +142,40 @@ char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn)
     }
 }
 
-int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
+int qd_raw_connection_drain_write_buffers(pn_raw_connection_t *pn_raw_conn)
 {
     pn_raw_buffer_t buffs[RAW_BUFFER_BATCH];
     size_t          n;
-    int             buffers_drained = 0;
+    int             write_buffers_drained = 0;
     while ((n = pn_raw_connection_take_written_buffers(pn_raw_conn, buffs, RAW_BUFFER_BATCH))) {
         for (size_t i = 0; i < n; ++i) {
-            buffers_drained++;
+            write_buffers_drained++;
             qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
             qd_adaptor_buffer_free(qd_adaptor_buffer);
         }
     }
+    return write_buffers_drained;
+}
 
+int qd_raw_connection_drain_read_buffers(pn_raw_connection_t *pn_raw_conn)
+{
+    pn_raw_buffer_t buffs[RAW_BUFFER_BATCH];
+    size_t          n;
+    int             read_buffers_drained = 0;
     while ((n = pn_raw_connection_take_read_buffers(pn_raw_conn, buffs, RAW_BUFFER_BATCH))) {
         for (size_t i = 0; i < n; ++i) {
             assert(buffs[i].size == 0);
-            buffers_drained++;
+            read_buffers_drained++;
             qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
             qd_adaptor_buffer_free(qd_adaptor_buffer);
         }
     }
+    return read_buffers_drained;
+}
+
+int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
+{
+    int             buffers_drained = qd_raw_connection_drain_write_buffers(pn_raw_conn);
+    buffers_drained += qd_raw_connection_drain_read_buffers(pn_raw_conn);
     return buffers_drained;
 }
