@@ -182,9 +182,10 @@ void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error
 // Raw Connection Write Buffer Management
 //
 
-static uint32_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo,
-                                          qd_adaptor_buffer_list_t  *abuf_list,
-                                          size_t                     limit)
+// Move out_data from the fifo list to the tail of a list of adaptor buffers. Free fifo entries whose data has been
+// moved onto the abuf_list. Return the total number of octets added to abuf_list.
+//
+uint64_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_buffer_list_t *abuf_list, size_t limit)
 {
     qd_adaptor_buffer_t  *abuf         = 0;
     qdr_http1_out_data_t *od           = 0;
@@ -240,7 +241,7 @@ uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_d
 
     // do not create more buffers than the raw connection capacity (limit) to avoid holding on to any unused buffers
     qd_adaptor_buffer_list_t abuf_list    = DEQ_EMPTY;
-    uint32_t                 total_octets = qdr_http1_get_out_buffers(fifo, &abuf_list, limit);
+    uint64_t                 total_octets = qdr_http1_get_out_buffers(fifo, &abuf_list, limit);
     if (total_octets == 0)
         return 0;
 
@@ -663,9 +664,69 @@ static void qd_http1_adaptor_final(void *adaptor_context)
     free(adaptor);
 }
 
+// Raw connection I/O loop for unencrypted connections.
+//
+// Takes full input (read) buffers from the raw connection and appends them to input_data. The total number of input
+// octets is returned in input_octets. Calls get_output_cb to retrieve output data from the adaptor and gives it to the
+// raw connection (write). Ownership of the buffers on input_data is passed to the caller. This function takes ownership
+// of all buffers taken via get_output_cb().
+//
+// Returns true if any I/O operations occur.
+//
+bool qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
+                         qdr_http1_get_output_data_cb_t *get_output_cb,
+                         void                           *get_output_context,
+                         qd_adaptor_buffer_list_t       *input_data,
+                         uint64_t                       *input_octets)
+{
+    bool work = false;
+
+    // take any inbound data
+
+    if (input_data) {
+        assert(input_octets);
+        *input_octets = 0;
+
+        pn_raw_buffer_t pn_buf_desc;
+        while (pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
+            qd_adaptor_buffer_t *abuf = qd_get_adaptor_buffer_from_pn_raw_buffer(&pn_buf_desc);
+            assert(abuf);
+            size_t size = qd_adaptor_buffer_size(abuf);
+            if (size == 0) {
+                qd_adaptor_buffer_free(abuf);
+            } else {
+                DEQ_INSERT_TAIL(*input_data, abuf);
+                *input_octets += size;
+                work = true;
+            }
+        }
+    }
+
+    // write any outbound data
+
+    if (get_output_cb) {
+        size_t capacity = pn_raw_connection_write_buffers_capacity(raw_conn);
+        if (capacity > 0) {
+            qd_adaptor_buffer_list_t a_bufs = DEQ_EMPTY;
+            get_output_cb(get_output_context, &a_bufs, capacity);
+            assert(DEQ_SIZE(a_bufs) <= capacity);
+            while (DEQ_HEAD(a_bufs)) {
+                pn_raw_buffer_t      pn_buf_desc;
+                qd_adaptor_buffer_t *buff = DEQ_HEAD(a_bufs);
+                DEQ_REMOVE_HEAD(a_bufs);
+                qd_adaptor_buffer_pn_raw_buffer(&pn_buf_desc, buff);
+                size_t given = pn_raw_connection_write_buffers(raw_conn, &pn_buf_desc, 1);
+                (void) given;
+                assert(given == 1);
+                work = true;
+            }
+        }
+    }
+
+    return work;
+}
 
 /**
  * Declare the adaptor so that it will self-register on process startup.
  */
 QDR_CORE_ADAPTOR_DECLARE("http1.x-adaptor", qd_http1_adaptor_init, qd_http1_adaptor_final)
-

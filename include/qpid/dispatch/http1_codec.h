@@ -144,11 +144,11 @@ typedef struct h1_codec_config_t {
     //
     void (*rx_done)(h1_codec_request_state_t *hrs);
 
-    // Invoked when the final response message has been decoded (server
-    // connection) or encoded (client connection), or the request has been cancelled.
-    // hrs is freed on return from this callback and must not be referenced further.
-    void (*request_complete)(h1_codec_request_state_t *hrs,
-                             bool cancelled);
+    // Invoked when the HTTP request/response messages have been completely encoded/decoded OR the request has been
+    // cancelled via a call to h1_codec_request_state_cancel(). The request is complete: hrs is freed on return from
+    // this callback and must not be referenced further.
+    //
+    void (*request_complete)(h1_codec_request_state_t *hrs, bool cancelled);
 
 } h1_codec_config_t;
 
@@ -158,16 +158,14 @@ typedef struct h1_codec_config_t {
 h1_codec_connection_t *h1_codec_connection(h1_codec_config_t *config, void *context);
 void *h1_codec_connection_get_context(h1_codec_connection_t *conn);
 
-// Release the codec.  This can only be done after all outstanding requests
-// have been completed or cancelled.
+// Release the codec. Any outstanding request/response state is released immediately, including any in-progress
+// requests.
 //
 void h1_codec_connection_free(h1_codec_connection_t *conn);
 
-// Push inbound network data into the http1 library. All rx_*() callbacks occur
-// during this call.  The return value is zero on success.  If a non-zero value
-// is returned the codec state is unknown - the application must cancel all
-// outstanding requests and destroy the conn by calling
-// h1_codec_connection_free().
+// Push inbound network data into the http1 library. All rx_*() callbacks occur during this call.  The return value is
+// zero on success.  If a non-zero value is returned the codec state is unknown and cannot be recovered: the application
+// must destroy the conn by calling h1_codec_connection_free().
 //
 int h1_codec_connection_rx_data(h1_codec_connection_t *conn, qd_buffer_list_t *data, size_t len);
 
@@ -244,7 +242,7 @@ int h1_codec_tx_add_header(h1_codec_request_state_t *hrs, const char *key, const
 //
 int h1_codec_tx_body(h1_codec_request_state_t *hrs, qd_message_stream_data_t *stream_data);
 
-// Write body as string
+// Write body as string. Ownership of data remains with the caller.
 //
 int h1_codec_tx_body_str(h1_codec_request_state_t *hrs, const char *data);
 

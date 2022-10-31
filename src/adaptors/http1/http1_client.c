@@ -34,7 +34,6 @@
 //
 
 #define DEFAULT_CAPACITY 250
-#define LISTENER_BACKLOG  16
 
 const char *CONTENT_LENGTH_KEY = "Content-Length";
 const char *POST_METHOD = "POST";
@@ -61,9 +60,17 @@ ALLOC_DECLARE(_client_response_msg_t);
 ALLOC_DEFINE(_client_response_msg_t);
 DEQ_DECLARE(_client_response_msg_t, _client_response_msg_list_t);
 
-
 //
-// State for an HTTP/1.x Request+Response exchange, client facing
+// State for an HTTP/1.x Request+Response exchange, client facing.
+//
+// An HTTP/1.x Request/Response is considered done when:
+// - The codec has completed: both the entire request and corresponding response message(s) have been fully received
+// and encoded/decoded by the HTTP codec.
+// - All _client_response_msg_t's owned by the _client_request_t have been released
+// - The AMQP message holding the encoded HTTP Request has been settled by the core (remote state)
+//
+// If an unrecoverable error occurs the raw connection will be immediately closed and the HTTP connection,
+// qdr_connection_t, etc will be destroyed.
 //
 typedef struct _client_request_t {
     qdr_http1_request_base_t base;
@@ -85,7 +92,6 @@ typedef struct _client_request_t {
     _client_response_msg_list_t responses;
 
     // flags:
-    bool cancelled;
     bool codec_completed;    // encoder/decoder done
     bool close_on_complete;  // close the conn when this request is complete
     bool conn_close_hdr;     // add Connection: close to response msg
@@ -118,7 +124,6 @@ static void _client_request_complete_cb(h1_codec_request_state_t *lib_rs, bool c
 static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, void *context);
 static void _client_response_msg_free(_client_request_t *req, _client_response_msg_t *rmsg);
 static void _client_request_free(_client_request_t *req);
-static void _write_pending_response(_client_request_t *req);
 static void _deliver_request(qdr_http1_connection_t *hconn, _client_request_t *req);
 static bool _find_token(const char *list, const char *value);
 static void _generate_response_msg(_client_request_t *hreq, int code, const char *reason, const char *text_body);
@@ -337,26 +342,6 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
     // to grant buffers to the raw connection
 }
 
-// handle PN_RAW_CONNECTION_READ
-static int _process_read_buffers(qdr_http1_connection_t *hconn)
-{
-    int error = 0;
-    qd_buffer_list_t blist;
-    uintmax_t length = qdr_http1_get_read_buffers(hconn, &blist);
-
-    if (length) {
-
-        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] Read %"PRIuMAX" bytes from client (%zu buffers)",
-               hconn->conn_id, hconn->in_link_id, length, DEQ_SIZE(blist));
-
-        hconn->in_http1_octets += length;
-        error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
-    }
-    return error;
-}
-
-
 // handle PN_RAW_CONNECTION_NEED_READ_BUFFERS
 static void _replenish_empty_read_buffers(qdr_http1_connection_t *hconn)
 {
@@ -369,6 +354,66 @@ static void _replenish_empty_read_buffers(qdr_http1_connection_t *hconn)
     }
 }
 
+uint64_t _get_output_data(void *context, qd_adaptor_buffer_list_t *abufs, size_t limit)
+{
+    uint64_t                total_octets = 0;
+    qdr_http1_connection_t *hconn        = (qdr_http1_connection_t *) context;
+
+    assert(hconn);
+    assert(DEQ_IS_EMPTY(*abufs));
+
+    _client_request_t *hreq = (_client_request_t *) DEQ_HEAD(hconn->requests);
+    if (hreq) {
+        _client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses);
+        while (rmsg && limit > DEQ_SIZE(*abufs)) {
+            total_octets += qdr_http1_get_out_buffers(&rmsg->out_data, abufs, limit - DEQ_SIZE(*abufs));
+            if (rmsg->encode_complete && DEQ_IS_EMPTY(rmsg->out_data)) {
+                _client_response_msg_free(hreq, rmsg);
+                rmsg = DEQ_HEAD(hreq->responses);
+            } else {
+                // full response message not yet fully arrived, wait for more
+                rmsg = 0;
+            }
+        }
+    }
+
+    if (total_octets) {
+        qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+               "[C%" PRIu64 "] queueing %" PRIu64 " encoded octets for raw conn output (%zu buffers)", hconn->conn_id,
+               total_octets, DEQ_SIZE(*abufs));
+        hconn->out_http1_octets += total_octets;
+    }
+    return total_octets;
+}
+
+// Unencrypted raw connection I/O work loop
+static int _do_raw_io(qdr_http1_connection_t *hconn)
+{
+    int error = 0;
+    if (hconn->raw_conn) {
+        bool work = false;
+        do {
+            size_t                   octets    = 0;
+            qd_adaptor_buffer_list_t abuf_list = DEQ_EMPTY;
+            work = qdr_http1_do_raw_io(hconn->raw_conn, _get_output_data, hconn, &abuf_list, &octets);
+            if (DEQ_SIZE(abuf_list)) {
+                qd_buffer_list_t qbuf_list = DEQ_EMPTY;
+                qd_adaptor_buffers_copy_to_qd_buffers(&abuf_list, &qbuf_list);
+
+                qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
+                       "[C%" PRIu64 "] pushing %zu received octets into codec (%zu buffers)", hconn->conn_id, octets,
+                       DEQ_SIZE(qbuf_list));
+
+                error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
+                if (error) {
+                    qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
+                }
+            }
+        } while (work && !error);
+    }
+
+    return error;
+}
 
 // Proton Connection Event Handler
 //
@@ -379,7 +424,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
 
     if (!hconn) return;
 
-    qd_log(log, QD_LOG_TRACE, "[C%"PRIu64"] HTTP client proactor event %s", hconn->conn_id, pn_event_type_name(pn_event_type(e)));
+    qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] client proactor event %s", hconn->conn_id,
+           pn_event_type_name(pn_event_type(e)));
 
     switch (pn_event_type(e)) {
 
@@ -396,6 +442,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
         hconn->q2_blocked = false;
+        // TBD: proper client half-close support
         pn_raw_connection_close(hconn->raw_conn);
         break;
     }
@@ -435,8 +482,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         return;  // hconn no longer valid
     }
     case PN_RAW_CONNECTION_NEED_WRITE_BUFFERS: {
-        qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] Need write buffers", hconn->conn_id);
-        _write_pending_response((_client_request_t*) DEQ_HEAD(hconn->requests));
+        // handled below in I/O loop
         break;
     }
     case PN_RAW_CONNECTION_WRITTEN: {
@@ -448,16 +494,13 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         _replenish_empty_read_buffers(hconn);
         break;
     }
-    case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
-        pn_raw_connection_t *pn_raw_conn     = pn_event_raw_connection(e);
-        int                  drained_buffers = qd_raw_connection_drain_read_write_buffers(pn_raw_conn);
-        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
-               hconn->conn_id, drained_buffers);
-    } break;
     case PN_RAW_CONNECTION_READ: {
-        int error = _process_read_buffers(hconn);
-        if (error)
-            qdr_http1_close_connection(hconn, "Incoming response message failed to parse");
+        // handled below in I/O loop
+        break;
+    }
+    case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
+        qdr_http1_free_written_buffers(hconn);
+        // discard of empty read buffers is handled below in I/O loop
         break;
     }
     case PN_RAW_CONNECTION_WAKE: {
@@ -477,71 +520,42 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
 
-    // Check the head request for completion and advance to next request if
-    // done.
+    // now process all pending raw connection I/O work
 
-    bool               need_close = false;
-    _client_request_t *hreq       = (_client_request_t *) DEQ_HEAD(hconn->requests);
-    if (hreq) {
-        if (hreq->cancelled) {
-            qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%"PRIu64"][L%"PRIu64"] HTTP client request msg-id=%"PRIu64" cancelled",
-                       hconn->conn_id, hconn->out_link_id, hreq->base.msg_id);
-            need_close = true;
-        } else {
-            // Can we retire the current outgoing response messages?
-            int credit = 0;
+    if (_do_raw_io(hconn) == 0) {  // I/O errors are fatal and will close the connection
 
+        // Check the head request for completion and advance to next request if
+        // done.
+
+        _client_request_t *hreq = (_client_request_t *) DEQ_HEAD(hconn->requests);
+        if (hreq) {
             qd_log(log, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "] client request msg-id=%" PRIu64
-                   " status: codec=%s pending-resp-ct=%zu flags=[%s%s%s]",
+                   "[C%" PRIu64 "] client request msg-id=%" PRIu64 " status: codec=%s pending-resp-ct=%zu flags=[%s%s]",
                    hconn->conn_id, hreq->base.msg_id, hreq->codec_completed ? "Done" : "Not Done",
-                   DEQ_SIZE(hreq->responses), hreq->cancelled ? "Cancelled:" : ":",
-                   hreq->close_on_complete ? "Close on Complete:" : ":", hreq->request_settled ? "Settled:" : ":");
-
-            _client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses);
-            while (rmsg && rmsg->encode_complete && DEQ_IS_EMPTY(rmsg->out_data)) {
-                credit += 1;
-                _client_response_msg_free(hreq, rmsg);
-                rmsg = DEQ_HEAD(hreq->responses);
-            }
-            if (rmsg)
-                qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] client pending resp: encode_complete=%s out_data_ct=%zu",
-                       hconn->conn_id, rmsg->encode_complete ? "Yes" : "No", DEQ_SIZE(rmsg->out_data));
-
-            // aggregation replenishes flow as soon as the response arrives
-            // TODO(kgiusti): perhaps non-aggregation should do the same?
-            if (credit && hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
-                qdr_link_flow(qdr_http1_adaptor->core, hconn->out_link, credit, false);
-            }
+                   DEQ_SIZE(hreq->responses), hreq->close_on_complete ? "Close on Complete:" : ":",
+                   hreq->request_settled ? "Settled:" : ":");
 
             if (hreq->codec_completed && DEQ_IS_EMPTY(hreq->responses) && hreq->request_settled) {
-                qd_log(log, QD_LOG_DEBUG, "[C%"PRIu64"] HTTP request msg-id=%"PRIu64" completed!",
-                       hconn->conn_id, hreq->base.msg_id);
+                const bool need_close = hreq->close_on_complete;
 
-                need_close = hreq->close_on_complete;
+                qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP request msg-id=%" PRIu64 " completed!", hconn->conn_id,
+                       hreq->base.msg_id);
+
                 _client_request_free(hreq);
+                if (need_close)
+                    qdr_http1_close_connection(hconn, 0);
+                else {
+                    hreq = (_client_request_t *) DEQ_HEAD(hconn->requests);
+                    if (hreq && hreq->request_msg && hconn->in_link_credit > 0) {
+                        qd_log(hconn->adaptor->log, QD_LOG_TRACE,
+                               "[C%" PRIu64 "][L%" PRIu64 "] Delivering next request msg-id=%" PRIu64 " to router",
+                               hconn->conn_id, hconn->in_link_id, hreq->base.msg_id);
+
+                        hconn->in_link_credit -= 1;
+                        _deliver_request(hconn, hreq);
+                    }
+                }
             }
-        }
-    }
-
-    if (need_close)
-        qdr_http1_close_connection(hconn, 0);
-    else {
-        hreq = (_client_request_t*) DEQ_HEAD(hconn->requests);
-        if (hreq) {
-
-            if (hreq->request_msg && hconn->in_link_credit > 0) {
-
-                qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                       "[C%"PRIu64"][L%"PRIu64"] Delivering next request msg-id=%"PRIu64" to router",
-                       hconn->conn_id, hconn->in_link_id, hreq->base.msg_id);
-
-                hconn->in_link_credit -= 1;
-                _deliver_request(hconn, hreq);
-            }
-
-            _write_pending_response(hreq);
         }
     }
 }
@@ -588,12 +602,6 @@ static void _client_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
     }
     assert(rmsg);
     qdr_http1_enqueue_buffer_list(&rmsg->out_data, blist, len);
-
-    // if this happens to be the current outgoing response try writing to the
-    // raw connection
-
-    if (rmsg == DEQ_HEAD(hreq->responses))
-        _write_pending_response(hreq);
 }
 
 
@@ -631,12 +639,6 @@ static void _client_tx_stream_data_cb(h1_codec_request_state_t *hrs, qd_message_
     }
     assert(rmsg);
     qdr_http1_enqueue_stream_data(&rmsg->out_data, stream_data);
-
-    // if this happens to be the current outgoing response try writing to the
-    // raw connection
-
-    if (rmsg == DEQ_HEAD(hreq->responses))
-        _write_pending_response(hreq);
 }
 
 
@@ -910,17 +912,14 @@ static void _client_request_complete_cb(h1_codec_request_state_t *lib_rs, bool c
         hreq->base.stop = qd_timer_now();
         qdr_http1_record_client_request_info(qdr_http1_adaptor, &hreq->base);
         hreq->base.lib_rs = 0;  // freed on return from this call
-        hreq->cancelled = hreq->cancelled || cancelled;
-        hreq->codec_completed = !hreq->cancelled;
+        hreq->codec_completed = true;
 
         uint64_t in_octets, out_octets;
         h1_codec_request_state_counters(lib_rs, &in_octets, &out_octets);
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-               "[C%"PRIu64"] HTTP request msg-id=%"PRIu64" %s. Octets read: %"PRIu64" written: %"PRIu64,
-               hreq->base.hconn->conn_id,
-               hreq->base.msg_id,
-               cancelled ? "cancelled" : "codec done",
-               in_octets, out_octets);
+               "[C%" PRIu64 "] client request msg-id=%" PRIu64 " codec complete: Octets read: %" PRIu64
+               " written: %" PRIu64,
+               hreq->base.hconn->conn_id, hreq->base.msg_id, in_octets, out_octets);
     }
 }
 
@@ -1240,7 +1239,6 @@ void qdr_http1_client_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
                 } else {
                     _encode_aggregated_response(hconn, hreq);
                 }
-                _write_pending_response(hreq);
             }
 
         } else if (disp != PN_ACCEPTED) {
@@ -1552,6 +1550,7 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             if (dispo) {
                 rmsg->encode_complete = true;
                 qd_message_set_send_complete(msg);
+                qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
                 if (dispo == PN_ACCEPTED) {
                     bool need_close = false;
                     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
@@ -1579,14 +1578,14 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
 
         if (qd_message_receive_complete(msg)) {
             qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                   DLV_FMT "Aggregated response received (%zu responses received), settling", DLV_ARGS(delivery),
+                   DLV_FMT " Aggregated response received (%zu responses received), settling", DLV_ARGS(delivery),
                    DEQ_SIZE(hreq->responses));
             dispo = PN_ACCEPTED;
             qd_message_set_send_complete(msg);
             qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
         } else {
             qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                   DLV_FMT "Aggregated response incomplete (%zu responses received)", DLV_ARGS(delivery),
+                   DLV_FMT " Aggregated response incomplete (%zu responses received)", DLV_ARGS(delivery),
                    DEQ_SIZE(hreq->responses));
         }
     }
@@ -1635,24 +1634,6 @@ static void _client_response_msg_free(_client_request_t *req, _client_response_m
 
     free__client_response_msg_t(rmsg);
 }
-
-
-// Check the head response message for buffers that need to be sent
-//
-static void _write_pending_response(_client_request_t *hreq)
-{
-    if (hreq && !hreq->cancelled) {
-        assert(DEQ_PREV(&hreq->base) == 0);  // must preserve order
-        _client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses);
-        if (rmsg && DEQ_HEAD(rmsg->out_data)) {
-            uint64_t written = qdr_http1_write_out_data(hreq->base.hconn, &rmsg->out_data);
-            hreq->base.out_http1_octets += written;
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"] %"PRIu64" octets written",
-                   hreq->base.hconn->conn_id, written);
-        }
-    }
-}
-
 
 static void _client_request_free(_client_request_t *hreq)
 {
