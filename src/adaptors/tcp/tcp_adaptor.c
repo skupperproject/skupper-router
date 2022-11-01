@@ -413,6 +413,25 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         return 0;
     }
 
+    // Don't read from proton if in Q2 holdoff
+    if (conn->q2_blocked) {
+        qd_log(log, QD_LOG_DEBUG, DLV_FMT " handle_incoming q2_blocked for %s connection",
+               DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn));
+        return 0;
+    }
+
+    // Read buffers available from proton.
+    qd_buffer_list_t buffers;
+    DEQ_INIT(buffers);
+    int count = handle_incoming_raw_read(conn, &buffers);
+    if (conn->require_tls && !qd_tls_is_secure(conn->tls)) {
+        // We don't have a fully secure channel established, cannot send message yet, return.
+        qd_log(tcp_adaptor->log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "] handle_incoming- connection requires tls but is not secure yet, returning",
+               conn->conn_id);
+        return 0;
+    }
+
     // Ensure existence of ingress stream message
     if (!conn->in_dlv_stream) {
         qd_message_t *msg = qd_message();
@@ -487,32 +506,8 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
                qdr_tcp_connection_role_name(conn));
     }
 
-    // Don't read from proton if in Q2 holdoff
-    if (conn->q2_blocked) {
-        qd_log(log, QD_LOG_DEBUG,
-               DLV_FMT" handle_incoming q2_blocked for %s connection",
-               DLV_ARGS(conn->in_dlv_stream),  qdr_tcp_connection_role_name(conn));
-        return 0;
-    }
-
-    // Read all buffers available from proton.
-    // Collect buffers for ingress; free empty buffers.
-    qd_buffer_list_t buffers;
-    DEQ_INIT(buffers);
-    int count = handle_incoming_raw_read(conn, &buffers);
-
     // Grant more buffers to proton for reading if read side is still open
-
     grant_read_buffers(conn, "handle_incoming");
-
-    if (conn->require_tls && !qd_tls_is_secure(conn->tls)) {
-        // We have already forwarded the amqp message header but we cannot forward the body
-        // of the message until we have a fully secure channel on the inbound side.
-        qd_log(log, QD_LOG_TRACE,
-               "[C%" PRIu64 "] handle_incoming - connection requires tls but is not secure yet, returning",
-               conn->conn_id);
-        return count;
-    }
 
     // Push the bytes just read into the streaming message
     if (count > 0) {
@@ -749,8 +744,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
             qd_adaptor_buffer_insert(adaptor_buffer, conn->outgoing_buffs[used].size);
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id, used + 1,
-                   conn->outgoing_buff_count - conn->outgoing_buff_idx, conn->outgoing_buffs[used].size,
-                   qd_adaptor_buffer_size(adaptor_buffer));
+                   conn->outgoing_buff_count, conn->outgoing_buffs[used].size, qd_adaptor_buffer_size(adaptor_buffer));
             used++;
         }
 
@@ -769,8 +763,8 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
         }
 
         conn->outgoing_buff_idx   += used;
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Copied %zu buffers, %i remain", conn->conn_id, used, conn->outgoing_buff_count - conn->outgoing_buff_idx);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %zu buffers, %i remain", conn->conn_id,
+               used, conn->outgoing_buff_count - used);
         return result;
     }
 }
@@ -802,7 +796,6 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
             ZERO(conn->outgoing_buffs);
             conn->outgoing_buff_idx   = 0;
             conn->outgoing_buff_count = read_message_body(conn, msg, conn->outgoing_buffs, WRITE_BUFFERS);
-
             if (conn->outgoing_buff_count > 0) {
                 // Send the data just returned
                 read_more_body = copy_outgoing_buffs(conn);
@@ -1123,11 +1116,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     } break;
     case PN_RAW_CONNECTION_READ: {
         int read = 0;
-        if (conn->in_dlv_stream) {
-            // Streaming message exists. Process read normally.
-            read = handle_incoming(conn, "PNRC_READ");
-        }
-
+        read     = handle_incoming(conn, "PNRC_READ");
         qd_log(log, QD_LOG_DEBUG,
                "[C%" PRIu64 "] PN_RAW_CONNECTION_READ Read %i bytes. Total read %" PRIu64
                " bytes, Total encrypted bytes=%" PRIu64 "",
