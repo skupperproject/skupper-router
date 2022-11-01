@@ -22,17 +22,19 @@
 #
 
 import errno
+import json
 import select
 import socket
 from time import sleep, time
+from email.parser import BytesParser
 from http.client import HTTPConnection
 
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
-from system_test import retry_exception
+from system_test import retry_exception, retry, curl_available, run_curl
 from http1_tests import http1_ping, TestServer, RequestHandler10
-from http1_tests import RequestMsg
+from http1_tests import RequestMsg, ResponseMsg
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
 from http1_tests import CommonHttp1OneRouterTest
 from http1_tests import CommonHttp1Edge2EdgeTest
@@ -1002,6 +1004,262 @@ class Http1AdaptorQ2Standalone(TestCase):
 
         router.teardown()
         self.check_logs("server", router.logfile_path)
+
+
+class Http1AdaptorAggregationTest(TestCase):
+    """
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorAggregationTest, cls).setUpClass()
+
+        # ports for testing JSON and MULTIPART aggregation
+        cls.json_server1_port = cls.tester.get_port()
+        cls.json_server2_port = cls.tester.get_port()
+        cls.json_listener_port = cls.tester.get_port()
+
+        cls.mpart_server1_port = cls.tester.get_port()
+        cls.mpart_server2_port = cls.tester.get_port()
+        cls.mpart_listener_port = cls.tester.get_port()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1Aggregator'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+
+            ('httpConnector', {
+                'name': 'httpConnectorJsonServer1',
+                'port': cls.json_server1_port,
+                'host': '127.0.0.1',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'json',
+                'address': 'multicast/json'}),
+            ('httpConnector', {
+                'name': 'httpConnectorJsonServer2',
+                'port': cls.json_server2_port,
+                'host': '127.0.0.1',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'json',
+                'address': 'multicast/json'}),
+            ('httpListener', {
+                'name': 'httpListenerJson',
+                'port': cls.json_listener_port,
+                'host': '0.0.0.0',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'json',
+                'address': 'multicast/json'}),
+
+            ('httpConnector', {
+                'name': 'httpConnectorMPartServer1',
+                'port': cls.mpart_server1_port,
+                'host': '127.0.0.1',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'multipart',
+                'address': 'multicast/multipart'}),
+            ('httpConnector', {
+                'name': 'httpConnectorMPartServer2',
+                'port': cls.mpart_server2_port,
+                'host': '127.0.0.1',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'multipart',
+                'address': 'multicast/multipart'}),
+            ('httpListener', {
+                'name': 'httpListenerMPart',
+                'port': cls.mpart_listener_port,
+                'host': '0.0.0.0',
+                'protocolVersion': 'HTTP1',
+                'aggregation': 'multipart',
+                'address': 'multicast/multipart'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('HTTP1Aggregator', config, wait=False)
+        # do not wait for connectors - servers haven't been created yet
+        cls.router.wait_ports()
+        cls.router.wait_startup_message()
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_json_aggregation(self):
+        """
+        """
+        SERVER1_TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/json_aggregation",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 24,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'server1 json aggregation'),
+                 None)
+            ]
+        }
+
+        SERVER2_TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/json_aggregation",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 24,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'server2 json aggregation'),
+                 None)
+            ]
+        }
+
+        # Cannot use a context for the servers since this is multicast and
+        # __exit__ing one will shutdown both causing the second call to
+        # __exit__ to fail
+
+        try:
+            server1 = TestServer.new_server(self.json_server1_port,
+                                            self.json_listener_port,
+                                            SERVER1_TEST)
+        except Exception as exc:
+            print(f"Failed to start server1: {exc}", flush=True)
+            raise
+
+        try:
+            server2 = TestServer.new_server(self.json_server2_port,
+                                            self.json_listener_port,
+                                            SERVER2_TEST)
+        except Exception as exc:
+            print(f"Failed to start server2: {exc}", flush=True)
+            server1.wait()
+            raise
+
+        try:
+            self.router.wait_address('multicast/json', subscribers=2)
+
+            # wait for the Json listener to activate
+            mgmt = self.router.qd_manager
+            self.assertTrue(retry(lambda:
+                                  mgmt.read(name='httpListenerJson')['operStatus']
+                                  == 'up'))
+
+            url = f"http://127.0.0.1:{self.json_listener_port}/GET/json_aggregation"
+            args = ['--http1.1', '-G', url, '--connect-timeout', str(TIMEOUT)]
+            returncode, out, err = run_curl(args)
+            self.assertEqual(0, returncode, "curl returned a failure code")
+            response = json.loads(out)  # throws if response is invalid json
+            self.assertEqual(2, len(response), "expected two json parts!")
+            for part in response:
+                self.assertIn(part['body'],
+                              ['server1 json aggregation', 'server2 json aggregation'],
+                              "Unexpected json body!")
+
+        finally:
+            server1.wait()  # this will shutdown both servers
+            self.router.wait_address_unsubscribed('multicast/json')
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_multipart_aggregation(self):
+        """
+        """
+        SERVER1_TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/multipart_aggregation",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 29,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'server1 multipart aggregation'),
+                 None)
+            ]
+        }
+
+        SERVER2_TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/multipart_aggregation",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 29,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'server2 multipart aggregation'),
+                 None)
+            ]
+        }
+
+        # Cannot use a context for the servers since this is multicast and
+        # __exit__ing one will shutdown both causing the second call to
+        # __exit__ to fail
+
+        try:
+            server1 = TestServer.new_server(self.mpart_server1_port,
+                                            self.mpart_listener_port,
+                                            SERVER1_TEST)
+        except Exception as exc:
+            print(f"Failed to start server1: {exc}", flush=True)
+            raise
+
+        try:
+            server2 = TestServer.new_server(self.mpart_server2_port,
+                                            self.mpart_listener_port,
+                                            SERVER2_TEST)
+        except Exception as exc:
+            print(f"Failed to start server2: {exc}", flush=True)
+            server1.wait()
+            raise
+
+        try:
+            self.router.wait_address('multicast/multipart', subscribers=2)
+
+            # wait for the client listener to activate
+            mgmt = self.router.qd_manager
+            self.assertTrue(retry(lambda:
+                                  mgmt.read(name='httpListenerMPart')['operStatus']
+                                  == 'up'))
+
+            # normally I'd use curl, but for the life of me I cannot get it to
+            # return the full raw http response message, which is necessary to
+            # validate the multipart body...
+
+            request = b'GET /GET/multipart_aggregation HTTP/1.1\r\n' \
+                + b'Content-Length: 0\r\n' \
+                + b'Connection: close\r\n' \
+                + b'\r\n'
+
+            reply = b''
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                client.settimeout(TIMEOUT)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+                # allow time for the listening socket to initialize
+                retry_exception(lambda: client.connect(("127.0.0.1",
+                                                        self.mpart_listener_port)),
+                                delay=0.25, exception=ConnectionRefusedError)
+                client.sendall(request, socket.MSG_WAITALL)
+                while True:
+                    rc = client.recv(4096)
+                    if not rc:
+                        # socket closed (response complete)
+                        break
+                    reply += rc
+
+            # mime parser chokes on HTTP response line, remove it:
+            prefix = b'HTTP/1.1 200\r\n'
+            self.assertTrue(reply.startswith(prefix))
+            reply = reply[len(prefix):]
+
+            bp = BytesParser()
+            mimetype = bp.parsebytes(reply)
+            self.assertTrue(mimetype.is_multipart())
+            count = 0
+            for part in mimetype.walk():
+                if "text/plain" in part.get_content_type():
+                    self.assertIn(part.get_payload(),
+                                  ["server1 multipart aggregation",
+                                   "server2 multipart aggregation"],
+                                  f"unexpected multipart body! {mimetype.as_string()}")
+                    count += 1
+
+            self.assertEqual(2, count, f"expected 2 mimetype parts {mimetype.as_string()}")
+
+        finally:
+            server1.wait()  # this will shutdown both servers
+            self.router.wait_address_unsubscribed('multicast/multipart')
 
 
 if __name__ == '__main__':

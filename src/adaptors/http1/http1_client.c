@@ -40,19 +40,19 @@ const char *CONTENT_LENGTH_KEY = "Content-Length";
 const char *POST_METHOD = "POST";
 
 //
-// State for a single response message to be sent to the client via the raw
-// connection.
+// State for a single response message to be sent to the client via the raw connection. A response is considered
+// completed when the encode_complete is true and the pending out_data is empty.
 //
 typedef struct _client_response_msg_t {
     DEQ_LINKS(struct _client_response_msg_t);
 
-    qdr_delivery_t *dlv;              // from core via core_link_deliver
-    uint64_t        dispo;            // set by adaptor on encode complete
-    bool            headers_encoded;  // all headers completely encoded
-    bool            encoded;          // true when full response encoded
+    qdr_delivery_t *dlv;  // from core via core_link_deliver
 
-    // HTTP encoded message data
+    // HTTP encoded message data pending write to connection
     qdr_http1_out_data_list_t out_data;
+
+    bool headers_encoded;  // all headers completely encoded
+    bool encode_complete;  // true when full response encoded
 
 } _client_response_msg_t;
 ALLOC_DECLARE(_client_response_msg_t);
@@ -516,28 +516,23 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
             }
             // Can we retire the current outgoing response messages?
             //
+            int credit = 0;
+
             _client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses);
-            while (rmsg &&
-                   rmsg->dispo &&
-                   DEQ_IS_EMPTY(rmsg->out_data) &&
-                   hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
-                // response message fully received and forwarded to client
-                if (rmsg->dlv) {
-                    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                           "[C%"PRIu64"][L%"PRIu64"] HTTP client request msg-id=%"PRIu64" settling response, dispo=0x%"PRIx64,
-                           hconn->conn_id, hconn->out_link_id, hreq->base.msg_id, rmsg->dispo);
-                    qdr_delivery_remote_state_updated(qdr_http1_adaptor->core,
-                                                      rmsg->dlv,
-                                                      rmsg->dispo,
-                                                      true,   // settled,
-                                                      0,      // delivery state
-                                                      false);
-                }
-                qdr_link_flow(qdr_http1_adaptor->core, hconn->out_link, 1, false);
+            while (rmsg && rmsg->encode_complete && DEQ_IS_EMPTY(rmsg->out_data)) {
+                credit += 1;
                 _client_response_msg_free(hreq, rmsg);
                 rmsg = DEQ_HEAD(hreq->responses);
             }
 
+            // aggregation replenishes flow as soon as the response arrives
+            // TODO(kgiusti): perhaps non-aggregation should do the same?
+            if (credit && hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
+                qdr_link_flow(qdr_http1_adaptor->core, hconn->out_link, credit, false);
+            }
+
+            // Can we retire the current request?
+            //
             if (hreq->codec_completed &&
                 DEQ_IS_EMPTY(hreq->responses) &&
                 hreq->request_settled) {
@@ -1073,7 +1068,7 @@ static void _encode_json_response(_client_request_t *hreq)
     for (_client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses); rmsg; rmsg = rmsg->next) {
         qd_message_t *msg = qdr_delivery_message(rmsg->dlv);
         qd_json_msgs_append(msgs, msg);
-        rmsg->encoded = true;
+        rmsg->encode_complete = true;
     }
     char *body = qd_json_msgs_string(msgs);
     if (body) {
@@ -1090,7 +1085,6 @@ static void _encode_json_response(_client_request_t *hreq)
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
-    hreq->codec_completed = true;
 }
 
 static void _encode_multipart_response(_client_request_t *hreq)
@@ -1197,14 +1191,12 @@ static void _encode_multipart_response(_client_request_t *hreq)
                 break;
             }
         }
-        rmsg->encoded = true;
-
+        rmsg->encode_complete = true;
     }
     h1_codec_tx_end_multipart(hreq->base.lib_rs);
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
-    hreq->codec_completed = true;
 }
 
 static void _encode_aggregated_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
@@ -1223,7 +1215,6 @@ static void _encode_empty_response(qdr_http1_connection_t *hconn, _client_reques
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
-    hreq->codec_completed = true;
 }
 
 // Handle disposition/settlement update for the outstanding request msg
@@ -1239,8 +1230,8 @@ void qdr_http1_client_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
     assert(dlv == hreq->request_dlv);
 
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%"PRIu64"][L%"PRIu64"] HTTP request msg-id=%"PRIu64" delivery update, outcome=0x%"PRIx64"%s",
-           hconn->conn_id, hconn->in_link_id, hreq->base.msg_id, disp, settled ? " settled" : "");
+           DLV_FMT "HTTP request msg-id=%" PRIu64 " delivery update, outcome=0x%" PRIx64 "%s", DLV_ARGS(dlv),
+           hreq->base.msg_id, disp, settled ? " settled" : "");
 
     if (disp && disp != PN_RECEIVED && hreq->request_dispo == 0) {
         // terminal disposition
@@ -1263,10 +1254,6 @@ void qdr_http1_client_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
             // no response message is going to arrive.  Now what?  For now fake
             // a response from the server by using the codec to write an error
             // response on the behalf of the server.
-            qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
-                   "[C%"PRIu64"][L%"PRIu64"] HTTP request failure, outcome=0x%"PRIx64,
-                   hconn->conn_id, hconn->in_link_id, disp);
-
             qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
                    "[C%"PRIu64"][L%"PRIu64"] HTTP request msg-id=%"PRIu64" failure, outcome=0x%"PRIx64,
                    hconn->conn_id, hconn->in_link_id, hreq->base.msg_id, disp);
@@ -1446,7 +1433,8 @@ static bool _encode_response_headers(_client_request_t *hreq,
     return ok;
 }
 
-
+// Encode an response. Returns a terminal outcome when encode is complete, else 0
+//
 static uint64_t _encode_response_message(_client_request_t *hreq,
                                          _client_response_msg_t *rmsg)
 {
@@ -1522,9 +1510,9 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
                                             qdr_delivery_t         *delivery,
                                             bool                    settled)
 {
-    qd_message_t        *msg = qdr_delivery_message(delivery);
-
-    _client_request_t  *hreq = (_client_request_t*) qdr_delivery_get_context(delivery);
+    uint64_t           dispo = 0;
+    qd_message_t      *msg   = qdr_delivery_message(delivery);
+    _client_request_t *hreq  = (_client_request_t *) qdr_delivery_get_context(delivery);
     if (!hreq) {
         // new delivery - look for corresponding request via correlation_id
         switch (qd_message_check_depth(msg, QD_DEPTH_PROPERTIES)) {
@@ -1574,54 +1562,54 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
     _client_response_msg_t *rmsg = DEQ_TAIL(hreq->responses);
     assert(rmsg && rmsg->dlv == delivery);
 
-    // when aggregating responses, they are saved on the list until
-    // the request has been settled, then encoded in the configured
-    // aggregation format
-    if (hconn->cfg.aggregation != QD_AGGREGATION_NONE) {
-        if (!qd_message_receive_complete(msg)) {
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"][L%"PRIu64"] Response incomplete (%zu responses received)", hconn->conn_id, link->identity, DEQ_SIZE(hreq->responses));
-            return 0;
-        }
-        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%"PRIu64"][L%"PRIu64"] Received response (%zu responses received), settling", hconn->conn_id, link->identity, DEQ_SIZE(hreq->responses));
-        rmsg->dispo = PN_ACCEPTED;
-        qd_message_set_send_complete(msg);
-        qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
-        qdr_delivery_remote_state_updated(qdr_http1_adaptor->core,
-                                          rmsg->dlv,
-                                          rmsg->dispo,
-                                          true,   // settled,
-                                          0,      // delivery state
-                                          false);
-        return PN_ACCEPTED;
-    }
+    if (hconn->cfg.aggregation == QD_AGGREGATION_NONE) {
+        // for non-aggregated multicast we encode and sent the response message as it arrives
+        if (!rmsg->encode_complete) {
+            dispo = _encode_response_message(hreq, rmsg);
+            if (dispo) {
+                rmsg->encode_complete = true;
+                qd_message_set_send_complete(msg);
+                if (dispo == PN_ACCEPTED) {
+                    bool need_close = false;
+                    h1_codec_tx_done(hreq->base.lib_rs, &need_close);
+                    hreq->close_on_complete = need_close || hreq->close_on_complete;
 
-    if (!rmsg->dispo) {
-        rmsg->dispo = _encode_response_message(hreq, rmsg);
-        if (rmsg->dispo) {
-            qd_message_set_send_complete(msg);
-            if (rmsg->dispo == PN_ACCEPTED) {
-                bool need_close = false;
-                h1_codec_tx_done(hreq->base.lib_rs, &need_close);
-                hreq->close_on_complete = need_close || hreq->close_on_complete;
+                    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "][L%" PRIu64 "] HTTP response message msg-id=%" PRIu64 " encoding complete",
+                           hconn->conn_id, link->identity, hreq->base.msg_id);
 
-                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                       "[C%"PRIu64"][L%"PRIu64"] HTTP response message msg-id=%"PRIu64" encoding complete",
-                       hconn->conn_id, link->identity, hreq->base.msg_id);
-
-            } else {
-                // The response was bad.  This should not happen since the
-                // response was created by the remote HTTP/1.x adaptor.  Likely
-                // a bug? There's not much that can be done to recover, so for
-                // now just drop the connection to the client.  Note that
-                // returning a terminal disposition will cause the delivery to
-                // be updated and settled.
-                qdr_http1_close_connection(hconn, "Cannot parse response message");
-                return rmsg->dispo;
+                } else {
+                    // The response was bad.  This should not happen since the
+                    // response was created by the remote HTTP/1.x adaptor.  Likely
+                    // a bug? There's not much that can be done to recover, so for
+                    // now just drop the connection to the client.
+                    qdr_http1_close_connection(hconn, "Cannot parse response message");
+                }
             }
         }
+    } else {
+        // for multicast aggregation we need to hold off encoding of the response until all responses have been
+        // completely received. Only after all responses have arrived can we aggregate the response bodies into a single
+        // HTTP1 response message and send it to the client.  We know that all responses have been received when the
+        // settlement/terminal dispo update arrives for the _request_ message!  That triggers the response encode and
+        // send.
+
+        if (qd_message_receive_complete(msg)) {
+            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                   DLV_FMT "Aggregated response received (%zu responses received), settling", DLV_ARGS(delivery),
+                   DEQ_SIZE(hreq->responses));
+            dispo = PN_ACCEPTED;
+            qd_message_set_send_complete(msg);
+            qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
+        } else {
+            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                   DLV_FMT "Aggregated response incomplete (%zu responses received)", DLV_ARGS(delivery),
+                   DEQ_SIZE(hreq->responses));
+        }
     }
 
-    return 0;
+    // Note that returning a non-zero terminal disposition will cause the delivery to be updated and settled.
+    return dispo;
 }
 
 
