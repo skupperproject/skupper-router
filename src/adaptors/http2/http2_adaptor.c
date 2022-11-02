@@ -2773,11 +2773,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         }
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         handle_incoming_http(conn);
-        int num_drained_read_buffers = qd_raw_connection_drain_read_buffers(conn->pn_raw_conn);
         if (conn->pn_raw_conn)
             pn_raw_connection_close(conn->pn_raw_conn);
-        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ, drained %i read buffers",
-               conn->conn_id, num_drained_read_buffers);
+        qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ", conn->conn_id);
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
