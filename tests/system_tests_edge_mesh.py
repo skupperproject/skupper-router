@@ -223,7 +223,7 @@ class ConnectedMeshTest(TestCase):
         router('EB', mode='edge', my_edge_port=edge_b_port, edge_ports=[edge_a_port, edge_c_port],
                connections=[('connector', {'role': 'edge', 'port': edge_port_ix})])
         router('EC', mode='edge', my_edge_port=edge_c_port, edge_ports=[edge_a_port, edge_b_port],
-               connections=[('connector', {'role': 'edge', 'port': edge_port_ix})])
+               connections=[('connector', {'role': 'edge', 'port': edge_port_iy})])
 
         router('IX', connections=[('listener', {'role': 'inter-router', 'port': inter_router_port}),
                                   ('listener', {'role': 'edge', 'port': edge_port_ix})])
@@ -239,8 +239,8 @@ class ConnectedMeshTest(TestCase):
         cls.routers[3].wait_router_connected('IY')
         cls.routers[4].wait_router_connected('IX')
 
-        cls.routers[3].is_edge_routers_connected(num_edges=3)
-        cls.routers[4].is_edge_routers_connected(num_edges=1)
+        cls.routers[3].is_edge_routers_connected(num_edges=2)
+        cls.routers[4].is_edge_routers_connected(num_edges=2)
 
     def test_01_dynamic_address_same_edge(self):
         test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0])
@@ -446,6 +446,42 @@ class ConnectedMeshTest(TestCase):
                                           self.routers[2].addresses[0],
                                           self.routers[2].addresses[0],
                                           'mc.test_36')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_37_mobile_address_multicast_int(self):
+        test = MobileAddressMulticastTest(self.routers[3].addresses[0],
+                                          self.routers[4].addresses[0],
+                                          self.routers[4].addresses[0],
+                                          self.routers[3].addresses[0],
+                                          'mc.test_37')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_38_mobile_address_multicast_same_mesh_from_int(self):
+        test = MobileAddressMulticastTest(self.routers[0].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[2].addresses[0],
+                                          self.routers[3].addresses[0],
+                                          'mc.test_38')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_39_mobile_address_multicast_different_meshes_from_int(self):
+        test = MobileAddressMulticastTest(self.routers[0].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[5].addresses[0],
+                                          self.routers[3].addresses[0],
+                                          'mc.test_39')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_40_mobile_address_multicast_different_meshes_from_edge(self):
+        test = MobileAddressMulticastTest(self.routers[0].addresses[0],
+                                          self.routers[1].addresses[0],
+                                          self.routers[5].addresses[0],
+                                          self.routers[5].addresses[0],
+                                          'mc.test_40')
         test.run()
         self.assertIsNone(test.error)
 
