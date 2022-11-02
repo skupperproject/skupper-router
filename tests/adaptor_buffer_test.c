@@ -121,6 +121,12 @@ static char *test_qd_adaptor_buffer_list_append(void *context)
     qd_adaptor_buffer_list_t adaptor_buffs;
     // Send in an empty adaptor_buffs
     DEQ_INIT(adaptor_buffs);
+
+    qd_adaptor_buffer_list_append(&adaptor_buffs, (uint8_t *) data_array, 0);
+    if (!DEQ_IS_EMPTY(adaptor_buffs)) {
+        return "Expected the adaptor_buffs to be empty but it is not";
+    }
+
     qd_adaptor_buffer_list_append(&adaptor_buffs, (uint8_t *) data_array, DATA_SIZE);
 
     int left_over = DATA_SIZE % QD_ADAPTOR_MAX_BUFFER_SIZE;
