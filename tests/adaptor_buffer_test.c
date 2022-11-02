@@ -121,6 +121,12 @@ static char *test_qd_adaptor_buffer_list_append(void *context)
     qd_adaptor_buffer_list_t adaptor_buffs;
     // Send in an empty adaptor_buffs
     DEQ_INIT(adaptor_buffs);
+
+    qd_adaptor_buffer_list_append(&adaptor_buffs, (uint8_t *) data_array, 0);
+    if (!DEQ_IS_EMPTY(adaptor_buffs)) {
+        return "Expected the adaptor_buffs to be empty but it is not";
+    }
+
     qd_adaptor_buffer_list_append(&adaptor_buffs, (uint8_t *) data_array, DATA_SIZE);
 
     int left_over = DATA_SIZE % QD_ADAPTOR_MAX_BUFFER_SIZE;
@@ -330,6 +336,65 @@ static char *test_qd_adaptor_copy_qd_buffers_to_adaptor_buffers(void *context)
     return 0;
 }
 
+static char *test_qd_get_adaptor_buffer_from_pn_raw_buffer(void *context)
+{
+    qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
+
+    pn_raw_buffer_t pn_raw_buff;
+    qd_adaptor_buffer_pn_raw_buffer(&pn_raw_buff, adaptor_buffer);
+    pn_raw_buff.size = 1000;
+
+    qd_adaptor_buffer_t *adaptor_buff = qd_get_adaptor_buffer_from_pn_raw_buffer(&pn_raw_buff);
+    if (adaptor_buff != adaptor_buffer) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "The call to qd_get_adaptor_buffer_from_pn_raw_buffer did not yield the expected adaptor buffer";
+    }
+
+    if (qd_adaptor_buffer_size(adaptor_buff) != pn_raw_buff.size) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "The adaptor buffer size and the raw buffer size did not match";
+    }
+
+    qd_adaptor_buffer_free(adaptor_buffer);
+    return 0;
+}
+
+static char *test_qd_adaptor_buffer_raw(void *context)
+{
+    pn_raw_buffer_t pn_raw_buff;
+    qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer_raw(&pn_raw_buff);
+
+    if (pn_raw_buff.size != 0) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "Raw buffer size is not zero";
+    }
+
+    qd_adaptor_buffer_t *context_adaptor_buff = (qd_adaptor_buffer_t *)pn_raw_buff.context;
+    if (context_adaptor_buff != adaptor_buffer) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "Adaptor buffer context did not match raw buffer context";
+    }
+
+    if (pn_raw_buff.offset != 0) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "Raw buffer offset is not zero";
+    }
+
+    if (pn_raw_buff.capacity != QD_ADAPTOR_MAX_BUFFER_SIZE) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "Raw buffer capacity is expected to be QD_ADAPTOR_MAX_BUFFER_SIZE but it is not";
+    }
+
+    if (pn_raw_buff.bytes == 0) {
+        qd_adaptor_buffer_free(adaptor_buffer);
+        return "Raw buffer bytes is empty";
+    }
+
+    qd_adaptor_buffer_free(adaptor_buffer);
+
+    return 0;
+}
+
 int adaptor_buffer_tests(void)
 {
     int   result     = 0;
@@ -341,6 +406,8 @@ int adaptor_buffer_tests(void)
     TEST_CASE(test_qd_adaptor_buffer_list_append, 0);
     TEST_CASE(test_qd_adaptor_buffers_copy_to_qd_buffers, 0);
     TEST_CASE(test_qd_adaptor_copy_qd_buffers_to_adaptor_buffers, 0);
+    TEST_CASE(test_qd_get_adaptor_buffer_from_pn_raw_buffer, 0);
+    TEST_CASE(test_qd_adaptor_buffer_raw, 0);
 
     return result;
 }
