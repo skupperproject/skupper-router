@@ -455,10 +455,10 @@ static uint8_t qdr_forward_effective_priority(qd_message_t *msg, qdr_address_t *
  */
 static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *out_link)
 {
-    qdr_link_t *link      = in_dlv ? safe_deref_qdr_link_t(in_dlv->link_sp) : 0;
+    qdr_link_t *in_link   = in_dlv ? safe_deref_qdr_link_t(in_dlv->link_sp) : 0;
     bool        mesh_loop = false;
 
-    if (!in_dlv || !link) {
+    if (!in_dlv || !in_link) {
         return false;
     }
 
@@ -467,9 +467,9 @@ static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *
         mesh_loop = !!mesh_id && qd_iterator_equal_n(qd_parse_raw(mesh_id), (unsigned char*) out_link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
     }
 
-    return (((in_dlv->via_edge && link->conn == out_link->conn)
+    return (((in_dlv->via_edge && in_link->conn == out_link->conn)
               || mesh_loop
-              || (link->conn->role == QDR_ROLE_INTER_EDGE && out_link->proxy)));
+              || ((in_link->conn->role == QDR_ROLE_INTER_EDGE || in_link->conn->role == QDR_ROLE_EDGE_CONNECTION) && out_link->proxy)));
 }
 
 
