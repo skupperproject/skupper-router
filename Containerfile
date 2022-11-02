@@ -50,7 +50,11 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     libnghttp2 \
     gdb libasan libubsan libtsan \
     gettext hostname iputils \
+    shadow-utils \
  && microdnf clean all
+
+RUN useradd --uid 10000 runner
+USER 10000
 
 WORKDIR /
 COPY --from=builder /image /
