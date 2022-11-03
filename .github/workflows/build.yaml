@@ -307,7 +307,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         container: ['fedora']
-        containerTag: ['35']
+        containerTag: ['36']
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
@@ -348,7 +348,7 @@ jobs:
           # coverage
           - os: ubuntu-20.04
             container: 'fedora'
-            containerTag: 35
+            containerTag: 36
             buildType: Coverage
             runtimeCheck: OFF
             protonGitRef: 0.37.0
@@ -430,10 +430,6 @@ jobs:
           dnf -y install epel-release
           dnf config-manager --set-enabled powertools
 
-      - name: Install dmesg on Fedora 35
-        if: ${{ matrix.container == 'fedora' }}
-        run: dnf install -y util-linux-core
-
       - name: Install Linux build dependencies
         run: |
           dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
@@ -464,10 +460,12 @@ jobs:
       - name: Zero ccache stats
         run: ccache -z
 
+      # PROTON-2473: either install `openssl1.1-devel` compat version, or build with `-Wno-error=deprecated-declarations`
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
         run: >
           cmake "${{github.workspace}}/qpid-proton" \
+            '-DCMAKE_C_FLAGS="-Wno-error=deprecated-declarations"' \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             ${ProtonCMakeExtraArgs}
