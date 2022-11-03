@@ -1743,7 +1743,7 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
 
     // index 4: edge-mesh identifier
     if (!!msg->ra_ingress_mesh) {
-        qd_compose_insert_string(ra, msg->ra_ingress_mesh);
+        qd_compose_insert_string_n(ra, msg->ra_ingress_mesh, QD_DISCRIMINATOR_BYTES);
     } else if (!!content->ra_pf_ingress_mesh) {
         qd_buffer_field_t bf = qd_parse_typed_field(content->ra_pf_ingress_mesh);
         qd_compose_insert_buffer_field(ra, &bf, 1);
