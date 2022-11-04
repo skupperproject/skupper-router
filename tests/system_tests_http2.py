@@ -319,8 +319,6 @@ class CommonHttp2Tests:
         if not tcp_connector:
             server_conn_found = False
             for conn in connections:
-                print(conn['name'])
-                print("server_port", server_port)
                 if str(server_port) in conn['name']:
                     server_conn_found = True
                     break

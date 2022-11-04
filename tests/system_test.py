@@ -735,31 +735,27 @@ class Qdrouterd(Process):
             return "%s:%s" % (host, port)
         raise Exception("Unknown socket address family: %s" % socket_address_family)
 
-    @property
-    def http_addresses(self):
-        """Return http://host:port addresses for all http listeners"""
-        cfg = self.config.sections('httpListener')
+    def _get_all_addresses(self, cfg):
         ret_val = []
         for listener in cfg:
             require_tls = listener.get("sslProfile")
-            if require_tls is not None:
+            if require_tls:
                 ret_val.append("https://%s" % self._cfg_2_host_port(listener))
             else:
                 ret_val.append("http://%s" % self._cfg_2_host_port(listener))
         return ret_val
 
     @property
+    def http_addresses(self):
+        """Return http(s)://host:port addresses for all http listeners"""
+        cfg = self.config.sections('httpListener')
+        return self._get_all_addresses(cfg)
+
+    @property
     def tcp_addresses(self):
-        """Return http://host:port addresses for all tcp listeners"""
+        """Return http(s)://host:port addresses for all tcp listeners"""
         cfg = self.config.sections('tcpListener')
-        ret_val = []
-        for listener in cfg:
-            require_tls = listener.get("sslProfile")
-            if require_tls is not None:
-                ret_val.append("https://%s" % self._cfg_2_host_port(listener))
-            else:
-                ret_val.append("http://%s" % self._cfg_2_host_port(listener))
-        return ret_val
+        return self._get_all_addresses(cfg)
 
     @property
     def addresses(self):
