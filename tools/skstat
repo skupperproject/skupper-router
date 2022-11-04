@@ -193,7 +193,7 @@ class BusManager:
         heads.append(Header("dir"))
         heads.append(Header("security"))
         heads.append(Header("authentication"))
-        heads.append(Header("tenant"))
+        heads.append(Header("meshId"))
 
         rows = []
         objects = self.query('io.skupper.router.connection', limit=self.opts.limit)
@@ -233,7 +233,7 @@ class BusManager:
             row.append(conn.dir)
             row.append(self.connSecurity(conn))
             row.append(self.connAuth(conn))
-            row.append(self.noTrailingSlash(get(conn, 'tenant')))
+            row.append(get(conn, 'meshId'))
             if has_last_dlv:
                 if conn.lastDlvSeconds is None:
                     row.append('-')
