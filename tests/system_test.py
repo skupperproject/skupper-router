@@ -749,6 +749,19 @@ class Qdrouterd(Process):
         return ret_val
 
     @property
+    def tcp_addresses(self):
+        """Return http://host:port addresses for all tcp listeners"""
+        cfg = self.config.sections('tcpListener')
+        ret_val = []
+        for listener in cfg:
+            require_tls = listener.get("sslProfile")
+            if require_tls is not None:
+                ret_val.append("https://%s" % self._cfg_2_host_port(listener))
+            else:
+                ret_val.append("http://%s" % self._cfg_2_host_port(listener))
+        return ret_val
+
+    @property
     def addresses(self):
         """Return amqp://host:port addresses for all listeners"""
         cfg = self.config.sections('listener')

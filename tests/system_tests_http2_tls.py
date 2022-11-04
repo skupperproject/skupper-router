@@ -19,7 +19,7 @@
 import os
 import unittest
 
-from http1_tests import wait_http_listeners_up, HttpTlsBadConfigTestsBase
+from http1_tests import wait_http_listeners_up, HttpTlsBadConfigTestsBase, wait_tcp_listeners_up
 from system_test import Qdrouterd, DIR
 from system_tests_ssl import RouterTestSslBase
 
@@ -593,3 +593,101 @@ class Http2TlsBadConfigTests(HttpTlsBadConfigTestsBase):
 
     def test_listener_mgmt_missing_ca_file(self):
         self._test_listener_mgmt_missing_ca_file()
+
+
+class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSslBase):
+    """
+    In this two router test, the tcpListener is on Router QDR.A and the tcpConnector is on router
+    QDR.B. Both the listener and the connector are encrypted. The server that QDR.B connects to
+    is also encrypted.
+    Client authentication is required for curl to talk to the router QDR.A listener http port.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http2TestBase, cls).setUpClass()
+        if skip_test():
+            return
+
+        cls.server_port = cls.tester.get_port()
+        cls.http2_server_name = "http2_server_tls"
+        cls.http2_server = cls.tester.http2server(name=cls.http2_server_name,
+                                                  listen_port=cls.server_port,
+                                                  wait=False,
+                                                  server_file="http2_server.py",
+                                                  env_config={
+                                                      'SERVER_TLS': "yes",
+                                                      'QUART_APP': "http2server:app",
+                                                      'SERVER_LISTEN_PORT': str(cls.server_port),
+                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
+                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
+                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                  })
+        inter_router_port = cls.tester.get_port()
+        cls.listener_name = 'listenerToBeDeleted'
+        cls.tcp_listener_props = {'port': cls.tester.get_port(),
+                                  'address': 'examples',
+                                  'host': 'localhost',
+                                  'name': cls.listener_name,
+                                  'authenticatePeer': 'yes',
+                                  'sslProfile': 'tcp-listener-ssl-profile'}
+        config_qdra = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR.A'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            # curl will connect to this tcpListener and run the tests.
+            ('tcpListener', cls.tcp_listener_props),
+            ('sslProfile', {'name': 'tcp-listener-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('server-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'password': 'server-password'}),
+            ('listener', {'role': 'inter-router', 'port': inter_router_port})
+        ])
+
+        cls.connector_name = 'connectorToBeDeleted'
+        cls.connector_props = {
+            'port': cls.server_port,
+            'address': 'examples',
+            'host': 'localhost',
+            'name': cls.connector_name,
+            # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
+            'verifyHostname': 'yes',
+            'sslProfile': 'tcp-connector-ssl-profile'
+        }
+        config_qdrb = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR.B'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            ('tcpConnector', cls.connector_props),
+            ('connector', {'name': 'connectorToA', 'role': 'inter-router',
+                           'port': inter_router_port,
+                           'verifyHostname': 'no'}),
+            ('sslProfile', {'name': 'tcp-connector-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('client-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                            'password': 'client-password'}),
+        ])
+
+        cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
+        cls.router_qdrb = cls.tester.qdrouterd("http2-two-router-tls-B", config_qdrb)
+        cls.router_qdra.wait_router_connected('QDR.B')
+        cls.router_qdrb.wait_router_connected('QDR.A')
+        wait_tcp_listeners_up(cls.router_qdra.addresses[0])
+
+        # curl will use these additional args to connect to the router.
+        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
+                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
+                         '--key', cls.ssl_file('client-private-key.pem')]
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_yyy_http_listener_delete(self):
+        self.check_listener_delete(client_addr=self.router_qdra.tcp_addresses[0],
+                                   server_addr=self.router_qdra.addresses[0],
+                                   tcp_listener=True)
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    def test_zzz_http_connector_delete(self):
+        self.check_connector_delete(client_addr=self.router_qdra.tcp_addresses[0],
+                                    server_addr=self.router_qdrb.addresses[0],
+                                    server_port=self.server_port,
+                                    listener_addr=self.router_qdra.addresses[0],
+                                    tcp_connector=True)

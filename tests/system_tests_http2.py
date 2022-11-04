@@ -25,7 +25,7 @@ from subprocess import PIPE
 from time import sleep
 
 import system_test
-from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase
+from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, TIMEOUT, skip_test_in_ci, Http2Server
 
@@ -136,12 +136,22 @@ class CommonHttp2Tests:
     Common Base class containing all tests. These tests are run by all
     topologies of routers.
     """
+    def get_address(self):
+        http_address = self.router_qdra.http_addresses
+        address = None
+        if http_address:
+            address = self.router_qdra.http_addresses[0]
+        else:
+            tcp_address = self.router_qdra.tcp_addresses
+            if tcp_address:
+                address = self.router_qdra.tcp_addresses[0]
+        return address
+
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     # Tests the HTTP2 head request
     def test_head_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge --head
-        address = self.router_qdra.http_addresses[0]
-        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['--head']))
+        _, out, _ = self.run_curl(self.get_address(), args=self.get_all_curl_args(['--head']))
         self.assertIn('HTTP/2 200', out)
         self.assertIn('server: hypercorn-h2', out)
         self.assertIn('content-type: text/html; charset=utf-8', out)
@@ -149,8 +159,7 @@ class CommonHttp2Tests:
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_get_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0]
-        _, out, _ = self.run_curl(address, args=self.get_all_curl_args())
+        _, out, _ = self.run_curl(self.get_address(), args=self.get_all_curl_args())
         i = 0
         ret_string = ""
         while i < 1000:
@@ -170,7 +179,7 @@ class CommonHttp2Tests:
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_post_request(self):
         # curl -d "fname=John&lname=Doe" -X POST 127.0.0.1:9000/myinfo --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/myinfo"
+        address = self.get_address() + "/myinfo"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-d', 'fname=John&lname=Doe', '-X', 'POST']))
         self.assertIn('Success! Your first name is John, last name is Doe', out)
 
@@ -181,7 +190,7 @@ class CommonHttp2Tests:
     def test_post_upload_large_image_jpg(self):
         # curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
         # http://127.0.0.1:9000/upload --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/upload"
+        address = self.get_address() + "/upload"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST', '-H',
                                                                         'Content-Type: multipart/form-data',
                                                                         '-F', 'data=@' + image_file('test.jpg')]))
@@ -191,21 +200,21 @@ class CommonHttp2Tests:
     def test_delete_request(self):
         #curl -X DELETE "http://127.0.0.1:9000/myinfo/delete/22122" -H
         # "accept: application/json" --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/myinfo/delete/22122"
+        address = self.get_address() + "/myinfo/delete/22122"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-X', 'DELETE']))
         self.assertIn('{"fname": "John", "lname": "Doe", "id": "22122"}', out)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_put_request(self):
         # curl -d "fname=John&lname=Doe" -X PUT 127.0.0.1:9000/myinfo --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/myinfo"
+        address = self.get_address() + "/myinfo"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-d', 'fname=John&lname=Doe', '-X', 'PUT']))
         self.assertIn('Success! Your first name is John, last name is Doe', out)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_patch_request(self):
         # curl -d "fname=John&lname=Doe" -X PATCH 127.0.0.1:9000/myinfo --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/patch"
+        address = self.get_address() + "/patch"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['--data',
                                                                         '{\"op\":\"add\",\"path\":\"/user\",\"value\":\"jane\"}',
                                                                         '-X', 'PATCH']))
@@ -214,14 +223,14 @@ class CommonHttp2Tests:
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_404(self):
         # Run curl 127.0.0.1:port/unavailable --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/unavailable"
+        address = self.get_address() + "/unavailable"
         _, out, _ = self.run_curl(address=address, args=self.get_all_curl_args())
         self.assertIn('404 Not Found', out)
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_500(self):
         # Run curl 127.0.0.1:port/test/500 --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/test/500"
+        address = self.get_address() + "/test/500"
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args())
         self.assertIn('500 Internal Server Error', out)
 
@@ -229,7 +238,7 @@ class CommonHttp2Tests:
     def test_get_image_png(self):
         # Run curl 127.0.0.1:port --output images/balanced-routing.png --http2-prior-knowledge
         image_file_name = '/balanced-routing.png'
-        address = self.router_qdra.http_addresses[0] + "/images" + image_file_name
+        address = self.get_address() + "/images" + image_file_name
         self.run_curl(address, args=self.get_all_curl_args(['--output', self.router_qdra.outdir + image_file_name]))
         digest_of_server_file = get_digest(image_file(image_file_name[1:]))
         digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
@@ -239,13 +248,13 @@ class CommonHttp2Tests:
     def test_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/apache.jpg --http2-prior-knowledge
         image_file_name = '/apache.jpg'
-        address = self.router_qdra.http_addresses[0] + "/images" + image_file_name
+        address = self.get_address() + "/images" + image_file_name
         self.run_curl(address, args=self.get_all_curl_args(['--output', self.router_qdra.outdir + image_file_name]))
         digest_of_server_file = get_digest(image_file(image_file(image_file_name[1:])))
         digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
         self.assertEqual(digest_of_server_file, digest_of_response_file)
 
-    def check_listener_delete(self, client_addr, server_addr):
+    def check_listener_delete(self, client_addr, server_addr, tcp_listener=False):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         # We are first making sure that the http request goes thru successfully.
         _, out, _ = self.run_curl(client_addr, args=self.get_all_curl_args())
@@ -257,15 +266,19 @@ class CommonHttp2Tests:
         self.assertIn(ret_string, out)
 
         qd_manager = QdManager(address=server_addr)
-        http_listeners = qd_manager.query('io.skupper.router.httpListener')
-        self.assertEqual(len(http_listeners), 1)
+        if tcp_listener:
+            entity_name = 'io.skupper.router.tcpListener'
+        else:
+            entity_name = 'io.skupper.router.httpListener'
+        listeners = qd_manager.query(entity_name)
+        self.assertEqual(len(listeners), 1)
 
         # Run a skmanage DELETE on the httpListener
-        qd_manager.delete("io.skupper.router.httpListener", name=self.listener_name)
+        qd_manager.delete(entity_name, name=self.listener_name)
 
         # Make sure the listener is gone
-        http_listeners  = qd_manager.query('io.skupper.router.httpListener')
-        self.assertEqual(len(http_listeners), 0)
+        listeners  = qd_manager.query(entity_name)
+        self.assertEqual(len(listeners), 0)
 
         # Try running a curl command against the listener to make sure it times out
         request_timed_out = False
@@ -277,14 +290,17 @@ class CommonHttp2Tests:
 
         # Add back the listener and run a curl command to make sure that the newly added listener is
         # back up and running.
-        create_result = qd_manager.create("io.skupper.router.httpListener",
-                                          self.http_listener_props)
-        wait_http_listeners_up(server_addr)
+        create_result = qd_manager.create(entity_name,
+                                          self.tcp_listener_props if tcp_listener else self.http_listener_props)
+        if tcp_listener:
+            wait_tcp_listeners_up(server_addr)
+        else:
+            wait_http_listeners_up(server_addr)
         _, out, _ = self.run_curl(client_addr, args=self.get_all_curl_args())
         self.assertIn(ret_string, out)
 
     def check_connector_delete(self, client_addr, server_addr, server_port,
-                               listener_addr=None):
+                               listener_addr=None, tcp_connector=False):
         # listener_addr: management address of router with httpListener
         # configured. Must be supplied if httpListener is on a different router
         # than the httpConnector
@@ -300,32 +316,39 @@ class CommonHttp2Tests:
         connections = qd_manager.query('io.skupper.router.connection')
         self.assertGreaterEqual(len(connections), 2)
 
+        if not tcp_connector:
+            server_conn_found = False
+            for conn in connections:
+                print(conn['name'])
+                print("server_port", server_port)
+                if str(server_port) in conn['name']:
+                    server_conn_found = True
+                    break
+            self.assertTrue(server_conn_found)
+
+        # Run a skmanage DELETE on the httpConnector
+        if tcp_connector:
+            connector_type = 'io.skupper.router.tcpConnector'
+        else:
+            connector_type = 'io.skupper.router.httpConnector'
+        connectors  = qd_manager.query(connector_type)
+        self.assertEqual(len(connectors), 1)
+
+        # Delete the httpConnector
+        qd_manager.delete(connector_type, name=self.connector_name)
+
+        # Make sure the connector is gone
+        connectors  = qd_manager.query(connector_type)
+        self.assertEqual(len(connectors), 0)
+
+        # Deleting the connector must have taken out the connection to the server.
+        connections = qd_manager.query('io.skupper.router.connection')
         server_conn_found = False
         for conn in connections:
             if str(server_port) in conn['name']:
                 server_conn_found = True
                 break
-        self.assertTrue(server_conn_found)
-
-        # Run a skmanage DELETE on the httpConnector
-        http_connectors  = qd_manager.query('io.skupper.router.httpConnector')
-        self.assertEqual(len(http_connectors), 1)
-
-        # Delete the httpConnector
-        qd_manager.delete("io.skupper.router.httpConnector", name=self.connector_name)
-
-        # Make sure the connector is gone
-        http_connectors  = qd_manager.query('io.skupper.router.httpConnector')
-        self.assertEqual(len(http_connectors), 0)
-
-        # Deleting the connector must have taken out the connection to the server.
-        connections = qd_manager.query('io.skupper.router.connection')
-        http_server_conn_found = False
-        for conn in connections:
-            if str(server_port) in conn['name']:
-                server_conn_found = True
-                break
-        self.assertFalse(http_server_conn_found)
+        self.assertFalse(server_conn_found)
 
         sleep(2)
 
@@ -341,7 +364,7 @@ class CommonHttp2Tests:
 
         # Add back the httpConnector
         # skmanage CREATE type=httpConnector address=examples.com host=127.0.0.1 port=80 protocolVersion=HTTP2
-        create_result = qd_manager.create("io.skupper.router.httpConnector", self.connector_props)
+        qd_manager.create(connector_type, self.connector_props)
         num_tries = 2
         tries = 0
         conn_present = False
@@ -354,8 +377,12 @@ class CommonHttp2Tests:
                 conn_present = True
         self.assertTrue(conn_present)
 
-        # wait for the httpListener to become available again
-        wait_http_listeners_up(listener_addr)
+        if tcp_connector:
+            # wait for the tcpListener to become available again
+            wait_tcp_listeners_up(listener_addr)
+        else:
+            # wait for the httpListener to become available again
+            wait_http_listeners_up(listener_addr)
 
         _, out, _ = self.run_curl(client_addr, args=self.get_all_curl_args())
         ret_string = ""
