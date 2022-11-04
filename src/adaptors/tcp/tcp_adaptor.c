@@ -1031,8 +1031,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         conn->q2_blocked = false;
         UNLOCK(&conn->activation_lock);
         handle_incoming(conn, "PNRC_CLOSED_READ");
-        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
-               conn->incoming_link_id, qdr_tcp_connection_role_name(conn));
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
+               qdr_tcp_connection_role_name(conn));
         break;
     }
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
