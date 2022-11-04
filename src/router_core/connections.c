@@ -1631,6 +1631,7 @@ static void qdr_inter_edge_connection_cleanup_CT(qdr_core_t *core, qdr_connectio
             }
         } else {
             qd_log(core->log, QD_LOG_INFO, "Edge peer lost: %s", edge_peer->identity);
+            qdrc_event_conn_raise(core, QDRC_EVENT_CONN_MESH_PEER_LOST, conn);
             qd_iterator_del_peer_edge(edge_peer->identity);
             DEQ_REMOVE(core->edge_peers, edge_peer);
             edge_peer->router_addr->ref_count--;
