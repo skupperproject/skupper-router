@@ -2079,7 +2079,14 @@ static void qdr_tcp_conn_close(void *context, qdr_connection_t *conn, qdr_error_
     if (tcontext) {
         qdr_tcp_connection_t* conn = (qdr_tcp_connection_t*) tcontext;
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"][L%"PRIu64"] qdr_tcp_conn_close: NOOP", conn->conn_id, qdr_tcp_conn_linkid(conn));
+               "[C%" PRIu64 "][L%" PRIu64 "] qdr_tcp_conn_close: closing raw connection", conn->conn_id,
+               qdr_tcp_conn_linkid(conn));
+        //
+        // Closing the raw connection (calling pn_raw_connection_close()) will generate a PN_RAW_CONNECTION_DISCONNECTED
+        // event which will call the handle_disconnected() which in turn calls qdr_connection_closed() which removes the
+        // connection from the list of connections.
+        //
+        pn_raw_connection_close(conn->pn_raw_conn);
     } else {
         qd_log(tcp_adaptor->log_source, QD_LOG_ERROR, "qdr_tcp_conn_close: no connection context");
         assert(false);

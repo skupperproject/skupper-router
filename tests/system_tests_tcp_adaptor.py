@@ -31,11 +31,14 @@ from typing import List, Optional
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
+from system_test import QdManager
 from system_test import TIMEOUT
 from system_test import TestCase
 from system_test import main_module
 from system_test import unittest
 from system_test import retry
+from system_test import CONNECTION_TYPE
+from system_test import retry_assertion
 from system_tests_ssl import RouterTestSslBase
 
 # Tests in this file are organized by classes that inherit TestCase.
@@ -1819,6 +1822,80 @@ class TcpAdaptorListenerConnectTest(TestCase):
         Test tcpListener socket lifecycle edge to edge
         """
         self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
+
+
+class TcpDeleteConnectionTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpDeleteConnectionTest, cls).setUpClass()
+        cls.good_listener_port = cls.tester.get_port()
+        cls.server_logger = Logger(title="TcpDeleteConnectionTest",
+                                   print_to_console=True,
+                                   save_for_dump=False,
+                                   ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                          "setUpClass/TcpAdaptor_echo_server_INTA.log"))
+        server_prefix = "ECHO_SERVER_TcpDeleteConnectionTest_INTA"
+        cls.echo_server = TcpEchoServer(prefix=server_prefix,
+                                        port=0,
+                                        logger=cls.server_logger)
+        assert cls.echo_server.is_running
+        cls.echo_server_port = cls.echo_server.port
+
+        config = [
+            ('router', {'mode': 'interior', 'id': 'INTA'}),
+            # Listener for handling router management requests.
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('tcpListener',
+             {'name': "good-listener",
+              'host': "localhost",
+              'port': cls.good_listener_port,
+              'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
+              'siteId': "mySite"}),
+
+            ('tcpConnector',
+             {'name': "good-connector",
+              'host': "localhost",
+              'port': cls.echo_server.port,
+              'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
+              'siteId': "mySite"}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        cls.router = cls.tester.qdrouterd('TcpDeleteConnectionTest',
+                                          Qdrouterd.Config(config), wait=True)
+        cls.address = cls.router.addresses[0]
+
+    def test_delete_tcp_connection(self):
+        client_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_conn.settimeout(TIMEOUT)
+        client_conn.connect(('127.0.0.1', self.good_listener_port))
+        qd_manager = QdManager(self.address)
+        conn_id = None
+        results = qd_manager.query("io.skupper.router.connection")
+        for result in results:
+            conn_direction = result['dir']
+            # Find the id of the tcp connection we want to delete.
+            if conn_direction == 'out' and result['host'] != 'egress-dispatch':
+                # Delete the connection by updating the adminStatus to deleted.
+                qd_manager.update(CONNECTION_TYPE, {"adminStatus": "deleted"}, identity=result['identity'])
+                conn_id = result['identity']
+                break
+        self.assertIsNotNone(conn_id, "Expected connection id to be not None")
+
+        def check_connection_deleted():
+            outs = qd_manager.query("io.skupper.router.connection")
+            is_conn_present = False
+            for out in outs:
+                if out['identity'] == conn_id:
+                    is_conn_present = True
+                    break
+            self.assertFalse(is_conn_present)
+
+        # Keep retrying until the connection is gone from the connection table.
+        retry_assertion(check_connection_deleted, delay=2)
+        client_conn.close()
 
 
 if __name__ == '__main__':
