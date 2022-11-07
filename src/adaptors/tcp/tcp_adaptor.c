@@ -969,7 +969,7 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
                "[C%" PRIu64 "] encrypt_outgoing_tls() DEQ_SIZE(conn->out_buffs)=%zu\n", conn->conn_id,
                DEQ_SIZE(conn->out_buffs));
     }
-    if (write_buffers) {
+    if (write_buffers && DEQ_SIZE(conn->out_buffs) > 0) {
         assert(!IS_ATOMIC_FLAG_SET(&conn->raw_closed_write));
         int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i\n",
