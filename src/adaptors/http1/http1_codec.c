@@ -620,9 +620,7 @@ static bool parse_request_line(h1_codec_connection_t *conn, struct decoder_t *de
     decoder->hrs = hrs;
     decoder->is_request = true;
 
-    decoder->error = conn->config.rx_request(hrs, (char*)method_str, (char*)target_str, major, minor);
-    if (decoder->error)
-        decoder->error_msg = "hrs_rx_request callback error";
+    decoder->error = conn->config.rx_request(hrs, (char *) method_str, (char *) target_str, major, minor);
     return decoder->error;
 }
 
@@ -703,13 +701,8 @@ static int parse_response_line(h1_codec_connection_t *conn, struct decoder_t *de
     decoder->is_request = false;
     decoder->is_http10 = minor == 0;
 
-    decoder->error = conn->config.rx_response(decoder->hrs,
-                                              hrs->response_code,
-                                              (offset) ? (char*)reason_str: 0,
-                                              major, minor);
-    if (decoder->error)
-        decoder->error_msg = "hrs_rx_response callback error";
-
+    decoder->error =
+        conn->config.rx_response(decoder->hrs, hrs->response_code, (offset) ? (char *) reason_str : 0, major, minor);
     return decoder->error;
 }
 
@@ -807,7 +800,6 @@ static bool process_headers_done(h1_codec_connection_t *conn, struct decoder_t *
 
     decoder->error = conn->config.rx_headers_done(decoder->hrs, has_body);
     if (decoder->error) {
-        decoder->error_msg = "hrs_rx_headers_done callback error";
         return false;
     }
 
@@ -968,9 +960,7 @@ static bool parse_header(h1_codec_connection_t *conn, struct decoder_t *decoder)
     process_header(conn, decoder, key_str, value_str);
 
     if (!decoder->error) {
-        decoder->error = conn->config.rx_header(hrs, (char *)key_str, (char *)value_str);
-        if (decoder->error)
-            decoder->error_msg = "hrs_rx_header callback error";
+        decoder->error = conn->config.rx_header(hrs, (char *) key_str, (char *) value_str);
     }
 
     return !!decoder->read_ptr.remaining;
@@ -1291,6 +1281,11 @@ int h1_codec_connection_rx_data(h1_codec_connection_t *conn, qd_buffer_list_t *d
 {
     struct decoder_t *decoder = &conn->decoder;
     bool init_ptrs = DEQ_IS_EMPTY(decoder->incoming);
+
+    if (decoder->error) {
+        qd_buffer_list_free_buffers(data);
+        return decoder->error;
+    }
 
     DEQ_APPEND(decoder->incoming, *data);
 
@@ -1624,7 +1619,7 @@ int h1_codec_tx_body(h1_codec_request_state_t *hrs, qd_message_stream_data_t *st
     return 0;
 }
 
-int h1_codec_tx_body_str(h1_codec_request_state_t *hrs, char *data)
+int h1_codec_tx_body_str(h1_codec_request_state_t *hrs, const char *data)
 {
     h1_codec_connection_t *conn = h1_codec_request_state_get_connection(hrs);
     struct encoder_t *encoder = &conn->encoder;

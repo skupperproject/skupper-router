@@ -343,9 +343,9 @@ class TestServer:
             self._request_count = server.request_count
             self._logger.log("TestServer %s:%s closed" % self._server_addr)
 
-    def wait(self, timeout=TIMEOUT):
+    def wait(self, timeout=TIMEOUT, check_reply=True):
         self._logger.log("TestServer %s:%s shutting down" % self._server_addr)
-        self._send_shutdown_request()
+        self._send_shutdown_request(check_reply)
         self._thread.join(timeout=timeout)
         if self._thread.is_alive():
             # should not happen unless the shutdown request failed due to
@@ -367,13 +367,16 @@ class TestServer:
             self.dump_log()
             raise AssertionError(msg)
 
-    def _send_shutdown_request(self):
+    def _send_shutdown_request(self, check_reply=True):
         """Sends a POST request instructing the test HTTPServer to shut down.
 
         This is necessary because the test HTTPServer cannot be interrupted while there is an open
         connection to it. The incoming connection in question is from a qdrouterd that we keep up
         for the duration of the entire testclass. The only place for server to graciously die is
-        after processing an incoming request and closing the connection, but before accepting a new one.
+        after processing an incoming request and closing the connection, but
+        before accepting a new one.
+
+        TODO: deprecate this test server and just use nginx
         """
         shutdown_request = b'POST /SHUTDOWN HTTP/1.1\r\n' \
             + b'Content-Length: 0\r\n' \
@@ -395,7 +398,7 @@ class TestServer:
                     # socket closed (response complete)
                     break
                 reply += rc
-            if b'Server Closed' not in reply:
+            if check_reply and b'Server Closed' not in reply:
                 if self._server_error is None:  # do not overwrite first error
                     self._server_error = f"bad shutdown response {reply}"
 
