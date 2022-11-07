@@ -17,6 +17,7 @@
  * under the License.
  */
 
+#include "adaptors/adaptor_tls.h"
 #include "http1_private.h"
 
 #include <inttypes.h>
@@ -111,9 +112,11 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
             qdr_http1_client_conn_cleanup(hconn);
 
         h1_codec_connection_free(hconn->http_conn);
+        qd_tls_free(hconn->tls);
         if (rconn) {
             pn_raw_connection_set_context(rconn, 0);
             pn_raw_connection_close(rconn);
+            qd_raw_connection_drain_read_write_buffers(rconn);
         }
 
         sys_atomic_destroy(&hconn->q2_restart);
@@ -166,6 +169,10 @@ void qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data)
 //
 void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error)
 {
+    if (hconn->closing)
+        return;
+    hconn->closing = true;
+
     if (error) {
         qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR,
                "[C%"PRIu64"] Connection closing: %s", hconn->conn_id, error);
@@ -646,9 +653,8 @@ static void qd_http1_adaptor_final(void *adaptor_context)
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
 
     qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-           "HTTP/1.x %zu connections %zu listeners %zu connectors still active",
-           DEQ_SIZE(adaptor->connections), DEQ_SIZE(adaptor->listeners),
-           DEQ_SIZE(adaptor->connectors));
+           "HTTP/1.x %zu connections, %zu listeners, and %zu connectors still active", DEQ_SIZE(adaptor->connections),
+           DEQ_SIZE(adaptor->listeners), DEQ_SIZE(adaptor->connectors));
 
     qdr_http1_connection_t *hconn = DEQ_HEAD(adaptor->connections);
     while (hconn) {
@@ -677,20 +683,16 @@ static void qd_http1_adaptor_final(void *adaptor_context)
 // Raw connection I/O loop for unencrypted connections.
 //
 // Takes full input (read) buffers from the raw connection and appends them to input_data. The total number of input
-// octets is returned in input_octets. Calls get_output_cb to retrieve output data from the adaptor and gives it to the
+// octets is returned in input_octets. Calls take_output_cb to retrieve output data from the adaptor and gives it to the
 // raw connection (write). Ownership of the buffers on input_data is passed to the caller. This function takes ownership
-// of all buffers taken via get_output_cb().
+// of all buffers taken via take_output_cb().
 //
-// Returns true if any I/O operations occur.
-//
-bool qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
-                         qdr_http1_get_output_data_cb_t *get_output_cb,
-                         void                           *get_output_context,
-                         qd_adaptor_buffer_list_t       *input_data,
-                         uint64_t                       *input_octets)
+void qdr_http1_do_raw_io(pn_raw_connection_t             *raw_conn,
+                         qdr_http1_take_output_data_cb_t *take_output_cb,
+                         void                            *take_output_context,
+                         qd_adaptor_buffer_list_t        *input_data,
+                         uint64_t                        *input_octets)
 {
-    bool work = false;
-
     // take any inbound data
 
     if (input_data) {
@@ -707,18 +709,18 @@ bool qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
             } else {
                 DEQ_INSERT_TAIL(*input_data, abuf);
                 *input_octets += size;
-                work = true;
             }
         }
     }
 
     // write any outbound data
 
-    if (get_output_cb) {
+    qd_adaptor_buffer_list_t a_bufs = DEQ_EMPTY;
+    if (take_output_cb) {
         size_t capacity = pn_raw_connection_write_buffers_capacity(raw_conn);
         if (capacity > 0) {
-            qd_adaptor_buffer_list_t a_bufs = DEQ_EMPTY;
-            get_output_cb(get_output_context, &a_bufs, capacity);
+            int64_t out_octets = take_output_cb(take_output_context, &a_bufs, capacity);
+
             assert(DEQ_SIZE(a_bufs) <= capacity);
             while (DEQ_HEAD(a_bufs)) {
                 pn_raw_buffer_t      pn_buf_desc;
@@ -728,12 +730,13 @@ bool qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
                 size_t given = pn_raw_connection_write_buffers(raw_conn, &pn_buf_desc, 1);
                 (void) given;
                 assert(given == 1);
-                work = true;
+            }
+
+            if (out_octets == QD_TLS_EOS) {
+                pn_raw_connection_write_close(raw_conn);
             }
         }
     }
-
-    return work;
 }
 
 /**

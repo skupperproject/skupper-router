@@ -1,0 +1,141 @@
+= HTTP/1.x Adaptor Readme
+
+An adaptor for the HTTP/1.x protocol.
+
+The `http1_client.c` file implements client-facing message
+handling. This file handles accept events on the listener
+socket. Request messages are read from the client socket, encoded into
+an AMQP message via the HTTP/1.x codec, and delivered to the router
+core. Response messages arrive via the router core as AMQP messages
+(`qdr_http1_client_core_link_deliver`). These response AMQP messages
+are decoded and written out the client socket via the HTTP/1.x codec.
+
+The `http1_server.c` file implements server-facing message
+handling. This file is responsible for connecting to the target
+HTTP/1.x server. Request Messages arrive via the router core as AMQP
+messages (`qdr_http1_server_core_link_deliver`). These request AMQP
+messages are decoded and written out the server socket via the
+HTTP/1.x codec. Response messages are read from the server socket and
+encoded into AMQP messages via the HTTP/1.x codec.
+
+The `http1_codec.c` file contains the HTTP/1.x codec. It handles the
+HTTP/1.x bi-directional data flow: decoding data read from the peer's
+TCP socket and encoding HTTP/1.x message elements into an output
+stream for TCP. Data read from the socket is decoded and passed to the
+application via a set of callbacks (e.g. "request started", "header
+added", "body data", etc). The codec provides an API for building
+HTTP/1.x messages for output ("start a request", "add a header", "add
+body data", etc). See the `http1_codec.h` file in the common includes
+for more details.
+
+The `http1_adaptor.c` file contains common code used by both the
+client and server-facing implementation.
+
+The `http1_private.h` file contains declarations and definitions of
+elements private to the adaptor.
+
+The adaptor manages a set of data structures that represent the
+HTTP/1.x session. The top level structure is the `qdr_adaptor_t`
+singleton that represents the adaptor module itself.
+
+Each connection is represented by an instance of the
+`qdr_http1_connection_t` structure. This structure contains
+connection-level configuration data as well as the corresponding
+`qdr_connection_t`, and input and output `qdr_link_t` links used for
+communication with the core. It also maintains an order list of
+HTTP/1.x request/response structures.
+
+A single HTTP/1.x Request/Response exchange is tracked by the
+`qdr_http1_request_base_t` structure. This is a base class that is
+sub-classed by the server and client-facing code. The owning
+`qdr_http1_connection_t` maintains these on an order list with the
+oldest request at the head (FIFO). The head request is the current
+"in-flight" request. Once the corresponding HTTP/1.x Request/Response
+exchange is completed the head `qdr_http1_request_base_t` item is
+retired and the next item becomes current.
+
+HTTP/1.x is a Request/Response protocol. Each Request message sent
+will result in the arrival one or more Response messages. Typically
+only one response message is used, however the HTTP/1.x protocol
+defines a set of "non-terminal" intermediate responses that can
+precede the final terminal response. The protocol calls these
+non-terminal responses _informational_ responses and are identified
+via the 1xx status code. Currently the only 1xx informational response
+supported is `100 Continue`. While this is not a common practice it
+must be supported by the adaptor. Therefore the adaptor (and codec)
+supports one or more response messages per request.
+
+A `qdr_http1_request_base_t` maintains an ordered list of structures
+that track response messages. The adaptor does not currently define a
+single common structure for this; rather each side of the adaptor
+defines their own specific response structures:
+`_server_response_msg_t` and `_client_response_msg_t`.
+
+The adaptor implements a two phased approach to processing the egress
+data flow (from core out to HTTP/1.x peer TCP connection):
+encode-then-write.
+
+When an AMQP message arrives containing an HTTP message (either
+request or response - depending on the type of HTTP peer), the AMQP
+message's fields and payload are extracted and passed to the HTTP/1.x
+codec. The codec then encodes this data into an octet stream that can
+be written to the TCP connection. This stream is stored in an ordered
+list of `qdr_http1_out_data_t` structures. These structures do not
+contain a copy of the AMQP message data - rather they refer to the
+data buffers in the AMQP message itself. This is necessary in order to
+preserve Q2 flow: if AMQP message buffers were copied and freed as
+they arrive Q2 would be relieved too early.
+
+Writing the encoded data does not occur during the encode
+process. Rather it is done during the I/O phase in the event
+handler. This provides some buffering between the arrival of AMQP data
+and the availability of output capacity on the raw connection. This is
+necessary because these two operations are not synchronous.
+
+== Special-Case Features
+
+=== Multicast Aggregation
+
+Configured via the HttpConnector and HttpListener management entities.
+
+This allows a client to multicast a single HTTP Request to more than
+one HTTP Server. The client-facing adaptor stores all Responses as
+they arrive from the servers without forwarding them out the
+client. Once all Responses have arrived at the client-facing adaptor a
+single HTTP Response message is crafted and sent to the client. This
+Response message's body contains the response bodies from all the
+stored responses, using either json or multipart encoding to identify
+the individual responses.
+
+M.A. modifies the way the server-facing adaptor code (http1_server.c)
+handles settlement/outcome for the received AMQP Request message. In
+the M.A. case the adaptor delays setting the AMQP Request's outcome
+and settlement until *after* the client has settled/accepted the
+corresponding AMQP Response message(s) sent by the router. This is
+necessary since the client-facing adaptor code (http1_client.c) will
+use the settlement of the AMQP Request message as the indicator that
+all AMQP Response messages have arrived and the aggregated response
+message may now be sent to the HTTP client. In the current
+implementation this delay imposes an extra round-trip for the
+settlement of the Responses so it is avoided in the non-M.A. case.
+
+=== Event Channel
+
+Configured via the HttpConnector and HttpListener management entities.
+
+This allows a client to send an HTTP POST request to a server without
+blocking for a response message. Think of it as "fire and forget" for
+an HTTP POST operation.
+
+The client-facing adaptor (http1_client.c) only permits HTTP POST
+commands. Any other command is considered an error and the connection
+is terminated. Since no HTTP Response is expected from the server the
+client-facing adaptor does not set a reply-to in the AMQP Request
+message. Instead, the client-facing adaptor waits for the
+settlement/outcome to arrive for the AMQP Request message it sent and
+then generates a simple 204 "No Content" response on the server's
+behalf.
+
+After writing the HTTP Request to the network the server-facing
+adaptor (http1_server.c) will discard all response data arriving from
+the server.
