@@ -26,6 +26,7 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #define QD_TLS_ERROR -1
+#define QD_TLS_EOM   -2  // see qd_tls_take_output_data_cb_t()
 
 typedef struct qd_tls_domain_t qd_tls_domain_t;
 typedef struct qd_tls_t qd_tls_t;
@@ -147,5 +148,56 @@ pn_tls_t *qd_tls_get_pn_tls_session(qd_tls_t *tls);
  * Finally, frees the qd_tls_t object
  */
 void qd_tls_free(qd_tls_t *tls);
+
+////////////////////////////////////////////////////////////////////////
+// Experimental: alternative API for TLS I/O
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Retrieve octet counters for encrypted I/O. It is expected that the adaptor maintains counters for the cleartext data
+ * itself.
+ */
+uint64_t qd_tls_get_encrypted_output_octet_count(const qd_tls_t *tls);  // outbound to network
+uint64_t qd_tls_get_encrypted_input_octet_count(const qd_tls_t *tls);   // inbound from network
+
+/**
+ * Callback into the adaptor to retrieve a list of cleartext application data that will be encrypted and sent. This
+ * callback is invoked during the qd_tls_do_io() function.
+ *
+ * @param context - provided by the adaptor to the qd_tls_do_io() call
+ * @param blist - a buffer list for the outgoing application data. The adaptor can append up to limit buffers containing
+ * outgoing application data. Ownership of these buffers is given to the TLS layer and will be freed at some point: the
+ * adaptor must not refer to these buffers on return from this call!
+ * @param limit - at most limit buffers can be appended during this call. Appending less than limit is acceptable,
+ * appending more is an error!
+ *
+ * @return - the total number of data octets added to the buffer list or QD_TLS_EOM to indicate that no more application
+ * data will be provided. Returning QD_TLS_EOM will cause the TLS layer to append the TLS closure record to the outbound
+ * encrypted data - this confirms a clean close to the peer. When QD_TLS_EOM is returned the blist MUST be empty.
+ */
+typedef int64_t qd_tls_take_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *blist, size_t limit);
+
+/**
+ * TLS I/O work loop.
+ *
+ * This API will perform TLS I/O operations in both directions. Outgoing cleartext data will be fetched from the adaptor
+ * as needed via the get_output_cb() callback. The cleartext data will be encrypted and written to the raw connection
+ * (write buffers). On return any incoming decrypted (cleartext) data will be appended to the input_data list. Ownership
+ * of the input_data buffers is transferred to the caller: the adaptor must release them when no longer needed.
+ *
+ * @param raw_conn - the raw connection for reading/writing encrypted buffers
+ * @param take_output_cb - see qd_tls_take_output_data_ct_t
+ * @param take_output_context - passed back to take_output_cb()
+ * @param input_data - incoming decrypted data is appended to this list.
+ * @param input_data_count - (output) total number of cleartext octets added to input_data
+ *
+ * @return - zero on success, otherwise an error code. Errors are unrecoverable.
+ */
+int qd_tls_do_io(qd_tls_t                     *tls,
+                 pn_raw_connection_t          *raw_conn,
+                 qd_tls_take_output_data_cb_t *take_output_cb,
+                 void                         *take_output_context,
+                 qd_adaptor_buffer_list_t     *input_data,
+                 uint64_t                     *input_data_count);
 
 #endif  // __adaptor_tls_h__

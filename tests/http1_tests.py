@@ -20,11 +20,12 @@
 import logging
 import socket
 import uuid
-import weakref
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPSConnection
+from ssl import SSLContext
 from threading import Thread, Event
 from time import sleep, time
+from weakref import WeakValueDictionary
 
 from typing import List, Any, Tuple, Mapping, Optional
 
@@ -37,6 +38,13 @@ from system_test import retry_exception
 CURL_VERSION = (7, 47, 0)   # minimum required
 
 
+class SimpleRequestTimeout(Exception):
+    """Thrown by http1_simple_request when timeout occurs during socket
+    read. Contains any reply data read from the server prior to the timeout
+    """
+    pass
+
+
 def _curl_ok():
     """
     Returns True if curl is installed and is the proper version for
@@ -44,6 +52,49 @@ def _curl_ok():
     """
     installed = curl_available()
     return installed and installed >= CURL_VERSION
+
+
+def http1_simple_request(raw_request: bytes,
+                         port: int,
+                         host: Optional[str] = '127.0.0.1',
+                         timeout: Optional[float] = TIMEOUT,
+                         ssl_context: Optional[SSLContext] = None):
+    """Perform a simple HTTP/1 request and return the response read from the
+    server. raw_request is a complete HTTP/1 request message. The client socket
+    will be read from until either it is closed or the TIMEOUT occurs.
+
+    It is expected that raw_request will include a "Connection: close" header
+    to prevent the TIMEOUT exception from being thrown.
+    """
+    reply = b''
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if ssl_context is not None:
+        client = ssl_context.wrap_socket(client, server_side=False,
+                                         server_hostname=host)
+    with client:
+        client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        client.settimeout(timeout)
+
+        # allow time for the listening socket to initialize
+        retry_exception(lambda: client.connect((host, port)),
+                        delay=0.25, exception=ConnectionRefusedError)
+        if ssl_context is None:
+            client.sendall(raw_request, socket.MSG_WAITALL)
+        else:
+            # because SSLSocket barfs on non-zero flags:
+            while raw_request:
+                sent = client.send(raw_request)
+                raw_request = raw_request[sent:]
+        try:
+            while True:
+                rc = client.recv(4096)
+                if not rc:
+                    # socket closed (response complete)
+                    break
+                reply += rc
+        except TimeoutError:
+            raise SimpleRequestTimeout(reply)
+    return reply
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -149,7 +200,8 @@ class RequestHandler10(RequestHandler):
 class MyHTTPServer(HTTPServer):
     """Adds a switch to the HTTPServer to allow it to exit gracefully"""
 
-    def __init__(self, addr, handler_cls, testcases, logger):
+    def __init__(self, addr, handler_cls, testcases, logger,
+                 ssl_context: Optional[SSLContext] = None):
         super().__init__(addr, handler_cls)
         self._client_sockets: List[socket.socket] = []
 
@@ -157,10 +209,13 @@ class MyHTTPServer(HTTPServer):
         self.system_tests = testcases
         self.request_count = 0
         self.logger = logger
+        self.my_ssl_context = ssl_context
 
     def get_request(self) -> Tuple[socket.socket, Any]:
         """Remember the client socket"""
         sock, addr = super().get_request()
+        if self.my_ssl_context is not None:
+            sock = self.my_ssl_context.wrap_socket(sock, server_side=True)
         self._client_sockets.append(sock)
         return sock, addr
 
@@ -185,13 +240,16 @@ class ThreadedTestClient:
     An HTTP client running in a separate thread
     """
 
-    def __init__(self, tests, port, repeat=1, wait=True, timeout=TIMEOUT):
+    def __init__(self, tests, host_port, repeat=1, wait=True, timeout=TIMEOUT,
+                 ssl_context: Optional[SSLContext] = None):
         self.error = None
         self._id = uuid.uuid4().hex
-        self._conn_addr = ("127.0.0.1:%s" % port)
+        host_port = str(host_port)
+        self._conn_addr = host_port if ':' in host_port else f"127.0.0.1:{host_port}"
         self._tests = tests
         self._repeat = repeat
         self._count = 0
+        self._ssl_context = ssl_context
         self._logger = Logger(title="TestClient: %s" % self._id,
                               print_to_console=False)
         self._thread = Thread(target=self._run, args=(wait, timeout), daemon=True)
@@ -199,7 +257,10 @@ class ThreadedTestClient:
 
     def _run(self, wait, timeout):
         self._logger.log("TestClient connecting on %s" % self._conn_addr)
-        client = HTTPConnection(self._conn_addr, timeout=timeout)
+        if self._ssl_context is not None:
+            client = HTTPSConnection(self._conn_addr, timeout=timeout, context=self._ssl_context)
+        else:
+            client = HTTPConnection(self._conn_addr, timeout=timeout)
         deadline = timeout + time()
         while True:
             # wait for listener socket to initialize
@@ -274,15 +335,19 @@ class ThreadedTestClient:
 class TestServer:
     """A HTTPServer running in a separate thread"""
     __test__ = False
-    _active_servers: Mapping[int, 'TestServer'] = weakref.WeakValueDictionary()
+    _active_servers: WeakValueDictionary[int, 'TestServer'] = WeakValueDictionary()
 
-    def __init__(self, server_port, client_port, tests, handler_cls=None):
+    def __init__(self, server_port: int, client_port: int, tests, handler_cls=None,
+                 server_ssl_context: Optional[SSLContext] = None,
+                 client_ssl_context: Optional[SSLContext] = None):
         self._request_count = 0
         self._logger = Logger(title=f"TestServer:{server_port}",
                               print_to_console=False)
         self._client_port = client_port
-        self._server_addr = ("", server_port)
+        self._client_ssl_context = client_ssl_context
+        self._server_addr = ("localhost", server_port)
         self._server_error = None
+        self._server_ssl_context = server_ssl_context
         self._is_ready = Event()
         self._thread = Thread(target=self._run, args=(tests,
                                                       handler_cls or
@@ -296,7 +361,9 @@ class TestServer:
         self._is_ready.wait(TIMEOUT)
 
     @classmethod
-    def new_server(cls, server_port, client_port, tests, handler_cls=None):
+    def new_server(cls, server_port: int, client_port: int, tests, handler_cls=None,
+                   server_ssl_context: Optional[SSLContext] = None,
+                   client_ssl_context: Optional[SSLContext] = None):
         """Repeatedly tries to create a new server.
 
         Always use this factory method, otherwise the mechanism
@@ -308,7 +375,9 @@ class TestServer:
                 server = TestServer(server_port=server_port,
                                     client_port=client_port,
                                     tests=tests,
-                                    handler_cls=handler_cls)
+                                    handler_cls=handler_cls,
+                                    server_ssl_context=server_ssl_context,
+                                    client_ssl_context=client_ssl_context)
                 cls._active_servers[server_port] = server
                 return server
             except OSError as e:
@@ -323,7 +392,8 @@ class TestServer:
     def _run(self, tests, handler_cls):
         self._logger.log("TestServer listening on %s:%s" % self._server_addr)
 
-        with MyHTTPServer(self._server_addr, handler_cls, tests, self._logger) as server:
+        with MyHTTPServer(self._server_addr, handler_cls, tests, self._logger,
+                          ssl_context=self._server_ssl_context) as server:
             server.allow_reuse_address = True
             server.timeout = TIMEOUT
             server.server_killed = False
@@ -383,24 +453,12 @@ class TestServer:
             + b'Connection: close\r\n' \
             + b'\r\n'
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-            client.settimeout(TIMEOUT)
-            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-            # allow time for the listening socket to initialize
-            retry_exception(lambda: client.connect(("127.0.0.1", self._client_port)),
-                            delay=0.25, exception=ConnectionRefusedError)
-            client.sendall(shutdown_request, socket.MSG_WAITALL)
-            reply = b''
-            while True:
-                rc = client.recv(4096)
-                if not rc:
-                    # socket closed (response complete)
-                    break
-                reply += rc
-            if check_reply and b'Server Closed' not in reply:
-                if self._server_error is None:  # do not overwrite first error
-                    self._server_error = f"bad shutdown response {reply}"
+        reply = http1_simple_request(shutdown_request, self._client_port,
+                                     host="localhost",
+                                     ssl_context=self._client_ssl_context)
+        if check_reply and b'Server Closed' not in reply:
+            if self._server_error is None:  # do not overwrite first error
+                self._server_error = f"bad shutdown response {reply}"
 
     def __enter__(self):
         return self
@@ -482,7 +540,7 @@ def http1_ping(sport, cport):
     }
 
     with TestServer.new_server(sport, cport, TEST) as server:
-        client = ThreadedTestClient(tests=TEST, port=cport)
+        client = ThreadedTestClient(tests=TEST, host_port=cport)
         client.wait()
         client.check_count(1)
 
@@ -577,9 +635,14 @@ class ResponseValidator:
 
 
 class CommonHttp1Edge2EdgeTest:
+    """
+    Defines the Edge2Edge test cases. Parent classes should be derived from
+    this class and Http1Edge2EdgeTestBase (as peers).
+    """
     def test_01_concurrent_requests(self):
         """
-        Test multiple concurrent clients sending streaming messages
+        Test multiple concurrent clients sending streaming messages. This class
+        expects to be derived with Http1Edge2EdgeTestBase as a peer.
         """
 
         REQ_CT = 3  # 3 requests per TEST_*
@@ -667,9 +730,9 @@ class CommonHttp1Edge2EdgeTest:
                  )],
         }
 
-        with TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11) as server11, \
-             TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
-                                   handler_cls=RequestHandler10) as server10:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS_11) as server11, \
+             self.create_server(self.server10_port, self.listener10_port, TESTS_10,
+                                handler_cls=RequestHandler10) as server10:
 
             self.EA2.wait_connectors()
 
@@ -677,12 +740,12 @@ class CommonHttp1Edge2EdgeTest:
             client_ct = 4  # per version
             clients = []
             for _ in range(client_ct):
-                clients.append(ThreadedTestClient(TESTS_11,
-                                                  self.http_listener11_port,
-                                                  repeat=repeat_ct))
-                clients.append(ThreadedTestClient(TESTS_10,
-                                                  self.http_listener10_port,
-                                                  repeat=repeat_ct))
+                clients.append(self.create_threaded_client(TESTS_11,
+                                                           self.listener11_host_port,
+                                                           repeat=repeat_ct))
+                clients.append(self.create_threaded_client(TESTS_10,
+                                                           self.listener10_host_port,
+                                                           repeat=repeat_ct))
                 for client in clients:
                     client.wait()
                     client.check_count(repeat_ct * REQ_CT)
@@ -711,13 +774,12 @@ class CommonHttp1Edge2EdgeTest:
             ]
         }
 
-        with TestServer.new_server(self.http_server11_port,
-                                   self.http_listener11_port, TESTS) as server11:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS) as server11:
             self.EA2.wait_connectors()
 
-            client = ThreadedTestClient(TESTS,
-                                        self.http_listener11_port,
-                                        repeat=300)
+            client = self.create_threaded_client(TESTS,
+                                                 self.listener11_host_port,
+                                                 repeat=300)
             client.wait()
             client.check_count(300)
 
@@ -743,13 +805,12 @@ class CommonHttp1Edge2EdgeTest:
 
         # bring up the server and send some requests. This will cause the
         # router to grant credit for clients
-        with TestServer.new_server(self.http_server11_port,
-                                   self.http_listener11_port, TESTS) as server:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS) as server:
             self.EA2.wait_connectors()
 
-            client = ThreadedTestClient(TESTS,
-                                        self.http_listener11_port,
-                                        repeat=2)
+            client = self.create_threaded_client(TESTS,
+                                                 self.listener11_host_port,
+                                                 repeat=2)
             client.wait()
             client.check_count(2)
 
@@ -758,15 +819,15 @@ class CommonHttp1Edge2EdgeTest:
         # adaptor does not immediately teardown the server links.  This will
         # cause the adaptor to run qdr_connection_process without a raw
         # connection available to wake the I/O thread..
-        client = ThreadedTestClient(TESTS,
-                                    self.http_listener11_port,
-                                    repeat=2)
+        client = self.create_threaded_client(TESTS,
+                                             self.listener11_host_port,
+                                             repeat=2)
         # the adaptor will detach the links to the server if the connection
         # cannot be reestablished after 2.5 seconds.  Restart the server before
         # that occurrs to prevent client messages from being released with 503
         # status.
-        with TestServer.new_server(self.http_server11_port,
-                                   self.http_listener11_port, TESTS) as server:
+        with self.create_server(self.server11_port,
+                                self.listener11_port, TESTS) as server:
 
             client.wait()
             client.check_count(2)
@@ -793,11 +854,10 @@ class CommonHttp1Edge2EdgeTest:
 
         # bring up the server and send some requests. This will cause the
         # router to grant credit for clients
-        with TestServer.new_server(self.http_server11_port,
-                                   self.http_listener11_port, TESTS) as server:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS) as server:
             self.EA2.wait_connectors()
 
-            client = ThreadedTestClient(TESTS, self.http_listener11_port)
+            client = self.create_threaded_client(TESTS, self.listener11_host_port)
             client.wait()
             client.check_count(1)
 
@@ -818,16 +878,15 @@ class CommonHttp1Edge2EdgeTest:
             ]
         }
 
-        client = ThreadedTestClient(TESTS_FAIL, self.http_listener11_port)
+        client = self.create_threaded_client(TESTS_FAIL, self.listener11_host_port)
         client.wait()
         client.check_count(1)
 
         # ensure links recover once the server re-appears
-        with TestServer.new_server(self.http_server11_port,
-                                   self.http_listener11_port, TESTS) as server:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS) as server:
             self.EA2.wait_connectors()
 
-            client = ThreadedTestClient(TESTS, self.http_listener11_port)
+            client = self.create_threaded_client(TESTS, self.listener11_host_port)
             client.wait()
             client.check_count(1)
 
@@ -895,25 +954,26 @@ class CommonHttp1Edge2EdgeTest:
             ],
         }
 
-        with TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11) as server11, \
-             TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
-                                   handler_cls=RequestHandler10) as server10:
+        with self.create_server(self.server11_port, self.listener11_port, TESTS_11) as server11, \
+             self.create_server(self.server10_port, self.listener10_port, TESTS_10,
+                                handler_cls=RequestHandler10) as server10:
             self.EA2.wait_connectors()
-
-            client11 = ThreadedTestClient(TESTS_11,
-                                          self.http_listener11_port,
-                                          repeat=2)
+            client11 = self.create_threaded_client(TESTS_11,
+                                                   self.listener11_host_port,
+                                                   repeat=2)
             client11.wait()
             client11.check_count(4)
 
-            client10 = ThreadedTestClient(TESTS_10,
-                                          self.http_listener10_port,
-                                          repeat=2)
+            client10 = self.create_threaded_client(TESTS_10,
+                                                   self.listener10_host_port,
+                                                   repeat=2)
             client10.wait()
             client10.check_count(4)
 
 
 class CommonHttp1OneRouterTest:
+    # Base tests for HTTP/1 One Router tests. Use Http1OneRouterTestBase to
+    # derive One Router test classes
     TESTS_11 = {
         #
         # GET
@@ -1251,6 +1311,11 @@ class CommonHttp1OneRouterTest:
         ]
     }
 
+    @classmethod
+    def create_client(cls, host_port, timeout=TIMEOUT):
+        """Creates basic HTTPConnection. May be overridden for SSL support"""
+        return HTTPConnection(host=host_port, timeout=timeout)
+
     def _do_request(self, client, tests):
         for req, _, val in tests:
             req.send_request(client)
@@ -1264,50 +1329,43 @@ class CommonHttp1OneRouterTest:
                 self.assertEqual(b'', body)
 
     def test_001_get(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener11_host_port)
         self._do_request(client, self.TESTS_11["GET"])
         client.close()
 
     def test_002_head(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener11_host_port)
         self._do_request(client, self.TESTS_11["HEAD"])
         client.close()
 
     def test_003_post(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener11_host_port)
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
 
     def test_004_put(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener11_host_port)
         self._do_request(client, self.TESTS_11["PUT"])
         client.close()
 
     def test_006_head_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener10_host_port)
         self._do_request(client, self.TESTS_10["HEAD"])
         client.close()
 
     def test_007_post_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener10_host_port)
         self._do_request(client, self.TESTS_10["POST"])
         client.close()
 
     def test_008_put_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener10_host_port)
         self._do_request(client, self.TESTS_10["PUT"])
         client.close()
 
 
 class Http1OneRouterTestBase(TestCase):
-    # HTTP/1.1 compliant test cases
+    # HTTP/1.1 One Router test setup
 
     @classmethod
     def router(cls, name, mode, extra):
@@ -1328,16 +1386,33 @@ class Http1OneRouterTestBase(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Start a router"""
+        """Configure server and listener addresses and ports"""
         super(Http1OneRouterTestBase, cls).setUpClass()
 
-        cls.http_server11_port = cls.tester.get_port()
-        cls.http_server10_port = cls.tester.get_port()
-        cls.http_listener11_port = cls.tester.get_port()
-        cls.http_listener10_port = cls.tester.get_port()
+        cls.routers = []
+
+        cls.server11_host = '127.0.0.1'
+        cls.server11_port = cls.tester.get_port()
+        cls.server11_host_port = f"127.0.0.1:{cls.server11_port}"
+
+        cls.listener11_host = 'localhost'
+        cls.listener11_port = cls.tester.get_port()
+        cls.listener11_host_port = f"localhost:{cls.listener11_port}"
+
+        cls.server10_host = '127.0.0.1'
+        cls.server10_port = cls.tester.get_port()
+        cls.server10_host_port = f"127.0.0.1:{cls.server10_port}"
+
+        cls.listener10_host = 'localhost'
+        cls.listener10_port = cls.tester.get_port()
+        cls.listener10_host_port = f"localhost:{cls.listener10_port}"
 
 
 class Http1Edge2EdgeTestBase(TestCase):
+    """
+    Common base class for Edge2Edge tests. Provides common utility functions
+    and host/port configuration.
+    """
     @classmethod
     def router(cls, name, mode, extra):
         config = [
@@ -1355,17 +1430,45 @@ class Http1Edge2EdgeTestBase(TestCase):
         return cls.routers[-1]
 
     @classmethod
+    def create_threaded_client(cls, *args, **kwargs):
+        """
+        Wrapper for creating ThreadedTestClient instances. May be overridden
+        for SSL support
+        """
+        return ThreadedTestClient(*args, **kwargs)
+
+    @classmethod
+    def create_server(cls, *args, **kwargs):
+        """
+        Wrapper for creating TestServer instances. May be overridden for SSL
+        support
+        """
+        return TestServer.new_server(*args, **kwargs)
+
+    @classmethod
     def setUpClass(cls):
-        """Start a router"""
+        """Configure server and listener addresses and ports"""
         super(Http1Edge2EdgeTestBase, cls).setUpClass()
         cls.skip = {}
         cls.routers = []
         cls.INTA_edge1_port   = cls.tester.get_port()
         cls.INTA_edge2_port   = cls.tester.get_port()
-        cls.http_server11_port = cls.tester.get_port()
-        cls.http_listener11_port = cls.tester.get_port()
-        cls.http_server10_port = cls.tester.get_port()
-        cls.http_listener10_port = cls.tester.get_port()
+
+        cls.server11_host = '127.0.0.1'
+        cls.server11_port = cls.tester.get_port()
+        cls.server11_host_port = f"127.0.0.1:{cls.server11_port}"
+
+        cls.listener11_host = 'localhost'
+        cls.listener11_port = cls.tester.get_port()
+        cls.listener11_host_port = f"localhost:{cls.listener11_port}"
+
+        cls.server10_host = '127.0.0.1'
+        cls.server10_port = cls.tester.get_port()
+        cls.server10_host_port = f"127.0.0.1:{cls.server10_port}"
+
+        cls.listener10_host = 'localhost'
+        cls.listener10_port = cls.tester.get_port()
+        cls.listener10_host_port = f"localhost:{cls.listener10_port}"
 
 
 class Http1ClientCloseTestsMixIn:

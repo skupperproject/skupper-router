@@ -597,6 +597,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         _process_request(hreq);
         hreq = 0;  // _process_request *may* free hreq, do not trust this pointer!
 
+        qd_raw_connection_drain_read_write_buffers(hconn->raw_conn);
+
         //
         // Try to reconnect to the server. Leave the links intact so pending
         // requests are not aborted.  If we fail to reconnect after
