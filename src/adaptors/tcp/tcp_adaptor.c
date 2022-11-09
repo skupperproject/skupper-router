@@ -966,13 +966,13 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
     if (DEQ_SIZE(encrypted_buffs) > 0) {
         DEQ_APPEND(conn->out_buffs, encrypted_buffs);
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%" PRIu64 "] encrypt_outgoing_tls() DEQ_SIZE(conn->out_buffs)=%zu\n", conn->conn_id,
+               "[C%" PRIu64 "] encrypt_outgoing_tls() DEQ_SIZE(conn->out_buffs)=%zu", conn->conn_id,
                DEQ_SIZE(conn->out_buffs));
     }
     if (write_buffers && DEQ_SIZE(conn->out_buffs) > 0) {
         assert(!IS_ATOMIC_FLAG_SET(&conn->raw_closed_write));
         int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i\n",
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] encrypt_outgoing_tls() num_buffers_written=%i",
                conn->conn_id, num_buffers_written);
     }
 }
