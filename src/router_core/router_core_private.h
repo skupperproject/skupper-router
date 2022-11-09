@@ -990,6 +990,7 @@ void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_
 bool qdr_link_is_idle_CT(const qdr_link_t *link);
 qdr_terminus_t *qdr_terminus_router_control(void);  ///< new terminus for router control links
 qdr_terminus_t *qdr_terminus_router_data(void);  ///< new terminus for router links
+qdr_terminus_t *qdr_terminus_inter_edge(void);  ///< new terminus for inter-edge links
 
 qdr_query_t *qdr_query(qdr_core_t              *core,
                        void                    *context,
