@@ -537,6 +537,10 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         conn->raw_read_shutdown = true;
     }
 
+    if (qd_tls_has_output(conn->tls))
+        encrypt_outgoing_tls(conn, 0, true);
+    handle_outgoing(conn);
+
     return count;
 }
 
