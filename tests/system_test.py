@@ -1143,9 +1143,14 @@ class Tester:
         try:
             p.teardown()
         except Exception as e:
-            raise NcatException("ncat failed:"
-                                " stdout='%s' stderr='%s' returncode=%d" % (out, err, p.returncode)
-                                if out or err else str(e))
+            if err and b'Ncat: Input/output error' in err:
+                # For now, we are ignoring the case where
+                # ncat produces a specific Input/output error.
+                self.logger.log(f"_ncat_runner err={err}")
+            else:
+                raise NcatException("ncat failed:"
+                                    " stdout='%s' stderr='%s' returncode=%d" % (out, err, p.returncode)
+                                    if out or err else str(e))
         return out, err
 
     def get_port(self, socket_address_family: str = 'IPv4') -> int:
