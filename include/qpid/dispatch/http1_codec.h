@@ -187,7 +187,7 @@ uint32_t h1_codec_request_state_response_code(const h1_codec_request_state_t *hr
 // true when codec has encoded/decoded a complete request message
 bool h1_codec_request_complete(const h1_codec_request_state_t *hrs);
 
-// true when codec has encoded/decoded a complete response message
+// true when codec has encoded/decoded all response(s) messages associated with the current request
 bool h1_codec_response_complete(const h1_codec_request_state_t *hrs);
 
 // query the amount of octets read (in) and written (out) for a request
