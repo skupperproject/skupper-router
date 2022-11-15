@@ -199,11 +199,6 @@ void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error
 void qdr_http1_connection_free(qdr_http1_connection_t *hconn);
 
 void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq);
-void qdr_http1_error_response(qdr_http1_request_base_t *hreq,
-                              int error_code,
-                              const char *reason);
-void qdr_http1_rejected_response(qdr_http1_request_base_t *hreq,
-                                 const qdr_error_t *error);
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context);
 
 // http1_client.c protocol adaptor callbacks

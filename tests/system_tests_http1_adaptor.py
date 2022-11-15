@@ -26,13 +26,14 @@ import json
 import select
 import socket
 from time import sleep, time
+from typing import Optional
 from email.parser import BytesParser
 from http.client import HTTPConnection
 
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
-from system_test import retry_exception, retry, curl_available, run_curl
+from system_test import retry_exception, curl_available, run_curl
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -43,6 +44,45 @@ from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
 from http1_tests import wait_http_listeners_up
 from http1_tests import HttpAdaptorListenerConnectTestBase
+
+
+class SimpleRequestTimeout(Exception):
+    """Thrown by http1_simple_request when timeout occurs during socket
+    read. Contains any reply data read from the server prior to the timeout
+    """
+    pass
+
+
+def http1_simple_request(raw_request: bytes,
+                         port: int,
+                         host: Optional[str] = '127.0.0.1',
+                         timeout: Optional[float] = TIMEOUT):
+    """Perform a simple HTTP/1 request and return the response read from the
+    server. raw_request is a complete HTTP/1 request message. The client socket
+    will be read from until either it is closed or the TIMEOUT occurs.
+
+    It is expected that raw_request will include a "Connection: close" header
+    to prevent the TIMEOUT exception from being thrown.
+    """
+    reply = b''
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        client.settimeout(timeout)
+
+        # allow time for the listening socket to initialize
+        retry_exception(lambda: client.connect((host, port)),
+                        delay=0.25, exception=ConnectionRefusedError)
+        client.sendall(raw_request, socket.MSG_WAITALL)
+        try:
+            while True:
+                rc = client.recv(4096)
+                if not rc:
+                    # socket closed (response complete)
+                    break
+                reply += rc
+        except TimeoutError:
+            raise SimpleRequestTimeout(reply)
+    return reply
 
 
 class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
@@ -1132,12 +1172,8 @@ class Http1AdaptorAggregationTest(TestCase):
 
         try:
             self.router.wait_address('multicast/json', subscribers=2)
-
-            # wait for the Json listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListenerJson')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0],
+                                   l_filter={'name': 'httpListenerJson'})
 
             url = f"http://127.0.0.1:{self.json_listener_port}/GET/json_aggregation"
             args = ['--http1.1', '-G', url, '--connect-timeout', str(TIMEOUT)]
@@ -1205,12 +1241,8 @@ class Http1AdaptorAggregationTest(TestCase):
 
         try:
             self.router.wait_address('multicast/multipart', subscribers=2)
-
-            # wait for the client listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListenerMPart')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0],
+                                   l_filter={'name': 'httpListenerMPart'})
 
             # normally I'd use curl, but for the life of me I cannot get it to
             # return the full raw http response message, which is necessary to
@@ -1221,22 +1253,7 @@ class Http1AdaptorAggregationTest(TestCase):
                 + b'Connection: close\r\n' \
                 + b'\r\n'
 
-            reply = b''
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-                client.settimeout(TIMEOUT)
-                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-                # allow time for the listening socket to initialize
-                retry_exception(lambda: client.connect(("127.0.0.1",
-                                                        self.mpart_listener_port)),
-                                delay=0.25, exception=ConnectionRefusedError)
-                client.sendall(request, socket.MSG_WAITALL)
-                while True:
-                    rc = client.recv(4096)
-                    if not rc:
-                        # socket closed (response complete)
-                        break
-                    reply += rc
+            reply = http1_simple_request(request, port=self.mpart_listener_port)
 
             # mime parser chokes on HTTP response line, remove it:
             prefix = b'HTTP/1.1 200\r\n'
@@ -1260,6 +1277,183 @@ class Http1AdaptorAggregationTest(TestCase):
         finally:
             server1.wait()  # this will shutdown both servers
             self.router.wait_address_unsubscribed('multicast/multipart')
+
+
+class Http1AdaptorEventChannelTest(TestCase):
+    """Verify the event-channel functionality."""
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorEventChannelTest, cls).setUpClass()
+
+        cls.server_port = cls.tester.get_port()
+        cls.listener_port = cls.tester.get_port()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTPEventChannel'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            ('httpConnector', {
+                'name': 'httpConnector1',
+                'port': cls.server_port,
+                'host': '127.0.0.1',
+                'protocolVersion': 'HTTP1',
+                'eventChannel': 'true',
+                'address': 'closest/EventChannel'}),
+            ('httpListener', {
+                'name': 'httpListener1',
+                'port': cls.listener_port,
+                'host': '0.0.0.0',
+                'protocolVersion': 'HTTP1',
+                'eventChannel': 'true',
+                'address': 'closest/EventChannel'}),
+
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('HTTP1EventChannel', config, wait=False)
+        # do not wait for connectors - servers haven't been created yet
+        cls.router.wait_ports()
+        cls.router.wait_startup_message()
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_event_channel_curl(self):
+        """Verify event channel post via curl"""
+        TESTS = {
+            "POST": [
+                (RequestMsg("POST", "/POST/EventChannel/1",
+                            headers={"Content-Length": 33},
+                            body=b'This is not used dummy test entry'),
+                 ResponseMsg(204, reason="No Content",
+                             headers={"Content-Length": 0,
+                                      "Dummy-header": "OOGA BOOGA!"}),
+                 None),
+            ]
+        }
+
+        # Cannot use a context for the servers since this is POST event channel
+        # which does not return a response. Exiting the context will cause
+        # a POST /SHUTDOWN to occur, but the test will fail waiting for a
+        # response to the shutdown command
+
+        try:
+            server = TestServer.new_server(self.server_port,
+                                           self.listener_port,
+                                           TESTS)
+        except Exception as exc:
+            print(f"Failed to start test server: {exc}", flush=True)
+            raise
+
+        try:
+            self.router.wait_address('closest/EventChannel', subscribers=1)
+            wait_http_listeners_up(self.router.addresses[0])
+
+            # try a simple POST via curl:
+
+            url = f"http://127.0.0.1:{self.listener_port}/POST/EventChannel/1"
+            args = ['--http1.1', '-d', '@-', '--connect-timeout', str(TIMEOUT),
+                    '--show-error', '--silent', url]
+            try:
+                returncode, out, err = run_curl(args, input='X' * 1000)
+                self.assertEqual(0, returncode, "curl returned a failure code")
+                self.assertEqual(0, len(out), f"Unexpected content returned: '{out}'")
+                self.assertEqual(0, len(err), f"Unexpected error returned: '{err}'")
+            except Exception as exc:
+                print(f"CURL FAILED: '{exc}'", flush=True)
+                raise
+
+        finally:
+            server.wait(check_reply=False)
+            self.router.wait_address_unsubscribed('closest/EventChannel')
+
+    def test_event_channel_raw(self):
+        """Test event channel post and error requests"""
+        TESTS = {
+            "POST": [
+                (RequestMsg("POST", "/POST/EventChannel/1",
+                            headers={"Content-Length": 33},
+                            body=b'This is not used dummy test entry'),
+                 ResponseMsg(204, reason="No Content",
+                             headers={"Content-Length": 0,
+                                      "Dummy-header": "OOGA BOOGA!"}),
+                 None),
+            ],
+            "GET": [
+                (RequestMsg("GET", "/POST/EventChannel/1",
+                            headers={"Content-Length": 33},
+                            body=b'This is not used dummy test entry'),
+                 ResponseMsg(204, reason="No Content",
+                             headers={"Content-Length": 0,
+                                      "Dummy-header": "OOGA BOOGA!"}),
+                 None),
+            ]
+        }
+
+        # Cannot use a context for the servers since this is POST event channel
+        # which does not return a response. Exiting the context will cause
+        # a POST /SHUTDOWN to occur, but the test will fail waiting for a
+        # response to the shutdown command
+
+        try:
+            server = TestServer.new_server(self.server_port,
+                                           self.listener_port,
+                                           TESTS)
+        except Exception as exc:
+            print(f"Failed to start test server: {exc}", flush=True)
+            raise
+
+        try:
+            self.router.wait_address('closest/EventChannel', subscribers=1)
+            wait_http_listeners_up(self.router.addresses[0])
+
+            # try a simple POST:
+
+            request = b'POST /POST/EventChannel/1 HTTP/1.1\r\n' \
+                + b'Content-Length: 19\r\n' \
+                + b'Connection: close\r\n' \
+                + b'\r\n' \
+                + b'This is a POST body'
+            expect = b'HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n'
+
+            reply = http1_simple_request(request, port=self.listener_port)
+            self.assertEqual(expect, reply, "Expected response not received")
+
+            # error case - non-POST command:
+
+            request = b'GET /GET/EventChannel/1 HTTP/1.1\r\n' \
+                + b'Content-Length: 18\r\n' \
+                + b'\r\n' \
+                + b'This is a GET body'
+            expect = b'HTTP/1.1 405 Method Not Allowed\r\n' \
+                + b'Content-Length: 68\r\n' \
+                + b'Content-Type: text/plain\r\n\r\n' \
+                + b'Invalid method for event channel httpListener, only POST is allowed.'
+
+            reply = http1_simple_request(request, port=self.listener_port)
+            self.assertEqual(expect, reply, "Expected error response not received")
+
+            # non-error case - pipelined POST commands:
+
+            request = b'POST /POST/EventChannel/1 HTTP/1.1\r\n' \
+                + b'Content-Length: 27\r\n' \
+                + b'\r\n' \
+                + b'This is the first POST body'
+            request += b'POST /POST/EventChannel/2 HTTP/1.1\r\n' \
+                + b'Content-Length: 28\r\n' \
+                + b'Connection: close\r\n' \
+                + b'\r\n' \
+                + b'This is the second POST body'
+            expect = b'HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n' \
+                + b'HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n'
+
+            reply = http1_simple_request(request, port=self.listener_port)
+            self.assertEqual(expect, reply, "Expected pipelined response not received")
+
+        finally:
+            server.wait(check_reply=False)
+            self.router.wait_address_unsubscribed('closest/EventChannel')
 
 
 if __name__ == '__main__':

@@ -75,36 +75,39 @@ typedef struct h1_codec_config_t {
 
     h1_codec_connection_type_t type;
 
+    //
+    // TX message callbacks
+    //
     // Callbacks to send data out the raw connection.  These callbacks are
     // triggered by the message creation API (h1_codec_tx_*) Note well: these
     // callbacks are called in the order in which the data must be written out
     // the raw connection!
+    //
 
-    // tx_buffers()
-    // Send a list of buffers containing encoded HTTP message data. The caller
-    // assumes ownership of the buffer list and must release the buffers when
-    // done.  len is set to the total octets of data in the list.
+    // Provides a list of buffers containing encoded HTTP message data that needs to be sent to the peer. The caller
+    // assumes ownership of the buffer list and must release the buffers when done.  len is set to the total octets of
+    // data in the list.
     //
     void (*tx_buffers)(h1_codec_request_state_t *hrs, qd_buffer_list_t *data, unsigned int len);
 
-    // tx_stream_data()
-    // Called with stream_data containing encoded HTTP message data. Only
-    // called if the outgoing HTTP message has a body. The caller assumes
-    // ownership of the stream_data and must release it when done.
+    // Provides a single stream_data containing encoded HTTP message data that needs to be sent to the peer. Only called
+    // if the outgoing HTTP message has a body. The caller assumes ownership of the stream_data and must release it when
+    // done.
     //
     void (*tx_stream_data)(h1_codec_request_state_t *hrs, qd_message_stream_data_t *stream_data);
 
     //
     // RX message callbacks
     //
-    // These callbacks should return 0 on success or non-zero on error.  A
-    // non-zero return code is used as the return code from
-    // h1_codec_connection_rx_data()
+    // Callbacks invoked when parsing incoming raw connection data. These callbacks are invoked from the
+    // h1_codec_connection_rx_data() call. These callbacks should return 0 on success or non-zero on error.  A non-zero
+    // return code is used as the return code from h1_codec_connection_rx_data()
     //
 
     // HTTP request received - new h1_codec_request_state_t created (hrs).  This
     // hrs must be supplied in the h1_codec_tx_response() method when sending the
     // response.
+    //
     int (*rx_request)(h1_codec_request_state_t *hrs,
                       const char *method,
                       const char *target,
@@ -115,7 +118,7 @@ typedef struct h1_codec_config_t {
     // value of the h1_codec_tx_request() method used to create the corresponding
     // request.  Note well that if status_code is Informational (1xx) then this
     // response is NOT the last response for the current request (See RFC7231,
-    // 6.2 Informational 1xx).  The request_done callback will be called after
+    // 6.2 Informational 1xx).  The request_complete callback will be called after
     // the LAST response has been received.
     //
     int (*rx_response)(h1_codec_request_state_t *hrs,
@@ -124,9 +127,17 @@ typedef struct h1_codec_config_t {
                        uint32_t version_major,
                        uint32_t version_minor);
 
+    // Invoked for each HTTP header received
+    //
     int (*rx_header)(h1_codec_request_state_t *hrs, const char *key, const char *value);
+
+    // invoked after the last HTTP header (after rx_header() callback
+    //
     int (*rx_headers_done)(h1_codec_request_state_t *hrs, bool has_body);
 
+    // invoked as the HTTP1 message body is parsed. If more is true then the body is not complete and additional call(s)
+    // to rx_body will be made as more body is parsed. len is set to the total octest of data in the body list.
+    //
     int (*rx_body)(h1_codec_request_state_t *hrs, qd_buffer_list_t *body, size_t len, bool more);
 
     // Invoked after a received HTTP message has been completely parsed.
@@ -235,7 +246,7 @@ int h1_codec_tx_body(h1_codec_request_state_t *hrs, qd_message_stream_data_t *st
 
 // Write body as string
 //
-int h1_codec_tx_body_str(h1_codec_request_state_t *hrs, char *data);
+int h1_codec_tx_body_str(h1_codec_request_state_t *hrs, const char *data);
 
 // outgoing message construction complete.  The request_complete() callback MAY
 // occur during this call.

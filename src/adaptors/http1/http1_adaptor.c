@@ -178,52 +178,6 @@ void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error
     // event
 }
 
-
-void qdr_http1_rejected_response(qdr_http1_request_base_t *hreq,
-                                 const qdr_error_t        *error)
-{
-    char *reason = 0;
-    if (error) {
-        size_t len = 0;
-        char *ename = qdr_error_name(error);
-        char *edesc = qdr_error_description(error);
-        if (ename) len += strlen(ename);
-        if (edesc) len += strlen(edesc);
-        if (len) {
-            reason = qd_malloc(len + 2);
-            reason[0] = 0;
-            if (ename) {
-                strcat(reason, ename);
-                strcat(reason, " ");
-            }
-            if (edesc)
-                strcat(reason, edesc);
-        }
-        free(ename);
-        free(edesc);
-    }
-
-    qdr_http1_error_response(hreq, HTTP1_STATUS_BAD_REQ,
-                             reason ? reason : "Invalid Request");
-    free(reason);
-}
-
-
-// send a server error response
-//
-void qdr_http1_error_response(qdr_http1_request_base_t *hreq,
-                              int error_code,
-                              const char *reason)
-{
-    if (hreq->lib_rs) {
-        bool ignored;
-        h1_codec_tx_response(hreq->lib_rs, error_code, reason, 1, 1);
-        h1_codec_tx_add_header(hreq->lib_rs, "Content-Length", "0");
-        h1_codec_tx_done(hreq->lib_rs, &ignored);
-    }
-}
-
-
 //
 // Raw Connection Write Buffer Management
 //
