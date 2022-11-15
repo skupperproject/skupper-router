@@ -23,8 +23,10 @@ under the License
 ** Name the branch with the patch part set to 'x'. For example 2.0.x
 * Test the branch to make sure there are no obvious bugs. If bugs are found, create relevant github issues, fix the bugs,
   push the fixes to the main branch and cherry-pick those same fixes to the newly created branch.
-* When you are ready to create a release, create a tag on the commit in the branch that you want to create the release
-  on and push the tag to the skupper-router git repo. The tag name should contain the release number you are trying
+* When you are ready to create a release, first change the version of proton in the Containerfile from main to the
+  latest released version of proton and commit the change.
+  Next, create a tag on the commit in the branch that you want to create the release
+  and push the tag to the skupper-router git repo. The tag name should contain the release number you are trying
   to release E.g. 2.0.0
   ** Note that there is no need to change any versions on the branch. The *tag name* will be used as the *container's tag*
 * The *https://github.com/skupperproject/skupper-router/blob/main/.github/workflows/release.yml[Release skupper-router,window=_blank]*
