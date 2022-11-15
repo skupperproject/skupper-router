@@ -1178,11 +1178,21 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                                                   dstate, false);
             }
         }
-        qd_log(log, QD_LOG_DEBUG,
-               "[C%" PRIu64
-               "] PN_RAW_CONNECTION_WRITTEN %s pn_raw_connection_take_written_buffers wrote %zu bytes. Total written "
-               "%" PRIu64 " bytes, Total encrypted bytes=%" PRIu64 "",
-               conn->conn_id, qdr_tcp_connection_role_name(conn), written, conn->bytes_out, conn->encrypted_bytes_out);
+        if (conn->require_tls) {
+            qd_log(log, QD_LOG_DEBUG,
+                   "[C%" PRIu64
+                   "] PN_RAW_CONNECTION_WRITTEN %s wrote %zu encrypted bytes. Total unencrypted data bytes written on "
+                   "this connection so far="
+                   "%" PRIu64 " , Total encrypted bytes written on this connection so far=%" PRIu64 "",
+                   conn->conn_id, qdr_tcp_connection_role_name(conn), written, conn->bytes_out,
+                   conn->encrypted_bytes_out);
+        } else {
+            qd_log(log, QD_LOG_DEBUG,
+                   "[C%" PRIu64
+                   "] PN_RAW_CONNECTION_WRITTEN %s wrote %zu bytes. Total bytes written on this connection so far="
+                   "%" PRIu64 " bytes",
+                   conn->conn_id, qdr_tcp_connection_role_name(conn), written, conn->bytes_out);
+        }
         handle_outgoing(conn);
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
