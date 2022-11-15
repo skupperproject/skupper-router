@@ -33,7 +33,7 @@ from http.client import HTTPConnection
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
-from system_test import retry_exception, retry, curl_available, run_curl
+from system_test import retry_exception, curl_available, run_curl
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -1172,12 +1172,8 @@ class Http1AdaptorAggregationTest(TestCase):
 
         try:
             self.router.wait_address('multicast/json', subscribers=2)
-
-            # wait for the Json listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListenerJson')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0],
+                                   l_filter={'name': 'httpListenerJson'})
 
             url = f"http://127.0.0.1:{self.json_listener_port}/GET/json_aggregation"
             args = ['--http1.1', '-G', url, '--connect-timeout', str(TIMEOUT)]
@@ -1245,12 +1241,8 @@ class Http1AdaptorAggregationTest(TestCase):
 
         try:
             self.router.wait_address('multicast/multipart', subscribers=2)
-
-            # wait for the client listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListenerMPart')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0],
+                                   l_filter={'name': 'httpListenerMPart'})
 
             # normally I'd use curl, but for the life of me I cannot get it to
             # return the full raw http response message, which is necessary to
@@ -1356,12 +1348,7 @@ class Http1AdaptorEventChannelTest(TestCase):
 
         try:
             self.router.wait_address('closest/EventChannel', subscribers=1)
-
-            # wait for the listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListener1')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0])
 
             # try a simple POST via curl:
 
@@ -1419,12 +1406,7 @@ class Http1AdaptorEventChannelTest(TestCase):
 
         try:
             self.router.wait_address('closest/EventChannel', subscribers=1)
-
-            # wait for the listener to activate
-            mgmt = self.router.qd_manager
-            self.assertTrue(retry(lambda:
-                                  mgmt.read(name='httpListener1')['operStatus']
-                                  == 'up'))
+            wait_http_listeners_up(self.router.addresses[0])
 
             # try a simple POST:
 

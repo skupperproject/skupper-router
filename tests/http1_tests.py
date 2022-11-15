@@ -445,7 +445,7 @@ def _wait_adaptor_listeners_up(listener_type,
     attributes.add("operStatus")
 
     def _filter_listener(listener):
-        for key, value in l_filter:
+        for key, value in l_filter.items():
             if listener[key] != value:
                 return False
         return True
