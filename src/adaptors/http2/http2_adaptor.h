@@ -80,6 +80,7 @@ struct qdr_http2_stream_data_t {
     qd_message_stream_data_t *next_stream_data;
     qd_message_stream_data_t *footer_stream_data;
     qd_iterator_t            *footer_stream_data_iter;
+    vflow_record_t           *vflow;
     DEQ_LINKS(qdr_http2_stream_data_t);
 
     qd_message_stream_data_result_t  curr_stream_data_result;
@@ -88,6 +89,10 @@ struct qdr_http2_stream_data_t {
     int                            in_link_credit;   // provided by router
     int32_t                        stream_id;
     qd_http2_stream_status_t       status;
+    qd_timestamp_t                   start;
+    qd_timestamp_t                   stop;
+    int                              bytes_in;
+    int                              bytes_out;
     bool                     entire_footer_arrived;
     bool                     entire_header_arrived;
     bool                     out_msg_header_sent;
@@ -105,16 +110,13 @@ struct qdr_http2_stream_data_t {
     bool                     in_dlv_decrefed;
     bool                     out_dlv_decrefed;
     bool                     body_data_added_to_msg;
-    int                      bytes_in;
-    int                      bytes_out;
-    qd_timestamp_t           start;
-    qd_timestamp_t           stop;
 };
 
 struct qdr_http2_connection_t {
     qd_handler_context_t     context;
     qdr_connection_t        *qdr_conn;
     pn_raw_connection_t     *pn_raw_conn;
+    vflow_record_t           *vflow;
     pn_raw_buffer_t          read_buffers[4];
     qd_timer_t               *activate_timer;
     qd_http_adaptor_config_t *config;

@@ -258,15 +258,14 @@ qd_http_listener_t *qd_http_listener(qd_server_t *server)
     li->server = server;
     li->config = qd_http_adaptor_config();
     DEQ_ITEM_INIT(li);
-
     return li;
 }
 
 void qd_http_listener_decref(qd_http_listener_t *li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
-        qd_free_http_adaptor_config(li->config);
         vflow_end_record(li->vflow);
+        qd_free_http_adaptor_config(li->config);
         qd_tls_domain_decref(li->tls_domain);
         sys_atomic_destroy(&li->ref_count);
         free_qd_http_listener_t(li);
@@ -286,14 +285,15 @@ qd_http_connector_t *qd_http_connector(qd_server_t *server)
     c->server = server;
     c->config = qd_http_adaptor_config();
     DEQ_ITEM_INIT(c);
+
     return c;
 }
 
 void qd_http_connector_decref(qd_http_connector_t* c)
 {
     if (c && sys_atomic_dec(&c->ref_count) == 1) {
-        qd_free_http_adaptor_config(c->config);
         vflow_end_record(c->vflow);
+        qd_free_http_adaptor_config(c->config);
         qd_tls_domain_decref(c->tls_domain);
         sys_atomic_destroy(&c->ref_count);
         free_qd_http_connector_t(c);
