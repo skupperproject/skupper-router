@@ -44,6 +44,7 @@ from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
 from http1_tests import wait_http_listeners_up
 from http1_tests import HttpAdaptorListenerConnectTestBase
+from http1_tests import HttpTlsBadConfigTestsBase
 
 
 class SimpleRequestTimeout(Exception):
@@ -1454,6 +1455,26 @@ class Http1AdaptorEventChannelTest(TestCase):
         finally:
             server.wait(check_reply=False)
             self.router.wait_address_unsubscribed('closest/EventChannel')
+
+
+class Http1TlsBadConfigTests(HttpTlsBadConfigTestsBase):
+    PROTOCOL_VERSION = "HTTP1"
+
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TlsBadConfigTests, cls).setUpClass()
+
+    def test_connector_mgmt_missing_ssl_profile(self):
+        self._test_connector_mgmt_missing_ssl_profile()
+
+    def test_connector_mgmt_missing_ca_file(self):
+        self._test_connector_mgmt_missing_ca_file()
+
+    def test_listener_mgmt_missing_ssl_profile(self):
+        self._test_listener_mgmt_missing_ssl_profile()
+
+    def test_listener_mgmt_missing_ca_file(self):
+        self._test_listener_mgmt_missing_ca_file()
 
 
 if __name__ == '__main__':
