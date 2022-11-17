@@ -289,13 +289,18 @@ class TcpTlsGoodListenerBadClient(TestCase):
                                  ssl_info=ssl_info)
             self.assertEqual(len(out), 0)
         except NcatException as e:
-            expected_error = "ncat failed: stdout='b''' stderr='b'Ncat: Input/output error"
+            # In some CI test runs, the NcatException is raised.
+            # In other cases no exception is raised
+            # This error happens in F36
+            expected_error1 = "ncat failed: stdout='b''' stderr='b'Ncat: Input/output error"
+            # This error happens in other operating sytems.
+            expected_error2 = "ncat failed: stdout='b''' stderr='b'Ncat: Connection refused"
             actual_error = str(e)
             error_found = False
-            if expected_error in actual_error:
+            if expected_error1 in actual_error or expected_error2 in actual_error:
                 error_found = True
             self.assertTrue(error_found, f"Expected error message not found. "
-                                         f"Expected {expected_error} but got {actual_error}")
+                                         f"Expected {expected_error1} or  {expected_error2} but got {actual_error}")
 
         self.router.wait_log_message("certificate verify failed")
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
