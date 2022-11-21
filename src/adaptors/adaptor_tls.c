@@ -120,6 +120,13 @@ qd_tls_t *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, q
     return tls;
 }
 
+int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char *alpn_protocols[], int alpn_protocol_count)
+{
+    assert(alpn_protocol_count > 0);
+    assert(tls_domain);
+    return pn_tls_config_set_alpn_protocols(tls_domain->pn_tls_config, alpn_protocols, alpn_protocol_count);
+}
+
 qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                const qd_dispatch_t       *qd,
                                qd_log_source_t           *log_source,
@@ -265,7 +272,7 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
         // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt
         //
         if (alpn_protocols) {
-            res = pn_tls_config_set_alpn_protocols(tls_domain->pn_tls_config, alpn_protocols, alpn_protocol_count);
+            res = qd_tls_set_alpn_protocols(tls_domain, alpn_protocols, alpn_protocol_count);
             if (res != 0) {
                 qd_log(log_source,
                        QD_LOG_ERROR,

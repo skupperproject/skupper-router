@@ -60,6 +60,12 @@ ALLOC_DEFINE(qd_tcp_connector_t);
 #define LOCK   sys_mutex_lock
 #define UNLOCK sys_mutex_unlock
 
+#define TCP_NUM_ALPN_PROTOCOLS 3
+const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
+
+const char *alpn        = "alpn";
+int         alpn_length = 4;
+
 typedef struct qdr_tcp_connection_t qdr_tcp_connection_t;
 
 
@@ -158,6 +164,21 @@ static void qdr_associate_vflow_flows(qdr_tcp_connection_t *tc, qd_message_t *ms
 static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t *tc);
 static void handle_outgoing(qdr_tcp_connection_t *conn);
 static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff, bool write_buffers);
+
+static void get_alpn_protocol(qdr_tcp_connection_t *conn, char **alpn_protocol)
+{
+    const char *protocol_name;
+    size_t      protocol_name_length;
+    if (pn_tls_get_alpn_protocol(qd_tls_get_pn_tls_session(conn->tls), &protocol_name, &protocol_name_length)) {
+        //
+        // An ALPN protocol was present. We want to get this protocol.
+        //
+        *alpn_protocol = qd_calloc(protocol_name_length + 1, sizeof(char));
+        memmove(*alpn_protocol, protocol_name, protocol_name_length);
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Using negotiated protocol %s obtained via ALPN",
+               conn->conn_id, *alpn_protocol);
+    }
+}
 
 // is the incoming byte window full
 //
@@ -474,10 +495,24 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         // Add the application properties
         //
         props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, props);
-        qd_compose_start_map(props);
+        qd_compose_start_map(props);  // start map
         qd_compose_insert_symbol(props, QD_AP_FLOW_ID);
         vflow_serialize_identity(conn->vflow, props);
-        qd_compose_end_map(props);
+        if (conn->require_tls) {
+            char *alpn_protocol = 0;
+            get_alpn_protocol(conn, &alpn_protocol);
+            if (alpn_protocol) {
+                qd_compose_insert_string_n(props, (const char *) alpn, alpn_length);  // key - "alpn"
+                qd_compose_insert_string_n(
+                    props, (const char *) alpn_protocol,
+                    strlen(alpn_protocol));  // value - whatever the agreed upon ALPN protocol is.
+                free(alpn_protocol);
+            } else {
+                qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] %s No ALPN protocol was negotiated", conn->conn_id,
+                       qdr_tcp_connection_role_name(conn));
+            }
+        }
+        qd_compose_end_map(props);  // end map
 
         qd_message_compose_2(msg, props, false);
         qd_compose_free(props);
@@ -810,7 +845,7 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
         }
         assert(!IS_ATOMIC_FLAG_SET(&conn->raw_closed_write));
         int num_buffers_written = qd_raw_connection_write_buffers(conn->pn_raw_conn, &conn->out_buffs);
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] handle_outgoing() num_buffers_written=%i\n",
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] handle_outgoing() num_buffers_written=%i",
                conn->conn_id, num_buffers_written);
         if (conn->read_eos_seen) {
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
@@ -1344,6 +1379,35 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
     qdr_link_set_context(tc->outgoing_link, tc);
 }
 
+static void set_alpn_protocol(qdr_tcp_connection_t *conn, qd_message_t *message, char **alpn_protocol)
+{
+    qd_iterator_t     *app_properties_iter = qd_message_field_iterator(message, QD_FIELD_APPLICATION_PROPERTIES);
+    qd_parsed_field_t *app_properties_fld  = qd_parse(app_properties_iter);
+    uint32_t           count               = qd_parse_sub_count(app_properties_fld);
+    bool               has_alpn_protocol   = false;
+    if (count > 1) {
+        for (int idx = 0; idx < count; idx++) {
+            qd_parsed_field_t *key     = qd_parse_sub_key(app_properties_fld, idx);
+            qd_parsed_field_t *val     = qd_parse_sub_value(app_properties_fld, idx);
+            qd_iterator_t     *key_raw = qd_parse_raw(key);
+            qd_iterator_t     *val_raw = qd_parse_raw(val);
+            if (qd_iterator_equal(key_raw, (const unsigned char *) alpn)) {
+                has_alpn_protocol = true;
+                *alpn_protocol    = (char *) qd_iterator_copy(val_raw);
+                qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] qdr_tcp_connection_egress ALPN protocol: %s", conn->conn_id, *alpn_protocol);
+                break;
+            }
+        }
+    }
+
+    if (!has_alpn_protocol)
+        *alpn_protocol = 0;
+
+    qd_iterator_free(app_properties_iter);
+    qd_parse_free(app_properties_fld);
+}
+
 // Create a new TCP connection to the server (egress). Note that the actual qd_tcp_connection_t instance is NOT returned
 // from this function: doing so would cause a race since the new connection is scheduled on a different proactor thread
 // by this call. That thread may have deleted the new connection (if an error occurs) before this function returns.
@@ -1369,9 +1433,39 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t      *connector,
     tc->is_egress_dispatcher_conn = false;
 
     tc->require_tls = !!connector->tls_domain;
+    qd_message_t *msg = qdr_delivery_message(initial_delivery);
     if (tc->require_tls) {
         // Since TLS is required on this connection, try to initialize TLS attributes
         // from the associated sslProfile.
+        char *alpn_protocol;
+        set_alpn_protocol(tc, msg, &alpn_protocol);
+
+        qd_tcp_connector_t *connector = tc->connector;
+        if (alpn_protocol) {
+            const char *alpn_protocols[] = {alpn_protocol};
+            qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] Calling qd_tls_set_alpn_protocols on egress connection using ALPN protocol as %s",
+                   tc->conn_id, alpn_protocol);
+            //
+            // We need to call qd_tls_set_alpn_protocols *before* the call to pn_tls_start() in qd_tls() constructor can
+            // be called. For the time being, we are using only a single qd_tls_domain object per connector. We are not
+            // going to try to copy qd_tls_domain objects. The assumption is that users will run only one protocol
+            // per connector. If you need a new protocol, use a different connector.
+            //
+            int res = qd_tls_set_alpn_protocols(connector->tls_domain, alpn_protocols, 1);
+            free(alpn_protocol);
+            if (res != 0) {
+                qd_log(tcp_adaptor->log_source,
+                       QD_LOG_ERROR,
+                       "Adaptor %s %s: failed to configure ALPN protocols (%d)",
+                       qdr_tcp_connection_role_name(tc),
+                       connector->config->adaptor_config->name,
+                       res);
+                free_qdr_tcp_connection(tc);  // this will undo the connector incref
+                return false;
+            }
+        }
+
         tc->tls = qd_tls(connector->tls_domain, tc, tc->conn_id, on_tls_connection_secured);
         if (!tc->tls) {
             // There was a failure trying to setup the connector sslProfile.  Look at the logs for failure reason.
@@ -1389,7 +1483,6 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t      *connector,
     vflow_add_rate(tc->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
 
-    qd_message_t *msg = qdr_delivery_message(initial_delivery);
     qdr_associate_vflow_flows(tc, msg);
     vflow_set_trace(tc->vflow, msg);
 
@@ -1512,7 +1605,9 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
     }
 
     if (li->config->adaptor_config->ssl_profile_name) {
-        li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, tcp_adaptor->log_source, 0, 0, true);
+        // On the TCP TLS listener side, send "http/1.1", "http/1.0" and "h2" as ALPN protocols
+        li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, tcp_adaptor->log_source, tcp_alpn_protocols,
+                                       TCP_NUM_ALPN_PROTOCOLS, true);
         if (!li->tls_domain) {
             // note qd_tls_domain logged the error
             qd_tcp_listener_decref(li);
