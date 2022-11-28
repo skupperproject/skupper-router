@@ -1778,15 +1778,9 @@ def curl_available():
     Return a tuple containing the version if found, otherwise
     return false.
     """
-    popen_args = ['curl', '--version']
     try:
-        process = Process(popen_args,
-                          name='curl_check',
-                          stdout=PIPE,
-                          expect=Process.EXIT_OK,
-                          universal_newlines=True)
-        out = process.communicate()[0]
-        if process.returncode == 0:
+        returncode, out, err = run_curl(['--version'])
+        if returncode == 0:
             # return curl version as a tuple (major, minor[,fix])
             # expects --version outputs "curl X.Y.Z ..."
             return tuple(int(x) for x in out.split()[1].split('.'))
@@ -1801,7 +1795,7 @@ def run_curl(args, input=None, timeout=TIMEOUT):
     Pass optional input to curls stdin.
     Return tuple of (return code, stdout, stderr)
     """
-    popen_args = ['curl'] + args
+    popen_args = ['curl', '-q'] + args
     if timeout is not None:
         popen_args = popen_args + ["--max-time", str(timeout)]
     stdin_value = PIPE if input is not None else None
