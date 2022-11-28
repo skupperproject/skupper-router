@@ -21,6 +21,7 @@
 
 #include "core_events.h"
 #include "router_core_private.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <inttypes.h>
 
@@ -43,6 +44,7 @@ struct qcm_edge_conn_mgr_t {
     qdr_core_t                *core;
     qdrc_event_subscription_t *event_sub;
     qdr_connection_t          *active_edge_connection;
+    vflow_record_t            *edge_link_record;
 };
 
 
@@ -182,6 +184,18 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
         }
         break;
 
+    case QDRC_EVENT_CONN_EDGE_ESTABLISHED :
+        cm->edge_link_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+        vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_NAME, conn->connection_info->container);
+        vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_MODE, "edge");
+        vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_DIRECTION, "outgoing");
+        break;
+
+    case QDRC_EVENT_CONN_EDGE_LOST :
+        vflow_end_record(cm->edge_link_record);
+        cm->edge_link_record = 0;
+        break;
+
     default:
         assert(false);
         break;
@@ -195,7 +209,10 @@ qcm_edge_conn_mgr_t *qcm_edge_conn_mgr(qdr_core_t *core)
 
     cm->core = core;
     cm->event_sub = qdrc_event_subscribe_CT(core,
-                                            QDRC_EVENT_CONN_OPENED | QDRC_EVENT_CONN_CLOSED,
+                                            QDRC_EVENT_CONN_OPENED
+                                            | QDRC_EVENT_CONN_CLOSED
+                                            | QDRC_EVENT_CONN_EDGE_ESTABLISHED
+                                            | QDRC_EVENT_CONN_EDGE_LOST,
                                             on_conn_event,
                                             0,
                                             0,
