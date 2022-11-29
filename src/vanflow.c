@@ -698,6 +698,14 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_OCTETS_UNACKED   : return "octetsUnacked";
     case VFLOW_ATTRIBUTE_WINDOW_CLOSURES  : return "windowClosures";
     case VFLOW_ATTRIBUTE_WINDOW_SIZE      : return "windowSize";
+    case VFLOW_ATTRIBUTE_FLOW_COUNT_L4    : return "flowCountL4";
+    case VFLOW_ATTRIBUTE_FLOW_COUNT_L7    : return "flowCountL7";
+    case VFLOW_ATTRIBUTE_FLOW_RATE_L4     : return "flowRateL4";
+    case VFLOW_ATTRIBUTE_FLOW_RATE_L7     : return "flowRateL7";
+    case VFLOW_ATTRIBUTE_DURATION         : return "duration";
+    case VFLOW_ATTRIBUTE_IMAGE            : return "image";
+    case VFLOW_ATTRIBUTE_GROUP            : return "group";
+    case VFLOW_ATTRIBUTE_STREAM_ID        : return "streamId";
     }
     return "UNKNOWN";
 }

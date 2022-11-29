@@ -98,11 +98,21 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_OCTETS_UNACKED   = 37,  // uint
     VFLOW_ATTRIBUTE_WINDOW_CLOSURES  = 38,  // uint/counter
     VFLOW_ATTRIBUTE_WINDOW_SIZE      = 39,  // uint
+
+    VFLOW_ATTRIBUTE_FLOW_COUNT_L4    = 40,  // uint/counter
+    VFLOW_ATTRIBUTE_FLOW_COUNT_L7    = 41,  // uint/counter
+    VFLOW_ATTRIBUTE_FLOW_RATE_L4     = 42,  // uint
+    VFLOW_ATTRIBUTE_FLOW_RATE_L7     = 43,  // uint
+
+    VFLOW_ATTRIBUTE_DURATION         = 44,  // uint
+    VFLOW_ATTRIBUTE_IMAGE            = 45,  // Reference
+    VFLOW_ATTRIBUTE_GROUP            = 46,  // Reference
+    VFLOW_ATTRIBUTE_STREAM_ID        = 47,  // uint
 } vflow_attribute_t;
 
-#define VALID_REF_ATTRS     0x00000000000000e6
-#define VALID_UINT_ATTRS    0x000000fa07800119
-#define VALID_COUNTER_ATTRS 0x0000005000800000
+#define VALID_REF_ATTRS     0x00006000000000e6
+#define VALID_UINT_ATTRS    0x00009ffa07800119
+#define VALID_COUNTER_ATTRS 0x0000035000800000
 #define VALID_STRING_ATTRS  0x00000005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
