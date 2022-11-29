@@ -62,6 +62,22 @@ static void take_back_encrypt_input_buffs(qd_tls_t *tls);
 static void take_back_decrypt_output_buffs(qd_tls_t *tls);
 static void take_back_encrypt_output_buffs(qd_tls_t *tls);
 
+void qd_tls_get_alpn_protocol(qd_tls_t *tls, char **alpn_protocol)
+{
+    const char *protocol_name;
+    size_t      protocol_name_length;
+    if (pn_tls_get_alpn_protocol(qd_tls_get_pn_tls_session(tls), &protocol_name, &protocol_name_length)) {
+        //
+        // An ALPN protocol was present. Get the ALPN protocol into the passed in alpn_protocol
+        //
+        *alpn_protocol = qd_calloc(protocol_name_length + 1, sizeof(char));
+        memmove(*alpn_protocol, protocol_name, protocol_name_length);
+    }
+    else {
+        *alpn_protocol = 0;
+    }
+}
+
 qd_tls_t *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, qd_tls_on_secure_cb_t *on_secure)
 {
     assert(tls_domain);
