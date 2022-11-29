@@ -18,7 +18,7 @@
 #
 import unittest
 
-from http1_tests import wait_http_listeners_up
+from http1_tests import wait_http_listeners_up, wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, TIMEOUT
 try:
     import grpc
@@ -210,10 +210,10 @@ class GrpcServiceMethodsTest(TestCase):
             assert all(f in exp_friends for f in res.friends)
 
 
-class GrpcServiceMethodsTestOverTls(GrpcServiceMethodsTest, RouterTestSslBase):
+class GrpcServiceMethodsTestOverHttp2Tls(GrpcServiceMethodsTest, RouterTestSslBase):
     @classmethod
     def setUpClass(cls):
-        super(GrpcServiceMethodsTestOverTls, cls).setUpClass()
+        super(GrpcServiceMethodsTestOverHttp2Tls, cls).setUpClass()
         if skip_test():
             return
 
@@ -268,4 +268,71 @@ class GrpcServiceMethodsTestOverTls(GrpcServiceMethodsTest, RouterTestSslBase):
         # The GRPC client is opening a secure channel to the TLS enabled router listener port which has its
         # sslProfile as http-listener-ssl-profile
         cls.secure_grpc_channel = grpc.secure_channel('localhost:%s' % cls.router_http_port, credentials=credentials)
+        cls.grpc_stub = FriendshipStub(cls.secure_grpc_channel)
+
+
+# This following test (running GRPC over TCP Adaptor TLS) will fail
+# without the fix for https://github.com/skupperproject/skupper-router/issues/845
+# GRPC client requires that the server it is connecting to (in this case, the router)
+# support "h2"(http2) as the protocol and this protocol is decided only using ALPN.
+# Same with the GRPC server, it too expects the client to present h2 in ALPN
+# as part of the router initiated TLS handshake.
+# The TCP Adaptor now accepts h2 as the protocol when acting as the server
+# and sends h2 as the protocol when it is connecting as a client to the GRPC server.
+class GrpcServiceMethodsTestOverTcpTls(GrpcServiceMethodsTest, RouterTestSslBase):
+    @classmethod
+    def setUpClass(cls):
+        super(GrpcServiceMethodsTestOverTcpTls, cls).setUpClass()
+        if skip_test():
+            return
+
+        # Define a random port for  the gRPC server to bind
+        cls.grpc_server_port = str(cls.tester.get_port())
+
+        # Run the gRPC server which will listen on a secure port (see friendship_server.py for more info)
+        cls.grpc_server = fs.serve_secure(cls.grpc_server_port)
+        cls.router_tcp_port = cls.tester.get_port()
+
+        # Prepare router to communicate with the gRPC server
+        cls.connector_props = {
+            # This grpc_server_port is a secure TLS enabled port and the router connector will
+            # connect to this port.
+            'port': cls.grpc_server_port,
+            'address': 'examples',
+            'host': 'localhost',
+            'name': 'grpc-server',
+            'sslProfile': 'tcp-connector-ssl-profile'
+        }
+        cls.listener_props = {
+            'port': cls.router_tcp_port,
+            'address': 'examples',
+            'host': 'localhost',
+            'authenticatePeer': 'no',
+            'sslProfile': 'tcp-listener-ssl-profile'
+        }
+        config = Qdrouterd.Config([
+            ('router', {'mode': 'standalone', 'id': 'QDR'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            ('sslProfile', {'name': 'tcp-listener-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('server-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'password': 'server-password'}),
+            ('tcpListener', cls.listener_props),
+            ('tcpConnector', cls.connector_props),
+            ('sslProfile', {'name': 'tcp-connector-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('client-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                            'password': 'client-password'})
+        ])
+        cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config, wait=True)
+        wait_tcp_listeners_up(cls.router_qdr.addresses[0])
+
+        ca_certificate = RouterTestSslBase.get_byte_string(cls.ssl_file('ca-certificate.pem'))
+        credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
+
+        # The GRPC client is opening a secure channel to the TLS enabled router listener tcp port which has its
+        # sslProfile as tcp-listener-ssl-profile
+        cls.secure_grpc_channel = grpc.secure_channel('localhost:%s' % cls.router_tcp_port, credentials=credentials)
         cls.grpc_stub = FriendshipStub(cls.secure_grpc_channel)

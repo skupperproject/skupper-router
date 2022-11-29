@@ -679,6 +679,19 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                          '--key', cls.ssl_file('client-private-key.pem')]
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
+    # Tests the HTTP2 head request
+    def test_head_request(self):
+        # Run curl 127.0.0.1:port --http2-prior-knowledge --head
+        _, out, _ = self.run_curl(self.get_address(), args=self.get_all_curl_args(['--head']))
+        self.assertIn('HTTP/2 200', out)
+        self.assertIn('server: hypercorn-h2', out)
+        self.assertIn('content-type: text/html; charset=utf-8', out)
+
+        # Make sure the ALPN log statements are in the log.
+        self.router_qdra.wait_log_message("Using negotiated protocol h2 obtained via ALPN")
+        self.router_qdrb.wait_log_message("Calling qd_tls_set_alpn_protocols on egress connection using ALPN protocol as h2")
+
+    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_yyy_http_listener_delete(self):
         self.check_listener_delete(client_addr=self.router_qdra.tcp_addresses[0],
                                    server_addr=self.router_qdra.addresses[0],

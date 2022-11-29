@@ -143,6 +143,24 @@ void qd_tls_update_connection_info(qd_tls_t *tls, qdr_connection_info_t *conn_in
 pn_tls_t *qd_tls_get_pn_tls_session(qd_tls_t *tls);
 
 /**
+ * Set ALPN protocols on the passed in tls domain object.
+ * Usually used to dynamically set the the ALPN protocol.
+ * @param tls_domain object
+ * @alpn_protocols list containing supported alpn protocols
+ * @alpn_protocol_count number of elements in the alpn_protocols list.
+ */
+int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char *alpn_protocols[], int alpn_protocol_count);
+
+/**
+ * Populates the negotiated ALPN protocol, if any, into the passed in alpn_protocol. Sets the alpn_protocol pointer to
+ * zero if no ALPN protocol has been negotiated.
+ * @param tls - The qd_tls_t object which contains the tls session information
+ * alpn_protocol - a pointer to the memory location which will contain the actual negotiated alpn protocol. The caller
+ * is responsible for freeing this memory.
+ */
+void qd_tls_get_alpn_protocol(qd_tls_t *tls, char **alpn_protocol);
+
+/**
  * Cleans up any pending buffers held by the proton tls session and stops/frees the proton tls session and the config.
  * Finally, frees the qd_tls_t object
  */
