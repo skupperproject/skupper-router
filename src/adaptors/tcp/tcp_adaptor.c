@@ -60,8 +60,9 @@ ALLOC_DEFINE(qd_tcp_connector_t);
 #define LOCK   sys_mutex_lock
 #define UNLOCK sys_mutex_unlock
 
-#define TCP_NUM_ALPN_PROTOCOLS 3
-const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
+#define TCP_NUM_ALPN_PROTOCOLS 2
+// const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
+const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"http/1.1", "h2"};
 
 const char *alpn        = "alpn";
 int         alpn_length = 4;
