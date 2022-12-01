@@ -130,7 +130,8 @@ class EchoClientRunner:
                  print_client_logs=True,
                  timeout=TIMEOUT,
                  port_override=None,
-                 test_ssl=False):
+                 test_ssl=False,
+                 delay_close=False):
         """
         Launch an echo client upon construction.
 
@@ -182,7 +183,8 @@ class EchoClientRunner:
                                           count=self.count,
                                           timeout=self.timeout,
                                           logger=self.client_logger,
-                                          ssl_info=ssl_info)
+                                          ssl_info=ssl_info,
+                                          delay_close=delay_close)
 
         except Exception as exc:
             self.e_client.error = "TCP_TEST TcpAdaptor_runner_%s failed. Exception: %s" % \
@@ -198,6 +200,9 @@ class EchoClientRunner:
 
     def client_running(self):
         return self.e_client.is_running
+
+    def client_waiting_to_close(self):
+        return self.e_client.is_waiting_to_close
 
     def wait(self):
         # wait for client to exit
@@ -275,6 +280,9 @@ class TcpAdaptorBase(TestCase):
     # Each router has a TCP listener that has no associated server
     nodest_listener_ports = {}
 
+    # Each router has a TCP listener that is associated with the ES_ALL address
+    balanced_listener_ports = {}
+
     # Each router has a console listener
     # http_listener_ports = {}
 
@@ -319,21 +327,45 @@ class TcpAdaptorBase(TestCase):
                                   'sslProfile': tcp_listener_ssl_profile_name,
                                   'siteId': cls.site}
 
-                connector_props = {'host': "localhost",
-                                   'port': cls.tcp_server_listener_ports[name],
-                                   'address': 'ES_' + name,
-                                   'sslProfile': 'tcp-connector-ssl-profile',
-                                   'siteId': cls.site}
+                listener_props_balanced = {'host': "localhost",
+                                           'port': cls.balanced_listener_ports[name],
+                                           'address': 'ES_ALL',
+                                           'sslProfile': tcp_listener_ssl_profile_name,
+                                           'siteId': cls.site}
+
+                connector_props_direct = {'host': "localhost",
+                                          'port': cls.tcp_server_listener_ports[name],
+                                          'address': 'ES_' + name,
+                                          'sslProfile': 'tcp-connector-ssl-profile',
+                                          'siteId': cls.site}
+
+                connector_props_balanced = {'name': "balanced",
+                                            'host': "localhost",
+                                            'port': cls.tcp_server_listener_ports[name],
+                                            'address': 'ES_ALL',
+                                            'sslProfile': 'tcp-connector-ssl-profile',
+                                            'siteId': cls.site}
             else:
                 listener_props = {'host': "0.0.0.0",
                                   'port': cls.nodest_listener_ports[name],
                                   'address': 'nodest',
                                   'siteId': cls.site}
 
-                connector_props = {'host': "127.0.0.1",
-                                   'port': cls.tcp_server_listener_ports[name],
-                                   'address': 'ES_' + name,
-                                   'siteId': cls.site}
+                listener_props_balanced = {'host': "0.0.0.0",
+                                           'port': cls.balanced_listener_ports[name],
+                                           'address': 'ES_ALL',
+                                           'siteId': cls.site}
+
+                connector_props_direct = {'host': "127.0.0.1",
+                                          'port': cls.tcp_server_listener_ports[name],
+                                          'address': 'ES_' + name,
+                                          'siteId': cls.site}
+
+                connector_props_balanced = {'name': "balanced",
+                                            'host': "127.0.0.1",
+                                            'port': cls.tcp_server_listener_ports[name],
+                                            'address': 'ES_ALL',
+                                            'siteId': cls.site}
             config = [
                 ('router', {'mode': mode, 'id': name}),
                 ('listener', {'port': cls.amqp_listener_ports[name]}),
@@ -348,7 +380,9 @@ class TcpAdaptorBase(TestCase):
                                 'privateKeyFile': CLIENT_PRIVATE_KEY,
                                 'password': CLIENT_PRIVATE_KEY_PASSWORD}),
                 ('tcpListener', listener_props),
-                ('tcpConnector', connector_props)
+                ('tcpListener', listener_props_balanced),
+                ('tcpConnector', connector_props_direct),
+                ('tcpConnector', connector_props_balanced)
             ]
 
             if connection:
@@ -442,6 +476,7 @@ class TcpAdaptorBase(TestCase):
                 tl_ports[tcp_listener] = cls.tester.get_port()
             cls.tcp_client_listener_ports[rtr] = tl_ports
             cls.nodest_listener_ports[rtr] = cls.tester.get_port()
+            cls.balanced_listener_ports[rtr] = cls.tester.get_port()
 
         inter_router_port_AB = cls.tester.get_port()
         cls.authenticate_peer_port = cls.tester.get_port()
@@ -465,6 +500,7 @@ class TcpAdaptorBase(TestCase):
                                   'siteId': cls.site}))
 
         # Launch the routers using the sea of router ports
+        cls.logger.log("TCP_TEST Launching interior routers")
         router('INTA', 'interior', int_a_config, ssl=cls.test_ssl)
         inter_router_port_BC = cls.tester.get_port()
         cls.INTB_edge_port = cls.tester.get_port()
@@ -477,6 +513,8 @@ class TcpAdaptorBase(TestCase):
         router('INTC', 'interior',
                [('connector', {'role': 'inter-router', 'port': inter_router_port_BC, 'dataConnectionCount': 4}),
                 ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
+
+        cls.logger.log("TCP_TEST Launching edge routers")
         router('EA1', 'edge',
                [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl)
         router('EA2', 'edge',
@@ -666,9 +704,9 @@ class TcpAdaptorBase(TestCase):
             cls.echo_server_NS_CONN_STALL.wait()
         super(TcpAdaptorBase, cls).tearDownClass()
 
-    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
+    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None, router='INTA'):
         p = self.popen(
-            ['skmanage'] + cmd.split(' ') + ['--bus', address or str(self.router_dict['INTA'].addresses[0]),
+            ['skmanage'] + cmd.split(' ') + ['--bus', address or str(self.router_dict[router].addresses[0]),
                                              '--indent=-1', '--timeout', str(TIMEOUT)],
             stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
             universal_newlines=True)
@@ -718,8 +756,8 @@ class CommonTcpTests:
                 server = echo_pair.server_rtr.name
                 for size in echo_pair.sizes:
                     for count in echo_pair.counts:
-                        over_tls = 'over TLS' if test_ssl else ''
-                        log_msg = "TCP_TEST " +  over_tls + " %s Running pair %d %s->%s size=%d count=%d" % \
+                        over_tls = ' over TLS' if test_ssl else ''
+                        log_msg = "TCP_TEST" +  over_tls + " %s Running pair %d %s->%s size=%d count=%d" % \
                                   (test_name, client_num, client, server, size, count)
                         self.logger.log(log_msg)
                         runner = EchoClientRunner(test_name, client_num,
@@ -889,6 +927,136 @@ class CommonTcpTests:
 
             if result is not None:
                 self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
+
+        except Exception as exc:
+            result = "TCP_TEST %s failed. Exception: %s" % \
+                (test_name, traceback.format_exc())
+
+        return result
+
+    def all_balanced_connector_stats(self):
+        """
+        Query each router for the connection counts for the balanced connector.
+        Return an array of integers with the router stats.
+        """
+        counts = []
+        query_command = 'QUERY --type=tcpConnector'
+        for router in self.router_dict.keys():
+            outputs = json.loads(self.run_skmanage(query_command, router=router))
+            for output in outputs:
+                if output['address'] == "ES_ALL":
+                    counts.append(output["connectionsOpened"])
+        return counts
+
+    def do_tcp_balance_test(self, test_name, client, count, test_ssl=False):
+        """
+        Launch 'count' connections from a single location.
+        Wait for stability (all connections established)
+        Test that every instance of the echo server has at least one connection open.
+        Close the connections
+        :param test_name test name
+        :param client router to which echo clients attach
+        :param count number of connections to be established
+        :return: None if success else error message for ctest
+        """
+        self.logger.log("TCP_TEST %s Start do_tcp_balance_test (ingress: %s connections: %d)" % (test_name, client, count))
+        result = None
+        runners = []
+        start_time = time.time()
+
+        # Collect a baseline of the connection counts for the balanced connectors
+        baseline = self.all_balanced_connector_stats()
+
+        try:
+            # Launch the runners
+            listener_port = self.balanced_listener_ports[client]
+            for client_num in range(count):
+                over_tls = ' over TLS' if test_ssl else ''
+                log_msg = "TCP_TEST" +  over_tls + " %s Running client %d %s" % \
+                            (test_name, client_num, client)
+                self.logger.log(log_msg)
+                runner = EchoClientRunner(test_name, client_num,
+                                          self.logger,
+                                          None, None, 100, 1,   # client, server, size, count
+                                          self.print_logs_client,
+                                          port_override=listener_port,
+                                          test_ssl=test_ssl,
+                                          delay_close=True)
+                runners.append(runner)
+
+            # Loop until timeout, error, or completion
+            while result is None:
+                # Check for timeout
+                time.sleep(0.1)
+                elapsed = time.time() - start_time
+                if elapsed > echo_timeout:
+                    result = "TCP_TEST TIMEOUT - local wait time exceeded"
+                    break
+                # Make sure servers are still up
+                for rtr in TcpAdaptor.router_order:
+                    es = TcpAdaptor.echo_servers[rtr]
+                    if es.error is not None:
+                        self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
+                                        (test_name, es.prefix, es.error))
+                        result = es.error
+                        break
+                    if es.exit_status is not None:
+                        self.logger.log("TCP_TEST %s Server %s stopped with status: %s" %
+                                        (test_name, es.prefix, es.exit_status))
+                        result = es.exit_status
+                        break
+                if result is not None:
+                    break
+
+                # Check for completion or runner error
+                complete = True
+                for runner in runners:
+                    if not runner.client_final:
+                        error = runner.client_error()
+                        if error is not None:
+                            self.logger.log("TCP_TEST %s Client %s stopped with error: %s" %
+                                            (test_name, runner.name, error))
+                            result = error
+                            runner.client_final = True
+                            break
+                        status = runner.client_exit_status()
+                        if status is not None:
+                            self.logger.log("TCP_TEST %s Client %s stopped with status: %s" %
+                                            (test_name, runner.name, status))
+                            result = status
+                            runner.client_final = True
+                            break
+                        running = runner.client_running() and not runner.client_waiting_to_close()
+                        if running:
+                            complete = False
+                        else:
+                            self.logger.log("TCP_TEST %s Client %s exited normally" %
+                                            (test_name, runner.name))
+                            runner.client_final = True
+                if complete and result is None:
+                    break
+
+            # Wait/join all the runners
+            for runner in runners:
+                runner.wait()
+
+            # Verify that all balanced connectors saw at least one new connection
+            if result == None:
+                metrics = self.all_balanced_connector_stats()
+                diffs = {}
+                fail = False
+                for i in range(len(metrics)):
+                    diff = metrics[i] - baseline[i]
+                    diffs[self.router_order[i]] = diff
+                    if diff == 0:
+                        fail = True
+                if fail:
+                    result = "At least one server did not receive a connection: origin=%s counts=%r" % (client, diffs)
+
+            if result is not None:
+                self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
+            else:
+                self.logger.log(("TCP_TEST %s SUCCESS " + over_tls) % test_name)
 
         except Exception as exc:
             result = "TCP_TEST %s failed. Exception: %s" % \
@@ -1161,7 +1329,8 @@ class CommonTcpTests:
                 # There is a listener with authenticatePeer:yes and we have not run any tests on it yet, so
                 # it is allowed to have zero connectionsOpened
                 if output['address'] != 'ES_INTA' and output['address'] != 'ES_BAD_CONNECTOR_CERT_INTA' \
-                        and output['address'] != 'ES_GOOD_CONNECTOR_CERT_INTA':
+                        and output['address'] != 'ES_GOOD_CONNECTOR_CERT_INTA' \
+                        and output['address'] != 'ES_ALL':
                     assert output["connectionsOpened"] > 0
                 assert output["bytesIn"] == output["bytesOut"]
         self.assertEqual(es_inta_connections_opened, 7)
@@ -1176,6 +1345,17 @@ class CommonTcpTests:
             # egress_dispatcher connection opens and should never close
             assert output["connectionsOpened"] == output["connectionsClosed"] + 1
             assert output["bytesIn"] == output["bytesOut"]
+        self.logger.log(tname + " SUCCESS")
+
+    # connection balancing
+    def test_90_balancing(self):
+        tname = "test_90 connection balancing"
+        self.logger.log(tname + " START")
+        #iterations = [('EA1', 94), ('EA2', 94), ('INTA', 63), ('EB1', 28), ('EB2', 28), ('INTB', 19)]
+        iterations = [('INTB', 19)]
+        for p in iterations:
+            result = self.do_tcp_balance_test(tname, p[0], p[1])
+            self.assertIsNone(result)
         self.logger.log(tname + " SUCCESS")
 
 

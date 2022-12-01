@@ -25,7 +25,7 @@ import signal
 import socket
 import ssl
 import sys
-from threading import Thread
+from threading import Thread, Condition, Lock
 import time
 import traceback
 from system_test import Logger
@@ -62,7 +62,8 @@ class TcpEchoClient:
     def __init__(self, prefix, host, port, size, count,
                  timeout=TIMEOUT,
                  logger=None,
-                 ssl_info=None):
+                 ssl_info=None,
+                 delay_close=False):
         """
         :param host: connect to this host
         :param port: connect to this port
@@ -71,6 +72,8 @@ class TcpEchoClient:
         :param strategy: "1" Send one payload;  # TODO more strategies
                              Recv one payload
         :param logger: Logger() object
+        :param ssl_info: optional SSL information for the connection
+        :param delay_close: if True, hold the connection open until the call to 'wait'
         :return:
         """
         # Start up
@@ -85,9 +88,13 @@ class TcpEchoClient:
         self.logger = logger
         self.keep_running = True
         self.is_running = False
+        self.is_waiting_to_close = False
         self.exit_status = None
         self.error = None
         self.ssl_info = ssl_info
+        self.delay_close = delay_close
+        self._lock = Lock()
+        self._cond = Condition(self._lock)
         self._thread = Thread(target=self.run)
         self._thread.daemon = True
         self._thread.start()
@@ -275,6 +282,15 @@ class TcpEchoClient:
                         else:
                             pass  # logger.log("DEBUG: ignoring EVENT_WRITE")
 
+            # delay the close if necessary
+            while self.delay_close:
+                self.logger.log("%s Delayed closing wait..." % self.prefix)
+                self.is_waiting_to_close = True
+                self._lock.acquire()
+                self._cond.wait(self.timeout)
+                self._lock.release()
+                self.logger.log("%s Delayed closing signaled" % self.prefix)
+
             # shut down
             sel.unregister(self.sock)
             self.sock.close()
@@ -288,6 +304,10 @@ class TcpEchoClient:
     def wait(self, timeout=TIMEOUT):
         self.logger.log("%s Client is shutting down" % self.prefix)
         self.keep_running = False
+        self.delay_close  = False
+        self._lock.acquire()
+        self._cond.notify_all()
+        self._lock.release()
         self._thread.join(timeout)
 
 
