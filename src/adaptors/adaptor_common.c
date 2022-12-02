@@ -164,7 +164,6 @@ int qd_raw_connection_drain_read_buffers(pn_raw_connection_t *pn_raw_conn)
     int             read_buffers_drained = 0;
     while ((n = pn_raw_connection_take_read_buffers(pn_raw_conn, buffs, RAW_BUFFER_BATCH))) {
         for (size_t i = 0; i < n; ++i) {
-            assert(buffs[i].size == 0);
             read_buffers_drained++;
             qd_adaptor_buffer_t *qd_adaptor_buffer = (qd_adaptor_buffer_t *) buffs[i].context;
             qd_adaptor_buffer_free(qd_adaptor_buffer);
