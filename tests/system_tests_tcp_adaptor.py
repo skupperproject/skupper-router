@@ -1052,6 +1052,9 @@ class CommonTcpTests:
                         fail = True
                 if fail:
                     result = "At least one server did not receive a connection: origin=%s counts=%r" % (client, diffs)
+                else:
+                    self.logger.log("TCP_TEST %s counts: %s" % (client, diffs))
+
 
             if result is not None:
                 self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
@@ -1351,10 +1354,9 @@ class CommonTcpTests:
     def test_90_balancing(self):
         tname = "test_90 connection balancing"
         self.logger.log(tname + " START")
-        #iterations = [('EA1', 94), ('EA2', 94), ('INTA', 63), ('EB1', 28), ('EB2', 28), ('INTB', 19)]
-        iterations = [('INTB', 19)]
+        iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
         for p in iterations:
-            result = self.do_tcp_balance_test(tname, p[0], p[1])
+            result = self.do_tcp_balance_test(tname, p[0], p[1], test_ssl=self.test_ssl)
             self.assertIsNone(result)
         self.logger.log(tname + " SUCCESS")
 

@@ -37,6 +37,7 @@ struct qdr_delivery_t {
     void                   *context;
     sys_atomic_t            ref_count;
     qdr_link_t_sp           link_sp;       /// Safe pointer to the link
+    qdr_link_t_sp           original_link_sp; /// Safe pointer to original link if this delivery was moved (via initial-delivery)
     qdr_delivery_t         *peer;          /// Use this peer if the delivery has one and only one peer.
     qdr_delivery_ref_t     *next_peer_ref;
     qd_message_t           *msg;

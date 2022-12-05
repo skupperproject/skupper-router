@@ -1911,6 +1911,13 @@ static void qdr_link_process_initial_delivery_CT(qdr_core_t *core, qdr_link_t *l
             qdr_delivery_decref_CT(core, dlv, "qdr_link_process_initial_delivery_CT - remove from settled list");
             break;
         }
+
+        //
+        // Account for the moved delivery in the original link's open_moved_streams counter.
+        //
+        set_safe_ptr_qdr_link_t(old_link, &dlv->original_link_sp);
+        old_link->open_moved_streams++;
+
         sys_mutex_unlock(&old_link->conn->work_lock);
     }
 
