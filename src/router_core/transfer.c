@@ -238,6 +238,16 @@ int qdr_link_process_deliveries(qdr_core_t *core, qdr_link_t *link, int credit)
                             qdr_link_work_release(dlv->link_work);
                             dlv->link_work = 0;
                             dlv->where = QDR_DELIVERY_NOWHERE;
+
+                            //
+                            // Account for the moved delivery in the original link's open_moved_streams counter.
+                            //
+                            qdr_link_t *old_link = safe_deref_qdr_link_t(dlv->link_sp);
+                            if (!!old_link) {
+                                set_safe_ptr_qdr_link_t(old_link, &dlv->original_link_sp);
+                                old_link->open_moved_streams++;
+                            }
+
                             qd_nullify_safe_ptr(&dlv->link_sp);
                             // note the link-attach action increments the refcount:
                             qdr_delivery_decref(core, dlv, "qdr_link_process_deliveries - moved from undelivered list to some other link");

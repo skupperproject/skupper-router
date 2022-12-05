@@ -25,6 +25,8 @@
 #include <inttypes.h>
 #include <strings.h>
 
+// #define LOG_FORWARD_BALANCED 1
+
 typedef struct qdr_forward_deliver_info_t {
     DEQ_LINKS(struct qdr_forward_deliver_info_t);
     qdr_link_t     *out_link;
@@ -806,6 +808,12 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
     // Control messages should never use balanced treatment.
     //
     assert(!control);
+#ifdef LOG_FORWARD_BALANCED
+    qd_log(core->log, QD_LOG_DEBUG, "ForwardBalanced: %s locals=%d remotes=%d",
+           qd_hash_key_by_handle(addr->hash_handle),
+           DEQ_SIZE(addr->rlinks),
+           qd_bitmask_cardinality(addr->rnodes));
+#endif
 
     //
     // If this is the first time through here, allocate the array for outstanding delivery counts.
@@ -840,7 +848,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
     while (link_ref && eligible_link_value != 0) {
         qdr_link_t *link     = link_ref->link;
         sys_mutex_lock(&link->conn->work_lock);
-        uint32_t    value    = DEQ_SIZE(link->undelivered) + DEQ_SIZE(link->unsettled);
+        uint32_t    value    = DEQ_SIZE(link->undelivered) + DEQ_SIZE(link->unsettled) + link->open_moved_streams;
         sys_mutex_unlock(&link->conn->work_lock);
         bool        eligible = link->capacity > value;
 
@@ -859,6 +867,10 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                 best_ineligible_link  = link;
                 ineligible_link_value = value;
             }
+
+#ifdef LOG_FORWARD_BALANCED
+            qd_log(core->log, QD_LOG_DEBUG, "ForwardBalanced:   local candidate: %"PRIu32, value);
+#endif
         }
 
         link_ref = DEQ_NEXT(link_ref);
@@ -914,6 +926,10 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                     best_ineligible_conn_bit = conn_bit;
                     ineligible_link_value    = value;
                 }
+
+#ifdef LOG_FORWARD_BALANCED
+                qd_log(core->log, QD_LOG_DEBUG, "ForwardBalanced:   remote candidate: %"PRIu32, value);
+#endif
             }
         }
     } else if (best_eligible_link) {
@@ -944,9 +960,18 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
         // DISPATCH-1545 (head of line blocking): if the message is streaming,
         // see if the allows us to open a dedicated link for streaming
         if (!qd_message_receive_complete(msg) && chosen_link->conn->connection_info->streaming_links) {
+            qdr_link_t *original_link = chosen_link;
             chosen_link = get_outgoing_streaming_link(core, chosen_link->conn);
-            if (!chosen_link)
+            if (!chosen_link) {
                 return 0;
+            }
+
+            //
+            // Account for the fact that the delivery will be on a different link from the one that was chosen
+            // in the balancing algorithm.
+            //
+            set_safe_ptr_qdr_link_t(original_link, &in_delivery->original_link_sp);
+            original_link->open_moved_streams++;
         }
 
         qdr_delivery_t *out_delivery = qdr_forward_new_delivery_CT(core, in_delivery, chosen_link, msg);

@@ -448,6 +448,7 @@ struct qdr_link_t {
     char                    *terminus_addr;
     int                      attach_count;       ///< 1 or 2 depending on the state of the lifecycle
     int                      detach_count;       ///< 0, 1, or 2 depending on the state of the lifecycle
+    uint32_t                 open_moved_streams; ///< Number of still-open streaming deliveries that were moved from this link
     qdr_address_t           *owning_addr;        ///< [ref] Address record that owns this link
     qdr_link_t              *connected_link;     ///< [ref] If this is a link-route, reference the connected link
     qdrc_endpoint_t         *core_endpoint;      ///< [ref] Set if this link terminates on an in-core endpoint

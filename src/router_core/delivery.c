@@ -479,6 +479,16 @@ static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *de
         ref = DEQ_HEAD(delivery->peers);
     }
 
+    //
+    // If this delivery was moved from another link (via initial-delivery or for a streaming link),
+    // account for the deletion of this delivery.
+    //
+    qdr_link_t *previous_link = safe_deref_qdr_link_t(delivery->original_link_sp);
+    if (!!previous_link) {
+        previous_link->open_moved_streams--;
+        qd_nullify_safe_ptr(&delivery->original_link_sp);
+    }
+
     qdr_link_work_release(delivery->link_work);
     qd_bitmask_free(delivery->link_exclusion);
     qd_delivery_state_free(delivery->local_state);
