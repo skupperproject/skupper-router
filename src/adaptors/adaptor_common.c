@@ -181,48 +181,6 @@ int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
     return buffers_drained;
 }
 
-void qd_associate_vflow_flows(vflow_record_t *vflow, qd_message_t *msg)
-{
-    assert(!!vflow);
-    qd_iterator_t *ap_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
-    if (!ap_iter) {
-        return;
-    }
-
-    do {
-        qd_parsed_field_t *ap = qd_parse(ap_iter);
-        if (!ap) {
-            break;
-        }
-
-        do {
-            if (!qd_parse_ok(ap) || !qd_parse_is_map(ap)) {
-                break;
-            }
-
-            uint32_t           count    = qd_parse_sub_count(ap);
-            qd_parsed_field_t *id_value = 0;
-            for (uint32_t i = 0; i < count; i++) {
-                qd_parsed_field_t *key = qd_parse_sub_key(ap, i);
-                if (key == 0) {
-                    break;
-                }
-                qd_iterator_t *key_iter = qd_parse_raw(key);
-                if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char *) QD_AP_FLOW_ID)) {
-                    id_value = qd_parse_sub_value(ap, i);
-                    break;
-                }
-            }
-
-            if (!!id_value) {
-                vflow_set_ref_from_parsed(vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, id_value);
-            }
-        } while (false);
-        qd_parse_free(ap);
-    } while (false);
-    qd_iterator_free(ap_iter);
-}
-
 void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_raw_conn, bool ingress)
 {
     char                remote_host[200];

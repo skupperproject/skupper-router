@@ -107,15 +107,6 @@ int qd_raw_connection_drain_read_buffers(pn_raw_connection_t *pn_raw_conn);
 int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn);
 
 /**
- * Find the flow-id in the message's application properties, if it's there use
- * it as the counterflow reference of the connection's flow record.
- *
- * @param tc Pointer to the tcp connection state
- * @param msg Pointer to the message received from the ingress (listener) side
- */
-void qd_associate_vflow_flows(vflow_record_t *vflow, qd_message_t *msg);
-
-/**
  * Sets the net address string on the vflow record.
  * @param vflow record
  * pn_raw_conn pointer to proton raw connection
