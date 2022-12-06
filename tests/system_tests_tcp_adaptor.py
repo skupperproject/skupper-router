@@ -972,8 +972,7 @@ class CommonTcpTests:
             listener_port = self.balanced_listener_ports[client]
             for client_num in range(count):
                 over_tls = ' over TLS' if test_ssl else ''
-                log_msg = "TCP_TEST" +  over_tls + " %s Running client %d %s" % \
-                            (test_name, client_num, client)
+                log_msg = "TCP_TEST" +  over_tls + " %s Running client %d %s" % (test_name, client_num, client)
                 self.logger.log(log_msg)
                 runner = EchoClientRunner(test_name, client_num,
                                           self.logger,
@@ -1041,7 +1040,7 @@ class CommonTcpTests:
                 runner.wait()
 
             # Verify that all balanced connectors saw at least one new connection
-            if result == None:
+            if result is None:
                 metrics = self.all_balanced_connector_stats()
                 diffs = {}
                 fail = False
@@ -1054,7 +1053,6 @@ class CommonTcpTests:
                     result = "At least one server did not receive a connection: origin=%s counts=%r" % (client, diffs)
                 else:
                     self.logger.log("TCP_TEST %s counts: %s" % (client, diffs))
-
 
             if result is not None:
                 self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
