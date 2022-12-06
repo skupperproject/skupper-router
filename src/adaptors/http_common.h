@@ -28,7 +28,6 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/timer.h"
-#include "qpid/dispatch/vanflow.h"
 
 #define QD_HTTP_LOG_SOURCE "HTTP_ADAPTOR"
 

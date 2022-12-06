@@ -381,6 +381,8 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
                             "HTTP2 adaptor out_dlv - free_http2_stream_data");
     }
 
+    // End the vanflow record for the stream level vanflow.
+    vflow_end_record(stream_data->vflow);
     free_qdr_http2_stream_data_t(stream_data);
 }
 
@@ -433,16 +435,25 @@ void free_qdr_http2_connection(qdr_http2_connection_t* http_conn, bool on_shutdo
     }
 
     qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Freeing http2 connection in free_qdr_http2_connection", http_conn->conn_id);
-
+    // End the vanflow record for the connection level vanflow.
+    vflow_end_record(http_conn->vflow);
     free_qdr_http2_connection_t(http_conn);
 }
 
-static qdr_http2_stream_data_t *create_http2_stream_data(qdr_http2_connection_t *conn, int32_t stream_id)
+static qdr_http2_stream_data_t *create_qdr_http2_stream_data(qdr_http2_connection_t *conn, int32_t stream_id)
 {
     qdr_http2_stream_data_t *stream_data = new_qdr_http2_stream_data_t();
 
     ZERO(stream_data);
     stream_data->stream_id = stream_id;
+
+    //
+    // Start a vanflow record for the http2 stream. The parent of this vanflow is
+    // its connection's vanflow record.
+    //
+    stream_data->vflow = vflow_start_record(VFLOW_RECORD_FLOW, conn->vflow);
+    vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(stream_data->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
 
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Created new stream_data (%lx)", conn->conn_id, stream_id, (long) stream_data);
 
@@ -455,9 +466,21 @@ static qdr_http2_stream_data_t *create_http2_stream_data(qdr_http2_connection_t 
     stream_data->start = qd_timer_now();
     qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Creating new stream_data->app_properties=QD_PERFORMATIVE_APPLICATION_PROPERTIES", conn->conn_id, stream_id);
     qd_compose_start_map(stream_data->app_properties);
+    //
+    // Insert the flow id into the message's application property.
+    // The http2 adaptor sends a message per stream.
+    //
+    qd_compose_insert_symbol(stream_data->app_properties, QD_AP_FLOW_ID);
+    vflow_serialize_identity(stream_data->vflow, stream_data->app_properties);
     nghttp2_session_set_stream_user_data(conn->session, stream_id, stream_data);
     DEQ_INSERT_TAIL(conn->streams, stream_data);
     stream_data->out_msg_has_body = true;
+
+    //
+    // Start latency timer for this http2  stream.
+    // This stream can be on an ingress connection or an egress connection.
+    //
+    vflow_latency_start(stream_data->vflow);
     return stream_data;
 }
 
@@ -515,7 +538,11 @@ static int on_data_chunk_recv_callback(nghttp2_session *session,
         return 0;
 
     stream_data->bytes_in += len;
+    conn->bytes_in += len;
 
+    // Flows are unidirectional. Let's just send in the bytes_in
+    vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_OCTETS, conn->bytes_in);
+    vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_OCTETS, stream_data->bytes_in);
 
     //
     // DISPATCH-1868: If an in_dlv is present it means that the qdr_link_deliver() has already been called (delivery has already been routed)
@@ -755,7 +782,12 @@ static int on_begin_headers_callback(nghttp2_session *session,
             int32_t stream_id = frame->hd.stream_id;
             qdr_terminus_t *target = qdr_terminus(0);
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"] Processing incoming HTTP2 stream with id %"PRId32"", conn->conn_id, stream_id);
-            stream_data = create_http2_stream_data(conn, stream_id);
+            stream_data = create_qdr_http2_stream_data(conn, stream_id);
+            //
+            // Capture the stream id on the ingress side.
+            // This will help vflow correlate the ingress and egress streams.
+            //
+            vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_data->stream_id);
 
             //
             // For every single stream in the same connection, create  -
@@ -788,6 +820,14 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                                           NULL,
                                                           &(stream_data->outgoing_id));
             qdr_link_set_context(stream_data->out_link, stream_data);
+        } else if (!conn->ingress) {
+            //
+            // The on_begin_headers_callback() is called only once just before the first response header header arrives.
+            // We will end the vanflow latency here.
+            //
+            int32_t                  stream_id   = frame->hd.stream_id;
+            qdr_http2_stream_data_t *stream_data = nghttp2_session_get_stream_user_data(conn->session, stream_id);
+            vflow_latency_end(stream_data->vflow);
         }
     }
 
@@ -830,9 +870,13 @@ static int on_header_callback(nghttp2_session *session,
             else {
                 if (strcmp(METHOD, (const char *)name) == 0) {
                     stream_data->method = qd_strdup((const char *)value);
+                    // Set the http method (GET, POST, PUT, DELETE etc) on the stream's vflow object.
+                    vflow_set_string(stream_data->vflow, VFLOW_ATTRIBUTE_METHOD, stream_data->method);
                 }
                 if (strcmp(STATUS, (const char *)name) == 0) {
                     stream_data->request_status = qd_strdup((const char *)value);
+                    // Set the http response status (200, 404 etc) on the stream's vflow object.
+                    vflow_set_string(stream_data->vflow, VFLOW_ATTRIBUTE_RESULT, stream_data->request_status);
                 }
                 qd_compose_insert_string_n(stream_data->app_properties, (const char *)name, namelen);
                 qd_compose_insert_string_n(stream_data->app_properties, (const char *)value, valuelen);
@@ -1507,6 +1551,15 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
     DEQ_INIT(ingress_http_conn->streams);
     ingress_http_conn->data_prd.read_callback = read_data_callback;
 
+    //
+    // Start an ingress connection level vanflow record. The parent of the connection level
+    // vanflow record is the listener's vanflow record.
+    //
+    ingress_http_conn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->vflow);
+    vflow_set_uint64(ingress_http_conn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(ingress_http_conn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_set_uint64(ingress_http_conn->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, WINDOW_SIZE);
+
     sys_mutex_lock(&http2_adaptor->lock);
     DEQ_INSERT_TAIL(http2_adaptor->connections, ingress_http_conn);
     sys_mutex_unlock(&http2_adaptor->lock);
@@ -1844,27 +1897,36 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
             qd_parsed_field_t *app_properties_fld = qd_parse(app_properties_iter);
 
             uint32_t count = qd_parse_sub_count(app_properties_fld);
+            int      actual_count = count - 1;  // Ignore the QD_AP_FLOW_ID
 
-            nghttp2_nv hdrs[count];
-
+            nghttp2_nv hdrs[actual_count];
+            int        index         = 0;
+            bool       flow_id_found = false;
             for (uint32_t idx = 0; idx < count; idx++) {
                 qd_parsed_field_t *key = qd_parse_sub_key(app_properties_fld, idx);
                 qd_parsed_field_t *val = qd_parse_sub_value(app_properties_fld, idx);
                 qd_iterator_t *key_raw = qd_parse_raw(key);
                 qd_iterator_t *val_raw = qd_parse_raw(val);
 
-                hdrs[idx].name = (uint8_t *)qd_iterator_copy(key_raw);
-                hdrs[idx].value = (uint8_t *)qd_iterator_copy(val_raw);
-                hdrs[idx].namelen = qd_iterator_length(key_raw);
-                hdrs[idx].valuelen = qd_iterator_length(val_raw);
-                hdrs[idx].flags = NGHTTP2_NV_FLAG_NONE;
+                if (!flow_id_found && !!key_raw && qd_iterator_equal(key_raw, (const unsigned char *) QD_AP_FLOW_ID)) {
+                    vflow_set_ref_from_parsed(stream_data->vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, val);
+                    flow_id_found = true;
+                    continue;
+                }
+                char *name           = (char *) qd_iterator_copy(key_raw);
+                hdrs[index].name     = (uint8_t *) name;
+                hdrs[index].value    = (uint8_t *) qd_iterator_copy(val_raw);
+                hdrs[index].namelen  = qd_iterator_length(key_raw);
+                hdrs[index].valuelen = qd_iterator_length(val_raw);
+                hdrs[index].flags    = NGHTTP2_NV_FLAG_NONE;
 
-                if (strcmp(METHOD, (const char *)hdrs[idx].name) == 0) {
-                    stream_data->method = qd_strdup((const char *)hdrs[idx].value);
+                if (strcmp(METHOD, name) == 0) {
+                    stream_data->method = qd_strdup((const char *) hdrs[index].value);
                 }
-                if (strcmp(STATUS, (const char *)hdrs[idx].name) == 0) {
-                    stream_data->request_status = qd_strdup((const char *)hdrs[idx].value);
+                if (strcmp(STATUS, name) == 0) {
+                    stream_data->request_status = qd_strdup((const char *) hdrs[index].value);
                 }
+                index += 1;
             }
 
             int stream_id = stream_data->conn->ingress?stream_data->stream_id: -1;
@@ -1904,13 +1966,14 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
                 SET_ATOMIC_FLAG(&conn->delay_buffer_write);
             }
 
-            stream_data->stream_id = nghttp2_submit_headers(conn->session,
-                                                            flags,
-                                                            stream_id,
-                                                            NULL,
-                                                            hdrs,
-                                                            count,
-                                                            stream_data);
+            stream_data->stream_id =
+                nghttp2_submit_headers(conn->session, flags, stream_id, NULL, hdrs, actual_count, stream_data);
+            //
+            // We have just submitted a request on the egress connection.
+            // Capture the stream id on the egress side.
+            // This will help vflow correlate the input and output streams.
+            //
+            vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_data->stream_id);
 
             if (stream_id != -1) {
                 stream_data->stream_id = stream_id;
@@ -1918,7 +1981,7 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
 
             qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] handle_outgoing_http, out_dlv before sending Outgoing headers "DLV_FMT, conn->conn_id, stream_data->stream_id, DLV_ARGS(stream_data->out_dlv));
 
-            for (uint32_t idx = 0; idx < count; idx++) {
+            for (uint32_t idx = 0; idx < actual_count; idx++) {
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 HEADER Outgoing [%s=%s]", conn->conn_id, stream_data->stream_id, (char *)hdrs[idx].name, (char *)hdrs[idx].value);
             }
 
@@ -1929,11 +1992,10 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
             qd_iterator_free(app_properties_iter);
             qd_parse_free(app_properties_fld);
 
-            for (uint32_t idx = 0; idx < count; idx++) {
+            for (uint32_t idx = 0; idx < actual_count; idx++) {
                 free(hdrs[idx].name);
                 free(hdrs[idx].value);
             }
-
         }
         else {
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Headers already submitted, Proceeding with the body", conn->conn_id, stream_data->stream_id);
@@ -2111,12 +2173,9 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
     }
 
     if (link == stream_data->conn->stream_dispatcher) {
-        //
-        // Let's make an outbound connection to the configured connector.
-        //
         qdr_http2_connection_t *conn = stream_data->conn;
 
-        qdr_http2_stream_data_t *stream_data = create_http2_stream_data(conn, 0);
+        qdr_http2_stream_data_t *stream_data = create_qdr_http2_stream_data(conn, 0);
         if (!stream_data->out_dlv) {
             stream_data->out_dlv = delivery;
             qdr_delivery_incref(delivery, "egress out_dlv referenced by HTTP2 adaptor");
@@ -2154,6 +2213,9 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
         qdr_link_set_context(stream_data->in_link, stream_data);
         qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
                DLV_FMT " qdr_http_deliver, returning QD_DELIVERY_MOVED_TO_NEW_LINK", DLV_ARGS(delivery));
+
+        // Set vanflow stuff
+        vflow_set_trace(stream_data->vflow, delivery->msg);
         return QD_DELIVERY_MOVED_TO_NEW_LINK;
     }
 
@@ -2161,6 +2223,11 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
         if (!stream_data->out_dlv) {
             stream_data->out_dlv = delivery;
             qdr_delivery_incref(delivery, "ingress out_dlv referenced by HTTP2 adaptor");
+            //
+            // On an ingress connection, the response qdr_delivery_t is being received for a particular stream.
+            // This is the time we call the vflow_latency_end and we do it only once.
+            //
+            vflow_latency_end(stream_data->vflow);
         }
     }
     qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
@@ -2643,6 +2710,15 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     DEQ_INSERT_TAIL(http2_adaptor->connections, egress_http_conn);
     sys_mutex_unlock(&http2_adaptor->lock);
 
+    //
+    // Start an egress connection level vanflow record. The parent of the connection level
+    // vanflow record is the connector's vanflow record.
+    //
+    egress_http_conn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+    vflow_set_uint64(egress_http_conn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(egress_http_conn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_set_uint64(egress_http_conn->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, WINDOW_SIZE);
+
     qdr_connection_info_t *info = qdr_connection_info(false, //bool             is_encrypted,
                                                       false, //bool             is_authenticated,
                                                       true,  //bool             opened,
@@ -2762,6 +2838,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     qd_log_source_t *log = http2_adaptor->log_source;
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
+        qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
         qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED %s", conn->conn_id,
                conn->ingress ? "ingress" : "egress");
         handle_raw_connected_event(conn);
@@ -2786,6 +2863,18 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
+        pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
+        if (!!cond) {
+            const char *cname = pn_condition_get_name(cond);
+            const char *cdesc = pn_condition_get_description(cond);
+
+            if (!!cname) {
+                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_RESULT, cname);
+            }
+            if (!!cdesc) {
+                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
+            }
+        }
         if (!conn->ingress) {
             conn->initial_settings_frame_sent = false;
             if (conn->delete_egress_connections) {
@@ -2944,6 +3033,10 @@ qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *li, qd_dispa
 
     li->adaptor_listener = qd_adaptor_listener(qd, li->config->adaptor_config, http2_adaptor->log_source);
 
+    //
+    // This is the top level listener vanflow record. This vanflow has no parent record.
+    // Reports the listener configuration to vflow
+    //
     li->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http2");
     vflow_set_string(li->vflow, VFLOW_ATTRIBUTE_NAME, li->config->adaptor_config->name);
@@ -2963,20 +3056,33 @@ qd_http_listener_t *qd_http2_configure_listener(qd_http_listener_t *li, qd_dispa
     return li;
 }
 
-qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *c, qd_dispatch_t *qd, qd_entity_t *entity)
+qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *connector, qd_dispatch_t *qd,
+                                                  qd_entity_t *entity)
 {
-    if (c->config->adaptor_config->ssl_profile_name) {
-        c->tls_domain = qd_tls_domain(c->config->adaptor_config, qd, http2_adaptor->log_source, protocols,
-                                      NUM_ALPN_PROTOCOLS, false);
-        if (!c->tls_domain) {
+    if (connector->config->adaptor_config->ssl_profile_name) {
+        connector->tls_domain = qd_tls_domain(connector->config->adaptor_config, qd, http2_adaptor->log_source,
+                                              protocols, NUM_ALPN_PROTOCOLS, false);
+        if (!connector->tls_domain) {
             // note qd_tls_domain logged the error
-            qd_http_connector_decref(c);
+            qd_http_connector_decref(connector);
             return 0;
         }
     }
-    DEQ_INSERT_TAIL(http2_adaptor->connectors, c);
-    qdr_http_connection_egress(c);
-    return c;
+    DEQ_INSERT_TAIL(http2_adaptor->connectors, connector);
+
+    //
+    // This is the top level connector vanflow record. This vanflow has no parent record.
+    // Reports the connector configuration to vflow
+    //
+    connector->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_NAME, connector->config->adaptor_config->name);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, connector->config->adaptor_config->host);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->config->adaptor_config->port);
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS, connector->config->adaptor_config->address);
+
+    qdr_http_connection_egress(connector);
+    return connector;
 }
 
 // avoid re-scheduling too rapidly after a connection drop - see ISSUE #582

@@ -18,6 +18,7 @@
  */
 #include "adaptor_common.h"
 
+#include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
 
@@ -177,4 +178,16 @@ int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
     int             buffers_drained = qd_raw_connection_drain_write_buffers(pn_raw_conn);
     buffers_drained += qd_raw_connection_drain_read_buffers(pn_raw_conn);
     return buffers_drained;
+}
+
+void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_raw_conn, bool ingress)
+{
+    char                remote_host[200];
+    char                remote_port[50];
+    const pn_netaddr_t *na =
+        ingress ? pn_raw_connection_remote_addr(pn_raw_conn) : pn_raw_connection_local_addr(pn_raw_conn);
+    if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
+        vflow_set_string(vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, remote_host);
+        vflow_set_string(vflow, VFLOW_ATTRIBUTE_SOURCE_PORT, remote_port);
+    }
 }

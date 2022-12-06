@@ -28,6 +28,7 @@
 #include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/raw_connection.h>
 #include <proton/tls.h>
@@ -104,5 +105,13 @@ int qd_raw_connection_drain_read_buffers(pn_raw_connection_t *pn_raw_conn);
  * @param raw_conn - The pn_raw_connection_t to which the read and write buffers were granted
  */
 int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn);
+
+/**
+ * Sets the net address string on the vflow record.
+ * @param vflow record
+ * pn_raw_conn pointer to proton raw connection
+ * bool is this connection ingress or egress.
+ */
+void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_raw_conn, bool ingress);
 
 #endif // __adaptor_common_h__

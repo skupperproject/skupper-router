@@ -951,17 +951,6 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     qdr_action_enqueue(tcp_adaptor->core, action);
 }
 
-static void set_vflow_string(qdr_tcp_connection_t *conn)
-{
-    char remote_host[200];
-    char remote_port[50];
-    const pn_netaddr_t *na = conn->ingress ? pn_raw_connection_remote_addr(conn->pn_raw_conn) : pn_raw_connection_local_addr(conn->pn_raw_conn);
-    if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
-        vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, remote_host);
-        vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_SOURCE_PORT, remote_port);
-    }
-}
-
 // invoked once when tls session handshake completes successfully
 static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
 {
@@ -1012,7 +1001,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     qd_log_source_t *log = tcp_adaptor->log_source;
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
-        set_vflow_string(conn);
+        qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
         if (conn->ingress) {
             qdr_tcp_connection_ingress_accept(conn);
             qd_log(log, QD_LOG_INFO,
@@ -1963,7 +1952,6 @@ static void qdr_process_app_properties(qdr_tcp_connection_t *tc, qd_message_t *m
     } while (false);
     qd_iterator_free(ap_iter);
 }
-
 
 static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t *delivery, bool settled)
 {
