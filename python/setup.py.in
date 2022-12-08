@@ -20,7 +20,7 @@
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
-from setuptools.command.build_ext import copy_file
+from distutils.file_util import copy_file
 from os.path import join
 from os import environ
 
