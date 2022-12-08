@@ -40,6 +40,7 @@ from system_test import retry
 from system_test import CONNECTION_TYPE
 from system_test import retry_assertion
 from system_tests_ssl import RouterTestSslBase
+from http1_tests import wait_tcp_listeners_up
 
 # Tests in this file are organized by classes that inherit TestCase.
 # The first instance is TcpAdaptor(TestCase).
@@ -1891,6 +1892,7 @@ class TcpDeleteConnectionTest(TestCase):
         cls.router = cls.tester.qdrouterd('TcpDeleteConnectionTest',
                                           Qdrouterd.Config(config), wait=True)
         cls.address = cls.router.addresses[0]
+        wait_tcp_listeners_up(cls.router.addresses[0])
 
     def test_delete_tcp_connection(self):
         client_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
