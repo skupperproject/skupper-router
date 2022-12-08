@@ -81,6 +81,10 @@ race:^qdr_delivery_continue_CT$
 # ISSUE-543
 race:^__lws_logv$
 
+# ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
+race:^qd_entity_refresh_connector$
+
+
 #
 # External libraries
 #
