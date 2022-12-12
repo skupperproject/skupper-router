@@ -697,7 +697,6 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
     //
     hreq->base.vflow = vflow_start_record(VFLOW_RECORD_FLOW, hconn->vflow);
     vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-    vflow_add_rate(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_set_string(hreq->base.vflow, VFLOW_ATTRIBUTE_METHOD, method);
     //
     // Start vflow latency timer for this request.

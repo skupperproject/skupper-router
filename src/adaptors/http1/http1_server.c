@@ -1367,7 +1367,6 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     //
     hreq->base.vflow = vflow_start_record(VFLOW_RECORD_FLOW, hconn->vflow);
     vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-    vflow_add_rate(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
 
     //
     // The server side of the router is about to send out a request to the http server.
