@@ -59,10 +59,6 @@ static const char *HAVE_SEQ   = "have_seq";
 #define ADDR_SYNC_ROUTER_MA_REQUESTED     0x00000001
 #define ADDR_SYNC_ROUTER_VERSION_LOGGED   0x00000002
 
-#define BIT_SET(M,B)    (M) |= (B)
-#define BIT_CLEAR(M,B)  (M) &= ~(B)
-#define BIT_IS_SET(M,B) ((M) & (B))
-
 typedef struct {
     qdr_core_t                *core;
     qdrc_event_subscription_t *event_sub;

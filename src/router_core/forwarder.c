@@ -462,11 +462,22 @@ static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *
         return false;
     }
 
+    //
+    // Compute 'mesh_loop' - True iff the message is annotated with an ingress-mesh and the mesh ID is the same as that
+    // of the outgoing connection.  This means we are contemplating sending a delivery back to the edge-mesh from which
+    // it originated.
+    //
     if (out_link->conn->role == QDR_ROLE_EDGE_CONNECTION && out_link->conn->edge_mesh_id[0] != '\0') {
         qd_parsed_field_t *mesh_id = qd_message_get_ingress_mesh(in_dlv->msg);
         mesh_loop = !!mesh_id && qd_iterator_equal_n(qd_parse_raw(mesh_id), (unsigned char*) out_link->conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
     }
 
+    //
+    // Sending the delivery on the out_link will result in edge-echo if any of the following are true:
+    //   1) The delivery came from an edge (we are an interior) and it's going to go back out the same connection
+    //   2) There will be a mesh-loop (as described above)
+    //   3) The out_link is a proxy (i.e. leads to a consumer on another router) and the in_connection is edge or inter-edge
+    //
     return (((in_dlv->via_edge && in_link->conn == out_link->conn)
               || mesh_loop
               || ((in_link->conn->role == QDR_ROLE_INTER_EDGE || in_link->conn->role == QDR_ROLE_EDGE_CONNECTION) && out_link->proxy)));

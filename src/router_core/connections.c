@@ -1402,16 +1402,15 @@ void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
     bool new_value = qd_bitmask_cardinality(addr->rnodes) > 0;
 
     int router_bit, c;
-    for (QD_BITMASK_EACH(addr->rnodes, router_bit, c)) {
-        if (addr->remote_sole_destination_meshes == 0) {
-            new_value = false;
-            break;
-        }
-
-        char *ptr = addr->remote_sole_destination_meshes + (router_bit * QD_DISCRIMINATOR_BYTES);
-        if (memcmp(ptr, addr->destination_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
-            new_value = false;
-            break;
+    if (addr->remote_sole_destination_meshes == 0) {
+        new_value = false;
+    } else {
+        for (QD_BITMASK_EACH(addr->rnodes, router_bit, c)) {
+            char *ptr = addr->remote_sole_destination_meshes + (router_bit * QD_DISCRIMINATOR_BYTES);
+            if (memcmp(ptr, addr->destination_mesh_id, QD_DISCRIMINATOR_BYTES) != 0) {
+                new_value = false;
+                break;
+            }
         }
     }
 
