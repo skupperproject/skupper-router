@@ -112,7 +112,7 @@ static void mesh_discovery_interior_init_CT(qdr_core_t *core, void **module_cont
     state.core = core;
 
     //
-    // Bind to the static address QD_TERMINUS_EDGE_MESH_PING
+    // Bind to the static address QD_TERMINUS_MESH_DISCOVERY
     //
     state.endpoint_desc.label            = "mesh_discovery_interior";
     state.endpoint_desc.on_first_attach  = on_first_attach;

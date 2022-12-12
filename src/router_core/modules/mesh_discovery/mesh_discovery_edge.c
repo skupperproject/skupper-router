@@ -385,7 +385,7 @@ static void mesh_discovery_edge_init_CT(qdr_core_t *core, void **module_context)
     state.core->edge_mesh_identifier[QD_DISCRIMINATOR_BYTES] = '\0';
 
     //
-    // Bind to the static address QD_TERMINUS_EDGE_MESH_PING.
+    // Bind to the static address QD_TERMINUS_MESH_ID_NEGOTIATION.
     //
     state.endpoint_desc.label            = "mesh_discovery_edge";
     state.endpoint_desc.on_first_attach  = on_first_attach;

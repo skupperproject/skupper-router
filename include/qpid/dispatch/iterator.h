@@ -95,7 +95,8 @@ typedef struct qd_iterator_t qd_iterator_t;
  *                            L^^^^^^^
  *     amqp:/_edge/<router>/<local>
  *                H^^^^^^^^          [ interior mode ]
- *         L_edge                    [ edge mode ]
+ *                H^^^^^^^^          [ edge mode where <router> is an edge-peer ]
+ *          L_edge                   [ edge mode where <router> is not an edge-peer ]
  *
  * ITER_VIEW_NODE_HASH - Isolate the hashable part of a router-id, used for headers
  *
@@ -140,7 +141,7 @@ void qd_iterator_set_address(bool edge_mode, const char *area, const char *route
  * Add and delete peer-edge router identities.  When in edge mode, peer edge routers
  * result in different hash results than remote edge routers.  These functions are used
  * to maintain the current set of peer edge routers.
- *
+ * 
  * @param router The identifier of a router that is a peer-edge
  */
 void qd_iterator_add_peer_edge(const char *router);

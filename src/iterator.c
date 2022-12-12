@@ -68,7 +68,7 @@ ALLOC_DEFINE(qd_iterator_t);
 
 typedef struct qd_iterator_peer_edge_t {
     DEQ_LINKS(struct qd_iterator_peer_edge_t);
-    const char *identity;
+    char *router_id;
 } qd_iterator_peer_edge_t;
 
 DEQ_DECLARE(qd_iterator_peer_edge_t, qd_iterator_peer_edge_list_t);
@@ -83,13 +83,22 @@ typedef enum {
     STATE_AT_NODE_ID
 } state_t;
 
-
+//
+// Static state that influences how the iterator operates.
+//
 static bool  edge_mode = false;
 static char *my_area   = 0;
 static char *my_router = 0;
 
+//
+// Used for edge routers only.  This is a list of routers that are connected directly
+// to this router in a mesh-of-edges.
+//
 static qd_iterator_peer_edge_list_t peer_edges = DEQ_EMPTY;
 
+//
+// Separator characters that can be used to divide addresses into segments.
+//
 static const char    *SEPARATORS = "./";
 
 
@@ -196,7 +205,7 @@ static void parse_address_view(qd_iterator_t *iter)
                 qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
                 qd_buffer_field_t save_pointer = iter->view_pointer;
                 while (!!peer_edge) {
-                    if (qd_iterator_prefix(iter, peer_edge->identity)) {
+                    if (qd_iterator_prefix(iter, peer_edge->router_id)) {
                         is_peer = true;
                         iter->view_pointer = save_pointer;
                         break;
@@ -498,7 +507,7 @@ void qd_iterator_add_peer_edge(const char *router)
 {
     qd_iterator_peer_edge_t *peer_edge = NEW(qd_iterator_peer_edge_t);
     ZERO(peer_edge);
-    peer_edge->identity = router;
+    peer_edge->router_id = strdup(router);
     DEQ_INSERT_TAIL(peer_edges, peer_edge);
 }
 
@@ -508,8 +517,9 @@ void qd_iterator_del_peer_edge(const char *router)
     qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
 
     while (!!peer_edge) {
-        if (peer_edge->identity == router) {
+        if (strcmp(peer_edge->router_id, router) == 0) {
             DEQ_REMOVE(peer_edges, peer_edge);
+            free(peer_edge->router_id);
             free(peer_edge);
             return;
         }

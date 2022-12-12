@@ -211,6 +211,10 @@ do {                                    \
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define BIT_SET(M,B)    (M) |= (B)
+#define BIT_CLEAR(M,B)  (M) &= ~(B)
+#define BIT_IS_SET(M,B) ((M) & (B))
+
 //
 // Heap allocation with abort() on failure
 //

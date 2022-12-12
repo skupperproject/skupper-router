@@ -99,7 +99,6 @@ class RouterAnnotationsSection:
         obj = Data()
         obj.decode(data)
         lcount = obj.get_list()
-        print("lcount == %d" % lcount)
         assert lcount in (4, 5)
         obj.enter()
 
