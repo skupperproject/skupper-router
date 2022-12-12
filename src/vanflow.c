@@ -1462,6 +1462,11 @@ void vflow_latency_end(vflow_record_t *record)
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
         vflow_set_uint64(record, VFLOW_ATTRIBUTE_LATENCY, now - record->latency_start);
+        //
+        // Clear the latency_start so that any subsequent calls to vflow_latency_end on the
+        // same vanflow will not have any effect.
+        //
+        record->latency_start = 0;
     }
 }
 

@@ -2863,18 +2863,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
-        pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
-        if (!!cond) {
-            const char *cname = pn_condition_get_name(cond);
-            const char *cdesc = pn_condition_get_description(cond);
-
-            if (!!cname) {
-                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_RESULT, cname);
-            }
-            if (!!cdesc) {
-                vflow_set_string(conn->vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
-            }
-        }
+        qd_set_condition_on_vflow(conn->pn_raw_conn, conn->vflow);
         if (!conn->ingress) {
             conn->initial_settings_frame_sent = false;
             if (conn->delete_egress_connections) {

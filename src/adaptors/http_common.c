@@ -755,3 +755,18 @@ char *qd_get_host_from_host_port(const char *host_port)
     }
 }
 
+void qd_set_condition_on_vflow(pn_raw_connection_t *raw_conn, vflow_record_t *vflow)
+{
+    pn_condition_t *cond = pn_raw_connection_condition(raw_conn);
+    if (!!cond) {
+        const char *cname = pn_condition_get_name(cond);
+        const char *cdesc = pn_condition_get_description(cond);
+
+        if (!!cname) {
+            vflow_set_string(vflow, VFLOW_ATTRIBUTE_RESULT, cname);
+        }
+        if (!!cdesc) {
+            vflow_set_string(vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
+        }
+    }
+}
