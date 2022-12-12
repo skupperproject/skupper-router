@@ -114,4 +114,11 @@ int qd_raw_connection_drain_read_write_buffers(pn_raw_connection_t *pn_raw_conn)
  */
 void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_raw_conn, bool ingress);
 
+/**
+ * Sets the VFLOW_ATTRIBUTE_RESULT and VFLOW_ATTRIBUTE_REASON from the
+ * proton pn_condition_get_name and pn_condition_get_description respectively.
+ * Usually called from the proton PN_RAW_CONNECTION_DISCONNECTED event handler.
+ */
+void qd_set_condition_on_vflow(pn_raw_connection_t *raw_conn, vflow_record_t *vflow);
+
 #endif // __adaptor_common_h__

@@ -128,6 +128,8 @@ void qdr_http1_connection_free(qdr_http1_connection_t *hconn)
         free(hconn->client.client_ip_addr);
         free(hconn->client.reply_to_addr);
 
+        // End the vanflow record for the connection level vanflow.
+        vflow_end_record(hconn->vflow);
         free_qdr_http1_connection_t(hconn);
     }
 }

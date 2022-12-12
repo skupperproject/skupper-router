@@ -128,7 +128,8 @@ static void _client_request_free(_client_request_t *req);
 static void _deliver_request(qdr_http1_connection_t *hconn, _client_request_t *req);
 static bool _find_token(const char *list, const char *value);
 static void _generate_response_msg(_client_request_t *hreq, int code, const char *reason, const char *text_body);
-
+static int  _h1_codec_tx_response(_client_request_t *hreq, int status_code, const char *reason_phrase,
+                                  uint32_t version_major, uint32_t version_minor);
 ////////////////////////////////////////////////////////
 // HTTP/1.x Client Listener
 ////////////////////////////////////////////////////////
@@ -174,6 +175,14 @@ static qdr_http1_connection_t *_create_client_connection(qd_http_listener_t *li)
     hconn->cfg.site = li->config->adaptor_config->site_id ? qd_strdup(li->config->adaptor_config->site_id) : 0;
     hconn->cfg.event_channel = li->config->event_channel;
     hconn->cfg.aggregation = li->config->aggregation;
+
+    //
+    // Start a connection level vanflow record. The parent of the connection level
+    // vanflow record is the associated listener's vanflow.
+    //
+    hconn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, li->vflow);
+    vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
 
     hconn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(hconn->raw_conn, &hconn->handler_context);
@@ -441,6 +450,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     switch (pn_event_type(e)) {
 
     case PN_RAW_CONNECTION_CONNECTED: {
+        // Set the host and port information on the vanflow record.
+        qd_set_vflow_netaddr_string(hconn->vflow, hconn->raw_conn, true);
         _setup_client_connection(hconn);
 
         char *conn_addr = qd_raw_conn_get_address(hconn->raw_conn);
@@ -463,6 +474,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
         qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] HTTP/1.x client disconnected", hconn->conn_id);
+        // Obtain the name and condition information from the pn_condition_t and set it on the vanflow.
+        qd_set_condition_on_vflow(hconn->raw_conn, hconn->vflow);
         pn_raw_connection_set_context(hconn->raw_conn, 0);
 
         // prevent core from waking this connection
@@ -678,12 +691,32 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
     h1_codec_request_state_set_context(hrs, (void *) hreq);
     DEQ_INSERT_TAIL(hconn->requests, &hreq->base);
 
+    //
+    // Start a vanflow record for the client request coming in on the qdr_http1_connection_t.
+    // The parent of this vanflow is the connection's vanflow record.
+    //
+    hreq->base.vflow = vflow_start_record(VFLOW_RECORD_FLOW, hconn->vflow);
+    vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_set_string(hreq->base.vflow, VFLOW_ATTRIBUTE_METHOD, method);
+    //
+    // Start vflow latency timer for this request.
+    //
+    vflow_latency_start(hreq->base.vflow);
+
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
            "[C%" PRIu64 "] HTTP request received: msg-id=%" PRIu64 " method=%s target=%s version=%" PRIi32 ".%" PRIi32,
            hconn->conn_id, hreq->base.msg_id, method, target, version_major, version_minor);
 
     hreq->request_props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
     qd_compose_start_map(hreq->request_props);
+
+    //
+    // Insert the flow id into the message's application properties.
+    // This flow id will be correlated to the response flow on the server side.
+    //
+    qd_compose_insert_symbol(hreq->request_props, QD_AP_FLOW_ID);
+    vflow_serialize_identity(hreq->base.vflow, hreq->request_props);
+
     {
         // OASIS specifies this value as "1.1" by default...
         char temp[64];
@@ -927,6 +960,15 @@ static void _client_request_complete_cb(h1_codec_request_state_t *lib_rs, bool c
 
         uint64_t in_octets, out_octets;
         h1_codec_request_state_counters(lib_rs, &in_octets, &out_octets);
+        //
+        // Set the inbound octets for this request on its vflow.
+        //
+        vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, in_octets);
+        //
+        // Set the aggregate inbound octets of this connection on the vflow.
+        //
+        hreq->base.hconn->in_http1_octets += in_octets;
+        vflow_set_uint64(hreq->base.hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hreq->base.hconn->in_http1_octets);
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                "[C%" PRIu64 "] client request msg-id=%" PRIu64 " codec complete: Octets read: %" PRIu64
                " written: %" PRIu64,
@@ -1054,7 +1096,7 @@ static void _encode_json_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding json response", hconn->conn_id);
-    bool ok = !h1_codec_tx_response(hreq->base.lib_rs, 200, NULL, hreq->version_major, hreq->version_minor);
+    bool ok = !_h1_codec_tx_response(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
     if (!ok) {
         qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] Could not encode response", hconn->conn_id);
         return;
@@ -1087,7 +1129,7 @@ static void _encode_multipart_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding multipart response", hconn->conn_id);
-    bool ok = !h1_codec_tx_response(hreq->base.lib_rs, 200, NULL, hreq->version_major, hreq->version_minor);
+    bool ok = !_h1_codec_tx_response(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
     char content_length[25];
     if (_get_multipart_content_length(hreq, content_length)) {
         h1_codec_tx_add_header(hreq->base.lib_rs, CONTENT_LENGTH_KEY, content_length);
@@ -1207,7 +1249,7 @@ static void _encode_aggregated_response(qdr_http1_connection_t *hconn, _client_r
 static void _encode_empty_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
 {
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding empty response", hconn->conn_id);
-    h1_codec_tx_response(hreq->base.lib_rs, 204, NULL, hreq->version_major, hreq->version_minor);
+    _h1_codec_tx_response(hreq, 204, NULL, hreq->version_major, hreq->version_minor);
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
@@ -1365,7 +1407,7 @@ static bool _encode_response_headers(_client_request_t *hreq,
                            hreq->base.hconn->conn_id, hreq->base.hconn->out_link_id, (int)status_code,
                            reason_str ? reason_str : "");
 
-                    ok = !h1_codec_tx_response(hreq->base.lib_rs, (int)status_code, reason_str, major, minor);
+                    ok = !_h1_codec_tx_response(hreq, (int) status_code, reason_str, major, minor);
                     free(reason_str);
 
                     // now send all headers in app properties
@@ -1530,6 +1572,13 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
                 qdr_http1_close_connection(hconn, "Cannot correlate response message");
                 return PN_REJECTED;
             }
+            //
+            // We have got the first of the many response message bodies for the request
+            // We will end the latency measurement on the vanflow when we get the first body.
+            // vflow latency is calculated on the first call to vflow_latency_end()
+            // Subsequent calls to vflow_latency_end() on the same vflow are ignored.
+            //
+            vflow_latency_end(hreq->base.vflow);
 
             // link request state and delivery
             _client_response_msg_t *rmsg = new__client_response_msg_t();
@@ -1649,6 +1698,11 @@ static void _client_response_msg_free(_client_request_t *req, _client_response_m
 static void _client_request_free(_client_request_t *hreq)
 {
     if (hreq) {
+        //
+        // The client request is being freed. This is a
+        // good place to end the client side request level vanflow.
+        //
+        vflow_end_record(hreq->base.vflow);
         // deactivate the Q2 callback
         qd_message_t *msg = hreq->request_dlv ? qdr_delivery_message(hreq->request_dlv) : hreq->request_msg;
         qd_message_clear_q2_unblocked_handler(msg);
@@ -1727,7 +1781,7 @@ static void _generate_response_msg(_client_request_t *hreq, int code, const char
     DEQ_INSERT_TAIL(hreq->responses, rmsg);
 
     bool ignored;
-    h1_codec_tx_response(hreq->base.lib_rs, code, reason, 1, 1);
+    _h1_codec_tx_response(hreq, code, reason, 1, 1);
     if (text_body) {
         const size_t len = strlen(text_body);
         char         buf[32];
@@ -1740,4 +1794,18 @@ static void _generate_response_msg(_client_request_t *hreq, int code, const char
     }
     h1_codec_tx_done(hreq->base.lib_rs, &ignored);
     rmsg->encode_complete = true;
+}
+
+static int _h1_codec_tx_response(_client_request_t *hreq, int status_code, const char *reason_phrase,
+                                 uint32_t version_major, uint32_t version_minor)
+{
+    //
+    // Set the http response code (200, 404 etc) on the stream's vflow object.
+    //
+    char code_str[32];
+    snprintf(code_str, 32, "%d", status_code);
+    vflow_set_string(hreq->base.vflow, VFLOW_ATTRIBUTE_RESULT, code_str);
+    if (reason_phrase)
+        vflow_set_string(hreq->base.vflow, VFLOW_ATTRIBUTE_REASON, reason_phrase);
+    return h1_codec_tx_response(hreq->base.lib_rs, status_code, reason_phrase, version_major, version_minor);
 }

@@ -172,6 +172,14 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
     // for initiating a connection to the server
     hconn->server.reconnect_timer = qd_timer(qdr_http1_adaptor->core->qd, _do_reconnect, hconn);
 
+    //
+    // Start a connection level vanflow record. The parent of the connection level
+    // vanflow record is the associated connector's vanflow record.
+    //
+    hconn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+    vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+
     // Create the qdr_connection
     qdr_connection_info_t *info = qdr_connection_info(false, //bool             is_encrypted,
                                                       false, //bool             is_authenticated,
@@ -518,6 +526,7 @@ static int _handle_conn_read_event(qdr_http1_connection_t *hconn)
         }
 
         hconn->in_http1_octets += length;
+        vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
         error = h1_codec_connection_rx_data(hconn->http_conn, &blist, length);
     }
     return error;
@@ -550,6 +559,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     switch (pn_event_type(e)) {
 
     case PN_RAW_CONNECTION_CONNECTED: {
+        qd_set_vflow_netaddr_string(hconn->vflow, hconn->raw_conn, false);
         if (hconn->oper_status == QD_CONN_OPER_DOWN) {
             hconn->oper_status = QD_CONN_OPER_UP;
             qd_log(log, QD_LOG_INFO, "[C%"PRIu64"] HTTP/1.x server %s connection established",
@@ -582,6 +592,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
+        qd_set_condition_on_vflow(hconn->raw_conn, hconn->vflow);
         pn_raw_connection_set_context(hconn->raw_conn, 0);
 
         // Check for a request that is in-progress - it needs to be cancelled.
@@ -913,6 +924,12 @@ static int _server_rx_response_cb(h1_codec_request_state_t *hrs,
     rmsg->hreq = hreq;
     DEQ_INSERT_TAIL(hreq->responses, rmsg);
 
+    //
+    // We are about to start decoding the HTTP response from the server.
+    // End the server side latency for the server request's vanflow.
+    //
+    vflow_latency_end(hreq->base.vflow);
+
     rmsg->msg_props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
     qd_compose_start_map(rmsg->msg_props);
     {
@@ -1162,6 +1179,10 @@ static void _server_request_complete_cb(h1_codec_request_state_t *hrs, bool canc
 
     uint64_t in_octets, out_octets;
     h1_codec_request_state_counters(hrs, &in_octets, &out_octets);
+    //
+    // Set the inbound octets for this request.
+    //
+    vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, in_octets);
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
            "[C%"PRIu64"] HTTP request/response %s. Octets read: %"PRIu64" written: %"PRIu64,
            hconn->conn_id,
@@ -1340,6 +1361,19 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     DEQ_INIT(hreq->responses);
     DEQ_INSERT_TAIL(hconn->requests, &hreq->base);
 
+    //
+    // Start a vanflow record for the server side request. The parent of this vanflow is
+    // its connection's vanflow record.
+    //
+    hreq->base.vflow = vflow_start_record(VFLOW_RECORD_FLOW, hconn->vflow);
+    vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+
+    //
+    // The server side of the router is about to send out a request to the http server.
+    // Start the vflow latency here.
+    //
+    vflow_latency_start(hreq->base.vflow);
+
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
            "[C%"PRIu64"][L%"PRIu64"] New HTTP Request msg-id=%"PRIu64" reply-to=%s.",
            hconn->conn_id, hconn->out_link_id, msg_id, reply_to);
@@ -1467,8 +1501,12 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
 
             free(header_key);
             free(header_value);
+        } else if (qd_iterator_equal(i_key, (const unsigned char *) QD_AP_FLOW_ID)) {
+            //
+            // Get the vanflow id from the message and set that as the van counterflow.
+            //
+            vflow_set_ref_from_parsed(hreq->base.vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, value);
         }
-
 
         key = qd_field_next_child(value);
     }
@@ -1692,6 +1730,11 @@ static void _server_response_msg_free(_server_request_t *hreq, _server_response_
 static void _server_request_free(_server_request_t *hreq)
 {
     if (hreq) {
+        //
+        // The server request is being freed. This is a
+        // right place to end the server side request level vanflow.
+        //
+        vflow_end_record(hreq->base.vflow);
         qdr_http1_request_base_cleanup(&hreq->base);
         qdr_http1_out_data_cleanup(&hreq->out_data);
         if (hreq->request_dlv) {

@@ -95,12 +95,14 @@ struct qdr_http1_request_base_t {
     uint64_t                  msg_id;
     h1_codec_request_state_t *lib_rs;
     qdr_http1_connection_t   *hconn;  // parent connection
+    vflow_record_t           *vflow;  // request level vanflow record.
     char                     *response_addr; // request reply-to
     char                     *site;
     qd_timestamp_t            start;
     qd_timestamp_t            stop;
     uint64_t                  out_http1_octets;
 };
+
 DEQ_DECLARE(qdr_http1_request_base_t, qdr_http1_request_list_t);
 
 
@@ -113,6 +115,7 @@ struct qdr_http1_connection_t {
     pn_raw_connection_t   *raw_conn;
     qdr_connection_t      *qdr_conn;
     qdr_http1_adaptor_t   *adaptor;
+    vflow_record_t        *vflow;  // connection level vanflow record.
 
     uint64_t               conn_id;
     qd_handler_context_t   handler_context;
