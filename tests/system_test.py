@@ -300,6 +300,29 @@ def skip_test_in_ci(environment_var):
     return False
 
 
+def wait_message(pattern, file_path=None, **retry_kwargs):
+    """
+    Wait for a message with the passed in pattern to appear in the
+    passed in log file.
+    :param pattern: The pattern to look for in the file_path
+    :param file_path: The full path of the file
+    :param retry_kwargs:
+    """
+    assert retry(lambda: pathlib.Path(file_path).is_file(), **retry_kwargs), \
+        f"Outfile {file_path} does not exist or is not a file"
+    with open(file_path, 'rt') as out_file:
+        assert retry(lambda: is_pattern_present(out_file, pattern), **retry_kwargs),\
+            f"'{pattern}' not present in out file {file_path}"
+
+
+def is_pattern_present(f: TextIO, pattern) -> bool:
+    for line in f:
+        m = re.search(pattern, line)
+        if m:
+            return True
+    return False
+
+
 class Process(subprocess.Popen):
     """
     Popen that can be torn down at the end of a TestCase and stores its output.
@@ -399,6 +422,16 @@ class Process(subprocess.Popen):
             error("expected %s but actual returncode is %s"
                   % (self.expect, self.returncode))
 
+    def wait_out_message(self, pattern, **retry_kwargs):
+        """
+        Convenience function that looks for the passed in pattern in the process's outfile.
+        :param pattern: The pattern to look for in the process's out file.
+        :param retry_kwargs: Retry arguments
+        """
+        outfile_path = self.outfile + ".out"
+        assert outfile_path
+        wait_message(pattern, outfile_path, **retry_kwargs)
+
 
 class Config:
     """Base class for configuration objects that provide a convenient
@@ -453,6 +486,40 @@ class Http2Server(HttpServer):
 
     def wait_ports(self, **retry_kwargs):
         wait_ports(self.ports_family, **retry_kwargs)
+
+
+class OpenSSLServer(Process):
+    """
+    Sets up an OpenSSL s_server.
+    The router usually stands between an OpenSSL s_client and s_server
+    """
+    def __init__(self,
+                 listening_port,
+                 ssl_info,
+                 name="OpenSSLServer",
+                 cl_args=None,
+                 expect=Process.RUNNING,
+                 **kwargs):
+        self.openssl_server_cmd = ['openssl', 's_server', '-accept', str(listening_port)]
+        ca_cert = ssl_info.get('CA_CERT')
+        if ca_cert:
+            self.openssl_server_cmd.append('-CAfile')
+            self.openssl_server_cmd.append(ca_cert)
+        server_cert = ssl_info.get('SERVER_CERTIFICATE')
+        if server_cert:
+            self.openssl_server_cmd.append('-cert')
+            self.openssl_server_cmd.append(server_cert)
+        server_private_key = ssl_info.get('SERVER_PRIVATE_KEY')
+        if server_private_key:
+            self.openssl_server_cmd.append('-key')
+            self.openssl_server_cmd.append(server_private_key)
+        server_private_key_password = ssl_info.get('SERVER_PRIVATE_KEY_PASSWORD')
+        if server_private_key_password:
+            self.openssl_server_cmd.append('-pass')
+            self.openssl_server_cmd.append("pass:" + server_private_key_password)
+        if cl_args:
+            self.openssl_server_cmd += cl_args
+        super(OpenSSLServer, self).__init__(self.openssl_server_cmd, name=name, expect=expect, **kwargs)
 
 
 class Qdrouterd(Process):
@@ -855,21 +922,9 @@ class Qdrouterd(Process):
         log file. The log file for the DEFAULT log module is used unless
         overridden via the (fully qualified) logfile_path parameter
         """
-        def _is_pattern_present(f: TextIO) -> bool:
-            for line in f:
-                m = re.search(pattern, line)
-                if m:
-                    return True
-            return False
-
         logfile_path = logfile_path or self.logfile_path
         assert logfile_path
-
-        assert retry(lambda: pathlib.Path(logfile_path).is_file(), **retry_kwargs), \
-            f"Router logfile {logfile_path} does not exist or is not a file"
-        with open(logfile_path, 'rt') as router_log:
-            assert retry(lambda: _is_pattern_present(router_log), **retry_kwargs),\
-                f"'{pattern}' not present in router log"
+        wait_message(pattern, logfile_path, **retry_kwargs)
 
     def wait_startup_message(self, **retry_kwargs):
         """Wait for router startup message to be printed into logfile
@@ -1108,6 +1163,46 @@ class Tester:
 
     def http2server(self, *args, **kwargs):
         return self.cleanup(Http2Server(*args, **kwargs))
+
+    def opensslclient(self,
+                      port,
+                      ssl_info,
+                      data=None,
+                      name="opensslsclient",
+                      cl_args=None,
+                      expect=Process.RUNNING,
+                      timeout=TIMEOUT):
+        s_client = ['openssl', 's_client', '-connect', 'localhost:' + str(port), '-servername', 'localhost']
+        if ssl_info:
+            ca_cert = ssl_info.get('CA_CERT')
+            if ca_cert:
+                s_client.append('-CAfile')
+                s_client.append(ca_cert)
+            client_cert = ssl_info.get('CLIENT_CERTIFICATE')
+            if client_cert:
+                s_client.append('-cert')
+                s_client.append(client_cert)
+            client_cert_key = ssl_info.get('CLIENT_PRIVATE_KEY')
+            if client_cert_key:
+                s_client.append('-key')
+                s_client.append(client_cert_key)
+            client_password = ssl_info.get('CLIENT_PRIVATE_KEY_PASSWORD')
+            if client_password:
+                s_client.append('-pass')
+                s_client.append("pass:" + client_password)
+        if cl_args:
+            s_client += cl_args
+        p = self.popen(s_client,
+                       stdin=PIPE,
+                       stdout=PIPE,
+                       stderr=PIPE,
+                       expect=expect,
+                       name=name)
+        # We are using self signed certificates here.
+        # Generally the error returned if self signed certificates are used is the following -
+        # error= b"Can't use SSL_get_servername\ndepth=1 CN = Trusted.CA.com, O = Trust Me Inc.\nverify return:1\ndepth=0 CN = localhost, O = Server\nverify return:1\nDONE\n"
+        out, error = p.communicate(input=data, timeout=timeout)
+        return out, error
 
     def ncat(self,
              port,
