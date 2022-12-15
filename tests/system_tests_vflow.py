@@ -30,6 +30,7 @@ RECORD_TYPE = 0
 # Record identifier constants from the VanFlow specification
 RT_ROUTER = 1
 
+
 class RouterTest(TestCase):
 
     inter_router_port = None
