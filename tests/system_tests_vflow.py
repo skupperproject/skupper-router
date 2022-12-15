@@ -22,6 +22,11 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
 
+IDENTITY    = 1
+START_TIME  = 3
+RECORD_TYPE = 0
+
+RT_ROUTER = 1
 
 class RouterTest(TestCase):
 
@@ -62,12 +67,12 @@ class RouterTest(TestCase):
         cls.routers[0].is_edge_routers_connected()
 
     def test_01_attach_far_interior(self):
-        test = VFlowTest(self.routers[0])
+        test = VFlowTest(self.routers[1])
         test.run()
         self.assertIsNone(test.error)
 
     def test_02_attach_mid_interior(self):
-        test = VFlowTest(self.routers[1])
+        test = VFlowTest(self.routers[0])
         test.run()
         self.assertIsNone(test.error)
 
@@ -80,7 +85,7 @@ class RouterTest(TestCase):
 class VFlowTest(MessagingHandler):
     '''
     Open a receiver for BEACON messages on the indicated router
-    Use BEACONS to find the 3 event sources (routers).  When discovered, attach sender and reciever links to the addresses for the source
+    Use BEACONS to find the 3 event sources (routers).  When discovered, attach sender and receiver links to the addresses for the source
     Wait for HEARTBEATS from each source.  On heartbeat, send a FLUSH
     Look for ROUTER record updates that include the startTime attribute (only included in a flush output)
     '''
@@ -111,10 +116,10 @@ class VFlowTest(MessagingHandler):
 
     def handle_records(self, body):
         for record in body:
-            id          = record.get('identity', None)
-            start_time  = record.get('startTime', None)
-            record_type = record.get('recordType', None)
-            if id in self.sources and start_time and record_type == 'ROUTER' and not self.sources[id]['sawFlushed']:
+            id          = record.get(IDENTITY, None)
+            start_time  = record.get(START_TIME, None)
+            record_type = record.get(RECORD_TYPE, None)
+            if id in self.sources and start_time and record_type == RT_ROUTER and not self.sources[id]['sawFlushed']:
                 self.sources[id]['sawFlushed'] = True
                 self.flushed_seen += 1
                 if self.flushed_seen == 3:
@@ -148,8 +153,6 @@ class VFlowTest(MessagingHandler):
                     self.sources[source_id]['sender'].send(Message(subject='FLUSH'))
                     self.sources[source_id]['flushed'] = True
                     self.flushes_sent += 1
-                    if self.flushes_sent == 3:
-                        self.fail(None)
             elif subject == 'RECORD':
                 self.handle_records(event.message.body)
         except Exception as reason:
