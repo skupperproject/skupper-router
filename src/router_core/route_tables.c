@@ -696,8 +696,10 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
                 qd_hash_insert(core->addr_hash, address->iterator, addr, &addr->hash_handle);
                 DEQ_ITEM_INIT(addr);
                 DEQ_INSERT_TAIL(core->addrs, addr);
-            } else if (aclass == QD_ITER_HASH_PREFIX_MOBILE && sub->propagate) {
-                qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ADDED_LOCAL_DEST, addr);
+                if (aclass == QD_ITER_HASH_PREFIX_MOBILE && sub->propagate) {
+                    addr->propagate_local = true;
+                    qdrc_event_addr_raise(core, QDRC_EVENT_ADDR_ADDED_LOCAL_DEST, addr);
+                }
             }
         }
         if (addr) {

@@ -918,6 +918,12 @@ static void qcm_mobile_sync_on_router_advanced_CT(qdrm_mobile_sync_t *msync, qdr
 }
 
 
+static uint32_t local_dest_count(qdr_address_t *addr)
+{
+    return DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count + (addr->propagate_local ? 1 : 0);
+}
+
+
 static void qcm_mobile_sync_on_addr_event_CT(void          *context,
                                              qdrc_event_t   event_type,
                                              qdr_address_t *addr)
@@ -926,13 +932,13 @@ static void qcm_mobile_sync_on_addr_event_CT(void          *context,
 
     switch (event_type) {
     case QDRC_EVENT_ADDR_ADDED_LOCAL_DEST:
-        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 1) {
+        if (local_dest_count(addr) == 1) {
             qcm_mobile_sync_on_became_local_dest_CT(msync, addr);
         }
         break;
         
     case QDRC_EVENT_ADDR_REMOVED_LOCAL_DEST:
-        if (DEQ_SIZE(addr->rlinks) - addr->proxy_rlink_count == 0) {
+        if (local_dest_count(addr) == 0) {
             qcm_mobile_sync_on_no_longer_local_dest_CT(msync, addr);
         }
         break;

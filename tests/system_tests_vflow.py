@@ -22,10 +22,12 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
 
+# Attribute constants from the VanFlow specification
 IDENTITY    = 1
 START_TIME  = 3
 RECORD_TYPE = 0
 
+# Record identifier constants from the VanFlow specification
 RT_ROUTER = 1
 
 class RouterTest(TestCase):

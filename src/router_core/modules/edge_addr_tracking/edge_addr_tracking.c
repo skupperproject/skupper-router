@@ -205,6 +205,13 @@ static bool qdrc_can_send_address(qdr_address_t *addr, qdr_connection_t *in_conn
         return true;
     }
 
+    //
+    // If there is a propagated in-process destination for this address, sending is allowed.
+    //
+    if (addr->propagate_local) {
+        return true;
+    }
+
     return false;
 }
 
@@ -341,7 +348,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
         {
             qdr_addr_tracking_module_context_t *mc = (qdr_addr_tracking_module_context_t*) context;
             qdr_address_t *addr = link->owning_addr;
-            if (addr && qdr_address_is_mobile_CT(addr) && DEQ_SIZE(addr->subscriptions) == 0 && link->link_direction == QD_INCOMING) {
+            if (addr && qdr_address_is_mobile_CT(addr) && (DEQ_SIZE(addr->subscriptions) == 0 || addr->propagate_local) && link->link_direction == QD_INCOMING) {
                 qdr_addr_endpoint_state_t *endpoint_state = qdrc_get_endpoint_state_for_connection(mc->endpoint_state_list, link->conn);
                 // Fix for DISPATCH-1492. Remove the assert(endpoint_state); and add an if condition check for endpoint_state
                 // We will not prevent regular endpoints from connecting to the edge listener for now.
