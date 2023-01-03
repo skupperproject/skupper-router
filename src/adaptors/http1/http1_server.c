@@ -239,18 +239,18 @@ qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector
         }
     }
 
-    qdr_http1_connection_t *hconn = _create_server_connection(connector, qd);
-    assert(hconn);
-
-    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
-           hconn->conn_id, hconn->cfg.host_port);
-
     connector->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_NAME, connector->config->adaptor_config->name);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, connector->config->adaptor_config->host);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->config->adaptor_config->port);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS, connector->config->adaptor_config->address);
+
+    qdr_http1_connection_t *hconn = _create_server_connection(connector, qd);
+    assert(hconn);
+
+    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
+           hconn->conn_id, hconn->cfg.host_port);
 
     // lock out the core activation thread.  Up until this point the core
     // thread cannot activate the qdr_connection_t since the
