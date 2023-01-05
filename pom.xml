@@ -107,6 +107,7 @@
                       <exclude>**/*_pb2*</exclude>
                       <exclude>share/index.html</exclude>
                       <exclude>scripts/git-clang-format</exclude>
+                      <exclude>tests/nginx-configs/**</exclude>
                 </excludes>
         </configuration>
             </plugin>

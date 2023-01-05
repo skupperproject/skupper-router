@@ -24,24 +24,44 @@ from __future__ import print_function
 import sys
 import os
 
-try:
-    filename = sys.argv[1]
-    is_file = os.path.isfile(filename)
-    if not is_file:
-        raise Exception()
-except Exception as e:
-    print("Usage: python3 expandvars.py <absolute_file_path>. Example - python3 expandvars.py /tmp/skrouterd.conf")
-    # Unix programs generally use 2 for command line syntax errors
-    sys.exit(2)
 
-out_list = []
-with open(filename) as f:
-    for line in f:
-        if line.startswith("#") or '$' not in line:
-            out_list.append(line)
-        else:
-            out_list.append(os.path.expandvars(line))
+def expand_file(input_file, output_file):
+    """
+    Calls os.path.expandvars on each line in the input file and writes
+    the expanded output to the output_file
+    If no output_file is provided, the input file will be overwritten with the
+    expanded output.
+    :param input_file:
+    :param output_file:
+    """
+    out_list = []
+    with open(input_file) as f:
+        for line in f:
+            if line.startswith("#") or '$' not in line:
+                out_list.append(line)
+            else:
+                out_list.append(os.path.expandvars(line))
 
-with open(filename, 'w') as f:
-    for out in out_list:
-        f.write(out)
+    output_file = output_file if output_file else input_file
+    with open(output_file, 'w') as f:
+        for out in out_list:
+            f.write(out)
+
+
+if __name__ == '__main__':
+    try:
+        input_filename = sys.argv[1]
+        output_filename = None
+        if len(sys.argv) > 2:
+            output_filename = sys.argv[2]
+        is_file = os.path.isfile(input_filename)
+        if not is_file:
+            raise Exception()
+    except Exception as e:
+        print("Usage: python3 expandvars.py <absolute_input_file_path> <absolute_output_file_path>. "
+              "Example - python3 expandvars.py /tmp/skrouterd-in.conf "
+              "/tmp/skrouterd.conf; <absolute_output_file_path> is optional, if not provided, output file will be same"
+              "as input file")
+        # Unix programs generally use 2 for command line syntax errors
+        sys.exit(2)
+    expand_file(input_filename, output_filename)
