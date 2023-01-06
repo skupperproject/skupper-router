@@ -807,6 +807,8 @@ struct qdr_core_t {
     bool               running;
     bool               sleeping;
 
+    bool disable_867_fix; /// True if the fix for issue #867 is to be disabled
+
     sys_mutex_t              work_lock;
     qdr_core_timer_list_t    scheduled_timers;
     qdr_general_work_list_t  work_list;
