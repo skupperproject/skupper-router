@@ -38,8 +38,10 @@ env.update(env_config)
 
 class ExpandvarsTest(TestCase):
     def test_expandvars_input_file_output_file(self):
-        # Provide an input file and an output file to the expandvars.py script
-        # and make sure the output file is populated with the expanded vars.
+        """
+        Provide an input file and an output file to the expandvars.py script
+        and make sure the output file is populated with the expanded vars.
+        """
         nginx_conf_dir = os.path.join(current_dir, 'nginx-configs')
         input_file = os.path.join(nginx_conf_dir, 'expandvars.conf')
         output_file = os.path.join(self.directory, 'expandvars.conf')
@@ -48,17 +50,18 @@ class ExpandvarsTest(TestCase):
         port_expanded = False
         name_expanded = False
         with open(output_file) as ofile:
-            for line in enumerate(ofile):
-                test_line = line[1].strip()
-                if "PORT=12345" == test_line:
+            for test_line in ofile:
+                if "PORT=12345" in test_line:
                     port_expanded = True
-                if "NAME=YoYoMa" == test_line:
+                if "NAME=YoYoMa" in test_line:
                     name_expanded = True
         self.assertTrue(port_expanded and name_expanded)
 
     def test_expandvars_input_file_without_output_file(self):
-        # Provide an input file and NO output file to the expandvars.py script
-        # and make sure the input file is overwritten/populated with the expanded vars.
+        """
+        Provide an input file and NO output file to the expandvars.py script
+        and make sure the input file is overwritten/populated with the expanded vars.
+        """
         nginx_conf_dir = os.path.join(current_dir, 'nginx-configs')
         orig_file = os.path.join(nginx_conf_dir, 'expandvars.conf')
 
@@ -70,22 +73,22 @@ class ExpandvarsTest(TestCase):
         port_expanded = False
         name_expanded = False
         with open(input_file) as ofile:
-            for line in enumerate(ofile):
-                test_line = line[1].strip()
-                if "PORT=12345" == test_line:
+            for test_line in ofile:
+                if "PORT=12345" in test_line:
                     port_expanded = True
-                if "NAME=YoYoMa" == test_line:
+                if "NAME=YoYoMa" in test_line:
                     name_expanded = True
         self.assertTrue(port_expanded and name_expanded)
 
     def test_expandvars_no_input_file_no_output_file(self):
-        # Does not pass any arguments to the expandvars.py
-        # and makes sure that the script fails.
+        """
+        Does not pass any arguments to the expandvars.py
+        and makes sure that the script fails.
+        """
         args = [sys.executable, os.path.join(expandvars_script_folder, script_file)]
-        script_failed = False
-        try:
+        with self.assertRaises(CalledProcessError) as cm:
             subprocess.run(args, stderr=STDOUT, check=True, env=env)
-        except CalledProcessError as e:
-            if "returned non-zero exit status 2" in str(e):
-                script_failed = True
-        self.assertTrue(script_failed)
+        self.assertIn("returned non-zero exit status 2", str(cm.exception))
+
+
+
