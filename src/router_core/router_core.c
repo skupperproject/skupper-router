@@ -48,6 +48,11 @@ static void qdr_general_handler(void *context);
 static void qdr_core_setup_init(qdr_core_t *core)
 {
     //
+    // Check the environment variable to see if we should disable the fix for issue #867.
+    //
+    core->disable_867_fix = getenv("SKUPPER_ROUTER_DISABLE_867_FIX") != 0;
+
+    //
     // DISPATCH-1867: These functions used to be called inside the router_core_thread() function in router_core_thread.c
     // which meant they were executed asynchronously by the core thread which meant qd_router_setup_late() could
     // return before these functions executed in the core thread. But we need the adaptors and modules to be initialized *before* qd_router_setup_late() completes
