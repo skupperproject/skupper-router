@@ -51,9 +51,10 @@ class ExpandvarsTest(TestCase):
         name_expanded = False
         with open(output_file) as ofile:
             for test_line in ofile:
-                if "PORT=12345" in test_line:
+                test_line = test_line.strip()
+                if "PORT=12345" == test_line:
                     port_expanded = True
-                if "NAME=YoYoMa" in test_line:
+                if "NAME=YoYoMa" == test_line:
                     name_expanded = True
         self.assertTrue(port_expanded and name_expanded)
 
@@ -74,9 +75,10 @@ class ExpandvarsTest(TestCase):
         name_expanded = False
         with open(input_file) as ofile:
             for test_line in ofile:
-                if "PORT=12345" in test_line:
+                test_line = test_line.strip()
+                if "PORT=12345" == test_line:
                     port_expanded = True
-                if "NAME=YoYoMa" in test_line:
+                if "NAME=YoYoMa" == test_line:
                     name_expanded = True
         self.assertTrue(port_expanded and name_expanded)
 
@@ -89,6 +91,3 @@ class ExpandvarsTest(TestCase):
         with self.assertRaises(CalledProcessError) as cm:
             subprocess.run(args, stderr=STDOUT, check=True, env=env)
         self.assertIn("returned non-zero exit status 2", str(cm.exception))
-
-
-
