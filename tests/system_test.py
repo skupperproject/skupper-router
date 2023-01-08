@@ -1290,6 +1290,12 @@ class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-me
         Tester.teardown(self)
         super().tearDown()
 
+    def shortDescription(self) -> Optional[str]:
+        """Returns None to disable showing first line of docstring in unittest logs.
+
+        https://stackoverflow.com/questions/12962772/how-to-stop-python-unittest-from-printing-test-docstring"""
+        return None
+
     def assert_fair(self, seq):
         avg = sum(seq) / len(seq)
         for i in seq:
