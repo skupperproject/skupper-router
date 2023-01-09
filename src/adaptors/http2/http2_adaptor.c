@@ -3064,7 +3064,7 @@ qd_http_connector_t *qd_http2_configure_connector(qd_http_connector_t *connector
     // Reports the connector configuration to vflow
     //
     connector->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
-    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
+    vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http2");
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_NAME, connector->config->adaptor_config->name);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, connector->config->adaptor_config->host);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->config->adaptor_config->port);
