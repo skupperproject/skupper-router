@@ -25,7 +25,7 @@ from system_tests_ssl import RouterTestSslBase
 
 from proton import VERSION, SASL
 from system_tests_sasl_plain import RouterTestPlainSaslCommon
-from system_tests_http2 import skip_test, skip_h2_test, image_file
+from system_tests_http2 import skip_test, skip_nginx_test, skip_h2_test, image_file, get_digest, get_address
 from system_tests_http2 import Http2TestTwoRouter, Http2TestBase, CommonHttp2Tests
 
 
@@ -711,3 +711,103 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                                     server_port=self.server_port,
                                     listener_addr=self.router_qdra.addresses[0],
                                     tcp_connector=True)
+
+
+@unittest.skipIf(skip_nginx_test(), "nginx and curl needed to run nginx http2 tests")
+class Http2TestTlsTwoRouterNginx(Http2TestBase, RouterTestSslBase):
+    """
+    In this two router test, the listener is on Router QDR.A and the connector is on router
+    QDR.B. Both the listener and the connector are encrypted. The nginx server that QDR.B connects to
+    is also encrypted.
+    Client authentication is required for curl to talk to the router QDR.A listener http port.
+    Client authentication is required for the QDR.B to talk to the nginx server ssl port.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http2TestBase, cls).setUpClass()
+        if skip_nginx_test():
+            return
+
+        cls.nginx_port = cls.tester.get_port()
+        nginx_config = os.path.join(os.path.dirname(os.path.abspath(__file__)) + '/nginx/nginx-configs/nginx.conf')
+        env = dict()
+        nginx_base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)) + '/nginx')
+        env['nginx-base-folder'] = nginx_base_folder
+        env['setupclass-folder'] = cls.tester.directory
+        env['nginx-configs-folder'] = os.path.join(nginx_base_folder + '/nginx-configs')
+        env['listening-port'] = str(cls.nginx_port)
+        env['http2'] = 'http2'
+        env['ssl'] = 'ssl'
+        env['tls-enabled'] = ''  # Will enable TLS lines
+        # TLS stuff
+        env['chained-pem'] = cls.ssl_file('chained.pem')
+        env['server-private-key-no-pass-pem'] = cls.ssl_file('server-private-key-no-pass.pem')
+        env['ssl-verify-client'] = 'on'
+        env['ca-certificate'] = cls.ssl_file('ca-certificate.pem')
+        cls.nginx_server = cls.tester.nginxserver(config_path=nginx_config, env=env)
+        inter_router_port = cls.tester.get_port()
+        cls.listener_name = 'listenerToBeDeleted'
+        cls.http_listener_props = {'port': cls.tester.get_port(),
+                                   'address': 'examples',
+                                   'host': 'localhost',
+                                   'name': cls.listener_name,
+                                   'protocolVersion': 'HTTP2',
+                                   'authenticatePeer': 'yes',
+                                   'sslProfile': 'http-listener-ssl-profile'}
+        config_qdra = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR.A'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            # curl will connect to this httpListener and run the tests.
+            ('httpListener', cls.http_listener_props),
+            ('sslProfile', {'name': 'http-listener-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('server-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'password': 'server-password'}),
+            ('listener', {'role': 'inter-router', 'port': inter_router_port})
+        ])
+
+        cls.connector_name = 'connectorToBeDeleted'
+        cls.connector_props = {
+            'port': cls.nginx_port,
+            'address': 'examples',
+            'host': 'localhost',
+            'protocolVersion': 'HTTP2',
+            'name': cls.connector_name,
+            # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
+            'verifyHostname': 'yes',
+            'sslProfile': 'http-connector-ssl-profile'
+        }
+        config_qdrb = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR.B'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            ('httpConnector', cls.connector_props),
+            ('connector', {'name': 'connectorToA', 'role': 'inter-router',
+                           'port': inter_router_port,
+                           'verifyHostname': 'no'}),
+            ('sslProfile', {'name': 'http-connector-ssl-profile',
+                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
+                            'certFile': cls.ssl_file('client-certificate.pem'),
+                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                            'password': 'client-password'}),
+        ])
+        cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
+        cls.router_qdrb = cls.tester.qdrouterd("http2-two-router-tls-B", config_qdrb)
+        cls.router_qdra.wait_router_connected('QDR.B')
+        cls.router_qdrb.wait_router_connected('QDR.A')
+        cls.router_qdrb.wait_http_server_connected(is_tls=True)
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
+
+        # curl will use these additional args to connect to the router.
+        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
+                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
+                         '--key', cls.ssl_file('client-private-key.pem')]
+
+    def test_get_image_jpg(self):
+        # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
+        image_file_name = '/test.jpg'
+        address = get_address(self.router_qdra) + "/images" + image_file_name
+        self.run_curl(address, args=self.get_all_curl_args(['--output', self.router_qdra.outdir + image_file_name]))
+        digest_of_server_file = get_digest(image_file(image_file(image_file_name[1:])))
+        digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
+        self.assertEqual(digest_of_server_file, digest_of_response_file)

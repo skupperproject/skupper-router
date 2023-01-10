@@ -27,7 +27,7 @@ from time import sleep
 import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
-from system_test import curl_available, TIMEOUT, skip_test_in_ci, Http2Server
+from system_test import curl_available, nginx_available, TIMEOUT, skip_test_in_ci, Http2Server
 
 h2hyper_installed = True
 try:
@@ -62,6 +62,11 @@ def quart_available():
         print(e)
         print("quart_not_available")
         return False
+
+def skip_nginx_test():
+    if nginx_available() and curl_available():
+        return False
+    return True
 
 
 def skip_test():
@@ -389,6 +394,70 @@ class CommonHttp2Tests:
             ret_string += str(i) + ","
             i += 1
         self.assertIn(ret_string, out)
+
+
+def get_address(router):
+    http_address = router.http_addresses
+    address = None
+    if http_address:
+        address = router.http_addresses[0]
+    else:
+        tcp_address = router.tcp_addresses
+        if tcp_address:
+            address = router.tcp_addresses[0]
+    return address
+
+@unittest.skipIf(skip_nginx_test(), "nginx and curl needed to run nginx http2 tests")
+class Http2TestOneStandaloneRouterNginx(Http2TestBase):
+    @classmethod
+    def setUpClass(cls):
+        super(Http2TestOneStandaloneRouterNginx, cls).setUpClass()
+        cls.nginx_port = cls.tester.get_port()
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) + '/nginx/nginx-configs/nginx.conf')
+        env = dict()
+        nginx_base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)) + '/nginx')
+        env['nginx-base-folder'] = nginx_base_folder
+        env['setupclass-folder'] = cls.tester.directory
+        env['nginx-configs-folder'] = os.path.join(nginx_base_folder + '/nginx-configs')
+        env['listening-port'] = str(cls.nginx_port)
+        env['http2'] = 'http2'
+        env['ssl'] = ''
+        env['tls-enabled'] = '#'  # Will comment out the TLS lines
+        cls.nginx_server = cls.tester.nginxserver(config_path=config_path, env=env)
+        name = "http2-test-standalone-router"
+        cls.connector_name = 'connectorToBeDeleted'
+        cls.connector_props = {
+            'port': cls.nginx_port,
+            'address': 'examples',
+            'host': 'localhost',
+            'protocolVersion': 'HTTP2',
+            'name': cls.connector_name
+        }
+        config = Qdrouterd.Config([
+            ('router', {'mode': 'standalone', 'id': 'QDR'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+
+            ('httpListener', {'port': cls.tester.get_port(), 'address': 'examples',
+                              'host': '127.0.0.1', 'protocolVersion': 'HTTP2'}),
+            ('httpConnector', cls.connector_props)
+        ])
+        cls.router_qdra = cls.tester.qdrouterd(name, config, wait=True)
+        wait_http_listeners_up(cls.router_qdra.addresses[0])
+
+    def test_head_request(self):
+        # Run curl 127.0.0.1:port --http2-prior-knowledge --head
+        _, out, _ = self.run_curl(get_address(self.router_qdra), args=self.get_all_curl_args(['--head']))
+        self.assertIn('HTTP/2 200', out)
+        self.assertIn('content-type: text/html', out)
+
+    def test_get_image_jpg(self):
+        # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
+        image_file_name = '/test.jpg'
+        address = get_address(self.router_qdra) + "/images" + image_file_name
+        self.run_curl(address, args=self.get_all_curl_args(['--output', self.router_qdra.outdir + image_file_name]))
+        digest_of_server_file = get_digest(image_file(image_file(image_file_name[1:])))
+        digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
+        self.assertEqual(digest_of_server_file, digest_of_response_file)
 
 
 class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
