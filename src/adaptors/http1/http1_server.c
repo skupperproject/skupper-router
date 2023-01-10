@@ -187,7 +187,8 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
                                                       0,     //int              ssl_ssf,
                                                       false, //bool             ssl,
                                                       "",                  // peer router version,
-                                                      false);              // streaming links
+                                                      false,               // streaming links
+                                                      false);              // connection trunking
 
     hconn->conn_id = qd_server_allocate_connection_id(hconn->qd_server);
     hconn->qdr_conn = qdr_connection_opened(qdr_http1_adaptor->core,
