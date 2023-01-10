@@ -442,6 +442,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
         pn_data_enter(ocaps);
         pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_ANONYMOUS_RELAY), (char*) QD_CAPABILITY_ANONYMOUS_RELAY));
         pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_STREAMING_LINKS), (char*) QD_CAPABILITY_STREAMING_LINKS));
+        pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_CONNECTION_TRUNKING), (char*) QD_CAPABILITY_CONNECTION_TRUNKING));
         pn_data_exit(ocaps);
 
         // The desired-capability list defines which extension capabilities the
@@ -455,6 +456,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
         pn_data_enter(ocaps);
         pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_ANONYMOUS_RELAY), (char*) QD_CAPABILITY_ANONYMOUS_RELAY));
         pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_STREAMING_LINKS), (char*) QD_CAPABILITY_STREAMING_LINKS));
+        pn_data_put_symbol(ocaps, pn_bytes(strlen(QD_CAPABILITY_CONNECTION_TRUNKING), (char*) QD_CAPABILITY_CONNECTION_TRUNKING));
         pn_data_exit(ocaps);
     }
 

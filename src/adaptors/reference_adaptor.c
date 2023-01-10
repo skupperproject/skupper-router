@@ -418,7 +418,8 @@ static void on_startup(void *context)
                                                       0,                   //int             ssl_ssf,
                                                       false,               //bool            ssl,
                                                       "",                  // peer router version,
-                                                      false);              // streaming links
+                                                      false,               // streaming links
+                                                      false);              // connection trunking
 
     adaptor->conn = qdr_connection_opened(adaptor->core,    // core
                                           adaptor->adaptor, // protocol_adaptor

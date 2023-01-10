@@ -1144,6 +1144,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     int                    link_capacity = 1;
     const char            *name = 0;
     bool                   streaming_links = false;
+    bool                   connection_trunking = false;
     char                   rversion[128];
     uint64_t               connection_id = qd_connection_connection_id(conn);
     pn_connection_t       *pn_conn = qd_connection_pn(conn);
@@ -1191,11 +1192,12 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         memcpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
     }
 
-    // check offered capabilities for streaming link support
+    // check offered capabilities for streaming link support and connection trunking support
     //
     pn_data_t *ocaps = pn_connection_remote_offered_capabilities(pn_conn);
     if (ocaps) {
         size_t sl_len = strlen(QD_CAPABILITY_STREAMING_LINKS);
+        size_t ct_len = strlen(QD_CAPABILITY_CONNECTION_TRUNKING);
         pn_data_rewind(ocaps);
         if (pn_data_next(ocaps)) {
             if (pn_data_type(ocaps) == PN_ARRAY) {
@@ -1205,10 +1207,13 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
             do {
                 if (pn_data_type(ocaps) == PN_SYMBOL) {
                     pn_bytes_t s = pn_data_get_symbol(ocaps);
-                    streaming_links = (s.size == sl_len
-                                       && strncmp(s.start, QD_CAPABILITY_STREAMING_LINKS, sl_len) == 0);
+                    if (s.size == sl_len && strncmp(s.start, QD_CAPABILITY_STREAMING_LINKS, sl_len) == 0) {
+                        streaming_links = true;
+                    } else if (s.size == ct_len && strncmp(s.start, QD_CAPABILITY_CONNECTION_TRUNKING, ct_len) == 0) {
+                        connection_trunking = true;
+                    }
                 }
-            } while (pn_data_next(ocaps) && !streaming_links);
+            } while (pn_data_next(ocaps));
         }
     }
 
@@ -1331,7 +1336,8 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  ssl_ssf,
                                                                  is_ssl,
                                                                  rversion,
-                                                                 streaming_links);
+                                                                 streaming_links,
+                                                                 connection_trunking);
 
     qdr_connection_info_set_group_correlator(connection_info, conn->group_correlator);
 

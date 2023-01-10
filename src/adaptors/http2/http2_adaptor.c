@@ -2361,7 +2361,8 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                       0,     //int              ssl_ssf,
                                                       false, //bool             ssl,
                                                       "",                  // peer router version,
-                                                      false);              // streaming links
+                                                      false,               // streaming links
+                                                      false);              // connection trunking
 
     qdr_connection_t *conn = qdr_connection_opened(http2_adaptor->core,
                                                    http2_adaptor->adaptor,
@@ -2657,7 +2658,8 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
                                                       0,     //int              ssl_ssf,
                                                       false, //bool             ssl,
                                                       "",                  // peer router version,
-                                                      false);              // streaming links
+                                                      false,               // streaming links
+                                                      false);              // connection trunking
 
     qdr_connection_t *conn     = qdr_connection_opened(http2_adaptor->core,
                                                        http2_adaptor->adaptor,

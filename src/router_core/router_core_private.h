@@ -634,6 +634,7 @@ struct qdr_connection_info_t {
     bool                   is_encrypted;
     bool                   opened;
     bool                   streaming_links;  // will allow streaming links
+    bool                   connection_trunking; // peer supports connection trunking
     qd_direction_t         dir;
     qdr_connection_role_t  role;
     pn_data_t             *connection_properties;
