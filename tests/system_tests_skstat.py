@@ -642,7 +642,7 @@ class SkstatLinkPriorityTest(SkstatTestBase):
     def test_link_priority_csv(self):
         HEADER_ROW = 4
         TYPE_COL = 0
-        PRI_COL = 8
+        PRI_COL = 7
         out = self.run_skstat(['--links', '--csv'])
         lines = out.split("\n")
 
