@@ -125,6 +125,7 @@ extern const char * const QD_AP_FLOW_ID;  ///< Flow-ID for correlating flow and 
 extern const char * const QD_CAPABILITY_ANONYMOUS_RELAY;
 extern const char * const QD_CAPABILITY_STREAMING_LINKS;
 extern const char * const QD_CAPABILITY_INTER_EDGE;
+extern const char * const QD_CAPABILITY_CONNECTION_TRUNKING;
 /// @}
 
 /** @name Link Terminus Capabilities */

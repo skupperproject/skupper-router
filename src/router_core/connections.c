@@ -180,7 +180,8 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            int              ssl_ssf,
                                            bool             ssl,
                                            const char      *version,
-                                           bool             streaming_links)
+                                           bool             streaming_links,
+                                           bool             connection_trunking)
 {
     qdr_connection_info_t *connection_info = new_qdr_connection_info_t();
     ZERO(connection_info);
@@ -212,6 +213,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
     connection_info->ssl_ssf = ssl_ssf;
     connection_info->ssl     = ssl;
     connection_info->streaming_links = streaming_links;
+    connection_info->connection_trunking = connection_trunking;
     sys_mutex_init(&connection_info->connection_info_lock);
     return connection_info;
 }

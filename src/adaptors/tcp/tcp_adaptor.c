@@ -898,7 +898,8 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                                      0,                    // ssl_ssf,
                                                                      false,                // ssl,
                                                                      "",                   // peer router version,
-                                                                     false);               // streaming links
+                                                                     false,                // streaming links
+                                                                     false);               // connection trunking
     pn_data_free(tcp_conn_properties);
 
     qdr_connection_t *conn = qdr_connection_opened(tcp_adaptor->core,
@@ -1291,21 +1292,22 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
     // So, we need to call pn_data_free(tcp_conn_properties)
     //
     pn_data_t *tcp_conn_properties = qdr_tcp_conn_properties();
-    qdr_connection_info_t *info                = qdr_connection_info(tc->require_tls,  // bool             is_encrypted,
-                                                                     false,        // bool             is_authenticated,
-                                                                     true,         // bool             opened,
-                                                                     "",           // char            *sasl_mechanisms,
-                                                                     QD_OUTGOING,  // qd_direction_t   dir,
-                                                                     host,         // const char      *host,
-                                                                     "",           // const char      *ssl_proto,
-                                                                     "",           // const char      *ssl_cipher,
-                                                                     "",           // const char      *user,
-                                                                     "TcpAdaptor",  // const char      *container,
-                                                                     tcp_conn_properties,  // pn_data_t *connection_properties,
-                                                                     0,                    // int              ssl_ssf,
-                                                                     false,                // bool             ssl,
-                                                                     "",                   // peer router version,
-                                                                     false);               // streaming links
+    qdr_connection_info_t *info    = qdr_connection_info(tc->require_tls,  // bool             is_encrypted,
+                                                         false,        // bool             is_authenticated,
+                                                         true,         // bool             opened,
+                                                         "",           // char            *sasl_mechanisms,
+                                                         QD_OUTGOING,  // qd_direction_t   dir,
+                                                         host,         // const char      *host,
+                                                         "",           // const char      *ssl_proto,
+                                                         "",           // const char      *ssl_cipher,
+                                                         "",           // const char      *user,
+                                                         "TcpAdaptor",  // const char      *container,
+                                                         tcp_conn_properties,  // pn_data_t *connection_properties,
+                                                         0,                    // int              ssl_ssf,
+                                                         false,                // bool             ssl,
+                                                         "",                   // peer router version,
+                                                         false,                // streaming links
+                                                         false);               // connection trunking
     pn_data_free(tcp_conn_properties);
 
     qdr_connection_t *conn = qdr_connection_opened(tcp_adaptor->core,
