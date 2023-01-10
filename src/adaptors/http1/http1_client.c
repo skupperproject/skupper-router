@@ -292,7 +292,8 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                                       0,     //int              ssl_ssf,
                                                       false, //bool             ssl,
                                                       "",                  // peer router version,
-                                                      false);              // streaming links
+                                                      false,               // streaming links
+                                                      false);              // connection trunking
 
     hconn->conn_id = qd_server_allocate_connection_id(hconn->qd_server);
     hconn->qdr_conn = qdr_connection_opened(qdr_http1_adaptor->core,

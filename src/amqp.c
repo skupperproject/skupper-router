@@ -25,12 +25,13 @@
 #include <string.h>
 
 const char * const QD_AP_FLOW_ID = ":flowid";
-const char * const QD_CAPABILITY_ROUTER_CONTROL   = "qd.router";
-const char * const QD_CAPABILITY_ROUTER_DATA      = "qd.router-data";
-const char * const QD_CAPABILITY_EDGE_DOWNLINK    = "qd.router-edge-downlink";
-const char * const QD_CAPABILITY_ANONYMOUS_RELAY  = "ANONYMOUS-RELAY";
-const char * const QD_CAPABILITY_STREAMING_LINKS  = "qd.streaming-links";
-const char * const QD_CAPABILITY_INTER_EDGE       = "qd.router-inter-edge";
+const char * const QD_CAPABILITY_ROUTER_CONTROL      = "qd.router";
+const char * const QD_CAPABILITY_ROUTER_DATA         = "qd.router-data";
+const char * const QD_CAPABILITY_EDGE_DOWNLINK       = "qd.router-edge-downlink";
+const char * const QD_CAPABILITY_ANONYMOUS_RELAY     = "ANONYMOUS-RELAY";
+const char * const QD_CAPABILITY_STREAMING_LINKS     = "qd.streaming-links";
+const char * const QD_CAPABILITY_INTER_EDGE          = "qd.router-inter-edge";
+const char * const QD_CAPABILITY_CONNECTION_TRUNKING = "qd.connection_trunking";
 
 const char * const QD_DYNAMIC_NODE_PROPERTY_ADDRESS = "x-opt-qd.address";
 

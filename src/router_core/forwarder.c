@@ -75,10 +75,10 @@ static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_conn
     qdr_connection_t *conn;
     if (!base_conn) return 0;
 
-    if (DEQ_SIZE(base_conn->connection_group) == 0) {
+    if (DEQ_SIZE(base_conn->connection_group) == 0 || !base_conn->connection_info->connection_trunking) {
         //
-        // If there is no connection group associated with this base connection, simply open the
-        // new link on the base connection.
+        // If there is no connection group associated with this base connection, or the peer
+        // does not support connection trunking,  simply open the new link on the base connection.
         //
         conn = base_conn;
     } else {

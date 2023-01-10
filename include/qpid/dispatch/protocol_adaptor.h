@@ -871,7 +871,8 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            int              ssl_ssf,
                                            bool             ssl,
                                            const char      *version,
-                                           bool             streaming_links);
+                                           bool             streaming_links,
+                                           bool             connection_trunking);
 
 void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, const char *correlator);
 
