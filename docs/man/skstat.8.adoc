@@ -58,13 +58,17 @@ The router's operating mode:
 Router Id::
 The router's ID.
 
+Worker Threads::
+The number of threads in the process dedicated to IO work.
+
 Uptime::
 Time this router has been up. Displayed in the days:hours:minutes:seconds format.
 
-// Area::
+VmSize::
+The size, in bytes, of the virtual memory consumed by the router process.
 
-Link Routes::
-The number of active and inactive link routes configured for this router.
+Area::
+Reserved.  Always "0".
 
 Auto Links::
 The number of incoming and outgoing auto links configured for this router.
@@ -108,9 +112,6 @@ The number of deliveries forwarded by this router that were unsettled for more t
 Deliveries Stuck > 10sec::
 The number of deliveries forwarded by this router that were stuck for more than ten seconds.
 
-Deliveries to Fallback::
-The number of deliveries that were forwarded to a fallback destination.
-
 Links Blocked::
 The number of links that are blocked. A blocked link is one in which the available credit has remained zero for more than 10 seconds.
 
@@ -135,7 +136,7 @@ id::
 The connection's unique identifier.
 
 host::
-The hostname or internet address of the remotely-connected AMQP container.
+The hostname or internet address and port of the remotely-connected AMQP container.
 
 container::
 The container name of the remotely-connected AMQP container.
@@ -144,8 +145,13 @@ role::
 The connection's role:
   - 'normal' - The normal connection from a client to a router.
   - 'inter-router' - The connection between routers to form a network.
-  - 'route-container' - The connection to or from a broker or other host to receive link routes and waypoints.
+  - 'inter-router-data' - Member of a trunk of inter-router connections.  Used to carry streaming deliveries.
+  - 'route-container' - The connection to or from a broker or other host that has auto-links.
+  - 'inter-edge' - The connection between edge routers in an edge-mesh.
   - 'edge' - The connection between an edge router and an interior router.
+
+proto::
+The protocol being used over the connection.
 
 dir::
 The direction in which the connection was established:
@@ -158,8 +164,8 @@ The security or encryption method, if any, used for this connection.
 authentication::
 The authentication method and user ID of the connection's authenticated user.
 
-tenant::
-If the connection is to a listener using multi-tenancy, this column displays the tenant namespace for the connection.
+meshId::
+If the role of the connection is 'edge', this is the identity of the mesh that the edge router is a member of.
 
 last dlv::
 Time since the last delivery arrived on this connection. Displayed in the days:hours:minutes:seconds format.
@@ -188,24 +194,15 @@ attached.
 id::
 The unique identifier of this link.
 
-peer::
-For link-routed links, the unique identifier of the peer link. In
-link routing, an inbound link is paired with an outbound link.
-
 class::
 The class of the address bound to the link:
   - 'local' - The address that is local to this router (temporary).
   - 'topo' - A topological address used for router control messages.
   - 'router' - A summary router address used to route messages to a remote router's local addresses.
   - 'mobile' - A mobile address for an attached consumer or producer.
-  - 'link-in' - The address match for incoming routed links.
-  - 'link-out' - The address match for outgoing routed links.
 
 addr::
 The address bound to the link.
-
-phs::
-The phase of the address bound to the link.
 
 cap::
 The capacity, in deliveries, of the link.
@@ -283,6 +280,9 @@ If this router is not a neighbor, this field identifies the next-hop neighbor us
 link::
 The ID of the link to the neighbor router.
 
+ver::
+The inter-router protocol version used by the router.
+
 cost::
 The topology cost to this remote router (with -v option only).
 
@@ -315,8 +315,8 @@ The security or encryption method, if any, used for this connection.
 authentication::
 The authentication method and user ID of the connection's authenticated user.
 
-tenant::
-If the connection is to a listener using multi-tenancy, this column displays the tenant namespace for the connection.
+active::
+Whether this edge connection is active or standby.
 
 skstat -a
 ~~~~~~~~~
@@ -330,9 +330,6 @@ The class of the address:
 
 addr::
 The address text.
-
-phs::
-For mobile addresses only, the phase of the address. Direct addresses have only a phase 0. Waypoint addresses have multiple phases, normally 0 and 1.
 
 distrib::
 One of the following distribution methods used for this address:
@@ -369,22 +366,8 @@ The number of deliveries for this address that were delivered to an in-process c
 from-proc::
 The number of deliveries for this address that were received from an in-process producer.
 
-skstat --linkroutes
-~~~~~~~~~~~~~~~~~~~
-
-prefix::
-The address prefix of the link route.
-
-dir::
-The direction of matching links (from this router's perspective).
-
-distrib::
-The distribution method used for routed links. This value should always be 'linkBalanced', which is the only supported distribution for routed links.
-
-status::
-The operational status of the link route:
-  - 'active' - The route is actively routing attaches (it is ready for use).
-  - 'inactive' - The route is inactive, because no local destination is connected.
+watch::
+'Y' if there is an internal watch set for this address.
 
 skstat --autolinks
 ~~~~~~~~~~~~~~~~~~
