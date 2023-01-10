@@ -1968,16 +1968,17 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
 
             stream_data->stream_id =
                 nghttp2_submit_headers(conn->session, flags, stream_id, NULL, hdrs, actual_count, stream_data);
+
+            if (stream_id != -1) {
+                stream_data->stream_id = stream_id;
+            }
+
             //
             // We have just submitted a request on the egress connection.
             // Capture the stream id on the egress side.
             // This will help vflow correlate the input and output streams.
             //
             vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_data->stream_id);
-
-            if (stream_id != -1) {
-                stream_data->stream_id = stream_id;
-            }
 
             qd_log(http2_adaptor->log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] handle_outgoing_http, out_dlv before sending Outgoing headers "DLV_FMT, conn->conn_id, stream_data->stream_id, DLV_ARGS(stream_data->out_dlv));
 
