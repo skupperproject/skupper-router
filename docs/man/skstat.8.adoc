@@ -145,13 +145,13 @@ role::
 The connection's role:
   - 'normal' - The normal connection from a client to a router.
   - 'inter-router' - The connection between routers to form a network.
-  - 'inter-router-data' - Member of a trunk of inter-router connections.  Used to carry streaming deliveries.
+  - 'inter-router-data' - A connection that runs in parallel to an inter-router connection to share the traffic load.
   - 'route-container' - The connection to or from a broker or other host that has auto-links.
   - 'inter-edge' - The connection between edge routers in an edge-mesh.
   - 'edge' - The connection between an edge router and an interior router.
 
 proto::
-The protocol being used over the connection.
+The protocol being used over the connection, for example amqp or tcp.
 
 dir::
 The direction in which the connection was established:
@@ -280,16 +280,16 @@ If this router is not a neighbor, this field identifies the next-hop neighbor us
 link::
 The ID of the link to the neighbor router.
 
-ver::
+ver (with -v option only)::
 The inter-router protocol version used by the router.
 
-cost::
+cost (with -v option only)::
 The topology cost to this remote router (with -v option only).
 
-neighbors::
+neighbors (with -v option only)::
 The list of neighbor routers (the router's link-state). This field is available only if you specify the -v option.
 
-valid-origins::
+valid-origins (with -v option only)::
 The list of origin routers for which the best path to the listed router passes through this router (available only with the -v option).
 
 skstat -e
