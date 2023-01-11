@@ -307,7 +307,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         container: ['fedora']
-        containerTag: ['36']
+        containerTag: ['37']
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
@@ -348,7 +348,7 @@ jobs:
           # coverage
           - os: ubuntu-20.04
             container: 'fedora'
-            containerTag: 36
+            containerTag: 37
             buildType: Coverage
             runtimeCheck: OFF
             protonGitRef: 0.38.0
