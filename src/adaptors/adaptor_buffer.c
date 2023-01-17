@@ -69,8 +69,11 @@ qd_adaptor_buffer_t *qd_adaptor_buffer_raw(pn_raw_buffer_t *pn_raw_buffer)
 qd_adaptor_buffer_t *qd_get_adaptor_buffer_from_pn_raw_buffer(const pn_raw_buffer_t *pn_raw_buffer)
 {
     assert(pn_raw_buffer);
+    assert(pn_raw_buffer->size <= QD_ADAPTOR_MAX_BUFFER_SIZE);
     qd_adaptor_buffer_t *adaptor_buffer = (qd_adaptor_buffer_t *) pn_raw_buffer->context;
-    qd_adaptor_buffer_insert(adaptor_buffer, pn_raw_buffer->size);
+    assert(adaptor_buffer);
+    // do not use qd_adaptor_buffer_insert() since it increments the size
+    adaptor_buffer->size = pn_raw_buffer->size;
     return adaptor_buffer;
 }
 

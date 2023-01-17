@@ -339,6 +339,7 @@ static char *test_qd_adaptor_copy_qd_buffers_to_adaptor_buffers(void *context)
 static char *test_qd_get_adaptor_buffer_from_pn_raw_buffer(void *context)
 {
     qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
+    adaptor_buffer->size = 1;  // expect: overridden by size in pn_raw_buffer
 
     pn_raw_buffer_t pn_raw_buff;
     qd_adaptor_buffer_pn_raw_buffer(&pn_raw_buff, adaptor_buffer);
@@ -350,7 +351,7 @@ static char *test_qd_get_adaptor_buffer_from_pn_raw_buffer(void *context)
         return "The call to qd_get_adaptor_buffer_from_pn_raw_buffer did not yield the expected adaptor buffer";
     }
 
-    if (qd_adaptor_buffer_size(adaptor_buff) != pn_raw_buff.size) {
+    if (qd_adaptor_buffer_size(adaptor_buff) != 1000) {
         qd_adaptor_buffer_free(adaptor_buffer);
         return "The adaptor buffer size and the raw buffer size did not match";
     }
