@@ -1976,8 +1976,11 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
                 // An error code was returned by nghttp2 when calling nghttp2_submit_headers. This was a failure in submitting the headers
                 // Log the failure code returned by nghttp2 and do not proceed
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"] nghttp2_submit_headers failed, ret_val=%"PRId32", closing connection", conn->conn_id, ret_val);
-                // Since there was an error calling nghttp2_submit_headers, we cannot proceed further, we will have to close the hahaha
+                // Since there was an error calling nghttp2_submit_headers, we cannot proceed further, we will have to close the connection
                 nghttp2_submit_goaway(conn->session, 0, stream_id, ret_val, (uint8_t *)"Error while submitting header", 29);
+                vflow_set_uint64(stream_data->vflow, VFLOW_ATTRIBUTE_RESULT, ret_val);
+                vflow_set_string(stream_data->vflow, VFLOW_ATTRIBUTE_REASON, nghttp2_strerror(ret_val));
+
                 pn_raw_connection_close(conn->pn_raw_conn);
                 return 0;
             } else if (ret_val == 0) {
