@@ -940,7 +940,8 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             qd_adaptor_buffer_free(abuf);
             ++taken;
         }
-        work = taken > 0;  // more capacity for input buffers available
+        if (taken)
+            work = true;  // more capacity for input buffers available
 
         // take decrypted output and give it to the adaptor
 
@@ -973,7 +974,8 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             qd_adaptor_buffer_free(abuf);
             ++taken;
         }
-        work = taken > 0;  // more capacity for decrypt input buffers
+        if (taken)
+            work = true;  // more capacity for decrypt input buffers
 
     } while (work);
 

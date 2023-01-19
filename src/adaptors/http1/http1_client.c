@@ -794,6 +794,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                     qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP request msg-id=%" PRIu64 " completed!",
                            hconn->conn_id, hreq->base.msg_id);
                     _client_request_free(hreq);
+                    // avoid coverity false use_after_free error:
+                    assert(hreq != (_client_request_t *) DEQ_HEAD(hconn->requests));
                     hreq = (_client_request_t *) DEQ_HEAD(hconn->requests);
                     if (hreq && hreq->request_msg && hconn->in_link_credit > 0) {
                         qd_log(hconn->adaptor->log, QD_LOG_TRACE,
