@@ -582,7 +582,6 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                             self.server11_port)
 
 
-# @unittest.skip("Avoid TLS tests due to flakey Python HTTP server")
 class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                                    CommonHttp1Edge2EdgeTest):
     """

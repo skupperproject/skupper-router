@@ -128,8 +128,8 @@ static void _client_response_msg_free(_client_request_t *req, _client_response_m
 static void _client_request_free(_client_request_t *req);
 static void _deliver_request(qdr_http1_connection_t *hconn, _client_request_t *req);
 static void _generate_response_msg(_client_request_t *hreq, int code, const char *reason, const char *text_body);
-static int  _h1_codec_tx_response(_client_request_t *hreq, int status_code, const char *reason_phrase,
-                                  uint32_t version_major, uint32_t version_minor);
+static int  _send_response_line(_client_request_t *hreq, int status_code, const char *reason_phrase,
+                                uint32_t version_major, uint32_t version_minor);
 
 // return true if the HTTP request (and response(s)) have been fully decoded/encoded. It is safe to release the hreq at
 // this point, however keep in mind that encoded response data may still be queued for output in the raw connection/TLS
@@ -484,6 +484,9 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
         if (!DEQ_IS_EMPTY(in_abufs)) {
             rx_data = true;
 
+            hconn->in_http1_octets += octets;
+            vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
+
             if (HTTP1_DUMP_BUFFERS) {
                 fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total octets\n", octets);
                 qd_adaptor_buffer_t *bb = DEQ_HEAD(in_abufs);
@@ -503,7 +506,6 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
                        "[C%" PRIu64 "] pushing %zu received octets into codec (%zu buffers)", hconn->conn_id, octets,
                        DEQ_SIZE(qbuf_list));
 
-                hconn->in_http1_octets += octets;
                 int error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
                 if (error) {
                     qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
@@ -580,6 +582,9 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
         if (!DEQ_IS_EMPTY(in_abufs)) {
             rx_data = true;
 
+            hconn->in_http1_octets += octets;
+            vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
+
             if (HTTP1_DUMP_BUFFERS) {
                 fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total octets\n", octets);
                 qd_adaptor_buffer_t *bb = DEQ_HEAD(in_abufs);
@@ -594,7 +599,6 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
             if (hconn->http_conn && !hconn->input_closed) {
                 qd_buffer_list_t qbuf_list = DEQ_EMPTY;
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
-                hconn->in_http1_octets += octets;
 
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                        "[C%" PRIu64 "] pushing %zu received octets into codec (%zu buffers)", hconn->conn_id, octets,
@@ -1191,11 +1195,6 @@ static void _client_request_complete_cb(h1_codec_request_state_t *lib_rs, bool c
         // Set the inbound octets for this request on its vflow.
         //
         vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, in_octets);
-        //
-        // Set the aggregate inbound octets of this connection on the vflow.
-        //
-        hreq->base.hconn->in_http1_octets += in_octets;
-        vflow_set_uint64(hreq->base.hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hreq->base.hconn->in_http1_octets);
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                "[C%" PRIu64 "] client request msg-id=%" PRIu64 " codec complete: Octets read: %" PRIu64
                " written: %" PRIu64,
@@ -1323,7 +1322,7 @@ static void _encode_json_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding json response", hconn->conn_id);
-    bool ok = !_h1_codec_tx_response(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
+    bool ok = !_send_response_line(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
     if (!ok) {
         qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] Could not encode response", hconn->conn_id);
         return;
@@ -1356,7 +1355,7 @@ static void _encode_multipart_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding multipart response", hconn->conn_id);
-    bool ok = !_h1_codec_tx_response(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
+    bool ok = !_send_response_line(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
     char content_length[25];
     if (_get_multipart_content_length(hreq, content_length)) {
         h1_codec_tx_add_header(hreq->base.lib_rs, CONTENT_LENGTH_KEY, content_length);
@@ -1476,7 +1475,7 @@ static void _encode_aggregated_response(qdr_http1_connection_t *hconn, _client_r
 static void _encode_empty_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
 {
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding empty response", hconn->conn_id);
-    _h1_codec_tx_response(hreq, 204, NULL, hreq->version_major, hreq->version_minor);
+    _send_response_line(hreq, 204, NULL, hreq->version_major, hreq->version_minor);
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
@@ -1634,7 +1633,7 @@ static bool _encode_response_headers(_client_request_t *hreq,
                            hreq->base.hconn->conn_id, hreq->base.hconn->out_link_id, (int)status_code,
                            reason_str ? reason_str : "");
 
-                    ok = !_h1_codec_tx_response(hreq, (int) status_code, reason_str, major, minor);
+                    ok = !_send_response_line(hreq, (int) status_code, reason_str, major, minor);
                     free(reason_str);
 
                     // now send all headers in app properties
@@ -1989,7 +1988,7 @@ static void _generate_response_msg(_client_request_t *hreq, int code, const char
     DEQ_INSERT_TAIL(hreq->responses, rmsg);
 
     bool ignored;
-    _h1_codec_tx_response(hreq, code, reason, 1, 1);
+    _send_response_line(hreq, code, reason, 1, 1);
     if (text_body) {
         const size_t len = strlen(text_body);
         char         buf[32];
@@ -2004,8 +2003,8 @@ static void _generate_response_msg(_client_request_t *hreq, int code, const char
     rmsg->encode_complete = true;
 }
 
-static int _h1_codec_tx_response(_client_request_t *hreq, int status_code, const char *reason_phrase,
-                                 uint32_t version_major, uint32_t version_minor)
+static int _send_response_line(_client_request_t *hreq, int status_code, const char *reason_phrase,
+                               uint32_t version_major, uint32_t version_minor)
 {
     //
     // Set the http response code (200, 404 etc) on the stream's vflow object.
