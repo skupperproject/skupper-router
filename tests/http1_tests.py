@@ -458,7 +458,7 @@ class TestServer:
         self._logger.log("TestServer %s:%s thread exited" % self._server_addr)
 
     def wait(self, timeout=TIMEOUT, check_reply=True):
-        self._logger.log("TestServer %s:%s shutting down" % self._server_addr)
+        self._logger.log("TestServer %s:%s requesting shut down" % self._server_addr)
         self._send_shutdown_request(check_reply)
         self._thread.join(timeout=timeout)
         if self._thread.is_alive():
@@ -471,6 +471,7 @@ class TestServer:
             self._logger.log(f"TestSever Error: server error on shutdown: '{self._server_error}'")
             self._logger.dump()
             raise RuntimeError("HTTP/1 TestServer fatal exception") from self._server_error
+        self._logger.log("TestServer %s:%s shut down!" % self._server_addr)
 
     def dump_log(self):
         self._logger.dump()
