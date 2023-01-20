@@ -22,7 +22,7 @@
 # https://sipb.mit.edu/doc/safe-shell
 set -Eefuxo pipefail
 
-BUILD_FLAGS="$(rpmbuild --eval '%set_build_flags')"
+BUILD_FLAGS="$(rpmbuild --undefine _annotated_build --eval '%set_build_flags')"
 eval "${BUILD_FLAGS}"
 
 if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
