@@ -21,12 +21,12 @@ import logging
 import os
 import socket
 import uuid
+import weakref
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPSConnection
 from ssl import SSLContext, SSLSocket
 from threading import Thread, Event
 from time import sleep, time
-from weakref import WeakValueDictionary
 
 from typing import List, Any, Tuple, Mapping, Optional
 
@@ -379,7 +379,8 @@ class ThreadedTestClient:
 class TestServer:
     """A HTTPServer running in a separate thread"""
     __test__ = False
-    _active_servers: WeakValueDictionary[int, 'TestServer'] = WeakValueDictionary()
+    #_active_servers: Mapping[int, 'TestServer'] = weakref.WeakValueDictionary()
+    _active_servers = weakref.WeakValueDictionary()  # type: ignore
 
     def __init__(self, server_port: int, client_port: int, tests, handler_cls=None,
                  server_ssl_context: Optional[SSLContext] = None,
