@@ -526,6 +526,7 @@ static void _do_reconnect(void *context)
         // this next call may immediately reschedule the connection on another I/O
         // thread. After this call hconn may no longer be valid!
         pn_proactor_raw_connect(qd_server_proactor(hconn->qd_server), hconn->raw_conn, hconn->cfg.host_port);
+        hconn->server.reconnecting = true;
     }
     sys_mutex_unlock(&qdr_http1_adaptor->lock);
     if (connecting)
@@ -804,6 +805,10 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
     switch (pn_event_type(e)) {
 
     case PN_RAW_CONNECTION_CONNECTED: {
+        sys_mutex_lock(&qdr_http1_adaptor->lock);
+        hconn->server.reconnecting = false;
+        sys_mutex_unlock(&qdr_http1_adaptor->lock);
+
         qd_set_vflow_netaddr_string(hconn->vflow, hconn->raw_conn, false);
         if (hconn->oper_status == QD_CONN_OPER_DOWN) {
             hconn->oper_status = QD_CONN_OPER_UP;
@@ -887,6 +892,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         // prevent core activation
         sys_mutex_lock(&qdr_http1_adaptor->lock);
         hconn->raw_conn = 0;
+        hconn->server.reconnecting = false;
 
         // there are two cases that need to be dealt with: the remote server
         // has dropped the connection and we need to reconnect, or the

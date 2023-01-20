@@ -151,6 +151,9 @@ struct qdr_http1_connection_t {
         qd_timer_t          *reconnect_timer;
         qd_timestamp_t       link_timeout;
         qd_duration_t        reconnect_pause;
+        // do not call pn_raw_connection_wake() while bringing up the raw connection. This prevents triggering a proton
+        // bug. See https://issues.apache.org/jira/browse/PROTON-2673
+        bool reconnecting;
     } server;
 
     // Outgoing link (router ==> HTTP app)

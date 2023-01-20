@@ -393,8 +393,10 @@ static void _core_connection_activate_CT(void *context, qdr_connection_t *conn)
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_connection_get_context(conn);
     if (hconn) {
         if (hconn->raw_conn) {
-            pn_raw_connection_wake(hconn->raw_conn);
             activated = true;
+            if (!hconn->server.reconnecting) {
+                pn_raw_connection_wake(hconn->raw_conn);
+            }
         } else if (hconn->server.reconnect_timer) {
             assert(hconn->type == HTTP1_CONN_SERVER);
             qd_timer_schedule(hconn->server.reconnect_timer, 0);
