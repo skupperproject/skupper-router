@@ -1332,15 +1332,6 @@ static void _server_request_complete_cb(h1_codec_request_state_t *hrs, bool canc
     // In the non-message aggregation case we can settle early rather than waiting for the client to settle the response
     // messages. Otherwise we have to wait for the client to settle all outstanding response messages.
 
-#if 0
-    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%"PRIu64"] KAG: CODEC COMPLETED c=%s A=%s E=%s",
-           hconn->conn_id,
-           cancelled ? "cancelled" : "not cancelled",
-           hconn->cfg.aggregation == QD_AGGREGATION_NONE ? "NONE" : "NOT-NONE",
-           DEQ_IS_EMPTY(hreq->responses) ? "EMPTY" : "NOT-EMPTY");
-#endif
-
     if (cancelled || hconn->cfg.aggregation == QD_AGGREGATION_NONE || DEQ_IS_EMPTY(hreq->responses)) {
         if (!hreq->request_settled) {
             hreq->request_settled = true;
