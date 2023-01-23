@@ -2810,7 +2810,7 @@ static void handle_raw_connected_event(qdr_http2_connection_t *conn)
                "[C%" PRIu64 "] Created stream dispatcher link in PN_RAW_CONNECTION_CONNECTED", conn->conn_id);
         if (!conn->session) {
             nghttp2_session_client_new(&conn->session, (nghttp2_session_callbacks *)http2_adaptor->callbacks, (void *)conn);
-            qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%" PRIu64 "] nghttp2_session_client_new", conn->conn_id);
+            qd_log(http2_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] nghttp2_session_client_new", conn->conn_id);
         }
         if (conn->require_tls && qd_tls_has_output(conn->tls)) {
             qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
@@ -3126,11 +3126,14 @@ static void qdr_http2_adaptor_final(void *adaptor_context)
     qdr_http2_connection_t *http_conn = DEQ_HEAD(adaptor->connections);
     while (http_conn) {
         if (http_conn->stream_dispatcher_stream_data) {
-            qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Freeing stream_data (stream_dispatcher, qdr_http2_adaptor_final) (%lx)", http_conn->conn_id,  (long) http_conn->stream_dispatcher_stream_data);
+            qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] Freeing stream_data (stream_dispatcher, qdr_http2_adaptor_final) (%lx)",
+                   http_conn->conn_id, (long) http_conn->stream_dispatcher_stream_data);
             free_qdr_http2_stream_data_t(http_conn->stream_dispatcher_stream_data);
             http_conn->stream_dispatcher_stream_data = 0;
         }
-        qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Freeing http2 connection (calling free_qdr_http2_connection)", http_conn->conn_id);
+        qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] Freeing http2 connection (calling free_qdr_http2_connection)", http_conn->conn_id);
         qd_adaptor_buffer_list_free_buffers(&http_conn->out_buffs);
         free_qdr_http2_connection(http_conn, true);
         http_conn = DEQ_HEAD(adaptor->connections);

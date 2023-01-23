@@ -1994,7 +1994,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_FORBIDDEN, true);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
-        qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Router attach forbidden on non-inter-router connection", conn->identity);
+        qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Router attach forbidden on non-inter-router connection",
+               conn->identity);
         return;
     }
 
@@ -2008,7 +2009,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_WRONG_ROLE, true);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
-        qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Endpoint attach forbidden on inter-router connection", conn->identity);
+        qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Endpoint attach forbidden on inter-router connection",
+               conn->identity);
         return;
     }
 
@@ -2051,7 +2053,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
                     qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
                     qdr_terminus_free(source);
                     qdr_terminus_free(target);
-                    qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Endpoint attach failed - no address lookup handler", conn->identity);
+                    qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Endpoint attach failed - no address lookup handler",
+                           conn->identity);
                     return;
                 }
             }
@@ -2089,7 +2092,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
                 qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
                 qdr_terminus_free(source);
                 qdr_terminus_free(target);
-                    qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Endpoint attach failed - no address lookup handler", conn->identity);
+                qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Endpoint attach failed - no address lookup handler",
+                       conn->identity);
                 return;
             }
             break;
