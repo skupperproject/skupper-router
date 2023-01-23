@@ -27,6 +27,7 @@ import select
 import socket
 from http.client import HTTPSConnection
 from ssl import SSLContext, PROTOCOL_TLS_CLIENT, PROTOCOL_TLS_SERVER
+from ssl import CERT_REQUIRED
 from time import sleep, time
 from email.parser import BytesParser
 
@@ -35,7 +36,7 @@ from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl
 from http1_tests import http1_ping, TestServer, RequestHandler10
-from http1_tests import RequestMsg, ResponseMsg
+from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
 from http1_tests import CommonHttp1OneRouterTest
 from http1_tests import CommonHttp1Edge2EdgeTest
@@ -339,15 +340,17 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
 
         extra_config = []
         if cls.connector_ssl_profile is not None:
-            connector11_config.update({'sslProfile': cls.connector_ssl_profile['name']})
-            #connector11_config.update({'verifyHostname': 'false'})
-            connector10_config.update({'sslProfile': cls.connector_ssl_profile['name']})
-            #connector10_config.update({'verifyHostname': 'false'})
+            connector11_config.update({'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True})
+            connector10_config.update({'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True})
             extra_config.extend([('sslProfile', cls.connector_ssl_profile)])
 
         if cls.listener_ssl_profile is not None:
-            listener11_config.update({'sslProfile': cls.listener_ssl_profile['name']})
-            listener10_config.update({'sslProfile': cls.listener_ssl_profile['name']})
+            listener11_config.update({'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True})
+            listener10_config.update({'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True})
             extra_config.extend([('sslProfile', cls.listener_ssl_profile)])
 
         super(Http1AdaptorOneRouterTest, cls).\
@@ -446,6 +449,7 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
         ctxt.load_cert_chain(SERVER_CERTIFICATE,
                              SERVER_PRIVATE_KEY,
                              "server-password")
+        ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = False
         cls.server_ssl_context = ctxt
 
@@ -460,6 +464,10 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
         # TLS configuration for use by the test clients
         ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
         ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = True
         cls.client_ssl_context = ctxt
 
@@ -606,7 +614,7 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
 
         # note: connector uses client SSL mode
         cls.connector_ssl_profile = {
-            'name': 'Http1AdaptorOneRouterConnectorSSL',
+            'name': 'Http1AdaptorEdge2EdgeConnectorSSL',
             'caCertFile': CA_CERT,
             'certFile': CLIENT_CERTIFICATE,
             'privateKeyFile': CLIENT_PRIVATE_KEY,
@@ -619,6 +627,7 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
         ctxt.load_cert_chain(SERVER_CERTIFICATE,
                              SERVER_PRIVATE_KEY,
                              "server-password")
+        ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = False
         cls.server_ssl_context = ctxt
 
@@ -632,6 +641,10 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
 
         ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
         ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = True
         cls.client_ssl_context = ctxt
 
@@ -650,11 +663,14 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                     ('httpListener', {'port': cls.listener11_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer11',
-                                      'sslProfile': cls.listener_ssl_profile['name']}),
+                                      'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True}),
+
                     ('httpListener', {'port': cls.listener10_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer10',
-                                      'sslProfile': cls.listener_ssl_profile['name']}),
+                                      'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True}),
                     ])
         cls.EA1 = cls.routers[1]
         cls.EA1.listener = cls.EA1.addresses[0]
@@ -668,12 +684,14 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                                        'host': cls.server11_host,
                                        'protocolVersion': 'HTTP1',
                                        'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True,
                                        'address': 'testServer11'}),
 
                     ('httpConnector', {'port': cls.server10_port,
                                        'host': cls.server10_host,
                                        'protocolVersion': 'HTTP1',
                                        'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True,
                                        'address': 'testServer10'})
                     ],
                    wait=False)
@@ -1658,6 +1676,250 @@ class Http1TlsBadConfigTests(HttpTlsBadConfigTestsBase):
 
     def test_listener_mgmt_missing_ca_file(self):
         self._test_listener_mgmt_missing_ca_file()
+
+
+class Http1TLSConnectorErrorTests(TestCase):
+    """Test server-facing connector error handling"""
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TLSConnectorErrorTests, cls).setUpClass()
+
+    def test_001_cleartext_reject(self):
+        """Attempt to connect to a server that does not use TLS"""
+
+        mgmt_port = self.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ConnectorErrorTests001'}),
+            ('listener', {'role': 'normal',
+                          'port': mgmt_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        r_config = Qdrouterd.Config(r_config)
+        with self.tester.qdrouterd('HTTP1ConnectorErrorTests001', r_config,
+                                   wait=True) as router:
+            mgmt = router.qd_manager
+
+            server_port = self.tester.get_port()
+            mgmt.create("sslProfile",
+                        {'name': 'SP_test_001_cleartext_reject',
+                         'caCertFile': CA_CERT})
+            mgmt.create("httpConnector",
+                        {"name": "C_test_001_cleartext_reject",
+                         "address": "test_001_cleartext_reject",
+                         'host': 'localhost',
+                         'port': server_port,
+                         'protocolVersion': 'HTTP1',
+                         'sslProfile': 'SP_test_001_cleartext_reject'})
+
+            # test server:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+
+                def _io(self):
+                    while True:
+                        conn.send(b'This is not TLS')
+                        ignore = conn.recv(4096)
+
+                self.assertRaises(OSError, _io, self)
+                conn.close()
+            router.wait_log_message(pattern=r"TLS connection failed")
+
+            # Ensure router can still connect given the proper TLS config.
+            # If the handshake fails an error will be raised by server.accept()
+
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            # ctxt.verify_mode = CERT_REQUIRED
+            # ctxt.check_hostname = False
+
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+                conn.close()
+
+    def test_002_client_cert_fail(self):
+        """Handle a handshake failure initiated by the server due to a missing
+        client certificate
+        """
+        mgmt_port = self.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ConnectorErrorTests002'}),
+            ('listener', {'role': 'normal',
+                          'port': mgmt_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        r_config = Qdrouterd.Config(r_config)
+        with self.tester.qdrouterd('HTTP1ConnectorErrorTests002', r_config,
+                                   wait=True) as router:
+            mgmt = router.qd_manager
+            server_port = self.tester.get_port()
+
+            # this profile does not provide a client cert
+            mgmt.create("sslProfile",
+                        {'name': 'SP_test_002_client_cert_fail',
+                         'caCertFile': CA_CERT})
+            mgmt.create("httpConnector",
+                        {"name": 'C_test_002_client_cert_fail',
+                         "address": 'test_002_client_cert_fail',
+                         'host': 'localhost',
+                         'port': server_port,
+                         'protocolVersion': 'HTTP1',
+                         'sslProfile': 'SP_test_002_client_cert_fail'})
+
+            # This test server expects a client cert from the router. Expect
+            # the handshake to fail
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            ctxt.verify_mode = CERT_REQUIRED
+
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                self.assertRaises(OSError, server.accept)
+
+            router.wait_log_message(pattern=r"TLS connection failed")
+
+            # Ensure router can still connect given the proper TLS config.
+
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+                conn.close()
+
+
+class Http1TLSListenerErrorTests(TestCase):
+    """Test client-facing listener error handling"""
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TLSListenerErrorTests, cls).setUpClass()
+        cls.connector_port = cls.tester.get_port()
+        cls.listener_port = cls.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1TLSListenerErrorTests'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+            ('httpConnector', {'name': 'C_HTTP1TLSListenerErrorTests',
+                               'address': 'HTTP1TLSListenerErrorTests',
+                               'host': 'localhost',
+                               'port': cls.connector_port,
+                               'protocolVersion': 'HTTP1'}),
+            ('sslProfile', {'name': 'SP_HTTP1TLSListenerErrorTests',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_HTTP1TLSListenerErrorTests',
+                              'address': 'HTTP1TLSListenerErrorTests',
+                              'host': 'localhost',
+                              'port': cls.listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'sslProfile': 'SP_HTTP1TLSListenerErrorTests',
+                              'authenticatePeer': True})
+        ]
+        r_config = Qdrouterd.Config(r_config)
+        cls.router = cls.tester.qdrouterd('HTTP1TLSListenerErrorTests', r_config, wait=False)
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_001_client_failures(self):
+        """Test various client errors"""
+        TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/ping",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 4,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'pong'),
+                 ResponseValidator(expect_body=b'pong'))
+            ]
+        }
+
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = True
+
+        with TestServer.new_server(self.connector_port, self.listener_port,
+                                   TEST, client_ssl_context=ctxt) as server:
+            self.router.wait_ready()
+            wait_http_listeners_up(self.router.addresses[0])
+
+            # verify a good client can connect
+
+            client = ThreadedTestClient(TEST,
+                                        f"localhost:{self.listener_port}",
+                                        ssl_context=ctxt)
+            client.wait()
+            client.check_count(1)
+
+            # now attempt to attach without TLS - should fail
+
+            url = f"http://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1', '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertNotEqual(0, rc, f"Expected curl to fail: out={out}")
+
+            # connect without a self identifying certificate should also fail
+
+            url = f"https://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1',
+                    '--cacert', CA_CERT,
+                    '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertNotEqual(0, rc, f"Expected curl to fail: out={out}")
+
+            # test properly configured client - should connect ok
+
+            url = f"https://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1',
+                    '--cacert', CA_CERT,
+                    '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                    '--key', CLIENT_PRIVATE_KEY,
+                    '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertEqual(0, rc, f"Expected curl fail: rc={rc} err={err}")
+            self.assertEqual('pong', out, f"Expected 'pong', got {out}")
 
 
 if __name__ == '__main__':
