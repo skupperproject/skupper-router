@@ -974,9 +974,9 @@
                 },
                 "dataConnectionCount": {
                     "description": "For inter-router connectors only.  The number of parallel data connections to carry streaming data.",
-                    "type": "integer",
+                    "type": "string",
                     "required": false,
-                    "default": 2,
+                    "default": "auto",
                     "create": true
                 }
             }

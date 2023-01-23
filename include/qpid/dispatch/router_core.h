@@ -82,6 +82,15 @@ bool qdr_core_test_hooks_enabled(const qdr_core_t *core);
 
 
 /**
+ * Return the count of worker threads.
+ *
+ * @param core Pointer to the core object returned by qd_core()
+ * @return count of worker threads
+ */
+int qdr_core_get_worker_thread_count(const qdr_core_t *core);
+
+
+/**
  ******************************************************************************
  * Route table maintenance functions (Router Control)
  ******************************************************************************

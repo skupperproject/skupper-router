@@ -26,6 +26,21 @@ from skupper_router.management.client import Node
 from proton import SASL
 
 
+# All tests use the same number of worker threads.
+n_worker_threads = 1
+
+
+# WARNING
+# The number of inter-router-data connections
+# is determined based on the number of worker
+# threads. This is done in connection_manager.c,
+# in the function qd_dispatch_configure_connector().
+# If the formula used in that function changes,
+# make the same change here.
+def worker_threads_to_data_connections(n):
+    return int((n + 1) / 2)
+
+
 class RouterTestPlainSaslCommon(TestCase):
     @classmethod
     def router(cls, name, connection):
@@ -90,7 +105,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -104,7 +119,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
                            'saslUsername': 'test@domain.com',
                            # Provide a non-existen file.
                            'saslPassword': 'file:' + cls.sasl_file('non-existent-password-file.txt')}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
@@ -185,7 +200,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -199,7 +214,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
                            'saslUsername': 'test@domain.com',
                            # Provide the password with a prefix of literal. This should fail..
                            'saslPassword': 'literal:password'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
@@ -274,7 +289,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
                           'authenticatePeer': 'no'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -287,7 +302,7 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
                            'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'env:ENV_SASL_PASSWORD'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
@@ -336,9 +351,11 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
-        # and the other connection that this skstat client is making
-        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
+        # There will be 1 inter-router connection and 1 skstat client connection that
+        # have authenticated using SASL PLAIN. And also the number of inter-router-data
+        # connections that are determined by the worker thread count.
+        n_total_connections = worker_threads_to_data_connections(n_worker_threads) + 1 + 1
+        self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -366,9 +383,11 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 
         split_list = out.split()
 
-        # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
-        # and the other connection that this skstat client is making
-        self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
+        # There will be 1 inter-router connection and 1 skstat client connection that
+        # have authenticated using SASL PLAIN. And also the number of inter-router-data
+        # connections that are determined by thw worker thread count.
+        n_total_connections = worker_threads_to_data_connections(n_worker_threads) + 1 + 1
+        self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
         self.assertEqual(1, split_list.count("inter-router"))
         self.assertEqual(1, split_list.count("normal"))
 
@@ -420,7 +439,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'protocols': 'TLSv1.1 TLSv1.2',
                             'password': 'server-password'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -436,7 +455,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
                            'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'file:' + cls.sasl_file('password.txt')}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
@@ -471,9 +490,12 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
             assert p.returncode == 0, \
                 "skstat exit status %s, output:\n%s" % (p.returncode, out)
             split_list = out.split()
-            # There will be 4 connections that have authenticated using SASL PLAIN. One inter-router connection, two inter-router-data,
-            # and the other connection that this skstat client is making
-            self.assertEqual(4, split_list.count("test@domain.com(PLAIN)"))
+
+            # There will be 1 inter-router connection and 1 skstat client connection that
+            # have authenticated using SASL PLAIN. And also the number of inter-router-data
+            # connections that are determined by the worker thread count.
+            n_total_connections = worker_threads_to_data_connections(n_worker_threads) + 1 + 1
+            self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
             self.assertEqual(1, split_list.count("inter-router"))
             self.assertEqual(1, split_list.count("normal"))
 
@@ -550,7 +572,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'password': 'server-password'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -566,7 +588,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
                            'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'file:' + cls.sasl_file('password.txt')}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
@@ -644,7 +666,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                             'certFile': cls.ssl_file('server-certificate.pem'),
                             'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                             'password': 'server-password'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -662,7 +684,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                            'saslMechanisms': 'PLAIN',
                            'verifyHostname': 'no',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password'}),
-            ('router', {'workerThreads': 1,
+            ('router', {'workerThreads': n_worker_threads,
                         'mode': 'interior',
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
