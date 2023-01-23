@@ -141,7 +141,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
         sasl_failed = False
         file_open_failed = False
         for log in logs:
-            if log[0] == 'SERVER' and log[1] == "info" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
+            if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
                 sasl_failed = True
             if log[0] == "CONN_MGR" and log[1] == "error" and "Unable to open password file" in log[2] and "error: No such file or directory" in log[2]:
                 file_open_failed = True
@@ -235,7 +235,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
 
         sasl_failed = False
         for log in logs:
-            if log[0] == 'SERVER' and log[1] == "info" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
+            if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
                 sasl_failed = True
 
         self.assertTrue(sasl_failed)

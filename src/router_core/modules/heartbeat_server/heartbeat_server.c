@@ -132,8 +132,8 @@ static void on_timer(qdr_core_t *core, void *context)
     endpoint_ref_t *epr = DEQ_HEAD(_server_state.endpoints);
     while (epr) {
         if (qdr_core_uptime_ticks(core) - epr->last_heartbeat > HEARTBEAT_THRESHOLD) {
-            qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Lost heartbeat from container %s, closing connection",
-            epr->conn_id, epr->container_id);
+            qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Lost heartbeat from container %s, closing connection",
+                   epr->conn_id, epr->container_id);
             qdr_close_connection_CT(core, epr->conn);
         }
         epr = DEQ_NEXT(epr);
