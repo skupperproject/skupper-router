@@ -217,7 +217,8 @@ void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq);
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context);
 
 typedef int64_t qdr_http1_take_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *a_bufs, size_t limit);
-void            qdr_http1_do_raw_io(pn_raw_connection_t             *raw_conn,
+void            qdr_http1_do_raw_io(uint64_t                         conn_id,
+                                    pn_raw_connection_t             *raw_conn,
                                     qdr_http1_take_output_data_cb_t *take_output_cb,
                                     void                            *take_output_context,
                                     qd_adaptor_buffer_list_t        *input_data,

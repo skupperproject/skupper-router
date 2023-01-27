@@ -523,8 +523,21 @@ def wait_http_listeners_up(mgmt_address: str,
     filter the set of configured listeners using attribute names and values
     """
     LISTENER_TYPE = 'io.skupper.router.httpListener'
-    return _wait_adaptor_listeners_up(LISTENER_TYPE, mgmt_address, l_filter,
-                                      timeout)
+    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+                                               'up', l_filter, timeout)
+
+
+def wait_http_listeners_down(mgmt_address: str,
+                             l_filter: Optional[Mapping[str, Any]] = None,
+                             timeout: float = TIMEOUT):
+    """
+    Wait until the configured HTTP listener sockets have
+    deactivated. Optionally filter the set of configured listeners using
+    attribute names and values
+    """
+    LISTENER_TYPE = 'io.skupper.router.httpListener'
+    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+                                               'down', l_filter, timeout)
 
 
 def wait_tcp_listeners_up(mgmt_address: str,
@@ -535,14 +548,18 @@ def wait_tcp_listeners_up(mgmt_address: str,
     filter the set of configured listeners using attribute names and values
     """
     LISTENER_TYPE = 'io.skupper.router.tcpListener'
-    return _wait_adaptor_listeners_up(LISTENER_TYPE, mgmt_address, l_filter,
-                                      timeout)
+    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+                                               'up', l_filter, timeout)
 
 
-def _wait_adaptor_listeners_up(listener_type,
-                               mgmt_address: str,
-                               l_filter: Optional[Mapping[str, Any]] = None,
-                               timeout: float = TIMEOUT):
+def _wait_adaptor_listeners_oper_status(listener_type,
+                                        mgmt_address: str,
+                                        oper_status: str,
+                                        l_filter: Optional[Mapping[str, Any]] = None,
+                                        timeout: float = TIMEOUT):
+    """
+    Wait until the selected listener socket operStatus has reached 'oper_status'
+    """
     mgmt = Node.connect(mgmt_address, timeout=timeout)
     l_filter = l_filter or {}
     attributes = set(l_filter.keys())
@@ -561,13 +578,13 @@ def _wait_adaptor_listeners_up(listener_type,
         listeners = filter(_filter_listener, listeners)
         assert listeners, "Filter error: no listeners matched"
         for listener in listeners:
-            if listener['operStatus'] != 'up':
-                print("Listener %s is not active, retrying..." %
-                      listener['name'], flush=True)
+            if listener['operStatus'] != oper_status:
+                print(f"Listener {listener['name']} operStatus is not {oper_status}, retrying...",
+                      flush=True)
                 return False
         return True
     assert retry(_check, timeout=timeout, delay=0.25), \
-        f"Timed out waiting for {listener_type} listener sockets to activate"
+        f"Timed out waiting for {listener_type} listener operStatus {oper_status}"
 
 
 def http1_ping(sport, cport):

@@ -1405,7 +1405,13 @@ void h1_codec_request_state_cancel(h1_codec_request_state_t *hrs)
     if (hrs) {
         h1_codec_connection_t *conn = hrs->conn;
         if (hrs == conn->decoder.hrs) {
+            // The decoder did not complete parsing. The incoming data is now in an unknown state. Set the decoder error
+            // so further calls to h1_codec_connection_rx_data() will fail and force the application to close the
+            // incoming stream
+            int err = conn->decoder.is_request ? HTTP1_STATUS_BAD_REQ : HTTP1_STATUS_SERVER_ERR;
             decoder_reset(&conn->decoder);
+            conn->decoder.error     = err;
+            conn->decoder.error_msg = "Request cancelled";
         }
         if (hrs == conn->encoder.hrs) {
             encoder_reset(&conn->encoder);

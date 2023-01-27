@@ -27,14 +27,14 @@ import select
 import socket
 from http.client import HTTPSConnection
 from ssl import SSLContext, PROTOCOL_TLS_CLIENT, PROTOCOL_TLS_SERVER
-from ssl import CERT_REQUIRED
+from ssl import CERT_REQUIRED, SSLSocket
 from time import sleep, time
 from email.parser import BytesParser
 
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
-from system_test import retry_exception, curl_available, run_curl
+from system_test import retry_exception, curl_available, run_curl, retry
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -43,7 +43,7 @@ from http1_tests import CommonHttp1Edge2EdgeTest
 from http1_tests import Http1Edge2EdgeTestBase
 from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
-from http1_tests import wait_http_listeners_up
+from http1_tests import wait_http_listeners_up, wait_http_listeners_down
 from http1_tests import HttpAdaptorListenerConnectTestBase
 from http1_tests import HttpTlsBadConfigTestsBase
 from http1_tests import http1_simple_request
@@ -54,6 +54,27 @@ SERVER_CERTIFICATE = RouterTestSslBase.ssl_file('server-certificate.pem')
 SERVER_PRIVATE_KEY = RouterTestSslBase.ssl_file('server-private-key.pem')
 CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
 CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
+
+
+def _read_socket(sock, length, timeout=TIMEOUT):
+    """
+    Read data from socket until either length octets are read or the socket
+    closes.  Return all data read.
+    """
+
+    old_timeout = sock.gettimeout()
+    sock.settimeout(timeout)
+    data = b''
+
+    try:
+        while len(data) < length:
+            chunk = sock.recv(length - len(data))
+            if not chunk:  # socket closed
+                break
+            data += chunk
+    finally:
+        sock.settimeout(old_timeout)
+    return data
 
 
 class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
@@ -524,10 +545,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             router('EA1', 'edge',
                    [('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge1_port}),
-                    ('httpListener', {'port': cls.listener11_port,
+                    ('httpListener', {'name': 'L_testServer11',
+                                      'port': cls.listener11_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer11'}),
-                    ('httpListener', {'port': cls.listener10_port,
+                    ('httpListener', {'name': 'L_testServer10',
+                                      'port': cls.listener10_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer10'})
                     ])
@@ -538,11 +561,13 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             router('EA2', 'edge',
                    [('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge2_port}),
-                    ('httpConnector', {'port': cls.server11_port,
+                    ('httpConnector', {'name': 'C_testServer11',
+                                       'port': cls.server11_port,
                                        'host': cls.server11_host,
                                        'protocolVersion': 'HTTP1',
                                        'address': 'testServer11'}),
-                    ('httpConnector', {'port': cls.server10_port,
+                    ('httpConnector', {'name': 'C_testServer10',
+                                       'port': cls.server10_port,
                                        'host': cls.server10_host,
                                        'protocolVersion': 'HTTP1',
                                        'address': 'testServer10'})
@@ -588,6 +613,464 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         """
         self.curl_post_test("127.0.0.1", self.listener11_port,
                             self.server11_port)
+
+    @staticmethod
+    def _server_get_undelivered_out(mgmt, service_address):
+        # Return the total count of outgoing undelivered deliveries to
+        # service_address
+        count = 0
+        links = mgmt.query('io.skupper.router.router.link')
+        for link in filter(lambda link:
+                           link['linkName'] == 'http1.server.out' and
+                           link['owningAddr'].endswith(service_address), links):
+            count += link['undeliveredCount']
+        return count
+
+    @staticmethod
+    def _server_get_unsettled_out(mgmt, service_address):
+        # Return the total count of outgoing unsettled deliveries to
+        # service_address
+        count = 0
+        links = mgmt.query('io.skupper.router.router.link')
+        for link in filter(lambda link:
+                           link['linkName'] == 'http1.server.out' and
+                           link['owningAddr'].endswith(service_address), links):
+            count += link['unsettledCount']
+        return count
+
+    @staticmethod
+    def _client_in_link_count(mgmt, service_address):
+        # get the total number of active HTTP1 client in-links for the given
+        # service address
+        links = mgmt.query('io.skupper.router.router.link')
+        count = len(list(filter(lambda link:
+                                link['linkName'] == 'http1.client.in' and
+                                link['owningAddr'].endswith(service_address),
+                                links)))
+        return count
+
+    def test_3000_N_client_pipeline(self):
+        """
+        Create N clients each sending a request. Verify the server processes
+        all requests in the correct order.
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 9  # single digit or content length will be bad!
+
+        request_template = 'GET /client%d HTTP/1.1\r\n' \
+            + 'Content-Length: 0\r\n' \
+            + '\r\n'
+        request_length = len(request_template) - 1
+
+        response_template = 'HTTP/1.1 200 OK\r\n' \
+            + 'content-length: 7\r\n' \
+            + '\r\n' \
+            + 'client%d'
+        response_length = len(response_template) - 1
+
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+                request = request_template % index
+                client.sendall(request.encode())
+
+                # Ensure that the delivery arrives at the server before sending
+                # the next request. Otherwise if all requests are sent at once
+                # they can arrive out of order. That will cause the test to
+                # fail since it services each client in order of transmission
+                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
+                                      self._server_get_undelivered_out(mg, "testServer11")
+                                      + self._server_get_unsettled_out(mg, "testServer11")
+                                      == dc))
+
+            for index in range(CLIENT_COUNT):
+                data = _read_socket(server, length=request_length)
+                self.assertEqual(request_length, len(data))
+                self.assertIn(b"GET /client%d" % index, data)
+
+                response = response_template % index
+                server.sendall(response.encode())
+
+                data = _read_socket(clients[index], length=response_length)
+                self.assertEqual(response_length, len(data))
+                self.assertIn(b"client%d" % index, data)
+
+            for client in clients:
+                client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_3001_N_client_pipeline_cancel(self):
+        """
+        Similar to test_3000, but force one client to disconnect before the
+        server processes its request. The aborted request should be silently
+        discarded from the point of view of the server.
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 9  # single digit or content length will be bad!
+        KILL_INDEX = 2  # client to force close
+
+        request_template = 'GET /client%d HTTP/1.1\r\n' \
+            + 'Content-Length: 0\r\n' \
+            + '\r\n'
+        request_length = len(request_template) - 1
+
+        response_template = 'HTTP/1.1 200 OK\r\n' \
+            + 'content-length: 7\r\n' \
+            + '\r\n' \
+            + 'client%d'
+        response_length = len(response_template) - 1
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+
+                if index == KILL_INDEX:
+                    # Send an incomplete request. When the client closes this
+                    # should cause the client-facing router to abort the
+                    # in-flight delivery
+                    request = b'PUT /killclient HTTP/1.1\r\n' \
+                        + b'Content-Length: 1024\r\n' \
+                        + b'\r\n' \
+                        + b'012345678901234567890123456789'
+                    client.sendall(request)
+                else:
+                    request = request_template % index
+                    client.sendall(request.encode())
+
+                # Ensure that the delivery arrives at the server before sending
+                # the next request. Otherwise if all requests are sent at once
+                # they can arrive out of order. That will cause the test to
+                # fail since it services each client in order of transmission
+                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
+                                      self._server_get_undelivered_out(mg, "testServer11")
+                                      + self._server_get_unsettled_out(mg, "testServer11")
+                                      == dc))
+
+            # Now destroy one of the clients. Wait until the socket has
+            # actually closed at the ingress router:
+
+            clients[2].shutdown(socket.SHUT_RDWR)
+            clients[2].close()
+            clients[2] = None
+            self.assertTrue(retry(lambda mg=EA1_mgmt:
+                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1))
+
+            # Since the cancelled request has yet to be written to the server
+            # connection by the adaptor, the adaptor should be smart enough to
+            # dispose of the cancelled request without writing anything to the
+            # server (or dropping the server connection)
+
+            for index in range(CLIENT_COUNT):
+                if index != KILL_INDEX:
+                    data = _read_socket(server, length=request_length)
+                    self.assertEqual(request_length, len(data))
+                    self.assertIn(b"GET /client%d" % index, data)
+
+                    response = response_template % index
+                    server.sendall(response.encode())
+
+                    data = _read_socket(clients[index], length=response_length)
+                    self.assertEqual(response_length, len(data))
+                    self.assertIn(b"client%d" % index, data)
+
+            for client in clients:
+                if client is not None:
+                    client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_3002_N_client_pipeline_recover(self):
+        """
+        Similar to test_3001, but the request from the dropped client is in the
+        process of being read by the server. This should cause the router to
+        drop the connection to the server. When the connection re-establishes
+        the remaining requests must arrive without error.
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 9  # single digit or content length will be bad!
+
+        request_template = 'GET /client%d HTTP/1.1\r\n' \
+            + 'Content-Length: 0\r\n' \
+            + '\r\n'
+        request_length = len(request_template) - 1
+
+        response_template = 'HTTP/1.1 200 OK\r\n' \
+            + 'content-length: 7\r\n' \
+            + '\r\n' \
+            + 'client%d'
+        response_length = len(response_template) - 1
+
+        incomplete_request = b'PUT /killclient HTTP/1.1\r\n' \
+            + b'Content-Length: 1024\r\n' \
+            + b'\r\n' \
+            + b'012345678901234567890123456789'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+
+                if index == 0:
+                    # Have the first client send an incomplete request. When
+                    # the client closes this should cause the client-facing
+                    # router to abort the in-flight delivery.
+                    client.sendall(incomplete_request)
+                else:
+                    request = request_template % index
+                    client.sendall(request.encode())
+
+                # Ensure that the delivery arrives at the server before sending
+                # the next request. Otherwise if all requests are sent at once
+                # they can arrive out of order. That will cause the test to
+                # fail since it services each client in order of transmission
+                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
+                                      self._server_get_undelivered_out(mg, "testServer11")
+                                      + self._server_get_unsettled_out(mg, "testServer11")
+                                      == dc))
+
+            # Have the server start processing the incomplete request
+
+            data = _read_socket(server, length=len(incomplete_request))
+            self.assertEqual(len(incomplete_request), len(data))
+            self.assertIn(b"/killclient", data)
+
+            # Now destroy the client. Wait until the socket has
+            # actually closed at the ingress router:
+
+            clients[0].shutdown(socket.SHUT_RDWR)
+            clients[0].close()
+            clients[0] = None
+            self.assertTrue(retry(lambda mg=EA1_mgmt:
+                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1))
+
+            # attempting to read the rest of the request should result in the
+            # server socket closing
+
+            data = _read_socket(server, 4096, timeout=TIMEOUT)
+            self.assertEqual(b'', data)
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+            # expect the router to reconnect
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            # expect the remaining requests to complete successfully
+
+            for index in range(1, CLIENT_COUNT):
+                data = _read_socket(server, length=request_length)
+                self.assertEqual(request_length, len(data))
+                self.assertIn(b"GET /client%d" % index, data)
+
+                response = response_template % index
+                server.sendall(response.encode())
+
+                data = _read_socket(clients[index], length=response_length)
+                self.assertEqual(response_length, len(data))
+                self.assertIn(b"client%d" % index, data)
+
+            for client in clients:
+                if client is not None:
+                    client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4000_client_half_close(self):
+        """
+        Verify that a client can close the write side of its socket and still
+        receive a response
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 9  # single digit or content length will be bad!
+
+        request_template = 'GET /client%d HTTP/1.1\r\n' \
+            + 'Content-Length: 0\r\n' \
+            + '\r\n'
+        request_length = len(request_template) - 1
+
+        response_template = 'HTTP/1.1 200 OK\r\n' \
+            + 'content-length: 7\r\n' \
+            + '\r\n' \
+            + 'client%d'
+        response_length = len(response_template) - 1
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+                request = request_template % index
+                client.sendall(request.encode())
+
+                # Ensure that the delivery arrives at the server before sending
+                # the next request. Otherwise if all requests are sent at once
+                # they can arrive out of order. That will cause the test to
+                # fail since it services each client in order of transmission
+                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
+                                      self._server_get_undelivered_out(mg, "testServer11")
+                                      + self._server_get_unsettled_out(mg, "testServer11")
+                                      == dc))
+
+                # Now close the write side of the client socket:
+                client.shutdown(socket.SHUT_WR)
+
+            # expect the requests to complete successfully
+
+            for index in range(CLIENT_COUNT):
+                data = _read_socket(server, length=request_length)
+                self.assertEqual(request_length, len(data))
+                self.assertIn(b"GET /client%d" % index, data)
+
+                response = response_template % index
+                server.sendall(response.encode())
+
+                data = _read_socket(clients[index], length=response_length)
+                self.assertEqual(response_length, len(data))
+                self.assertIn(b"client%d" % index, data)
+                clients[index].close()
+
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4001_server_half_close(self):
+        """
+        Verify that a server can close the side of its socket after receiving a
+        request and the response will be received by the client
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        request = b'GET /client1 HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 7\r\n' \
+            + b'\r\n' \
+            + b'client1'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            retry_exception(lambda cs=client:
+                            cs.connect((self.listener11_host,
+                                        self.listener11_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+            client.settimeout(TIMEOUT)
+            client.sendall(request)
+
+            data = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(data))
+            self.assertIn(b"GET /client1", data)
+
+            server.shutdown(socket.SHUT_RD)
+            server.sendall(response)
+
+            data = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(data))
+            self.assertIn(b"client1", data)
+            client.close()
+
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
 
 
 class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
@@ -660,13 +1143,15 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                    [('sslProfile', cls.listener_ssl_profile),
                     ('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge1_port}),
-                    ('httpListener', {'port': cls.listener11_port,
+                    ('httpListener', {'name': 'L_testServer11',
+                                      'port': cls.listener11_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer11',
                                       'sslProfile': cls.listener_ssl_profile['name'],
                                       'authenticatePeer': True}),
 
-                    ('httpListener', {'port': cls.listener10_port,
+                    ('httpListener', {'name': 'L_testServer10',
+                                      'port': cls.listener10_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer10',
                                       'sslProfile': cls.listener_ssl_profile['name'],
@@ -680,14 +1165,16 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                    [('sslProfile', cls.connector_ssl_profile),
                     ('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge2_port}),
-                    ('httpConnector', {'port': cls.server11_port,
+                    ('httpConnector', {'name': 'C_testServer11',
+                                       'port': cls.server11_port,
                                        'host': cls.server11_host,
                                        'protocolVersion': 'HTTP1',
                                        'sslProfile': cls.connector_ssl_profile['name'],
                                        'verifyHostname': True,
                                        'address': 'testServer11'}),
 
-                    ('httpConnector', {'port': cls.server10_port,
+                    ('httpConnector', {'name': 'C_testServer10',
+                                       'port': cls.server10_port,
                                        'host': cls.server10_host,
                                        'protocolVersion': 'HTTP1',
                                        'sslProfile': cls.connector_ssl_profile['name'],
@@ -717,6 +1204,117 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
         return TestServer.new_server(*args, **kwargs,
                                      server_ssl_context=cls.server_ssl_context,
                                      client_ssl_context=cls.client_ssl_context)
+
+    def test_4000_server_no_notify(self):
+        """
+        """
+        request = b'GET /client HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 6\r\n' \
+            + b'\r\n' \
+            + b'client'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
+            raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            raw_listener.settimeout(TIMEOUT)
+            with self.server_ssl_context.wrap_socket(raw_listener,
+                                                     server_side=True) as listener:
+                listener.bind((self.server11_host, self.server11_port))
+                listener.listen(1)
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+                raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                raw_client.settimeout(TIMEOUT)
+                client = self.client_ssl_context.wrap_socket(raw_client,
+                                                             server_hostname=self.listener11_host)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+
+                client.sendall(request)
+
+                data = _read_socket(server, length=len(request))
+                self.assertEqual(len(request), len(data))
+                self.assertIn(b"GET /client", data)
+                server.sendall(response)
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+
+                data = _read_socket(client, length=len(response))
+                self.assertEqual(len(response), len(data))
+                self.assertIn(b"200 OK", data)
+                client.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4001_server_no_notify_truncated(self):
+        """
+        """
+        request = b'GET /client HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'\r\n' \
+            + b'unterminated response'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
+            raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            raw_listener.settimeout(TIMEOUT)
+            with self.server_ssl_context.wrap_socket(raw_listener,
+                                                     server_side=True) as listener:
+                listener.bind((self.server11_host, self.server11_port))
+                listener.listen(1)
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+                raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                raw_client.settimeout(TIMEOUT)
+                client = self.client_ssl_context.wrap_socket(raw_client,
+                                                             server_hostname=self.listener11_host)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+
+                client.sendall(request)
+
+                data = _read_socket(server, length=len(request))
+                self.assertEqual(len(request), len(data))
+                self.assertIn(b"GET /client", data)
+
+                server.sendall(response)
+
+                # force close without close-notify
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+
+                # What happens on the client-facing side is timing dependent:
+                # it may get a partial message, or even an error response from
+                # the server. In any case the router should force close the
+                # client connection. Attempt to drain the socket. If this times
+                # out the router did not force close the connection properly
+                #
+                while True:
+                    data = _read_socket(client, 4096, timeout=TIMEOUT)
+                    if data == b'':
+                        # yay! socket closed!
+                        break
+                client.close()
+
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
 
 
 class FakeHttpServerBase:
@@ -1046,6 +1644,11 @@ class Http1AdaptorQ2Standalone(TestCase):
         """
         Read data from socket until timeout occurs.  Return read data.
         """
+
+        # Trying to use SSLSocket with select is an exercise in pain. Just
+        # don't do it.
+        assert not isinstance(sock, SSLSocket)
+
         sock.setblocking(0)
         data = b''
 

@@ -462,7 +462,7 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
             if (hreq->close_on_complete && _response_tx_done(hreq)) {
                 hconn->output_closed = true;
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                       "[C%" PRIu64 "] request completed: no further encoded octets for output", hconn->conn_id);
+                       "[C%" PRIu64 "] response output done: closing write stream", hconn->conn_id);
                 total_octets = QD_TLS_EOS;
             }
         }
@@ -480,7 +480,7 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
         qd_adaptor_buffer_list_t in_abufs = DEQ_EMPTY;
 
         rx_data = false;
-        qdr_http1_do_raw_io(hconn->raw_conn, _take_output_data, hconn, &in_abufs, &octets);
+        qdr_http1_do_raw_io(hconn->conn_id, hconn->raw_conn, _take_output_data, hconn, &in_abufs, &octets);
         if (!DEQ_IS_EMPTY(in_abufs)) {
             rx_data = true;
 

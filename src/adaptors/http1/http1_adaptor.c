@@ -689,7 +689,8 @@ static void qd_http1_adaptor_final(void *adaptor_context)
 // raw connection (write). Ownership of the buffers on input_data is passed to the caller. This function takes ownership
 // of all buffers taken via take_output_cb().
 //
-void qdr_http1_do_raw_io(pn_raw_connection_t             *raw_conn,
+void qdr_http1_do_raw_io(uint64_t                         conn_id,
+                         pn_raw_connection_t             *raw_conn,
                          qdr_http1_take_output_data_cb_t *take_output_cb,
                          void                            *take_output_context,
                          qd_adaptor_buffer_list_t        *input_data,
@@ -712,6 +713,11 @@ void qdr_http1_do_raw_io(pn_raw_connection_t             *raw_conn,
                 DEQ_INSERT_TAIL(*input_data, abuf);
                 *input_octets += size;
             }
+        }
+
+        if (*input_octets) {
+            qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE, "[C%" PRIu64 "] %" PRIu64 " octets read from raw connection",
+                   conn_id, *input_octets);
         }
     }
 
@@ -736,6 +742,11 @@ void qdr_http1_do_raw_io(pn_raw_connection_t             *raw_conn,
 
             if (out_octets == QD_TLS_EOS) {
                 pn_raw_connection_write_close(raw_conn);
+            }
+
+            if (out_octets > 0) {
+                qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR,
+                       "[C%" PRIu64 "] %" PRId64 " octets written to the raw connection", conn_id, out_octets);
             }
         }
     }
