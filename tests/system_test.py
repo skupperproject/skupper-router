@@ -51,7 +51,7 @@ from datetime import datetime
 from subprocess import PIPE, STDOUT, TimeoutExpired
 from threading import Event
 from threading import Thread
-from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar
+from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar, Dict
 
 import __main__
 
@@ -499,9 +499,9 @@ class NginxServer(Process):
     """
     def __init__(self,
                  config_path: str,  # Full path of templated config file (string) /blah-blah/nginx/nginx-template.conf
-                 env: dict[str, str],  # A dict of env variables which will be substituted in the config_path file.
-                 name: str="nginx",
-                 expect: int=Process.RUNNING,
+                 env: Dict[str, str],  # A dict of env variables which will be substituted in the config_path file.
+                 name: str = "nginx",
+                 expect: int = Process.RUNNING,
                  **kwargs):
         input_file = os.path.join(config_path)
         config_file = os.path.join(env['setupclass-folder'], 'nginx.conf')
@@ -513,7 +513,7 @@ class NginxServer(Process):
 
         # Pass the config file for nginx to use.
         nginx_cmd = ['nginx', '-c', config_file]
-        super(NginxServer, self).__init__(nginx_cmd, name=name, expect=expect, **kwargs)
+        super().__init__(nginx_cmd, name=name, expect=expect, **kwargs)
 
 
 class OpenSSLServer(Process):
