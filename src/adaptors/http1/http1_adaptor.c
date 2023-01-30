@@ -238,44 +238,6 @@ uint64_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_b
     return total_octets;
 }
 
-// Write list of data out the raw connection, freeing entries when data is exhausted
-//
-uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo)
-{
-    size_t limit = !hconn->raw_conn || pn_raw_connection_is_write_closed(hconn->raw_conn)
-                       ? 0
-                       : pn_raw_connection_write_buffers_capacity(hconn->raw_conn);
-
-    if (limit == 0)
-        return 0;
-
-    // do not create more buffers than the raw connection capacity (limit) to avoid holding on to any unused buffers
-    qd_adaptor_buffer_list_t abuf_list    = DEQ_EMPTY;
-    uint64_t                 total_octets = qdr_http1_get_out_buffers(fifo, &abuf_list, limit);
-    if (total_octets == 0)
-        return 0;
-
-    assert(DEQ_SIZE(abuf_list) <= limit);
-
-    // keep me, you'll need it
-    if (HTTP1_DUMP_BUFFERS) {
-        qd_adaptor_buffer_t *abuf = DEQ_HEAD(abuf_list);
-        while (abuf) {
-            fprintf(stdout, "\n[C%" PRIu64 "] Raw Write: Ptr=%p len=%" PRIu32 "\n  value='%.*s'\n", hconn->conn_id,
-                    (void *) qd_adaptor_buffer_base(abuf), (uint32_t) qd_adaptor_buffer_size(abuf),
-                    (int) qd_adaptor_buffer_size(abuf), (char *) qd_adaptor_buffer_base(abuf));
-            fflush(stdout);
-            abuf = DEQ_NEXT(abuf);
-        }
-    }
-
-    qd_raw_connection_write_buffers(hconn->raw_conn, &abuf_list);
-    assert(DEQ_IS_EMPTY(abuf_list));  // expect all consumed since capacity was checked above
-
-    hconn->out_http1_octets += total_octets;
-    return total_octets;
-}
-
 // The HTTP encoder has a list of buffers to be written to the raw connection.
 // Queue it to the outgoing data fifo.
 //
@@ -322,41 +284,6 @@ void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn)
         qd_adaptor_buffer_free(abuf);
     }
 }
-
-
-//
-// Raw Connection Read Buffer Management
-//
-
-// take incoming data from raw connection
-uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
-                                     qd_buffer_list_t *blist)
-{
-    pn_raw_buffer_t pn_buff;
-    DEQ_INIT(*blist);
-    uintmax_t octets = 0;
-
-    if (hconn->raw_conn) {
-        while (pn_raw_connection_take_read_buffers(hconn->raw_conn, &pn_buff, 1) == 1) {
-            if (pn_buff.size) {
-                // keep me, you'll need it
-                if (HTTP1_DUMP_BUFFERS) {
-                    fprintf(stdout, "\n[C%" PRIu64 "] Raw Read: Ptr=%p len=%" PRIu32 "\n value='%.*s'\n",
-                            hconn->conn_id, (void *) pn_buff.bytes, (uint32_t) pn_buff.size, (int) pn_buff.size,
-                            (char *) pn_buff.bytes);
-                    fflush(stdout);
-                }
-
-                octets += pn_buff.size;
-                qd_buffer_list_append(blist, (uint8_t *) pn_buff.bytes, pn_buff.size);
-            }
-            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buff.context;
-            qd_adaptor_buffer_free(abuf);
-        }
-    }
-    return octets;
-}
-
 
 // Per-message callback to resume receiving after Q2 is unblocked on the
 // incoming link (to HTTP app).  This routine runs on another I/O thread so it
@@ -745,7 +672,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
             }
 
             if (out_octets > 0) {
-                qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR,
+                qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                        "[C%" PRIu64 "] %" PRId64 " octets written to the raw connection", conn_id, out_octets);
             }
         }

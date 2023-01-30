@@ -204,17 +204,13 @@ ALLOC_DECLARE(qdr_http1_connection_t);
 void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn);
 void qdr_http1_enqueue_buffer_list(qdr_http1_out_data_list_t *fifo, qd_buffer_list_t *blist, uintmax_t octets);
 void qdr_http1_enqueue_stream_data(qdr_http1_out_data_list_t *fifo, qd_message_stream_data_t *stream_data);
-uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo);
-uint64_t  qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_buffer_list_t *abuf_list, size_t limit);
-void      qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
-uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
-                                     qd_buffer_list_t *blist);
-
+void qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
 void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error);
 void qdr_http1_connection_free(qdr_http1_connection_t *hconn);
-
 void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq);
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context);
+
+uint64_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_buffer_list_t *abuf_list, size_t limit);
 
 typedef int64_t qdr_http1_take_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *a_bufs, size_t limit);
 void            qdr_http1_do_raw_io(uint64_t                         conn_id,

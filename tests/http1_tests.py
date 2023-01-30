@@ -104,7 +104,14 @@ class RequestHandler(BaseHTTPRequestHandler):
     """
     protocol_version = 'HTTP/1.1'
 
-    def _execute_request(self, tests):
+    def _execute_request(self, method):
+        self.server.logger.log(f"Executing {method} request")
+        tests = self.server.system_tests.get(method)
+        if tests is None:
+            self.server.logger.log(f"request failed: method '{method}' not supported")
+            self.send_error(405, "Method Not Allowed")
+            return
+
         for req, resp, val in tests:
             if req.target == self.path:
                 self.server.logger.log(f"target={req.target}")
@@ -127,12 +134,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def do_GET(self):
-        self.server.logger.log("Executing GET request")
-        self._execute_request(self.server.system_tests["GET"])
+        self._execute_request("GET")
 
     def do_HEAD(self):
-        self.server.logger.log("Executing HEAD request")
-        self._execute_request(self.server.system_tests["HEAD"])
+        self._execute_request("HEAD")
 
     def do_POST(self):
         if self.path == "/SHUTDOWN":
@@ -145,12 +150,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.close_connection = True  # server will close connection from router
             self.server.server_killed = True  # server will not accept a reconnect
             return
-        self.server.logger.log("Executing POST request")
-        self._execute_request(self.server.system_tests["POST"])
+        self._execute_request("POST")
 
     def do_PUT(self):
-        self.server.logger.log("Executing PUT request")
-        self._execute_request(self.server.system_tests["PUT"])
+        self._execute_request("PUT")
 
     # these overrides just quiet the test output
     # comment them out to help debug:
@@ -579,12 +582,10 @@ def _wait_adaptor_listeners_oper_status(listener_type,
         assert listeners, "Filter error: no listeners matched"
         for listener in listeners:
             if listener['operStatus'] != oper_status:
-                print(f"Listener {listener['name']} operStatus is not {oper_status}, retrying...",
-                      flush=True)
                 return False
         return True
     assert retry(_check, timeout=timeout, delay=0.25), \
-        f"Timed out waiting for {listener_type} listener operStatus {oper_status}"
+        f"Timed out waiting for {listener_type} operStatus {oper_status}"
 
 
 def http1_ping(sport, cport):

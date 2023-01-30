@@ -149,13 +149,12 @@ static inline size_t qd_buffer_field_advance(qd_buffer_field_t *bfield, size_t a
     return blen - bfield->remaining;
 }
 
-
 /* qd_buffer_field_octet
  *
  * Get the first octet of the field and move the cursor to the next octet (if
  * present).  bfield length is decremented by 1
  *
- * @return true of octet read, false if no octet available (end of field).
+ * @return true if octet read, false if no octet available (end of field).
  */
 static inline bool qd_buffer_field_octet(qd_buffer_field_t *bfield, uint8_t *octet)
 {

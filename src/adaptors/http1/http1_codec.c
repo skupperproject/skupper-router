@@ -918,18 +918,16 @@ static bool parse_header(h1_codec_connection_t *conn, struct decoder_t *decoder)
 
     // convert field to key and value strings
 
+    // The key field must be terminated in an colon. It is an error if there is any whitespace (or non-token) characters
+    // between the key and the colon. See RFC9112 "Field Line Parsing".
     qd_buffer_field_t key;
-    if (!parse_token(&line, &key)) {
-        decoder->error_msg = "Malformed Header";
+    uint8_t           octet;
+    if (!parse_token(&line, &key) || !qd_buffer_field_octet(&line, &octet) || octet != ':') {
+        decoder->error_msg = "Malformed Header Key";
         decoder->error = (decoder->is_request) ? HTTP1_STATUS_BAD_REQ
             : HTTP1_STATUS_SERVER_ERR;
         return false;
     }
-
-    // advance line past the ':'
-    uint8_t octet;
-    while (qd_buffer_field_octet(&line, &octet) && octet != ':')
-        ;
 
     // line now contains the value. convert to C strings and post callback
     ensure_scratch_size(&decoder->scratch, key.remaining + line.remaining + 2);
@@ -1048,10 +1046,10 @@ static inline int consume_stream_data(h1_codec_connection_t *conn, bool flush)
     return decoder->error;
 }
 
-
-
 // parsing the start of a chunked header:
-// <chunk size in hex>CRLF
+// <chunk size in hex>*(chunk-ext)CRLF
+// chunk-ext = *( BWS ";" BWS chunk-ext-name
+//      [ BWS "=" BWS chunk-ext-val ] )*(OWS*(;))
 //
 static bool parse_body_chunked_header(h1_codec_connection_t *conn, struct decoder_t *decoder)
 {
@@ -1324,9 +1322,9 @@ int h1_codec_connection_rx_close(h1_codec_connection_t *conn)
     if (decoder->hrs) {
         // Current message has not finished parsing. This is an error unless the message is an HTTP response and the
         // server has not provided an explicit length (think HTTP/1.0 w/o content-length, etc).
-        assert(!decoder->hrs->response_complete);
         truncated = true;
-        if (conn->config.type == HTTP1_CONN_SERVER) {
+        if (!decoder->is_request) {
+            assert(!decoder->hrs->response_complete);
             // Note: if this response message is a "continue" then the final response never arrived and the response is
             // incomplete
             if (decoder->state == HTTP1_MSG_STATE_BODY && !IS_INFO_RESPONSE(decoder->hrs->response_code)

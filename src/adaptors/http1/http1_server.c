@@ -1082,12 +1082,7 @@ static int _server_rx_request_cb(h1_codec_request_state_t *hrs,
                                  uint32_t version_major,
                                  uint32_t version_minor)
 {
-    _server_request_t       *hreq = (_server_request_t*) h1_codec_request_state_get_context(hrs);
-    qdr_http1_connection_t *hconn = hreq->base.hconn;
-
-    qd_log(qdr_http1_adaptor->log, QD_LOG_ERROR,
-           "[C%"PRIu64"][L%"PRIu64"] Spurious HTTP request received from server",
-           hconn->conn_id, hconn->in_link_id);
+    assert(false);
     return HTTP1_STATUS_BAD_REQ;
 }
 

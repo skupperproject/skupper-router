@@ -1207,6 +1207,9 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
 
     def test_4000_server_no_notify(self):
         """
+        Force server close without sending proper close-notify TLS
+        handshake, but since the response has an explicit length no error
+        should occur
         """
         request = b'GET /client HTTP/1.1\r\n' \
             + b'Content-Length: 0\r\n' \
@@ -1257,6 +1260,8 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
 
     def test_4001_server_no_notify_truncated(self):
         """
+        Similar to 4000, but cause an error by not sending an explictly
+        terminated message.
         """
         request = b'GET /client HTTP/1.1\r\n' \
             + b'Content-Length: 0\r\n' \
@@ -1380,7 +1385,8 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             ('httpConnector', {'port': cls.http_server_port,
                                'protocolVersion': 'HTTP1',
                                'address': 'testServer'}),
-            ('httpListener', {'port': cls.http_listener_port,
+            ('httpListener', {'name': 'L_testServer',
+                              'port': cls.http_listener_port,
                               'protocolVersion': 'HTTP1',
                               'address': 'testServer'}),
             ('httpListener', {'port': cls.http_fake_port,
@@ -1417,9 +1423,11 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
         http1_ping(self.http_server_port, self.http_listener_port)
 
-    def test_02_bad_request_message(self):
+    def test_02_bad_AMQP_request_message(self):
         """
-        Test various improperly constructed request messages
+        Test various improperly constructed AMQP request messages. Note this
+        test deals with improperly encoded inter-router AMQP messages: no HTTP
+        clients are used.
         """
         with TestServer.new_server(server_port=self.http_server_port,
                                    client_port=self.http_listener_port,
@@ -1476,9 +1484,11 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         # verify router is still sane:
         http1_ping(self.http_server_port, self.http_listener_port)
 
-    def test_03_bad_response_message(self):
+    def test_03_bad_AMQP_response_message(self):
         """
-        Test various improperly constructed response messages
+        Test various improperly constructed AMQP response messages. Note this
+        test deals with improperly encoded inter-router AMQP messages: no HTTP
+        server is used.
         """
         DUMMY_TESTS = {
             "GET": [
@@ -1580,6 +1590,230 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         """
         self.client_response_close_test(self.http_server_port,
                                         self.http_listener_port)
+
+    def test_06_bad_request_headers(self):
+        """
+        Construct request messages with various header violations
+        """
+
+        # no need for a full server - expect that no data will arrive at server
+        # since all parse errors will be detected and handling on the
+        # client-facing router
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            bad_requests = [
+                # malformed request line
+                b'GET \r\n',
+                # invalid version field
+                b'GET /badversion HTTP/1.bannana\r\n',
+                # unsupported version
+                b'GET /wrongversion HTTP/0.9\r\n',
+                # invalid header format
+                b'GET /badheader HTTP/1.1\r\n' \
+                + b'novalue\r\n\r\n',
+                # invalid header format 2
+                b'GET /badheader1 HTTP/1.1\r\n' \
+                + b'novalue :\r\n\r\n',
+                # invalid transfer encoding value
+                b'PUT /bad/encoding HTTP/1.1\r\n' \
+                + b'Transfer-Encoding: bannana\r\n\r\nBLAH',
+                # invalid content length format
+                b'PUT /bad/len1 HTTP/1.1\r\n' \
+                + b'Content-Length:\r\n\r\nFOO',
+                # invalid content length
+                b'PUT /bad/len2 HTTP/1.1\r\n' \
+                + b'Content-Length: spaghetti\r\n\r\nFOO',
+                # duplicate conflicting content length fields
+                b'PUT /dup/len3 HTTP/1.1\r\n' \
+                + b'Content-length: 1\r\n' \
+                + b'Content-length: 2\r\n\r\nHA',
+            ]
+
+            for req in bad_requests:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client.settimeout(TIMEOUT)
+                retry_exception(lambda cs=client:
+                                cs.connect(("127.0.0.1", self.http_listener_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.sendall(req)
+
+                # expect the router to close the connection. Otherwise this
+                # raises a time out error:
+                _ = _read_socket(client, length=4096)
+                self.assertEqual(0, len(_))
+                client.close()
+
+            # ensure none of theses bad requests were forwarded to the server
+            server.settimeout(0.25)
+            self.assertRaises(TimeoutError, server.recv, 4096)
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+    def test_07_bad_response_line(self):
+        """
+        Construct response messages with various violations
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+
+            bad_responses = [
+                # malformed response line
+                b'bad-response\r\n',
+                # invalid version field
+                b'HTTP/1.bannana 999\r\n',
+                # unsupported version
+                b'HTTP/0.9 200 OK\r\n',
+                # missing status code
+                b'HTTP/1.1 \r\n',
+                # invalid status code 1
+                b'HTTP/1.1 skupper\r\n',
+                # invalid status code 2
+                b'HTTP/1.1 2\r\n',
+            ]
+
+            # unterminated request to check client cleanup
+            request = b'GET / HTTP/1.1\r\nContent-Length: 100\r\n\r\nX'
+            for response in bad_responses:
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client.settimeout(TIMEOUT)
+                retry_exception(lambda cs=client:
+                                cs.connect(("127.0.0.1", self.http_listener_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.sendall(request)
+
+                _ = _read_socket(server, length=len(request))
+                server.sendall(response)
+
+                # expect the router to close the connection to the server due
+                # to the error. Otherwise this raises a time out error:
+                _ = _read_socket(server, length=4096)
+                self.assertEqual(0, len(_))
+
+                # This should cause the router to send an error response and
+                # close the connection to the client. Otherwise this raises a
+                # time out error:
+                err = _read_socket(client, length=4096)
+                self.assertIn(b'HTTP/1.1 503', err)
+                client.close()
+
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+    def test_08_bad_chunked_body(self):
+        """
+        Construct a messages with invalid chunk header
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client.settimeout(TIMEOUT)
+            retry_exception(lambda cs=client:
+                            cs.connect(("127.0.0.1", self.http_listener_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+
+            # send a valid start so server gets a delivery
+            request = b'PUSH / HTTP/1.1\r\n' \
+                + b'Transfer-Encoding: chunked\r\n' \
+                + b'\r\n' \
+                + b'10\r\n' \
+                + b'ABCDEFGHIJKLMNOP\r\n'
+
+            client.sendall(request)
+
+            _ = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(_))
+
+            # now send a bad chunk header
+            client.sendall(b'GERBIL\r\n')
+
+            # the error should be detected on the client facing router and the
+            # connection should be dropped (timeout if not dropped)
+            _ = _read_socket(client, length=4096)
+
+            # since the message was in-flight at the server the connection
+            # should drop there as well
+            _ = _read_socket(server, length=4096)
+
+            client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+            # repeat the test, but have the server response attempt to send an
+            # invalid chunk
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client.settimeout(TIMEOUT)
+            retry_exception(lambda cs=client:
+                            cs.connect(("127.0.0.1", self.http_listener_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+
+            request = b'GET / HTTP/1.1\r\n' \
+                + b'Content-length: 0\r\n' \
+                + b'\r\n'
+
+            client.sendall(request)
+
+            _ = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(_))
+
+            response = b'HTTP/1.1 200 OK\r\n' \
+                + b'Transfer-Encoding: chunked\r\n' \
+                + b'\r\n' \
+                + b'10\r\n' \
+                + b'ABCDEFGHIJKLMNOP\r\n'
+
+            server.sendall(response)
+
+            _ = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(_))
+
+            server.sendall(b'HAMSTER\r\n')
+
+            # the error should be detected on the server facing router and the
+            # connection should be dropped (timeout if not dropped)
+            _ = _read_socket(server, length=4096)
+
+            # and the client connection should drop as well
+            _ = _read_socket(client, length=4096)
+
+            client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
 
 
 class Http1AdaptorQ2Standalone(TestCase):
