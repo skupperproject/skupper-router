@@ -138,6 +138,7 @@ static void send_bid(mesh_peer_t *peer)
 //
 static void generate_id(void)
 {
+    /* coverity[dont_call] */
     state.my_negotiation_ordinal = random();
     qd_generate_discriminator(state.my_mesh_id);
 }
