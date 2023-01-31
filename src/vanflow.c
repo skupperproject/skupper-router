@@ -88,7 +88,6 @@ struct vflow_record_t {
     uint64_t                     latency_start;
     uint32_t                     emit_ordinal;
     int                          flush_slot;
-    bool                         never_flushed;
     bool                         never_logged;
     bool                         force_log;
     bool                         ended;
@@ -136,13 +135,15 @@ typedef struct {
     sys_cond_t           condition;
     sys_thread_t        *thread;
     char                *event_address_my;
+    char                *event_address_my_flow;
     char                *command_address;
     bool                 sleeping;
     qd_log_source_t     *log;
     vflow_work_list_t    work_list;
     vflow_record_t      *local_router;
     char                *local_router_id;
-    vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];
+    vflow_record_list_t  unflushed_flow_records[FLUSH_SLOT_COUNT];
+    vflow_record_list_t  unflushed_nonflow_records[FLUSH_SLOT_COUNT];
     vflow_rate_list_t    rate_trackers;
     int                  current_flush_slot;
     char                *site_id;
@@ -283,6 +284,31 @@ static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_att
 
 
 /**
+ * @brief Schedule a record, and if needed, its ancestors for flushing.
+ *
+ * @param record Pointer to the record to be flushed
+ */
+static void _vflow_post_flush_record_TH(vflow_record_t *record)
+{
+    if (!!record->parent && record->parent->never_logged) {
+        record->parent->force_log = true;
+        if (record != record->parent) {
+            _vflow_post_flush_record_TH(record->parent);
+        }
+    }
+
+    if (record->flush_slot == -1) {
+        record->flush_slot = state->current_flush_slot;
+        if (record->record_type == VFLOW_RECORD_FLOW) {
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
+        } else {
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_nonflow_records[state->current_flush_slot], record);
+        }
+    }
+}
+
+
+/**
  * @brief Work handler for vflow_start_record
  * 
  * @param work Pointer to work context
@@ -333,27 +359,9 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     }
 
     //
-    // If this record has a parent and the parent has never been logged,
-    // flag it as needing to be flushed and logged.
+    // Schedule this record for flushing
     //
-    if (!!record->parent && record->parent->never_logged) {
-        record->parent->force_log = true;
-        if (record->parent->flush_slot == -1) {
-            record->parent->flush_slot = state->current_flush_slot;
-            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record->parent);
-        }
-    }
-
-    //
-    // Place the new record on the unflushed list to be pushed out later.
-    // Mark the record as never-flushed so we can avoid the situation where
-    // a record that references this record gets flushed before this record
-    // is initially flushed.
-    //
-    if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-    }
+    _vflow_post_flush_record_TH(record);
 }
 
 
@@ -386,13 +394,9 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     record->ended = true;
 
     //
-    // If the record has been flushed, schedule it for re-flushing
-    // with the updated lifecycle information.
+    // Schedule this record for flushing
     //
-    if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-    }
+    _vflow_post_flush_record_TH(record);
 
     //
     // Free any rate trackers on this record
@@ -447,10 +451,10 @@ static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
         insert->emit_ordinal     = record->emit_ordinal;
     }
 
-    if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-    }
+    //
+    // Schedule this record for flushing
+    //
+    _vflow_post_flush_record_TH(record);
 }
 
 
@@ -492,10 +496,10 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
         insert->emit_ordinal   = record->emit_ordinal;
     }
 
-    if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-    }
+    //
+    // Schedule this record for flushing
+    //
+    _vflow_post_flush_record_TH(record);
 }
 
 
@@ -593,7 +597,11 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     // Remove the record from the unflushed list if needed
     //
     if (record->flush_slot >= 0) {
-        DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
+        if (record->record_type == VFLOW_RECORD_FLOW) {
+            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
+        } else {
+            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_nonflow_records[record->flush_slot], record);
+        }
         record->flush_slot = -1;
     }
 
@@ -770,15 +778,15 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
  *
  * @param core Pointer to the core module
  */
-static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
+static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_list_t *unflushed_records, bool nonflow)
 {
-    if (DEQ_SIZE(state->unflushed_records[state->current_flush_slot]) == 0) {
+    if (DEQ_SIZE(*unflushed_records) == 0) {
         return;
     }
 
     int                  event_count = 0;
     qd_composed_field_t *field = 0;
-    vflow_record_t      *record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
+    vflow_record_t      *record = DEQ_HEAD(*unflushed_records);
 
     while (!!record) {
         if (field == 0) {
@@ -831,7 +839,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
         // we have reached the end of the unflushed list, close out the current message.
         //
         event_count++;
-        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(state->unflushed_records[state->current_flush_slot])) {
+        if (event_count == EVENT_BATCH_MAX || record == DEQ_TAIL(*unflushed_records)) {
             event_count = 0;
 
             //
@@ -848,7 +856,11 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
             //
             // Send the message to all of the bound receivers
             //
-            qdr_send_to2(core, event, state->event_address_my, true, false);
+            if (nonflow) {
+                qdr_send_to2(core, event, state->event_address_my, true, false);
+            } else {
+                qdr_send_to2(core, event, state->event_address_my_flow, true, false);
+            }
 
             //
             // Free up used resources
@@ -869,6 +881,31 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core)
 }
 
 
+static void _vflow_clean_unflushed_TH(vflow_record_list_t *unflushed_records)
+{
+    vflow_record_t *record = DEQ_HEAD(*unflushed_records);
+    while (!!record) {
+        DEQ_REMOVE_HEAD_N(UNFLUSHED, *unflushed_records);
+        assert(record->flush_slot >= 0);
+        record->flush_slot = -1;
+
+        //
+        // If this record has been ended, emit the log line.
+        //
+        if (record->ended || record->force_log) {
+            record->force_log = false;
+            _vflow_emit_record_as_log_TH(record);
+        }
+
+        record->emit_ordinal++;
+        if (record->ended) {
+            _vflow_free_record_TH(record, false);
+        }
+        record = DEQ_HEAD(*unflushed_records);
+    }
+}
+
+
 /**
  * @brief Emit all of the unflushed records
  * 
@@ -881,30 +918,12 @@ static void _vflow_flush_TH(qdr_core_t *core)
     // unflushed records and send them as events to the collector.
     //
     if (state->my_address_usable) {
-        _vflow_emit_unflushed_as_events_TH(core);
+        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_nonflow_records[state->current_flush_slot], true);
+        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_flow_records[state->current_flush_slot], false);
     }
 
-    vflow_record_t *record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
-    while (!!record) {
-        DEQ_REMOVE_HEAD_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot]);
-        assert(record->flush_slot >= 0);
-        record->flush_slot = -1;
-
-        //
-        // If this record has been ended, emit the log line.
-        //
-        if (record->ended || record->force_log) {
-            record->force_log = false;
-            _vflow_emit_record_as_log_TH(record);
-        }
-
-        record->never_flushed = false;
-        record->emit_ordinal++;
-        if (record->ended) {
-            _vflow_free_record_TH(record, false);
-        }
-        record = DEQ_HEAD(state->unflushed_records[state->current_flush_slot]);
-    }
+    _vflow_clean_unflushed_TH(&state->unflushed_nonflow_records[state->current_flush_slot]);
+    _vflow_clean_unflushed_TH(&state->unflushed_flow_records[state->current_flush_slot]);
 }
 
 
@@ -1015,10 +1034,8 @@ static void _vflow_send_heartbeat_TH(vflow_work_t *work, bool discard)
 static void _vflow_refresh_record_TH(vflow_record_t *record)
 {
     record->emit_ordinal = 0;
-    if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
-        DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-    }
+
+    _vflow_post_flush_record_TH(record);
 
     vflow_record_t *child = DEQ_HEAD(record->children);
     while (!!child) {
@@ -1178,7 +1195,7 @@ static void _vflow_my_address_status_TH(vflow_work_t *work, bool discard)
  * @param unused Unused
  * @return void* Unused
  */
-static void *_vflow_thread(void *context)
+static void *_vflow_thread_TH(void *context)
 {
     bool running = true;
     vflow_work_list_t local_work_list = DEQ_EMPTY;
@@ -1309,7 +1326,6 @@ vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record
     record->record_type   = record_type;
     record->parent        = parent;
     record->flush_slot    = -1;
-    record->never_flushed = true;
     record->never_logged  = true;
     record->force_log     = false;
     record->ended         = false;
@@ -1519,6 +1535,11 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
         strcpy(state->event_address_my, event_address_my_prefix);
         _vflow_strncat_id(state->event_address_my, 70, &state->local_router->identity);
 
+        state->event_address_my_flow = (char*) malloc(71);
+        strcpy(state->event_address_my_flow, event_address_my_prefix);
+        _vflow_strncat_id(state->event_address_my_flow, 70, &state->local_router->identity);
+        strcat(state->event_address_my_flow, ".flows");
+
         state->command_address = (char*) malloc(71);
         strcpy(state->command_address, command_address_prefix);
         _vflow_strncat_id(state->command_address, 70, &state->local_router->identity);
@@ -1576,14 +1597,15 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     state->router_name = qdr_core_dispatch(core)->router_id;
 
     for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
-        DEQ_INIT(state->unflushed_records[slot]);
+        DEQ_INIT(state->unflushed_flow_records[slot]);
+        DEQ_INIT(state->unflushed_nonflow_records[slot]);
     }
 
     state->log       = qd_log_source("FLOW_LOG");
     sys_mutex_init(&state->lock);
     sys_mutex_init(&state->id_lock);
     sys_cond_init(&state->condition);
-    state->thread    = sys_thread("vflow_thread", _vflow_thread, core);
+    state->thread    = sys_thread("vflow_thread", _vflow_thread_TH, core);
     *adaptor_context = core;
 
     _vflow_create_router_record();
@@ -1639,6 +1661,7 @@ static void _vflow_final(void *adaptor_context)
     // Free the allocated my-address
     //
     free(state->event_address_my);
+    free(state->event_address_my_flow);
     free(state->command_address);
     free(state->local_router_id);
 
