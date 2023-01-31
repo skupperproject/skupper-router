@@ -130,7 +130,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v3
         with:
-          python-version: 3.6
+          python-version: 3.9
           architecture: x64
 
       - name: Install Python build dependencies
@@ -243,7 +243,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v3
         with:
-          python-version: 3.6
+          python-version: 3.9
           architecture: x64
 
       - name: Install Linux runtime/test dependencies
@@ -432,7 +432,15 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig python3-devel python3-pip make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
+          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan
+
+      - name: Install Linux build dependencies (Fedora)
+        if: ${{ matrix.container == 'fedora' }}
+        run: dnf install -y python3-devel python3-pip
+
+      - name: Install Linux build dependencies (Centos)
+        if: ${{ matrix.container == 'centos' }}
+        run: dnf install -y python39-devel python39-pip
 
       - name: Install Python build dependencies
         run: python3 -m pip install setuptools wheel tox
@@ -460,12 +468,10 @@ jobs:
       - name: Zero ccache stats
         run: ccache -z
 
-      # PROTON-2473: either install `openssl1.1-devel` compat version, or build with `-Wno-error=deprecated-declarations`
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
         run: >
           cmake "${{github.workspace}}/qpid-proton" \
-            '-DCMAKE_C_FLAGS="-Wno-error=deprecated-declarations"' \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             ${ProtonCMakeExtraArgs}
@@ -644,6 +650,12 @@ jobs:
           repository: ${{ env.protonRepository }}
           ref: ${{ env.protonBranch }}
           path: 'qpid-proton'
+
+      - name: Setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.9
+          architecture: x64
 
       - name: Install Linux build dependencies
         run: |
