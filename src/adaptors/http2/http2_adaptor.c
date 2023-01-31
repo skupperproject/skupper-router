@@ -497,6 +497,34 @@ static int on_error_callback(nghttp2_session *session, int lib_error_code, const
     return 0;
 }
 
+static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
+{
+    qdr_http2_connection_t *conn = (qdr_http2_connection_t *) user_data;
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+           "[C%" PRIu64 "][S%" PRId32 "] on_frame_send_callback, frame size=%zu", conn->conn_id, frame->hd.stream_id,
+           frame->hd.length);
+    return 0;
+}
+
+static int on_frame_not_send_callback(nghttp2_session *session, const nghttp2_frame *frame, int lib_error_code,
+                                      void *user_data)
+{
+    qdr_http2_connection_t *conn      = (qdr_http2_connection_t *) user_data;
+    int32_t                 stream_id = frame->hd.stream_id;
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+           "[C%" PRIu64 "][S%" PRId32 "] on_frame_not_send_callback, lib_error_code=%s", conn->conn_id, stream_id,
+           nghttp2_strerror(lib_error_code));
+    return 0;
+}
+
+static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id, uint32_t error_code, void *user_data)
+{
+    qdr_http2_connection_t *conn = (qdr_http2_connection_t *) user_data;
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+           "[C%" PRIu64 "][S%" PRId32 "] on_stream_close_callback, lib_error_code=%s", conn->conn_id, stream_id,
+           nghttp2_http2_strerror(error_code));
+    return 0;
+}
 
 /**
  * Callback function invoked by nghttp2_session_recv() and nghttp2_session_mem_recv() when an invalid non-DATA frame is received
@@ -505,7 +533,9 @@ static int on_invalid_frame_recv_callback(nghttp2_session *session, const nghttp
 {
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *)user_data;
     int32_t stream_id = frame->hd.stream_id;
-    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] on_invalid_frame_recv_callback, lib_error_code=%i", conn->conn_id, stream_id, lib_error_code);
+    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+           "[C%" PRIu64 "][S%" PRId32 "] on_invalid_frame_recv_callback, lib_error_code=%s", conn->conn_id, stream_id,
+           nghttp2_strerror(lib_error_code));
 
     if (lib_error_code == NGHTTP2_ERR_FLOW_CONTROL) {
         const char*str_error = nghttp2_http2_strerror(lib_error_code);
@@ -1137,6 +1167,14 @@ static int on_frame_recv_callback(nghttp2_session *session,
         return 0;
     }
     break;
+    case NGHTTP2_PUSH_PROMISE: {
+        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_PUSH_PROMISE frame received", conn->conn_id, stream_id);
+    } break;
+    case NGHTTP2_RST_STREAM: {
+        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+               "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_RST_STREAM frame received", conn->conn_id, stream_id);
+    } break;
     case NGHTTP2_PING: {
         qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 PING frame received", conn->conn_id, stream_id);
     }
@@ -1931,9 +1969,9 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
 
             int stream_id = stream_data->conn->ingress?stream_data->stream_id: -1;
 
-            create_settings_frame(conn);
+            send_settings_frame(conn);
 
-            uint8_t flags = 0;
+            uint8_t flags                        = NGHTTP2_FLAG_END_HEADERS;
             stream_data->curr_stream_data_result = qd_message_next_stream_data(message, &stream_data->curr_stream_data);
             if (stream_data->curr_stream_data_result == QD_MESSAGE_STREAM_DATA_BODY_OK) {
                 size_t payload_length = qd_message_stream_data_payload_length(stream_data->curr_stream_data);
@@ -2003,8 +2041,13 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 HEADER Outgoing [%s=%s]", conn->conn_id, stream_data->stream_id, (char *)hdrs[idx].name, (char *)hdrs[idx].value);
             }
 
-            nghttp2_session_send(conn->session);
-            conn->initial_settings_frame_sent = true;
+            ret_val = nghttp2_session_send(conn->session);
+            if (ret_val == NGHTTP2_ERR_NOMEM || ret_val == NGHTTP2_ERR_CALLBACK_FAILURE) {
+                qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR,
+                       "[C%" PRIu64 "][S%" PRId32 "] Error submitting header ret_val=%i", conn->conn_id,
+                       stream_data->stream_id, ret_val);
+            }
+
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Headers submitted", conn->conn_id, stream_data->stream_id);
 
             qd_iterator_free(app_properties_iter);
@@ -2047,7 +2090,6 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] Message has no body", conn->conn_id, stream_data->stream_id);
         }
         stream_data->out_msg_header_sent = true;
-
         CLEAR_ATOMIC_FLAG(&conn->delay_buffer_write);
 
         if (stream_data->out_msg_has_footer) {
@@ -2349,7 +2391,7 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
         } else if (DEQ_SIZE(decrypted_buffs) > 0 && qd_tls_is_secure(conn->tls)) {
             if (!conn->alpn_check_complete)
                 close_conn = !is_alpn_protocol_match(conn);
-            if (!close_conn && !conn->initial_settings_frame_sent) {
+            if (!close_conn) {
                 send_settings_frame(conn);
             }
             qd_adaptor_buffer_t *adaptor_buff = DEQ_HEAD(decrypted_buffs);
@@ -2379,13 +2421,17 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
         // 2. Router sends -
         //     2a. Client magic
         //     2b. SETTINGS frame with ack=true (here the router is responding to the SETTINGS frame from nodejs in step
-        //     1) 2c. SETTINGS frame ack=false(this is the router's inital settings frame) 2d. GET request
+        //     2c. SETTINGS frame ack=false(this is the router's inital settings frame)
+        //     2d. GET request
         // 3. Nodejs responds with GOAWAY. Not sure why
         // To remedy this problem, when nodejs sends the initial SETTINGS frame, we don't tell nghttp2 about it. So step
         // 2c happens before step 2b and nodejs is now happy
         //
         if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) && !conn->ingress && !conn->tls) {
             if (!conn->initial_settings_frame_sent) {
+                qd_log(http2_adaptor->log_source, QD_LOG_TRACE,
+                       "[C%" PRIu64 "] In handle_incoming_http, initial settings frame not sent, returning",
+                       conn->conn_id);
                 return 0;
             }
         }
@@ -2929,6 +2975,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_READ: {
         // We don't want to read when we are q2 blocked.
         if (conn->q2_blocked) {
+            qd_log(log, QD_LOG_TRACE, "[C%" PRIu64 "] PN_RAW_CONNECTION_READ conn->q2_blocked is true, returning",
+                   conn->conn_id);
             return;
         }
         int read = handle_incoming_http(conn);
@@ -3214,7 +3262,9 @@ static void qdr_http2_adaptor_init(qdr_core_t *core, void **adaptor_context)
     nghttp2_session_callbacks_set_on_header_callback(callbacks, on_header_callback);
     nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, on_data_chunk_recv_callback);
     nghttp2_session_callbacks_set_on_invalid_frame_recv_callback(callbacks, on_invalid_frame_recv_callback);
-
+    nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, on_stream_close_callback);
+    nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, on_frame_send_callback);
+    nghttp2_session_callbacks_set_on_frame_not_send_callback(callbacks, on_frame_not_send_callback);
 
     // These callbacks are called when you try to push out amqp data to http2
     // More specifically, they are called from handle_outgoing_http()
