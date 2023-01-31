@@ -134,7 +134,7 @@ do_build () {
 # Do a regular build without asan or tsan.
 do_build "" OFF
 # and install Proton Python
-python3 -m pip install --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/dist/" -name 'python-qpid-proton*.tar.gz')"
+python3 -m pip install --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
 
 # Then perform sanitized builds of Proton and the Router.
 # talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
