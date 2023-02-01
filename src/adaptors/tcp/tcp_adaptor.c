@@ -238,7 +238,13 @@ static void on_activate(void *context)
         qdr_connection_set_context(conn->qdr_conn, 0);
         qdr_connection_closed(conn->qdr_conn);
         conn->qdr_conn = 0;
-        free_qdr_tcp_connection(conn);
+        //
+        // The conn->in_list is false for egress dispatcher connections.
+        // So, you can safely call qdr_del_tcp_connection() for the egress dispatcher connections
+        // since the core thread callback function will not try to delete it
+        // from the tcp_adaptor->connections list
+        //
+        qdr_del_tcp_connection(conn);
     }
 }
 
@@ -965,7 +971,6 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                               &(tc->incoming_link_id));
     tc->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
     qdr_link_set_context(tc->incoming_link, tc);
-    qdr_add_tcp_connection(tc);
 }
 
 // invoked once when tls session handshake completes successfully
@@ -1274,6 +1279,13 @@ static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_
     tcp_stats->connections_opened +=1;
     UNLOCK(&tcp_stats->stats_lock);
     DEQ_INIT(tc->out_buffs);
+
+    // Add the connection to the tcp_adaptor->connections list via the core thread.
+    // The egress dispatcher connection will not be added to the tcp_adaptor->connections list
+    // since it is just a dummy connection.
+    if (!is_egress_dispatcher_conn)
+        qdr_add_tcp_connection(tc);
+
     return tc;
 }
 
@@ -1438,7 +1450,7 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t *connector, qdr_
                        qdr_tcp_connection_role_name(tc),
                        connector->config->adaptor_config->name,
                        res);
-                free_qdr_tcp_connection(tc);  // this will undo the connector incref
+                qdr_del_tcp_connection(tc);  // this will undo the connector incref
                 return false;
             }
         }
@@ -1447,7 +1459,7 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t *connector, qdr_
         if (!tc->tls) {
             // There was a failure trying to setup the connector sslProfile.  Look at the logs for failure reason.
             // We cannot proceed setting up this connection, free it.
-            free_qdr_tcp_connection(tc);  // this will undo the connector incref
+            qdr_del_tcp_connection(tc);  // this will undo the connector incref
             return false;
         }
     }
@@ -2045,10 +2057,6 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                        tc->conn_id, tc->incoming_link->identity,
                        qdr_tcp_quadrant_id(tc, tc->incoming_link), tc->reply_to);
                 qdr_link_set_context(tc->incoming_link, tc);
-                //
-                //add this connection to those visible through management now that we have the global_id
-                //
-                qdr_add_tcp_connection(tc);
                 handle_incoming(tc, "qdr_tcp_deliver");
             }
         }
@@ -2268,6 +2276,10 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qdr_tcp_connection_t *tc = DEQ_HEAD(adaptor->connections);
     while (tc) {
         qdr_tcp_connection_t *next = DEQ_NEXT(tc);
+        //
+        // This is the only place you should be directly calling the free_qdr_tcp_connection(conn)
+        // instead of calling qdr_del_tcp_connection(conn) because the core thread is going to be shut down.
+        //
         free_qdr_tcp_connection(tc);
         tc = next;
     }
