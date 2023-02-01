@@ -468,7 +468,7 @@ class MobileAddressMulticastTest(MessagingHandler):
         self.address = address
         self.anon_sender = anon_sender
 
-        # One sender connection and two receiver connections
+        # One sender connection and three receiver connections
         self.receiver1_conn = None
         self.receiver2_conn = None
         self.receiver3_conn = None
@@ -493,8 +493,6 @@ class MobileAddressMulticastTest(MessagingHandler):
         self.recvd2_msgs = dict()
         self.recvd3_msgs = dict()
         self.dup_msg_rcvd = False
-        self.dup_msg = None
-        self.receiver_name = None
         self.large_msg = large_msg
         self.body = ""
         self.r_attaches = 0
@@ -511,6 +509,7 @@ class MobileAddressMulticastTest(MessagingHandler):
         self.test_msg_received_r3 = False
         self.initial_msg_sent = False
         self.n_accepted = 0
+        self.received_all = False
 
         if self.large_msg:
             self.body = "0123456789101112131415" * 5000
@@ -521,15 +520,17 @@ class MobileAddressMulticastTest(MessagingHandler):
         self.send_test_message()
 
     def timeout(self):
-        if self.dup_msg:
-            self.error = "%s received duplicate message %s" % \
-                         (self.receiver_name, self.dup_msg)
-        else:
-            if not self.error:
-                self.error = "Timeout Expired - n_sent=%d n_rcvd1=%d, " \
-                             "n_rcvd2=%d, n_rcvd3=%d, n_released=%d, addr=%s" % \
-                             (self.n_sent, self.n_rcvd1, self.n_rcvd2,
-                              self.n_rcvd3, self.n_released, self.address)
+        error = None
+        if not self.received_all:
+            error = "Timeout Expired - n_sent=%d n_rcvd1=%d, " \
+                    "n_rcvd2=%d, n_rcvd3=%d, n_released=%d, addr=%s" % \
+                    (self.n_sent, self.n_rcvd1, self.n_rcvd2, self.n_rcvd3, self.n_released, self.address)
+        self.fail(error, True)
+
+    def fail(self, error, timedout=False):
+        self.error = error
+        if not timedout:
+            self.timer.cancel()
         self.receiver1_conn.close()
         self.receiver2_conn.close()
         self.receiver3_conn.close()
@@ -577,10 +578,10 @@ class MobileAddressMulticastTest(MessagingHandler):
     def on_accepted(self, event):
         if self.test_msg_received_r1 and self.test_msg_received_r2 and self.test_msg_received_r3:
             # All receivers have received the test message.
-            # Now fire off 100 messages to see if the message was multicasted to all
+            # Now start firing off 'count' messages to see if the message was multicasted to all
             # receivers.
             self.n_accepted += 1
-            while self.n_sent < self.count:
+            while self.n_sent < self.count and self.sender.credit > 0:
                 self.send()
                 self.n_sent += 1
         else:
@@ -600,39 +601,34 @@ class MobileAddressMulticastTest(MessagingHandler):
                 self.test_msg_received_r1 = True
             else:
                 if self.recvd1_msgs.get(event.message.correlation_id):
-                    self.dup_msg = event.message.correlation_id
-                    self.receiver_name = "Receiver 1"
-                    self.timeout()
-                self.n_rcvd1 += 1
-                self.recvd1_msgs[event.message.correlation_id] = event.message.correlation_id
+                    self.fail("Receiver 1 received duplicate: %d" % event.message.correlation_id)
+                else:
+                    self.n_rcvd1 += 1
+                    self.recvd1_msgs[event.message.correlation_id] = event.message.correlation_id
         if event.receiver == self.receiver2:
             if event.message.body == "Test Message":
                 self.test_msg_received_r2 = True
             else:
                 if self.recvd2_msgs.get(event.message.correlation_id):
-                    self.dup_msg = event.message.correlation_id
-                    self.receiver_name = "Receiver 2"
-                    self.timeout()
-                self.n_rcvd2 += 1
-                self.recvd2_msgs[event.message.correlation_id] = event.message.correlation_id
+                    self.fail("Receiver 2 received duplicate: %d" % event.message.correlation_id)
+                else:
+                    self.n_rcvd2 += 1
+                    self.recvd2_msgs[event.message.correlation_id] = event.message.correlation_id
         if event.receiver == self.receiver3:
             if event.message.body == "Test Message":
                 self.test_msg_received_r3 = True
             else:
                 if self.recvd3_msgs.get(event.message.correlation_id):
-                    self.dup_msg = event.message.correlation_id
-                    self.receiver_name = "Receiver 3"
-                    self.timeout()
-                self.n_rcvd3 += 1
-                self.recvd3_msgs[event.message.correlation_id] = event.message.correlation_id
+                    self.fail("Receiver 3 received duplicate: %d" % event.message.correlation_id)
+                else:
+                    self.n_rcvd3 += 1
+                    self.recvd3_msgs[event.message.correlation_id] = event.message.correlation_id
 
         if self.n_rcvd1 == self.count and self.n_rcvd2 == self.count and \
                 self.n_rcvd3 == self.count:
+            self.received_all = True
             self.timer.cancel()
-            self.receiver1_conn.close()
-            self.receiver2_conn.close()
-            self.receiver3_conn.close()
-            self.sender_conn.close()
+            self.timer = event.reactor.schedule(2.0, TestTimeout(self))
 
     def run(self):
         Container(self).run()

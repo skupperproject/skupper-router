@@ -239,8 +239,8 @@ class ConnectedMeshTest(TestCase):
         cls.routers[3].wait_router_connected('IY')
         cls.routers[4].wait_router_connected('IX')
 
-        cls.routers[3].is_edge_routers_connected(num_edges=2)
-        cls.routers[4].is_edge_routers_connected(num_edges=2)
+        cls.routers[3].is_edge_routers_connected(num_edges=2, num_meshes=1)
+        cls.routers[4].is_edge_routers_connected(num_edges=2, num_meshes=2)
 
     def test_01_dynamic_address_same_edge(self):
         test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0])
