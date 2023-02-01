@@ -51,7 +51,7 @@ from datetime import datetime
 from subprocess import PIPE, STDOUT, TimeoutExpired
 from threading import Event
 from threading import Thread
-from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar
+from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar, Dict
 
 import __main__
 
@@ -65,6 +65,11 @@ from proton.reactor import AtMostOnce
 
 from skupper_router.management.client import Node
 from skupper_router.management.error import NotFoundStatus, BadRequestStatus
+
+current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+path_parent = os.path.dirname(os.path.join(os.path.dirname(os.path.abspath(__file__))))
+expandvars_script_folder = os.path.join(path_parent, 'scripts')
+script_file = "expandvars.py"
 
 # Optional modules
 MISSING_MODULES = []
@@ -486,6 +491,29 @@ class Http2Server(HttpServer):
 
     def wait_ports(self, **retry_kwargs):
         wait_ports(self.ports_family, **retry_kwargs)
+
+
+class NginxServer(Process):
+    """
+    Sets up an ngix server
+    """
+    def __init__(self,
+                 config_path: str,  # Full path of templated config file (string) /blah-blah/nginx/nginx-template.conf
+                 env: Dict[str, str],  # A dict of env variables which will be substituted in the config_path file.
+                 name: str = "nginx",
+                 expect: int = Process.RUNNING,
+                 **kwargs):
+        input_file = os.path.join(config_path)
+        config_file = os.path.join(env['setupclass-folder'], 'nginx.conf')
+
+        # Run the expandvars.py script to replace the shell style variables in the config file with
+        # environment variables.
+        args = [sys.executable, os.path.join(expandvars_script_folder, script_file), input_file, config_file]
+        subprocess.run(args, stderr=STDOUT, check=True, env=env)
+
+        # Pass the config file for nginx to use.
+        nginx_cmd = ['nginx', '-c', config_file]
+        super().__init__(nginx_cmd, name=name, expect=expect, **kwargs)
 
 
 class OpenSSLServer(Process):
@@ -1169,6 +1197,9 @@ class Tester:
 
     def http2server(self, *args, **kwargs):
         return self.cleanup(Http2Server(*args, **kwargs))
+
+    def nginxserver(self, *args, **kwargs):
+        return self.cleanup(NginxServer(*args, **kwargs))
 
     def opensslclient(self,
                       port,
@@ -1890,6 +1921,24 @@ def curl_available():
             # return curl version as a tuple (major, minor[,fix])
             # expects --version outputs "curl X.Y.Z ..."
             return tuple(int(x) for x in out.split()[1].split('.'))
+    except:
+        pass
+    return False
+
+
+def nginx_available():
+    """
+    Check if the nginx http server is present on the system.
+    Return a tuple containing the version if found, otherwise
+    return false.
+    """
+    try:
+        popen_args = ['nginx', '-version']
+        with subprocess.Popen(popen_args,
+                              stdout=PIPE,
+                              stderr=PIPE) as p:
+            out = p.communicate()
+            return p.returncode, out[0], out[1]
     except:
         pass
     return False

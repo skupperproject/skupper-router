@@ -21,17 +21,13 @@ import sys
 import subprocess
 from subprocess import STDOUT, CalledProcessError
 import shutil
-from system_test import TestCase
+from system_test import TestCase, current_dir, expandvars_script_folder, script_file
 
 env_config = {
     'PORT': '12345',
     'NAME': 'YoYoMa'
 }
 
-current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-path_parent = os.path.dirname(os.path.join(os.path.dirname(os.path.abspath(__file__))))
-expandvars_script_folder = os.path.join(path_parent, 'scripts')
-script_file = "expandvars.py"
 env = dict(os.environ)
 env.update(env_config)
 
@@ -42,7 +38,7 @@ class ExpandvarsTest(TestCase):
         Provide an input file and an output file to the expandvars.py script
         and make sure the output file is populated with the expanded vars.
         """
-        nginx_conf_dir = os.path.join(current_dir, 'nginx-configs')
+        nginx_conf_dir = os.path.join(current_dir, 'nginx/nginx-configs')
         input_file = os.path.join(nginx_conf_dir, 'expandvars.conf')
         output_file = os.path.join(self.directory, 'expandvars.conf')
         args = [sys.executable, os.path.join(expandvars_script_folder, script_file), input_file, output_file]
@@ -63,10 +59,10 @@ class ExpandvarsTest(TestCase):
         Provide an input file and NO output file to the expandvars.py script
         and make sure the input file is overwritten/populated with the expanded vars.
         """
-        nginx_conf_dir = os.path.join(current_dir, 'nginx-configs')
+        nginx_conf_dir = os.path.join(current_dir, 'nginx/nginx-configs')
         orig_file = os.path.join(nginx_conf_dir, 'expandvars.conf')
 
-        # Make a copy of tests/nginx-configs/expandvars.conf, we don't want to modify that file.
+        # Make a copy of tests/nginx/nginx-configs/expandvars.conf, we don't want to modify that file.
         input_file = os.path.join(self.directory, 'expandvars.in.conf')
         shutil.copyfile(orig_file, input_file)
         args = [sys.executable, os.path.join(expandvars_script_folder, script_file), input_file]

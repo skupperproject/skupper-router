@@ -138,7 +138,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev
+          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
 
       - name: Zero ccache stats
         run: ccache -z
@@ -521,7 +521,7 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file
+          dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
           dnf debuginfo-install -y python3
 
       - name: install qpid-proton python wheel
@@ -659,7 +659,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y python3-qpid-proton libpython3-dev ninja-build libwebsockets-dev libnghttp2-dev
+          sudo apt update; sudo apt install -y python3-qpid-proton libpython3-dev ninja-build libwebsockets-dev libnghttp2-dev nginx
 
       - name: Install qpid-proton
         run: |
