@@ -978,14 +978,14 @@ class Qdrouterd(Process):
     def wait_router_connected(self, router_id, **retry_kwargs):
         retry(lambda: self.is_router_connected(router_id), **retry_kwargs)
 
-    def is_edge_routers_connected(self, num_edges=1, role='edge', **retry_kwargs):
+    def is_edge_routers_connected(self, num_edges=1, role='edge', num_meshes=None, **retry_kwargs):
         """
         Checks the number of edge uplink connections equals the passed in num_edges
         :param num_edges:
         :param is_tls:
         :return:
         """
-        def is_edges_connected(edges=num_edges):
+        def is_edges_connected(edges=num_edges, meshes=num_meshes):
             node = None
             try:
                 node = Node.connect(self.addresses[0], timeout=1)
@@ -993,12 +993,18 @@ class Qdrouterd(Process):
                 if out:
                     role_index = out.attribute_names.index("role")
                     dir_index = out.attribute_names.index("dir")
+                    meshid_index = out.attribute_names.index("meshId")
                     edges_num = 0
+                    mesh_list = []
                     for conn in out.results:
                         if role == conn[role_index] and conn[dir_index] == "in":
                             edges_num += 1
-                        if edges_num == edges:
-                            return True
+                            if meshes != None:
+                                meshid = conn[meshid_index]
+                                if meshid not in mesh_list:
+                                    mesh_list.append(meshid)
+                    if edges_num == edges and (meshes == None or meshes == len(mesh_list)):
+                        return True
                 return False
             except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):
                 return False
@@ -1006,7 +1012,7 @@ class Qdrouterd(Process):
                 if node:
                     node.close()
 
-        retry(lambda: is_edges_connected(num_edges), **retry_kwargs)
+        retry(lambda: is_edges_connected(num_edges, num_meshes), **retry_kwargs)
 
     def wait_http_server_connected(self, is_tls=False, **retry_kwargs):
         """
