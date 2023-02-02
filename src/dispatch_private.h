@@ -56,6 +56,7 @@ struct qd_dispatch_t {
     char  *router_area;
     char  *router_id;
     qd_router_mode_t router_mode;
+    char  *van_id;
     char  *timestamp_format;
     char  *metadata;
     bool   timestamps_in_utc;

@@ -379,6 +379,12 @@
                     "required": false,
                     "create": true
                 },
+                "vanId": {
+                    "description":"The unique ID of the Virtual Application Network that this router is a member of.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
                 "mode": {
                     "type": [
                         "standalone",

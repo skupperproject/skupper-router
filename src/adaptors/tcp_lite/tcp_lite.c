@@ -2226,7 +2226,7 @@ tcplite_listener_t *qd_dispatch_configure_tcp_listener_lite(qd_dispatch_t *qd, q
 
     li->adaptor_config = new_qd_adaptor_config_t();
 
-    if (qd_load_adaptor_config(li->adaptor_config, entity) != QD_ERROR_NONE) {
+    if (qd_load_adaptor_config(tcplite_context->core, li->adaptor_config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp listener: %s", qd_error_message());
         qd_free_adaptor_config(li->adaptor_config);
         free_tcplite_listener_t(li);
@@ -2339,7 +2339,7 @@ tcplite_connector_t *qd_dispatch_configure_tcp_connector_lite(qd_dispatch_t *qd,
 
     cr->adaptor_config = new_qd_adaptor_config_t();
 
-    if (qd_load_adaptor_config(cr->adaptor_config, entity) != QD_ERROR_NONE) {
+    if (qd_load_adaptor_config(tcplite_context->core, cr->adaptor_config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp connector: %s", qd_error_message());
         qd_free_adaptor_config(cr->adaptor_config);
         free_tcplite_connector_t(cr);

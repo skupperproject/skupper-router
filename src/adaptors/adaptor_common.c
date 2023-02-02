@@ -56,13 +56,14 @@ void qd_free_adaptor_config(qd_adaptor_config_t *config)
 
 #define CHECK() if (qd_error_code()) goto error
 
-qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *entity)
+qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config, qd_entity_t *entity)
 {
+    char *config_address;
     qd_error_clear();
     config->name    = qd_entity_opt_string(entity, "name", 0);                 CHECK();
     config->host    = qd_entity_get_string(entity, "host");                    CHECK();
     config->port    = qd_entity_get_string(entity, "port");                    CHECK();
-    config->address = qd_entity_get_string(entity, "address");                 CHECK();
+    config_address  = qd_entity_get_string(entity, "address");                 CHECK();
     config->site_id = qd_entity_opt_string(entity, "siteId", 0);               CHECK();
     config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
     config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
@@ -76,6 +77,21 @@ qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *enti
     int hplen = strlen(config->host) + strlen(config->port) + 2;
     config->host_port = malloc(hplen);
     snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
+
+    //
+    // If this router is annotated with a van-id, add the van-id to the address
+    //
+    const char *van_id = qdr_core_van_id(core);
+    if (!!van_id) {
+        char *address = (char*) malloc(strlen(config_address) + strlen(van_id) + 2);
+        strcpy(address, van_id);
+        strcat(address, "/");
+        strcat(address, config_address);
+        config->address = address;
+        free(config_address);
+    } else {
+        config->address = config_address;
+    }
 
     return QD_ERROR_NONE;
 

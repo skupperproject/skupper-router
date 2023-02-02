@@ -1816,6 +1816,7 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
     router->router_mode  = mode;
     router->router_area  = area;
     router->router_id    = id;
+    router->van_id       = qd->van_id;
     router->node         = qd_container_set_default_node_type(qd, &router_node, (void*) router, QD_DIST_BOTH);
 
     sys_mutex_init(&router->lock);
@@ -2328,7 +2329,7 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
 QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd)
 {
     qd->router->tracemask   = qd_tracemask();
-    qd->router->router_core = qdr_core(qd, qd->router->router_mode, qd->router->router_area, qd->router->router_id);
+    qd->router->router_core = qdr_core(qd, qd->router->router_mode, qd->router->router_area, qd->router->router_id, qd->router->van_id);
 
     amqp_direct_adaptor = qdr_protocol_adaptor(qd->router->router_core,
                                                "amqp",
@@ -2362,6 +2363,7 @@ void qd_router_free(qd_router_t *router)
     //
     router->router_id = 0;
     router->router_area = 0;
+    router->van_id = 0;
 
     qd_container_set_default_node_type(router->qd, 0, 0, QD_DIST_BOTH);
 
