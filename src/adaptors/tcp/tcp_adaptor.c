@@ -1581,10 +1581,10 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     return li;
 }
 
-static qd_error_t qd_load_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_entity_t *entity)
+static qd_error_t qd_load_tcp_adaptor_config(qdr_core_t *core, qd_tcp_adaptor_config_t *config, qd_entity_t *entity)
 {
     // Make a call to the function that loads the common adaptor config.
-    qd_error_t qd_error = qd_load_adaptor_config(config->adaptor_config, entity);
+    qd_error_t qd_error = qd_load_adaptor_config(core, config->adaptor_config, entity);
     // Add more code here if you want to load something specific to the tcp adaptor config.
     return qd_error;
 }
@@ -1594,7 +1594,7 @@ static qd_error_t qd_load_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd
 qd_tcp_listener_t *qd_dispatch_configure_tcp_listener_legacy(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_tcp_listener_t *li = qd_tcp_listener(qd->server);
-    if (qd_load_tcp_adaptor_config(li->config, entity) != QD_ERROR_NONE) {
+    if (qd_load_tcp_adaptor_config(qd->router->router_core, li->config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp listener: %s", qd_error_message());
         qd_tcp_listener_decref(li);
         return 0;
@@ -1715,7 +1715,7 @@ static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
 qd_tcp_connector_t *qd_dispatch_configure_tcp_connector_legacy(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_tcp_connector_t *c = qd_tcp_connector(qd->server);
-    if (qd_load_tcp_adaptor_config(c->config, entity) != QD_ERROR_NONE) {
+    if (qd_load_tcp_adaptor_config(qd->router->router_core, c->config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp connector: %s", qd_error_message());
         qd_tcp_connector_decref(c);
         return 0;

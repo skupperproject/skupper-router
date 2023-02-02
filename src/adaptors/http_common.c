@@ -74,13 +74,13 @@ static void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
     free_qd_http_adaptor_config_t(config);
 }
 
-static qd_error_t qd_load_http_adaptor_config(qd_http_adaptor_config_t *config, qd_entity_t *entity)
+static qd_error_t qd_load_http_adaptor_config(qdr_core_t *core, qd_http_adaptor_config_t *config, qd_entity_t *entity)
 {
     assert(config);
     //
     // First load the common config data (common to all adaptors)
     //
-    qd_error_t qd_error = qd_load_adaptor_config(config->adaptor_config, entity);
+    qd_error_t qd_error = qd_load_adaptor_config(core, config->adaptor_config, entity);
     if (qd_error != QD_ERROR_NONE) {
         return qd_error;
     }
@@ -133,7 +133,7 @@ qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_en
     qd_http_listener_t *listener = qd_http_listener(qd->server);
     assert(listener);
 
-    if (qd_load_http_adaptor_config(listener->config, entity) != QD_ERROR_NONE) {
+    if (qd_load_http_adaptor_config(qd->router->router_core, listener->config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpListener: %s",
                qd_error_message());
         qd_http_listener_decref(listener);
@@ -197,7 +197,7 @@ qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_
     qd_http_connector_t *conn = qd_http_connector(qd->server);
     assert(conn);
 
-    if (qd_load_http_adaptor_config(conn->config, entity) != QD_ERROR_NONE) {
+    if (qd_load_http_adaptor_config(qd->router->router_core, conn->config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpConnector: %s",
                qd_error_message());
         qd_http_connector_decref(conn);

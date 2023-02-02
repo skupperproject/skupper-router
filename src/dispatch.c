@@ -59,6 +59,7 @@ void            qd_router_free(qd_router_t *router);
 void            qd_error_initialize(void);
 static void qd_dispatch_set_router_id(qd_dispatch_t *qd, char *_id);
 static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area);
+static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id);
 static void qd_dispatch_policy_c_counts_free(PyObject *capsule);
 
 const char     *CLOSEST_DISTRIBUTION   = "closest";
@@ -220,6 +221,7 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_dispatch_set_router_default_distribution(qd, qd_entity_opt_string(entity, "defaultDistribution", 0)); QD_ERROR_RET();
     qd_dispatch_set_router_id(qd, qd_entity_opt_string(entity, "id", 0)); QD_ERROR_RET();
+    qd_dispatch_set_router_van_id(qd, qd_entity_opt_string(entity, "vanId", 0)); QD_ERROR_RET();
     qd->router_mode = qd_entity_get_long(entity, "mode"); QD_ERROR_RET();
     if (!qd->router_id) {
         char *mode = 0;
@@ -369,6 +371,14 @@ static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area) {
     qd->router_area = _area;
 }
 
+// Takes ownership of _van_id
+static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id) {
+    if (qd->van_id) {
+        free(qd->van_id);
+    }
+    qd->van_id = _van_id;
+}
+
 void qd_dispatch_free(qd_dispatch_t *qd)
 {
     if (!qd) return;
@@ -390,6 +400,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_python_finalize();
     qd_dispatch_set_router_id(qd, NULL);
     qd_dispatch_set_router_area(qd, NULL);
+    qd_dispatch_set_router_van_id(qd, NULL);
     qd_iterator_finalize();
     free(qd->timestamp_format);
     free(qd->metadata);

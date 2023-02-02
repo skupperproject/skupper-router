@@ -29,6 +29,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/router_core.h"
 
 #include <proton/raw_connection.h>
 #include <proton/tls.h>
@@ -65,7 +66,7 @@ struct qd_adaptor_config_t
 
 ALLOC_DECLARE(qd_adaptor_config_t);
 
-qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *entity);
+qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config, qd_entity_t *entity);
 void qd_free_adaptor_config(qd_adaptor_config_t *config);
 
 /**

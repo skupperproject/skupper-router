@@ -335,6 +335,8 @@ class BusManager:
         rows.append(('Version',        router.version))
         rows.append(('Mode',           router.mode))
         rows.append(('Router Id',      router.id))
+        if router.vanId is not None:
+            rows.append(('Van Id', router.vanId))
         try:
             rows.append(('Worker Threads', PlainNum(router.workerThreads)))
         except:

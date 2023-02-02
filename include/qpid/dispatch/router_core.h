@@ -46,7 +46,7 @@ ENUM_DECLARE(qd_router_mode);
 /**
  * Allocate and start an instance of the router core module.
  */
-qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id);
+qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *van_id);
 
 /**
  * Stop and deallocate an instance of the router core.
@@ -67,7 +67,7 @@ qd_dispatch_t *qdr_core_dispatch(qdr_core_t *core);
 /**
  * Drive the core-internal timer every one second.
  *
- * @param core Pointer to the core object returned by qd_core()
+ * @param core Pointer to the core object returned by qdr_core()
  */
 void qdr_process_tick(qdr_core_t *core);
 
@@ -78,6 +78,15 @@ void qdr_process_tick(qdr_core_t *core);
  * @return count of worker threads
  */
 int qdr_core_get_worker_thread_count(const qdr_core_t *core);
+
+/**
+ * @brief Return the text of the router's virtual application network ID, or 0.
+ *
+ * @param core Pointer to the core object returned by qdr_core()
+ * @return const char* null-terminated text of the van-id or 0 if there's no id.
+ */
+const char *qdr_core_van_id(const qdr_core_t *core);
+
 
 /**
  ******************************************************************************
