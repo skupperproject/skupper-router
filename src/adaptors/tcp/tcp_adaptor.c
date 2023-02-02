@@ -153,6 +153,7 @@ typedef struct qdr_tcp_adaptor_t {
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
 
+static void qdr_add_tcp_connection(qdr_tcp_connection_t *conn);
 static void qdr_add_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_del_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 
@@ -172,6 +173,26 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
 inline static bool read_window_full(const qdr_tcp_connection_t* conn)
 {
     return !conn->window_disabled && conn->bytes_unacked >= TCP_MAX_CAPACITY;
+}
+
+/**
+ * Queues up a qdr_add_tcp_connection_CT action on the core thread.
+ */
+static void qdr_add_tcp_connection(qdr_tcp_connection_t *conn)
+{
+    qdr_action_t *action           = qdr_action(qdr_add_tcp_connection_CT, "add_tcp_connection");
+    action->args.general.context_1 = conn;
+    qdr_action_enqueue(tcp_adaptor->core, action);
+}
+
+/**
+ * Queues up a qdr_del_tcp_connection_CT action on the core thread.
+ */
+static void qdr_del_tcp_connection(qdr_tcp_connection_t *conn)
+{
+    qdr_action_t *action           = qdr_action(qdr_del_tcp_connection_CT, "delete_tcp_connection");
+    action->args.general.context_1 = conn;
+    qdr_action_enqueue(tcp_adaptor->core, action);
 }
 
 static qdr_tcp_stats_t *get_tcp_stats(qdr_tcp_connection_t *conn)
@@ -672,9 +693,7 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
 
     // Do the actual deletion of the tcp connection instance on the core thread to prevent the core from running
     // qdr_tcp_activate_CT on a freed tcp connection pointer:
-    qdr_action_t *action = qdr_action(qdr_del_tcp_connection_CT, "delete_tcp_connection");
-    action->args.general.context_1 = conn;
-    qdr_action_enqueue(tcp_adaptor->core, action);
+    qdr_del_tcp_connection(conn);
 }
 
 static int read_message_body(qdr_tcp_connection_t *conn, qd_message_t *msg, pn_raw_buffer_t *buffers, int count)
@@ -946,10 +965,7 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                               &(tc->incoming_link_id));
     tc->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
     qdr_link_set_context(tc->incoming_link, tc);
-
-    qdr_action_t *action = qdr_action(qdr_add_tcp_connection_CT, "add_tcp_connection");
-    action->args.general.context_1 = tc;
-    qdr_action_enqueue(tcp_adaptor->core, action);
+    qdr_add_tcp_connection(tc);
 }
 
 // invoked once when tls session handshake completes successfully
@@ -1218,11 +1234,30 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     }
 }
 
-
-static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *server, qd_tcp_adaptor_config_t *config, qdr_tcp_stats_t *tcp_stats)
+static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_tcp_connector_t *connector,
+                                                bool is_egress_dispatcher_conn, bool ingress)
 {
     qdr_tcp_connection_t* tc = new_qdr_tcp_connection_t();
     ZERO(tc);
+    qdr_tcp_stats_t *tcp_stats = 0;
+    qd_server_t     *server    = 0;
+    if (listener) {
+        tc->listener = listener;
+        tc->config   = listener->config;
+        tcp_stats    = listener->tcp_stats;
+        server       = listener->server;
+        sys_atomic_inc(&listener->ref_count);
+    } else if (connector) {
+        tc->connector = connector;
+        tc->config    = connector->config;
+        tcp_stats     = connector->tcp_stats;
+        server        = connector->server;
+        sys_atomic_inc(&connector->ref_count);
+    }
+    assert(tc->config);
+    assert(tcp_stats);
+    assert(server);
+
     tc->conn_id         = qd_server_allocate_connection_id(server);
     tc->context.context = tc;
     tc->context.handler = &handle_connection_event;
@@ -1230,10 +1265,11 @@ static qdr_tcp_connection_t *qdr_tcp_connection(bool ingress, qd_server_t *serve
     sys_atomic_init(&tc->raw_closed_read, 0);
     sys_atomic_init(&tc->raw_closed_write, 0);
     sys_mutex_init(&tc->activation_lock);
+    tc->is_egress_dispatcher_conn = is_egress_dispatcher_conn;
     tc->ingress = ingress;
-    tc->server = server;
-    tc->config = config;
+    tc->server                    = server;
     sys_atomic_inc(&tc->config->ref_count);
+
     LOCK(&tcp_stats->stats_lock);
     tcp_stats->connections_opened +=1;
     UNLOCK(&tcp_stats->stats_lock);
@@ -1253,9 +1289,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
     qd_tcp_listener_t *listener = (qd_tcp_listener_t*) user_context;
     assert(listener);
 
-    qdr_tcp_connection_t* tc = qdr_tcp_connection(true, listener->server, listener->config, listener->tcp_stats);
-    tc->listener = listener;
-    sys_atomic_inc(&listener->ref_count);
+    qdr_tcp_connection_t *tc = qdr_tcp_connection(listener, 0, false, true);
     tc->require_tls = !!listener->tls_domain;
 
     tc->vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->vflow);
@@ -1366,15 +1400,9 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
 //
 // Returns true if the connection was successfully created and scheduled, otherwise false on error.
 //
-static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t      *connector,
-                                             qd_tcp_adaptor_config_t *config,
-                                             qd_server_t             *server,
-                                             qdr_delivery_t          *initial_delivery)
+static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t *connector, qdr_delivery_t *initial_delivery)
 {
     assert(initial_delivery);
-    qdr_tcp_connection_t *tc = qdr_tcp_connection(false, server, config, connector->tcp_stats);
-    tc->connector            = connector;
-    sys_atomic_inc(&connector->ref_count);
 
     // This is not an egress dispatcher connection.
     // Real TCP traffic flows thru this connection.
@@ -1382,8 +1410,7 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t      *connector,
     // network, i.e. there are N of these real connections (non-egress dispatcher connections) for N clients
     // respectively.
     //
-    tc->is_egress_dispatcher_conn = false;
-
+    qdr_tcp_connection_t *tc = qdr_tcp_connection(0, connector, false, false);
     tc->require_tls = !!connector->tls_domain;
     qd_message_t *msg = qdr_delivery_message(initial_delivery);
     tc->vflow         = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
@@ -1457,18 +1484,13 @@ static qdr_tcp_connection_t *qdr_tcp_create_dispatcher_connection(qd_tcp_connect
                                                                   qd_tcp_adaptor_config_t *config,
                                                                   qd_server_t             *server)
 {
-    qdr_tcp_connection_t *tc = qdr_tcp_connection(false, server, config, connector->tcp_stats);
-    tc->connector            = connector;
-    sys_atomic_inc(&connector->ref_count);
-
     //
     // This is just an egress dispatcher connection. It is initially created so an
     // outgoing link can be created on it. When a delivery arrives on the outgoing link
     // in the egress dispatcher connection, it is moved to another connection/link
     //
-    tc->is_egress_dispatcher_conn = true;
-    tc->activate_timer            = qd_timer(tcp_adaptor->core->qd, on_activate, tc);
-
+    qdr_tcp_connection_t *tc = qdr_tcp_connection(0, connector, true, false);
+    tc->activate_timer       = qd_timer(tcp_adaptor->core->qd, on_activate, tc);
     //
     // Create a server side dispatcher connection.
     // We don't want to create any socket level connection here.
@@ -1975,7 +1997,7 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                    " tcp_adaptor delivery arrived on egress dispatcher connection, initiating actual egress connection",
                    DLV_ARGS(delivery));
 
-            if (qdr_tcp_create_egress_connection(tc->connector, tc->config, tc->server, delivery)) {
+            if (qdr_tcp_create_egress_connection(tc->connector, delivery)) {
                 qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                        DLV_FMT " tcp_adaptor delivery QD_DELIVERY_MOVED_TO_NEW_LINK", DLV_ARGS(delivery));
                 return QD_DELIVERY_MOVED_TO_NEW_LINK;
@@ -2026,9 +2048,7 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 //
                 //add this connection to those visible through management now that we have the global_id
                 //
-                qdr_action_t *action = qdr_action(qdr_add_tcp_connection_CT, "add_tcp_connection");
-                action->args.general.context_1 = tc;
-                qdr_action_enqueue(tcp_adaptor->core, action);
+                qdr_add_tcp_connection(tc);
                 handle_incoming(tc, "qdr_tcp_deliver");
             }
         }
@@ -2260,13 +2280,13 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
         tl = next;
     }
 
-    qd_tcp_connector_t *tr = DEQ_HEAD(adaptor->connectors);
-    while (tr) {
-        qd_tcp_connector_t *next = DEQ_NEXT(tr);
-        free_qdr_tcp_connection((qdr_tcp_connection_t*) tr->dispatcher_conn);
-        assert(sys_atomic_get(&tr->ref_count) == 1);  // leak check
-        qd_tcp_connector_decref(tr);
-        tr = next;
+    qd_tcp_connector_t *connector = DEQ_HEAD(adaptor->connectors);
+    while (connector) {
+        qd_tcp_connector_t *next = DEQ_NEXT(connector);
+        free_qdr_tcp_connection((qdr_tcp_connection_t *) connector->dispatcher_conn);
+        assert(sys_atomic_get(&connector->ref_count) == 1);  // leak check
+        qd_tcp_connector_decref(connector);
+        connector = next;
     }
 
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
