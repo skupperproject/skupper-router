@@ -42,11 +42,15 @@ def main() -> int:
         logging.error("Build dir %s does not exist or is not a directory", build_dir)
         return 1
 
-    with pathlib.Path(build_dir, 'Testing', 'Temporary', 'LastTestsFailed.log').open('rt') as f:
-        failed_tests = gha_tools.parse_last_tests_failed_log(f)
+    log_file = pathlib.Path(build_dir, 'Testing', 'Temporary', 'LastTestsFailed.log')
+    if not log_file.exists():
+        logging.debug(f"File {log_file} does not exist - nothing to do")
+        return 0
 
+    with log_file.open('rt') as f:
+        failed_tests = gha_tools.parse_last_tests_failed_log(f)
     failed_test_names = {test[1] for test in failed_tests}
-    logging.debug("Failed tests: %s", failed_test_names)
+    logging.debug(f"Failed tests: {failed_test_names}")
 
     system_tests_dir = pathlib.Path(build_dir, 'tests', 'system_test.dir', 'tests')
     if not system_tests_dir.exists():
