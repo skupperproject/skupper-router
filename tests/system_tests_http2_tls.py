@@ -220,14 +220,22 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         # This means that curl client will not offer an ALPN protocol at all. The router (server) sends back 'h2'
         # in its ALPN response which is ignored by the curl client.
         # The TLS handshake is successful and curl receives a http2 settings frame from the router which it does
-        # not understand. Hence it complains with the error message
+        # not understand. Hence it complains with either of the following error messages based on the version of
+        # openssl.
         # 'Received HTTP/0.9 when not allowed'
+        # 'Weird server reply'
+        # The main goal of this test is to make sure the router closes the connection
+        # when curl speaks HTTP/1.1 because the http2 adaptor does not speak HTTP/1.1
         address = self.router_qdra.http_addresses[0]
         _, out, err = self.run_curl(address,
                                     args=self.get_all_curl_args(['--head']),
                                     http2_prior_knowledge=False,
                                     no_alpn=True, assert_status=False)
-        self.assertIn('Received HTTP/0.9 when not allowed', err)
+        self.assertEqual(out, '', f"Expected value of out to be an empty string but got {out}")
+        test_passed = False
+        if 'Received HTTP/0.9 when not allowed' in err or 'Weird server reply' in err:
+            test_passed = True
+        self.assertTrue(test_passed, f"unexpected curl error: {err}")
 
 
 class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTestSslBase):
