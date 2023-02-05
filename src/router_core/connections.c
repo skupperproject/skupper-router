@@ -333,12 +333,11 @@ int qdr_connection_process(qdr_connection_t *conn)
     qdr_connection_work_list_t  work_list;
     qdr_link_ref_list_t         links_with_work[QDR_N_PRIORITIES];
     qdr_core_t                 *core = conn->core;
+    int                         event_count = 0;
 
     qdr_link_ref_t *ref;
     qdr_link_t     *link;
     bool            detach_sent;
-
-    int event_count = 0;
 
     sys_mutex_lock(&conn->work_lock);
 

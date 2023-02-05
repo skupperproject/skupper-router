@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
 
     sys_mutex_init(&ticker_lock);
 
-    sys_thread_t *ticker = sys_thread("ticker_thread", ticker_thread, 0);
+    sys_thread_t *ticker = sys_thread(SYS_THREAD_PROACTOR, ticker_thread, 0);
 
     result = test_simple(argv[0]);
     result += test_reschedule_internal(argv[0]);

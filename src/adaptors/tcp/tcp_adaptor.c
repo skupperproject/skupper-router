@@ -240,6 +240,8 @@ static const char * qdr_tcp_quadrant_id(const qdr_tcp_connection_t *tc, const qd
 
 static void on_activate(void *context)
 {
+    ASSERT_PROACTOR_MODE(SYS_THREAD_PROACTOR_MODE_TIMER);
+
     qdr_tcp_connection_t* conn = (qdr_tcp_connection_t*) context;
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] on_activate", conn->conn_id);
@@ -315,6 +317,8 @@ static size_t copy_decrypted_adaptor_buffs_to_qd_buffs(qdr_tcp_connection_t     
  */
 static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t *buffers)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
+
     int result = 0;
 
     if (conn->require_tls) {
@@ -999,6 +1003,8 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_tcp_connection_t *conn = (qdr_tcp_connection_t *) context;
+    CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
+
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
         qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
@@ -1271,6 +1277,8 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
                                        pn_listener_t *pn_listener,
                                        void *user_context)
 {
+    CHECK_PROACTOR_LISTENER(pn_listener);
+
     qd_tcp_listener_t *listener = (qd_tcp_listener_t*) user_context;
     assert(listener);
 

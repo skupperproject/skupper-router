@@ -1493,6 +1493,8 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
     pn_record_t *record    = pn_delivery_attachments(delivery);
     qd_message_pvt_t *msg  = (qd_message_pvt_t*) pn_record_get(record, PN_DELIVERY_CTX);
 
+    CHECK_PROACTOR_CONNECTION(pn_session_connection(pn_link_session(link)));
+
     //
     // If there is no message associated with the delivery then this is the
     // first time we've received anything on this delivery.
@@ -1811,6 +1813,8 @@ void qd_message_send(qd_message_t *in_msg,
     qd_message_q2_unblocker_t  q2_unblock = {0};
     pn_session_t              *pns        = pn_link_session(pnl);
     const size_t               q3_upper   = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
+
+    CHECK_PROACTOR_CONNECTION(pn_session_connection(pns));
 
     while (!IS_ATOMIC_FLAG_SET(&content->aborted)
            && buf
