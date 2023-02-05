@@ -113,6 +113,8 @@ void qd_adaptor_common_init(void)
 
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(pn_raw_conn);
+
     //
     // Define the allocation tiers.  The tier values are the number of read buffers to be granted
     // to raw connections based on the percentage of usage of the router-wide buffer ceiling.
@@ -206,6 +208,8 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 
 int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(pn_raw_conn);
+
     if (!pn_raw_conn)
         return 0;
 

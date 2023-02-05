@@ -478,6 +478,8 @@ static void _teardown_server_links(qdr_http1_connection_t *hconn)
 //
 static void _do_reconnect(void *context)
 {
+    ASSERT_PROACTOR_MODE(SYS_THREAD_PROACTOR_MODE_TIMER);
+
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) context;
     uint64_t conn_id = hconn->conn_id;
 
@@ -582,6 +584,8 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
 // Unencrypted raw connection I/O work loop
 static int _do_raw_io(qdr_http1_connection_t *hconn)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(hconn->raw_conn);
+
     bool rx_data = false;
 
     do {
@@ -670,6 +674,8 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
 // Encrypted I/O work loop
 static int _do_tls_io(qdr_http1_connection_t *hconn)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(hconn->raw_conn);
+
     bool rx_data = false;
 
     if (hconn->tls_error)

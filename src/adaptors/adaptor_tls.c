@@ -492,6 +492,8 @@ static size_t get_pn_raw_buffer_fetch_size(qd_tls_t *tls)
 
 int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *decrypted_buffs)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(pn_raw_conn);
+
     int    encrypted_bytes_in = 0;
     size_t fetch_size         = get_pn_raw_buffer_fetch_size(tls);
 
@@ -769,6 +771,8 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                  qd_adaptor_buffer_list_t     *input_data,
                  uint64_t                     *input_data_count)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(raw_conn);
+
     bool work;
     *input_data_count = 0;
 

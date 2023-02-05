@@ -36,8 +36,6 @@ static sys_cond_t    cond;
 
 static char         *result;
 
-#define THREAD_NAME_FMT "thrd %hu"
-
 // for test_thread_id. Note well: never set result to zero here or you'll lose the test failures!
 //
 void *thread_id_thread(void *arg)
@@ -46,7 +44,7 @@ void *thread_id_thread(void *arg)
     assert(index < thread_count);
 
     char expected_name[16];
-    snprintf(expected_name, 16, THREAD_NAME_FMT, (unsigned short) index);
+    snprintf(expected_name, 16, "wrkr_%hu", (unsigned short) index);
 
     sys_mutex_lock(&mutex);
 
@@ -77,9 +75,7 @@ static char *test_thread_id(void *context)
     result = 0;
     memset(threads, 0, sizeof(threads));
     for (intptr_t i = 0; i < thread_count; ++i) {
-        char thread_name[16];
-        snprintf(thread_name, sizeof(thread_name), THREAD_NAME_FMT, (unsigned short) i);
-        threads[i] = sys_thread(thread_name, thread_id_thread, (void *)i);
+        threads[i] = sys_thread(SYS_THREAD_PROACTOR, thread_id_thread, (void *) i);
     }
 
     sys_mutex_unlock(&mutex);
@@ -151,7 +147,7 @@ static char *test_condition(void *context)
     int test = 0;
     cond_count = 0;
     result = 0;
-    sys_thread_t *thread = sys_thread("tst_cond_thread", test_condition_thread, &test);
+    sys_thread_t *thread = sys_thread(SYS_THREAD_PROACTOR, test_condition_thread, &test);
 
     sys_mutex_unlock(&mutex);
 
@@ -181,6 +177,75 @@ static char *test_condition(void *context)
     return result;
 }
 
+static sys_mutex_t _mode_test_mutex;
+
+// note: do not clear *reason - doing so will mask previous test failures!
+static void *_mode_test_thread(void *arg)
+{
+    char **reason = (char **) arg;
+
+    // wait until test is ready to run
+    sys_mutex_lock(&_mode_test_mutex);
+    sys_mutex_unlock(&_mode_test_mutex);
+
+    // haven't assigned a mode yet:
+    if (sys_thread_proactor_mode() != SYS_THREAD_PROACTOR_MODE_NONE) {
+        *reason = "Subthread expected default mode, failed!";
+        return 0;
+    }
+
+    if (sys_thread_proactor_context() != (void *) 0) {
+        *reason = "Subthread expected default proactor context to be zero, failed!";
+        return 0;
+    }
+
+    sys_thread_proactor_mode_t old_mode = sys_thread_proactor_set_mode(SYS_THREAD_PROACTOR_MODE_LISTENER, (void *) 123);
+    if (old_mode != SYS_THREAD_PROACTOR_MODE_NONE) {
+        *reason = "Subthread expected old mode to be default, failed!";
+        return 0;
+    }
+
+    if (sys_thread_proactor_mode() != SYS_THREAD_PROACTOR_MODE_LISTENER) {
+        *reason = "Subthread expected new mode LISTENER, failed!";
+        return 0;
+    }
+
+    if (sys_thread_proactor_context() != (void *) 123) {
+        *reason = "Subthread expected new LISTENER context, failed!";
+        return 0;
+    }
+
+    return 0;
+}
+
+char *test_threading_mode(void *context)
+{
+    if (sys_thread_proactor_mode() != SYS_THREAD_PROACTOR_MODE_NONE) {
+        return "Main thread expected default mode, failed!";
+    }
+
+    char *reason = 0;
+    sys_mutex_init(&_mode_test_mutex);
+    sys_mutex_lock(&_mode_test_mutex);
+    sys_thread_t *t = sys_thread(SYS_THREAD_PROACTOR, _mode_test_thread, &reason);
+    // allow _mode_test_thread to run:
+    sys_mutex_unlock(&_mode_test_mutex);
+
+    sys_thread_join(t);
+    sys_thread_free(t);
+
+    sys_mutex_free(&_mode_test_mutex);
+
+    if (reason)
+        return reason;
+
+    if (sys_thread_proactor_mode() != SYS_THREAD_PROACTOR_MODE_NONE) {
+        return "Main thread mode changed unexpectantly, failed!";
+    }
+
+    return 0;
+}
+
 int thread_tests(void)
 {
     int result = 0;
@@ -188,6 +253,8 @@ int thread_tests(void)
 
     TEST_CASE(test_thread_id, 0);
     TEST_CASE(test_condition, 0);
+    TEST_CASE(test_threading_roles_names, 0);
+    TEST_CASE(test_threading_mode, 0);
 
     return result;
 }

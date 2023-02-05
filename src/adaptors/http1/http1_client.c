@@ -238,6 +238,8 @@ static void _on_tls_connection_secured(qd_tls_t *tls, void *context)
 //
 static void _handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
 {
+    CHECK_PROACTOR_LISTENER(pn_listener);
+
     qd_http_listener_t     *li    = (qd_http_listener_t *) context;
     qdr_http1_connection_t *hconn = _create_client_connection(li);
     assert(hconn);
@@ -488,6 +490,8 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
 // Unencrypted raw connection I/O work loop
 static int _do_raw_io(qdr_http1_connection_t *hconn)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(hconn->raw_conn);
+
     bool rx_data = false;
 
     do {

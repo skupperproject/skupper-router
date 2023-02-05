@@ -280,6 +280,8 @@ void qdr_http1_enqueue_stream_data(qdr_http1_out_data_list_t *fifo, qd_message_s
 //
 void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(hconn->raw_conn);
+
     pn_raw_buffer_t pn_buff = {0};
 
     while (pn_raw_connection_take_written_buffers(hconn->raw_conn, &pn_buff, 1) != 0) {
@@ -616,6 +618,8 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
                          qd_adaptor_buffer_list_t        *input_data,
                          uint64_t                        *input_octets)
 {
+    CHECK_PROACTOR_RAW_CONNECTION(raw_conn);
+
     // take any inbound data
 
     if (input_data) {

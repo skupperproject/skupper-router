@@ -1649,7 +1649,7 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     sys_mutex_init(&state->lock);
     sys_mutex_init(&state->id_lock);
     sys_cond_init(&state->condition);
-    state->thread    = sys_thread("vflow_thread", _vflow_thread_TH, core);
+    state->thread    = sys_thread(SYS_THREAD_VFLOW, _vflow_thread_TH, core);
     *adaptor_context = core;
 
     _vflow_create_router_record();

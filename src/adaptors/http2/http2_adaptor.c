@@ -1451,6 +1451,8 @@ ssize_t read_data_callback(nghttp2_session *session,
     qd_message_t *message = qdr_delivery_message(stream_data->out_dlv);
     qd_message_depth_status_t status = qd_message_check_depth(message, QD_DEPTH_BODY);
 
+    CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
+
     // This flag tells nghttp2 that the data is not being copied into the buffer supplied by nghttp2 (uint8_t *buf).
     *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
 
@@ -1770,7 +1772,6 @@ ssize_t read_data_callback(nghttp2_session *session,
 
     return 0;
 }
-
 
 qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener)
 {
@@ -2657,6 +2658,8 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
                "[C%" PRIu64 "] In handle_incoming_http, no pn raw connection, returning", conn->conn_id);
         return 0;
     }
+    CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
+
     int  count      = 0;
     bool close_conn = false;
     if (conn->require_tls) {
@@ -2752,7 +2755,6 @@ static int handle_incoming_http(qdr_http2_connection_t *conn)
 
     return count;
 }
-
 
 qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_t* ingress_http_conn)
 {
@@ -2952,6 +2954,8 @@ static void handle_disconnected(qdr_http2_connection_t* conn)
 
 static void egress_conn_timer_handler(void *context)
 {
+    ASSERT_PROACTOR_MODE(SYS_THREAD_PROACTOR_MODE_TIMER);
+
     qdr_http2_connection_t* conn = (qdr_http2_connection_t*) context;
     CLEAR_ATOMIC_FLAG(&conn->activate_scheduled);
 
@@ -3201,6 +3205,8 @@ static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *) context;
+    CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
+
     switch (pn_event_type(e)) {
     case PN_RAW_CONNECTION_CONNECTED: {
         qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
@@ -3335,6 +3341,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
 //
 static void handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
 {
+    CHECK_PROACTOR_LISTENER(pn_listener);
+
     qd_http_listener_t     *li   = (qd_http_listener_t *) context;
     qdr_http2_connection_t *conn = qdr_http_connection_ingress(li);
     pn_listener_raw_accept(pn_listener, conn->pn_raw_conn);
