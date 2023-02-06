@@ -281,6 +281,7 @@ jobs:
 
       - name: Delete logs from passing tests
         if: ${{ failure() }}
+        continue-on-error: true
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
@@ -577,6 +578,7 @@ jobs:
 
       - name: Delete logs from passing tests
         if: ${{ failure() }}
+        continue-on-error: true
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
