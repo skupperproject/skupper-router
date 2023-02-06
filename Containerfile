@@ -23,7 +23,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
-    python39-devel python39-pip swig \
+    python39-devel swig \
     libnghttp2-devel \
     wget tar patch findutils git libasan libubsan libtsan \
  && microdnf clean all -y

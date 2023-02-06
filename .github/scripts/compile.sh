@@ -111,7 +111,7 @@ do_build () {
     -DRUNTIME_CHECK="${runtime_check}" \
     -DENABLE_LINKTIME_OPTIMIZATION=ON \
     -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
+    -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python -DSYSINSTALL_PYTHON=ON \
     -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
@@ -133,10 +133,7 @@ do_build () {
 
 # Do a regular build without asan or tsan.
 do_build "" OFF
-# and install Proton Python
-python3 -m pip install --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
 
-# Then perform sanitized builds of Proton and the Router.
 # talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
 common_sanitizer_flags="-Wp,-U_FORTIFY_SOURCE -fplugin=annobin -fplugin-arg-annobin-no-active-checks"
 export CFLAGS="${CFLAGS} ${common_sanitizer_flags}"
