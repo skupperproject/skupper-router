@@ -44,7 +44,7 @@ def main() -> int:
 
     log_file = pathlib.Path(build_dir, 'Testing', 'Temporary', 'LastTestsFailed.log')
     if not log_file.exists():
-        logging.debug(f"File {log_file} does not exist - nothing to do")
+        logging.info(f"File {log_file} does not exist - nothing to do")
         return 0
 
     with log_file.open('rt') as f:
@@ -54,7 +54,7 @@ def main() -> int:
 
     system_tests_dir = pathlib.Path(build_dir, 'tests', 'system_test.dir', 'tests')
     if not system_tests_dir.exists():
-        logging.info("system_test.dir does not exits, nothing to do")
+        logging.info("system_test.dir does not exist, nothing to do")
         return 0
 
     for test_dir in system_tests_dir.iterdir():
