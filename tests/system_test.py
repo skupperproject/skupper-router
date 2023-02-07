@@ -395,8 +395,10 @@ class Process(subprocess.Popen):
 
         state = self.poll()
         if state is None:
-            # If status is None, it means that the process is still running
-            self.terminate()
+            # If status is None, it means that the process is still
+            # running. This is cool if expected is Process.RUNNING - we'll
+            # check that below
+            self.terminate()  # send SIGTERM
             try:
                 self.wait(TIMEOUT)
             except TimeoutExpired:
@@ -414,9 +416,14 @@ class Process(subprocess.Popen):
             error("process was unexpectedly still running")
 
         # check the process return code
-        if self.expect in (Process.RUNNING, Process.EXIT_OK):
+        if self.expect == Process.EXIT_OK:
             # returncode should be zero
             if self.returncode != 0:
+                error("returned error code %s" % self.returncode)
+        elif self.expect == Process.RUNNING:
+            # returncode should be zero or SIGTERM since we just called
+            # terminate() on a running process
+            if self.returncode not in [0, -signal.SIGTERM]:
                 error("returned error code %s" % self.returncode)
         elif self.expect == Process.EXIT_FAIL:
             # expect any nonzero error code
@@ -1200,6 +1207,9 @@ class Tester:
 
     def nginxserver(self, *args, **kwargs):
         return self.cleanup(NginxServer(*args, **kwargs))
+
+    def openssl_server(self, *args, **kwargs):
+        return self.cleanup(OpenSSLServer(*args, **kwargs))
 
     def opensslclient(self,
                       port,

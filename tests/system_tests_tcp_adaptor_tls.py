@@ -17,7 +17,7 @@
 # under the License.
 #
 import os
-from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, OpenSSLServer, run_curl
+from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl
 from system_tests_ssl import RouterTestSslBase
 from system_tests_http2 import skip_nginx_test
 from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available, \
@@ -177,33 +177,35 @@ class TcpAdaptorOpenSSLTests(TestCase):
         cls.ssl_info['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
         cls.ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = SERVER_PRIVATE_KEY_PASSWORD
 
+        openssl_server = cls.tester.openssl_server
+
         # This openssl server accepts ALPN protocol http/1.1
-        cls.openssl_server_alpn_http11 = OpenSSLServer(listening_port=cls.openssl_server_listening_port_http11,
-                                                       ssl_info=cls.ssl_info,
-                                                       name="OpenSSLServerhttp11",
-                                                       cl_args=['-alpn', 'http/1.1'])
+        cls.openssl_server_alpn_http11 = openssl_server(listening_port=cls.openssl_server_listening_port_http11,
+                                                        ssl_info=cls.ssl_info,
+                                                        name="OpenSSLServerhttp11",
+                                                        cl_args=['-alpn', 'http/1.1'])
 
         # This openssl server accepts ALPN protocol http2 (h2)
-        cls.openssl_server_alpn_http2 = OpenSSLServer(listening_port=cls.openssl_server_listening_port_http2,
-                                                      ssl_info=cls.ssl_info,
-                                                      name="OpenSSLServerhttp2",
-                                                      cl_args=['-alpn', 'h2'])
+        cls.openssl_server_alpn_http2 = openssl_server(listening_port=cls.openssl_server_listening_port_http2,
+                                                       ssl_info=cls.ssl_info,
+                                                       name="OpenSSLServerhttp2",
+                                                       cl_args=['-alpn', 'h2'])
 
         # This openssl server does TLSv1.2. The openssl client connecting to the router will also have to do
         # TLSv1.2.
-        cls.openssl_server_tlsv1_2 = OpenSSLServer(listening_port=cls.openssl_server_listening_port_tlsv1_2,
-                                                   ssl_info=cls.ssl_info,
-                                                   name="OpenSSLServertlsv1_2",
-                                                   cl_args=['-tls1_2'])
+        cls.openssl_server_tlsv1_2 = openssl_server(listening_port=cls.openssl_server_listening_port_tlsv1_2,
+                                                    ssl_info=cls.ssl_info,
+                                                    name="OpenSSLServertlsv1_2",
+                                                    cl_args=['-tls1_2'])
 
         # This openssl server requires that any client connecting to it show its client certificate.
         # If the client does not present a client cert, the openssl server will terminate the connection
         # with error -
         # 80FB44718D7F0000:error:0A0000C7:SSL routines:tls_process_client_certificate:peer did not return a certificate
-        cls.openssl_server_auth_peer = OpenSSLServer(listening_port=cls.openssl_server_listening_port_auth_peer,
-                                                     ssl_info=cls.ssl_info,
-                                                     name="OpenSSLServerAuthPeer",
-                                                     cl_args=['-Verify', '1'])
+        cls.openssl_server_auth_peer = openssl_server(listening_port=cls.openssl_server_listening_port_auth_peer,
+                                                      ssl_info=cls.ssl_info,
+                                                      name="OpenSSLServerAuthPeer",
+                                                      cl_args=['-Verify', '1'])
 
         inter_router_port = cls.tester.get_port()
         config_qdra = Qdrouterd.Config([
