@@ -51,3 +51,4 @@ openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -passout 
 # Create a client private key without a password
 openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -nodes -out client-private-key-no-pass.pem
 
+cat server-certificate.pem ca-certificate.pem > chained.pem
