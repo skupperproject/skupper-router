@@ -3216,5 +3216,86 @@ class Q2HoldoffDropTest(MessagingHandler):
                 sleep(0.1)
 
 
+class DataConnectionCountTest(TestCase):
+    """
+    Start the router with different numbers of worker threads and make sure
+    that the automatic setting of the number of data connections works
+    correctly. Also make sure that the user can override that automatic
+    setting by providing a specific integer, including zero.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(DataConnectionCountTest, cls).setUpClass()
+        DataConnectionCountTest.listen_port = cls.tester.get_port()
+        cls.config = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'DCC', 'workerThreads': '7'}),
+            ('listener', {'port': DataConnectionCountTest.listen_port, 'role': 'normal'}),
+            ('connector', {'role': 'inter-router', 'host': '127.0.0.1', 'port': DataConnectionCountTest.listen_port, 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120'}),
+        ])
+
+    def test_60_data_connection_count_absent(self):
+        """
+        If the user omits the dataConnectionCount line from
+        the connector paragraph, it should default to 'auto'.
+        Since this router has worker threads set to '7', we
+        should get (7+1)/2 == 4 data connections.
+        """
+        name = "dcc-test-router"
+        self.router = self.tester.qdrouterd(name, self.config)
+        self.router.wait_ready()
+        msg = "Inter-router data connections calculated at 4"
+        self.router.wait_log_message(msg, timeout=1.0)
+        self.assertTrue(True)
+
+    # Note that when the users sets a specific value for the
+    # inter-router data connections, the log message says
+    # "set to <value>". When 'auto' mode is used, it says
+    # "calculated at <value>".
+
+    def test_61_data_connection_count_zero(self):
+        """
+        Zero is a valid value for data connection count,
+        and should not be used as an invitation to
+        calculate a value. If the user asks for 0, he
+        should get 0.
+        """
+        self.config[2][1]['dataConnectionCount'] = '0'
+        name = "dcc-test-router"
+        self.router = self.tester.qdrouterd(name, self.config)
+        self.router.wait_ready()
+        msg = "Inter-router data connections set to 0"
+        self.router.wait_log_message(msg, timeout=1.0)
+        self.assertTrue(True)
+
+    def test_62_data_connection_count_set(self):
+        """
+        The user can explicitly set any positive value for data
+        connection count, and should get the requested value.
+        """
+        self.config[2][1]['dataConnectionCount'] = '5'
+        name = "dcc-test-router"
+        self.router = self.tester.qdrouterd(name, self.config)
+        self.router.wait_ready()
+        msg = "Inter-router data connections set to 5"
+        self.router.wait_log_message(msg, timeout=1.0)
+        self.assertTrue(True)
+
+    def test_63_data_connection_explicit_auto(self):
+        """
+        If the user explicitly sets 'auto' as the connection
+        count value, we calculate it based on worker threads
+        the same as if dataConnectionCount were omitted from
+        the connector paragraph.
+        """
+        self.config[0][1]['workerThreads'] = '5'
+        self.config[2][1]['dataConnectionCount'] = 'auto'
+        name = "dcc-test-router"
+        self.router = self.tester.qdrouterd(name, self.config)
+        self.router.wait_ready()
+        msg = "Inter-router data connections calculated at 3"
+        self.router.wait_log_message(msg, timeout=1.0)
+        self.assertTrue(True)
+
+
 if __name__ == '__main__':
     unittest.main(main_module())
