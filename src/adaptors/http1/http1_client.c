@@ -524,8 +524,9 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         break;
     }
     case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
-        qdr_http1_free_written_buffers(hconn);
-        // discard of empty read buffers is handled below in I/O loop
+        int drained_buffers = qd_raw_connection_drain_read_write_buffers(hconn->raw_conn);
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_DRAIN_BUFFERS Drained a total of %i buffers",
+               hconn->conn_id, drained_buffers);
         break;
     }
     case PN_RAW_CONNECTION_WAKE: {
