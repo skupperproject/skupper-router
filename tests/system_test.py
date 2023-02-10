@@ -508,11 +508,11 @@ class NginxServer(Process):
 
     # Filesystem paths used by the server content and configuration
     #
-    BASE_FOLDER=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nginx')
-    CONFIGS_FOLDER=os.path.join(BASE_FOLDER, 'nginx-configs')
-    IMAGES_FOLDER=os.path.join(BASE_FOLDER, 'images')
-    HTML_FOLDER=os.path.join(BASE_FOLDER, 'html')
-    CONFIG_FILE=os.path.join(CONFIGS_FOLDER, 'nginx.conf')
+    BASE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nginx')
+    CONFIGS_FOLDER = os.path.join(BASE_FOLDER, 'nginx-configs')
+    IMAGES_FOLDER = os.path.join(BASE_FOLDER, 'images')
+    HTML_FOLDER = os.path.join(BASE_FOLDER, 'html')
+    CONFIG_FILE = os.path.join(CONFIGS_FOLDER, 'nginx.conf')
 
     def __init__(self,
                  config_path: str,  # Full path of templated config file (string) /blah-blah/nginx/nginx-template.conf

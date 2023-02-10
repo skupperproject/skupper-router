@@ -93,7 +93,7 @@ def http1_simple_request(raw_request: bytes,
                     # socket closed (response complete)
                     break
                 reply += rc
-        except TimeoutError:
+        except socket.timeout:
             raise SimpleRequestTimeout(reply)
     return reply
 

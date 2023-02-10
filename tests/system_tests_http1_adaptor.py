@@ -766,7 +766,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
 
             # expect no more data from the router
             server.settimeout(1.0)
-            self.assertRaises(TimeoutError, server.recv, 4096)
+            self.assertRaises(socket.timeout, server.recv, 4096)
             server.close()
 
             # expect remaining clients get responses, and the correct responses
@@ -901,7 +901,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
 
             # expect no more data from the router
             server.settimeout(1.0)
-            self.assertRaises(TimeoutError, server.recv, 4096)
+            self.assertRaises(socket.timeout, server.recv, 4096)
             server.close()
 
             # expect remaining clients get responses, and the correct responses
@@ -1692,7 +1692,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
             # ensure none of theses bad requests were forwarded to the server
             server.settimeout(0.25)
-            self.assertRaises(TimeoutError, server.recv, 4096)
+            self.assertRaises(socket.timeout, server.recv, 4096)
             server.shutdown(socket.SHUT_RDWR)
             server.close()
         wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
