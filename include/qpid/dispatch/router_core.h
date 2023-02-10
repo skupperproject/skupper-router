@@ -80,7 +80,6 @@ void qdr_process_tick(qdr_core_t *core);
  */
 bool qdr_core_test_hooks_enabled(const qdr_core_t *core);
 
-
 /**
  * Return the count of worker threads.
  *
@@ -88,7 +87,6 @@ bool qdr_core_test_hooks_enabled(const qdr_core_t *core);
  * @return count of worker threads
  */
 int qdr_core_get_worker_thread_count(const qdr_core_t *core);
-
 
 /**
  ******************************************************************************
