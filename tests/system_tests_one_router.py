@@ -3232,6 +3232,7 @@ class DataConnectionCountTest(TestCase):
             ('listener', {'port': DataConnectionCountTest.listen_port, 'role': 'normal'}),
             ('connector', {'role': 'inter-router', 'host': '127.0.0.1', 'port': DataConnectionCountTest.listen_port, 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120'}),
         ])
+        cls.name = "dcc-test-router"
 
     def test_60_data_connection_count_absent(self):
         """
@@ -3240,11 +3241,10 @@ class DataConnectionCountTest(TestCase):
         Since this router has worker threads set to '7', we
         should get (7+1)/2 == 4 data connections.
         """
-        name = "dcc-test-router"
-        self.router = self.tester.qdrouterd(name, self.config)
+        self.router = self.tester.qdrouterd(self.name, self.config)
         self.router.wait_ready()
         msg = "Inter-router data connections calculated at 4"
-        self.router.wait_log_message(msg, timeout=1.0)
+        self.router.wait_log_message(msg)
         self.assertTrue(True)
 
     # Note that when the users sets a specific value for the
@@ -3260,11 +3260,10 @@ class DataConnectionCountTest(TestCase):
         should get 0.
         """
         self.config[2][1]['dataConnectionCount'] = '0'
-        name = "dcc-test-router"
-        self.router = self.tester.qdrouterd(name, self.config)
+        self.router = self.tester.qdrouterd(self.name, self.config)
         self.router.wait_ready()
         msg = "Inter-router data connections set to 0"
-        self.router.wait_log_message(msg, timeout=1.0)
+        self.router.wait_log_message(msg)
         self.assertTrue(True)
 
     def test_62_data_connection_count_set(self):
@@ -3273,11 +3272,10 @@ class DataConnectionCountTest(TestCase):
         connection count, and should get the requested value.
         """
         self.config[2][1]['dataConnectionCount'] = '5'
-        name = "dcc-test-router"
-        self.router = self.tester.qdrouterd(name, self.config)
+        self.router = self.tester.qdrouterd(self.name, self.config)
         self.router.wait_ready()
         msg = "Inter-router data connections set to 5"
-        self.router.wait_log_message(msg, timeout=1.0)
+        self.router.wait_log_message(msg)
         self.assertTrue(True)
 
     def test_63_data_connection_explicit_auto(self):
@@ -3289,11 +3287,10 @@ class DataConnectionCountTest(TestCase):
         """
         self.config[0][1]['workerThreads'] = '5'
         self.config[2][1]['dataConnectionCount'] = 'auto'
-        name = "dcc-test-router"
-        self.router = self.tester.qdrouterd(name, self.config)
+        self.router = self.tester.qdrouterd(self.name, self.config)
         self.router.wait_ready()
         msg = "Inter-router data connections calculated at 3"
-        self.router.wait_log_message(msg, timeout=1.0)
+        self.router.wait_log_message(msg)
         self.assertTrue(True)
 
 
