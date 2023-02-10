@@ -1045,6 +1045,67 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             server.close()
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
 
+    def test_4002_server_early_reply(self):
+        """
+        Verify that a server can send a response before the entire request
+        message has been received.
+        """
+
+        request_part1 = b'GET /early_reply HTTP/1.1\r\n' \
+            + b'Content-Length: 50\r\n' \
+            + b'\r\n' \
+            + b'0123456789'
+
+        request_part2 = b'0123456789012345678901234567890123456789'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 14\r\n' \
+            + b'\r\n' \
+            + b'Early Response'
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            retry_exception(lambda cs=client:
+                            cs.connect((self.listener11_host,
+                                        self.listener11_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+            client.settimeout(TIMEOUT)
+            client.sendall(request_part1)
+
+            # server read part 1
+            data = _read_socket(server, length=len(request_part1))
+            self.assertEqual(len(request_part1), len(data),
+                             f"Unexpected request: {data}")
+
+            # fire off the response
+            server.sendall(response)
+
+            # Consume response
+            data = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(data),
+                             f"Unexpected response: {data}")
+
+            # finish request
+            client.sendall(request_part2)
+            client.close()
+
+            # consume the remaining request
+            data = _read_socket(server, length=len(request_part2))
+            self.assertEqual(len(request_part2), len(data),
+                             f"Unexpected request: {data}")
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
 
 class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
                                    CommonHttp1Edge2EdgeTest):

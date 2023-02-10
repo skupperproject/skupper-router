@@ -1720,7 +1720,7 @@ exit:
     return outcome;
 }
 
-// Encode an outbound AMQP message as an HTTP Request.  Returns outcome
+// Encode an outbound AMQP message as an HTTP Request.  Sets the request message outcome
 // when the encoding completes either successfully or in error.
 //
 static uint64_t _encode_request_message(_server_request_t *hreq)
@@ -1735,7 +1735,8 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
         if (dispo) {
             qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING, DLV_FMT " Rejecting malformed message msg-id=%" PRIu64,
                    DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
-            return dispo;
+            hreq->request_dispo = dispo;
+            return hreq->request_dispo;
         }
     }
 
@@ -1748,7 +1749,8 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
                 if (h1_codec_tx_body(hreq->base.lib_rs, stream_data)) {
                     qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING, DLV_FMT " body data encode failed",
                            DLV_ARGS(hreq->request_dlv));
-                    return PN_REJECTED;
+                    hreq->request_dispo = PN_REJECTED;
+                    return hreq->request_dispo;
                 }
                 break;
             }
@@ -1763,8 +1765,9 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
                 qd_log(hconn->adaptor->log, QD_LOG_TRACE,
                        DLV_FMT " HTTP Request msg-id=%" PRIu64 " body data encode complete",
                        DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
+                hreq->request_dispo = PN_ACCEPTED;
                 h1_codec_tx_done(hreq->base.lib_rs, &ignore);
-                return PN_ACCEPTED;
+                return hreq->request_dispo;
             }
 
             case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
@@ -1773,7 +1776,8 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
             case QD_MESSAGE_STREAM_DATA_INVALID:
                 qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING, DLV_FMT " Rejecting corrupted body data.",
                        DLV_ARGS(hreq->request_dlv));
-                return PN_REJECTED;
+                hreq->request_dispo = PN_REJECTED;
+                return hreq->request_dispo;
         }
     }
 }
@@ -1847,18 +1851,21 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
     // happens in the I/O loop called from the proactor connection event handler
 
     if (!hreq->cancelled) {
-        hreq->request_dispo = _encode_request_message(hreq);
-        if (hreq->request_dispo == 0) {
-            // not done receiving yet
-        } else if (hreq->request_dispo == PN_ACCEPTED) {
-            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "][L%" PRIu64 "] HTTP request message msg-id=%" PRIu64 " encoding complete",
-                   hconn->conn_id, hconn->out_link_id, hreq->base.msg_id);
-            qd_message_set_send_complete(msg);
-        } else {
-            // parse error: logged by _encode_request_message()
-            qd_message_set_send_complete(msg);
-            _cancel_request(hreq, "Incoming HTTP/1.x request message failed to encode properly");
+        switch (_encode_request_message(hreq)) {
+            case 0:
+                // not done receiving yet
+                break;
+            case PN_ACCEPTED:
+                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "][L%" PRIu64 "] HTTP request message msg-id=%" PRIu64 " encoding complete",
+                       hconn->conn_id, hconn->out_link_id, hreq->base.msg_id);
+                qd_message_set_send_complete(msg);
+                break;
+            default:
+                // parse error: logged by _encode_request_message()
+                qd_message_set_send_complete(msg);
+                _cancel_request(hreq, "Incoming HTTP/1.x request message failed to encode properly");
+                break;
         }
     }
 
