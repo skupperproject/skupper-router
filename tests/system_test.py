@@ -30,6 +30,7 @@ Features:
 
 import errno
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -504,6 +505,15 @@ class NginxServer(Process):
     """
     Sets up an ngix server
     """
+
+    # Filesystem paths used by the server content and configuration
+    #
+    BASE_FOLDER=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nginx')
+    CONFIGS_FOLDER=os.path.join(BASE_FOLDER, 'nginx-configs')
+    IMAGES_FOLDER=os.path.join(BASE_FOLDER, 'images')
+    HTML_FOLDER=os.path.join(BASE_FOLDER, 'html')
+    CONFIG_FILE=os.path.join(CONFIGS_FOLDER, 'nginx.conf')
+
     def __init__(self,
                  config_path: str,  # Full path of templated config file (string) /blah-blah/nginx/nginx-template.conf
                  env: Dict[str, str],  # A dict of env variables which will be substituted in the config_path file.
@@ -1968,3 +1978,18 @@ def run_curl(args, input=None, timeout=TIMEOUT):
                           stderr=PIPE, universal_newlines=True) as p:
         out = p.communicate(input, timeout)
         return p.returncode, out[0], out[1]
+
+
+def get_digest(file_path):
+    "Compute a sha256 hash on file_path"
+    h = hashlib.sha256()
+
+    with open(file_path, 'rb') as file:
+        while True:
+            # Reading is buffered, so we can read smaller chunks.
+            chunk = file.read(h.block_size)
+            if not chunk:
+                break
+            h.update(chunk)
+
+    return h.hexdigest()

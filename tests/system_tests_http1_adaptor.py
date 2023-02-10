@@ -23,6 +23,7 @@
 
 import errno
 import json
+import os
 import re
 import select
 import socket
@@ -36,6 +37,7 @@ from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
+from system_test import nginx_available, get_digest, NginxServer
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -55,6 +57,8 @@ SERVER_CERTIFICATE = RouterTestSslBase.ssl_file('server-certificate.pem')
 SERVER_PRIVATE_KEY = RouterTestSslBase.ssl_file('server-private-key.pem')
 CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
 CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
+SERVER_KEY_NO_PASS = RouterTestSslBase.ssl_file('server-private-key-no-pass.pem')
+CHAINED_PEM = RouterTestSslBase.ssl_file('chained.pem')
 
 
 def _read_socket(sock, length, timeout=TIMEOUT):
@@ -2791,6 +2795,148 @@ class Http1TLSListenerErrorTests(TestCase):
             rc, out, err = run_curl(args)
             self.assertEqual(0, rc, f"Expected curl fail: rc={rc} err={err}")
             self.assertEqual('pong', out, f"Expected 'pong', got {out}")
+
+
+@unittest.skipIf(not nginx_available() or not curl_available(), "both nginx and curl needed")
+class Http1AdaptorTwoRouterNginxTLS(TestCase):
+    """
+    Verify curl requests across two routers to an nginx server
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorTwoRouterNginxTLS, cls).setUpClass()
+
+        # configuration:
+        # two interiors
+        #
+        #  +------+    +---------+
+        #  | INTA |<==>|  INT.B  |
+        #  +------+    +---------+
+        #     ^             ^
+        #     |             |
+        #     V             V
+        #   <curl>       <nginx>
+
+        cls.interior_port = cls.tester.get_port()
+        cls.http_server_port = cls.tester.get_port()
+        cls.http_listener_port = cls.tester.get_port()
+
+        # INTA
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTA'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('connector', {'name': 'backbone',
+                           'role': 'inter-router',
+                           'host': '127.0.0.1',
+                           'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ListenerSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_curl',
+                              'port': cls.http_listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'closest/nginx',
+                              'sslProfile': 'ListenerSSLProfile',
+                              'authenticatePeer': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTA = cls.tester.qdrouterd('INTA', config, wait=False)
+
+        # INTB
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTB'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('listener', {'name': 'backbone',
+                          'role': 'inter-router',
+                          'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ConnectorSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': "client-password"}),
+            ('httpConnector', {'name': 'C_nginx',
+                               'host': 'localhost',
+                               'port': cls.http_server_port,
+                               'protocolVersion': 'HTTP1',
+                               'address': 'closest/nginx',
+                               'sslProfile': 'ConnectorSSLProfile',
+                               'verifyHostname': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTB = cls.tester.qdrouterd('INTB', config, wait=False)
+
+        env = dict()
+        env['nginx-base-folder'] = NginxServer.BASE_FOLDER
+        env['setupclass-folder'] = cls.tester.directory
+        env['nginx-configs-folder'] = NginxServer.CONFIGS_FOLDER
+        env['listening-port'] = str(cls.http_server_port)
+        env['http2'] = ''  # disable HTTP/2
+        env['ssl'] = 'ssl'
+        env['tls-enabled'] = ''  # Will enable TLS lines
+
+        # TLS stuff
+        env['chained-pem'] = CHAINED_PEM
+        env['server-private-key-no-pass-pem'] = SERVER_KEY_NO_PASS
+        env['ssl-verify-client'] = 'on'
+        env['ca-certificate'] = CA_CERT
+        cls.nginx_server = cls.tester.nginxserver(config_path=NginxServer.CONFIG_FILE,
+                                                  env=env)
+
+        # wait for everything to connect and settle
+        cls.INTA.wait_ready()
+        cls.INTB.wait_ready()
+        wait_http_listeners_up(cls.INTA.addresses[0])
+
+        # curl will use these additional args to connect to the router.
+        cls.curl_args = ['--http1.1',
+                         '--cacert', CA_CERT,
+                         '--cert-type', 'PEM',
+                         '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                         '--key', CLIENT_PRIVATE_KEY]
+
+    def test_get_image_jpg(self):
+        images = ['test.jpg',
+                  'pug.png',
+                  'skupper.png',
+                  'skupper-logo-vertical.svg']
+
+        for image in images:
+            in_file = os.path.join(NginxServer.IMAGES_FOLDER, image)
+            out_file = os.path.join(self.INTA.outdir, 'curl-images', image)
+            url = f"https://localhost:{self.http_listener_port}/images/{image}"
+            (rc, _, err) = run_curl(args=self.curl_args +
+                                    ['--verbose',
+                                     '--create-dirs',
+                                     '--output', out_file,
+                                     '-G', url])
+            self.assertEqual(0, rc, f"curl failed: {err}")
+            self.assertEqual(get_digest(in_file), get_digest(out_file),
+                             f"Error: {out_file} corrupted by HTTP/1 transfer!")
+
+    def test_get_html(self):
+        pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
+        for page in pages:
+            in_file = os.path.join(NginxServer.HTML_FOLDER, page)
+            out_file = os.path.join(self.INTA.outdir, 'curl-html', page)
+            url = f"https://localhost:{self.http_listener_port}/{page}"
+            (rc, _, err) = run_curl(args=self.curl_args +
+                                    ['--verbose',
+                                     '--create-dirs',
+                                     '--output', out_file,
+                                     '-G', url])
+            self.assertEqual(0, rc, f"curl failed: {err}")
+            self.assertEqual(get_digest(in_file), get_digest(out_file),
+                             f"Error: {out_file} corrupted by HTTP/1 transfer!")
 
 
 if __name__ == '__main__':
