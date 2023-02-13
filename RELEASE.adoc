@@ -46,3 +46,14 @@ under the License
   will be unable to assign any more issues to the closed milestone.
 * Create the next milestone if necessary.
 * There is no need to advance any versions on the main branch.
+
+# Re-spinning an already released skupper-router version to include CVE changes from other component/base images
+
+* Sometimes there is a need to re-release an already released version of skupper-router, for example to
+  include any CVE fixes included in one of the component/base images. In this case, we use the same version number as
+  the earlier released version since there are no changes to the skupper-router code base.
+* Before re-spinning an image, push a test tag and create a test image using the "Run Workflow" button the "Manual skupper-router image build"
+  page from the Actions tab in github and test using the CI in skupper-router and skupper. Make sure the
+  "Push :latest tag?" checkbox is unchecked while creating this test re-spin.
+* Once the test is successful, choose the correct tag (same tag from earlier release) and check the "Push :latest tag?"
+  in the  "Manual skupper-router image build" page
