@@ -75,17 +75,18 @@ class QdManage():
             self.opts.indent = None
         if len(self.args) == 0:
             raise UsageError("No operation specified")
-        self.node = Node.connect(opts_url(self.opts), self.opts.router, self.opts.timeout,
-                                 opts_ssl_domain(self.opts),
-                                 opts_sasl(self.opts),
-                                 edge_router=self.opts.edge_router)
 
-        operation = self.args.pop(0)
-        method = operation.lower().replace('-', '_')
-        if operation.upper() in self.operations and hasattr(self, method):
-            getattr(self, method)()  # Built-in operation
-        else:
-            self.operation(operation)  # Custom operation
+        with Node.connect(opts_url(self.opts), self.opts.router, self.opts.timeout,
+                          opts_ssl_domain(self.opts),
+                          opts_sasl(self.opts),
+                          edge_router=self.opts.edge_router) as self.node:
+
+            operation = self.args.pop(0)
+            method = operation.lower().replace('-', '_')
+            if operation.upper() in self.operations and hasattr(self, method):
+                getattr(self, method)()  # Built-in operation
+            else:
+                self.operation(operation)  # Custom operation
 
     def main(self, argv):
         return main(self.run, argv, self.op)
