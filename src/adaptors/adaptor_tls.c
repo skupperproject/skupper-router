@@ -787,7 +787,9 @@ int qd_tls_do_io(qd_tls_t                     *tls,
 
         work = false;
 
-        // give empty buffers for holding encrypted output from TLS
+        //
+        // give empty buffers for holding encrypted and decrypted output from the TLS layer
+        //
 
         capacity = pn_tls_get_encrypt_output_buffer_capacity(tls->tls_session);
         while (capacity-- > 0) {
@@ -796,8 +798,17 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             (void) given;
             assert(given == 1);
         }
+        capacity = pn_tls_get_decrypt_output_buffer_capacity(tls->tls_session);
+        while (capacity-- > 0) {
+            (void) qd_adaptor_buffer_raw(&pn_buf_desc);
+            given = pn_tls_give_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
+            (void) given;
+            assert(given == 1);
+        }
 
-        // push any unencrypted output data from the protocol adaptor into TLS for encryption.
+        //
+        // push any unencrypted output data from the protocol adaptor into the TLS layer for encryption.
+        //
 
         if (pn_tls_is_secure(tls->tls_session)) {
             assert(take_output_cb);
@@ -833,18 +844,15 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                     }
                 }
             }
+        } else {
+            // TLS is not secure (either handshake is in progress or an error occurred). Either way, do not give it any
+            // more output data.  TLS errors are checked after the TLS state machine runs and are handled on exit from
+            // this loop.
         }
 
-        // give empty output buffers to be filled with decrypted data
-
-        capacity = pn_tls_get_decrypt_output_buffer_capacity(tls->tls_session);
-        while (capacity-- > 0) {
-            (void) qd_adaptor_buffer_raw(&pn_buf_desc);
-            given = pn_tls_give_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
-            assert(given == 1);
-        }
-
+        //
         // push incoming encrypted data from raw conn into TLS
+        //
 
         capacity = pn_tls_get_decrypt_input_buffer_capacity(tls->tls_session);
         if (capacity > 0) {
@@ -893,7 +901,9 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             }
         }
 
+        //
         // Take encrypted TLS output and write it to the raw connection
+        //
 
         capacity = pn_raw_connection_write_buffers_capacity(raw_conn);
         if (capacity > 0) {
@@ -931,19 +941,9 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             }
         }
 
-        // free all old unencrypted input buffers
-
-        taken = 0;
-        while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
-            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buf_desc.context;
-            assert(abuf);
-            qd_adaptor_buffer_free(abuf);
-            ++taken;
-        }
-        if (taken)
-            work = true;  // more capacity for input buffers available
-
+        //
         // take decrypted output and give it to the adaptor
+        //
 
         total_octets = 0;
         taken        = 0;
@@ -965,9 +965,17 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                    tls->conn_id, total_octets, taken);
         }
 
-        // free old decryption input buffers
+        //
+        // Release all used TLS input buffers - they are no longer needed
+        //
 
         taken = 0;
+        while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buf_desc.context;
+            assert(abuf);
+            qd_adaptor_buffer_free(abuf);
+            ++taken;
+        }
         while (pn_tls_take_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
             qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buf_desc.context;
             assert(abuf);
@@ -975,7 +983,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             ++taken;
         }
         if (taken)
-            work = true;  // more capacity for decrypt input buffers
+            work = true;  // more capacity for encrypt/decrypt input buffers
 
     } while (work);
 
