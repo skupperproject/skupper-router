@@ -1186,7 +1186,7 @@ class Tester:
             except Exception as exc:
                 errors.append(exc)
         if errors:
-            raise RuntimeError("Errors during teardown: \n\n%s" % "\n\n".join([str(e) for e in errors]))
+            raise RuntimeError("Errors during teardown: \n\n%s" % "\n\n".join([str(e) for e in errors])) from errors[0]
 
     def cleanup(self, x):
         """Record object x for clean-up during tear-down.
