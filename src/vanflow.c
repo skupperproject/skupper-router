@@ -1501,6 +1501,26 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
 }
 
 
+void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter)
+{
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
+        work->record    = record;
+        work->attribute = attribute_type;
+
+        work->value.string_val = (char*) qd_iterator_copy(iter);
+
+        if (!!work->value.string_val) {
+            _vflow_post_work(work);
+        } else {
+            free_vflow_work_t(work);
+            qd_log(LOG_FLOW_LOG, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
+        }
+    }
+}
+
+
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300

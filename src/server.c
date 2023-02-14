@@ -28,6 +28,7 @@
 #include "policy.h"
 #include "server_private.h"
 #include "timer_private.h"
+#include "qd_connection.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/amqp.h"
@@ -78,7 +79,7 @@ struct qd_server_t {
 ALLOC_DEFINE(qd_listener_t);
 ALLOC_DEFINE(qd_connector_t);
 ALLOC_DEFINE(qd_deferred_call_t);
-ALLOC_DEFINE(qd_connection_t);
+ALLOC_DEFINE_SAFE(qd_connection_t);
 
 const char *MECH_EXTERNAL = "EXTERNAL";
 
@@ -597,12 +598,17 @@ qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config
 {
     assert(ctx);
     ZERO(ctx);
-    ctx->pn_conn       = pn_connection();
+    ctx->pn_conn = pn_connection();
     assert(ctx->pn_conn);
     sys_mutex_init(&ctx->deferred_call_lock);
     ctx->role = qd_strdup(config->role);
     ctx->server = server;
     ctx->wake = connection_wake; /* Default, over-ridden for HTTP connections */
+    sys_atomic_init(&ctx->wake_core, 0);
+    sys_atomic_init(&ctx->wake_cutthrough_inbound, 0);
+    sys_atomic_init(&ctx->wake_cutthrough_outbound, 0);
+    sys_spinlock_init(&ctx->inbound_cutthrough_spinlock);
+    sys_spinlock_init(&ctx->outbound_cutthrough_spinlock);
     pn_connection_set_context(ctx->pn_conn, ctx);
     DEQ_ITEM_INIT(ctx);
     DEQ_INIT(ctx->deferred_calls);
@@ -933,6 +939,11 @@ static void qd_connection_free(qd_connection_t *qd_conn)
     if (qd_conn->timer) qd_timer_free(qd_conn->timer);
     free(qd_conn->name);
     free(qd_conn->role);
+    sys_atomic_destroy(&qd_conn->wake_core);
+    sys_atomic_destroy(&qd_conn->wake_cutthrough_inbound);
+    sys_atomic_destroy(&qd_conn->wake_cutthrough_outbound);
+    sys_spinlock_free(&qd_conn->inbound_cutthrough_spinlock);
+    sys_spinlock_free(&qd_conn->outbound_cutthrough_spinlock);
     sys_mutex_lock(&qd_server->conn_activation_lock);
     free_qd_connection_t(qd_conn);
     sys_mutex_unlock(&qd_server->conn_activation_lock);
@@ -1427,6 +1438,12 @@ void qd_server_free(qd_server_t *qd_server)
             ctx->connector->qd_conn = 0;
             qd_connector_decref(ctx->connector);
         }
+        sys_atomic_destroy(&ctx->wake_core);
+        sys_atomic_destroy(&ctx->wake_cutthrough_inbound);
+        sys_atomic_destroy(&ctx->wake_cutthrough_outbound);
+        sys_spinlock_free(&ctx->inbound_cutthrough_spinlock);
+        sys_spinlock_free(&ctx->outbound_cutthrough_spinlock);
+
         free_qd_connection_t(ctx);
         ctx = DEQ_HEAD(qd_server->conn_list);
     }
@@ -1468,26 +1485,6 @@ void qd_server_trace_all_connections(void)
     }
 }
 
-
-static double normalize_memory_size(const uint64_t bytes, const char **suffix)
-{
-    static const char * const units[] = {"B", "KiB", "MiB", "GiB", "TiB"};
-    const int units_ct = 5;
-    const double base = 1024.0;
-
-    double value = (double)bytes;
-    for (int i = 0; i < units_ct; ++i) {
-        if (value < base) {
-            if (suffix)
-                *suffix = units[i];
-            return value;
-        }
-        value /= base;
-    }
-    if (suffix)
-        *suffix = units[units_ct - 1];
-    return value;
-}
 
 void qd_server_run(qd_dispatch_t *qd)
 {
@@ -1536,6 +1533,14 @@ void qd_server_stop(qd_dispatch_t *qd)
 void qd_server_activate(qd_connection_t *ctx)
 {
     if (ctx) ctx->wake(ctx);
+}
+
+
+void qd_server_activate_cutthrough(qd_connection_t *ctx, bool incoming)
+{
+    if (!!ctx && !SET_ATOMIC_FLAG(incoming ? &ctx->wake_cutthrough_inbound : &ctx->wake_cutthrough_outbound)) {
+        ctx->wake(ctx);
+    }
 }
 
 

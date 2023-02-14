@@ -28,9 +28,11 @@
 
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/alloc_pool.h"
 
 typedef struct qd_buffer_t qd_buffer_t;
 
+ALLOC_DECLARE(qd_buffer_t);
 DEQ_DECLARE(qd_buffer_t, qd_buffer_list_t);
 
 #define QD_BUFFER_DEFAULT_SIZE (4096 - sizeof(qd_buffer_t))

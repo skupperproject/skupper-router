@@ -49,7 +49,7 @@ set(qpid_dispatch_SOURCES
   adaptors/http1/http1_request_info.c
   adaptors/http2/http2_adaptor.c
   adaptors/adaptor_common.c
-  adaptors/tcp/tcp_adaptor.c
+  adaptors/tcp_lite/tcp_lite.c
   adaptors/test_adaptor.c
   adaptors/adaptor_listener.c
   alloc.c
@@ -65,6 +65,7 @@ set(qpid_dispatch_SOURCES
   ctools.c
   connection_manager.c
   container.c
+  cutthrough_utils.c
   delivery_state.c
   discriminator.c
   dispatch.c

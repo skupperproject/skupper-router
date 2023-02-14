@@ -115,7 +115,12 @@ typedef enum {
 //
 #define QD_ROUTER_ANNOTATIONS_VERSION 2
 
-/** @name Application Propertiy Names */
+/** @name Standard codepoints */
+/// @{
+extern const char * const QD_CONTENT_TYPE_APP_OCTETS;  ///< application/octet-stream
+/// @}
+
+/** @name Application Property Names */
 /// @{
 extern const char * const QD_AP_FLOW_ID;  ///< Flow-ID for correlating flow and counter-flow records
 /// @}

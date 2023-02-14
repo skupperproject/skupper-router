@@ -144,6 +144,42 @@ static const char thread_names[SYS_THREAD_ROLE_COUNT][SYS_THREAD_NAME_MAX + 1] =
 
 static sys_atomic_t proactor_thread_count = 0;
 
+void sys_spinlock_init(sys_spinlock_t *lock)
+{
+    int result;
+    result = pthread_mutexattr_init(&lock->attr);
+    assert(result == 0);
+    result = pthread_mutexattr_settype(&lock->attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+    assert(result == 0);
+    result = pthread_mutex_init(&lock->lock, &lock->attr);
+    assert(result == 0);
+}
+
+
+void sys_spinlock_free(sys_spinlock_t *lock)
+{
+    int result = pthread_mutex_destroy(&lock->lock);
+    assert(result == 0);
+    result = pthread_mutexattr_destroy(&lock->attr);
+    assert(result == 0);
+}
+
+
+void sys_spinlock_lock(sys_spinlock_t *lock)
+{
+    int result = pthread_mutex_lock(&(lock->lock));
+    assert(result == 0);
+}
+
+
+void sys_spinlock_unlock(sys_spinlock_t *lock)
+{
+    int result = pthread_mutex_unlock(&(lock->lock));
+    assert(result == 0);
+}
+
+
+
 struct sys_thread_t {
     pthread_t thread;
     void *(*f)(void *);

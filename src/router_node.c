@@ -21,10 +21,12 @@
 #include "dispatch_private.h"
 #include "policy.h"
 #include "router_private.h"
+#include "qd_connection.h"
 
-#include "qpid/dispatch.h"
-#include "qpid/dispatch/protocol_adaptor.h"
-#include "qpid/dispatch/proton_utils.h"
+#include <qpid/dispatch.h>
+#include <qpid/dispatch/protocol_adaptor.h>
+#include <qpid/dispatch/proton_utils.h>
+#include <qpid/dispatch/cutthrough_utils.h>
 
 #include <proton/sasl.h>
 
@@ -105,7 +107,7 @@ static void qdr_node_disconnect_deliveries(qdr_core_t *core, qd_link_t *link, qd
 
         pn_delivery_set_context(pdlv, 0);
         qdr_delivery_set_context(qdlv, 0);
-        qdr_delivery_decref(core, qdlv, "removed reference from pn_delivery");
+        qdr_delivery_decref(core, qdlv, "qdr_node_disconnect_deliveries - removed reference from pn_delivery");
     }
 }
 
@@ -312,13 +314,156 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
 }
 
 
-static int AMQP_writable_conn_handler(void *type_context, qd_connection_t *conn, void *context)
+static void clear_consumer_activation(qdr_core_t *core, qd_message_t *stream)
 {
-    qdr_connection_t *qconn = (qdr_connection_t*) qd_connection_get_context(conn);
+    qd_message_activation_t activation;
+    qd_message_get_consumer_activation(stream, &activation);
+    if (!!activation.delivery) {
+        activation.delivery->in_message_activation = false;
+        qdr_delivery_decref(core, activation.delivery, "Removing delivery from activation (out)");
+    }
 
-    if (qconn)
-        return qdr_connection_process(qconn);
-    return 0;
+    activation.type     = QD_ACTIVATION_NONE;
+    activation.delivery = 0;
+    qd_nullify_safe_ptr(&activation.safeptr);
+    qd_message_set_consumer_activation(stream, &activation);
+}
+
+
+static void clear_producer_activation(qdr_core_t *core, qd_message_t *stream)
+{
+    qd_message_activation_t activation;
+    qd_message_get_producer_activation(stream, &activation);
+    if (!!activation.delivery) {
+        activation.delivery->in_message_activation = false;
+        qdr_delivery_decref(core, activation.delivery, "Removing delivery from activation (in)");
+    }
+
+    activation.type     = QD_ACTIVATION_NONE;
+    activation.delivery = 0;
+    qd_nullify_safe_ptr(&activation.safeptr);
+    qd_message_set_producer_activation(stream, &activation);
+}
+
+
+static int AMQP_conn_wake_handler(void *type_context, qd_connection_t *conn, void *context)
+{
+    qdr_connection_t *qconn  = (qdr_connection_t*) qd_connection_get_context(conn);
+    qd_router_t      *router = (qd_router_t*) type_context;
+    int               result = 0;
+
+    if (CLEAR_ATOMIC_FLAG(&conn->wake_core) && !!qconn) {
+        result = qdr_connection_process(qconn);
+    }
+
+    if (CLEAR_ATOMIC_FLAG(&conn->wake_cutthrough_outbound)) {
+        //
+        // Run outgoing cut-through processing
+        //
+        while (true) {
+            //
+            // Under the protection of the spinlock, get the next delivery in the worklist
+            //
+            sys_spinlock_lock(&conn->outbound_cutthrough_spinlock);
+            qdr_delivery_ref_t *dref = DEQ_HEAD(conn->outbound_cutthrough_worklist);
+            if (!!dref) {
+                DEQ_REMOVE_HEAD(conn->outbound_cutthrough_worklist);
+                dref->dlv->cutthrough_list_ref = 0;
+            }
+            sys_spinlock_unlock(&conn->outbound_cutthrough_spinlock);
+
+            //
+            // If the worklist was empty, exit the loop
+            //
+            if (!dref) {
+                break;
+            }
+
+            qdr_delivery_t *delivery = dref->dlv;
+            qd_link_t      *qlink    = (qd_link_t*) qdr_link_get_context(qdr_delivery_link(delivery));
+            qd_message_t   *stream   = qdr_delivery_message(delivery);
+            bool            q3_stalled;
+
+            //
+            // Account for the removed reference and free the reference object
+            //
+            qdr_delivery_decref(router->router_core, dref->dlv, "AMQP_conn_wake_handler - cut-through activation worklist");
+            free_qdr_delivery_ref_t(dref);
+
+            //
+            // Send content from the stream outbound on the link
+            //
+            qd_message_send(stream, qlink, 0, &q3_stalled);
+            if (q3_stalled) {
+                qd_link_q3_block(qlink);
+            }
+
+            //
+            // Handle any subsequent activation that is needed
+            //
+            cutthrough_notify_buffers_consumed_outbound(stream);
+
+            //
+            // If the stream is send complete, we don't need to be activated any more.  Cancel the activation on the stream.
+            //
+            if (qd_message_send_complete(stream)) {
+                clear_consumer_activation(router->router_core, stream);
+            }
+        }
+    }
+
+    if (CLEAR_ATOMIC_FLAG(&conn->wake_cutthrough_inbound)) {
+        //
+        // Run incoming cut-through processing
+        //
+        while (true) {
+            //
+            // Under the protection of the spinlock, get the next delivery in the worklist
+            //
+            sys_spinlock_lock(&conn->inbound_cutthrough_spinlock);
+            qdr_delivery_ref_t *dref = DEQ_HEAD(conn->inbound_cutthrough_worklist);
+            if (!!dref) {
+                DEQ_REMOVE_HEAD(conn->inbound_cutthrough_worklist);
+                dref->dlv->cutthrough_list_ref = 0;
+            }
+            sys_spinlock_unlock(&conn->inbound_cutthrough_spinlock);
+
+            //
+            // If the worklist was empty, exit the loop
+            //
+            if (!dref) {
+                break;
+            }
+
+            //
+            // Account for the removed reference and free the reference object
+            //
+            qdr_delivery_t *delivery = dref->dlv;
+            qd_message_t   *stream   = qdr_delivery_message(delivery);
+
+            qdr_delivery_decref(router->router_core, dref->dlv, "AMQP_conn_wake_handler - cut-through activation worklist");
+            free_qdr_delivery_ref_t(dref);
+
+            //
+            // Receive content from the link and produce it into the stream
+            //
+            qd_message_receive(qdr_node_delivery_pn_from_qdr(delivery));
+
+            //
+            // Handle any subsequent activation that is needed
+            //
+            cutthrough_notify_buffers_produced_inbound(stream);
+
+            //
+            // If the stream is receive complete, we don't need to be activated any more.  Cancel the activation on the stream.
+            //
+            if (qd_message_receive_complete(stream)) {
+                clear_producer_activation(router->router_core, stream);
+            }
+        }
+    }
+
+    return result;
 }
 
 
@@ -390,6 +535,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
     }
 }
 
+
 /**
  * Inbound Delivery Handler
  *
@@ -428,6 +574,16 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     qd_message_t   *msg   = qd_message_receive(pnd);
     bool receive_complete = qd_message_receive_complete(msg);
 
+    if (!receive_complete && !!delivery && !delivery->in_message_activation && qd_message_is_unicast_cutthrough(msg)) {
+        qd_message_activation_t activation;
+        activation.delivery = delivery;
+        activation.type     = QD_ACTIVATION_AMQP;
+        qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+        delivery->in_message_activation = true;
+        qdr_delivery_incref(delivery, "AMQP_rx_handler - Added to message activation");
+        qd_message_set_producer_activation(msg, &activation);
+    }
+
     if (!qd_message_oversize(msg)) {
         // message not rejected as oversize
         if (receive_complete) {
@@ -436,6 +592,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
             //
             pn_link_advance(pn_link);
             next_delivery = pn_link_current(pn_link) != 0;
+            clear_producer_activation(router->router_core, msg);
         }
 
         if (qd_message_is_discard(msg)) {
@@ -511,7 +668,16 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     //
 
     if (delivery) {
-        qdr_delivery_continue(router->router_core, delivery, pn_delivery_settled(pnd));
+        if (qd_message_is_unicast_cutthrough(msg)) {
+            cutthrough_notify_buffers_produced_inbound(msg);
+
+            if (receive_complete) {
+                qdr_delivery_continue(router->router_core, delivery, pn_delivery_settled(pnd));
+            }
+        }
+        else {
+            qdr_delivery_continue(router->router_core, delivery, pn_delivery_settled(pnd));
+        }
         return next_delivery;
     }
 
@@ -981,20 +1147,52 @@ static int AMQP_link_flow_handler(void* context, qd_link_t *link)
             const size_t q3_lower = QD_BUFFER_SIZE * QD_QLIMIT_Q3_LOWER;
             if (pn_session_outgoing_bytes(pn_ssn) < q3_lower) {
                 // yes.  We must now unblock all links that have been blocked by Q3
-                qd_link_list_t *blinks = qd_session_q3_blocked_links(qd_ssn);
-                qd_link_t *blink = DEQ_HEAD(*blinks);
+
+                qd_link_list_t  *blinks = qd_session_q3_blocked_links(qd_ssn);
+                qd_link_t       *blink  = DEQ_HEAD(*blinks);
+                qd_connection_t *conn   = qd_link_connection(blink);
+
                 while (blink) {
                     qd_link_q3_unblock(blink);  // removes from blinks list!
+                    pnlink = qd_link_pn(blink);
                     if (blink != link) {        // already flowed this link
                         rlink = (qdr_link_t *) qd_link_get_context(blink);
                         if (rlink) {
-                            pnlink = qd_link_pn(blink);
                             // signalling flow to the core causes the link to be re-activated
                             qdr_link_flow(router->router_core, rlink, pn_link_remote_credit(pnlink), pn_link_get_drain(pnlink));
                         }
                     }
+
+                    pn_delivery_t *pdlv = pn_link_current(pnlink);
+                    if (!!pdlv) {
+                        qdr_delivery_t     *qdlv = qdr_node_delivery_qdr_from_pn(pdlv);
+                        qdr_delivery_ref_t *dref = new_qdr_delivery_ref_t();
+                        bool used = false;
+
+                        sys_spinlock_lock(&conn->outbound_cutthrough_spinlock);
+                        if (!qdlv->cutthrough_list_ref) {
+                            DEQ_ITEM_INIT(dref);
+                            dref->dlv = qdlv;
+                            qdlv->cutthrough_list_ref = dref;
+                            DEQ_INSERT_TAIL(conn->outbound_cutthrough_worklist, dref);
+                            qdr_delivery_incref(qdlv, "Recover from Q3 stall");
+                            used = true;
+                        }
+                        sys_spinlock_unlock(&conn->outbound_cutthrough_spinlock);
+
+                        if (!used) {
+                            free_qdr_delivery_ref_t(dref);
+                        }
+                    }
+
                     blink = DEQ_HEAD(*blinks);
                 }
+
+                //
+                // Wake the connection for outgoing cut-through
+                //
+                SET_ATOMIC_FLAG(&conn->wake_cutthrough_outbound);
+                AMQP_conn_wake_handler(context, conn, 0);
             }
         }
     }
@@ -1560,7 +1758,7 @@ static qd_node_type_t router_node = {"router", 0, 0,
                                      AMQP_disposition_handler,
                                      AMQP_incoming_link_handler,
                                      AMQP_outgoing_link_handler,
-                                     AMQP_writable_conn_handler,
+                                     AMQP_conn_wake_handler,
                                      AMQP_link_detach_handler,
                                      AMQP_link_attach_handler,
                                      qd_link_abandoned_deliveries_handler,
@@ -1650,8 +1848,12 @@ static void CORE_connection_activate(void *context, qdr_connection_t *conn)
     // IMPORTANT:  This is the only core callback that is invoked on the core
     //             thread itself. It must not take locks that could deadlock the core.
     //
+
     sys_mutex_lock(qd_server_get_activation_lock(router->qd->server));
-    qd_server_activate((qd_connection_t*) qdr_connection_get_context(conn));
+    qd_connection_t *ctx = (qd_connection_t*) qdr_connection_get_context(conn);
+    if (!!ctx && !SET_ATOMIC_FLAG(&ctx->wake_core)) {
+        qd_server_activate(ctx);
+    }
     sys_mutex_unlock(qd_server_get_activation_lock(router->qd->server));
 }
 
@@ -1971,13 +2173,25 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
         : QD_MESSAGE_RA_STRIP_NONE;
 
     qd_message_send(msg_out, qlink, ra_flags, &q3_stalled);
+    bool send_complete = qdr_delivery_send_complete(dlv);
+
+    //
+    // If this message content has cut-through enabled, set consumer activation in the message.
+    //
+    if (!send_complete && !dlv->in_message_activation && qd_message_is_unicast_cutthrough(msg_out)) {
+        qd_message_activation_t activation;
+        activation.delivery = dlv;
+        activation.type     = QD_ACTIVATION_AMQP;
+        qd_alloc_set_safe_ptr(&activation.safeptr, qconn);
+        dlv->in_message_activation = true;
+        qdr_delivery_incref(dlv, "CORE_link_deliver - Added to message activation");
+        qd_message_set_consumer_activation(msg_out, &activation);
+    }
 
     if (q3_stalled) {
         qd_link_q3_block(qlink);
         qdr_link_stalled_outbound(link);
     }
-
-    bool send_complete = qdr_delivery_send_complete(dlv);
 
     if (send_complete) {
         if (qd_message_aborted(msg_out)) {
@@ -2005,6 +2219,7 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
                 }
             }
         }
+        clear_consumer_activation(router->router_core, msg_out);
         log_link_message(qconn, plink, msg_out);
     }
     return update;

@@ -117,3 +117,25 @@ uintmax_t qd_platform_memory_size(void)
 
     return 0;
 }
+
+
+double normalize_memory_size(const uint64_t bytes, const char **suffix)
+{
+    static const char * const units[] = {"B", "KiB", "MiB", "GiB", "TiB"};
+    const int units_ct = 5;
+    const double base = 1024.0;
+
+    double value = (double)bytes;
+    for (int i = 0; i < units_ct; ++i) {
+        if (value < base) {
+            if (suffix)
+                *suffix = units[i];
+            return value;
+        }
+        value /= base;
+    }
+    if (suffix)
+        *suffix = units[units_ct - 1];
+    return value;
+}
+

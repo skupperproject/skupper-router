@@ -1047,6 +1047,7 @@ qd_message_t *qd_message(void)
     sys_atomic_init(&msg->content->priority_parsed, 0);
     sys_atomic_init(&msg->content->receive_complete, 0);
     sys_atomic_init(&msg->content->ref_count, 1);
+    sys_atomic_init(&msg->content->uct_enabled, 0);
     msg->content->parse_depth = QD_DEPTH_NONE;
     return (qd_message_t*) msg;
 }
@@ -1135,6 +1136,19 @@ void qd_message_free(qd_message_t *in_msg)
         sys_atomic_destroy(&content->priority_parsed);
         sys_atomic_destroy(&content->receive_complete);
         sys_atomic_destroy(&content->ref_count);
+
+        //
+        // If unicast/cut-through was enabled, clean up the related state and buffers
+        //
+        if (IS_ATOMIC_FLAG_SET(&content->uct_enabled)) {
+            sys_atomic_destroy(&content->uct_produce_slot);
+            sys_atomic_destroy(&content->uct_consume_slot);
+            for (int i = 0; i < UCT_SLOT_COUNT; i++) {
+                qd_buffer_list_free_buffers(&content->uct_slots[i]);
+            }
+        }
+
+        sys_atomic_destroy(&content->uct_enabled);
         free_qd_message_content_t(content);
     }
 
@@ -1502,11 +1516,78 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg)
 }
 
 
+static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *delivery, pn_link_t *link, qd_message_content_t *content)
+{
+    while (pn_delivery_pending(delivery) > 0 && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 1) {
+        //
+        // The ring is not full, build a buffer list from the link data and produce one slot.
+        //
+        uint32_t     use_slot = sys_atomic_get(&content->uct_produce_slot);
+        ssize_t      rc;
+        qd_buffer_t *buf;
+        bool         produced_data = false;
+        int          limit = 16;
+
+        assert(DEQ_SIZE(content->uct_slots[use_slot]) == 0);
+
+        while (true) {
+            if (limit-- == 0) {
+                break;
+            }
+
+            buf = qd_buffer();
+            rc  = pn_link_recv(link, (char*) qd_buffer_cursor(buf), qd_buffer_capacity(buf));
+            if (rc < 0) {
+                qd_message_set_receive_complete(in_msg);
+                if (rc != PN_EOS) {
+                    SET_ATOMIC_FLAG(&content->aborted);
+                }
+                qd_buffer_free(buf);
+                break;
+            } else if (rc == 0) {
+                //
+                // We've received all the data that is available now.  We will come back later for more.
+                //
+                qd_buffer_free(buf);
+                break;
+            } else {
+                //
+                // We've received stream data.  Annotate the buffer with the size of the received block and append
+                // it to the produced buffer list.
+                //
+                qd_buffer_insert(buf, rc);
+                DEQ_INSERT_TAIL(content->uct_slots[use_slot], buf);
+                produced_data = true;
+            }
+        }
+
+        if (produced_data) {
+            //
+            // Advance the producer slot pointer
+            //
+            sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+
+            if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
+                SET_ATOMIC_FLAG(&content->uct_producer_stalled);
+            }
+        }
+    }
+
+    if (!pn_delivery_partial(delivery) && pn_delivery_pending(delivery) == 0) {
+        qd_message_set_receive_complete(in_msg);
+    }
+}
+
+
 qd_message_t *qd_message_receive(pn_delivery_t *delivery)
 {
-    pn_link_t        *link = pn_delivery_link(delivery);
-    qd_link_t       *qdl = (qd_link_t *)pn_link_get_context(link);
-    ssize_t           rc;
+    if (!delivery) {
+        return 0;
+    }
+
+    pn_link_t *link = pn_delivery_link(delivery);
+    qd_link_t *qdl  = (qd_link_t*) pn_link_get_context(link);
+    ssize_t    rc;
 
     pn_record_t *record    = pn_delivery_attachments(delivery);
     qd_message_pvt_t *msg  = (qd_message_pvt_t*) pn_record_get(record, PN_DELIVERY_CTX);
@@ -1536,7 +1617,19 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
     // Oversize messages are also discarded.
     //
     if (IS_ATOMIC_FLAG_SET(&msg->content->discard)) {
-        return discard_receive(delivery, link, (qd_message_t *)msg);
+        return discard_receive(delivery, link, (qd_message_t*) msg);
+    }
+
+    if (!msg->uct_started && IS_ATOMIC_FLAG_SET(&msg->content->uct_enabled)) {
+        msg->uct_started = true;
+    }
+
+    //
+    // If this message is in cut-through mode, do cut-through-specific receive processing.
+    //
+    if (msg->uct_started) {
+        qd_message_receive_cutthrough((qd_message_t*) msg, delivery, link, msg->content);
+        return (qd_message_t*) msg;
     }
 
     // if q2 holdoff has been disabled (disable_q2_holdoff=true), we keep receiving.
@@ -1765,6 +1858,38 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
 }
 
 
+static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_content_t *content, pn_link_t *pnl, pn_session_t *pns, bool *q3_stalled)
+{
+    const size_t q3_upper = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
+
+    while (!*q3_stalled && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0) {
+        uint32_t use_slot = sys_atomic_get(&content->uct_consume_slot);
+
+        qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[use_slot]);
+        while (!!buf) {
+            DEQ_REMOVE_HEAD(content->uct_slots[use_slot]);
+            if (!IS_ATOMIC_FLAG_SET(&content->aborted)) {
+                pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
+            }
+            qd_buffer_free(buf);
+            buf = DEQ_HEAD(content->uct_slots[use_slot]);
+        }
+
+        sys_atomic_set(&content->uct_consume_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+        *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
+    }
+
+    if ((IS_ATOMIC_FLAG_SET(&content->aborted) || IS_ATOMIC_FLAG_SET(&content->receive_complete))
+        && sys_atomic_get(&content->uct_consume_slot) == sys_atomic_get(&content->uct_produce_slot)) {
+        //
+        // The stream is aborted or receive complete (no new content expected) AND we have consumed
+        // all of the buffered content.  Mark the message as send-complete.
+        //
+        SET_ATOMIC_FLAG(&msg->send_complete);
+    }
+}
+
+
 void qd_message_send(qd_message_t *in_msg,
                      qd_link_t    *link,
                      unsigned int  ra_flags,
@@ -1773,8 +1898,17 @@ void qd_message_send(qd_message_t *in_msg,
     qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
     qd_message_content_t *content = msg->content;
     pn_link_t            *pnl     = qd_link_pn(link);
+    pn_session_t         *pns     = pn_link_session(pnl);
 
-    *q3_stalled                   = false;
+    *q3_stalled = false;
+
+    if (msg->uct_started) {
+        //
+        // Perform the cut-through transfer from the message content to the outbound link
+        //
+        qd_message_send_cut_through(msg, content, pnl, pns, q3_stalled);
+        return;
+    }
 
     if (!msg->ra_sent) {
 
@@ -1829,7 +1963,6 @@ void qd_message_send(qd_message_t *in_msg,
     qd_buffer_t *buf = msg->cursor.buffer;
 
     qd_message_q2_unblocker_t  q2_unblock = {0};
-    pn_session_t              *pns        = pn_link_session(pnl);
     const size_t               q3_upper   = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
 
     CHECK_PROACTOR_CONNECTION(pn_session_connection(pns));
@@ -1910,7 +2043,7 @@ void qd_message_send(qd_message_t *in_msg,
                     msg->cursor.buffer = next_buf;
                     msg->cursor.cursor = (next_buf) ? qd_buffer_base(next_buf) : 0;
 
-                    SET_ATOMIC_BOOL(&msg->send_complete, (complete && !next_buf));
+                    SET_ATOMIC_BOOL(&msg->send_complete, (complete && !next_buf && !IS_ATOMIC_FLAG_SET(&content->uct_enabled)));
                 }
 
                 buf = next_buf;
@@ -1941,7 +2074,18 @@ void qd_message_send(qd_message_t *in_msg,
         }
     }
 
-    *q3_stalled = (pn_session_outgoing_bytes(pns) >= q3_upper);
+    //
+    // If we have sent all of the content in the normal buffers and cut-through is enabled,
+    // switch to cut-through mode for further sends.
+    //
+    if (IS_ATOMIC_FLAG_SET(&content->uct_enabled)
+        && (!msg->cursor.buffer || ((msg->cursor.cursor - qd_buffer_base(msg->cursor.buffer) == qd_buffer_size(msg->cursor.buffer))
+                                   && !DEQ_NEXT(msg->cursor.buffer)))) {
+        msg->uct_started = true;
+        qd_message_send_cut_through(msg, content, pnl, pns, q3_stalled);
+    } else {
+        *q3_stalled = (pn_session_outgoing_bytes(pns) >= q3_upper);
+    }
 }
 
 
@@ -2097,7 +2241,6 @@ static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *conte
         // fallthrough
 
     case QD_DEPTH_BODY:
-
         //
         // BODY (not optional, but proton allows it - see PROTON-2085)
         //
@@ -2122,6 +2265,25 @@ static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *conte
 
         if (rc != QD_MESSAGE_DEPTH_OK || depth == QD_DEPTH_BODY)
             break;
+
+        // fallthrough
+
+    case QD_DEPTH_RAW_BODY:
+        //
+        // RAW_BODY - This is simply looking for raw octets following the properties sections
+        // The message depth is OK if the properties are complete.
+        //
+        content->section_raw_body.buffer     = content->parse_buffer;
+        content->section_raw_body.offset     = !!content->parse_buffer ? content->parse_cursor - qd_buffer_base(content->parse_buffer) : 0;
+        content->section_raw_body.length     = 0;
+        content->section_raw_body.hdr_length = 0;
+        content->section_raw_body.parsed     = true;
+        content->section_raw_body.tag        = 0;
+
+        content->parse_depth = QD_DEPTH_RAW_BODY;
+        if (depth == QD_DEPTH_RAW_BODY) {
+            break;
+        }
 
         // fallthrough
 
@@ -2232,6 +2394,54 @@ ssize_t qd_message_field_copy(qd_message_t *msg, qd_message_field_t field, char 
     }
 
     return loc->length + loc->hdr_length;
+}
+
+
+void qd_message_raw_body_and_start_cutthrough(qd_message_t *in_msg, qd_buffer_t **buf, size_t *offset)
+{
+    qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
+    qd_message_content_t *content = msg->content;
+
+    LOCK(&content->lock);
+
+    //
+    // If there are no body octets in the buffer list, return a NULL buffer pointer.  We will do pure cut-through in this case.
+    //
+    if (content->section_raw_body.buffer == 0 || (qd_buffer_size(content->section_raw_body.buffer) == content->section_raw_body.offset && !DEQ_NEXT(content->section_raw_body.buffer))) {
+        *buf    = 0;
+        *offset = 0;
+    } else {
+        *buf    = content->section_raw_body.buffer;
+        *offset = content->section_raw_body.offset;
+    }
+
+    //
+    // Start the unicast-cut-through operation on this stream.  This means that any further data that is received into this stream will be placed in the 
+    // cut-through buffer-list ring.
+    //
+    if (!IS_ATOMIC_FLAG_SET(&content->uct_enabled)) {
+        SET_ATOMIC_FLAG(&content->uct_enabled);
+        sys_atomic_init(&content->uct_produce_slot, 0);
+        sys_atomic_init(&content->uct_consume_slot, 0);
+    }
+
+    UNLOCK(&content->lock);
+}
+
+
+void qd_message_release_raw_body(qd_message_t *in_msg)
+{
+    qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
+    qd_message_content_t *content = msg->content;
+
+    assert(IS_ATOMIC_FLAG_SET(&content->uct_enabled));
+
+    //
+    // This function intentionally left blank.
+    //
+    // This is an optimization that will be implemented if we discover that large numbers of buffers
+    // are held by open cut-through streams.
+    //
 }
 
 
@@ -3022,4 +3232,127 @@ void qd_message_clear_q2_unblocked_handler(qd_message_t *msg)
 
         UNLOCK(&content->lock);
     }
+}
+
+
+void qd_message_start_unicast_cutthrough(qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    sys_mutex_lock(&content->lock);
+    if (!IS_ATOMIC_FLAG_SET(&content->uct_enabled)) {
+        sys_atomic_init(&content->uct_produce_slot, 0);
+        sys_atomic_init(&content->uct_consume_slot, 0);
+        SET_ATOMIC_FLAG(&content->uct_enabled);
+
+        //
+        // TODO - If there are body octets in buffers, move those bytes/buffers into the cut-through ring.
+        //
+    }
+    sys_mutex_unlock(&content->lock);
+}
+
+
+bool qd_message_is_unicast_cutthrough(const qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    return IS_ATOMIC_FLAG_SET(&content->uct_enabled);
+}
+
+
+bool qd_message_can_produce_buffers(const qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    return (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 1;
+}
+
+
+bool qd_message_can_consume_buffers(const qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    return (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0;
+}
+
+
+int qd_message_full_slot_count(const qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    return (sys_atomic_get(&content->uct_produce_slot) - sys_atomic_get(&content->uct_consume_slot)) % UCT_SLOT_COUNT;
+}
+
+
+void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    uint32_t useSlot = sys_atomic_get(&content->uct_produce_slot);
+    DEQ_MOVE(*buffers, content->uct_slots[useSlot]);
+    sys_atomic_set(&content->uct_produce_slot, (useSlot + 1) % UCT_SLOT_COUNT);
+
+    if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
+        SET_ATOMIC_FLAG(&content->uct_producer_stalled);
+    }
+}
+
+
+int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, int limit)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    int  count = 0;
+    bool empty = sys_atomic_get(&content->uct_consume_slot) == sys_atomic_get(&content->uct_produce_slot);
+    while (count < limit && !empty) {
+        uint32_t useSlot = sys_atomic_get(&content->uct_consume_slot);
+        while (count < limit && !DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
+            qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[useSlot]);
+            DEQ_REMOVE_HEAD(content->uct_slots[useSlot]);
+            DEQ_INSERT_TAIL(*buffers, buf);
+            count++;
+        }
+        if (DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
+            sys_atomic_set(&content->uct_consume_slot, (useSlot + 1) % UCT_SLOT_COUNT);
+        }
+        empty = sys_atomic_get(&content->uct_consume_slot) == sys_atomic_get(&content->uct_produce_slot);
+    }
+
+    return count;
+}
+
+
+bool qd_message_resume_from_stalled(qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+
+    if (IS_ATOMIC_FLAG_SET(&content->uct_producer_stalled)
+        && (sys_atomic_get(&content->uct_produce_slot) - sys_atomic_get(&content->uct_consume_slot)) % UCT_SLOT_COUNT < UCT_RESUME_THRESHOLD) {
+        CLEAR_ATOMIC_FLAG(&content->uct_producer_stalled);
+        return true;
+    }
+
+    return false;
+}
+
+
+void qd_message_set_consumer_activation(qd_message_t *stream, qd_message_activation_t *activation)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    content->uct_consumer_activation = *activation;
+}
+
+
+void qd_message_get_consumer_activation(const qd_message_t *stream, qd_message_activation_t *activation)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    *activation = content->uct_consumer_activation;
+}
+
+
+void qd_message_set_producer_activation(qd_message_t *stream, qd_message_activation_t *activation)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    content->uct_producer_activation = *activation;
+}
+
+
+void qd_message_get_producer_activation(const qd_message_t *stream, qd_message_activation_t *activation)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    *activation = content->uct_producer_activation;
 }

@@ -20,6 +20,7 @@
 #include "config.h"
 #include "http.h"
 #include "server_private.h"
+#include "qd_connection.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/atomic.h"
