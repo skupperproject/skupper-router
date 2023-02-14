@@ -3234,63 +3234,41 @@ class DataConnectionCountTest(TestCase):
         ])
         cls.name = "dcc-test-router"
 
-    def test_60_data_connection_count_absent(self):
-        """
-        If the user omits the dataConnectionCount line from
-        the connector paragraph, it should default to 'auto'.
-        Since this router has worker threads set to '7', we
-        should get (7+1)/2 == 4 data connections.
-        """
-        self.router = self.tester.qdrouterd(self.name, self.config)
-        self.router.wait_ready()
-        msg = "Inter-router data connections calculated at 4"
-        self.router.wait_log_message(msg)
-        self.assertTrue(True)
-
     # Note that when the users sets a specific value for the
     # inter-router data connections, the log message says
     # "set to <value>". When 'auto' mode is used, it says
     # "calculated at <value>".
+    # Omitting the dataConnectionCount entirely means you
+    # get the default value of 'auto'.
 
-    def test_61_data_connection_count_zero(self):
-        """
-        Zero is a valid value for data connection count,
-        and should not be used as an invitation to
-        calculate a value. If the user asks for 0, he
-        should get 0.
-        """
-        self.config[2][1]['dataConnectionCount'] = '0'
-        self.router = self.tester.qdrouterd(self.name, self.config)
-        self.router.wait_ready()
-        msg = "Inter-router data connections set to 0"
-        self.router.wait_log_message(msg)
-        self.assertTrue(True)
+    def test_60_threads_vs_data_connection_count(self):
+        for worker_threads in ('1', '3', '5'):
+            for con_count in ('auto', '', '0', '2', '4'):
 
-    def test_62_data_connection_count_set(self):
-        """
-        The user can explicitly set any positive value for data
-        connection count, and should get the requested value.
-        """
-        self.config[2][1]['dataConnectionCount'] = '5'
-        self.router = self.tester.qdrouterd(self.name, self.config)
-        self.router.wait_ready()
-        msg = "Inter-router data connections set to 5"
-        self.router.wait_log_message(msg)
-        self.assertTrue(True)
+                # Make the config file.
+                self.config[0][1]['workerThreads'] = worker_threads
+                if con_count == '':
+                    del self.config[0][1]['workerThreads']
+                else:
+                    self.config[2][1]['dataConnectionCount'] = con_count
 
-    def test_63_data_connection_explicit_auto(self):
-        """
-        If the user explicitly sets 'auto' as the connection
-        count value, we calculate it based on worker threads
-        the same as if dataConnectionCount were omitted from
-        the connector paragraph.
-        """
-        self.config[0][1]['workerThreads'] = '5'
-        self.config[2][1]['dataConnectionCount'] = 'auto'
-        self.router = self.tester.qdrouterd(self.name, self.config)
-        self.router.wait_ready()
-        msg = "Inter-router data connections calculated at 3"
-        self.router.wait_log_message(msg)
+                # Figure out what log message we expect to see.
+                if con_count in ('auto', ''):
+                    # This expression should match the one in
+                    # the C function auto_calc_connection_count()
+                    # in connection_manager.c .
+                    expected_result = int((int(worker_threads) + 1) / 2)
+                    msg = "Inter-router data connections calculated at " + str(expected_result)
+                else:
+                    expected_result = con_count
+                    msg = "Inter-router data connections set to " + str(expected_result)
+
+                print("worker threads:", worker_threads, ", requested connections:", con_count, ", expected result:", expected_result, end=" ")
+                self.router = self.tester.qdrouterd(self.name, self.config)
+                self.router.wait_ready()
+                self.router.wait_log_message(msg)
+                print("     good")
+
         self.assertTrue(True)
 
 

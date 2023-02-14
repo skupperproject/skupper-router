@@ -368,10 +368,8 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     if (strcmp(config->role, "inter-router") == 0) {
         // For inter-router connections only, the dataConnectionCount defaults to "auto",
         // which means it will be determined as a function of the number of worker threads.
-        if (config->data_connection_count == 0) {
-            config->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto");
-            CHECK();
-        }
+        config->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto");
+        CHECK();
         // If the user has *not* explicitly set the value "0",
         // then we will have some data connections.
         if (strcmp(config->data_connection_count, "0")) {
@@ -763,6 +761,14 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 }
 
 
+// This is used to calculate inter-router data connection
+// count when the user explicitly requests 'auto'
+// or lets it default to that.
+static int auto_calc_connection_count(qd_dispatch_t *qd)
+{
+  return (qdr_core_get_worker_thread_count(qd_dispatch_router_core(qd)) + 1) / 2;
+}
+
 QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
@@ -776,8 +782,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         DEQ_INSERT_TAIL(cm->connectors, ct);
         log_config(cm->log_source, &ct->config, "Connector");
 
-        qdr_core_t *core             = qd_dispatch_router_core(qd);
-        int         connection_count = 0;
+        uint32_t connection_count = 0;
         //
         // If the user asks for automatic setting of the number
         // of data connnection count, make one data connection
@@ -785,13 +790,20 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         // for high load, as determined by throughput performance
         // testing.
         //
-        if (!strcmp("auto", ct->config.data_connection_count)) {
-             connection_count = (qdr_core_get_worker_thread_count(core) + 1) / 2;
-            qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections calculated at %d ", connection_count);
-        } else {
-          connection_count = atoi(ct->config.data_connection_count);
-          qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
-        }
+          if (!strcmp("auto", ct->config.data_connection_count)) {
+              // The user has explicitly requested 'auto'.
+              connection_count = auto_calc_connection_count(qd);
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections calculated at %d ", connection_count);
+          } else if (1 == sscanf(ct->config.data_connection_count, "%u", &connection_count)) {
+              // The user has requested a specific number of connections.
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
+          } else {
+              // The user has entered a non-numeric value that is not 'auto'.
+              // This is not a legal value. Default to 'auto' and mention it.
+              qd_log(cm->log_source, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ", ct->config.data_connection_count);
+              connection_count = auto_calc_connection_count(qd);
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections calculated at %d ", connection_count);
+          }
         //
         // If this connection has a data-connection-group, set up the group members now
         //
