@@ -822,7 +822,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                     assert(!DEQ_IS_EMPTY(ubufs) && DEQ_SIZE(ubufs) <= capacity);
                     qd_log(tls->log_source,
                            QD_LOG_TRACE,
-                           "[C%" PRIu64 "] %" PRIi64 " unencrypted octets taken by TLS for encryption (%zu buffers)",
+                           "[C%" PRIu64 "] %" PRIi64 " unencrypted bytes taken by TLS for encryption (%zu buffers)",
                            tls->conn_id,
                            out_octets,
                            DEQ_SIZE(ubufs));
@@ -836,7 +836,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                     }
                 } else {
                     assert(DEQ_IS_EMPTY(ubufs));
-                    if (out_octets == QD_TLS_EOS && tls->output_eos == false) {
+                    if (out_octets == QD_IO_EOS && tls->output_eos == false) {
                         pn_tls_close_output(tls->tls_session);
                         tls->output_eos = true;
                         qd_log(tls->log_source, QD_LOG_TRACE, "[C%" PRIu64 "] EOS signalled: closing TLS output",
@@ -873,7 +873,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                 qd_log(tls->log_source,
                        QD_LOG_TRACE,
                        "[C%" PRIu64 "] %" PRIu64
-                       " encrypted octets read from the raw connection passed to TLS for decryption (%zu buffers)",
+                       " encrypted bytes read from the raw connection passed to TLS for decryption (%zu buffers)",
                        tls->conn_id,
                        total_octets,
                        pushed);
@@ -920,7 +920,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                 tls->encrypted_output_bytes += total_octets;
                 qd_log(tls->log_source,
                        QD_LOG_TRACE,
-                       "[C%" PRIu64 "] %" PRIu64 " encrypted octets written to the raw connection by TLS (%zu buffers)",
+                       "[C%" PRIu64 "] %" PRIu64 " encrypted bytes written to the raw connection by TLS (%zu buffers)",
                        tls->conn_id,
                        total_octets,
                        pushed);
@@ -961,7 +961,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             work = true;  // more capacity for decrypted output
             *input_data_count += total_octets;
             qd_log(tls->log_source, QD_LOG_TRACE,
-                   "[C%" PRIu64 "] %" PRIu64 " decrypted octets taken from TLS for adaptor input (%zu buffers)",
+                   "[C%" PRIu64 "] %" PRIu64 " decrypted bytes taken from TLS for adaptor input (%zu buffers)",
                    tls->conn_id, total_octets, taken);
         }
 

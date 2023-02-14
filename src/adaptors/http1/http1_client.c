@@ -434,7 +434,7 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
     assert(DEQ_IS_EMPTY(*abufs));
 
     if (hconn->output_closed)
-        return QD_TLS_EOS;
+        return QD_IO_EOS;
 
     _client_request_t *hreq = (_client_request_t *) DEQ_HEAD(hconn->requests);
     if (hreq) {
@@ -452,7 +452,7 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
 
         if (total_octets) {
             qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                   "[C%" PRIu64 "] queueing %" PRIi64 " encoded octets for output (%zu buffers)", hconn->conn_id,
+                   "[C%" PRIu64 "] queueing %" PRIi64 " encoded bytes for output (%zu buffers)", hconn->conn_id,
                    total_octets, DEQ_SIZE(*abufs));
             hconn->out_http1_octets += total_octets;
             hreq->base.out_http1_octets += total_octets;
@@ -463,7 +463,7 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
                 hconn->output_closed = true;
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
                        "[C%" PRIu64 "] response output done: closing write stream", hconn->conn_id);
-                total_octets = QD_TLS_EOS;
+                total_octets = QD_IO_EOS;
             }
         }
     }
@@ -488,7 +488,7 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
             vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
 
             if (HTTP1_DUMP_BUFFERS) {
-                fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total octets\n", octets);
+                fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total bytes\n", octets);
                 qd_adaptor_buffer_t *bb = DEQ_HEAD(in_abufs);
                 while (bb) {
                     fprintf(stdout, "  buffer='%.*s'\n", (int) qd_adaptor_buffer_size(bb),
@@ -503,7 +503,7 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
 
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                       "[C%" PRIu64 "] pushing %zu received octets into codec (%zu buffers)", hconn->conn_id, octets,
+                       "[C%" PRIu64 "] pushing %zu received bytes into codec (%zu buffers)", hconn->conn_id, octets,
                        DEQ_SIZE(qbuf_list));
 
                 int error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
@@ -586,7 +586,7 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
             vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, hconn->in_http1_octets);
 
             if (HTTP1_DUMP_BUFFERS) {
-                fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total octets\n", octets);
+                fprintf(stdout, "\nClient raw buffer READ %" PRIu64 " total bytes\n", octets);
                 qd_adaptor_buffer_t *bb = DEQ_HEAD(in_abufs);
                 while (bb) {
                     fprintf(stdout, "  buffer='%.*s'\n", (int) qd_adaptor_buffer_size(bb),
@@ -601,7 +601,7 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
 
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                       "[C%" PRIu64 "] pushing %zu received octets into codec (%zu buffers)", hconn->conn_id, octets,
+                       "[C%" PRIu64 "] pushing %zu received bytes into codec (%zu buffers)", hconn->conn_id, octets,
                        DEQ_SIZE(qbuf_list));
 
                 error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
@@ -839,7 +839,7 @@ static void _client_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
     }
 
     qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%"PRIu64"][L%"PRIu64"] %u response octets encoded",
+           "[C%"PRIu64"][L%"PRIu64"] %u response bytes encoded",
            hconn->conn_id, hconn->out_link_id, len);
 
 
@@ -1191,7 +1191,7 @@ static void _client_request_complete_cb(h1_codec_request_state_t *lib_rs, bool c
         //
         vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, in_octets);
         qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-               "[C%" PRIu64 "] client request msg-id=%" PRIu64 " codec complete: Octets read: %" PRIu64
+               "[C%" PRIu64 "] client request msg-id=%" PRIu64 " codec complete: Bytes read: %" PRIu64
                " written: %" PRIu64,
                hreq->base.hconn->conn_id, hreq->base.msg_id, in_octets, out_octets);
     }

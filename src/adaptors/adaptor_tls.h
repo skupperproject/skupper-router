@@ -26,7 +26,6 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #define QD_TLS_ERROR -1
-#define QD_TLS_EOS   -2  // see qd_tls_take_output_data_cb_t()
 
 typedef struct qd_tls_domain_t qd_tls_domain_t;
 typedef struct qd_tls_t qd_tls_t;

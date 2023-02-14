@@ -643,7 +643,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
         }
 
         if (*input_octets) {
-            qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE, "[C%" PRIu64 "] %" PRIu64 " octets read from raw connection",
+            qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE, "[C%" PRIu64 "] %" PRIu64 " bytes read from raw connection",
                    conn_id, *input_octets);
         }
     }
@@ -667,13 +667,13 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
                 assert(given == 1);
             }
 
-            if (out_octets == QD_TLS_EOS) {
+            if (out_octets == QD_IO_EOS) {
                 pn_raw_connection_write_close(raw_conn);
             }
 
             if (out_octets > 0) {
                 qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-                       "[C%" PRIu64 "] %" PRId64 " octets written to the raw connection", conn_id, out_octets);
+                       "[C%" PRIu64 "] %" PRId64 " bytes written to the raw connection", conn_id, out_octets);
             }
         }
     }
