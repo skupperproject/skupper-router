@@ -32,7 +32,8 @@ on:
       canPushLatestTag:
         description: 'Push :latest tag?'
         required: true
-        type: boolean # default is false for type boolean
+        type: boolean
+        default: false
 
 jobs:
   build-manual:
