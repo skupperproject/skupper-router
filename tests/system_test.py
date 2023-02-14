@@ -1259,6 +1259,9 @@ class Tester:
         # Generally the error returned if self signed certificates are used is the following -
         # error= b"Can't use SSL_get_servername\ndepth=1 CN = Trusted.CA.com, O = Trust Me Inc.\nverify return:1\ndepth=0 CN = localhost, O = Server\nverify return:1\nDONE\n"
         out, error = p.communicate(input=data, timeout=timeout)
+        if expect == Process.EXIT_OK:
+            assert p.returncode == 0, \
+                f"openssl s_client failed with returncode {p.returncode} {error}"
         return out, error
 
     def ncat(self,

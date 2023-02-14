@@ -37,7 +37,7 @@ from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
-from system_test import nginx_available, get_digest, NginxServer
+from system_test import nginx_available, get_digest, NginxServer, Process
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -2937,6 +2937,140 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
             self.assertEqual(0, rc, f"curl failed: {err}")
             self.assertEqual(get_digest(in_file), get_digest(out_file),
                              f"Error: {out_file} corrupted by HTTP/1 transfer!")
+
+
+class Http1AdaptorTwoRouterOpensslServer(TestCase):
+    """
+    Verify requests across two routers to an openssl server
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorTwoRouterOpensslServer, cls).setUpClass()
+
+        # configuration:
+        # two interiors
+        #
+        #  +------+    +---------+
+        #  | INTA |<==>|  INT.B  |
+        #  +------+    +---------+
+        #     ^             ^
+        #     |             |
+        #     V             V
+        #   <client>   <openssl s_server>
+
+        cls.interior_port = cls.tester.get_port()
+        #cls.http_server_port = cls.tester.get_port()
+        #cls.http_listener_port = cls.tester.get_port()
+        cls.http_server_port = 8800
+        cls.http_listener_port = 8000
+
+        # INTA
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTA'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('connector', {'name': 'backbone',
+                           'role': 'inter-router',
+                           'host': '127.0.0.1',
+                           'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ListenerSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_INTA',
+                              'port': cls.http_listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'closest/openssl',
+                              'sslProfile': 'ListenerSSLProfile',
+                              'authenticatePeer': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTA = cls.tester.qdrouterd('INTA', config, wait=False)
+
+        # INTB
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTB'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('listener', {'name': 'backbone',
+                          'role': 'inter-router',
+                          'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ConnectorSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': "client-password"}),
+            ('httpConnector', {'name': 'C_INTB',
+                               'host': 'localhost',
+                               'port': cls.http_server_port,
+                               'protocolVersion': 'HTTP1',
+                               'address': 'closest/openssl',
+                               'sslProfile': 'ConnectorSSLProfile',
+                               'verifyHostname': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTB = cls.tester.qdrouterd('INTB', config, wait=False)
+
+        ssl_info = {}
+        ssl_info['CA_CERT'] = CA_CERT
+        ssl_info['SERVER_CERTIFICATE'] = SERVER_CERTIFICATE
+        ssl_info['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
+        ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = "server-password"
+
+        server_args = ["-Verify", "1", "-WWW"]
+        cls.openssl_server = cls.tester.openssl_server(listening_port=cls.http_server_port,
+                                                       ssl_info=ssl_info,
+                                                       name="OpenSSLServerHttp",
+                                                       cl_args=server_args)
+        cls.INTA.wait_ready()
+        cls.INTB.wait_ready()
+        wait_http_listeners_up(cls.INTA.addresses[0])
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_curl_client(self):
+        # curl will use these additional args to connect to the router.
+        curl_args = ['--http1.1',
+                     '--cacert', CA_CERT,
+                     '--cert-type', 'PEM',
+                     '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                     '--key', CLIENT_PRIVATE_KEY]
+
+        # create a file for the openssl server to serve
+        with open(os.path.join(self.openssl_server.outdir, "openssl_curl_test.txt"),
+                  'w') as out:
+            out.write("OPENSSL SERVER CURL TEST")
+
+        url = f"https://localhost:{self.http_listener_port}/openssl_curl_test.txt"
+        rc, out, err = run_curl(args=curl_args + ['-G', url])
+        self.assertEqual(0, rc, f"curl failed: {err}")
+        self.assertIn("OPENSSL SERVER CURL TEST", out)
+
+    def test_openssl_client(self):
+        ssl_info = {}
+        ssl_info['CA_CERT'] = CA_CERT
+        ssl_info['CLIENT_CERTIFICATE'] = CLIENT_CERTIFICATE
+        ssl_info['CLIENT_PRIVATE_KEY'] = CLIENT_PRIVATE_KEY
+        ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'] = "client-password"
+
+        # create a file for the openssl server to serve
+        with open(os.path.join(self.openssl_server.outdir, "s_client_test.txt"),
+                  'w') as out:
+            out.write("OPENSSL SERVER S_CLIENT TEST")
+
+        out, err = self.opensslclient(port=self.http_listener_port,
+                                      ssl_info=ssl_info,
+                                      data=b'GET /s_client_test.txt HTTP/1.1\r\n'
+                                      + b'content-length: 0\r\n\r\n',
+                                      expect=Process.EXIT_OK,
+                                      cl_args=["-verify_return_error", "-quiet"])
+        self.assertIn("OPENSSL SERVER S_CLIENT TEST", out.decode())
 
 
 if __name__ == '__main__':
