@@ -23,6 +23,7 @@
 #include "policy.h"
 
 #include "dispatch_private.h"
+#include "qd_connection.h"
 #include "parse_tree.h"
 #include "policy_internal.h"
 

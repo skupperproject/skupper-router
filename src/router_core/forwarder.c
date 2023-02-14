@@ -70,10 +70,14 @@ static inline qdr_link_t *peer_router_data_link(qdr_core_t *core,
 // Get an idle anonymous link for a streaming message. This link will come from
 // either the connection's free link pool or it will be dynamically created on
 // the given connection.
-static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *base_conn)
+static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_connection_t *base_conn, qdr_link_t *base_link)
 {
     qdr_connection_t *conn;
     if (!base_conn) return 0;
+
+    if (!!base_link && base_link->user_streaming) {
+        return base_link;
+    }
 
     if (DEQ_SIZE(base_conn->connection_group) == 0 || !base_conn->connection_info->connection_trunking) {
         //
@@ -571,7 +575,7 @@ int qdr_forward_multicast_CT(qdr_core_t      *core,
             if (!qdr_forward_edge_echo_CT(in_delivery, out_link)) {
 
                 if (!receive_complete && out_link->conn->connection_info->streaming_links) {
-                    out_link = get_outgoing_streaming_link(core, out_link->conn);
+                    out_link = get_outgoing_streaming_link(core, out_link->conn, out_link);
                 }
 
                 if (out_link) {
@@ -657,7 +661,7 @@ int qdr_forward_multicast_CT(qdr_core_t      *core,
             if (control) {
                 dest_link = peer_router_control_link(core, conn_bit);
             } else if (!receive_complete) {  // inter-router conns support dynamic streaming links
-                dest_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[conn_bit]);
+                dest_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[conn_bit], 0);
             } else {
                 dest_link = peer_router_data_link(core, conn_bit, qdr_forward_effective_priority(msg, addr));
             }
@@ -758,7 +762,7 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
         qdr_link_t *original_link = out_link;
 
         if (!receive_complete && out_link->conn->connection_info->streaming_links) {
-            out_link = get_outgoing_streaming_link(core, out_link->conn);
+            out_link = get_outgoing_streaming_link(core, out_link->conn, out_link);
         }
 
         if (out_link) {
@@ -869,7 +873,7 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
         if (control) {
             out_link = peer_router_control_link(core, chosen_conn_bit);
         } else if (!receive_complete) {
-            out_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[chosen_conn_bit]);
+            out_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[chosen_conn_bit], 0);
         } else {
             out_link = peer_router_data_link(core, chosen_conn_bit, qdr_forward_effective_priority(msg, addr));
         }
@@ -1060,7 +1064,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
         // DISPATCH-1545 (head of line blocking): if the message is streaming,
         // see if the allows us to open a dedicated link for streaming
         if (!qd_message_receive_complete(msg) && chosen_link->conn->connection_info->streaming_links) {
-            chosen_link = get_outgoing_streaming_link(core, chosen_link->conn);
+            chosen_link = get_outgoing_streaming_link(core, chosen_link->conn, chosen_link);
             if (!chosen_link) {
                 return 0;
             }

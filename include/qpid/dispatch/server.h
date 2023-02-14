@@ -498,6 +498,15 @@ void qd_server_activate(qd_connection_t *conn);
 
 
 /**
+ * Activate a connection for cut-through processing.
+ *
+ * @param conn The connection that is being requested to do cut-through processing
+ * @param incoming The direction of flow being requested (true = INCOMING, false = OUTGOING)
+ */
+void qd_server_activate_cutthrough(qd_connection_t *conn, bool incoming);
+
+
+/**
  * Get the wrapped proton-engine connection object.
  *
  * @param conn Connection object supplied in QD_CONN_EVENT_{LISTENER,CONNECTOR}_OPEN

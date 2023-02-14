@@ -29,6 +29,8 @@
 
 #include <proton/raw_connection.h>
 
+typedef struct qdr_delivery_t qdr_delivery_t;
+
 /**@file
  * Message representation. 
  *
@@ -73,6 +75,7 @@ typedef enum {
     QD_DEPTH_PROPERTIES,
     QD_DEPTH_APPLICATION_PROPERTIES,
     QD_DEPTH_BODY,
+    QD_DEPTH_RAW_BODY,
     QD_DEPTH_ALL
 } qd_message_depth_t;
 
@@ -293,6 +296,27 @@ qd_iterator_t *qd_message_field_iterator(qd_message_t *msg, qd_message_field_t f
 
 ssize_t qd_message_field_length(qd_message_t *msg, qd_message_field_t field);
 ssize_t qd_message_field_copy(qd_message_t *msg, qd_message_field_t field, char *buffer, size_t *hdr_length);
+
+/**
+ * Return the buffer and offset of the beginning of the raw body section.  Return NULL if there is no
+ * raw body.
+ *
+ * Side effect: Atomically enable cut-through on this stream so there is no race-condition between
+ *              the producer and consumer.
+ *
+ * @param msg A pointer to a stream
+ * @param buf [out] pointer to the buffer containing the first octet of the raw body (or 0)
+ * @param offset [out] The offset in the buffer to the first octet of the raw body
+ */
+void qd_message_raw_body_and_start_cutthrough(qd_message_t *msg, qd_buffer_t **buf, size_t *offset);
+
+/**
+ * This is called when the raw body has been completely consumed by a cut-through consumer.
+ * In this function, the function _should_ free any buffers that purely contain body content.
+ *
+ * @param msg A pointer to a stream
+ */
+void qd_message_release_raw_body(qd_message_t *msg);
 
 // Create a message using composed fields to supply content.
 //
@@ -621,6 +645,142 @@ uint8_t qd_message_get_priority(qd_message_t *msg);
  * @return 
  */
 bool qd_message_oversize(const qd_message_t *msg);
+
+//=====================================================================================================
+// Unicast/Cut-through API
+//
+// This is an optimization for the case where the message is streaming and is being delivered to
+// exactly one destination.
+//=====================================================================================================
+
+#define UCT_SLOT_COUNT       8
+#define UCT_RESUME_THRESHOLD 4
+
+/**
+ * Transition this message to unicast/cut-through operation.  This action cannot be reversed for a message.
+ *
+ * Once this mode is set for a message stream, the conventional methods for accessing the message body will
+ * no longer work.
+ *
+ * @param stream Pointer to the message
+ */
+void qd_message_start_unicast_cutthrough(qd_message_t *stream);
+
+/**
+ * Indicate whether this message stream is in unicast/cut-through mode.
+ *
+ * @param stream Pointer to the message
+ * @return true if the message is in unicast/cut-through mode
+ * @return false if not
+ */
+bool qd_message_is_unicast_cutthrough(const qd_message_t *stream);
+
+/**
+ * Indicate whether there is capacity to produce buffers into the stream.
+ *
+ * @param stream Pointer to the message
+ * @return true Yes, there is capacity to produce buffers
+ * @return false No, do not attempt to produce buffers
+ */
+bool qd_message_can_produce_buffers(const qd_message_t *stream);
+
+/**
+ * Indicate whether there are buffers to consume from the stream.
+ *
+ * @param stream Pointer to the message
+ * @return true Yes, there are buffers to consume
+ * @return false No, there are no buffers to consumer
+ */
+bool qd_message_can_consume_buffers(const qd_message_t *stream);
+
+/**
+ * Return the number of cut-through slots that are filled
+ * 
+ * @param stream Pointer to the message
+ * @return int The number of slots that contain produced content
+ */
+int qd_message_full_slot_count(const qd_message_t *stream);
+
+/**
+ * Produce a list of buffers into the message stream.  The pn_message_can_produce_buffers must be
+ * called prior to calling this function to determine whether there is capacity to produce a list
+ * of buffers into the stream.  If there is no capacity, this function must not be called.
+ *
+ * There is no scenario in which this function will partially consume the buffer list.
+ *
+ * @param stream Pointer to the message
+ * @param buffers Pointer to a list of buffers to be appended to the message stream
+ */
+void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers);
+
+/**
+ * Consume buffers from a message stream.
+ *
+ * @param stream Pointer to the message
+ * @param buffers Pointer to a list of buffers to fill.  Must be empty at the call.
+ * @param limit The maximum number of buffers that should be consumed.
+ * @return int The number of buffers actually consumed.
+ */
+int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, int limit);
+
+
+/**
+ * Indicate whether this stream should be resumed from a stalled state.  This will be the case
+ * if (a) the stream was stalled due to being full, and (b) the payload has shrunk down below
+ * the resume threshold.
+ *
+ * If the result is true, there is a side effect of clearing the 'stalled' state.
+ *
+ * @param stream Pointer to the message
+ * @return true Yes, the stream was stalled and buffer production may continue
+ * @return false No, the stream was not stalled or it was stalled and is not yet ready to resume
+ */
+bool qd_message_resume_from_stalled(qd_message_t *stream);
+
+
+typedef enum {
+    QD_ACTIVATION_NONE = 0,
+    QD_ACTIVATION_AMQP,
+    QD_ACTIVATION_TCP
+} qd_message_activation_type_t;
+
+typedef struct {
+    qd_message_activation_type_t  type;
+    qd_alloc_safe_ptr_t           safeptr;
+    qdr_delivery_t               *delivery;
+} qd_message_activation_t;
+
+/**
+ * Tell the message stream which connection is consuming its buffers.
+ *
+ * @param stream Pointer to the message
+ * @param connection Pointer to the qd_connection that is consuming this stream's buffers
+ */
+void qd_message_set_consumer_activation(qd_message_t *stream, qd_message_activation_t *activation);
+
+/**
+ * Return the connection that is consuming this message stream's buffers.
+ *
+ * @param stream Pointer to the message
+ * @return qd_connection_t* Pointer to the connection that is consuming buffers from this stream
+ */
+void qd_message_get_consumer_activation(const qd_message_t *stream, qd_message_activation_t *activation);
+
+/**
+ * Tell the message stream which connection is producing its buffers.
+ *
+ * @param stream Pointer to the message
+ * @param connection Pointer to the qd_connection that is consuming this stream's buffers
+ */
+void qd_message_set_producer_activation(qd_message_t *stream, qd_message_activation_t *activation);
+
+/**
+ * Return the connection that is producing this message stream's buffers.
+ *
+ * @param stream Pointer to the message
+ * @return qd_connection_t* Pointer to the connection that is consuming buffers from this stream
+ */
+void qd_message_get_producer_activation(const qd_message_t *stream, qd_message_activation_t *activation);
 
 ///@}
 

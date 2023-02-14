@@ -40,6 +40,7 @@ struct qdr_delivery_t {
     qdr_link_t_sp           original_link_sp; /// Safe pointer to original link if this delivery was moved (via initial-delivery)
     qdr_delivery_t         *peer;          /// Use this peer if the delivery has one and only one peer.
     qdr_delivery_ref_t     *next_peer_ref;
+    qdr_delivery_ref_t     *cutthrough_list_ref;
     qd_message_t           *msg;
     qd_iterator_t          *to_addr;
     qd_iterator_t          *origin;
@@ -74,6 +75,7 @@ struct qdr_delivery_t {
     bool                    stuck;             /// True if this delivery was counted as stuck.
     bool                    reforwarded;       /// True if this delivery was released and re-forwarded.
     bool                    abort_outbound;    /// A re-forwarded streaming delivery needs to be aborted outbound
+    bool                    in_message_activation;
 };
 
 ALLOC_DECLARE(qdr_delivery_t);
@@ -126,7 +128,6 @@ bool qdr_delivery_move_delivery_state_CT(qdr_delivery_t *dlv, qdr_delivery_t *pe
 //
 // I/O thread only functions
 //
-
 
 /* release dlv and possibly schedule its deletion on the core thread */
 void qdr_delivery_decref(qdr_core_t *core, qdr_delivery_t *delivery, const char *label);

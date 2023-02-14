@@ -23,6 +23,7 @@
 #include "dispatch_private.h"
 #include "entity.h"
 #include "server_private.h"
+#include "qd_connection.h"
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/failoverlist.h"

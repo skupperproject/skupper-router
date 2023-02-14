@@ -85,6 +85,7 @@ race:^qd_entity_refresh_connector$
 
 # #1107 - Suppress warnings on benign race in accessing memory stats
 race:^qd_raw_connection_grant_read_buffers$
+race:^grant_read_buffers_XSIDE_IO$
 
 
 #

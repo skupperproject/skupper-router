@@ -641,7 +641,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             qd_parsed_field_t *field      = !!exist_field ? exist_field : add_field;
             qd_parsed_field_t *addr_field = qd_field_first_child(field);
             while (!!addr_field) {
-                int            treatment_hint;
+                int            treatment_hint = 0;
                 int            inlink_count;
                 char           sole_destination_mesh[QD_DISCRIMINATOR_BYTES];
 

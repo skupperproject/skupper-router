@@ -98,6 +98,7 @@ typedef struct {
     qd_field_location_t  section_message_annotation;      // The message annotation map
     qd_field_location_t  section_message_properties;      // The message properties list
     qd_field_location_t  section_application_properties;  // The application properties list
+    qd_field_location_t  section_raw_body;                // Raw octets following the properties
     qd_field_location_t  section_body;                    // The message body: Data
     qd_field_location_t  section_footer;                  // The footer
 
@@ -149,6 +150,14 @@ typedef struct {
     sys_atomic_t         no_body;                        // HTTP2 request has no body
     sys_atomic_t         priority;                       // Message AMQP priority
     sys_atomic_t         aborted;                        // Message has been aborted
+
+    sys_atomic_t             uct_enabled;
+    qd_buffer_list_t         uct_slots[UCT_SLOT_COUNT];
+    sys_atomic_t             uct_produce_slot;
+    sys_atomic_t             uct_consume_slot;
+    sys_atomic_t             uct_producer_stalled;
+    qd_message_activation_t  uct_producer_activation;
+    qd_message_activation_t  uct_consumer_activation;
 } qd_message_content_t;
 
 struct qd_message_pvt_t {
@@ -165,6 +174,7 @@ struct qd_message_pvt_t {
     bool                           ra_sent;         // false == router annotation section not yet sent
     bool                           tag_sent;        // Tags are sent
     bool                           is_fanout;       // Message is an outgoing fanout
+    bool                           uct_started;     // Cut-through has been started for this message
 
     qd_message_stream_data_list_t  stream_data_list;// Stream data parse structure
                                                     // TODO - move this to the content for one-time parsing (TLR)

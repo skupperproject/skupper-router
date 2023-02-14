@@ -21,6 +21,7 @@
 
 #include "dispatch_private.h"
 #include "policy.h"
+#include "qd_connection.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"

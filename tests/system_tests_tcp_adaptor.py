@@ -1255,9 +1255,19 @@ class CommonTcpTests:
         self.assertEqual(large_msg, out, f"ncat command returned invalid data, expected {len(large_msg)} but got {len(out)}")
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
+    # connection balancing
+    def test_80_balancing(self):
+        tname = "test_80 connection balancing"
+        self.logger.log(tname + " START")
+        iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
+        for p in iterations:
+            result = self.do_tcp_balance_test(tname, p[0], p[1], test_ssl=self.test_ssl)
+            self.assertIsNone(result)
+        self.logger.log(tname + " SUCCESS")
+
     # connector/listener stats
-    def test_80_stats(self):
-        tname = "test_80 check stats in skmanage"
+    def test_90_stats(self):
+        tname = "test_90 check stats in skmanage"
         self.logger.log(tname + " START")
         # Verify listener stats
 
@@ -1291,21 +1301,12 @@ class CommonTcpTests:
             assert output['address'].startswith("ES")
             assert "connectionsOpened" in output
             assert output["connectionsOpened"] > 0
+
             # egress_dispatcher connection opens and should never close
             if ncat_available():
                 # See the comments in test_20_tcp_connect_disconnect()
                 self.assertIn(output["connectionsOpened"], (output["connectionsClosed"] + 1, output["connectionsClosed"] + 2))
             assert output["bytesIn"] == output["bytesOut"]
-        self.logger.log(tname + " SUCCESS")
-
-    # connection balancing
-    def test_90_balancing(self):
-        tname = "test_90 connection balancing"
-        self.logger.log(tname + " START")
-        iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
-        for p in iterations:
-            result = self.do_tcp_balance_test(tname, p[0], p[1], test_ssl=self.test_ssl)
-            self.assertIsNone(result)
         self.logger.log(tname + " SUCCESS")
 
 

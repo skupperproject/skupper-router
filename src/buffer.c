@@ -26,7 +26,6 @@
 
 size_t QD_BUFFER_SIZE = QD_BUFFER_DEFAULT_SIZE;
 
-ALLOC_DECLARE(qd_buffer_t);
 ALLOC_DEFINE_CONFIG(qd_buffer_t, sizeof(qd_buffer_t), &QD_BUFFER_SIZE, 0);
 
 /**

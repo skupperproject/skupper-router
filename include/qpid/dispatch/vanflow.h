@@ -196,6 +196,16 @@ void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribu
  */
 void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribute_type, qd_parsed_field_t *field);
 
+
+/**
+ * vflow_set_ref_from_iter
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param iter Pointer to an iterator containing the serialized form of a record identity
+ */
+void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter);
+
 /**
  * vflow_set_string
  * 

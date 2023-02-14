@@ -436,8 +436,8 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
         *entity_type = QD_ROUTER_ROUTER;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), connection_entity_type))
         *entity_type = QD_ROUTER_CONNECTION;
-    else if (qd_iterator_equal(qd_parse_raw(parsed_field), tcp_connection_entity_type))
-        *entity_type = QD_ROUTER_TCP_CONNECTION;
+//  else if (qd_iterator_equal(qd_parse_raw(parsed_field), tcp_connection_entity_type))
+//      *entity_type = QD_ROUTER_TCP_CONNECTION;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), http_request_info_entity_type))
         *entity_type = QD_ROUTER_HTTP_REQUEST_INFO;
     else

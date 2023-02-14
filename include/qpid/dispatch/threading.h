@@ -108,6 +108,18 @@ typedef enum {
     SYS_THREAD_PROACTOR_MODE_TIMER = SYS_THREAD_PROACTOR_MODE_OTHER,
 } sys_thread_proactor_mode_t;
 
+typedef struct sys_spinlock_t sys_spinlock_t;
+struct sys_spinlock_t {
+    pthread_mutexattr_t attr;
+    pthread_mutex_t     lock;
+};
+
+void sys_spinlock_init(sys_spinlock_t *lock);
+void sys_spinlock_free(sys_spinlock_t *lock);
+void sys_spinlock_lock(sys_spinlock_t *lock);
+void sys_spinlock_unlock(sys_spinlock_t *lock);
+
+
 typedef struct sys_thread_t sys_thread_t;
 
 sys_thread_t *sys_thread(sys_thread_role_t role, void *(*run_function)(void *), void *arg);

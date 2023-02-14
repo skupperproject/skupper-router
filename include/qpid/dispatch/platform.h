@@ -39,4 +39,10 @@
  */
 uintmax_t qd_platform_memory_size(void);
 
+/**
+ * Given a number of bytes, return a unit as a suffix and the byte count
+ * in terms of that unit.  This is used to print sizes in a friendly way.
+ */
+double normalize_memory_size(const uint64_t bytes, const char **suffix);
+
 #endif

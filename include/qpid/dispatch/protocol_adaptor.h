@@ -695,6 +695,15 @@ bool qdr_link_strip_annotations_out(const qdr_link_t *link);
 void qdr_link_stalled_outbound(qdr_link_t *link);
 
 /**
+ * qdr_link_set_user_streaming
+ *
+ * Allow this link to carry streaming messages without getting involved with the connection's
+ * streaming-link pool.  This allows protocol adaptors to "manually" create streaming links.
+ * This function will typically be invoked right after qdr_link_first_attach.
+ */
+void qdr_link_set_user_streaming(qdr_link_t *link);
+
+/**
  * qdr_link_name
  *
  * Retrieve the name of the link.
@@ -753,15 +762,6 @@ void qdr_link_second_attach(qdr_link_t *link, qdr_terminus_t *source, qdr_termin
  * @param error The link error from the detach frame or 0 if none.
  */
 void qdr_link_detach(qdr_link_t *link, qd_detach_type_t dt, qdr_error_t *error);
-
-/**
- * qdr_link_delete
- *
- * Request that the router-core delete this link and free all its associated resources.
- *
- * @param link The link pointer returned by qdr_link_first_attach or in a FIRST_ATTACH event.
- */
-void qdr_link_delete(qdr_link_t *link);
 
 /**
  * qdr_link_deliver

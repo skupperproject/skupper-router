@@ -597,6 +597,12 @@ void qdr_link_stalled_outbound(qdr_link_t *link)
 }
 
 
+void qdr_link_set_user_streaming(qdr_link_t *link)
+{
+    link->user_streaming = true;
+}
+
+
 const char *qdr_link_name(const qdr_link_t *link)
 {
     return link->name;
