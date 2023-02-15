@@ -30,6 +30,8 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/log.h"
 
+#include "proton/version.h"
+
 #include <inttypes.h>
 #include <memory.h>
 #include <stdio.h>
@@ -107,6 +109,11 @@ static const char *leaking_types[] = {
 
     "qd_parsed_field_t",   // DISPATCH-1701
     "qdr_delivery_ref_t",  // DISPATCH-1702
+
+#if PN_VERSION_MAJOR == 0 && PN_VERSION_MINOR == 38
+    // https://issues.apache.org/jira/browse/PROTON-2658
+    "qd_adaptor_buffer_t",
+#endif
 
     // https://github.com/skupperproject/skupper-router/issues/335
     // Please see comments in qdr_link_inbound_first_attach_CT's discard flag handling section

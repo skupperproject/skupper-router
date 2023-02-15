@@ -643,7 +643,7 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         env['listening-port'] = str(cls.nginx_port)
         env['http2'] = 'http2'
         env['ssl'] = 'ssl'
-        env['tls-enabled'] = '' # Will enable TLS lines
+        env['tls-enabled'] = ''  # Will enable TLS lines
 
         # TLS stuff
         env['chained-pem'] = cls.ssl_file('chained.pem')
@@ -651,7 +651,6 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         env['ssl-verify-client'] = 'on'
         env['ca-certificate'] = cls.ssl_file('ca-certificate.pem')
         cls.nginx_server = cls.tester.nginxserver(config_path=nginx_config, env=env)
-
 
         inter_router_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'

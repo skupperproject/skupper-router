@@ -19,7 +19,6 @@
 
 import os
 import sys
-import hashlib
 import unittest
 from subprocess import PIPE
 from time import sleep
@@ -28,6 +27,7 @@ import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, nginx_available, TIMEOUT, skip_test_in_ci, Http2Server
+from system_test import get_digest
 
 h2hyper_installed = True
 try:
@@ -63,6 +63,7 @@ def quart_available():
         print("quart_not_available")
         return False
 
+
 def skip_nginx_test():
     if nginx_available() and curl_available():
         return False
@@ -79,20 +80,6 @@ def skip_h2_test():
     if python_37_available() and h2hyper_installed and curl_available():
         return False
     return True
-
-
-def get_digest(file_path):
-    h = hashlib.sha256()
-
-    with open(file_path, 'rb') as file:
-        while True:
-            # Reading is buffered, so we can read smaller chunks.
-            chunk = file.read(h.block_size)
-            if not chunk:
-                break
-            h.update(chunk)
-
-    return h.hexdigest()
 
 
 def image_file(name):
@@ -406,6 +393,7 @@ def get_address(router):
         if tcp_address:
             address = router.tcp_addresses[0]
     return address
+
 
 @unittest.skipIf(skip_nginx_test(), "nginx and curl needed to run nginx http2 tests")
 class Http2TestOneStandaloneRouterNginx(Http2TestBase):

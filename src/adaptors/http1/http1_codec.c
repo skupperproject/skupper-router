@@ -156,6 +156,8 @@ struct h1_codec_connection_t {
         h1_codec_request_state_t *hrs;            // current request/response
         http1_msg_state_t       state;
         scratch_memory_t        scratch;
+
+        // decode errors are sticky: cleared on h1_codec_connection_rx_close()
         const char             *error_msg;
         int                     error;
 
@@ -271,40 +273,44 @@ void h1_codec_connection_free(h1_codec_connection_t *conn)
     }
 }
 
-
-// reset the rx decoder state after message received
+// reset the rx decoder state machine after message received
 //
 static void decoder_reset(struct decoder_t *decoder)
 {
-    // do not touch the read_ptr or incoming buffer list as they
-    // track the current position in the incoming data stream
+    // Do not touch the read_ptr or incoming buffer list as they track the current position in the incoming data stream.
+    // Also do not clear error/error_msg - the incoming data stream is in an unknown state and must be closed via
+    // h1_codec_connection_rx_close() before the error can be cleared.
 
+    decoder->hrs      = 0;
     decoder->body_ptr = NULL_R_PTR;
-    decoder->hrs = 0;
-    decoder->state = HTTP1_MSG_STATE_START;
+    decoder->state    = HTTP1_MSG_STATE_START;
+
     decoder->content_length = 0;
-    decoder->chunk_state = HTTP1_CHUNK_HEADER;
-    decoder->chunk_length = 0;
-    decoder->error = 0;
-    decoder->error_msg = 0;
+    decoder->chunk_state    = HTTP1_CHUNK_HEADER;
+    decoder->chunk_length   = 0;
+
     decoder->is_request = false;
     decoder->is_chunked = false;
-    decoder->is_http10 = false;
+    decoder->is_http10  = false;
+
     decoder->hdr_transfer_encoding = false;
-    decoder->hdr_content_length = false;
-    decoder->hdr_conn_close = false;
-    decoder->hdr_conn_keep_alive = false;
+    decoder->hdr_content_length    = false;
+    decoder->hdr_conn_close        = false;
+    decoder->hdr_conn_keep_alive   = false;
 }
 
 
 // reset the tx encoder after message sent
 static void encoder_reset(struct encoder_t *encoder)
 {
-    // do not touch the write_ptr or the outgoing queue as there may be more messages to send.
-    encoder->hrs = 0;
-    encoder->headers_sent = false;
-    encoder->is_request = false;
-    encoder->is_chunked = false;
+    qd_buffer_list_free_buffers(&encoder->outgoing);
+
+    encoder->hrs       = 0;
+    encoder->write_ptr = NULL_W_PTR;
+
+    encoder->headers_sent       = false;
+    encoder->is_request         = false;
+    encoder->is_chunked         = false;
     encoder->hdr_content_length = false;
     if (encoder->boundary_marker) {
         free(encoder->boundary_marker);
@@ -912,18 +918,16 @@ static bool parse_header(h1_codec_connection_t *conn, struct decoder_t *decoder)
 
     // convert field to key and value strings
 
+    // The key field must be terminated in an colon. It is an error if there is any whitespace (or non-token) characters
+    // between the key and the colon. See RFC9112 "Field Line Parsing".
     qd_buffer_field_t key;
-    if (!parse_token(&line, &key)) {
-        decoder->error_msg = "Malformed Header";
+    uint8_t           octet;
+    if (!parse_token(&line, &key) || !qd_buffer_field_octet(&line, &octet) || octet != ':') {
+        decoder->error_msg = "Malformed Header Key";
         decoder->error = (decoder->is_request) ? HTTP1_STATUS_BAD_REQ
             : HTTP1_STATUS_SERVER_ERR;
         return false;
     }
-
-    // advance line past the ':'
-    uint8_t octet;
-    while (qd_buffer_field_octet(&line, &octet) && octet != ':')
-        ;
 
     // line now contains the value. convert to C strings and post callback
     ensure_scratch_size(&decoder->scratch, key.remaining + line.remaining + 2);
@@ -1042,10 +1046,10 @@ static inline int consume_stream_data(h1_codec_connection_t *conn, bool flush)
     return decoder->error;
 }
 
-
-
 // parsing the start of a chunked header:
-// <chunk size in hex>CRLF
+// <chunk size in hex>*(chunk-ext)CRLF
+// chunk-ext = *( BWS ";" BWS chunk-ext-name
+//      [ BWS "=" BWS chunk-ext-val ] )*(OWS*(;))
 //
 static bool parse_body_chunked_header(h1_codec_connection_t *conn, struct decoder_t *decoder)
 {
@@ -1212,9 +1216,6 @@ static bool parse_done(h1_codec_connection_t *conn, struct decoder_t *decoder)
     h1_codec_request_state_t *hrs = decoder->hrs;
     bool is_response = !decoder->is_request;
 
-    // signal the message receive is complete
-    conn->config.rx_done(hrs);
-
     if (is_response) {
         // Informational 1xx response codes are NOT terminal - further responses are allowed!
         if (IS_INFO_RESPONSE(hrs->response_code)) {
@@ -1227,6 +1228,9 @@ static bool parse_done(h1_codec_connection_t *conn, struct decoder_t *decoder)
     }
 
     decoder_reset(decoder);
+
+    // signal the message receive is complete
+    conn->config.rx_done(hrs);
 
     if (!hrs->close_expected) {
         if (hrs->request_complete && hrs->response_complete) {
@@ -1268,6 +1272,7 @@ static int decode_incoming(h1_codec_connection_t *conn)
 
 void *h1_codec_connection_get_context(h1_codec_connection_t *conn)
 {
+    assert(conn);
     return conn->context;
 }
 
@@ -1308,81 +1313,87 @@ int h1_codec_connection_rx_data(h1_codec_connection_t *conn, qd_buffer_list_t *d
 // server this may simply be the end of the response message.  If a message is
 // currently being decoded see if it is valid to complete.
 //
-void h1_codec_connection_rx_closed(h1_codec_connection_t *conn)
+int h1_codec_connection_rx_close(h1_codec_connection_t *conn)
 {
-    if (conn && conn->config.type == HTTP1_CONN_SERVER) {
+    assert(conn);
+    struct decoder_t *decoder   = &conn->decoder;
+    bool              truncated = false;
 
-        // terminate the in progress decode
-
-        struct decoder_t *decoder = &conn->decoder;
-        h1_codec_request_state_t *hrs = decoder->hrs;
-        if (hrs) {
-            // consider the response complete if length is unspecified since in
-            // this case the server must close the connection to complete the
-            // message body.  However if the response message is a "continue"
-            // then the final response never arrived and the response is
+    if (decoder->hrs) {
+        // Current message has not finished parsing. This is an error unless the message is an HTTP response and the
+        // server has not provided an explicit length (think HTTP/1.0 w/o content-length, etc).
+        truncated = true;
+        if (!decoder->is_request) {
+            assert(!decoder->hrs->response_complete);
+            // Note: if this response message is a "continue" then the final response never arrived and the response is
             // incomplete
-            if (decoder->state == HTTP1_MSG_STATE_BODY
-                && !IS_INFO_RESPONSE(hrs->response_code)
-                && !decoder->is_chunked
-                && !decoder->hdr_content_length) {
-
-                if (!hrs->response_complete) {
-                    hrs->response_complete = true;
-                    conn->config.rx_done(hrs);
-                }
-            }
-        }
-
-        decoder_reset(decoder);
-        // since the underlying connection is gone discard all remaining
-        // incoming data
-        qd_buffer_list_free_buffers(&conn->decoder.incoming);
-        decoder->read_ptr = NULL_R_PTR;
-
-        // check if current request is completed
-        hrs = DEQ_HEAD(conn->hrs_queue);
-        if (hrs) {
-            hrs->close_expected = false;   // the close just occurred
-            if (hrs->response_complete && hrs->request_complete) {
-                conn->config.request_complete(hrs, false);
-                h1_codec_request_state_free(hrs);
+            if (decoder->state == HTTP1_MSG_STATE_BODY && !IS_INFO_RESPONSE(decoder->hrs->response_code)
+                && !decoder->is_chunked && !decoder->hdr_content_length) {
+                truncated                       = false;
+                decoder->hrs->response_complete = true;
+                conn->config.rx_done(decoder->hrs);
             }
         }
     }
+
+    // Reinitialize the decode. Since the underlying connection is gone discard all unparsed incoming data.
+
+    decoder_reset(decoder);
+    qd_buffer_list_free_buffers(&conn->decoder.incoming);
+    decoder->read_ptr  = NULL_R_PTR;
+    decoder->error     = 0;
+    decoder->error_msg = 0;
+
+    // check if current request is completed
+    h1_codec_request_state_t *hrs = DEQ_HEAD(conn->hrs_queue);
+    if (hrs) {
+        hrs->close_expected = false;  // the close just occurred
+        if (hrs->response_complete && hrs->request_complete) {
+            conn->config.request_complete(hrs, false);
+            h1_codec_request_state_free(hrs);
+        }
+    }
+
+    return truncated ? -1 : 0;
 }
 
 
 void h1_codec_request_state_set_context(h1_codec_request_state_t *hrs, void *context)
 {
+    assert(hrs);
     hrs->context = context;
 }
 
 
 void *h1_codec_request_state_get_context(const h1_codec_request_state_t *hrs)
 {
+    assert(hrs);
     return hrs->context;
 }
 
 
 h1_codec_connection_t *h1_codec_request_state_get_connection(const h1_codec_request_state_t *hrs)
 {
+    assert(hrs);
     return hrs->conn;
 }
 
 
 const char *h1_codec_request_state_method(const h1_codec_request_state_t *hrs)
 {
+    assert(hrs);
     return hrs->method;
 }
 
 const char *h1_codec_request_state_target(const h1_codec_request_state_t *hrs)
 {
+    assert(hrs);
     return hrs->target;
 }
 
 uint32_t h1_codec_request_state_response_code(const h1_codec_request_state_t *hrs)
 {
+    assert(hrs);
     return hrs->response_code;
 }
 
@@ -1392,7 +1403,13 @@ void h1_codec_request_state_cancel(h1_codec_request_state_t *hrs)
     if (hrs) {
         h1_codec_connection_t *conn = hrs->conn;
         if (hrs == conn->decoder.hrs) {
+            // The decoder did not complete parsing. The incoming data is now in an unknown state. Set the decoder error
+            // so further calls to h1_codec_connection_rx_data() will fail and force the application to close the
+            // incoming stream
+            int err = conn->decoder.is_request ? HTTP1_STATUS_BAD_REQ : HTTP1_STATUS_SERVER_ERR;
             decoder_reset(&conn->decoder);
+            conn->decoder.error     = err;
+            conn->decoder.error_msg = "Request cancelled";
         }
         if (hrs == conn->encoder.hrs) {
             encoder_reset(&conn->encoder);
@@ -1409,9 +1426,11 @@ void h1_codec_request_state_cancel(h1_codec_request_state_t *hrs)
 h1_codec_request_state_t *h1_codec_tx_request(h1_codec_connection_t *conn, const char *method, const char *target,
                                               uint32_t version_major, uint32_t version_minor)
 {
-    struct encoder_t *encoder = &conn->encoder;
-    assert(!encoder->hrs);   // error: transfer already in progress
+    assert(conn);
     assert(conn->config.type == HTTP1_CONN_SERVER);
+
+    struct encoder_t *encoder = &conn->encoder;
+    assert(!encoder->hrs);  // error: transfer already in progress
 
     h1_codec_request_state_t *hrs = encoder->hrs = h1_codec_request_state(conn);
     encoder->is_request = true;
@@ -1669,6 +1688,8 @@ int h1_codec_tx_done(h1_codec_request_state_t *hrs, bool *need_close)
         hrs->request_complete = true;
     }
 
+    // expect: all outgoing data sent
+    assert(DEQ_IS_EMPTY(encoder->outgoing));
     encoder_reset(encoder);
 
     if (!hrs->close_expected) {
@@ -1684,21 +1705,24 @@ int h1_codec_tx_done(h1_codec_request_state_t *hrs, bool *need_close)
 
 bool h1_codec_request_complete(const h1_codec_request_state_t *hrs)
 {
-    return hrs && hrs->request_complete;
+    assert(hrs);
+    return hrs->request_complete;
 }
 
 
 bool h1_codec_response_complete(const h1_codec_request_state_t *hrs)
 {
-    return hrs && hrs->response_complete;
+    assert(hrs);
+    return hrs->response_complete;
 }
 
 
 void h1_codec_request_state_counters(const h1_codec_request_state_t *hrs,
                                      uint64_t *in_octets, uint64_t *out_octets)
 {
-    *in_octets = (hrs) ? hrs->in_octets : 0;
-    *out_octets = (hrs) ? hrs->out_octets : 0;
+    assert(hrs);
+    *in_octets  = hrs->in_octets;
+    *out_octets = hrs->out_octets;
 }
 
 
@@ -1726,4 +1750,18 @@ const char *h1_codec_token_list_next(const char *start, size_t *len, const char 
 
     *next = end;
     return start;
+}
+
+bool h1_codec_token_list_find(const char *list, const char *token)
+{
+    size_t       len;
+    const size_t token_len     = strlen(token);
+    const char  *current_token = h1_codec_token_list_next(list, &len, &list);
+    while (current_token) {
+        if (len == token_len && strncasecmp(current_token, token, token_len) == 0) {
+            return true;
+        }
+        current_token = h1_codec_token_list_next(list, &len, &list);
+    }
+    return false;
 }

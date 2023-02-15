@@ -135,8 +135,9 @@ typedef struct h1_codec_config_t {
     //
     int (*rx_headers_done)(h1_codec_request_state_t *hrs, bool has_body);
 
-    // invoked as the HTTP1 message body is parsed. If more is true then the body is not complete and additional call(s)
-    // to rx_body will be made as more body is parsed. len is set to the total octest of data in the body list.
+    // invoked as the HTTP1 message body is parsed. The callback takes ownership of the buffer list. If more is true
+    // then the body is not complete and additional call(s) to rx_body will be made as more body is parsed. len is set
+    // to the number of data octets in the body list.
     //
     int (*rx_body)(h1_codec_request_state_t *hrs, qd_buffer_list_t *body, size_t len, bool more);
 
@@ -164,27 +165,31 @@ void *h1_codec_connection_get_context(h1_codec_connection_t *conn);
 void h1_codec_connection_free(h1_codec_connection_t *conn);
 
 // Push inbound network data into the http1 library. All rx_*() callbacks occur during this call.  The return value is
-// zero on success.  If a non-zero value is returned the codec state is unknown and cannot be recovered: the application
-// must destroy the conn by calling h1_codec_connection_free().
+// zero on success.  Returns a non-zero value if there is a parse error on the input data.
+//
+// Errors are not recoverable: the caller must terminate the input stream, discard all pending input, and call
+// h1_codec_connection_rx_close() to reset the decoder. All in-flight h1_codec_request_state_t's must be cancelled via
+// h1_codec_request_state_cancel().
 //
 int h1_codec_connection_rx_data(h1_codec_connection_t *conn, qd_buffer_list_t *data, size_t len);
 
-// Notify the codec that the endpoint closed the connection.  For server-facing
-// connections it is safe to resume calling h1_codec_connection_rx_data() for
-// the h1_codec_connection once the connection to the server is reestablished.
-// Client-facing connections cannot be resumed after the connection has been
-// closed. In the client case the  application must cancel all outstanding
-// requests and then call h1_codec_connection_free() instead.
+// Notify the codec that the endpoint closed the write side of the connection and no further data will be received. This
+// will reset the receive state of the codec. Returns a non-zero value if the current message did not complete parsing
+// and is truncated. The caller should cancel any truncated messages via h1_codec_request_state_cancel().
 //
-void h1_codec_connection_rx_closed(h1_codec_connection_t *conn);
+// For server-facing connections it is safe to resume calling h1_codec_connection_rx_data() for the h1_codec_connection
+// once any outstanding incomplete h1_codec_request_state_t's are cancelled and the connection to the server is
+// reestablished.  Client-facing connections cannot be resumed after the connection has been closed. In the client case
+// the application must cancel all outstanding requests and then call h1_codec_connection_free() instead.
+//
+int h1_codec_connection_rx_close(h1_codec_connection_t *conn);
 
 void h1_codec_request_state_set_context(h1_codec_request_state_t *hrs, void *context);
 void *h1_codec_request_state_get_context(const h1_codec_request_state_t *hrs);
 h1_codec_connection_t *h1_codec_request_state_get_connection(const h1_codec_request_state_t *hrs);
 
-// Cancel the request.  The h1_codec_request_state_t is freed during this call.
-// The request_complete callback will be invoked during this call with
-// cancelled=True.
+// Cancel the request. The request_complete callback will be invoked during this call with cancelled=True. The
+// h1_codec_request_state_t is freed on return from this call and must not be referenced further by the caller.
 //
 void h1_codec_request_state_cancel(h1_codec_request_state_t *hrs);
 
@@ -193,10 +198,10 @@ const char *h1_codec_request_state_method(const h1_codec_request_state_t *hrs);
 const char *h1_codec_request_state_target(const h1_codec_request_state_t *hrs);
 uint32_t h1_codec_request_state_response_code(const h1_codec_request_state_t *hrs);
 
-// true when codec has encoded/decoded a complete request message
+// true when codec has encoded/decoded a complete request message (and not cancelled)
 bool h1_codec_request_complete(const h1_codec_request_state_t *hrs);
 
-// true when codec has encoded/decoded all response(s) messages associated with the current request
+// true when codec has encoded/decoded all response(s) messages associated with the current request (and not cancelled)
 bool h1_codec_response_complete(const h1_codec_request_state_t *hrs);
 
 // query the amount of octets read (in) and written (out) for a request
@@ -213,6 +218,8 @@ void h1_codec_request_state_counters(const h1_codec_request_state_t *hrs,
 //
 const char *h1_codec_token_list_next(const char *start, size_t *len, const char **next);
 
+// is token in list?
+bool h1_codec_token_list_find(const char *list, const char *token);
 
 //
 // API for sending HTTP/1.x messages

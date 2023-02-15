@@ -23,67 +23,64 @@
 
 import errno
 import json
+import os
+import re
 import select
 import socket
+from http.client import HTTPSConnection
+from ssl import SSLContext, PROTOCOL_TLS_CLIENT, PROTOCOL_TLS_SERVER
+from ssl import CERT_REQUIRED, SSLSocket
 from time import sleep, time
-from typing import Optional
 from email.parser import BytesParser
-from http.client import HTTPConnection
 
 from proton import Message
 from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
-from system_test import retry_exception, curl_available, run_curl
+from system_test import retry_exception, curl_available, run_curl, retry
+from system_test import nginx_available, get_digest, NginxServer, Process
+from system_test import openssl_available
 from http1_tests import http1_ping, TestServer, RequestHandler10
-from http1_tests import RequestMsg, ResponseMsg
+from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
 from http1_tests import CommonHttp1OneRouterTest
 from http1_tests import CommonHttp1Edge2EdgeTest
 from http1_tests import Http1Edge2EdgeTestBase
 from http1_tests import Http1ClientCloseTestsMixIn
 from http1_tests import Http1CurlTestsMixIn
-from http1_tests import wait_http_listeners_up
+from http1_tests import wait_http_listeners_up, wait_http_listeners_down
 from http1_tests import HttpAdaptorListenerConnectTestBase
 from http1_tests import HttpTlsBadConfigTestsBase
+from http1_tests import http1_simple_request
+from system_tests_ssl import RouterTestSslBase
+
+CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
+SERVER_CERTIFICATE = RouterTestSslBase.ssl_file('server-certificate.pem')
+SERVER_PRIVATE_KEY = RouterTestSslBase.ssl_file('server-private-key.pem')
+CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
+CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
+SERVER_KEY_NO_PASS = RouterTestSslBase.ssl_file('server-private-key-no-pass.pem')
+CHAINED_PEM = RouterTestSslBase.ssl_file('chained.pem')
 
 
-class SimpleRequestTimeout(Exception):
-    """Thrown by http1_simple_request when timeout occurs during socket
-    read. Contains any reply data read from the server prior to the timeout
+def _read_socket(sock, length, timeout=TIMEOUT):
     """
-    pass
-
-
-def http1_simple_request(raw_request: bytes,
-                         port: int,
-                         host: Optional[str] = '127.0.0.1',
-                         timeout: Optional[float] = TIMEOUT):
-    """Perform a simple HTTP/1 request and return the response read from the
-    server. raw_request is a complete HTTP/1 request message. The client socket
-    will be read from until either it is closed or the TIMEOUT occurs.
-
-    It is expected that raw_request will include a "Connection: close" header
-    to prevent the TIMEOUT exception from being thrown.
+    Read data from socket until either length octets are read or the socket
+    closes.  Return all data read. Note: may return > length if more data is
+    present on the socket. Raises a timeout error if < length data arrives.
     """
-    reply = b''
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-        client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        client.settimeout(timeout)
+    old_timeout = sock.gettimeout()
+    sock.settimeout(timeout)
+    data = b''
 
-        # allow time for the listening socket to initialize
-        retry_exception(lambda: client.connect((host, port)),
-                        delay=0.25, exception=ConnectionRefusedError)
-        client.sendall(raw_request, socket.MSG_WAITALL)
-        try:
-            while True:
-                rc = client.recv(4096)
-                if not rc:
-                    # socket closed (response complete)
-                    break
-                reply += rc
-        except TimeoutError:
-            raise SimpleRequestTimeout(reply)
-    return reply
+    try:
+        while len(data) < length:
+            chunk = sock.recv(length - len(data))
+            if not chunk:  # socket closed
+                break
+            data += chunk
+    finally:
+        sock.settimeout(old_timeout)
+    return data
 
 
 class Http1AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
@@ -324,6 +321,17 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
     """
     Test HTTP servers and clients attached to a standalone router
     """
+
+    # these can be overridden to provide sslProfile configuration (dicts) for
+    # the routers connectors and listeners
+    connector_ssl_profile = None
+    listener_ssl_profile = None
+
+    # these can be set to SSLContext instances to enable TLS for the test
+    # clients and servers.
+    client_ssl_context = None
+    server_ssl_context = None
+
     @classmethod
     def setUpClass(cls):
         """Start a router"""
@@ -340,37 +348,57 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         #      V         V
         #  <clients>  <servers>
 
-        cls.routers = []
+        connector11_config = {'port': cls.server11_port,
+                              'host': cls.server11_host,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'testServer11'}
+        connector10_config = {'port': cls.server10_port,
+                              'host': cls.server10_host,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'testServer10'}
+        listener11_config = {'port': cls.listener11_port,
+                             'host': cls.listener11_host,
+                             'protocolVersion': 'HTTP1',
+                             'address': 'testServer11'}
+        listener10_config = {'port': cls.listener10_port,
+                             'host': cls.listener10_host,
+                             'protocolVersion': 'HTTP1',
+                             'address': 'testServer10'}
+
+        extra_config = []
+        if cls.connector_ssl_profile is not None:
+            connector11_config.update({'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True})
+            connector10_config.update({'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True})
+            extra_config.extend([('sslProfile', cls.connector_ssl_profile)])
+
+        if cls.listener_ssl_profile is not None:
+            listener11_config.update({'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True})
+            listener10_config.update({'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True})
+            extra_config.extend([('sslProfile', cls.listener_ssl_profile)])
+
         super(Http1AdaptorOneRouterTest, cls).\
-            router('INT.A', 'standalone',
-                   [('httpConnector', {'port': cls.http_server11_port,
-                                       'host': '127.0.0.1',
-                                       'protocolVersion': 'HTTP1',
-                                       'address': 'testServer11'}),
-                    ('httpConnector', {'port': cls.http_server10_port,
-                                       'host': '127.0.0.1',
-                                       'protocolVersion': 'HTTP1',
-                                       'address': 'testServer10'}),
-                    ('httpListener', {'port': cls.http_listener11_port,
-                                      'protocolVersion': 'HTTP1',
-                                      'host': '127.0.0.1',
-                                      'address': 'testServer11'}),
-                    ('httpListener', {'port': cls.http_listener10_port,
-                                      'protocolVersion': 'HTTP1',
-                                      'host': '127.0.0.1',
-                                      'address': 'testServer10'})
-                    ])
+            router(name='INT.A', mode='standalone',
+                   extra=[('httpConnector', connector11_config),
+                          ('httpConnector', connector10_config),
+                          ('httpListener', listener11_config),
+                          ('httpListener', listener10_config)
+                          ] + extra_config)
 
         cls.INT_A = cls.routers[0]
         cls.INT_A.listener = cls.INT_A.addresses[0]
 
-        cls.http11_server = TestServer.new_server(server_port=cls.http_server11_port,
-                                                  client_port=cls.http_listener11_port,
-                                                  tests=cls.TESTS_11)
-        cls.http10_server = TestServer.new_server(server_port=cls.http_server10_port,
-                                                  client_port=cls.http_listener10_port,
-                                                  tests=cls.TESTS_10,
-                                                  handler_cls=RequestHandler10)
+        cls.http11_server = cls.create_server(server_port=cls.server11_port,
+                                              client_port=cls.listener11_port,
+                                              tests=cls.TESTS_11)
+        cls.http10_server = cls.create_server(server_port=cls.server10_port,
+                                              client_port=cls.listener10_port,
+                                              tests=cls.TESTS_10,
+                                              handler_cls=RequestHandler10)
+
         cls.INT_A.wait_connectors()
         wait_http_listeners_up(cls.INT_A.addresses[0])
 
@@ -380,18 +408,25 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         cls.http11_server.wait(TIMEOUT)
         super().tearDownClass()
 
+    @classmethod
+    def create_server(cls, server_port, client_port, tests, handler_cls=None):
+        """Creates basic HTTP TestServer. May be overridden for SSL support"""
+        return TestServer.new_server(server_port=server_port,
+                                     client_port=client_port,
+                                     tests=tests,
+                                     handler_cls=handler_cls)
+
     def test_005_get_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener10_host_port)
         self._do_request(client, self.TESTS_10["GET"])
         client.close()
 
     def test_000_stats(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = self.create_client(self.listener11_host_port)
         self._do_request(client, self.TESTS_11["GET"])
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
+
         qd_manager = QdManager(address=self.INT_A.listener)
         stats = qd_manager.query('io.skupper.router.httpRequestInfo')
         self.assertEqual(len(stats), 2)
@@ -417,6 +452,68 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
             assert_approximately_equal(stats[0].get('bytesIn'), 1059)
             assert_approximately_equal(stats[1].get('bytesOut'), 1059)
             assert_approximately_equal(stats[1].get('bytesIn'), 8830)
+
+
+# @unittest.skip("Avoid TLS tests due to flakey Python HTTP server")
+class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
+    """
+    Run the One Router tests using a TLS enabled client
+    """
+    @classmethod
+    def setUpClass(cls):
+        # note: connector uses client SSL mode
+        cls.connector_ssl_profile = {
+            'name': 'Http1AdaptorOneRouterConnectorSSL',
+            'caCertFile': CA_CERT,
+            'certFile': CLIENT_CERTIFICATE,
+            'privateKeyFile': CLIENT_PRIVATE_KEY,
+            'password': "client-password",
+        }
+
+        # TLS configuration for use by the test servers
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                             SERVER_PRIVATE_KEY,
+                             "server-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = False
+        cls.server_ssl_context = ctxt
+
+        cls.listener_ssl_profile = {
+            'name': 'Http1AdaptorOneRouterListenerSSL',
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': "server-password"
+        }
+
+        # TLS configuration for use by the test clients
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = True
+        cls.client_ssl_context = ctxt
+
+        super(Http1AdaptorOneRouterTLSTest, cls).setUpClass()
+
+    @classmethod
+    def create_client(cls, host_port, timeout=TIMEOUT):
+        # overrides base class method to use TLS
+        return HTTPSConnection(host_port, timeout=timeout, context=cls.client_ssl_context)
+
+    @classmethod
+    def create_server(cls, server_port, client_port, tests, handler_cls=None):
+        # overrides base class method to use TLS
+        return TestServer.new_server(server_port=server_port,
+                                     client_port=client_port,
+                                     tests=tests,
+                                     handler_cls=handler_cls,
+                                     server_ssl_context=cls.server_ssl_context,
+                                     client_ssl_context=cls.client_ssl_context)
 
 
 class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
@@ -454,10 +551,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             router('EA1', 'edge',
                    [('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge1_port}),
-                    ('httpListener', {'port': cls.http_listener11_port,
+                    ('httpListener', {'name': 'L_testServer11',
+                                      'port': cls.listener11_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer11'}),
-                    ('httpListener', {'port': cls.http_listener10_port,
+                    ('httpListener', {'name': 'L_testServer10',
+                                      'port': cls.listener10_port,
                                       'protocolVersion': 'HTTP1',
                                       'address': 'testServer10'})
                     ])
@@ -468,10 +567,14 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             router('EA2', 'edge',
                    [('connector', {'name': 'uplink', 'role': 'edge',
                                    'port': cls.INTA_edge2_port}),
-                    ('httpConnector', {'port': cls.http_server11_port,
+                    ('httpConnector', {'name': 'C_testServer11',
+                                       'port': cls.server11_port,
+                                       'host': cls.server11_host,
                                        'protocolVersion': 'HTTP1',
                                        'address': 'testServer11'}),
-                    ('httpConnector', {'port': cls.http_server10_port,
+                    ('httpConnector', {'name': 'C_testServer10',
+                                       'port': cls.server10_port,
+                                       'host': cls.server10_host,
                                        'protocolVersion': 'HTTP1',
                                        'address': 'testServer10'})
                     ])
@@ -485,37 +588,777 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         """
         Simulate an HTTP client drop while sending a very large PUT
         """
-        self.client_request_close_test(self.http_server11_port,
-                                       self.http_listener11_port,
+        self.client_request_close_test(self.server11_port,
+                                       self.listener11_port,
                                        self.EA2.management)
 
     def test_1002_client_response_close(self):
         """
         Simulate an HTTP client drop while server sends very large response
         """
-        self.client_response_close_test(self.http_server11_port,
-                                        self.http_listener11_port)
+        self.client_response_close_test(self.server11_port,
+                                        self.listener11_port)
 
     def test_2000_curl_get(self):
         """
         Perform a get via curl
         """
-        self.curl_get_test("127.0.0.1", self.http_listener11_port,
-                           self.http_server11_port)
+        self.curl_get_test("127.0.0.1", self.listener11_port,
+                           self.server11_port)
 
     def test_2001_curl_put(self):
         """
         Perform a put via curl
         """
-        self.curl_put_test("127.0.0.1", self.http_listener11_port,
-                           self.http_server11_port)
+        self.curl_put_test("127.0.0.1", self.listener11_port,
+                           self.server11_port)
 
     def test_2002_curl_post(self):
         """
         Perform a post via curl
         """
-        self.curl_post_test("127.0.0.1", self.http_listener11_port,
-                            self.http_server11_port)
+        self.curl_post_test("127.0.0.1", self.listener11_port,
+                            self.server11_port)
+
+    @staticmethod
+    def _server_get_undelivered_out(mgmt, service_address):
+        # Return the total count of outgoing undelivered deliveries to
+        # service_address
+        count = 0
+        links = mgmt.query('io.skupper.router.router.link')
+        for link in filter(lambda link:
+                           link['linkName'] == 'http1.server.out' and
+                           link['owningAddr'].endswith(service_address), links):
+            count += link['undeliveredCount']
+        return count
+
+    @staticmethod
+    def _server_get_unsettled_out(mgmt, service_address):
+        # Return the total count of outgoing unsettled deliveries to
+        # service_address
+        count = 0
+        links = mgmt.query('io.skupper.router.router.link')
+        for link in filter(lambda link:
+                           link['linkName'] == 'http1.server.out' and
+                           link['owningAddr'].endswith(service_address), links):
+            count += link['unsettledCount']
+        return count
+
+    @staticmethod
+    def _client_in_link_count(mgmt, service_address):
+        # get the total number of active HTTP1 client in-links for the given
+        # service address
+        links = mgmt.query('io.skupper.router.router.link')
+        count = len(list(filter(lambda link:
+                                link['linkName'] == 'http1.client.in' and
+                                link['owningAddr'].endswith(service_address),
+                                links)))
+        return count
+
+    def test_3000_N_client_pipeline_cancel(self):
+        """
+        Create N clients. Have several clients send short GET requests. Have
+        two clients send incomplete GET requests. Close the incomplete clients
+        with their requests outstanding. Verify that the router services the
+        remaining requests properly
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 10
+        KILL_INDEX = [4, 5]  # clients to force close
+
+        request = b'GET /client_pipeline/3000 HTTP/1.1\r\n' \
+            + b'index: %d\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+        request_len = 67
+        request_re = re.compile(r"^(index:).(\d+)", re.MULTILINE)
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 7\r\n' \
+            + b'\r\n' \
+            + b'index=%d'
+        response_len = 45
+        response_re = re.compile(r"(index=)(\d+)$", re.MULTILINE)
+
+        truncated_req = b'GET /client_pipeline_truncated HTTP/1.1\r\n' \
+            + b'Content-Length: 10000\r\n' \
+            + b'\r\n' \
+            + b'I like cereal...'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect(("localhost",
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+
+                if index in KILL_INDEX:
+                    # Pause before sending the incomplete request until the
+                    # previous deliveries arrive at the server. This prevents
+                    # the incomplete requests from arriving ahead of other
+                    # requests and having the server start reading the
+                    # incomplete request first (before the abort signal arrives
+                    # to cancel the request).
+                    self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index:
+                                          self._server_get_undelivered_out(mg, "testServer11")
+                                          + self._server_get_unsettled_out(mg, "testServer11")
+                                          == dc))
+
+                    # Send an incomplete request. When the client closes this
+                    # should cause the client-facing router to abort the
+                    # in-flight delivery.
+                    client.sendall(truncated_req)
+                else:
+                    client.sendall(request % index)
+
+            # Wait for the client deliveries to arrive on the outgoing link to
+            # the server. The arrival order is not guaranteed! The test will
+            # validate that responses are sent to the proper client
+
+            self.assertTrue(retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
+                                  self._server_get_undelivered_out(mg, "testServer11")
+                                  + self._server_get_unsettled_out(mg, "testServer11")
+                                  == dc))
+
+            # Now destroy the incomplete clients. Wait until the socket has
+            # actually closed at the ingress router:
+
+            for index in KILL_INDEX:
+                clients[index].shutdown(socket.SHUT_RDWR)
+                clients[index].close()
+                clients[index] = None
+
+            # wait for the killed client connections to the router drop
+            self.assertTrue(retry(lambda mg=EA1_mgmt:
+                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - len(KILL_INDEX)))
+            sleep(1.0)  # hack: ensure the abort signal has propagated to the server
+
+            # Since the cancelled request has yet to be written to the server
+            # connection by the adaptor, the adaptor should be smart enough to
+            # dispose of the cancelled request without writing anything to the
+            # server (or dropping the server connection)
+
+            for _ in range(CLIENT_COUNT - len(KILL_INDEX)):
+                data = _read_socket(server, request_len)
+                self.assertEqual(request_len, len(data))
+                index_match = request_re.search(data.decode())
+                self.assertIsNotNone(index_match,
+                                     f"request not matched >{data.decode()}<")
+                self.assertEqual(2, len(index_match.groups()))
+                server.sendall(response % int(index_match.group(2)))
+
+            # expect no more data from the router
+            server.settimeout(1.0)
+            self.assertRaises(socket.timeout, server.recv, 4096)
+            server.close()
+
+            # expect remaining clients get responses, and the correct responses
+            # are returned
+            for index in range(CLIENT_COUNT):
+                if clients[index] is not None:
+                    data = _read_socket(clients[index], response_len)
+                    self.assertEqual(response_len, len(data))
+                    index_match = response_re.search(data.decode())
+                    self.assertIsNotNone(index_match,
+                                         f"response not matched >{data.decode()}<")
+                    self.assertEqual(2, len(index_match.groups()))
+                    self.assertEqual(index, int(index_match.group(2)))
+                    clients[index].close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_3001_N_client_pipeline_recover(self):
+        """
+        Similar to test_3000, but the request from the dropped client is in the
+        process of being read by the server. This should cause the router to
+        drop the connection to the server. When the connection re-establishes
+        the remaining requests must arrive without error.
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 10
+
+        request = b'GET /client_pipeline/3001 HTTP/1.1\r\n' \
+            + b'index: %d\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+        request_len = 67
+        request_re = re.compile(r"^(index:).(\d+)", re.MULTILINE)
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 7\r\n' \
+            + b'\r\n' \
+            + b'index=%d'
+        response_len = 45
+        response_re = re.compile(r"(index=)(\d+)$", re.MULTILINE)
+
+        truncated_req = b'GET /client_pipeline_truncated HTTP/1.1\r\n' \
+            + b'Content-Length: 10000\r\n' \
+            + b'\r\n' \
+            + b'I like potatoes...'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+
+                if index == 0:
+                    # Have the first client send an incomplete request. When
+                    # the client closes this should cause the client-facing
+                    # router to abort the in-flight delivery. Wait for the
+                    # request to arrive at the server in order to prevent the
+                    # following requests from arriving first
+                    client.sendall(truncated_req)
+                    self.assertTrue(retry(lambda mg=EA2_mgmt, dc=1:
+                                          self._server_get_undelivered_out(mg, "testServer11")
+                                          + self._server_get_unsettled_out(mg, "testServer11")
+                                          == dc))
+                else:
+                    client.sendall(request % index)
+
+            # Wait for the client deliveries to arrive on the outgoing link to
+            # the server. The arrival order is not guaranteed! The test will
+            # validate that responses are sent to the proper client
+
+            self.assertTrue(retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
+                                  self._server_get_undelivered_out(mg, "testServer11")
+                                  + self._server_get_unsettled_out(mg, "testServer11")
+                                  == dc))
+
+            # Have the server start processing the incomplete request
+
+            data = _read_socket(server, length=len(truncated_req))
+            self.assertEqual(len(truncated_req), len(data))
+            self.assertIn(b"potatoes...", data)
+
+            # Now destroy the client. Wait until the socket has
+            # actually closed at the ingress router:
+
+            clients[0].shutdown(socket.SHUT_RDWR)
+            clients[0].close()
+            clients[0] = None
+            self.assertTrue(retry(lambda mg=EA1_mgmt:
+                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1))
+
+            # attempting to read the rest of the request should result in the
+            # server socket closing
+
+            data = _read_socket(server, 4096, timeout=TIMEOUT)
+            self.assertEqual(b'', data, "Server did not disconnect as expected")
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+            # expect the router to reconnect
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            # expect the remaining requests to complete successfully
+
+            for index in range(1, CLIENT_COUNT):
+                data = _read_socket(server, length=request_len)
+                self.assertEqual(request_len, len(data))
+                index_match = request_re.search(data.decode())
+                self.assertIsNotNone(index_match,
+                                     f"request not matched >{data.decode()}<")
+                self.assertEqual(2, len(index_match.groups()))
+                server.sendall(response % int(index_match.group(2)))
+
+            # expect no more data from the router
+            server.settimeout(1.0)
+            self.assertRaises(socket.timeout, server.recv, 4096)
+            server.close()
+
+            # expect remaining clients get responses, and the correct responses
+            # are returned
+            for index in range(CLIENT_COUNT):
+                if clients[index] is not None:
+                    data = _read_socket(clients[index], response_len)
+                    self.assertEqual(response_len, len(data))
+                    index_match = response_re.search(data.decode())
+                    self.assertIsNotNone(index_match,
+                                         f"response not matched >{data.decode()}<")
+                    self.assertEqual(2, len(index_match.groups()))
+                    self.assertEqual(index, int(index_match.group(2)))
+                    clients[index].close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4000_client_half_close(self):
+        """
+        Verify that a client can close the write side of its socket and still
+        receive a response
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        CLIENT_COUNT = 9  # single digit or content length will be bad!
+
+        request_template = 'GET /client%d HTTP/1.1\r\n' \
+            + 'Content-Length: 0\r\n' \
+            + '\r\n'
+        request_length = len(request_template) - 1
+
+        response_template = 'HTTP/1.1 200 OK\r\n' \
+            + 'content-length: 7\r\n' \
+            + '\r\n' \
+            + 'client%d'
+        response_length = len(response_template) - 1
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            clients = []
+            for index in range(CLIENT_COUNT):
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.settimeout(TIMEOUT)
+                clients.append(client)
+                request = request_template % index
+                client.sendall(request.encode())
+
+                # Ensure that the delivery arrives at the server before sending
+                # the next request. Otherwise if all requests are sent at once
+                # they can arrive out of order. That will cause the test to
+                # fail since it services each client in order of transmission
+                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
+                                      self._server_get_undelivered_out(mg, "testServer11")
+                                      + self._server_get_unsettled_out(mg, "testServer11")
+                                      == dc))
+
+                # Now close the write side of the client socket:
+                client.shutdown(socket.SHUT_WR)
+
+            # expect the requests to complete successfully
+
+            for index in range(CLIENT_COUNT):
+                data = _read_socket(server, length=request_length)
+                self.assertEqual(request_length, len(data))
+                self.assertIn(b"GET /client%d" % index, data)
+
+                response = response_template % index
+                server.sendall(response.encode())
+
+                data = _read_socket(clients[index], length=response_length)
+                self.assertEqual(response_length, len(data))
+                self.assertIn(b"client%d" % index, data)
+                clients[index].close()
+
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4001_server_half_close(self):
+        """
+        Verify that a server can close the side of its socket after receiving a
+        request and the response will be received by the client
+        """
+
+        # note: this test assumes server-side is synchronous. It will need to
+        # be re-written if server-facing pipelining is implemented!
+
+        request = b'GET /client1 HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 7\r\n' \
+            + b'\r\n' \
+            + b'client1'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            retry_exception(lambda cs=client:
+                            cs.connect((self.listener11_host,
+                                        self.listener11_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+            client.settimeout(TIMEOUT)
+            client.sendall(request)
+
+            data = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(data))
+            self.assertIn(b"GET /client1", data)
+
+            server.shutdown(socket.SHUT_RD)
+            server.sendall(response)
+
+            data = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(data))
+            self.assertIn(b"client1", data)
+            client.close()
+
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4002_server_early_reply(self):
+        """
+        Verify that a server can send a response before the entire request
+        message has been received.
+        """
+
+        request_part1 = b'GET /early_reply HTTP/1.1\r\n' \
+            + b'Content-Length: 50\r\n' \
+            + b'\r\n' \
+            + b'0123456789'
+
+        request_part2 = b'0123456789012345678901234567890123456789'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 14\r\n' \
+            + b'\r\n' \
+            + b'Early Response'
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((self.server11_host, self.server11_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            retry_exception(lambda cs=client:
+                            cs.connect((self.listener11_host,
+                                        self.listener11_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+            client.settimeout(TIMEOUT)
+            client.sendall(request_part1)
+
+            # server read part 1
+            data = _read_socket(server, length=len(request_part1))
+            self.assertEqual(len(request_part1), len(data),
+                             f"Unexpected request: {data}")
+
+            # fire off the response
+            server.sendall(response)
+
+            # Consume response
+            data = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(data),
+                             f"Unexpected response: {data}")
+
+            # finish request
+            client.sendall(request_part2)
+            client.close()
+
+            # consume the remaining request
+            data = _read_socket(server, length=len(request_part2))
+            self.assertEqual(len(request_part2), len(data),
+                             f"Unexpected request: {data}")
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+
+class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
+                                   CommonHttp1Edge2EdgeTest):
+    """
+    Run the Edge2Edge tests using TLS transport
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a router"""
+        super(Http1AdaptorEdge2EdgeTLSTest, cls).setUpClass()
+
+        # configuration:
+        # one edge, one interior
+        #
+        #  +-------+    +---------+    +-------+
+        #  |  EA1  |<==>|  INT.A  |<==>|  EA2  |
+        #  +-------+    +---------+    +-------+
+        #      ^                           ^
+        #      |                           |
+        #      V                           V
+        #  <clients>                   <servers>
+
+        # note: connector uses client SSL mode
+        cls.connector_ssl_profile = {
+            'name': 'Http1AdaptorEdge2EdgeConnectorSSL',
+            'caCertFile': CA_CERT,
+            'certFile': CLIENT_CERTIFICATE,
+            'privateKeyFile': CLIENT_PRIVATE_KEY,
+            'password': "client-password",
+        }
+
+        # TLS configuration for use by the test servers
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                             SERVER_PRIVATE_KEY,
+                             "server-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = False
+        cls.server_ssl_context = ctxt
+
+        cls.listener_ssl_profile = {
+            'name': 'Http1AdaptorEdge2EdgeListenerSSL',
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': "server-password"
+        }
+
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = True
+        cls.client_ssl_context = ctxt
+
+        super(Http1AdaptorEdge2EdgeTLSTest, cls).\
+            router('INT.A', 'interior', [('listener', {'role': 'edge', 'port': cls.INTA_edge1_port}),
+                                         ('listener', {'role': 'edge', 'port': cls.INTA_edge2_port}),
+                                         ])
+        cls.INT_A = cls.routers[0]
+        cls.INT_A.listener = cls.INT_A.addresses[0]
+
+        super(Http1AdaptorEdge2EdgeTLSTest, cls).\
+            router('EA1', 'edge',
+                   [('sslProfile', cls.listener_ssl_profile),
+                    ('connector', {'name': 'uplink', 'role': 'edge',
+                                   'port': cls.INTA_edge1_port}),
+                    ('httpListener', {'name': 'L_testServer11',
+                                      'port': cls.listener11_port,
+                                      'protocolVersion': 'HTTP1',
+                                      'address': 'testServer11',
+                                      'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True}),
+
+                    ('httpListener', {'name': 'L_testServer10',
+                                      'port': cls.listener10_port,
+                                      'protocolVersion': 'HTTP1',
+                                      'address': 'testServer10',
+                                      'sslProfile': cls.listener_ssl_profile['name'],
+                                      'authenticatePeer': True}),
+                    ])
+        cls.EA1 = cls.routers[1]
+        cls.EA1.listener = cls.EA1.addresses[0]
+
+        super(Http1AdaptorEdge2EdgeTLSTest, cls).\
+            router('EA2', 'edge',
+                   [('sslProfile', cls.connector_ssl_profile),
+                    ('connector', {'name': 'uplink', 'role': 'edge',
+                                   'port': cls.INTA_edge2_port}),
+                    ('httpConnector', {'name': 'C_testServer11',
+                                       'port': cls.server11_port,
+                                       'host': cls.server11_host,
+                                       'protocolVersion': 'HTTP1',
+                                       'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True,
+                                       'address': 'testServer11'}),
+
+                    ('httpConnector', {'name': 'C_testServer10',
+                                       'port': cls.server10_port,
+                                       'host': cls.server10_host,
+                                       'protocolVersion': 'HTTP1',
+                                       'sslProfile': cls.connector_ssl_profile['name'],
+                                       'verifyHostname': True,
+                                       'address': 'testServer10'})
+                    ],
+                   wait=False)
+        cls.EA2 = cls.routers[-1]
+        cls.EA2.listener = cls.EA2.addresses[0]
+
+        cls.INT_A.wait_address('EA1')
+        cls.INT_A.wait_address('EA2')
+
+    @classmethod
+    def create_threaded_client(cls, *args, **kwargs):
+        """
+        Override base class to provide TLS configuration
+        """
+        return ThreadedTestClient(*args, **kwargs,
+                                  ssl_context=cls.client_ssl_context)
+
+    @classmethod
+    def create_server(cls, *args, **kwargs):
+        """
+        Override base class to provide TLS configuration
+        """
+        return TestServer.new_server(*args, **kwargs,
+                                     server_ssl_context=cls.server_ssl_context,
+                                     client_ssl_context=cls.client_ssl_context)
+
+    def test_4000_server_no_notify(self):
+        """
+        Force server close without sending proper close-notify TLS
+        handshake, but since the response has an explicit length no error
+        should occur
+        """
+        request = b'GET /client HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'content-length: 6\r\n' \
+            + b'\r\n' \
+            + b'client'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
+            raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            raw_listener.settimeout(TIMEOUT)
+            with self.server_ssl_context.wrap_socket(raw_listener,
+                                                     server_side=True) as listener:
+                listener.bind((self.server11_host, self.server11_port))
+                listener.listen(1)
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+                raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                raw_client.settimeout(TIMEOUT)
+                client = self.client_ssl_context.wrap_socket(raw_client,
+                                                             server_hostname=self.listener11_host)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+
+                client.sendall(request)
+
+                data = _read_socket(server, length=len(request))
+                self.assertEqual(len(request), len(data))
+                self.assertIn(b"GET /client", data)
+                server.sendall(response)
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+
+                data = _read_socket(client, length=len(response))
+                self.assertEqual(len(response), len(data))
+                self.assertIn(b"200 OK", data)
+                client.close()
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+    def test_4001_server_no_notify_truncated(self):
+        """
+        Similar to 4000, but cause an error by not sending an explictly
+        terminated message.
+        """
+        request = b'GET /client HTTP/1.1\r\n' \
+            + b'Content-Length: 0\r\n' \
+            + b'\r\n'
+
+        response = b'HTTP/1.1 200 OK\r\n' \
+            + b'\r\n' \
+            + b'unterminated response'
+
+        EA1_mgmt = self.EA1.qd_manager
+        EA2_mgmt = self.EA2.qd_manager
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
+            raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            raw_listener.settimeout(TIMEOUT)
+            with self.server_ssl_context.wrap_socket(raw_listener,
+                                                     server_side=True) as listener:
+                listener.bind((self.server11_host, self.server11_port))
+                listener.listen(1)
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+
+                raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                raw_client.settimeout(TIMEOUT)
+                client = self.client_ssl_context.wrap_socket(raw_client,
+                                                             server_hostname=self.listener11_host)
+                retry_exception(lambda cs=client:
+                                cs.connect((self.listener11_host,
+                                            self.listener11_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+
+                client.sendall(request)
+
+                data = _read_socket(server, length=len(request))
+                self.assertEqual(len(request), len(data))
+                self.assertIn(b"GET /client", data)
+
+                server.sendall(response)
+
+                # force close without close-notify
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+
+                # What happens on the client-facing side is timing dependent:
+                # it may get a partial message, or even an error response from
+                # the server. In any case the router should force close the
+                # client connection. Attempt to drain the socket. If this times
+                # out the router did not force close the connection properly
+                #
+                while True:
+                    data = _read_socket(client, 4096, timeout=TIMEOUT)
+                    if data == b'':
+                        # yay! socket closed!
+                        break
+                client.close()
+
+        wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
 
 
 class FakeHttpServerBase:
@@ -581,7 +1424,8 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             ('httpConnector', {'port': cls.http_server_port,
                                'protocolVersion': 'HTTP1',
                                'address': 'testServer'}),
-            ('httpListener', {'port': cls.http_listener_port,
+            ('httpListener', {'name': 'L_testServer',
+                              'port': cls.http_listener_port,
                               'protocolVersion': 'HTTP1',
                               'address': 'testServer'}),
             ('httpListener', {'port': cls.http_fake_port,
@@ -618,9 +1462,11 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
         http1_ping(self.http_server_port, self.http_listener_port)
 
-    def test_02_bad_request_message(self):
+    def test_02_bad_AMQP_request_message(self):
         """
-        Test various improperly constructed request messages
+        Test various improperly constructed AMQP request messages. Note this
+        test deals with improperly encoded inter-router AMQP messages: no HTTP
+        clients are used.
         """
         with TestServer.new_server(server_port=self.http_server_port,
                                    client_port=self.http_listener_port,
@@ -677,9 +1523,11 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         # verify router is still sane:
         http1_ping(self.http_server_port, self.http_listener_port)
 
-    def test_03_bad_response_message(self):
+    def test_03_bad_AMQP_response_message(self):
         """
-        Test various improperly constructed response messages
+        Test various improperly constructed AMQP response messages. Note this
+        test deals with improperly encoded inter-router AMQP messages: no HTTP
+        server is used.
         """
         DUMMY_TESTS = {
             "GET": [
@@ -782,6 +1630,230 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         self.client_response_close_test(self.http_server_port,
                                         self.http_listener_port)
 
+    def test_06_bad_request_headers(self):
+        """
+        Construct request messages with various header violations
+        """
+
+        # no need for a full server - expect that no data will arrive at server
+        # since all parse errors will be detected and handling on the
+        # client-facing router
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            bad_requests = [
+                # malformed request line
+                b'GET \r\n',
+                # invalid version field
+                b'GET /badversion HTTP/1.bannana\r\n',
+                # unsupported version
+                b'GET /wrongversion HTTP/0.9\r\n',
+                # invalid header format
+                b'GET /badheader HTTP/1.1\r\n' \
+                + b'novalue\r\n\r\n',
+                # invalid header format 2
+                b'GET /badheader1 HTTP/1.1\r\n' \
+                + b'novalue :\r\n\r\n',
+                # invalid transfer encoding value
+                b'PUT /bad/encoding HTTP/1.1\r\n' \
+                + b'Transfer-Encoding: bannana\r\n\r\nBLAH',
+                # invalid content length format
+                b'PUT /bad/len1 HTTP/1.1\r\n' \
+                + b'Content-Length:\r\n\r\nFOO',
+                # invalid content length
+                b'PUT /bad/len2 HTTP/1.1\r\n' \
+                + b'Content-Length: spaghetti\r\n\r\nFOO',
+                # duplicate conflicting content length fields
+                b'PUT /dup/len3 HTTP/1.1\r\n' \
+                + b'Content-length: 1\r\n' \
+                + b'Content-length: 2\r\n\r\nHA',
+            ]
+
+            for req in bad_requests:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client.settimeout(TIMEOUT)
+                retry_exception(lambda cs=client:
+                                cs.connect(("127.0.0.1", self.http_listener_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.sendall(req)
+
+                # expect the router to close the connection. Otherwise this
+                # raises a time out error:
+                _ = _read_socket(client, length=4096)
+                self.assertEqual(0, len(_))
+                client.close()
+
+            # ensure none of theses bad requests were forwarded to the server
+            server.settimeout(0.25)
+            self.assertRaises(socket.timeout, server.recv, 4096)
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+    def test_07_bad_response_line(self):
+        """
+        Construct response messages with various violations
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+
+            bad_responses = [
+                # malformed response line
+                b'bad-response\r\n',
+                # invalid version field
+                b'HTTP/1.bannana 999\r\n',
+                # unsupported version
+                b'HTTP/0.9 200 OK\r\n',
+                # missing status code
+                b'HTTP/1.1 \r\n',
+                # invalid status code 1
+                b'HTTP/1.1 skupper\r\n',
+                # invalid status code 2
+                b'HTTP/1.1 2\r\n',
+            ]
+
+            # unterminated request to check client cleanup
+            request = b'GET / HTTP/1.1\r\nContent-Length: 100\r\n\r\nX'
+            for response in bad_responses:
+                server, addr = listener.accept()
+                wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client.settimeout(TIMEOUT)
+                retry_exception(lambda cs=client:
+                                cs.connect(("127.0.0.1", self.http_listener_port)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                client.sendall(request)
+
+                _ = _read_socket(server, length=len(request))
+                server.sendall(response)
+
+                # expect the router to close the connection to the server due
+                # to the error. Otherwise this raises a time out error:
+                _ = _read_socket(server, length=4096)
+                self.assertEqual(0, len(_))
+
+                # This should cause the router to send an error response and
+                # close the connection to the client. Otherwise this raises a
+                # time out error:
+                err = _read_socket(client, length=4096)
+                self.assertIn(b'HTTP/1.1 503', err)
+                client.close()
+
+                server.shutdown(socket.SHUT_RDWR)
+                server.close()
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+    def test_08_bad_chunked_body(self):
+        """
+        Construct a messages with invalid chunk header
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.http_server_port))
+            listener.settimeout(TIMEOUT)
+            listener.listen(1)
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client.settimeout(TIMEOUT)
+            retry_exception(lambda cs=client:
+                            cs.connect(("127.0.0.1", self.http_listener_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+
+            # send a valid start so server gets a delivery
+            request = b'PUSH / HTTP/1.1\r\n' \
+                + b'Transfer-Encoding: chunked\r\n' \
+                + b'\r\n' \
+                + b'10\r\n' \
+                + b'ABCDEFGHIJKLMNOP\r\n'
+
+            client.sendall(request)
+
+            _ = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(_))
+
+            # now send a bad chunk header
+            client.sendall(b'GERBIL\r\n')
+
+            # the error should be detected on the client facing router and the
+            # connection should be dropped (timeout if not dropped)
+            _ = _read_socket(client, length=4096)
+
+            # since the message was in-flight at the server the connection
+            # should drop there as well
+            _ = _read_socket(server, length=4096)
+
+            client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+            # repeat the test, but have the server response attempt to send an
+            # invalid chunk
+
+            server, addr = listener.accept()
+            wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client.settimeout(TIMEOUT)
+            retry_exception(lambda cs=client:
+                            cs.connect(("127.0.0.1", self.http_listener_port)),
+                            delay=0.25,
+                            exception=ConnectionRefusedError)
+
+            request = b'GET / HTTP/1.1\r\n' \
+                + b'Content-length: 0\r\n' \
+                + b'\r\n'
+
+            client.sendall(request)
+
+            _ = _read_socket(server, length=len(request))
+            self.assertEqual(len(request), len(_))
+
+            response = b'HTTP/1.1 200 OK\r\n' \
+                + b'Transfer-Encoding: chunked\r\n' \
+                + b'\r\n' \
+                + b'10\r\n' \
+                + b'ABCDEFGHIJKLMNOP\r\n'
+
+            server.sendall(response)
+
+            _ = _read_socket(client, length=len(response))
+            self.assertEqual(len(response), len(_))
+
+            server.sendall(b'HAMSTER\r\n')
+
+            # the error should be detected on the server facing router and the
+            # connection should be dropped (timeout if not dropped)
+            _ = _read_socket(server, length=4096)
+
+            # and the client connection should drop as well
+            _ = _read_socket(client, length=4096)
+
+            client.close()
+            server.shutdown(socket.SHUT_RDWR)
+            server.close()
+
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
 
 class Http1AdaptorQ2Standalone(TestCase):
     """
@@ -845,6 +1917,11 @@ class Http1AdaptorQ2Standalone(TestCase):
         """
         Read data from socket until timeout occurs.  Return read data.
         """
+
+        # Trying to use SSLSocket with select is an exercise in pain. Just
+        # don't do it.
+        assert not isinstance(sock, SSLSocket)
+
         sock.setblocking(0)
         data = b''
 
@@ -1475,6 +2552,528 @@ class Http1TlsBadConfigTests(HttpTlsBadConfigTestsBase):
 
     def test_listener_mgmt_missing_ca_file(self):
         self._test_listener_mgmt_missing_ca_file()
+
+
+class Http1TLSConnectorErrorTests(TestCase):
+    """Test server-facing connector error handling"""
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TLSConnectorErrorTests, cls).setUpClass()
+
+    def test_001_cleartext_reject(self):
+        """Attempt to connect to a server that does not use TLS"""
+
+        mgmt_port = self.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ConnectorErrorTests001'}),
+            ('listener', {'role': 'normal',
+                          'port': mgmt_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        r_config = Qdrouterd.Config(r_config)
+        with self.tester.qdrouterd('HTTP1ConnectorErrorTests001', r_config,
+                                   wait=True) as router:
+            mgmt = router.qd_manager
+
+            server_port = self.tester.get_port()
+            mgmt.create("sslProfile",
+                        {'name': 'SP_test_001_cleartext_reject',
+                         'caCertFile': CA_CERT})
+            mgmt.create("httpConnector",
+                        {"name": "C_test_001_cleartext_reject",
+                         "address": "test_001_cleartext_reject",
+                         'host': 'localhost',
+                         'port': server_port,
+                         'protocolVersion': 'HTTP1',
+                         'sslProfile': 'SP_test_001_cleartext_reject'})
+
+            # test server:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+
+                def _io(self):
+                    while True:
+                        conn.send(b'This is not TLS')
+                        ignore = conn.recv(4096)
+
+                self.assertRaises(OSError, _io, self)
+                conn.close()
+            router.wait_log_message(pattern=r"TLS connection failed")
+
+            # Ensure router can still connect given the proper TLS config.
+            # If the handshake fails an error will be raised by server.accept()
+
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            # ctxt.verify_mode = CERT_REQUIRED
+            # ctxt.check_hostname = False
+
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+                conn.close()
+
+    def test_002_client_cert_fail(self):
+        """Handle a handshake failure initiated by the server due to a missing
+        client certificate
+        """
+        mgmt_port = self.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ConnectorErrorTests002'}),
+            ('listener', {'role': 'normal',
+                          'port': mgmt_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        r_config = Qdrouterd.Config(r_config)
+        with self.tester.qdrouterd('HTTP1ConnectorErrorTests002', r_config,
+                                   wait=True) as router:
+            mgmt = router.qd_manager
+            server_port = self.tester.get_port()
+
+            # this profile does not provide a client cert
+            mgmt.create("sslProfile",
+                        {'name': 'SP_test_002_client_cert_fail',
+                         'caCertFile': CA_CERT})
+            mgmt.create("httpConnector",
+                        {"name": 'C_test_002_client_cert_fail',
+                         "address": 'test_002_client_cert_fail',
+                         'host': 'localhost',
+                         'port': server_port,
+                         'protocolVersion': 'HTTP1',
+                         'sslProfile': 'SP_test_002_client_cert_fail'})
+
+            # This test server expects a client cert from the router. Expect
+            # the handshake to fail
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            ctxt.verify_mode = CERT_REQUIRED
+
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                self.assertRaises(OSError, server.accept)
+
+            router.wait_log_message(pattern=r"TLS connection failed")
+
+            # Ensure router can still connect given the proper TLS config.
+
+            ctxt = SSLContext(protocol=PROTOCOL_TLS_SERVER)
+            ctxt.load_verify_locations(cafile=CA_CERT)
+            ctxt.load_cert_chain(SERVER_CERTIFICATE,
+                                 SERVER_PRIVATE_KEY,
+                                 "server-password")
+            with ctxt.wrap_socket(socket.socket(socket.AF_INET,
+                                                socket.SOCK_STREAM),
+                                  server_side=True) as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.settimeout(TIMEOUT)
+                server.bind(("localhost", server_port))
+                server.listen(1)
+                conn, addr = server.accept()
+                conn.close()
+
+
+class Http1TLSListenerErrorTests(TestCase):
+    """Test client-facing listener error handling"""
+    @classmethod
+    def setUpClass(cls):
+        super(Http1TLSListenerErrorTests, cls).setUpClass()
+        cls.connector_port = cls.tester.get_port()
+        cls.listener_port = cls.tester.get_port()
+        r_config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1TLSListenerErrorTests'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+            ('httpConnector', {'name': 'C_HTTP1TLSListenerErrorTests',
+                               'address': 'HTTP1TLSListenerErrorTests',
+                               'host': 'localhost',
+                               'port': cls.connector_port,
+                               'protocolVersion': 'HTTP1'}),
+            ('sslProfile', {'name': 'SP_HTTP1TLSListenerErrorTests',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_HTTP1TLSListenerErrorTests',
+                              'address': 'HTTP1TLSListenerErrorTests',
+                              'host': 'localhost',
+                              'port': cls.listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'sslProfile': 'SP_HTTP1TLSListenerErrorTests',
+                              'authenticatePeer': True})
+        ]
+        r_config = Qdrouterd.Config(r_config)
+        cls.router = cls.tester.qdrouterd('HTTP1TLSListenerErrorTests', r_config, wait=False)
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_001_client_failures(self):
+        """Test various client errors"""
+        TEST = {
+            "GET": [
+                (RequestMsg("GET", "/GET/ping",
+                            headers={"Content-Length": 0}),
+                 ResponseMsg(200, reason="OK",
+                             headers={"Content-Length": 4,
+                                      "Content-Type": "text/plain;charset=utf-8"},
+                             body=b'pong'),
+                 ResponseValidator(expect_body=b'pong'))
+            ]
+        }
+
+        ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
+        ctxt.load_verify_locations(cafile=CA_CERT)
+        ctxt.load_cert_chain(CLIENT_CERTIFICATE,
+                             CLIENT_PRIVATE_KEY,
+                             "client-password")
+        ctxt.verify_mode = CERT_REQUIRED
+        ctxt.check_hostname = True
+
+        with TestServer.new_server(self.connector_port, self.listener_port,
+                                   TEST, client_ssl_context=ctxt) as server:
+            self.router.wait_ready()
+            wait_http_listeners_up(self.router.addresses[0])
+
+            # verify a good client can connect
+
+            client = ThreadedTestClient(TEST,
+                                        f"localhost:{self.listener_port}",
+                                        ssl_context=ctxt)
+            client.wait()
+            client.check_count(1)
+
+            # now attempt to attach without TLS - should fail
+
+            url = f"http://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1', '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertNotEqual(0, rc, f"Expected curl to fail: out={out}")
+
+            # connect without a self identifying certificate should also fail
+
+            url = f"https://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1',
+                    '--cacert', CA_CERT,
+                    '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertNotEqual(0, rc, f"Expected curl to fail: out={out}")
+
+            # test properly configured client - should connect ok
+
+            url = f"https://localhost:{self.listener_port}/GET/ping"
+            args = ['--http1.1',
+                    '--cacert', CA_CERT,
+                    '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                    '--key', CLIENT_PRIVATE_KEY,
+                    '--show-error', '--silent', '-G', url]
+            rc, out, err = run_curl(args)
+            self.assertEqual(0, rc, f"Expected curl fail: rc={rc} err={err}")
+            self.assertEqual('pong', out, f"Expected 'pong', got {out}")
+
+
+@unittest.skipIf(not nginx_available() or not curl_available(), "both nginx and curl needed")
+class Http1AdaptorTwoRouterNginxTLS(TestCase):
+    """
+    Verify curl requests across two routers to an nginx server
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorTwoRouterNginxTLS, cls).setUpClass()
+
+        # configuration:
+        # two interiors
+        #
+        #  +------+    +---------+
+        #  | INTA |<==>|  INT.B  |
+        #  +------+    +---------+
+        #     ^             ^
+        #     |             |
+        #     V             V
+        #   <curl>       <nginx>
+
+        cls.interior_port = cls.tester.get_port()
+        cls.http_server_port = cls.tester.get_port()
+        cls.http_listener_port = cls.tester.get_port()
+
+        # INTA
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTA'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('connector', {'name': 'backbone',
+                           'role': 'inter-router',
+                           'host': '127.0.0.1',
+                           'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ListenerSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_curl',
+                              'port': cls.http_listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'closest/nginx',
+                              'sslProfile': 'ListenerSSLProfile',
+                              'authenticatePeer': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTA = cls.tester.qdrouterd('INTA', config, wait=False)
+
+        # INTB
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTB'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('listener', {'name': 'backbone',
+                          'role': 'inter-router',
+                          'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ConnectorSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': "client-password"}),
+            ('httpConnector', {'name': 'C_nginx',
+                               'host': 'localhost',
+                               'port': cls.http_server_port,
+                               'protocolVersion': 'HTTP1',
+                               'address': 'closest/nginx',
+                               'sslProfile': 'ConnectorSSLProfile',
+                               'verifyHostname': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTB = cls.tester.qdrouterd('INTB', config, wait=False)
+
+        env = dict()
+        env['nginx-base-folder'] = NginxServer.BASE_FOLDER
+        env['setupclass-folder'] = cls.tester.directory
+        env['nginx-configs-folder'] = NginxServer.CONFIGS_FOLDER
+        env['listening-port'] = str(cls.http_server_port)
+        env['http2'] = ''  # disable HTTP/2
+        env['ssl'] = 'ssl'
+        env['tls-enabled'] = ''  # Will enable TLS lines
+
+        # TLS stuff
+        env['chained-pem'] = CHAINED_PEM
+        env['server-private-key-no-pass-pem'] = SERVER_KEY_NO_PASS
+        env['ssl-verify-client'] = 'on'
+        env['ca-certificate'] = CA_CERT
+        cls.nginx_server = cls.tester.nginxserver(config_path=NginxServer.CONFIG_FILE,
+                                                  env=env)
+
+        # wait for everything to connect and settle
+        cls.INTA.wait_ready()
+        cls.INTB.wait_ready()
+        wait_http_listeners_up(cls.INTA.addresses[0])
+
+        # curl will use these additional args to connect to the router.
+        cls.curl_args = ['--http1.1',
+                         '--cacert', CA_CERT,
+                         '--cert-type', 'PEM',
+                         '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                         '--key', CLIENT_PRIVATE_KEY]
+
+    def test_get_image_jpg(self):
+        images = ['test.jpg',
+                  'pug.png',
+                  'skupper.png',
+                  'skupper-logo-vertical.svg']
+
+        for image in images:
+            in_file = os.path.join(NginxServer.IMAGES_FOLDER, image)
+            out_file = os.path.join(self.INTA.outdir, 'curl-images', image)
+            url = f"https://localhost:{self.http_listener_port}/images/{image}"
+            (rc, _, err) = run_curl(args=self.curl_args +
+                                    ['--verbose',
+                                     '--create-dirs',
+                                     '--output', out_file,
+                                     '-G', url])
+            self.assertEqual(0, rc, f"curl failed: {err}")
+            self.assertEqual(get_digest(in_file), get_digest(out_file),
+                             f"Error: {out_file} corrupted by HTTP/1 transfer!")
+
+    def test_get_html(self):
+        pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
+        for page in pages:
+            in_file = os.path.join(NginxServer.HTML_FOLDER, page)
+            out_file = os.path.join(self.INTA.outdir, 'curl-html', page)
+            url = f"https://localhost:{self.http_listener_port}/{page}"
+            (rc, _, err) = run_curl(args=self.curl_args +
+                                    ['--verbose',
+                                     '--create-dirs',
+                                     '--output', out_file,
+                                     '-G', url])
+            self.assertEqual(0, rc, f"curl failed: {err}")
+            self.assertEqual(get_digest(in_file), get_digest(out_file),
+                             f"Error: {out_file} corrupted by HTTP/1 transfer!")
+
+
+# old openssl s_server implementations fail to send close_notify
+# https://github.com/openssl/openssl/issues/1806
+@unittest.skipIf(openssl_available() is False or openssl_available() < (3, 0, 5),
+                 "openssl s_server not supported")
+class Http1AdaptorTwoRouterOpensslServer(TestCase):
+    """
+    Verify requests across two routers to an openssl server
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorTwoRouterOpensslServer, cls).setUpClass()
+
+        # configuration:
+        # two interiors
+        #
+        #  +------+    +---------+
+        #  | INTA |<==>|  INT.B  |
+        #  +------+    +---------+
+        #     ^             ^
+        #     |             |
+        #     V             V
+        #   <client>   <openssl s_server>
+
+        cls.interior_port = cls.tester.get_port()
+        cls.http_server_port = cls.tester.get_port()
+        cls.http_listener_port = cls.tester.get_port()
+
+        # INTA
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTA'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('connector', {'name': 'backbone',
+                           'role': 'inter-router',
+                           'host': '127.0.0.1',
+                           'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ListenerSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': "server-password"}),
+            ('httpListener', {'name': 'L_INTA',
+                              'port': cls.http_listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'closest/openssl',
+                              'sslProfile': 'ListenerSSLProfile',
+                              'authenticatePeer': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTA = cls.tester.qdrouterd('INTA', config, wait=False)
+
+        # INTB
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'INTB'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('listener', {'name': 'backbone',
+                          'role': 'inter-router',
+                          'port': cls.interior_port}),
+            ('sslProfile', {'name': 'ConnectorSSLProfile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': "client-password"}),
+            ('httpConnector', {'name': 'C_INTB',
+                               'host': 'localhost',
+                               'port': cls.http_server_port,
+                               'protocolVersion': 'HTTP1',
+                               'address': 'closest/openssl',
+                               'sslProfile': 'ConnectorSSLProfile',
+                               'verifyHostname': True}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.INTB = cls.tester.qdrouterd('INTB', config, wait=False)
+
+        ssl_info = {}
+        ssl_info['CA_CERT'] = CA_CERT
+        ssl_info['SERVER_CERTIFICATE'] = SERVER_CERTIFICATE
+        ssl_info['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
+        ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = "server-password"
+
+        server_args = ["-Verify", "1", "-WWW"]
+        cls.openssl_server = cls.tester.openssl_server(listening_port=cls.http_server_port,
+                                                       ssl_info=ssl_info,
+                                                       name="OpenSSLServerHttp",
+                                                       cl_args=server_args)
+        cls.INTA.wait_ready()
+        cls.INTB.wait_ready()
+        wait_http_listeners_up(cls.INTA.addresses[0])
+
+    @unittest.skipIf(not curl_available(), "test required 'curl' command not found")
+    def test_curl_client(self):
+        # curl will use these additional args to connect to the router.
+        curl_args = ['--http1.1',
+                     '--cacert', CA_CERT,
+                     '--cert-type', 'PEM',
+                     '--cert', f"{CLIENT_CERTIFICATE}:client-password",
+                     '--key', CLIENT_PRIVATE_KEY]
+
+        # create a file for the openssl server to serve
+        with open(os.path.join(self.openssl_server.outdir, "openssl_curl_test.txt"),
+                  'w') as out:
+            out.write("OPENSSL SERVER CURL TEST")
+
+        url = f"https://localhost:{self.http_listener_port}/openssl_curl_test.txt"
+        rc, out, err = run_curl(args=curl_args + ['-G', url])
+        self.assertEqual(0, rc, f"curl failed: {err}")
+        self.assertIn("OPENSSL SERVER CURL TEST", out)
+
+    def test_openssl_client(self):
+        ssl_info = {}
+        ssl_info['CA_CERT'] = CA_CERT
+        ssl_info['CLIENT_CERTIFICATE'] = CLIENT_CERTIFICATE
+        ssl_info['CLIENT_PRIVATE_KEY'] = CLIENT_PRIVATE_KEY
+        ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'] = "client-password"
+
+        # create a file for the openssl server to serve
+        with open(os.path.join(self.openssl_server.outdir, "s_client_test.txt"),
+                  'w') as out:
+            out.write("OPENSSL SERVER S_CLIENT TEST")
+
+        out, err = self.opensslclient(port=self.http_listener_port,
+                                      ssl_info=ssl_info,
+                                      data=b'GET /s_client_test.txt HTTP/1.1\r\n'
+                                      + b'content-length: 0\r\n\r\n',
+                                      expect=Process.EXIT_OK,
+                                      cl_args=["-verify_return_error", "-quiet"])
+        self.assertIn("OPENSSL SERVER S_CLIENT TEST", out.decode())
 
 
 if __name__ == '__main__':

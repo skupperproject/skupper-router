@@ -30,6 +30,7 @@ Features:
 
 import errno
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -504,6 +505,15 @@ class NginxServer(Process):
     """
     Sets up an ngix server
     """
+
+    # Filesystem paths used by the server content and configuration
+    #
+    BASE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nginx')
+    CONFIGS_FOLDER = os.path.join(BASE_FOLDER, 'nginx-configs')
+    IMAGES_FOLDER = os.path.join(BASE_FOLDER, 'images')
+    HTML_FOLDER = os.path.join(BASE_FOLDER, 'html')
+    CONFIG_FILE = os.path.join(CONFIGS_FOLDER, 'nginx.conf')
+
     def __init__(self,
                  config_path: str,  # Full path of templated config file (string) /blah-blah/nginx/nginx-template.conf
                  env: Dict[str, str],  # A dict of env variables which will be substituted in the config_path file.
@@ -1249,6 +1259,9 @@ class Tester:
         # Generally the error returned if self signed certificates are used is the following -
         # error= b"Can't use SSL_get_servername\ndepth=1 CN = Trusted.CA.com, O = Trust Me Inc.\nverify return:1\ndepth=0 CN = localhost, O = Server\nverify return:1\nDONE\n"
         out, error = p.communicate(input=data, timeout=timeout)
+        if expect == Process.EXIT_OK:
+            assert p.returncode == 0, \
+                f"openssl s_client failed with returncode {p.returncode} {error}"
         return out, error
 
     def ncat(self,
@@ -1954,6 +1967,23 @@ def nginx_available():
     return False
 
 
+def openssl_available():
+    """
+    Check if the openssl command line tool is installed. Return a tuple
+    containing the version if found, otherwise return False.
+    """
+    try:
+        args = ['openssl', 'version']
+        with subprocess.Popen(args, stdout=PIPE, stderr=PIPE,
+                              universal_newlines=True) as p:
+            out, err = p.communicate()
+            if p.returncode == 0:
+                return tuple([int(x) for x in out.split()[1].split('.')])
+    except Exception:
+        pass
+    return False
+
+
 def run_curl(args, input=None, timeout=TIMEOUT):
     """
     Run the curl command with the given argument list.
@@ -1968,3 +1998,18 @@ def run_curl(args, input=None, timeout=TIMEOUT):
                           stderr=PIPE, universal_newlines=True) as p:
         out = p.communicate(input, timeout)
         return p.returncode, out[0], out[1]
+
+
+def get_digest(file_path):
+    "Compute a sha256 hash on file_path"
+    h = hashlib.sha256()
+
+    with open(file_path, 'rb') as file:
+        while True:
+            # Reading is buffered, so we can read smaller chunks.
+            chunk = file.read(h.block_size)
+            if not chunk:
+                break
+            h.update(chunk)
+
+    return h.hexdigest()

@@ -52,6 +52,12 @@ struct qd_tls_t {
     qd_tls_on_secure_cb_t *on_secure_cb;
     bool                   tls_has_output;
     bool                   tls_error;
+    bool                   output_eos;      // pn_tls_close_output() called
+    bool                   input_drained;   // no more decrypted output, raw conn read closed
+    bool                   output_flushed;  // encrypt done, raw conn write closed
+
+    uint64_t encrypted_output_bytes;
+    uint64_t encrypted_input_bytes;
 };
 
 ALLOC_DECLARE(qd_tls_t);
@@ -723,7 +729,297 @@ bool qd_tls_has_output(const qd_tls_t *tls)
     return tls->tls_has_output;
 }
 
+bool qd_tls_is_input_drained(const qd_tls_t *tls, bool *close_notify)
+{
+    assert(tls);
+    *close_notify = pn_tls_is_input_closed(tls->tls_session);
+    return tls->input_drained;
+}
+
+bool qd_tls_is_output_flushed(const qd_tls_t *tls)
+{
+    assert(tls);
+    return tls->output_flushed;
+}
+
 pn_tls_t *qd_tls_get_pn_tls_session(qd_tls_t *tls)
 {
+    assert(tls);
     return tls->tls_session;
+}
+
+// note: only use with qd_tls_do_io
+uint64_t qd_tls_get_encrypted_output_octet_count(const qd_tls_t *tls)
+{
+    assert(tls);
+    return tls->encrypted_output_bytes;
+}
+
+// note: only use with qd_tls_do_io
+uint64_t qd_tls_get_encrypted_input_octet_count(const qd_tls_t *tls)
+{
+    assert(tls);
+    return tls->encrypted_input_bytes;
+}
+
+int qd_tls_do_io(qd_tls_t                     *tls,
+                 pn_raw_connection_t          *raw_conn,
+                 qd_tls_take_output_data_cb_t *take_output_cb,
+                 void                         *take_output_context,
+                 qd_adaptor_buffer_list_t     *input_data,
+                 uint64_t                     *input_data_count)
+{
+    bool work;
+    *input_data_count = 0;
+
+    assert(tls);
+    assert(raw_conn);
+
+    do {
+        size_t          capacity;
+        size_t          taken;
+        size_t          given;
+        pn_raw_buffer_t pn_buf_desc;
+        uint64_t        total_octets;
+
+        // Loop until no more work can be done. "work" is considered true whenever the TLS layer produces output or
+        // opens up capacity for more input
+
+        work = false;
+
+        //
+        // give empty buffers for holding encrypted and decrypted output from the TLS layer
+        //
+
+        capacity = pn_tls_get_encrypt_output_buffer_capacity(tls->tls_session);
+        while (capacity-- > 0) {
+            (void) qd_adaptor_buffer_raw(&pn_buf_desc);
+            given = pn_tls_give_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
+            (void) given;
+            assert(given == 1);
+        }
+        capacity = pn_tls_get_decrypt_output_buffer_capacity(tls->tls_session);
+        while (capacity-- > 0) {
+            (void) qd_adaptor_buffer_raw(&pn_buf_desc);
+            given = pn_tls_give_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
+            (void) given;
+            assert(given == 1);
+        }
+
+        //
+        // push any unencrypted output data from the protocol adaptor into the TLS layer for encryption.
+        //
+
+        if (pn_tls_is_secure(tls->tls_session)) {
+            assert(take_output_cb);
+            capacity = pn_tls_get_encrypt_input_buffer_capacity(tls->tls_session);
+
+            if (capacity > 0) {
+                qd_adaptor_buffer_list_t ubufs = DEQ_EMPTY;
+
+                int64_t out_octets = take_output_cb(take_output_context, &ubufs, capacity);
+                if (out_octets > 0) {
+                    assert(!DEQ_IS_EMPTY(ubufs) && DEQ_SIZE(ubufs) <= capacity);
+                    qd_log(tls->log_source,
+                           QD_LOG_TRACE,
+                           "[C%" PRIu64 "] %" PRIi64 " unencrypted bytes taken by TLS for encryption (%zu buffers)",
+                           tls->conn_id,
+                           out_octets,
+                           DEQ_SIZE(ubufs));
+                    qd_adaptor_buffer_t *abuf = DEQ_HEAD(ubufs);
+                    while (abuf) {
+                        DEQ_REMOVE_HEAD(ubufs);
+                        qd_adaptor_buffer_pn_raw_buffer(&pn_buf_desc, abuf);
+                        given = pn_tls_give_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1);
+                        assert(given == 1);
+                        abuf = DEQ_HEAD(ubufs);
+                    }
+                } else {
+                    assert(DEQ_IS_EMPTY(ubufs));
+                    if (out_octets == QD_IO_EOS && tls->output_eos == false) {
+                        pn_tls_close_output(tls->tls_session);
+                        tls->output_eos = true;
+                        qd_log(tls->log_source, QD_LOG_TRACE, "[C%" PRIu64 "] EOS signalled: closing TLS output",
+                               tls->conn_id);
+                    }
+                }
+            }
+        } else {
+            // TLS is not secure (either handshake is in progress or an error occurred). Either way, do not give it any
+            // more output data.  TLS errors are checked after the TLS state machine runs and are handled on exit from
+            // this loop.
+        }
+
+        //
+        // push incoming encrypted data from raw conn into TLS
+        //
+
+        capacity = pn_tls_get_decrypt_input_buffer_capacity(tls->tls_session);
+        if (capacity > 0) {
+            size_t pushed = 0;
+            total_octets  = 0;
+            while (pushed < capacity && pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
+                if (pn_buf_desc.size) {
+                    total_octets += pn_buf_desc.size;
+                    given = pn_tls_give_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1);
+                    assert(given == 1);
+                    ++pushed;
+                } else {
+                    qd_adaptor_buffer_free((qd_adaptor_buffer_t *) pn_buf_desc.context);
+                }
+            }
+            if (pushed > 0) {
+                tls->encrypted_input_bytes += total_octets;
+                qd_log(tls->log_source,
+                       QD_LOG_TRACE,
+                       "[C%" PRIu64 "] %" PRIu64
+                       " encrypted bytes read from the raw connection passed to TLS for decryption (%zu buffers)",
+                       tls->conn_id,
+                       total_octets,
+                       pushed);
+            }
+        }
+
+        // run the tls state machine (not considered "work").
+        //
+        // If there is an error the TLS layer may have generated new encrypted output that contains the details about
+        // the failure that needs to be sent to the remote. That is why this code does not immediately cease processing
+        // if pn_tls_process returns an error: there may be more outgoing buffers that have to be written to the raw
+        // connection before it can be closed. This code assumes that the proton TLS library will stop giving capacity
+        // for other work once the error has occurred so it is safe to continue running this work loop.
+
+        if (!tls->tls_error) {
+            const bool check_if_secure = tls->on_secure_cb && !pn_tls_is_secure(tls->tls_session);
+            int        err             = pn_tls_process(tls->tls_session);
+            if (err) {
+                tls->tls_error = true;
+                qd_log(
+                    tls->log_source, QD_LOG_TRACE, "[C%" PRIu64 "] pn_tls_process failed: error=%d", tls->conn_id, err);
+            } else if (check_if_secure && pn_tls_is_secure(tls->tls_session)) {
+                tls->on_secure_cb(tls, tls->user_context);
+                tls->on_secure_cb = 0;  // one shot
+            }
+        }
+
+        //
+        // Take encrypted TLS output and write it to the raw connection
+        //
+
+        capacity = pn_raw_connection_write_buffers_capacity(raw_conn);
+        if (capacity > 0) {
+            size_t pushed = 0;
+            total_octets  = 0;
+            while (pushed < capacity && pn_tls_take_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+                total_octets += pn_buf_desc.size;
+                given = pn_raw_connection_write_buffers(raw_conn, &pn_buf_desc, 1);
+                assert(given == 1);
+                ++pushed;
+            }
+            if (pushed > 0) {
+                work = true;
+                tls->encrypted_output_bytes += total_octets;
+                qd_log(tls->log_source,
+                       QD_LOG_TRACE,
+                       "[C%" PRIu64 "] %" PRIu64 " encrypted bytes written to the raw connection by TLS (%zu buffers)",
+                       tls->conn_id,
+                       total_octets,
+                       pushed);
+            }
+        } else if (pn_raw_connection_is_write_closed(raw_conn)) {
+            // drain the TLS buffers - there is no place to send them!
+            taken = 0;
+            while (pn_tls_take_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+                assert(pn_buf_desc.context);
+                qd_adaptor_buffer_free((qd_adaptor_buffer_t *) pn_buf_desc.context);
+                taken += 1;
+            }
+            if (taken) {
+                work = true;
+                qd_log(tls->log_source, QD_LOG_TRACE,
+                       "[C%" PRIu64 "] discarded %zu outgoing encrypted buffers due to raw conn write closed",
+                       tls->conn_id, taken);
+            }
+        }
+
+        //
+        // take decrypted output and give it to the adaptor
+        //
+
+        total_octets = 0;
+        taken        = 0;
+        while (pn_tls_take_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_adaptor_buffer_t *abuf = qd_get_adaptor_buffer_from_pn_raw_buffer(&pn_buf_desc);
+            if (pn_buf_desc.size) {
+                total_octets += pn_buf_desc.size;
+                DEQ_INSERT_TAIL(*input_data, abuf);
+                ++taken;
+            } else {
+                qd_adaptor_buffer_free(abuf);
+            }
+        }
+        if (taken) {
+            work = true;  // more capacity for decrypted output
+            *input_data_count += total_octets;
+            qd_log(tls->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] %" PRIu64 " decrypted bytes taken from TLS for adaptor input (%zu buffers)",
+                   tls->conn_id, total_octets, taken);
+        }
+
+        //
+        // Release all used TLS input buffers - they are no longer needed
+        //
+
+        taken = 0;
+        while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buf_desc.context;
+            assert(abuf);
+            qd_adaptor_buffer_free(abuf);
+            ++taken;
+        }
+        while (pn_tls_take_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_adaptor_buffer_t *abuf = (qd_adaptor_buffer_t *) pn_buf_desc.context;
+            assert(abuf);
+            qd_adaptor_buffer_free(abuf);
+            ++taken;
+        }
+        if (taken)
+            work = true;  // more capacity for encrypt/decrypt input buffers
+
+    } while (work);
+
+    // Cannot return an error until all pending outgoing encrypted data have been written to the raw conn so error info
+    // can be sent to peer. See comment above.
+    //
+    if (tls->tls_error && !pn_tls_is_decrypt_output_pending(tls->tls_session)) {
+        char buf[1024];
+        int  err = pn_tls_get_session_error(tls->tls_session);
+        pn_tls_get_session_error_string(tls->tls_session, buf, sizeof(buf));
+        qd_log(tls->log_source, QD_LOG_ERROR, "[C%" PRIu64 "] TLS connection failed (%d): %s", tls->conn_id, err, buf);
+        pn_raw_connection_close(raw_conn);
+        return err;
+    }
+
+    if (tls->output_eos && !pn_tls_is_encrypt_output_pending(tls->tls_session)) {
+        // We closed the encrypt side of the TLS connection and we've sent all output
+        tls->output_flushed = true;
+        if (!pn_raw_connection_is_write_closed(raw_conn)) {
+            qd_log(tls->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] TLS output closed - closing write side of raw connection", tls->conn_id);
+            pn_raw_connection_write_close(raw_conn);
+        }
+    }
+
+    if (pn_tls_is_input_closed(tls->tls_session)
+        || (pn_raw_connection_is_read_closed(raw_conn) && !pn_tls_is_decrypt_output_pending(tls->tls_session))) {
+        // TLS will not take any more encrypted input - drain the raw conn input
+        if (!pn_raw_connection_is_read_closed(raw_conn)) {
+            qd_log(tls->log_source, QD_LOG_TRACE,
+                   "[C%" PRIu64 "] TLS input closed - closing read side of raw connection", tls->conn_id);
+            pn_raw_connection_read_close(raw_conn);
+        }
+        qd_raw_connection_drain_read_buffers(raw_conn);
+        tls->input_drained = true;
+    }
+
+    return 0;
 }

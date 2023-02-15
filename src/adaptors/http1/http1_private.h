@@ -41,6 +41,7 @@
 typedef struct qdr_http1_out_data_t      qdr_http1_out_data_t;
 typedef struct qdr_http1_request_base_t  qdr_http1_request_base_t;
 typedef struct qdr_http1_connection_t    qdr_http1_connection_t;
+typedef struct qd_tls_t                  qd_tls_t;
 
 DEQ_DECLARE(qdr_http1_connection_t, qdr_http1_connection_list_t);
 
@@ -116,12 +117,14 @@ struct qdr_http1_connection_t {
     qdr_connection_t      *qdr_conn;
     qdr_http1_adaptor_t   *adaptor;
     vflow_record_t        *vflow;  // connection level vanflow record.
+    qd_tls_t              *tls;  // TLS session (if configured)
 
     uint64_t               conn_id;
     qd_handler_context_t   handler_context;
     h1_codec_connection_type_t     type;
     qd_conn_admin_status_t         admin_status;
     qd_conn_oper_status_t          oper_status;
+    int                            tls_error;
 
     struct {
         char *host;
@@ -138,7 +141,7 @@ struct qdr_http1_connection_t {
     //
     struct {
         char    *client_ip_addr;
-        char    *reply_to_addr;  // set once link is up
+        char    *reply_to_addr;  // set after link is up
         uint64_t next_msg_id;
     } client;
 
@@ -148,6 +151,9 @@ struct qdr_http1_connection_t {
         qd_timer_t          *reconnect_timer;
         qd_timestamp_t       link_timeout;
         qd_duration_t        reconnect_pause;
+        // do not call pn_raw_connection_wake() while bringing up the raw connection. This prevents triggering a proton
+        // bug. See https://issues.apache.org/jira/browse/PROTON-2673
+        bool reconnecting;
     } server;
 
     // Outgoing link (router ==> HTTP app)
@@ -168,7 +174,8 @@ struct qdr_http1_connection_t {
     //
     qdr_http1_request_list_t requests;
 
-    // statistics
+    // statistics: unencrypted octet counters. The TLS instance maintains counters for the corresponding encrypted
+    // octets.
     //
     uint64_t out_http1_octets;
     uint64_t in_http1_octets;
@@ -177,6 +184,9 @@ struct qdr_http1_connection_t {
     //
     bool trace;
     bool require_tls;
+    bool closing;
+    bool output_closed;
+    bool input_closed;
 };
 ALLOC_DECLARE(qdr_http1_connection_t);
 
@@ -194,24 +204,21 @@ ALLOC_DECLARE(qdr_http1_connection_t);
 void qdr_http1_free_written_buffers(qdr_http1_connection_t *hconn);
 void qdr_http1_enqueue_buffer_list(qdr_http1_out_data_list_t *fifo, qd_buffer_list_t *blist, uintmax_t octets);
 void qdr_http1_enqueue_stream_data(qdr_http1_out_data_list_t *fifo, qd_message_stream_data_t *stream_data);
-uint64_t qdr_http1_write_out_data(qdr_http1_connection_t *hconn, qdr_http1_out_data_list_t *fifo);
-uint64_t  qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_buffer_list_t *abuf_list, size_t limit);
-void      qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
-uintmax_t qdr_http1_get_read_buffers(qdr_http1_connection_t *hconn,
-                                     qd_buffer_list_t *blist);
-
+void qdr_http1_out_data_cleanup(qdr_http1_out_data_list_t *out_data);
 void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error);
 void qdr_http1_connection_free(qdr_http1_connection_t *hconn);
-
 void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq);
 void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context);
 
-typedef uint64_t qdr_http1_get_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *a_bufs, size_t limit);
-bool             qdr_http1_do_raw_io(pn_raw_connection_t            *raw_conn,
-                                     qdr_http1_get_output_data_cb_t *get_output_cb,
-                                     void                           *get_output_context,
-                                     qd_adaptor_buffer_list_t       *input_data,
-                                     uint64_t                       *input_octets);
+uint64_t qdr_http1_get_out_buffers(qdr_http1_out_data_list_t *fifo, qd_adaptor_buffer_list_t *abuf_list, size_t limit);
+
+typedef int64_t qdr_http1_take_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *a_bufs, size_t limit);
+void            qdr_http1_do_raw_io(uint64_t                         conn_id,
+                                    pn_raw_connection_t             *raw_conn,
+                                    qdr_http1_take_output_data_cb_t *take_output_cb,
+                                    void                            *take_output_context,
+                                    qd_adaptor_buffer_list_t        *input_data,
+                                    uint64_t                        *input_octets);
 
 #define HTTP1_NUM_ALPN_PROTOCOLS 2
 extern const char *http1_alpn_protocols[HTTP1_NUM_ALPN_PROTOCOLS];
