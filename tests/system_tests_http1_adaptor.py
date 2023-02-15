@@ -38,6 +38,7 @@ from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
+from system_test import openssl_available
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -2939,6 +2940,10 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
                              f"Error: {out_file} corrupted by HTTP/1 transfer!")
 
 
+# old openssl s_server implementations fail to send close_notify
+# https://github.com/openssl/openssl/issues/1806
+@unittest.skipIf(openssl_available() is False or openssl_available() < (3, 0, 5),
+                 "openssl s_server not supported")
 class Http1AdaptorTwoRouterOpensslServer(TestCase):
     """
     Verify requests across two routers to an openssl server
@@ -2959,10 +2964,8 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
         #   <client>   <openssl s_server>
 
         cls.interior_port = cls.tester.get_port()
-        #cls.http_server_port = cls.tester.get_port()
-        #cls.http_listener_port = cls.tester.get_port()
-        cls.http_server_port = 8800
-        cls.http_listener_port = 8000
+        cls.http_server_port = cls.tester.get_port()
+        cls.http_listener_port = cls.tester.get_port()
 
         # INTA
         config = [

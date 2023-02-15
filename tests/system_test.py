@@ -1967,6 +1967,23 @@ def nginx_available():
     return False
 
 
+def openssl_available():
+    """
+    Check if the openssl command line tool is installed. Return a tuple
+    containing the version if found, otherwise return False.
+    """
+    try:
+        args = ['openssl', 'version']
+        with subprocess.Popen(args, stdout=PIPE, stderr=PIPE,
+                              universal_newlines=True) as p:
+            out, err = p.communicate()
+            if p.returncode == 0:
+                return tuple([int(x) for x in out.split()[1].split('.')])
+    except Exception:
+        pass
+    return False
+
+
 def run_curl(args, input=None, timeout=TIMEOUT):
     """
     Run the curl command with the given argument list.
