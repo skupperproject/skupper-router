@@ -1017,7 +1017,15 @@ class TopologyDisposition (MessagingHandler):
                 # replies, we make sure that we count the expected 6 connections.
                 # (The 4 routers are completely connected.)
                 if 'OK' == event.message.properties['statusDescription']:
-                    connection_name = event.message.body['name']
+                    try:
+                        # debug for
+                        # https://github.com/skupperproject/skupper-router/issues/962
+                        connection_name = event.message.body['name']
+                    except Exception as exc:
+                        print("ERROR: see skupper-router ISSUE #962", flush=True)
+                        print(f"Exception hit: {exc}", flush=True)
+                        print(f"body={event.message.body}", flush=True)
+                        raise
 
                     if connection_name in self.connectors_map :
                         self.connectors_map[connection_name] = 1
