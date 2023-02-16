@@ -146,6 +146,8 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
     if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
     if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
+    if (cf->data_connection_count)
+        free(cf->data_connection_count);
 
     if (cf->conn_props) pn_data_free(cf->conn_props);
 
@@ -364,8 +366,17 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
 
     if (strcmp(config->role, "inter-router") == 0) {
-        config->data_connection_count = qd_entity_opt_long(entity, "dataConnectionCount", 2); CHECK();
-        config->has_data_connectors   = true;
+        // For inter-router connections only, the dataConnectionCount defaults to "auto",
+        // which means it will be determined as a function of the number of worker threads.
+        config->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto");
+        CHECK();
+        // If the user has *not* explicitly set the value "0",
+        // then we will have some data connections.
+        if (strcmp(config->data_connection_count, "0")) {
+            config->has_data_connectors = true;
+        }
+    } else {
+        config->data_connection_count = strdup("0");
     }
 
     set_config_host(config, entity);
@@ -750,6 +761,14 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 }
 
 
+// This is used to calculate inter-router data connection
+// count when the user explicitly requests 'auto'
+// or lets it default to that.
+static int auto_calc_connection_count(qd_dispatch_t *qd)
+{
+  return (qdr_core_get_worker_thread_count(qd_dispatch_router_core(qd)) + 1) / 2;
+}
+
 QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
@@ -763,12 +782,34 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         DEQ_INSERT_TAIL(cm->connectors, ct);
         log_config(cm->log_source, &ct->config, "Connector");
 
+        uint32_t connection_count = 0;
+        //
+        // If the user asks for automatic setting of the number
+        // of data connnection count, make one data connection
+        // for every two worker threads. This is the best ratio
+        // for high load, as determined by throughput performance
+        // testing.
+        //
+          if (!strcmp("auto", ct->config.data_connection_count)) {
+              // The user has explicitly requested 'auto'.
+              connection_count = auto_calc_connection_count(qd);
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections calculated at %d ", connection_count);
+          } else if (1 == sscanf(ct->config.data_connection_count, "%u", &connection_count)) {
+              // The user has requested a specific number of connections.
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
+          } else {
+              // The user has entered a non-numeric value that is not 'auto'.
+              // This is not a legal value. Default to 'auto' and mention it.
+              qd_log(cm->log_source, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ", ct->config.data_connection_count);
+              connection_count = auto_calc_connection_count(qd);
+              qd_log(cm->log_source, QD_LOG_INFO, "Inter-router data connections calculated at %d ", connection_count);
+          }
         //
         // If this connection has a data-connection-group, set up the group members now
         //
         if (ct->config.has_data_connectors) {
             qd_generate_discriminator(ct->group_correlator);
-            for (uint32_t i = 0; i < ct->config.data_connection_count; i++) {
+            for (uint32_t i = 0; i < connection_count; i++) {
                 qd_connector_t *dc = qd_server_connector(qd->server);
                 if (dc && load_server_config(qd, &dc->config, entity, false, "inter-router-data") == QD_ERROR_NONE) {
                     strncpy(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE);

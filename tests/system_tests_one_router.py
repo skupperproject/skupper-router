@@ -3216,5 +3216,61 @@ class Q2HoldoffDropTest(MessagingHandler):
                 sleep(0.1)
 
 
+class DataConnectionCountTest(TestCase):
+    """
+    Start the router with different numbers of worker threads and make sure
+    that the automatic setting of the number of data connections works
+    correctly. Also make sure that the user can override that automatic
+    setting by providing a specific integer, including zero.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(DataConnectionCountTest, cls).setUpClass()
+        DataConnectionCountTest.listen_port = cls.tester.get_port()
+        cls.config = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'DCC', 'workerThreads': '7'}),
+            ('listener', {'port': DataConnectionCountTest.listen_port, 'role': 'normal'}),
+            ('connector', {'role': 'inter-router', 'host': '127.0.0.1', 'port': DataConnectionCountTest.listen_port, 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120'}),
+        ])
+        cls.name = "dcc-test-router"
+
+    # Note that when the users sets a specific value for the
+    # inter-router data connections, the log message says
+    # "set to <value>". When 'auto' mode is used, it says
+    # "calculated at <value>".
+    # Omitting the dataConnectionCount entirely means you
+    # get the default value of 'auto'.
+
+    def test_60_threads_vs_data_connection_count(self):
+        for worker_threads in ('1', '3', '5'):
+            for con_count in ('auto', '', '0', '2', '4'):
+
+                # Make the config file.
+                self.config[0][1]['workerThreads'] = worker_threads
+                if con_count == '':
+                    del self.config[0][1]['workerThreads']
+                else:
+                    self.config[2][1]['dataConnectionCount'] = con_count
+
+                # Figure out what log message we expect to see.
+                if con_count in ('auto', ''):
+                    # This expression should match the one in
+                    # the C function auto_calc_connection_count()
+                    # in connection_manager.c .
+                    expected_result = int((int(worker_threads) + 1) / 2)
+                    msg = "Inter-router data connections calculated at " + str(expected_result)
+                else:
+                    expected_result = con_count
+                    msg = "Inter-router data connections set to " + str(expected_result)
+
+                print("worker threads:", worker_threads, ", requested connections:", con_count, ", expected result:", expected_result, end=" ")
+                self.router = self.tester.qdrouterd(self.name, self.config)
+                self.router.wait_ready()
+                self.router.wait_log_message(msg)
+                print("     good")
+
+        self.assertTrue(True)
+
+
 if __name__ == '__main__':
     unittest.main(main_module())

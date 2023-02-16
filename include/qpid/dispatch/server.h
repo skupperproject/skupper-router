@@ -403,8 +403,8 @@ typedef struct qd_server_config_t {
     /**
      * For inter-router roles only.  The number of data connections associated with the link.
      */
-    uint32_t  data_connection_count;
-    bool      has_data_connectors;
+    char *data_connection_count;
+    bool  has_data_connectors;
 
     /**
      * @name These fields are not primary configuration, they are computed.
