@@ -165,7 +165,11 @@ class TcpEchoServer:
                     sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
                     sck.bind((self.HOST, int(self.port)))
                     self.sock = context.wrap_socket(sck, server_side=True)
-                    self.sock.listen(5)
+                    # self.sock.listen(n) - where n is the number of unaccepted connections that the
+                    # system will allow before refusing new connections.
+                    # Since the CI system is low on resources, it might take time for the echo server
+                    # to accept TLS connections. Test setting the value of n to socket.SOMAXCONN
+                    self.sock.listen(socket.SOMAXCONN)
                     self.sock.setblocking(False)
                     self.sel.register(self.sock, selectors.EVENT_READ, data=None)
                     if self.port == 0:
@@ -174,7 +178,7 @@ class TcpEchoServer:
                 else:
                     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     self.sock.bind((self.HOST, self.port))
-                    self.sock.listen(5)
+                    self.sock.listen(socket.SOMAXCONN)
                     if self.port == 0:
                         self.port = self.get_listening_port()
                     self.sock.setblocking(False)
