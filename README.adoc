@@ -364,8 +364,7 @@ Other options include `Debug` (disables optimizations) and `Coverage`.
 Use it to disable sanitization with older Python version (< 3.9).
 
 |`-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`
-|With CMake 3.9+, compiles the project with LTO (Link Time Optimization) enabled.
-Older versions of `CMake`` only honor this option with the Intel compiler on Linux.
+|Compiles the project with LTO (Link Time Optimization) enabled.
 
 |`-DQD_DISABLE_MEMORY_POOL=ON`
 |Skupper router immediately frees memory, instead of returning it to memory pool.
