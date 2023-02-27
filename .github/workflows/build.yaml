@@ -611,8 +611,11 @@ jobs:
     steps:
 
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+
+      - name: Fetch upstream main reference
+        run: |
+          git remote add upstream https://github.com/skupperproject/skupper-router.git
+          git fetch -a upstream
 
       - name: Install clang-format
         run: python3 -m pip install clang-format
@@ -620,7 +623,7 @@ jobs:
       - name: Perform clang-format check
         run: |
           set -o pipefail
-          scripts/git-clang-format origin/main --diff | tee clang-format.patch
+          scripts/git-clang-format upstream/main --diff | tee clang-format.patch
 
       - name: Upload the proposed patch to Artifacts
         if: ${{ failure() }}
