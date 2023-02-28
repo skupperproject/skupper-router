@@ -32,6 +32,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
+option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Perform link time optimization" ON)
 
 
 # Set warning compile flags
@@ -41,6 +42,21 @@ set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors
 set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic
         -Wstrict-prototypes -Wold-style-definition
         -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
+
+if (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT output)
+    if(ipo_supported)
+      message(STATUS "Interprocedural optimization is enabled")
+      set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    else(ipo_supported)
+      # You wanted to enable link time optimization but that feature is not supported by the compiler, put out
+      # an error message and fail build.
+      message(FATAL_ERROR "Interprocedural  optimization is not supported: ${output}")
+    endif(ipo_supported)
+else(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    # do not enable link time optimization.
+endif (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
 
 # Additional compiler-specific flags
 #  -gdwarf-aranges to workaround https://sourceware.org/bugzilla/show_bug.cgi?id=22288 (backtrace line printing with libdw and clang)
