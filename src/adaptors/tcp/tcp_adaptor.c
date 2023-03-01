@@ -369,6 +369,10 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
                         qd_buffer_list_append(buffers, (uint8_t *) (raw_buffers[i].bytes + raw_buffers[i].offset),
                                               raw_buffers[i].size);
                 }
+                else {
+                    qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "] pn_raw_connection_take_read_buffers() took buffer with 0 bytes", conn->conn_id);
+                }
                 // Free the wire buffer that we got back from proton.
                 qd_adaptor_buffer_free(buf);
             }
