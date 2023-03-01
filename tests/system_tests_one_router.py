@@ -3268,6 +3268,7 @@ class DataConnectionCountTest(TestCase):
                 self.router.wait_ready()
                 self.router.wait_log_message(msg)
                 print("     good")
+                self.router.teardown()
 
         self.assertTrue(True)
 
