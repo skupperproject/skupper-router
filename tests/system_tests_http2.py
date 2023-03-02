@@ -19,6 +19,8 @@
 
 import os
 import sys
+import socket
+import time
 import unittest
 from subprocess import PIPE
 from time import sleep
@@ -414,6 +416,8 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         cls.nginx_server = cls.tester.nginxserver(config_path=config_path, env=env)
         name = "http2-test-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
+        cls.http_listener_port = cls.tester.get_port()
+
         cls.connector_props = {
             'port': cls.nginx_port,
             'address': 'examples',
@@ -425,7 +429,7 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
 
-            ('httpListener', {'port': cls.tester.get_port(), 'address': 'examples',
+            ('httpListener', {'port': cls.http_listener_port, 'address': 'examples',
                               'host': '127.0.0.1', 'protocolVersion': 'HTTP2'}),
             ('httpConnector', cls.connector_props)
         ])
@@ -446,6 +450,39 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         digest_of_server_file = get_digest(image_file(image_file(image_file_name[1:])))
         digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
         self.assertEqual(digest_of_server_file, digest_of_response_file)
+
+    def test_000_send_rst_stream_after_get_request(self):
+        # Send a GET request to get test.jpg (which is a large file) and immediately after the GET
+        # request send an RST_STREAM frame.
+        # There should be no http2 stream object leaks.
+        client_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_conn.settimeout(TIMEOUT)
+        client_conn.connect(('127.0.0.1', self.http_listener_port))
+
+        # Send the HTTP2 raw bytes
+        # HTTP2 Client Magic
+        data = bytes.fromhex('505249202a20485454502f322e300d0a0d0a534d0d0a0d0a')
+        client_conn.send(data)
+
+        # HTTP2 Settings frame
+        data = bytes.fromhex('000012040000000000000300000064000402000000000200000000')
+        client_conn.send(data)
+        # HTTP2 Window Update frame
+        data = bytes.fromhex('00000408000000000001ff0001')
+        client_conn.send(data)
+
+        # HTTP2 Get request - /images/test.jpg
+        data = bytes.fromhex(
+            '00002b01050000000182048c60d48e62a18495095fa5737f86418aa0e41d139d09b8f8000f7a8825b650c3abbcdae053032a2f2a')
+        client_conn.send(data)
+
+        # Send the RST_STREAM frame
+        data = bytes.fromhex('00000403000000000100000008')
+        client_conn.send(data)
+
+        self.router_qdra.wait_log_message("HTTP2 NGHTTP2_RST_STREAM frame received, freeing stream data")
+
+        client_conn.close()
 
 
 class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
