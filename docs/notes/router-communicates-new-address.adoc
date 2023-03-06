@@ -1,0 +1,122 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+= How does a Router communicate to the other Routers that it has a new consumer?
+
+== The Scenario
+     
+     * Start two routers, A and B.
+     * A connects to B.
+     * Receiver connects to A.
+     * How does A tell B about its new receiver?
+
+
+== Router A (the one with the client)
+
+=== At Compile Time
+1. The macro QDR_CORE_MODULE_DECLARE in router_core/modules/mobile_sync/mobile.c declares the Core module 'mobile_sync', and declares and defines a function called modstart(). The declaration of modstart causes the compiler to add it to a list of constructor functions that will be called before main().
+
+=== At Startup
+1. During startup, qcm_addr_lookup_client_init_CT() 
+   registers qcm_addr_lookup_CT() as the 
+   addr_lookup_handler.
+
+
+=== At Attach Time
+1. When the receiver attaches to router A:
+   qdr_link_inbound_first_attach_CT()
+   calls addr_lookup_handler for an OUTGOING link.
+   (This link is outgoing, because the client is
+    a receiver.)
+
+
+2. The addr_lookup_handler is qcm_addr_lookup_CT().
+   Figure out what the terminus is, based on whether
+   the direction of this link is incoming or ougoing.
+   Then call qdr_link_react_to_first_attach_CT().
+
+
+3. qdr_link_react_to_first_attach_CT()
+   Does some checking that is not relevant in this case:
+   Is it unavailable?  No.
+   Is this a connection between two edges? No.
+   Then calls qdr_core_bind_address_link_CT().
+
+
+4. qdr_core_bind_address_link_CT()
+   This function gets a link and an addr as args.
+
+   * Set link->addr = addr.
+   * If the link is not part of a link-route, we simply increment its owning addr so that can't go away before this link does.
+   * Raise this event: QDRC_EVENT_ADDR_ADDED_LOCAL_DEST
+
+
+5. The QDRC_EVENT_ADDR_ADDED_LOCAL_DEST event is caught by 
+   qcm_mobile_sync_on_addr_event_CT().
+   If this address has one more rlinks than it has proxy
+   rlinks, then it has become a local address.
+   Call qcm_mobile_sync_on_became_local_dest_CT().
+
+
+6. In qcm_mobile_sync_on_became_local_dest_CT():
+   The address is appended to the added_addrs list
+   in the qdrm_mobile_sync_t structure.
+
+
+7. A timer goes off in the Core, and calls
+   qcm_mobile_sync_on_timer_CT().
+   Reset the timer.
+   Increment the Mobile Squence Number.
+   Look at msync->added_addrs. If it has non-zero length,
+   prepare a Mobile Address Update (MAU) message.
+   Address this message to "_topo/0/all/qdrouter.ma", 
+   which will cause it to be sent to all other routers.
+   Send it.
+
+
+8. The message was composed by 
+   qcm_mobile_sync_compose_differential_mau().
+   Its format is:
+
+          router_id
+          protocol_version
+          router_area
+          mobile sequence number
+          list of addresses to be added
+
+
+== Router B (the one without the client)
+
+=== At Compile Time
+1. The macro QDR_CORE_MODULE_DECLARE declares modstart and defines it to register qcm_mobile_sync_init_CT as the initialization fn for this module.
+
+=== At Startup
+1. The  mobile_sync modstart function is called before main. It calls qdr_register_core_module(), which registers qcm_mobile_sync_init_CT() as the initialization function for this module. 
+
+2. Later during startup, qcm_mobile_sync_init_CT() is called, which subscribes to events of type QDRC_EVENT_ADDR_ADDED_LOCAL_DEST, and registers the callback function qcm_mobile_sync_on_message_CT for messages whose addresses contain 'qdrouter.ma' as their 'qdr field'.
+
+=== At Attach Time
+
+1. The receiver attaches to Router A, which then sends a message to this router (see Router A, above) with the string "qdrouter.ma" in its 'qdr field'.
+
+2. qcm_mobile_sync_on_message_CT is called (see At Startup, above). It detects that this message is a Mobile Address Update, and calls qcm_mobile_sync_on_mau_CT.
+
+3. qcm_mobile_sync_on_mau_CT finds the ID field of the router that this mobile address update came from, and calls qcm_mobile_sync_router_by_id to retrieve that router's node structure. It adds this address to the core's list of addresses that share this treatment (i.e. ANYCAST_CLOSEST, ANYCAST_BALANCED, MULTUICAST_ONCE, etc) and starts up any inbound links associated with this address.
+
+4. This router is now aware of and tracking this destination for the address.
