@@ -794,6 +794,115 @@ jobs:
         working-directory: ${{env.DispatchBuildDir}}
         run: ctest -VV -R python-checker
 
+  pgo:
+    name: Profile Guided Optimization
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+        container: ['fedora']
+        containerTag: ['37']
+        buildType: [RelWithDebInfo]
+        protonGitRef:
+          - ${{ github.event.inputs.protonBranch || 'main' }}
+    container:
+      image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
+      volumes:
+        - ${{github.workspace}}:${{github.workspace}}
+      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined --sysctl net.ipv6.conf.all.disable_ipv6=0
+    env:
+      BuildType: ${{matrix.buildType}}
+      ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
+      RouterBuildDir: ${{github.workspace}}/skupper-router/build
+      InstallPrefix: ${{github.workspace}}/install
+      # this enables colored output
+      FORCE_COLOR: 1
+      COLUMNS: 160
+      ProtonCMakeExtraArgs: >
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DBUILD_BINDINGS=python
+        -DPython_EXECUTABLE=/usr/bin/python3
+        -DBUILD_EXAMPLES=OFF
+        -DBUILD_TESTING=OFF
+        -DENABLE_FUZZ_TESTING=OFF
+        -DRUNTIME_CHECK=OFF
+        -DBUILD_TLS=ON
+      RouterCMakeExtraArgs: >
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DPython_EXECUTABLE=/usr/bin/python3
+        -DRUNTIME_CHECK=OFF
+        -DENABLE_PROFILE_GUIDED_OPTIMIZATION=ON
+      CCACHE_BASEDIR: ${{github.workspace}}
+      CCACHE_DIR: ${{github.workspace}}/.ccache
+      CCACHE_COMPRESS: 'true'
+      CCACHE_MAXSIZE: '400MB'
+      QPID_SYSTEM_TEST_TIMEOUT: 400
+      VERBOSE: 1
+
+    steps:
+      - name: Show environment (Linux)
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: env -0 | sort -z | tr '\0' '\n'
+
+      - uses: actions/checkout@v3
+        with:
+          repository: ${{ env.protonRepository }}
+          ref: ${{ matrix.protonGitRef }}
+          path: 'qpid-proton'
+
+      - uses: actions/checkout@v3
+        with:
+          path: 'skupper-router'
+
+      - name: Install Linux build dependencies
+        run: |
+          dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache
+
+      - name: Install Linux build dependencies (Python)
+        run: dnf install -y python3-devel python3-pip
+
+      - name: Install Linux runtime/test dependencies
+        run: |
+          dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
+          dnf debuginfo-install -y python3
+
+      - name: Install Python build dependencies
+        run: python3 -m pip install setuptools wheel tox
+
+      - name: Install Python runtime/test dependencies
+        run: python3 -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
+
+      - name: Create Build and Install directories
+        run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
+
+      - name: qpid-proton cmake configure
+        working-directory: ${{env.ProtonBuildDir}}
+        run: >
+          cmake "${{github.workspace}}/qpid-proton" \
+            "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
+            "-DCMAKE_BUILD_TYPE=${BuildType}" \
+            ${ProtonCMakeExtraArgs}
+      - name: qpid-proton cmake build/install
+        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} --target install --parallel 6
+
+      - name: install qpid-proton python wheel
+        run: python3 -m pip install $(find ${ProtonBuildDir}/python/ -name 'python_qpid_proton*.whl')
+
+      - name: skupper-router cmake configure
+        working-directory: ${{env.RouterBuildDir}}
+        run: >
+          cmake "${{github.workspace}}/skupper-router" \
+            "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
+            "-DCMAKE_BUILD_TYPE=${BuildType}" \
+            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
+            ${RouterCMakeExtraArgs} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython:-ON}
+
+      - name: skupper-router cmake build/install
+        run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
+
   container:
     name: Container image
     runs-on: ubuntu-latest

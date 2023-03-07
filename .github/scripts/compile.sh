@@ -130,6 +130,13 @@ do_build () {
   local suffix=${1}
   local runtime_check=${2}
 
+  if [ "$runtime_check" == "OFF" ]; then
+     # Turn on PGO only when we are not doing asan or tsan
+     BUILD_OPTS="-DENABLE_PROFILE_GUIDED_OPTIMIZATION=ON"
+  else
+     BUILD_OPTS="-DBUILD_TESTING=OFF"
+  fi
+
   cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
@@ -142,21 +149,31 @@ do_build () {
 
   DESTDIR="$PROTON_INSTALL_DIR${suffix}" cmake --install "$PROTON_BUILD_DIR${suffix}"
 
+   if [ "$runtime_check" == "OFF" ]; then
+     # This will install the proton python libraries in sys.path so the tests using
+     # proton can be run successfully.
+     python3 -m pip install "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+   fi
+
   cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DProton_USE_STATIC_LIBS=ON \
     -DProton_DIR="${PROTON_INSTALL_DIR}${suffix}/usr/lib64/cmake/Proton" \
-    -DBUILD_TESTING=OFF \
+    ${BUILD_OPTS} \
     -DVERSION="${VERSION}" \
     -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build "${SKUPPER_BUILD_DIR}${suffix}" --verbose
 }
 
+# This is required to install the python packages that the system tests use.
+python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
+
 # Do a regular build without asan or tsan.
 do_build "" OFF
-# and install Proton Python
-python3 -m pip install --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+
+# Install Proton Python
+python3 -m pip install --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
 
 # Then perform sanitized builds of Proton and the Router.
 # talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569

@@ -34,6 +34,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Perform link time optimization" ON)
 option(ENABLE_WARNING_ERROR "Consider compiler warnings to be errors" ON)
+option(ENABLE_PROFILE_GUIDED_OPTIMIZATION "Perform profile guided optimization" OFF)
 
 # preserve frame pointers for ease of debugging and profiling
 #  see https://fedoraproject.org/wiki/Changes/fno-omit-frame-pointer
@@ -46,6 +47,18 @@ set(C_WARNING_GNU -Wall -Wextra -Wpedantic -pedantic-errors
 set(C_WARNING_Clang -Wall -Wextra -Wpedantic
         -Wstrict-prototypes -Wold-style-definition
         -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
+
+# Set default build type. Must use FORCE because project() sets default to ""
+if (NOT CMAKE_BUILD_TYPE)
+  set (CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
+    "Build type: Debug, Release, RelWithDebInfo, MinSizeRel or Coverage (default RelWithDebInfo)" FORCE)
+endif(NOT CMAKE_BUILD_TYPE)
+if (CMAKE_BUILD_TYPE MATCHES "Deb|Cover")
+  set (has_debug_symbols " (has debug symbols)")
+endif (CMAKE_BUILD_TYPE MATCHES "Deb|Cover")
+message(STATUS "Build type is \"${CMAKE_BUILD_TYPE}\"${has_debug_symbols}")
+# This is commonly needed so define it before we include anything else.
+string(TOUPPER "${CMAKE_BUILD_TYPE}" uppercase_CMAKE_BUILD_TYPE)
 
 if (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
     include(CheckIPOSupported)
@@ -66,6 +79,26 @@ endif (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
 set(C_EXTRA_GNU )
 set(C_EXTRA_Clang )
 
+if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
+    message(STATUS "Profile guided optimization is enabled on ${CMAKE_C_COMPILER_ID} compiler")
+    # Set the build type to coverage since we need coverage related
+    # build options when -fprofile-generate is used.
+    if("GNU" STREQUAL ${CMAKE_C_COMPILER_ID})
+        # Temporarily modify the CMAKE_BUILD_TYPE to Coverage. Note that we are not setting the
+        # CMAKE_BUILD_TYPE to Coverage using the CACHE option. This means that when this build is over,
+        # we will retain the original value of CMAKE_BUILD_TYPE
+        set(CMAKE_BUILD_TYPE Coverage)
+        #  You must use -fprofile-generate both when compiling *and* when linking your program
+        set(C_EXTRA_GNU ${C_EXTRA_GNU} -fprofile-generate=${CMAKE_BINARY_DIR}/profile-data -fprofile-correction)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-generate=${CMAKE_BINARY_DIR}/profile-data")
+    endif("GNU" STREQUAL ${CMAKE_C_COMPILER_ID})
+    if("Clang" STREQUAL ${CMAKE_C_COMPILER_ID})
+        # We are currently not supporting PGO on Clang although clang has good options to do PGO.
+        # Any contributions to skupper-router in this regard is welcome.
+        message(FATAL_ERROR "Profile Guided optimization of skupper-router not supported on ${CMAKE_C_COMPILER_ID}. Please consider contributing this feature")
+    endif("Clang" STREQUAL ${CMAKE_C_COMPILER_ID})
+endif (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
+
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
 set(C_EXTRA_FLAGS ${C_EXTRA_${CMAKE_C_COMPILER_ID}})
 add_compile_options(${C_WARNING_FLAGS} ${C_EXTRA_FLAGS})
@@ -73,18 +106,6 @@ add_compile_options(${C_WARNING_FLAGS} ${C_EXTRA_FLAGS})
 if (ENABLE_WARNING_ERROR)
     add_compile_options(-Werror)
 endif (ENABLE_WARNING_ERROR)
-
-# Set default build type. Must use FORCE because project() sets default to ""
-if (NOT CMAKE_BUILD_TYPE)
-  set (CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
-    "Build type: Debug, Release, RelWithDebInfo, MinSizeRel or Coverage (default RelWithDebInfo)" FORCE)
-endif(NOT CMAKE_BUILD_TYPE)
-if (CMAKE_BUILD_TYPE MATCHES "Deb|Cover")
-  set (has_debug_symbols " (has debug symbols)")
-endif (CMAKE_BUILD_TYPE MATCHES "Deb|Cover")
-message(STATUS "Build type is \"${CMAKE_BUILD_TYPE}\"${has_debug_symbols}")
-# This is commonly needed so define it before we include anything else.
-string(TOUPPER "${CMAKE_BUILD_TYPE}" uppercase_CMAKE_BUILD_TYPE)
 
 if(uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" )
     option(QD_ENABLE_ASSERTIONS "Enable assertions" ON)
@@ -257,11 +278,17 @@ endif()
 
 # Set up extra coverage analysis options for gcc and clang
 if (CMAKE_BUILD_TYPE MATCHES "Coverage")
- set (CMAKE_C_FLAGS_COVERAGE "-g -O0 --coverage")
- set (CMAKE_CXX_FLAGS_COVERAGE "-g -O0 --coverage")
+ if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
+   set (CMAKE_C_FLAGS_COVERAGE "-g -O2 -DNDEBUG --coverage")
+   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O2  --coverage")
+ else(ENABLE_PROFILE_GUIDED_OPTIMIZATION)
+   set (CMAKE_C_FLAGS_COVERAGE "-g -O0 --coverage")
+   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O0 --coverage")
+ endif(ENABLE_PROFILE_GUIDED_OPTIMIZATION)
  set (CMAKE_EXE_LINKER_FLAGS_COVERAGE "--coverage")
  set (CMAKE_MODULE_LINKER_FLAGS_COVERAGE "--coverage")
  set (CMAKE_SHARED_LINKER_FLAGS_COVERAGE "--coverage")
+
  mark_as_advanced(
    CMAKE_C_FLAGS_COVERAGE
    CMAKE_EXE_LINKER_FLAGS_COVERAGE
