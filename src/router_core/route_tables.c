@@ -453,7 +453,17 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     // Create a protocol log record for this inter-router link.
     //
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
-    core->vflow_links_by_mask_bit[router_maskbit] = vflow_start_record(VFLOW_RECORD_LINK, 0);
+
+    //
+    // Allocate a vFlow record for the link only if there is not already one in place.
+    // In the (misconfigured) case where there are multiple inter-router connections between
+    // a pair of routers, multiple calls to qdr_set_link_CT can occur without interleaved calls
+    // to qdr_remove_link_CT.  See skupper-router issue #980.
+    //
+    if (core->vflow_links_by_mask_bit[router_maskbit] == 0) {
+        core->vflow_links_by_mask_bit[router_maskbit] = vflow_start_record(VFLOW_RECORD_LINK, 0);
+    }
+
     const char *rname = (const char*) qd_hash_key_by_handle(rnode->owning_addr->hash_handle);
     vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_NAME, &rname[1]);
     vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_MODE, "interior");
