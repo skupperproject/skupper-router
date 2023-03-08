@@ -103,8 +103,15 @@ async fn test_h2spec() {
     let skupper_router_image = &env::var("QDROUTERD_IMAGE").unwrap_or(String::from("quay.io/skupper/skupper-router:latest"));
     println!("Using router image: {}", skupper_router_image);
 
+    // list all available tests by running `podman run --rm -it summerwind/h2spec:2.6.0 --dryrun`
     // TODO(ISSUE #371) DISPATCH-1940 [http2] Router HTTP2 adaptor should pass h2spec
-    let enabled_h2spec_tests = vec!["hpack"];  // this group of tests passes, despite issue
+    //  currently failing tests are generic/4, http2/5, http2/6, http2/7, which must be filtered out here
+    let enabled_h2spec_tests = [
+        vec!["--strict".to_string(), "hpack".to_string()],
+        [2, 4, 5, 6].iter().filter(|i| **i != 4).map(|i| format!("generic/{}", i)).collect::<Vec<_>>(),
+        (3..=8).filter(|i| *i != 5 && *i != 6 && *i != 7).map(|i| format!("http2/{}", i)).collect::<Vec<_>>(),
+    ].concat();
+    println!("Going to run these h2spec tests: {:?}", enabled_h2spec_tests);
 
     let docker = Docker::connect_with_local_defaults().unwrap();
     let network_name = "test_h2spec_network";
@@ -147,8 +154,10 @@ async fn test_h2spec() {
     let inspection = docker.inspect_container(&*container_skrouterd.id, Some(InspectContainerOptions { size: false })).await.unwrap();
     let hostname = inspection.network_settings.unwrap().networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
 
-    let mut h2args = vec!["-h", &hostname, "-p", "24162", "--verbose", "--insecure", "--timeout", "10"];
-    h2args.extend(enabled_h2spec_tests);
+    let h2args: Vec<&str> = [
+        vec!["-h", &hostname, "-p", "24162", "--verbose", "--insecure", "--timeout", "10"],
+        enabled_h2spec_tests.iter().map(String::as_str).collect()
+    ].concat();
     let container_h2spec = create_and_start_container(
         &docker, H2SPEC_IMAGE, "h2spec",
         Config {
