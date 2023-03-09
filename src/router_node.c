@@ -993,7 +993,7 @@ static int AMQP_link_flow_handler(void* context, qd_link_t *link)
         qd_session_t *qd_ssn = qd_session_from_pn(pn_ssn);
         if (qd_ssn && qd_session_is_q3_blocked(qd_ssn)) {
             // Q3 blocked - have we drained enough outgoing bytes?
-            const size_t q3_lower = BUFFER_SIZE * QD_QLIMIT_Q3_LOWER;
+            const size_t q3_lower = QD_BUFFER_SIZE * QD_QLIMIT_Q3_LOWER;
             if (pn_session_outgoing_bytes(pn_ssn) < q3_lower) {
                 // yes.  We must now unblock all links that have been blocked by Q3
                 qd_link_list_t *blinks = qd_session_q3_blocked_links(qd_ssn);

@@ -33,8 +33,8 @@ typedef struct qd_buffer_t qd_buffer_t;
 
 DEQ_DECLARE(qd_buffer_t, qd_buffer_list_t);
 
-#define QD_BUFFER_DEFAULT_SIZE 512
-extern size_t BUFFER_SIZE;
+#define QD_BUFFER_DEFAULT_SIZE (4096 - sizeof(qd_buffer_t))
+extern size_t QD_BUFFER_SIZE;
 
 /** A raw byte buffer .*/
 struct qd_buffer_t {
@@ -82,7 +82,7 @@ static inline unsigned char *qd_buffer_cursor(const qd_buffer_t *buf)
  */
 static inline size_t qd_buffer_capacity(const qd_buffer_t *buf)
 {
-    return BUFFER_SIZE - buf->size;
+    return QD_BUFFER_SIZE - buf->size;
 }
 
 /**
@@ -105,7 +105,7 @@ static inline size_t qd_buffer_size(const qd_buffer_t *buf)
 static inline void qd_buffer_insert(qd_buffer_t *buf, size_t len)
 {
     buf->size += len;
-    assert(buf->size <= BUFFER_SIZE);
+    assert(buf->size <= QD_BUFFER_SIZE);
 }
 
 /**
@@ -176,7 +176,7 @@ static inline uint32_t qd_buffer_dec_fanout(qd_buffer_t *buf)
  */
 static inline unsigned char *qd_buffer_at(const qd_buffer_t *buf, size_t len)
 {
-    assert(len <= BUFFER_SIZE);
+    assert(len <= QD_BUFFER_SIZE);
     return ((unsigned char*) &buf[1]) + len;
 }
 
