@@ -29,6 +29,7 @@ wheel
 tox
 
 pytest
+pytest-cov
 pytest-instafail
 pytest-timeout
 
