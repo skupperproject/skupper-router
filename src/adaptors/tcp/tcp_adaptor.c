@@ -783,19 +783,22 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
                conn->conn_id, pn_buffs_capacity);
         return false;
     } else {
-        bool                 result;
-        qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
         // copy small buffers into one large adaptor buffer
-        size_t used = conn->outgoing_buff_idx;
-        while (used < conn->outgoing_buff_count
-               && ((conn->outgoing_buffs[used].size) <= qd_adaptor_buffer_capacity(adaptor_buffer))) {
-            memcpy(qd_adaptor_buffer_cursor(adaptor_buffer), conn->outgoing_buffs[used].bytes,
-                   conn->outgoing_buffs[used].size);
-            qd_adaptor_buffer_insert(adaptor_buffer, conn->outgoing_buffs[used].size);
+        qd_adaptor_buffer_t *adaptor_buffer = qd_adaptor_buffer();
+        while (conn->outgoing_buff_idx < conn->outgoing_buff_count) {
+            pn_raw_buffer_t *rbuf = &conn->outgoing_buffs[conn->outgoing_buff_idx];
+
+            if (rbuf->size > qd_adaptor_buffer_capacity(adaptor_buffer))
+                break;
+
+            memcpy(qd_adaptor_buffer_cursor(adaptor_buffer), rbuf->bytes, rbuf->size);
+            qd_adaptor_buffer_insert(adaptor_buffer, rbuf->size);
+            conn->outgoing_buff_idx += 1;
+
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id, used + 1,
-                   conn->outgoing_buff_count, conn->outgoing_buffs[used].size, qd_adaptor_buffer_size(adaptor_buffer));
-            used++;
+                   "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id,
+                   conn->outgoing_buff_idx,
+                   conn->outgoing_buff_count, rbuf->size, qd_adaptor_buffer_size(adaptor_buffer));
         }
 
         if (conn->require_tls) {
@@ -805,18 +808,22 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
             DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
         }
 
-        result = used == conn->outgoing_buff_count;
-        if (result) {
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %zu buffers, %i remain", conn->conn_id,
+               conn->outgoing_buff_idx,
+               conn->outgoing_buff_count - conn->outgoing_buff_idx);
+
+        if (conn->outgoing_buff_idx == conn->outgoing_buff_count) {
+            conn->outgoing_buff_count = 0;
+            conn->outgoing_buff_idx = 0;
+
             // set context only when stream data has just been consumed
             conn->release_up_to        = conn->previous_stream_data;
             conn->previous_stream_data = 0;
-        }
 
-        conn->outgoing_buff_idx   += used;
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %zu buffers, %i remain", conn->conn_id,
-               used, conn->outgoing_buff_count - used);
-        return result;
+            return true;  // need more outgoing_buffs
+        }
     }
+    return false;
 }
 
 static void handle_outgoing(qdr_tcp_connection_t *conn)
@@ -843,7 +850,6 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
             read_more_body = copy_outgoing_buffs(conn);
         }
         while (read_more_body) {
-            ZERO(conn->outgoing_buffs);
             conn->outgoing_buff_idx   = 0;
             conn->outgoing_buff_count = read_message_body(conn, msg, conn->outgoing_buffs, WRITE_BUFFERS);
             if (conn->outgoing_buff_count > 0) {
