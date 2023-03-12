@@ -22,6 +22,10 @@ Fluentd [<parse> directive](https://docs.fluentd.org/configuration/parse-section
 Vector [remap with the VRL language](https://vector.dev/docs/reference/vrl/) or transform with an [arbitrary lua program](https://vector.dev/docs/reference/configuration/transforms/lua/)
 Elasticsearch [Grok filter plugin](https://www.elastic.co/guide/en/logstash/current/plugins-filters-grok.html)
 
+AFAIK (TODO) OpenShift wants me to use grok in elasticsearch, as I haven't found where to configure this in fluentd or vector, but I might be wrong.
+
+* https://stackoverflow.com/questions/57460451/how-to-extract-and-visualize-values-from-a-log-entry-in-openshift-efk-stack
+
 #### Date and time
 
     ruby -e 'require "time"; puts Time.strptime("2023-03-12 11:54:24.084418 +0100", "%Y-%m-%d %H:%M:%S.%N %z")'
@@ -52,6 +56,39 @@ sudo dnf install -y https://packages.timber.io/vector/0.28.1/vector-0.28.1-1.$(a
 Test with
 
     vector -c vector.conf < sample.log
+
+#### Elasticsearch
+
+From https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html
+
+```shell
+# this then requires a root user to run elasticsearch
+sudo dnf install -y https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.6.2-x86_64.rpm
+
+# this allows running as regular user
+wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.6.2-linux-x86_64.tar.gz
+tar -xzf elasticsearch-8.6.2-linux-x86_64.tar.gz
+
+# probably best to use docker anyways
+docker network create elastic
+docker run --name elasticsearch --net elastic --rm -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -it docker.elastic.co/elasticsearch/elasticsearch:8.6.2
+docker run --name kibana --net elastic --rm -p 5601:5601 -it docker.elastic.co/kibana/kibana:8.6.2
+```
+
+The install will print superuser password, username is `elastic` (GUnJ9xh-RfxjMEC4v6BG)
+
+From https://www.elastic.co/guide/en/welcome-to-elastic/current/getting-started-general-purpose.html
+and https://www.elastic.co/guide/en/elasticsearch/reference/current/run-elasticsearch-locally.html
+
+Test with
+
+    ES_PATH_CONF=elasticsearch.config.yaml elasticsearch
+
+Upload logs with
+
+    curl -X POST 127.0.0.1:9200/skrouterd/_logs/1 -T sample.log
+
+Open Kibana dev console () and run Grok query 
 
 ### Visualization
 
