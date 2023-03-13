@@ -788,8 +788,11 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
         while (conn->outgoing_buff_idx < conn->outgoing_buff_count) {
             pn_raw_buffer_t *rbuf = &conn->outgoing_buffs[conn->outgoing_buff_idx];
 
-            if (rbuf->size > qd_adaptor_buffer_capacity(adaptor_buffer))
+            // clang-format off
+            if (rbuf->size > qd_adaptor_buffer_capacity(adaptor_buffer)) {
                 break;
+            }
+            // clang-format on
 
             memcpy(qd_adaptor_buffer_cursor(adaptor_buffer), rbuf->bytes, rbuf->size);
             qd_adaptor_buffer_insert(adaptor_buffer, rbuf->size);
@@ -797,8 +800,8 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
 
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id,
-                   conn->outgoing_buff_idx,
-                   conn->outgoing_buff_count, rbuf->size, qd_adaptor_buffer_size(adaptor_buffer));
+                   conn->outgoing_buff_idx, conn->outgoing_buff_count, rbuf->size,
+                   qd_adaptor_buffer_size(adaptor_buffer));
         }
 
         if (conn->require_tls) {
@@ -809,12 +812,11 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
         }
 
         qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %zu buffers, %i remain", conn->conn_id,
-               conn->outgoing_buff_idx,
-               conn->outgoing_buff_count - conn->outgoing_buff_idx);
+               conn->outgoing_buff_idx, conn->outgoing_buff_count - conn->outgoing_buff_idx);
 
         if (conn->outgoing_buff_idx == conn->outgoing_buff_count) {
             conn->outgoing_buff_count = 0;
-            conn->outgoing_buff_idx = 0;
+            conn->outgoing_buff_idx   = 0;
 
             // set context only when stream data has just been consumed
             conn->release_up_to        = conn->previous_stream_data;
