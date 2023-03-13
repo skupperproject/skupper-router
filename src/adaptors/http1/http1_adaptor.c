@@ -296,8 +296,9 @@ void qdr_http1_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
 
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*)qd_alloc_deref_safe_ptr(&context);
     if (hconn && hconn->raw_conn) {
-        sys_atomic_set(&hconn->q2_restart, 1);
-        pn_raw_connection_wake(hconn->raw_conn);
+        if (sys_atomic_set(&hconn->q2_restart, 1) == 0) {
+            pn_raw_connection_wake(hconn->raw_conn);
+        }
     }
 
     sys_mutex_unlock(&qdr_http1_adaptor->lock);
