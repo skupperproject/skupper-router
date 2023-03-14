@@ -1760,13 +1760,20 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
                 break;
 
             case QD_MESSAGE_STREAM_DATA_NO_MORE: {
-                // indicate this message is complete
-                bool ignore;
-                qd_log(hconn->adaptor->log, QD_LOG_TRACE,
-                       DLV_FMT " HTTP Request msg-id=%" PRIu64 " body data encode complete",
-                       DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
-                hreq->request_dispo = PN_ACCEPTED;
-                h1_codec_tx_done(hreq->base.lib_rs, &ignore);
+                // ISSUE-1000: check if the message was aborted
+                if (qd_message_aborted(msg)) {
+                    qd_log(hconn->adaptor->log, QD_LOG_TRACE,
+                           DLV_FMT " HTTP Request msg-id=%" PRIu64 " message aborted", DLV_ARGS(hreq->request_dlv),
+                           hreq->base.msg_id);
+                    hreq->request_dispo = PN_REJECTED;
+                } else {
+                    bool ignore;
+                    qd_log(hconn->adaptor->log, QD_LOG_TRACE,
+                           DLV_FMT " HTTP Request msg-id=%" PRIu64 " body data encode complete",
+                           DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
+                    hreq->request_dispo = PN_ACCEPTED;
+                    h1_codec_tx_done(hreq->base.lib_rs, &ignore);
+                }
                 return hreq->request_dispo;
             }
 

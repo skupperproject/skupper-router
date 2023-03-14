@@ -1313,14 +1313,15 @@ static bool _get_multipart_content_length(_client_request_t *hreq, char *value)
     return true;
 }
 
-static void _encode_json_response(_client_request_t *hreq)
+// returns 0 on success
+static int _encode_json_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding json response", hconn->conn_id);
     bool ok = !_send_response_line(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
     if (!ok) {
         qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] Could not encode response", hconn->conn_id);
-        return;
+        return -1;
     }
     PyObject* msgs = 0;
     qd_json_msgs_init(&msgs);
@@ -1340,23 +1341,30 @@ static void _encode_json_response(_client_request_t *hreq)
         free(body);
     } else {
         qd_log(hconn->adaptor->log, QD_LOG_ERROR, "[C%"PRIu64"] No aggregated json response returned", hconn->conn_id);
+        return -1;
     }
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
+    return 0;
 }
 
-static void _encode_multipart_response(_client_request_t *hreq)
+// return 0 on success
+static int _encode_multipart_response(_client_request_t *hreq)
 {
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%"PRIu64"] encoding multipart response", hconn->conn_id);
     bool ok = !_send_response_line(hreq, 200, NULL, hreq->version_major, hreq->version_minor);
+    if (!ok) {
+        qd_log(hconn->adaptor->log, QD_LOG_TRACE, "[C%" PRIu64 "] Could not encode response", hconn->conn_id);
+        return -1;
+    }
     char content_length[25];
     if (_get_multipart_content_length(hreq, content_length)) {
         h1_codec_tx_add_header(hreq->base.lib_rs, CONTENT_LENGTH_KEY, content_length);
     }
     h1_codec_tx_begin_multipart(hreq->base.lib_rs);
-    for (_client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses); rmsg; rmsg = rmsg->next) {
+    for (_client_response_msg_t *rmsg = DEQ_HEAD(hreq->responses); rmsg && ok; rmsg = rmsg->next) {
         h1_codec_tx_begin_multipart_section(hreq->base.lib_rs);
         qd_message_t *msg = qdr_delivery_message(rmsg->dlv);
 
@@ -1421,11 +1429,18 @@ static void _encode_multipart_response(_client_request_t *hreq)
                 break;
 
             case QD_MESSAGE_STREAM_DATA_NO_MORE:
-                // indicate this message is complete
-                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                       "[C%"PRIu64"][L%"PRIu64"] response message encoding completed",
-                       hconn->conn_id, hconn->out_link_id);
-                done = true;
+                // ISSUE-1000: check if the message was aborted
+                if (qd_message_aborted(msg)) {
+                    qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " multicast response message aborted",
+                           DLV_ARGS(rmsg->dlv));
+                    ok = false;
+                } else {
+                    // indicate this message is complete
+                    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "][L%" PRIu64 "] response message encoding completed", hconn->conn_id,
+                           hconn->out_link_id);
+                    done = true;
+                }
                 break;
 
             case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
@@ -1456,15 +1471,18 @@ static void _encode_multipart_response(_client_request_t *hreq)
     bool need_close;
     h1_codec_tx_done(hreq->base.lib_rs, &need_close);
     hreq->close_on_complete = need_close || hreq->close_on_complete;
+
+    return ok ? 0 : -1;
 }
 
-static void _encode_aggregated_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
+static int _encode_aggregated_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
 {
     if (hconn->cfg.aggregation == QD_AGGREGATION_MULTIPART) {
-        _encode_multipart_response(hreq);
+        return _encode_multipart_response(hreq);
     } else if (hconn->cfg.aggregation == QD_AGGREGATION_JSON) {
-        _encode_json_response(hreq);
+        return _encode_json_response(hreq);
     }
+    return -1;  // error: should not get here
 }
 
 static void _encode_empty_response(qdr_http1_connection_t *hconn, _client_request_t *hreq)
@@ -1511,7 +1529,12 @@ void qdr_http1_client_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
                            "[C%"PRIu64"][L%"PRIu64"] Aggregation request settled but no responses received.", hconn->conn_id, hconn->in_link_id);
                     _encode_empty_response(hconn, hreq);
                 } else {
-                    _encode_aggregated_response(hconn, hreq);
+                    // clang-format off
+                    if (_encode_aggregated_response(hconn, hreq) != 0) {
+                        // failed to aggregate the response, no way to recover
+                        qdr_http1_close_connection(hconn, "HTTP multicast request response failed");
+                    }
+                    // clang-format on
                 }
             }
 
@@ -1731,6 +1754,12 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
             break;
 
         case QD_MESSAGE_STREAM_DATA_NO_MORE:
+            // ISSUE-1000: check if the message was aborted
+            if (qd_message_aborted(msg)) {
+                qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " response message aborted", DLV_ARGS(rmsg->dlv));
+                return PN_REJECTED;
+            }
+
             // indicate this message is complete
             qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
                    "[C%"PRIu64"][L%"PRIu64"] response message encoding completed",
@@ -1842,10 +1871,8 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
                            hconn->conn_id, link->identity, hreq->base.msg_id);
 
                 } else {
-                    // The response was bad.  This should not happen since the
-                    // response was created by the remote HTTP/1.x adaptor.  Likely
-                    // a bug? There's not much that can be done to recover, so for
-                    // now just drop the connection to the client.
+                    // The response was bad. This can happen if the response message was aborted. There's not much that
+                    // can be done to recover, so for now just drop the connection to the client.
                     qdr_http1_close_connection(hconn, "Cannot parse response message");
                 }
             }
