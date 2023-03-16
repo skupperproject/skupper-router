@@ -429,6 +429,7 @@ jobs:
         if: ${{ matrix.container == 'centos' }}
         run: |
           dnf -y install epel-release
+          dnf -y install 'dnf-command(config-manager)'
           dnf config-manager --set-enabled powertools
 
       - name: Install Linux build dependencies
@@ -737,6 +738,7 @@ jobs:
     steps:
       - name: Install build dependencies (1/2)
         run: |
+          dnf install -y 'dnf-command(config-manager)'
           dnf config-manager --set-enabled powertools
           dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release 'dnf-command(copr)' 'dnf-command(builddep)'
           dnf copr enable -y clime/rpkg-util
