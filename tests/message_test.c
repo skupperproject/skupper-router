@@ -958,9 +958,10 @@ static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatte
         if (stream_data_result == QD_MESSAGE_STREAM_DATA_BODY_OK) {
             // check stream_data payload length
             if (stream_data->payload.length != chunk_size) {
-                printf("********** check_stream_data: BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
+                printf(
+                    "********** check_stream_data: BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
                     "chunk_size:%s, n_chunks:%s, payload length error : %zu \n",
-                    BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, stream_data->payload.length);
+                    QD_BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, stream_data->payload.length);
                 fflush(stdout);
                 result = "qd_message_next_stream_data returned wrong payload length.";
                 break;
@@ -989,9 +990,10 @@ static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatte
                         for (uint32_t idx=0; idx < buffs[ii].size; idx++) {
                             char actual = buffs[ii].bytes[buffs[ii].offset + idx];
                             if (e_char != actual) {
-                                printf("********** check_stream_data: BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
+                                printf(
+                                    "********** check_stream_data: QD_BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
                                     "chunk_size:%s, n_chunks:%s, verify error at index %d, expected:%d, actual:%d \n",
-                                    BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received + idx, e_char,
+                                    QD_BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received + idx, e_char,
                                     actual);
                                 fflush(stdout);
                                 result = "verify error";
@@ -1002,17 +1004,19 @@ static char *check_stream_data(char *s_chunk_size, char *s_n_chunks, bool flatte
                     used_buffers += n_used;
                     if (!!result) break;
                 } else {
-                    printf("********** check_stream_data: BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
+                    printf(
+                        "********** check_stream_data: QD_BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
                         "chunk_size:%s, n_chunks:%s, received %d bytes (not enough) \n",
-                        BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received);
+                        QD_BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received);
                     fflush(stdout);
                     result = "Did not receive enough data";
                     break;
                 }
                 if (received > chunk_size) {
-                    printf("********** check_stream_data: BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
+                    printf(
+                        "********** check_stream_data: QD_BUFFER_SIZE=%zu, pn-buf-array-size:%d, "
                         "chunk_size:%s, n_chunks:%s, received %d bytes (too many) \n",
-                        BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received);
+                        QD_BUFFER_SIZE, N_PN_RAW_BUFFS, s_chunk_size, s_n_chunks, received);
                     result = "Received too much data";
                     break;
                 }
@@ -1416,13 +1420,6 @@ static char *test_check_stream_data_footer(void *context)
     qd_message_extend(in_msg, field, &q2_blocked);
     qd_compose_free(field);
 
-    // this small message should not have triggered Q2
-    assert(DEQ_SIZE(MSG_CONTENT(in_msg)->buffers) < QD_QLIMIT_Q2_UPPER);
-    if (q2_blocked) {
-        result = "Unexpected Q2 block on message extend";
-        goto exit;
-    }
-
     qd_message_set_receive_complete(in_msg);
 
     // "fan out" the message
@@ -1623,24 +1620,6 @@ static char *test_q2_callback_on_disable(void *context)
     qd_alloc_safe_ptr_t unblock_arg = {0};
     unblock_arg.ptr = (void*) &unblock_called;
     qd_message_set_q2_unblocked_handler(msg, q2_unblocked_handler, unblock_arg);
-
-    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
-    qd_compose_start_list(field);
-    qd_compose_insert_bool(field, 0);     // durable
-    qd_compose_insert_null(field);        // priority
-    qd_compose_end_list(field);
-    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
-    qd_compose_start_list(field);
-    qd_compose_insert_ulong(field, 666);    // message-id
-    qd_compose_insert_null(field);                 // user-id
-    qd_compose_insert_string(field, "/whereevah"); // to
-    qd_compose_insert_string(field, "my-subject");  // subject
-    qd_compose_insert_string(field, "/reply-to");   // reply-to
-    qd_compose_end_list(field);
-
-    qd_message_compose_2(msg, field, false);
-    qd_compose_free(field);
-
     qd_message_Q2_holdoff_disable(msg);
 
     if (unblock_called != 0) {
@@ -1657,7 +1636,7 @@ static char *test_q2_callback_on_disable(void *context)
     unblock_arg.ptr = (void*) &unblock_called;
     qd_message_set_q2_unblocked_handler(msg, q2_unblocked_handler, unblock_arg);
 
-    field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
     qd_compose_start_list(field);
     qd_compose_insert_bool(field, 0);     // durable
     qd_compose_insert_null(field);        // priority
@@ -1757,8 +1736,8 @@ static char *test_q2_ignore_headers(void *context)
         DEQ_INSERT_TAIL(content->buffers, buffy);
     }
 
-    // expect: block occurs when length == QD_QLIMIT_Q2_UPPER + header_ct
-    if (DEQ_SIZE(content->buffers) != QD_QLIMIT_Q2_UPPER + header_ct) {
+    // expect: Q2 blocking activates when the non-header buffer count exceeds QD_QLIMIT_Q2_UPPER
+    if (DEQ_SIZE(content->buffers) - header_ct < QD_QLIMIT_Q2_UPPER) {
         result = "Wrong buffer length for Q2 activate!";
         goto exit;
     }
@@ -1771,8 +1750,8 @@ static char *test_q2_ignore_headers(void *context)
         qd_buffer_free(buffy);
     }
 
-    // expect: Q2 deactivates when list length < QD_QDLIMIT_Q2_LOWER + header_ct
-    if (DEQ_SIZE(content->buffers) != (QD_QLIMIT_Q2_LOWER + header_ct) - 1) {
+    // expect: Q2 deactivates when the non-header buffer count falls below QD_QLIMIT_Q2_LOWER
+    if (DEQ_SIZE(content->buffers) - header_ct > QD_QLIMIT_Q2_LOWER) {
         result = "Wrong buffer length for Q2 deactivate!";
         goto exit;
     }

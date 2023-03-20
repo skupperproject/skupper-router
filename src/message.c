@@ -1824,7 +1824,7 @@ void qd_message_send(qd_message_t *in_msg,
 
     qd_message_q2_unblocker_t  q2_unblock = {0};
     pn_session_t              *pns        = pn_link_session(pnl);
-    const size_t               q3_upper   = BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
+    const size_t               q3_upper   = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
 
     while (!IS_ATOMIC_FLAG_SET(&content->aborted)
            && buf
@@ -2589,7 +2589,7 @@ int qd_message_stream_data_buffers(qd_message_stream_data_t *stream_data, pn_raw
         size_t buf_size = MIN(payload_len, qd_buffer_size(buffer) - data_offset);
         buffers[idx].context  = 0;  // reserved for use by caller - do not modify!
         buffers[idx].bytes    = (char*) qd_buffer_base(buffer) + data_offset;
-        buffers[idx].capacity = BUFFER_SIZE;
+        buffers[idx].capacity = QD_BUFFER_SIZE;
         buffers[idx].size     = buf_size;
         buffers[idx].offset   = 0;
 
