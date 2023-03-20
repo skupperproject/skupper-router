@@ -113,3 +113,8 @@ race:^qd_connection_manager_delete_listener$
 
 # DISPATCH-2156
 race:^pconnection_final_free$
+
+# ISSUE-922
+# Revisit?  So far restricted to openssl 3.0.5
+race:^ASN1_STRING_set$
+race:^ASN1_STRING_cmp$
