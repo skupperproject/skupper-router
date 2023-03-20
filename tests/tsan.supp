@@ -79,6 +79,8 @@ race:^qdr_link_process_deliveries$
 race:^qdr_delivery_continue_CT$
 
 # ISSUE-543
+race:^_lws_log$
+race:^_lws_logv$
 race:^__lws_logv$
 
 # ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
