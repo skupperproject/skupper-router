@@ -2892,7 +2892,7 @@ bool qd_message_aborted(const qd_message_t *msg)
     return IS_ATOMIC_FLAG_SET(&msg_pvt->content->aborted);
 }
 
-void qd_message_set_aborted(const qd_message_t *msg)
+void qd_message_set_aborted(qd_message_t *msg)
 {
     if (!msg)
         return;
