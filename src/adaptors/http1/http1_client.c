@@ -1429,18 +1429,11 @@ static int _encode_multipart_response(_client_request_t *hreq)
                 break;
 
             case QD_MESSAGE_STREAM_DATA_NO_MORE:
-                // ISSUE-1000: check if the message was aborted
-                if (qd_message_aborted(msg)) {
-                    qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " multicast response message aborted",
-                           DLV_ARGS(rmsg->dlv));
-                    ok = false;
-                } else {
-                    // indicate this message is complete
-                    qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
-                           "[C%" PRIu64 "][L%" PRIu64 "] response message encoding completed", hconn->conn_id,
-                           hconn->out_link_id);
-                    done = true;
-                }
+                // indicate this message is complete
+                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "][L%" PRIu64 "] response message encoding completed", hconn->conn_id,
+                       hconn->out_link_id);
+                done = true;
                 break;
 
             case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
@@ -1455,6 +1448,13 @@ static int _encode_multipart_response(_client_request_t *hreq)
                        "[C%"PRIu64"][L%"PRIu64"] Ignoring corrupted body data in aggregated response.",
                        hconn->conn_id, hconn->out_link_id);
                 done = true;
+                break;
+
+            case QD_MESSAGE_STREAM_DATA_ABORTED:
+                // ISSUE-1000: aborted messages are incomplete (truncated)
+                qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " multicast response message aborted",
+                       DLV_ARGS(rmsg->dlv));
+                ok = false;
                 break;
 
             case QD_MESSAGE_STREAM_DATA_FOOTER_OK:
@@ -1754,12 +1754,6 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
             break;
 
         case QD_MESSAGE_STREAM_DATA_NO_MORE:
-            // ISSUE-1000: check if the message was aborted
-            if (qd_message_aborted(msg)) {
-                qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " response message aborted", DLV_ARGS(rmsg->dlv));
-                return PN_REJECTED;
-            }
-
             // indicate this message is complete
             qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
                    "[C%"PRIu64"][L%"PRIu64"] response message encoding completed",
@@ -1776,6 +1770,11 @@ static uint64_t _encode_response_message(_client_request_t *hreq,
             qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING,
                    "[C%"PRIu64"][L%"PRIu64"] Rejecting corrupted body data.",
                    hconn->conn_id, hconn->out_link_id);
+            return PN_REJECTED;
+
+        case QD_MESSAGE_STREAM_DATA_ABORTED:
+            // ISSUE-1000: aborted messages are incomplete (truncated)
+            qd_log(hconn->adaptor->log, QD_LOG_TRACE, DLV_FMT " response message aborted", DLV_ARGS(rmsg->dlv));
             return PN_REJECTED;
         }
     }

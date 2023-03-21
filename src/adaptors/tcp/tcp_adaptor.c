@@ -718,6 +718,8 @@ static int read_message_body(qdr_tcp_connection_t *conn, qd_message_t *msg, pn_r
         } else {
             switch (stream_data_result) {
             case QD_MESSAGE_STREAM_DATA_NO_MORE:
+            case QD_MESSAGE_STREAM_DATA_ABORTED:
+                // treat aborted like end-of-stream since both require closing the connection.
                 qd_log(tcp_adaptor->log_source, QD_LOG_INFO,
                        "[C%"PRIu64"] EOS", conn->conn_id);
                 conn->read_eos_seen = true;

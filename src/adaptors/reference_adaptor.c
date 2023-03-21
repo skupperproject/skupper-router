@@ -328,12 +328,14 @@ static uint64_t qdr_ref_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                 qdr_link_flow(adaptor->core, link, 1, false);
                 adaptor->incoming_message = 0;
                 return PN_ACCEPTED; // This will cause the delivery to be settled
-            
+
             case QD_MESSAGE_STREAM_DATA_INVALID:
+            case QD_MESSAGE_STREAM_DATA_ABORTED:
                 //
-                // The body-data is corrupt in some way.  Stop handling the delivery and reject it.
+                // The body-data is corrupted or the sender has aborted the message mid-flight. Stop handling the
+                // delivery and reject it.
                 //
-                printf("qdr_ref_deliver: body-data invalid\n");
+                printf("qdr_ref_deliver: body-data invalid/aborted\n");
                 qdr_link_flow(adaptor->core, link, 1, false);
                 adaptor->incoming_message = 0;
                 return PN_REJECTED;

@@ -395,7 +395,8 @@ typedef enum {
     QD_MESSAGE_STREAM_DATA_FOOTER_OK,    // A valid footer has been returned
     QD_MESSAGE_STREAM_DATA_INCOMPLETE,   // The next body data is incomplete, try again later
     QD_MESSAGE_STREAM_DATA_NO_MORE,      // There are no more body data objects in this stream
-    QD_MESSAGE_STREAM_DATA_INVALID       // The next body data is invalid, the stream is corrupted
+    QD_MESSAGE_STREAM_DATA_INVALID,      // The next body data is invalid, the stream is corrupted
+    QD_MESSAGE_STREAM_DATA_ABORTED       // sender has terminated the transfer, message is incomplete
 } qd_message_stream_data_result_t;
 
 
