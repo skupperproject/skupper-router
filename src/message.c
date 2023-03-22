@@ -2727,15 +2727,23 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
             }
         }
 
-        if (status == QD_MESSAGE_DEPTH_INCOMPLETE)
-            return QD_MESSAGE_STREAM_DATA_INCOMPLETE;
-        if (status == QD_MESSAGE_DEPTH_INVALID)
-            return QD_MESSAGE_STREAM_DATA_INVALID;
+        switch (status) {
+            case QD_MESSAGE_DEPTH_OK:
+                if (!msg->body_buffer) {
+                    // neither data nor footer found
+                    return IS_ATOMIC_FLAG_SET(&msg->content->aborted) ? QD_MESSAGE_STREAM_DATA_ABORTED
+                                                                      : QD_MESSAGE_STREAM_DATA_NO_MORE;
+                }
+                // proceed to parse out the VBIN
+                break;
 
-        // neither data not footer found
-        if (!msg->body_buffer)
-            return IS_ATOMIC_FLAG_SET(&msg->content->aborted)
-                ? QD_MESSAGE_STREAM_DATA_ABORTED : QD_MESSAGE_STREAM_DATA_NO_MORE;
+            case QD_MESSAGE_DEPTH_INVALID:
+                return QD_MESSAGE_STREAM_DATA_INVALID;
+
+            case QD_MESSAGE_DEPTH_INCOMPLETE:
+                return IS_ATOMIC_FLAG_SET(&msg->content->aborted) ? QD_MESSAGE_STREAM_DATA_ABORTED
+                                                                  : QD_MESSAGE_STREAM_DATA_INCOMPLETE;
+        }
     }
 
     // parse out the body data section, or the footer if we're past the
@@ -2795,8 +2803,13 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
 
     UNLOCK(&content->lock);
 
-    if (result == QD_MESSAGE_STREAM_DATA_NO_MORE && IS_ATOMIC_FLAG_SET(&msg->content->aborted))
+    // clang-format off
+    if (IS_ATOMIC_FLAG_SET(&msg->content->aborted)) {
         result = QD_MESSAGE_STREAM_DATA_ABORTED;
+        qd_message_stream_data_release(*out_stream_data);
+        *out_stream_data = 0;
+    }
+    // clang-format on
 
     return result;
 }

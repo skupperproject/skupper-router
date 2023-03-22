@@ -1945,15 +1945,8 @@ static char *test_check_stream_data_aborted_body(void *context)
     qd_message_set_aborted(in_msg);
     qd_message_set_receive_complete(in_msg);
 
-    // expect next stream data to return the ABORT status after returning the one
-    // valid body data
+    // expect next stream data to return the ABORT status
     qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg, &sdata);
-    if (rc != QD_MESSAGE_STREAM_DATA_BODY_OK) {
-        fprintf(stderr, "Expected BODY_OK stream data result - got: %d\n", (int) rc);
-        result = "Did not get the BODY_OK status";
-        goto exit;
-    }
-    rc = qd_message_next_stream_data(out_msg, &sdata);
     if (rc != QD_MESSAGE_STREAM_DATA_ABORTED) {
         fprintf(stderr, "Expected ABORTED stream data result - got: %d\n", (int) rc);
         result = "Did not get the aborted status";
