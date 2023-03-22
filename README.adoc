@@ -24,6 +24,9 @@ link="https://github.com/skupperproject/skupper-router/actions/workflows/build.y
 image:https://app.travis-ci.com/skupperproject/skupper-router.svg?branch=main[
 "Travis CI",
 link="https://app.travis-ci.com/skupperproject/skupper-router"]
+image:https://codecov.io/github/skupperproject/skupper-router/branch/main/graph/badge.svg?token=XGZ7WM8SYU[
+"codecov",
+link="https://app.codecov.io/github/skupperproject/skupper-router"]
 image:https://img.shields.io/github/license/skupperproject/skupper-router.svg[
 "License",
 link="https://github.com/skupperproject/skupper-router/blob/main/LICENSE"]
