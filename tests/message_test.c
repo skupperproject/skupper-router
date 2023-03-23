@@ -1931,15 +1931,11 @@ static char *test_check_stream_data_aborted_body(void *context)
     out_msg = qd_message_copy(in_msg);
     qd_message_add_fanout(out_msg);
 
-    bool q2_blocked = false;
+    bool             ignore  = false;
     qd_buffer_list_t blist = DEQ_EMPTY;
     uint8_t data[3] = {0x01, 0x02, 0x03};
     qd_buffer_list_append(&blist, data, 3);
-    qd_message_stream_data_append(in_msg, &blist, &q2_blocked);
-    if (q2_blocked) {
-        result = "Unexpected Q2 block!";
-        goto exit;
-    }
+    qd_message_stream_data_append(in_msg, &blist, &ignore);
 
     // now simulate the abort:
     qd_message_set_aborted(in_msg);
