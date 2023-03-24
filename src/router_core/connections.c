@@ -1426,7 +1426,8 @@ void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_setup_CT - %x (%s)", (ulong) conn, conn->connection_info->host);
+    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_setup_CT - %lx (%s)", (ulong) conn,
+           conn->connection_info->host);
     //
     // Record the group's correlator in the core record.
     // Check the unallocated member list for matching correlators.  Import the
@@ -1442,7 +1443,7 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
             if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %x", (ulong) member);
+                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %lx", (ulong) member);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
                 DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
             }
@@ -1457,7 +1458,7 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
 static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %x", (ulong) conn);
+    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %lx", (ulong) conn);
     //
     // Scan the correlators-by-maskbit to see if this member's correlator is active.
     // If so, import this into the active group and reset the cursor.
@@ -1474,7 +1475,7 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
     }
 
     if (!!parent) {
-        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     adding member to parent: %x", (ulong) parent);
+        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     adding member to parent: %lx", (ulong) parent);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
         DEQ_INSERT_TAIL_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
@@ -1488,7 +1489,7 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %x", (ulong) conn);
+    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %lx", (ulong) conn);
     //
     // Remove the correlator from the maskbit index.
     // Clear the group list in this connection and nullify the cursor.
@@ -1501,7 +1502,8 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
         core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
 
         while (!!DEQ_HEAD(conn->connection_group)) {
-            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %x", (ulong) DEQ_HEAD(conn->connection_group));
+            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx",
+                   (ulong) DEQ_HEAD(conn->connection_group));
             DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
         }
         conn->group_cursor = 0;
@@ -1510,7 +1512,8 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
             if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing unallocated with matching correlator: %x", (ulong) member);
+                qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing unallocated with matching correlator: %lx",
+                       (ulong) member);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
             }
             member = next;
@@ -1522,7 +1525,7 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
 static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %x", (ulong) conn);
+    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %lx", (ulong) conn);
     //
     // Search for the correlator in the maskbit index.
     // If found, get the parent connection and remove this connection from the group. Reset the cursor.
@@ -1540,7 +1543,7 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
     }
 
     if (!!parent) {
-        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %x", (ulong) parent);
+        qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx", (ulong) parent);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
         DEQ_REMOVE_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);

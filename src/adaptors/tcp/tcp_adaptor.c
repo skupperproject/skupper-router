@@ -363,7 +363,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
                 if (raw_buff_size > 0) {
                     result += raw_buff_size;
                     qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                           "[C%" PRIu64 "] pn_raw_connection_take_read_buffers() took buffer with %lu bytes",
+                           "[C%" PRIu64 "] pn_raw_connection_take_read_buffers() took buffer with %u bytes",
                            conn->conn_id, raw_buff_size);
                     if (buffers)
                         qd_buffer_list_append(buffers, (uint8_t *) (raw_buffers[i].bytes + raw_buffers[i].offset),
@@ -799,7 +799,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
             conn->outgoing_buff_idx += 1;
 
             qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%i)", conn->conn_id,
+                   "[C%" PRIu64 "] Copying buffer %i of %i with %i bytes (total=%zu)", conn->conn_id,
                    conn->outgoing_buff_idx, conn->outgoing_buff_count, rbuf->size,
                    qd_adaptor_buffer_size(adaptor_buffer));
         }
@@ -811,7 +811,7 @@ static bool copy_outgoing_buffs(qdr_tcp_connection_t *conn)
             DEQ_INSERT_TAIL(conn->out_buffs, adaptor_buffer);
         }
 
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %zu buffers, %i remain", conn->conn_id,
+        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG, "[C%" PRIu64 "] Copied %d buffers, %i remain", conn->conn_id,
                conn->outgoing_buff_idx, conn->outgoing_buff_count - conn->outgoing_buff_idx);
 
         if (conn->outgoing_buff_idx == conn->outgoing_buff_count) {

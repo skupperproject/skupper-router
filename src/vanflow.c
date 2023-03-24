@@ -761,7 +761,7 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
     }
 
     record->never_logged = false;
-    qd_log(state->log, QD_LOG_INFO, line);
+    qd_log(state->log, QD_LOG_INFO, "%s", line);
 }
 
 
