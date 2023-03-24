@@ -36,3 +36,13 @@ git clone --branch main https://github.com/skupperproject/skupper-router.git
 ln -s ${PWD}/skupper-router/packaging/skupper-router.spec.rpkg ./skupper-router/
 rpkg srpm --outdir ./ --spec ./skupper-router
 ----
+
+== Packit
+
+Install Packit CLI tool from https://packit.dev/docs/cli/#installation
+
+[source,shell script]
+----
+packit srpm
+rpmbuild --rebuild <path to generated srpm>
+----

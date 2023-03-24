@@ -32,3 +32,13 @@ files_to_sync:
 upstream_package_name: skupper-router
 # downstream (Fedora) RPM package name
 downstream_package_name: skupper-router
+
+jobs:
+
+  # run build/tests on some interesting architectures
+  - job: tests
+    trigger: pull_request
+    targets:
+      - fedora-stable-aarch64
+      - fedora-stable-s390x
+      - fedora-stable-x86_64
