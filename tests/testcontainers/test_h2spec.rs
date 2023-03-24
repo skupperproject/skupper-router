@@ -26,7 +26,7 @@ use bollard::Docker;
 use bollard::errors::Error;
 use bollard::errors::Error::DockerResponseServerError;
 use bollard::image::{CreateImageOptions, ListImagesOptions};
-use bollard::models::{ContainerCreateResponse, CreateImageInfo, HostConfig, NetworkCreateResponse, PortBinding};
+use bollard::models::{ContainerCreateResponse, ContainerWaitResponse, CreateImageInfo, HostConfig, NetworkCreateResponse, PortBinding};
 use bollard::network::{CreateNetworkOptions, InspectNetworkOptions};
 use futures::{FutureExt, pin_mut, select, Stream, stream, stream_select};
 use futures::StreamExt;
@@ -48,6 +48,7 @@ macro_rules! collection {
 const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `docker.io/`, docker won't find it
 // https://nixery.dev/
 const NGHTTP2_IMAGE: &str = "nixery.dev/nghttp2:latest";
+const NETCAT_IMAGE: &str = "nixery.dev/netcat:latest";
 
 const ROUTER_CONFIG: &str = r#"
 router {
@@ -130,6 +131,26 @@ async fn test_h2spec() {
         ..Default::default()
     };
 
+    // prefetch all images before creating containers
+
+    find_or_pull_image(&docker, NGHTTP2_IMAGE).await;
+    find_or_pull_image(&docker, skupper_router_image).await;
+    find_or_pull_image(&docker, NETCAT_IMAGE).await;
+    find_or_pull_image(&docker, H2SPEC_IMAGE).await;
+
+    // create container_nghttpd
+
+    let container_nghttpd = create_and_start_container(
+        &docker, NGHTTP2_IMAGE, "nghttpd",
+        Config {
+            host_config: Some(hostconfig.clone()),
+            cmd: Some(vec!["nghttpd", "-a", "0.0.0.0", "--no-tls", "-d", "/tmp", "8888"]),
+            ..Default::default()
+        }).await;
+    let logs_nghttpd = stream_container_logs(&docker, "nghttpd", &container_nghttpd);
+
+    // container_skrouterd
+
     let container_skrouterd = create_and_start_container(
         &docker, skupper_router_image, "test_h2spec_skrouterd",
         Config {
@@ -142,17 +163,13 @@ async fn test_h2spec() {
         }).await;
     let logs_skrouterd = stream_container_logs(&docker, "skrouterd", &container_skrouterd);
 
-    let container_nghttpd = create_and_start_container(
-        &docker, NGHTTP2_IMAGE, "nghttpd",
-        Config {
-            host_config: Some(hostconfig.clone()),
-            cmd: Some(vec!["nghttpd", "-a", "0.0.0.0", "--no-tls", "-d", "/tmp", "8888"]),
-            ..Default::default()
-        }).await;
-    let logs_nghttpd = stream_container_logs(&docker, "nghttpd", &container_nghttpd);
+    let inspection_skrouterd = docker.inspect_container(&*container_skrouterd.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let hostname = network_settings_skrouterd.networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
 
-    let inspection = docker.inspect_container(&*container_skrouterd.id, Some(InspectContainerOptions { size: false })).await.unwrap();
-    let hostname = inspection.network_settings.unwrap().networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
+    wait_for_port(&docker, hostconfig.clone(), &hostname, "24162").await.expect("Port was not open in time");
+
+    // container_h2spec
 
     let h2args: Vec<&str> = [
         vec!["-h", &hostname, "-p", "24162", "--verbose", "--insecure", "--timeout", "10"],
@@ -204,11 +221,53 @@ async fn test_h2spec() {
     println!("container skrouterd finished with exit code {:?}", router_exit_code);
 
     stdout().flush().expect("failed to flush stdout");
-    assert_eq!(Some(0), h2spec_exit_code);
-    assert_eq!(Some(0), router_exit_code);
+    assert_eq!(0, h2spec_exit_code.unwrap());
+    assert_eq!(0, router_exit_code.unwrap());
 }
 
-async fn find_or_pull_image(docker: &&Docker, image: &str) -> String {
+/// Runs a nc container which tries to connect to the provided hostname and port.
+async fn wait_for_port(docker: &Docker, hostconfig: HostConfig, hostname: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let retry_policy = again::RetryPolicy::exponential(Duration::from_secs(1))
+        .with_jitter(true)
+        .with_max_delay(Duration::from_secs(3))
+        .with_max_retries(10);
+
+    let container_netcat = create_and_start_container(
+        &docker, NETCAT_IMAGE, "test_h2spec_netcat",
+        Config {
+            host_config: Some(hostconfig),
+            cmd: Some(vec!["nc", "-zv", hostname, port]),
+            ..Default::default()
+        }).await;
+
+    async fn try_connect(docker: &Docker, container: &ContainerCreateResponse) -> Result<(), Box<dyn std::error::Error>> {
+        let result = get_container_exit_code(&docker, &container).await?;
+        println!("Waiting for open port, nc exited with: {}", result);
+        if result == 0 {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        docker.start_container(&*container.id, None::<StartContainerOptions<String>>).await.unwrap();
+
+        return Err("".into());
+    }
+    let waiting_result = retry_policy.retry(|| { try_connect(&docker, &container_netcat) }).await;
+    let mut logs_netcat = stream_container_logs(&docker, "netcat", &container_netcat).fuse();
+
+    while select! {
+        msg = logs_netcat.next() => match msg {
+            Some(msg) => {
+                let msg: String = msg;
+                println!("{}", msg);
+                true
+            },
+            None => false
+        },
+    } {}
+    waiting_result
+}
+
+async fn find_or_pull_image(docker: &Docker, image: &str) -> String {
     if let Some(image_id) = docker_find_image(docker, image).await {
         return image_id;
     }
@@ -216,7 +275,7 @@ async fn find_or_pull_image(docker: &&Docker, image: &str) -> String {
     return docker_find_image(docker, image).await.expect(&*format!("{:?}", pull));
 }
 
-async fn docker_find_image(docker: &&Docker, image: &str) -> Option<String> {
+async fn docker_find_image(docker: &Docker, image: &str) -> Option<String> {
     for found in docker.list_images(None::<ListImagesOptions<String>>).await.unwrap() {
         if found.repo_tags.iter().any(|t| t.contains(image)) {
             return Some(found.id);
@@ -233,12 +292,12 @@ async fn docker_pull(docker: &Docker, image: &str) -> Vec<CreateImageInfo> {
 }
 
 async fn create_and_start_container(docker: &Docker, image: &str, name: &str, config: Config<&str>) -> ContainerCreateResponse {
-    let image_id = find_or_pull_image(&docker, image).await;
+    let image_id = find_or_pull_image(docker, image).await;
     // to be extra sure container does not already exist
     delete_container(&docker, name).await;
 
     let container: ContainerCreateResponse = docker.create_container(
-        Some(CreateContainerOptions { name }),
+        Some(CreateContainerOptions { name, platform: Some("linux/amd64") }),
         Config::<&str> {
             image: Some(&*image_id),
             ..config
@@ -288,7 +347,7 @@ async fn recreate_network(docker: &Docker, network_name: &str) -> NetworkCreateR
 }
 
 fn stream_container_logs(docker: &Docker, name: &'static str, container: &ContainerCreateResponse) -> impl Stream<Item=String> {
-    // keep in mind that containers that don't log anything will eventually (60+ sec) timeout on `RequestTimeoutError`
+    // NOTE: containers that don't log anything will eventually (60+ sec) timeout on `RequestTimeoutError`
     let logs = docker.logs::<String>(
         &*container.id,
         Some(LogsOptions {
@@ -314,8 +373,12 @@ fn label_log(label: &'static str, stream: impl futures::Stream<Item=Result<LogOu
         .map(move |line| format!("{}: {}", label, line));
 }
 
-async fn get_container_exit_code(docker: &Docker, container: &ContainerCreateResponse) -> Option<i64> {
-    let final_inspect = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
-    let exit_code = final_inspect.state.unwrap().exit_code;
+async fn get_container_exit_code(docker: &Docker, container: &ContainerCreateResponse) -> Result<i64, Box<dyn std::error::Error>> {
+    let result: Option<Result<ContainerWaitResponse, Error>> = docker.wait_container(&*container.id, None::<WaitContainerOptions<String>>).next().await;
+    let exit_code = match result.ok_or("no result")? {
+        Ok(c) => Ok(c.status_code),
+        Err(Error::DockerContainerWaitError { error: _, code }) => Ok(code),
+        Err(e) => Err(e.into())
+    };
     exit_code
 }
