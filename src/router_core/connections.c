@@ -1426,8 +1426,9 @@ void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_setup_CT - %lx (%s)", (ulong) conn,
-           conn->connection_info->host);
+    qd_log(core->log, QD_LOG_DEBUG,                            //
+           "CGROUP qdr_connection_group_setup_CT - %lx (%s)",  //
+           (ulong) conn, conn->connection_info->host);
     //
     // Record the group's correlator in the core record.
     // Check the unallocated member list for matching correlators.  Import the
@@ -1502,7 +1503,8 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
         core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
 
         while (!!DEQ_HEAD(conn->connection_group)) {
-            qd_log(core->log, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx",
+            qd_log(core->log, QD_LOG_DEBUG,                        //
+                   "CGROUP     removing member from parent: %lx",  //
                    (ulong) DEQ_HEAD(conn->connection_group));
             DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
         }

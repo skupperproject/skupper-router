@@ -362,9 +362,9 @@ static void _free_request_CT(qdrc_client_t *client,
                      error);
     }
 
-    qd_log(client->core->log, QD_LOG_TRACE,                                  //
-           "Freeing core client request c=%p, rc=%p (%s)", (void *) client,  //
-           req->req_context,                                                 //
+    qd_log(client->core->log, QD_LOG_TRACE,                 //
+           "Freeing core client request c=%p, rc=%p (%s)",  //
+           (void *) client, req->req_context,               //
            error ? error : "request complete");
 
     free_qdrc_client_request_t(req);
@@ -396,7 +396,8 @@ static void _sender_second_attach_CT(void *context,
 {
     qdrc_client_t *client = (qdrc_client_t *)context;
 
-    qd_log(client->core->log, QD_LOG_TRACE, "Core client sender 2nd attach c=%p", (void *) client);
+    qd_log(client->core->log, QD_LOG_TRACE,  //
+           "Core client sender 2nd attach c=%p", (void *) client);
 
     if (!client->sender_up) {
         client->sender_up = true;
