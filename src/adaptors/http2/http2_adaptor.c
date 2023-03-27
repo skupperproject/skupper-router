@@ -2317,7 +2317,7 @@ static bool push_rx_buffer_to_nghttp2(qdr_http2_connection_t *conn, uint8_t *buf
     qd_log(http2_adaptor->log_source, QD_LOG_DEBUG,
            "[C%" PRIu64
            "] handle_incoming_http - Calling nghttp2_session_mem_recv "
-           "qd_adaptor_buffer of size %" PRIu32 " ",
+           "qd_adaptor_buffer of size %zu",
            conn->conn_id, size);
     bool close_conn = false; // return result
     if (!conn->buffers_pushed_to_nghttp2)

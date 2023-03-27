@@ -1056,11 +1056,11 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                             pn_condition_get_name(condition), pn_condition_get_description(condition));
                     strcpy(ctx->connector->conn_msg, conn_msg);
 
-                    qd_log(qd_server->log_source, QD_LOG_ERROR, conn_msg);
+                    qd_log(qd_server->log_source, QD_LOG_ERROR, "%s", conn_msg);
                 } else {
                     qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection to %s failed", ctx->connection_id, config->host_port);
                     strcpy(ctx->connector->conn_msg, conn_msg);
-                    qd_log(qd_server->log_source, QD_LOG_ERROR, conn_msg);
+                    qd_log(qd_server->log_source, QD_LOG_ERROR, "%s", conn_msg);
                 }
             } else if (ctx && ctx->listener) { /* Incoming connection */
                 if (condition && pn_condition_is_set(condition)) {

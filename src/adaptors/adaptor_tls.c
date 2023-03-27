@@ -515,7 +515,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
                 size_t consumed = pn_tls_give_decrypt_input_buffers(tls->tls_session, &raw_buffers[i], 1);
                 qd_log(tls->log_source,
                        QD_LOG_TRACE,
-                       "[C%" PRIu64 "] qd_tls_decrypt gave raw buffer to pn_tls_give_decrypt_input_buffers, size=%zu ",
+                       "[C%" PRIu64 "] qd_tls_decrypt gave raw buffer to pn_tls_give_decrypt_input_buffers, size=%u ",
                        tls->conn_id,
                        raw_buffers[i].size);
                 (void) consumed;  // prevent unused variable warning
@@ -696,7 +696,7 @@ give_encrypt_output_buffers:
         DEQ_INSERT_TAIL(*encrypted_buffs, encrypted_adaptor_buff);
         qd_log(tls->log_source,
                QD_LOG_TRACE,
-               "[C%" PRIu64 "] qd_tls_encrypt pn_tls_take_encrypt_output_buffers, encrypted_raw_output_buff.size=%zu",
+               "[C%" PRIu64 "] qd_tls_encrypt pn_tls_take_encrypt_output_buffers, encrypted_raw_output_buff.size=%u",
                tls->conn_id,
                encrypted_raw_output_buff.size);
     }
