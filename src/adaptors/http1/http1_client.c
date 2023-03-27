@@ -1905,6 +1905,8 @@ static void _client_request_free(_client_request_t *hreq)
         // good place to end the client side request level vanflow.
         //
         vflow_end_record(hreq->base.vflow);
+        hreq->base.vflow = 0;
+
         // deactivate the Q2 callback
         qd_message_t *msg = hreq->request_dlv ? qdr_delivery_message(hreq->request_dlv) : hreq->request_msg;
         qd_message_clear_q2_unblocked_handler(msg);
