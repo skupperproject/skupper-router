@@ -1904,11 +1904,6 @@ static void _server_response_msg_free(_server_request_t *hreq, _server_response_
 static void _server_request_free(_server_request_t *hreq)
 {
     if (hreq) {
-        //
-        // The server request is being freed. This is a
-        // right place to end the server side request level vanflow.
-        //
-        vflow_end_record(hreq->base.vflow);
         qdr_http1_request_base_cleanup(&hreq->base);
         qdr_http1_out_data_cleanup(&hreq->out_data);
         if (hreq->request_dlv) {
