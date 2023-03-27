@@ -67,8 +67,12 @@ void qdr_http1_request_base_cleanup(qdr_http1_request_base_t *hreq)
     if (hreq) {
         DEQ_REMOVE(hreq->hconn->requests, hreq);
         h1_codec_request_state_cancel(hreq->lib_rs);
+        vflow_end_record(hreq->vflow);
+        hreq->vflow = 0;
         free(hreq->response_addr);
+        hreq->response_addr = 0;
         free(hreq->site);
+        hreq->site = 0;
     }
 }
 
