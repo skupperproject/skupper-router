@@ -648,6 +648,8 @@ static void on_accept(pn_event_t *e, qd_listener_t *listener)
 
 /* Log the description, set the transport condition (name, description) close the transport tail. */
 void connect_fail(qd_connection_t *ctx, const char *name, const char *description, ...)
+     __attribute__((format(printf, 3, 4)));
+void connect_fail(qd_connection_t *ctx, const char *name, const char *description, ...)
 {
     va_list ap;
     va_start(ap, description);
@@ -669,7 +671,6 @@ void connect_fail(qd_connection_t *ctx, const char *name, const char *descriptio
         }
     }
 }
-
 
 /* Get the host IP address for the remote end */
 static void set_rhost_port(qd_connection_t *ctx) {
