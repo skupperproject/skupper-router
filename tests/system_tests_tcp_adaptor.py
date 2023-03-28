@@ -1318,6 +1318,7 @@ class CommonTcpTests:
         tname = "test_80 check stats in skmanage"
         self.logger.log(tname + " START")
         # Verify listener stats
+
         query_command = 'QUERY --type=tcpListener'
         outputs = json.loads(self.run_skmanage(query_command))
         es_inta_connections_opened = 0
@@ -1334,7 +1335,12 @@ class CommonTcpTests:
                         and output['address'] != 'ES_ALL':
                     assert output["connectionsOpened"] > 0
                 assert output["bytesIn"] == output["bytesOut"]
-        self.assertEqual(es_inta_connections_opened, 7)
+
+        # The connections opened count is 7 only if the ncat tests were run.
+        # The ncat tests will only be run if ncat_available() is True.
+        # https://github.com/skupperproject/skupper-router/issues/1019
+        if ncat_available():
+            self.assertEqual(es_inta_connections_opened, 7)
 
         # Verify connector stats
         query_command = 'QUERY --type=tcpConnector'
