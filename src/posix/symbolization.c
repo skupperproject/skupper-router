@@ -21,6 +21,7 @@
 
 #include "qpid/dispatch/internal/symbolization.h"
 
+#include <dwarf.h>
 #include <elfutils/libdw.h>
 #include <elfutils/libdwfl.h>
 #include <stdbool.h>
@@ -56,6 +57,10 @@ bool ensure_libdwfl_intialized(void)
     return true;
 }
 
+// helper functions to recover cudie, taken from bombela/backward-cpp
+static Dwarf_Die *find_fundie_by_pc(Dwarf_Die *parent_die, Dwarf_Addr pc, Dwarf_Die *result);
+static bool       die_has_pc(Dwarf_Die *die, Dwarf_Addr pc);
+
 qd_backtrace_fileline_t qd_symbolize_backtrace_line(void *target_address)
 {
     qd_backtrace_fileline_t result = {0};
@@ -83,9 +88,31 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(void *target_address)
     Dwarf_Addr module_bias = 0;
     Dwarf_Die *cudie       = dwfl_module_addrdie(module, addr, &module_bias);
 
+    // This is a trick from bombela/backward-cpp to recover source lines when using clang
+    // We could instead compile with clang using -gdwarf-aranges, but that does not work with when LTO is enabled
+    //  see https://sourceware.org/bugzilla/show_bug.cgi?id=22288 (backtrace line printing with libdw and clang)
+    if (!cudie) {
+        // Sadly clang does not generate the section .debug_aranges, thus
+        // dwfl_module_addrdie will fail early. Clang doesn't either set
+        // the lowpc/highpc/range info for every compilation unit.
+        //
+        // So in order to save the world:
+        // for every compilation unit, we will iterate over every single
+        // DIEs. Normally functions should have a lowpc/highpc/range, which
+        // we will use to infer the compilation unit.
+
+        // note that this is probably badly inefficient.
+        while ((cudie = dwfl_module_nextcu(module, cudie, &module_bias))) {
+            Dwarf_Die  die_mem;
+            Dwarf_Die *fundie = find_fundie_by_pc(cudie, addr - module_bias, &die_mem);
+            if (fundie) {
+                break;
+            }
+        }
+    }
+
     if (cudie == NULL) {
-        // this should not happen if we have debug info,
-        // but if it does fail, then look how bombela/backward-cpp hacks this
+        // we failed, not even bombela/backward-cpp trick saved us
         return result;
     }
 
@@ -106,6 +133,71 @@ qd_backtrace_fileline_t qd_symbolize_backtrace_line(void *target_address)
 
     result.found = true;
     return result;
+}
+
+static bool die_has_pc(Dwarf_Die *die, Dwarf_Addr pc)
+{
+    Dwarf_Addr low, high;
+
+    // continuous range
+    if (dwarf_hasattr(die, DW_AT_low_pc) && dwarf_hasattr(die, DW_AT_high_pc)) {
+        if (dwarf_lowpc(die, &low) != 0) {
+            return false;
+        }
+        if (dwarf_highpc(die, &high) != 0) {
+            Dwarf_Attribute  attr_mem;
+            Dwarf_Attribute *attr = dwarf_attr(die, DW_AT_high_pc, &attr_mem);
+            Dwarf_Word       value;
+            if (dwarf_formudata(attr, &value) != 0) {
+                return false;
+            }
+            high = low + value;
+        }
+        return pc >= low && pc < high;
+    }
+
+    // non-continuous range.
+    Dwarf_Addr base;
+    ptrdiff_t  offset = 0;
+    while ((offset = dwarf_ranges(die, offset, &base, &low, &high)) > 0) {
+        if (pc >= low && pc < high) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static Dwarf_Die *find_fundie_by_pc(Dwarf_Die *parent_die, Dwarf_Addr pc, Dwarf_Die *result)
+{
+    if (dwarf_child(parent_die, result) != 0) {
+        return 0;
+    }
+
+    Dwarf_Die *die = result;
+    do {
+        switch (dwarf_tag(die)) {
+            case DW_TAG_subprogram:
+            case DW_TAG_inlined_subroutine:
+                if (die_has_pc(die, pc)) {
+                    return result;
+                }
+        };
+        bool            declaration = false;
+        Dwarf_Attribute attr_mem;
+        dwarf_formflag(dwarf_attr(die, DW_AT_declaration, &attr_mem), &declaration);
+        if (!declaration) {
+            // let's be curious and look deeper in the tree,
+            // function are not necessarily at the first level, but
+            // might be nested inside a namespace, structure etc.
+            Dwarf_Die  die_mem;
+            Dwarf_Die *indie = find_fundie_by_pc(die, pc, &die_mem);
+            if (indie) {
+                *result = die_mem;
+                return result;
+            }
+        }
+    } while (dwarf_siblingof(die, result) == 0);
+    return 0;
 }
 
 void qd_print_symbolized_backtrace_line(FILE *dump_file, const char *fallback_symbolization, int i, void *pc)

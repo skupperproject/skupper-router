@@ -59,9 +59,8 @@ else(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
 endif (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
 
 # Additional compiler-specific flags
-#  -gdwarf-aranges to workaround https://sourceware.org/bugzilla/show_bug.cgi?id=22288 (backtrace line printing with libdw and clang)
 set(C_EXTRA_GNU )
-set(C_EXTRA_Clang -gdwarf-aranges)
+set(C_EXTRA_Clang )
 
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
 set(C_EXTRA_FLAGS ${C_EXTRA_${CMAKE_C_COMPILER_ID}})
