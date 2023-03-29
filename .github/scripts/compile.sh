@@ -121,7 +121,6 @@ do_build () {
   cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}${suffix}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
-    -DSANITIZE_PYTHON=OFF \
     -DProton_USE_STATIC_LIBS=ON \
     -DProton_DIR="${PROTON_INSTALL_DIR}${suffix}/usr/lib64/cmake/Proton" \
     -DBUILD_TESTING=OFF \
