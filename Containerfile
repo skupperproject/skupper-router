@@ -17,13 +17,13 @@
 # under the License.
 #
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as builder
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest as builder
 
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
-    python39-devel python39-pip swig \
+    python3-devel python3-pip \
     libnghttp2-devel \
     wget tar patch findutils git libasan libubsan libtsan \
  && microdnf clean all -y
@@ -40,13 +40,13 @@ ENV VERSION=$VERSION
 RUN .github/scripts/compile.sh
 RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # gdb and sanitizers are part of final image as they can be used as debug options for Skupper
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
-    python39 \
+    python3 \
     libnghttp2 \
     gdb libasan libubsan libtsan \
     gettext hostname iputils \

@@ -319,7 +319,26 @@ jobs:
         shard: [ 1, 2 ]
         shards: [ 2 ]
         include:
-          # CentOS
+          # CentOS 9
+          - os: ubuntu-20.04
+            container: 'centos'
+            containerTag: stream9
+            cc: gcc
+            cxx: g++
+            runtimeCheck: OFF
+            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+            shard: 1
+            shards: 2
+          - os: ubuntu-20.04
+            container: 'centos'
+            containerTag: stream9
+            cc: gcc
+            cxx: g++
+            runtimeCheck: OFF
+            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+            shard: 2
+            shards: 2
+          # CentOS 8
           - os: ubuntu-20.04
             container: 'centos'
             containerTag: stream8
@@ -460,12 +479,17 @@ jobs:
         with:
           path: 'skupper-router'
 
-      - name: Enable additional package repositories for CentOS
-        if: ${{ matrix.container == 'centos' }}
+      - name: Enable additional package repositories for CentOS 8
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream8' }}
         run: |
-          dnf -y install epel-release
-          dnf -y install 'dnf-command(config-manager)'
+          dnf -y install epel-release 'dnf-command(config-manager)'
           dnf config-manager --set-enabled powertools
+
+      - name: Enable additional package repositories for CentOS 9
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream9' }}
+        run: |
+          dnf -y install epel-release 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled crb
 
       # also sets LD_LIBRARY_PATH to find libclang_rt.asan-x86_64.so for asan'd proton
       - name: Install Linux compiler (clang)
@@ -486,9 +510,14 @@ jobs:
         if: ${{ matrix.container == 'fedora' }}
         run: dnf install -y python3-devel python3-pip
 
-      - name: Install Linux build dependencies (Centos)
-        if: ${{ matrix.container == 'centos' }}
+      - name: Install Linux build dependencies (CentOS 8)
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream8' }}
         run: dnf install -y python39-devel python39-pip
+
+      # util-linux-core provides dmesg
+      - name: Install Linux build dependencies (CentOS 9)
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream9' }}
+        run: dnf install -y util-linux-core python3-devel python3-pip
 
       - name: Install Python build dependencies
         run: python3 -m pip install setuptools wheel tox
@@ -569,7 +598,8 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
+          dnf install -y nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
+          command -v curl || dnf install -y curl
           dnf debuginfo-install -y python3
 
       - name: install qpid-proton python wheel
