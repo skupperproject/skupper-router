@@ -1343,8 +1343,6 @@ static void _server_request_complete_cb(h1_codec_request_state_t *hrs, bool canc
     hreq->base.stop = qd_timer_now();
     qdr_http1_record_server_request_info(qdr_http1_adaptor, &hreq->base);
     hreq->base.lib_rs = 0;
-    // expect: adaptor cancelled the request before cancelling the codec
-    assert(!cancelled || hreq->cancelled);
     hreq->codec_completed_ok = !cancelled;
 
     // Can we settle the client request message delivery?
