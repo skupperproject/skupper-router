@@ -573,11 +573,12 @@ jobs:
 
       - name: skupper-router cmake configure
         working-directory: ${{env.RouterBuildDir}}
-        run: >
+        run: |
+          if [[ ${BuildType} == "Coverage" ]]; then CoverageOpts="--cov;--cov-report=xml;--cov-append"; fi
           cmake "${{github.workspace}}/skupper-router" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
+            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;${CoverageOpts};--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython:-ON}
 
       - name: skupper-router cmake build/install
@@ -626,13 +627,24 @@ jobs:
           cmake --build . --target coverage
 
       # https://github.com/codecov/codecov-action
-      - name: Upload Coverage
+      - name: Upload C Coverage
         if: ${{ matrix.buildType == 'Coverage' }}
         uses: codecov/codecov-action@v3
         with:
           flags: unittests
           verbose: true
           gcov: true
+          name: skupper-router
+          root_dir: .
+          working-directory: ${{github.workspace}}/skupper-router
+
+      - name: Upload Python Coverage
+        if: ${{ matrix.buildType == 'Coverage' }}
+        uses: codecov/codecov-action@v3
+        with:
+          flags: pyunittests
+          verbose: true
+          directory: ${{env.RouterBuildDir}}/tests
           name: skupper-router
           root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
