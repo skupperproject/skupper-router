@@ -3076,5 +3076,107 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
         self.assertIn("OPENSSL SERVER S_CLIENT TEST", out.decode())
 
 
+class Http1AdaptorClientBackpressure(TestCase):
+    """
+    Test that link credit forces backpressure on client requests
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorClientBackpressure, cls).setUpClass()
+
+        cls.server_port = cls.tester.get_port()
+        cls.listener_port = cls.tester.get_port()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ClientBackpressure'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('httpListener', {'name': 'TestHttpListener',
+                              'port': cls.listener_port,
+                              'protocolVersion': 'HTTP1',
+                              'address': 'http-bridge'}),
+            ('httpConnector', {'name': 'TestHttpConnector',
+                               'port': cls.server_port,
+                               'host': 'localhost',
+                               'protocolVersion': 'HTTP1',
+                               'address': 'http-bridge'}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('HTTP1ClientBackpressure', config)
+
+    def test_01_client_backpressure(self):
+        """ Have a client send enough requests to overrun the link
+        credit. Verify backpressure is enabled. Drain the responses and verify
+        that the backpressure is released.
+
+        Note well: this test assumes the backlog limit is 16 (see
+        http1_client.c). If that changes this test needs to be updated!
+        """
+
+        backpressure_level = 16
+        request_count = backpressure_level * 2
+
+        get_req = 'GET /index.html HTTP/1.1\r\n'
+        get_req += f'Host: localhost:{self.server_port}\r\n'
+        get_req += '\r\n'
+        get_req = get_req.encode()
+
+        response = 'HTTP/1.1 200 OK\r\n'
+        response += 'content-length: 0\r\n'
+        response += '\r\n'
+        response = response.encode()
+
+        # create a "server"
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.server_port))
+            listener.setblocking(True)
+            listener.listen(1)
+
+            server, _ = listener.accept()
+            try:
+                wait_http_listeners_up(self.router.addresses[0],
+                                       l_filter={'name': 'TestHttpListener'})
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                    client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    retry_exception(lambda cs=client:
+                                    cs.connect(("localhost",
+                                                self.listener_port)),
+                                    delay=0.25,
+                                    exception=ConnectionRefusedError)
+                    for _ in range(request_count):
+                        client.sendall(get_req)
+
+                    # this should queue up enough requests to trigger
+                    # backpressure. Check the logs
+
+                    pattern = r" request backlog \(15\) at credit limit \(15\), client link blocked"
+                    self.router.wait_log_message(pattern)
+
+                    # send responses
+
+                    for _ in range(request_count):
+                        data = _read_socket(server, len(get_req))
+                        self.assertEqual(len(data), len(get_req))
+                        server.sendall(response)
+
+                    # drain enough the responses to dip below the backpressure
+                    # threshold
+
+                    while request_count >= backpressure_level:
+                        data = _read_socket(client, len(response))
+                        self.assertEqual(len(data), len(response))
+                        request_count -= 1
+
+                    pattern = r"request backlog \(15\) below credit limit \(16\), client link unblocked"
+                    self.router.wait_log_message(pattern)
+            finally:
+                server.close()
+
+
 if __name__ == '__main__':
     unittest.main(main_module())

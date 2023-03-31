@@ -34,7 +34,7 @@
 // connection is terminated at an HTTP client, not an HTTP server.
 //
 
-#define DEFAULT_CAPACITY 250
+#define REQUEST_BACKLOG_MAX 16  // max queued up requests pending responses
 
 const char *CONTENT_LENGTH_KEY = "Content-Length";
 const char *POST_METHOD = "POST";
@@ -350,17 +350,17 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             qdr_http1_adaptor->adaptor,
                                             true,  // incoming
                                             QDR_ROLE_NORMAL,
-                                            1,     //cost
+                                            1,  // cost
                                             hconn->conn_id,
-                                            0,  // label
-                                            0,  // remote container id
-                                            false,  // strip annotations in
-                                            false,  // strip annotations out
-                                            DEFAULT_CAPACITY,
-                                            0,      // policy_spec
+                                            0,                    // label
+                                            0,                    // remote container id
+                                            false,                // strip annotations in
+                                            false,                // strip annotations out
+                                            REQUEST_BACKLOG_MAX,  // incoming link capacity
+                                            0,                    // policy_spec
                                             info,
-                                            0,      // bind context
-                                            0);     // bind token
+                                            0,   // bind context
+                                            0);  // bind token
     qdr_connection_set_context(hconn->qdr_conn, hconn);
     hconn->oper_status = QD_CONN_OPER_UP;
 
@@ -413,12 +413,17 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
     // to grant buffers to the raw connection
 }
 
-// handle PN_RAW_CONNECTION_NEED_READ_BUFFERS
+// Provide buffers for receiving requests on the client connection.
+//
 static void _replenish_empty_read_buffers(qdr_http1_connection_t *hconn)
 {
     assert(hconn->raw_conn);
 
-    if (!hconn->q2_blocked && (hconn->client.reply_to_addr || hconn->cfg.event_channel)) {
+    // do not grant buffers if flow control is active
+    bool rx_blocked = hconn->q2_blocked || (DEQ_SIZE(hconn->requests) >= hconn->in_link_credit)
+                      || (!hconn->client.reply_to_addr && !hconn->cfg.event_channel);
+
+    if (!rx_blocked) {
         int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
         qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
                "[C%" PRIu64 "] %d empty read buffers granted to the raw connection", hconn->conn_id, granted);
@@ -806,7 +811,6 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                                "[C%" PRIu64 "][L%" PRIu64 "] Delivering next request msg-id=%" PRIu64 " to router",
                                hconn->conn_id, hconn->in_link_id, hreq->base.msg_id);
 
-                        hconn->in_link_credit -= 1;
                         _deliver_request(hconn, hreq);
                     }
                 }
@@ -922,6 +926,19 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
     h1_codec_request_state_set_context(hrs, (void *) hreq);
     DEQ_INSERT_TAIL(hconn->requests, &hreq->base);
 
+    if (qd_log_enabled(qdr_http1_adaptor->log, QD_LOG_DEBUG)) {
+        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] New HTTP request received: msg-id=%" PRIu64 " method=%s target=%s version=%" PRIi32
+               ".%" PRIi32,
+               hconn->conn_id, hreq->base.msg_id, method, target, version_major, version_minor);
+
+        if (DEQ_SIZE(hconn->requests) == hconn->in_link_credit) {
+            qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] request backlog (%zu) at credit limit (%d), client link blocked", hconn->conn_id,
+                   DEQ_SIZE(hconn->requests), hconn->in_link_credit);
+        }
+    }
+
     //
     // Start a vanflow record for the client request coming in on the qdr_http1_connection_t.
     // The parent of this vanflow is the connection's vanflow record.
@@ -933,10 +950,6 @@ static int _client_rx_request_cb(h1_codec_request_state_t *hrs,
     // Start vflow latency timer for this request.
     //
     vflow_latency_start(hreq->base.vflow);
-
-    qd_log(qdr_http1_adaptor->log, QD_LOG_TRACE,
-           "[C%" PRIu64 "] HTTP request received: msg-id=%" PRIu64 " method=%s target=%s version=%" PRIi32 ".%" PRIi32,
-           hconn->conn_id, hreq->base.msg_id, method, target, version_major, version_minor);
 
     hreq->request_props = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
     qd_compose_start_map(hreq->request_props);
@@ -1092,9 +1105,7 @@ static int _client_rx_headers_done_cb(h1_codec_request_state_t *hrs, bool has_bo
     // Use up one credit to obtain a delivery and forward to core.  If no
     // credit is available the request is stalled until the core grants more
     // flow.
-    if (hreq == (_client_request_t*) DEQ_HEAD(hconn->requests) && hconn->in_link_credit > 0) {
-        hconn->in_link_credit -= 1;
-
+    if (hreq == (_client_request_t *) DEQ_HEAD(hconn->requests) && hconn->in_link_credit > 0) {
         qd_log(hconn->adaptor->log, QD_LOG_TRACE,
                "[C%"PRIu64"][L%"PRIu64"] Delivering request msg-id=%"PRIu64" to router",
                hconn->conn_id, hconn->in_link_id, hreq->base.msg_id);
@@ -1216,8 +1227,10 @@ void qdr_http1_client_core_second_attach(qdr_http1_adaptor_t    *adaptor,
 
         assert(hconn->client.reply_to_addr);
 
-        hconn->out_link_credit += DEFAULT_CAPACITY;
-        qdr_link_flow(adaptor->core, link, DEFAULT_CAPACITY, false);
+        // Grant capacity for responses arriving from server. Overprovision to allow an additional "100 Continue"
+        // response for each request
+        hconn->out_link_credit = 2 * REQUEST_BACKLOG_MAX;
+        qdr_link_flow(adaptor->core, link, hconn->out_link_credit, false);
     }
 }
 
@@ -1227,23 +1240,33 @@ void qdr_http1_client_core_link_flow(qdr_http1_adaptor_t    *adaptor,
                                      qdr_link_t             *link,
                                      int                     credit)
 {
-    qd_log(adaptor->log, QD_LOG_DEBUG,
-           "[C%"PRIu64"][L%"PRIu64"] Credit granted on request link %d",
-           hconn->conn_id, hconn->in_link_id, credit);
-
     assert(link == hconn->in_link);   // router only grants flow on incoming link
 
+    const int old_credit = hconn->in_link_credit;
     hconn->in_link_credit += credit;
-    if (hconn->in_link_credit > 0) {
-        if (hconn->raw_conn)
-            _replenish_empty_read_buffers(hconn);
 
-        // is the current request message blocked by lack of credit?
+    qd_log(adaptor->log, QD_LOG_DEBUG,
+           "[C%" PRIu64 "][L%" PRIu64 "] Credit granted on request link: %d credits available", hconn->conn_id,
+           hconn->in_link_id, hconn->in_link_credit);
+
+    if (hconn->in_link_credit > 0) {
+        const bool unblocked = hconn->in_link_credit > DEQ_SIZE(hconn->requests);
+        if (unblocked) {
+            if (old_credit <= DEQ_SIZE(hconn->requests)) {
+                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] request backlog (%zu) below credit limit (%d), client link unblocked",
+                       hconn->conn_id, DEQ_SIZE(hconn->requests), hconn->in_link_credit);
+            }
+
+            if (hconn->raw_conn)
+                _replenish_empty_read_buffers(hconn);
+        }
+
+        // is the current outgoing request message blocked by lack of credit?
 
         _client_request_t *hreq = (_client_request_t *)DEQ_HEAD(hconn->requests);
         if (hreq && hreq->request_msg) {
             assert(!hreq->request_dlv);
-            hconn->in_link_credit -= 1;
 
             qd_log(hconn->adaptor->log, QD_LOG_TRACE,
                    "[C%"PRIu64"][L%"PRIu64"] Delivering next request msg-id=%"PRIu64" to router",
@@ -1900,11 +1923,13 @@ static void _client_response_msg_free(_client_request_t *req, _client_response_m
 static void _client_request_free(_client_request_t *hreq)
 {
     if (hreq) {
+        qdr_http1_connection_t *hconn = hreq->base.hconn;
+
         // deactivate the Q2 callback
         qd_message_t *msg = hreq->request_dlv ? qdr_delivery_message(hreq->request_dlv) : hreq->request_msg;
         qd_message_clear_q2_unblocked_handler(msg);
 
-        qdr_http1_request_base_cleanup(&hreq->base);
+        qdr_http1_request_base_cleanup(&hreq->base);  // dequeues request from hconn->requests
         qd_message_free(hreq->request_msg);
         if (hreq->request_dlv) {
             qdr_delivery_set_context(hreq->request_dlv, 0);
@@ -1916,6 +1941,14 @@ static void _client_request_free(_client_request_t *hreq)
         while (rmsg) {
             _client_response_msg_free(hreq, rmsg);
             rmsg = DEQ_HEAD(hreq->responses);
+        }
+
+        if (qd_log_enabled(qdr_http1_adaptor->log, QD_LOG_DEBUG)) {
+            if (hconn->in_link_credit > 0 && DEQ_SIZE(hconn->requests) == hconn->in_link_credit - 1) {
+                qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] request backlog (%zu) below credit limit (%d), client link unblocked",
+                       hconn->conn_id, DEQ_SIZE(hconn->requests), hconn->in_link_credit);
+            }
         }
 
         free__client_request_t(hreq);
@@ -1948,6 +1981,9 @@ void qdr_http1_client_core_conn_close(qdr_http1_adaptor_t *adaptor,
 
 static void _deliver_request(qdr_http1_connection_t *hconn, _client_request_t *hreq)
 {
+    assert(hconn->in_link_credit > 0);
+    hconn->in_link_credit -= 1;
+
     if (hconn->cfg.event_channel) {
         qd_iterator_t *addr = qd_message_field_iterator(hreq->request_msg, QD_FIELD_TO);
         qd_iterator_reset_view(addr, ITER_VIEW_ADDRESS_HASH);
@@ -1957,6 +1993,12 @@ static void _deliver_request(qdr_http1_connection_t *hconn, _client_request_t *h
     }
     qdr_delivery_set_context(hreq->request_dlv, (void*) hreq);
     hreq->request_msg = 0;
+
+    if (hconn->in_link_credit == DEQ_SIZE(hconn->requests)) {
+        qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] request backlog (%zu) at credit limit (%d), client link blocked", hconn->conn_id,
+               DEQ_SIZE(hconn->requests), hconn->in_link_credit);
+    }
 }
 
 // Generate an HTTP/1.1 response message and pass it to the codec. This should be used to send a response to a client
