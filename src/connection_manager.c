@@ -338,7 +338,9 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     // The router will terminate on invalid cost values.
     //
     if (inter_router_cost <= 0 || inter_router_cost > INT32_MAX) {
-        return qd_error(QD_ERROR_CONFIG, "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %li", inter_router_cost, INT32_MAX);
+        return qd_error(QD_ERROR_CONFIG,
+                        "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %i",
+                        inter_router_cost, INT32_MAX);
     }
 
     config->inter_router_cost = inter_router_cost;
