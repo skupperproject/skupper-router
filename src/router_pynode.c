@@ -307,12 +307,12 @@ static PyMethodDef RouterAdapter_methods[] = {
 };
 
 static PyTypeObject RouterAdapterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "dispatch.RouterAdapter",  /* tp_name*/
-    .tp_basicsize = sizeof(RouterAdapter),     /* tp_basicsize*/
-    .tp_flags = Py_TPFLAGS_DEFAULT,        /* tp_flags*/
-    .tp_doc = "Dispatch Router Adapter", /* tp_doc */
-    .tp_methods = RouterAdapter_methods,     /* tp_methods */
+    .ob_base      = PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name      = "dispatch.RouterAdapter",
+    .tp_basicsize = sizeof(RouterAdapter),
+    .tp_flags     = Py_TPFLAGS_DEFAULT,
+    .tp_doc       = "Dispatch Router Adapter",
+    .tp_methods   = RouterAdapter_methods,
 };
 
 

@@ -559,12 +559,12 @@ static PyMethodDef LogAdapter_methods[] = {
 };
 
 static PyTypeObject LogAdapterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
+    .ob_base      = PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name      = DISPATCH_MODULE ".LogAdapter",
-    .tp_doc       = "Dispatch Log Adapter",
     .tp_basicsize = sizeof(LogAdapter),
     .tp_dealloc   = (destructor)LogAdapter_dealloc,
     .tp_flags     = Py_TPFLAGS_DEFAULT,
+    .tp_doc       = "Dispatch Log Adapter",
     .tp_methods   = LogAdapter_methods,
     .tp_init      = (initproc)LogAdapter_init,
     .tp_new       = PyType_GenericNew,
@@ -807,14 +807,14 @@ static PyMethodDef IoAdapter_methods[] = {
 
 
 static PyTypeObject IoAdapterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
+    .ob_base      = PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name      = DISPATCH_MODULE ".IoAdapter",
-    .tp_doc       = "Dispatch IO Adapter",
     .tp_basicsize = sizeof(IoAdapter),
-    .tp_traverse  = (traverseproc)IoAdapter_traverse,
-    .tp_clear     = (inquiry)IoAdapter_clear,
     .tp_dealloc   = (destructor)IoAdapter_dealloc,
     .tp_flags     = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_doc       = "Dispatch IO Adapter",
+    .tp_traverse  = (traverseproc)IoAdapter_traverse,
+    .tp_clear     = (inquiry)IoAdapter_clear,
     .tp_methods   = IoAdapter_methods,
     .tp_init      = (initproc)IoAdapter_init,
     .tp_new       = PyType_GenericNew,
