@@ -121,7 +121,7 @@ class TwoRouterTest(TestCase):
         # deliveriesTransit must most surely be greater than num_msgs
         pos = outs.attribute_names.index("deliveriesTransit")
         results = outs.results[0]
-        self.assertTrue(results[pos] > 104)
+        self.assertGreater(results[pos], 104)
 
     def test_02a_multicast_unsettled(self):
         test = MulticastUnsettled(self.routers[0].addresses[0])

@@ -1949,7 +1949,7 @@ class PolicyVhostAlias(TestCase):
         if test.error is not None:
             test.logger.log("test_100 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
 
 class PolicyConnSettingsSniffer(MessagingHandler):
