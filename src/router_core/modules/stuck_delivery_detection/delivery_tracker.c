@@ -35,14 +35,13 @@ static int stuck_age      = PROD_STUCK_AGE;
 
 static void action_handler_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 
-typedef struct tracker_t tracker_t;
+typedef struct dtracker_t dtracker_t;
 
-struct tracker_t {
+struct dtracker_t {
     qdr_core_t       *core;
     qdr_core_timer_t *timer;
     qdr_link_t_sp     next_link;
 };
-
 
 static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv)
 {
@@ -97,7 +96,7 @@ static void process_link_CT(qdr_core_t *core, qdr_link_t *link)
 
 static void timer_handler_CT(qdr_core_t *core, void *context)
 {
-    tracker_t  *tracker    = (tracker_t*) context;
+    dtracker_t *tracker    = (dtracker_t *) context;
     qdr_link_t *first_link = DEQ_HEAD(core->open_links);
 
     qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Stuck Delivery Detection: Starting detection cycle");
@@ -117,7 +116,7 @@ static void action_handler_CT(qdr_core_t *core, qdr_action_t *action, bool disca
     if (discard)
         return;
 
-    tracker_t  *tracker = (tracker_t*) action->args.general.context_1;
+    dtracker_t *tracker = (dtracker_t *) action->args.general.context_1;
     qdr_link_t *link    = safe_deref_qdr_link_t(tracker->next_link);
 
     if (!!link) {
@@ -163,7 +162,7 @@ static bool qdrc_delivery_tracker_enable_CT(qdr_core_t *core)
 
 static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_context)
 {
-    tracker_t *tracker = NEW(tracker_t);
+    dtracker_t *tracker = NEW(dtracker_t);
     ZERO(tracker);
     tracker->core  = core;
     tracker->timer = qdr_core_timer_CT(core, timer_handler_CT, tracker);
@@ -178,7 +177,7 @@ static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_contex
 
 static void qdrc_delivery_tracker_final_CT(void *module_context)
 {
-    tracker_t *tracker = (tracker_t*) module_context;
+    dtracker_t *tracker = (dtracker_t *) module_context;
     qdr_core_timer_free_CT(tracker->core, tracker->timer);
     free(tracker);
 }
