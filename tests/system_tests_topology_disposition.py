@@ -803,6 +803,8 @@ class TopologyDisposition (MessagingHandler):
         self.n_accepted           = 0
         self.n_received           = 0
         self.n_released           = 0
+        self.n_links              = 0
+        self.max_links            = 10
         self.reactor              = None
         self.state                = None
         self.send_conn            = None
@@ -960,30 +962,31 @@ class TopologyDisposition (MessagingHandler):
     # connections.
     # -----------------------------------------------------------------
 
-    def on_link_opened(self, event) :
-        self.state_transition('on_link_opened', 'topo checking')
-        # The A mgmt link has opened.  --------------------------
-        # Give it some credit, but we don't need to use this one until
-        # later, if there is a problem.
+    def on_link_opened(self, event):
+        assert self.n_links < self.max_links, f"unexpected link opened: {event.link}"
+        self.n_links += 1
+        self.debug_print(f"{self.n_links} links opened")
+
         if event.receiver == self.routers['A']['mgmt_receiver'] :
             event.receiver.flow(self.flow)
             self.routers['A']['mgmt_helper'] = ManagementMessageHelper(event.receiver.remote_source.address)
-        # The B mgmt link has opened. Check its connections. --------------------------
         elif event.receiver == self.routers['B']['mgmt_receiver'] :
             event.receiver.flow(self.flow)
             self.routers['B']['mgmt_helper'] = ManagementMessageHelper(event.receiver.remote_source.address)
-            for connector in ['AB_connector'] :
-                self.connector_check('B', connector)
-        # The C mgmt link has opened. Check its connections. --------------------------
         elif event.receiver == self.routers['C']['mgmt_receiver'] :
             event.receiver.flow(self.flow)
             self.routers['C']['mgmt_helper'] = ManagementMessageHelper(event.receiver.remote_source.address)
-            for connector in ['AC_connector', 'BC_connector'] :
-                self.connector_check('C', connector)
-        # The D mgmt link has opened. Check its connections. --------------------------
         elif event.receiver == self.routers['D']['mgmt_receiver']:
             event.receiver.flow(self.flow)
             self.routers['D']['mgmt_helper'] = ManagementMessageHelper(event.receiver.remote_source.address)
+
+        if self.n_links == self.max_links:
+            # All test links are up. Start checking the topology
+            self.state_transition('all links opened', 'topo checking')
+            for connector in ['AB_connector'] :
+                self.connector_check('B', connector)
+            for connector in ['AC_connector', 'BC_connector'] :
+                self.connector_check('C', connector)
             for connector in ['AD_connector', 'BD_connector', 'CD_connector'] :
                 self.connector_check('D', connector)
 
