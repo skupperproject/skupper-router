@@ -192,6 +192,9 @@ foreach(py_test_module
   list(APPEND SYSTEM_TEST_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${py_test_module}.py)
 endforeach()
 
+# Place .coveragerc where coverage.py will find it when running system_tests
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.coveragerc ${CMAKE_CURRENT_BINARY_DIR}/.coveragerc COPYONLY)
+
 # Location of tox.ini determines the testroot directory for Pytest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tox.ini.in ${CMAKE_CURRENT_BINARY_DIR}/tox.ini)
 # Use tox to run the flake8 python linter tool on all the python

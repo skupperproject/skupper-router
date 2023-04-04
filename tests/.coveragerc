@@ -17,24 +17,5 @@
 # under the License.
 #
 
-# https://docs.codecov.com/docs/codecov-yaml
-
-comment:
-    layout: "header, diff, flags, components"  # show component info in the PR comment
-component_management:
-    individual_components:
-        - component_id: unittests
-          name: calculator
-          flag_regexes:
-              - ".*unittests"
-        - component_id: systemtests
-          name: systemtests
-          flag_regexes:
-              - ".*systemtests"
-flags:
-    pysystemtests:
-        joined: false
-    systemtests:
-        joined: false
-github_checks:
-    annotations: false
+[run]
+parallel = True
