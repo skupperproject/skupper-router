@@ -1758,7 +1758,6 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
                 break;
 
             case QD_MESSAGE_STREAM_DATA_NO_MORE: {
-                // indicate this message is complete
                 bool ignore;
                 qd_log(hconn->adaptor->log, QD_LOG_TRACE,
                        DLV_FMT " HTTP Request msg-id=%" PRIu64 " body data encode complete",
@@ -1774,6 +1773,13 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
             case QD_MESSAGE_STREAM_DATA_INVALID:
                 qd_log(qdr_http1_adaptor->log, QD_LOG_WARNING, DLV_FMT " Rejecting corrupted body data.",
                        DLV_ARGS(hreq->request_dlv));
+                hreq->request_dispo = PN_REJECTED;
+                return hreq->request_dispo;
+
+            case QD_MESSAGE_STREAM_DATA_ABORTED:
+                qd_log(hconn->adaptor->log, QD_LOG_TRACE,
+                       DLV_FMT " HTTP Request msg-id=%" PRIu64 " message aborted", DLV_ARGS(hreq->request_dlv),
+                       hreq->base.msg_id);
                 hreq->request_dispo = PN_REJECTED;
                 return hreq->request_dispo;
         }
@@ -1839,10 +1845,6 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             qd_message_Q2_holdoff_disable(msg);
             break;
         }
-
-    } else if (qd_message_aborted(msg)) {
-        qd_message_set_send_complete(msg);
-        _cancel_request(hreq, "HTTP/1.x request cancelled by originating client");
     }
 
     // Encode the request into buffers pending output. Note that these buffers are not yet written to the network: that

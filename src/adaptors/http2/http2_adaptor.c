@@ -1339,7 +1339,10 @@ ssize_t read_data_callback(nghttp2_session *session,
             qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback No body data, get qd_message_next_stream_data", conn->conn_id, stream_data->stream_id);
         }
 
-        if (stream_data->next_stream_data == 0 && (stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_NO_MORE || stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_INVALID)) {
+        if (stream_data->next_stream_data == 0 &&
+            (stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_NO_MORE ||
+             stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_ABORTED ||
+             stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_INVALID)) {
             stream_data->curr_stream_data_result = stream_data->next_stream_data_result;
         }
 
@@ -1477,7 +1480,8 @@ ssize_t read_data_callback(nghttp2_session *session,
             if (stream_data->next_stream_data) {
                 qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_FOOTER_OK, we have a next_stream_data", conn->conn_id, stream_data->stream_id);
             }
-            if (stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_INVALID) {
+            if (stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_INVALID ||
+                stream_data->next_stream_data_result == QD_MESSAGE_STREAM_DATA_ABORTED) {
                 stream_data->out_msg_has_footer = false;
                 if (stream_data->next_stream_data) {
                     qd_message_stream_data_release(stream_data->next_stream_data);
@@ -1529,8 +1533,10 @@ ssize_t read_data_callback(nghttp2_session *session,
         }
 
         case QD_MESSAGE_STREAM_DATA_INVALID:
+        case QD_MESSAGE_STREAM_DATA_ABORTED:
             //
-            // The body-data is corrupt in some way.  Stop handling the delivery and reject it.
+            // The body-data is corrupt or the sender aborted the message (incomplete).  Stop handling the delivery and
+            // reject it.
             //
             *data_flags |= NGHTTP2_DATA_FLAG_EOF;
             stream_data->out_msg_data_flag_eof = true;
@@ -1541,7 +1547,8 @@ ssize_t read_data_callback(nghttp2_session *session,
                 stream_data->curr_stream_data      = 0;
             }
             stream_data->out_dlv_local_disposition = PN_REJECTED;
-            qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_INVALID", conn->conn_id, stream_data->stream_id);
+            qd_log(http2_adaptor->protocol_log_source, QD_LOG_ERROR, "[C%"PRIu64"][S%"PRId32"] read_data_callback QD_MESSAGE_STREAM_DATA_%s", conn->conn_id, stream_data->stream_id,
+                   stream_data->curr_stream_data_result == QD_MESSAGE_STREAM_DATA_ABORTED ? "ABORTED" : "INVALID");
             break;
         }
         break;

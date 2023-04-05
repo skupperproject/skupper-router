@@ -1175,6 +1175,7 @@ static char *test_check_stream_data_append(void * context)
         switch (qd_message_next_stream_data(out_msg, &stream_data)) {
         case QD_MESSAGE_STREAM_DATA_INCOMPLETE:
         case QD_MESSAGE_STREAM_DATA_INVALID:
+        case QD_MESSAGE_STREAM_DATA_ABORTED:
             result = "Next body data failed to get next body data";
             goto exit;
         case QD_MESSAGE_STREAM_DATA_NO_MORE:
@@ -1897,7 +1898,117 @@ exit:
     qd_message_free(out_msg2);
     return result;
 }
-    
+
+// Verify that aborted messages are detected by the data stream parser
+//
+static char *test_check_stream_data_aborted_body(void *context)
+{
+    char *result = 0;
+    qd_message_t *in_msg = 0;
+    qd_message_t *out_msg = 0;
+    qd_message_stream_data_t *sdata = 0;
+
+    // simulate building a message as an adaptor would:
+    in_msg = qd_message();
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+    qd_compose_start_list(field);
+    qd_compose_insert_bool(field, 0);     // durable
+    qd_compose_insert_null(field);        // priority
+    qd_compose_end_list(field);
+    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+    qd_compose_start_list(field);
+    qd_compose_insert_ulong(field, 666);    // message-id
+    qd_compose_insert_null(field);                 // user-id
+    qd_compose_insert_string(field, "/whereevah"); // to
+    qd_compose_insert_string(field, "my-subject");  // subject
+    qd_compose_insert_string(field, "/reply-to");   // reply-to
+    qd_compose_end_list(field);
+
+    qd_message_compose_2(in_msg, field, false);
+    qd_compose_free(field);
+
+    // "fan out" the message
+    out_msg = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg);
+
+    bool             ignore  = false;
+    qd_buffer_list_t blist = DEQ_EMPTY;
+    uint8_t data[3] = {0x01, 0x02, 0x03};
+    qd_buffer_list_append(&blist, data, 3);
+    qd_message_stream_data_append(in_msg, &blist, &ignore);
+
+    // now simulate the abort:
+    qd_message_set_aborted(in_msg);
+    qd_message_set_receive_complete(in_msg);
+
+    // expect next stream data to return the ABORT status
+    qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_ABORTED) {
+        fprintf(stderr, "Expected ABORTED stream data result - got: %d\n", (int) rc);
+        result = "Did not get the aborted status";
+        goto exit;
+    }
+
+
+exit:
+    qd_message_stream_data_release(sdata);
+    qd_message_free(in_msg);
+    qd_message_free(out_msg);
+    return result;
+}
+
+
+// Verify that aborted messages are detected by the data stream parser even if no body present
+//
+static char *test_check_stream_data_aborted_no_body(void *context)
+{
+    char *result = 0;
+    qd_message_t *in_msg = 0;
+    qd_message_t *out_msg = 0;
+    qd_message_stream_data_t *sdata = 0;
+
+    // simulate building a message as an adaptor would:
+    in_msg = qd_message();
+    qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_HEADER, 0);
+    qd_compose_start_list(field);
+    qd_compose_insert_bool(field, 0);     // durable
+    qd_compose_insert_null(field);        // priority
+    qd_compose_end_list(field);
+    field = qd_compose(QD_PERFORMATIVE_PROPERTIES, field);
+    qd_compose_start_list(field);
+    qd_compose_insert_ulong(field, 666);    // message-id
+    qd_compose_insert_null(field);                 // user-id
+    qd_compose_insert_string(field, "/whereevah"); // to
+    qd_compose_insert_string(field, "my-subject");  // subject
+    qd_compose_insert_string(field, "/reply-to");   // reply-to
+    qd_compose_end_list(field);
+
+    qd_message_compose_2(in_msg, field, false);
+    qd_compose_free(field);
+
+    // "fan out" the message
+    out_msg = qd_message_copy(in_msg);
+    qd_message_add_fanout(out_msg);
+
+    // now simulate the abort:
+    qd_message_set_aborted(in_msg);
+    qd_message_set_receive_complete(in_msg);
+
+    // expect next stream data to return the ABORT status immediately since there are no complete body data sections
+    qd_message_stream_data_result_t rc = qd_message_next_stream_data(out_msg, &sdata);
+    if (rc != QD_MESSAGE_STREAM_DATA_ABORTED) {
+        fprintf(stderr, "Expected ABORTED stream data result - got: %d\n", (int) rc);
+        result = "Did not get the aborted status";
+        goto exit;
+    }
+
+
+exit:
+    qd_message_stream_data_release(sdata);
+    qd_message_free(in_msg);
+    qd_message_free(out_msg);
+    return result;
+}
 
 int message_tests(void)
 {
@@ -1918,6 +2029,8 @@ int message_tests(void)
     TEST_CASE(test_check_stream_data_footer, 0);
     TEST_CASE(test_check_stream_data_fanout_leak, 0);
     TEST_CASE(test_check_stream_data_partial, 0);
+    TEST_CASE(test_check_stream_data_aborted_body, 0);
+    TEST_CASE(test_check_stream_data_aborted_no_body, 0);
     TEST_CASE(test_q2_callback_on_disable, 0);
     TEST_CASE(test_q2_ignore_headers, 0);
 
