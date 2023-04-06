@@ -625,7 +625,7 @@ jobs:
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
 
       - name: Process C Coverage
-        if: ${{ matrix.buildType == 'Coverage' }}
+        if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         working-directory: ${{env.RouterBuildDir}}
         run: |
           dnf install -y lcov
@@ -633,7 +633,7 @@ jobs:
 
       # https://github.com/codecov/codecov-action
       - name: Upload C Coverage
-        if: ${{ matrix.buildType == 'Coverage' }}
+        if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         uses: codecov/codecov-action@v3
         with:
           flags: ${{matrix.covType}}tests
@@ -644,14 +644,14 @@ jobs:
           working-directory: ${{github.workspace}}/skupper-router
 
       - name: Process Python coverage
-        if: ${{ matrix.buildType == 'Coverage' }}
+        if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         run: |
           coverage combine
           coverage xml
         working-directory: ${{env.RouterBuildDir}}/tests
 
       - name: Upload Python Coverage
-        if: ${{ matrix.buildType == 'Coverage' }}
+        if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         uses: codecov/codecov-action@v3
         with:
           flags: py${{matrix.covType}}tests
