@@ -31,10 +31,5 @@ component_management:
           name: systemtests
           flag_regexes:
               - ".*systemtests"
-flags:
-    pysystemtests:
-        joined: false
-    systemtests:
-        joined: false
 github_checks:
     annotations: false
