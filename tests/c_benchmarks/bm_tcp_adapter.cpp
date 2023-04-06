@@ -289,7 +289,7 @@ class DispatchRouterSubprocessTcpLatencyTest
 static void DISABLED_BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
 {
     return;  // disabled
-    auto est                        = make_unique<EchoServerThread>();
+    auto           est              = std::make_unique<EchoServerThread>();
     unsigned short tcpConnectorPort = est->port();
     unsigned short tcpListenerPort  = findFreePort();
 

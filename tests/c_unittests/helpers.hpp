@@ -30,6 +30,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <type_traits>
 
 // assertions without stack traces when running outside doctest
 #ifndef QDR_DOCTEST
@@ -80,28 +81,17 @@ extern "C" {
 void qd_error_initialize();
 }
 
-// backport of C++14 feature
-template <class T>
-using remove_const_t = typename std::remove_const<T>::type;
-
-// https://stackoverflow.com/questions/17902405/how-to-implement-make-unique-function-in-c11
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 // https://stackoverflow.com/questions/27440953/stdunique-ptr-for-c-functions-that-need-free
 struct free_deleter {
     template <typename T>
     void operator()(T *p) const
     {
-        std::free(const_cast<remove_const_t<T> *>(p));
+        std::free(const_cast<std::remove_const_t<T> *>(p));
     }
 };
 template <typename T>
 using unique_C_ptr = std::unique_ptr<T, free_deleter>;
-static_assert(sizeof(char *) == sizeof(unique_C_ptr<char>), "");  // ensure no overhead
+static_assert(sizeof(char *) == sizeof(unique_C_ptr<char>), "ensure no overhead");
 
 // https://stackoverflow.com/questions/65290961/can-i-succintly-declare-stdunique-ptr-with-custom-deleter
 template <typename T, typename Deleter>
