@@ -141,11 +141,10 @@ class RouterTestBadConfiguration(TestCase):
         """
         self.assertTrue(self.error_caught)
 
-    def test_skmanage_query(self):
+    def test_zzz_skmanage_query(self):
         """
         Attempts to query the router after the error (or timeout) has occurred.
         It expects a successful query response to be returned by the router.
-        :return:
         """
         p = self.popen(
             ['skmanage', '-b', self.address(), 'query', '--type=router', '--timeout', str(TIMEOUT)],
@@ -157,7 +156,6 @@ class RouterTestBadConfiguration(TestCase):
             p.kill()
             out, _ = p.communicate(timeout=TIMEOUT)
             raise Exception("%s\n%s" % (e, out)) from e
-        return out
 
 
 class RouterTestIdFailChar(TestCase):
