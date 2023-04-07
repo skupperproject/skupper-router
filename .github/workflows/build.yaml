@@ -108,12 +108,13 @@ jobs:
           path: 'skupper-router'
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
+      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
       - name: Prepare ccache timestamp
         id: ccache_cache_timestamp
         shell: cmake -P {0}
         run: |
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          message("::set-output name=timestamp::${current_date}")
+          file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}")
 
       - uses: actions/cache@v3
         env:
@@ -128,7 +129,7 @@ jobs:
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
       - name: Setup python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
           architecture: x64
@@ -241,7 +242,7 @@ jobs:
           name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
 
       - name: Setup python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
           architecture: x64
@@ -523,12 +524,13 @@ jobs:
         run: python3 -m pip install setuptools wheel tox
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
+      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
       - name: Prepare ccache timestamp
         id: ccache_cache_timestamp
         shell: cmake -P {0}
         run: |
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          message("::set-output name=timestamp::${current_date}")
+          file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}")
 
       - uses: actions/cache@v3
         env:
@@ -746,7 +748,7 @@ jobs:
           path: 'qpid-proton'
 
       - name: Setup python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
           architecture: x64
@@ -791,17 +793,19 @@ jobs:
         run: |
           docker build -t local/skupper-router:local -f ./Containerfile .
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
+      # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
+      # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
+      - name: Install rust with rustup
+        run: |
+          rustup set auto-self-update disable
+          rustup toolchain install stable --profile minimal
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: -- --nocapture
+      - name: Compile and run .rs tests
+        run: |
+          cargo check
+          cargo test -- --nocapture
         env:
           QDROUTERD_IMAGE: local/skupper-router:local
           RUST_BACKTRACE: 1
