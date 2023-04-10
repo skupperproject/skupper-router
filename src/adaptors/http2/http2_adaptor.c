@@ -1172,8 +1172,30 @@ static int on_frame_recv_callback(nghttp2_session *session,
                "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_PUSH_PROMISE frame received", conn->conn_id, stream_id);
     } break;
     case NGHTTP2_RST_STREAM: {
-        qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
-               "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_RST_STREAM frame received", conn->conn_id, stream_id);
+        if (stream_data) {
+                if (stream_data->out_dlv) {
+                    qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+                           "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_RST_STREAM frame received, rejecting out_dlv",
+                           conn->conn_id, stream_id);
+                    //
+                    // The client sent an RST_STREAM frame which means it does not want to hear from the router on this
+                    // stream anymore. We will reject this delivery which is already in progress/streaming. Rejecting
+                    // this delivery will free it and its peer delivery.
+                    //
+                    stream_data->out_dlv_local_disposition = PN_REJECTED;
+                    qdr_delivery_remote_state_updated(http2_adaptor->core, stream_data->out_dlv,
+                                                      stream_data->out_dlv_local_disposition, true, 0, false);
+                }
+                if (stream_data->in_dlv) {
+                    qdr_delivery_set_context(stream_data->in_dlv, 0);
+                }
+                qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE,
+                       "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_RST_STREAM frame received, freeing stream data",
+                       conn->conn_id, stream_id);
+
+                // Free the stream data object since it is no longer needed.
+                free_http2_stream_data(stream_data, false);
+        }
     } break;
     case NGHTTP2_PING: {
         qd_log(http2_adaptor->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"][S%"PRId32"] HTTP2 PING frame received", conn->conn_id, stream_id);
