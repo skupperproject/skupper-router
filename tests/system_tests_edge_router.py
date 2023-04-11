@@ -1287,8 +1287,8 @@ class RouterTest(TestCase):
 
         outs = self.run_skstat(['-c', '--all-routers'],
                                address=self.routers[0].addresses[0])
-        self.assertEqual(outs.count("INT.A"), 4)
-        self.assertEqual(outs.count("INT.B"), 4)
+        self.assertEqual(outs.count("INT.A"), 2)
+        self.assertEqual(outs.count("INT.B"), 2)
 
         outs = self.run_skstat(['-l', '--all-routers'],
                                address=self.routers[0].addresses[0])
