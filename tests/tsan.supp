@@ -32,9 +32,6 @@ race:qdr_delivery_mcast_inbound_update_CT
 race:qdr_delivery_mcast_outbound_settled_CT
 race:qdr_delivery_anycast_update_CT
 
-# DISPATCH-2127
-race:qd_message_receive
-
 # DISPATCH-2128
 race:process_link_CT
 

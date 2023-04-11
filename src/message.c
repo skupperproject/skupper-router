@@ -1580,7 +1580,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
                     // pending buffer is absent
                 }
 
-                content->receive_complete = true;
+                SET_ATOMIC_BOOL(&content->receive_complete, true);
                 content->q2_unblocker.handler = 0;
                 qd_nullify_safe_ptr(&content->q2_unblocker.context);
                 if (pn_delivery_aborted(delivery)) {
