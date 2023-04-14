@@ -32,7 +32,7 @@ from proton.utils import BlockingConnection
 from skupper_router.management.client import Node
 
 from system_test import TestCase, Process, Qdrouterd, main_module, TIMEOUT, TestTimeout, PollTimeout
-from system_test import AsyncTestReceiver
+from system_test import AsyncTestReceiver, retry
 from system_test import AsyncTestSender
 from system_test import get_inter_router_links
 from system_test import unittest
@@ -1588,8 +1588,7 @@ class StreamingLinkScrubberTest(TestCase):
             config = [
                 ('router', {'id': 'Router%s' % name,
                             'mode': 'interior'}),
-                ('listener', {'port': cls.tester.get_port(),
-                              'stripAnnotations': 'no'}),
+                ('listener', {'port': cls.tester.get_port()}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
                 ('address', {'prefix': 'multicast', 'distribution': 'multicast'})
@@ -1618,7 +1617,8 @@ class StreamingLinkScrubberTest(TestCase):
         router('B',
                [('connector', {'name': 'connectorToA', 'role':
                                'inter-router',
-                               'port': inter_router_port})])
+                               'port': inter_router_port,
+                               'dataConnectionCount': 0})])
         cls.RouterB = cls.routers[-1]
         cls.RouterB.listener = cls.RouterB.addresses[0]
 
@@ -1666,12 +1666,12 @@ class StreamingLinkScrubberTest(TestCase):
         post_count = len(get_inter_router_links(self.RouterA.listener))
         self.assertGreater(post_count, pre_count)
 
-        # expect: after 5 seconds 10 of the links should be closed and 4 (2 per each of 2 data connections)
-        # should remain (--test-hooks router option sets these parameters)
-        while (post_count - pre_count) > 4:
-            sleep(0.1)
-            post_count = len(get_inter_router_links(self.RouterA.listener))
-
+        # expect: after 5 seconds 10 of the links should be closed and 2 should
+        # remain (--test-hooks router option sets these parameters, see streaming_link_scrubber.c)
+        self.assertTrue(retry(lambda pc=pre_count, ra=self.RouterA.listener:
+                              len(get_inter_router_links(ra)) - pc == 2,
+                              delay=0.25),
+                        f"{len(get_inter_router_links(self.RouterA.listener)) - pre_count} != 2")
         rx.wait(timeout=TIMEOUT)
 
 
