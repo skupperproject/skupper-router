@@ -25,6 +25,7 @@ use bollard::container::{Config, CreateContainerOptions, InspectContainerOptions
 use bollard::Docker;
 use bollard::errors::Error;
 use bollard::errors::Error::DockerResponseServerError;
+use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::{CreateImageOptions, ListImagesOptions};
 use bollard::models::{ContainerCreateResponse, ContainerWaitResponse, CreateImageInfo, HostConfig, NetworkCreateResponse, PortBinding};
 use bollard::network::{CreateNetworkOptions, InspectNetworkOptions};
@@ -49,6 +50,70 @@ const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `do
 // https://nixery.dev/
 const NGHTTP2_IMAGE: &str = "nixery.dev/nghttp2:latest";
 const NETCAT_IMAGE: &str = "nixery.dev/netcat:latest";
+
+/**
+ * Starts skrouterd and queries it with skmanage from inside the same container.
+ *
+ * Issue #925: ModuleNotFoundError: No module named 'proton'
+ */
+#[tokio::test(flavor = "multi_thread")]
+async fn test_skrouterd_sanity() -> Result<(), Box<dyn std::error::Error>> {
+    let skupper_router_image = &env::var("QDROUTERD_IMAGE").unwrap_or(String::from("quay.io/skupper/skupper-router:latest"));
+    println!("Using router image: {}", skupper_router_image);
+
+    let hostconfig: HostConfig = HostConfig {
+        cap_add: Some(vec!["SYS_PTRACE".to_string()]),
+        port_bindings: Some(collection! {
+            "5672/tcp".to_string() => Some(vec![PortBinding{host_ip: None, host_port: None}]),
+        }),
+        ..Default::default()
+    };
+
+    let docker = Docker::connect_with_local_defaults().unwrap();
+    docker_pull(&docker, skupper_router_image).await;
+    let skrouterd = create_and_start_container(
+        &docker, skupper_router_image, "skrouterd_sanity",
+        Config {
+            host_config: Some(hostconfig.clone()),
+            env: Some(vec![
+                format!("QDROUTERD_DEBUG={}", "asan").as_str(),
+            ]),
+            ..Default::default()
+        }).await;
+
+    // let logs_skrouterd = stream_container_logs(&docker, "skrouterd", &skrouterd);
+    let gateway = get_container_gateway(&docker, &skrouterd).await;
+    let ipport = get_container_exposed_ports(&docker, &skrouterd, "5672/tcp").await;
+    wait_for_port_using_nc(&docker, hostconfig, &*gateway, &*ipport.host_port.unwrap()).await?;
+
+    let exec = docker.create_exec(&*skrouterd.id, CreateExecOptions {
+        cmd: Some(vec!["skstat", "-l"]),
+        attach_stdout: Some(true),
+        ..Default::default()
+    }).await?;
+
+    let result = docker.start_exec(&*exec.id, None).await?;
+    match result {
+        StartExecResults::Attached { mut output, .. } => {
+            // input.shutdown().await?;
+
+            // let outp = output.next().await;
+
+            while let Some(msg) = output.next().await {
+                println!("{}", msg.unwrap());
+            }
+        }
+        StartExecResults::Detached => {
+            println!("detached");
+        }
+    }
+
+    let exresult = docker.inspect_exec(&*exec.id).await?;
+    println!("{:?}", exresult);
+
+
+    return Ok(());
+}
 
 const ROUTER_CONFIG: &str = r#"
 router {
@@ -163,11 +228,9 @@ async fn test_h2spec() {
         }).await;
     let logs_skrouterd = stream_container_logs(&docker, "skrouterd", &container_skrouterd);
 
-    let inspection_skrouterd = docker.inspect_container(&*container_skrouterd.id, Some(InspectContainerOptions { size: false })).await.unwrap();
-    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
-    let hostname = network_settings_skrouterd.networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
+    let hostname = get_container_hostname(&docker, &container_skrouterd).await;
 
-    wait_for_port(&docker, hostconfig.clone(), &hostname, "24162").await.expect("Port was not open in time");
+    wait_for_port_using_nc(&docker, hostconfig.clone(), &hostname, "24162").await.expect("Port was not open in time");
 
     // container_h2spec
 
@@ -225,8 +288,31 @@ async fn test_h2spec() {
     assert_eq!(0, router_exit_code.unwrap());
 }
 
+async fn get_container_gateway(docker: &Docker, container: &ContainerCreateResponse) -> String {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let gateway = network_settings_skrouterd.gateway.unwrap();
+    gateway
+}
+
+async fn get_container_exposed_ports(docker: &Docker, container: &ContainerCreateResponse, port: &str) -> PortBinding {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let ports = network_settings_skrouterd.ports.unwrap();
+    let amqp = ports[port].clone().unwrap();
+    let ipport = amqp.first().unwrap();
+    return ipport.clone()
+}
+
+async fn get_container_hostname(docker: &Docker, container: &ContainerCreateResponse) -> String {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let hostname = network_settings_skrouterd.networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
+    hostname
+}
+
 /// Runs a nc container which tries to connect to the provided hostname and port.
-async fn wait_for_port(docker: &Docker, hostconfig: HostConfig, hostname: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn wait_for_port_using_nc(docker: &Docker, hostconfig: HostConfig, hostname: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
     let retry_policy = again::RetryPolicy::exponential(Duration::from_secs(1))
         .with_jitter(true)
         .with_max_delay(Duration::from_secs(3))
