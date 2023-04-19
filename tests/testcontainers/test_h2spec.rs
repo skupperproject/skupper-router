@@ -25,7 +25,7 @@ use bollard::Docker;
 use bollard::container::{Config, CreateContainerOptions, InspectContainerOptions, KillContainerOptions, LogOutput, LogsOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions, WaitContainerOptions};
 use bollard::errors::Error::DockerResponseServerError;
 use bollard::errors::Error;
-use bollard::exec::{CreateExecOptions, StartExecResults};
+use bollard::exec::{CreateExecOptions, CreateExecResults, StartExecResults};
 use bollard::image::{CreateImageOptions, ListImagesOptions};
 use bollard::models::{ContainerCreateResponse, ContainerWaitResponse, CreateImageInfo, HostConfig, NetworkCreateResponse, PortBinding};
 use bollard::network::{CreateNetworkOptions, InspectNetworkOptions};
@@ -34,6 +34,8 @@ use futures::TryStreamExt;
 use futures::stream::{Fuse};
 use futures::{FutureExt, pin_mut, select, Stream, stream, stream_select};
 use tokio::task::JoinHandle;
+use speculoos::assert_that;
+use speculoos::prelude::StrAssertions;
 
 // https://stackoverflow.com/questions/27582739/how-do-i-create-a-hashmap-literal
 macro_rules! collection {
@@ -45,53 +47,6 @@ macro_rules! collection {
     ($($v:expr),* $(,)?) => {{
         core::convert::From::from([$($v,)*])
     }};
-}
-
-struct LogPrinter {
-    tasks: Vec<JoinHandle<()>>,
-}
-
-impl Drop for LogPrinter {
-    fn drop(&mut self) {
-        for task in self.tasks.drain(..).rev() {
-            // async {
-            //     let result = task.await;
-            //     println!("Finalized LogPrinter {:?}", result);
-            // };
-            let result = futures::executor::block_on(task);
-            // let result = tokio::join!(task);
-            println!("Finalized LogPrinter {:?}", result);
-        }
-    }
-}
-
-impl LogPrinter {
-    fn new() -> Self {
-        Self {
-            tasks: vec![],
-        }
-    }
-
-    // log_streams: Vec<Pin<Box<dyn Stream<Item=String>>>>,
-    // fn register_stream(&mut self, log_stream: &'static mut (impl Stream<Item=String> + Unpin)) {
-    //     self.log_streams.push(Box::pin(log_stream));
-    // }
-    fn print(&mut self, log_stream: Fuse<(impl Stream<Item=String> + Unpin + Sized + Send + 'static)>) {
-        let mut s = log_stream;
-        let handle = tokio::spawn(async move {
-            while select! {
-                msg = s.next() => match msg {
-                    Some(msg) => {
-                        let msg: String = msg;
-                        println!("{}", msg);
-                        true
-                    },
-                    None => false
-                },
-            } {}
-        });
-        self.tasks.push(handle);
-    }
 }
 
 // https://hub.docker.com/r/summerwind/h2spec
@@ -136,50 +91,21 @@ async fn test_skrouterd_sanity() -> Result<(), Box<dyn std::error::Error>> {
 
     log_printer.print(logs_skrouterd.fuse());
 
-    // let printer = tokio::spawn(async move {
-    //     while select! {
-    //         msg = logs_skrouterd.next() => match msg {
-    //             Some(msg) => {
-    //                 let msg: String = msg;
-    //                 println!("{}", msg);
-    //                 true
-    //             },
-    //             None => false
-    //         },
-    //     } {}
-    // });
-
-    // printer.await;
-    // return Ok(());
-
     let gateway = get_container_gateway(&docker, &skrouterd).await;
     let ipport = get_container_exposed_ports(&docker, &skrouterd, "5672/tcp").await;
     wait_for_port_using_nc(&docker, hostconfig, &*gateway, &*ipport.host_port.unwrap()).await?;
 
-    let exec = docker.create_exec(&*skrouterd.id, CreateExecOptions {
-        cmd: Some(vec!["skstat", "-l"]),
-        attach_stdout: Some(true),
-        ..Default::default()
-    }).await?;
+    let skstat_command = vec!["skstat", "-l"];
+    let (exec, result) = docker_exec(&docker, &skrouterd, skstat_command).await;
+    let (stdout, stderr) = tokio::time::timeout(Duration::from_secs(10),docker_read_output(result)).await.unwrap();
+    println!("{}", stdout);
+    println!("{}", stderr);
 
-    let result = docker.start_exec(&*exec.id, None).await?;
-    match result {
-        StartExecResults::Attached { mut output, .. } => {
-            // input.shutdown().await?;
+    assert_that(&stdout).contains("Router Links");
+    assert_that(&stdout).contains("$management");
 
-            // let outp = output.next().await;
-
-            while let Some(msg) = output.next().await {
-                println!("{}", msg.unwrap());
-            }
-        }
-        StartExecResults::Detached => {
-            println!("detached");
-        }
-    }
-
-    let exresult = docker.inspect_exec(&*exec.id).await?;
-    assert_eq!(exresult.exit_code, Some(0));
+    let exec_result = docker.inspect_exec(&*exec.id).await?;
+    assert_eq!(exec_result.exit_code, Some(0));
 
     docker.stop_container(&*skrouterd.id, None).await.unwrap();
 
@@ -357,6 +283,44 @@ async fn test_h2spec() {
     stdout().flush().expect("failed to flush stdout");
     assert_eq!(0, h2spec_exit_code.unwrap());
     assert_eq!(0, router_exit_code.unwrap());
+}
+
+struct LogPrinter {
+    tasks: Vec<JoinHandle<()>>,
+}
+
+impl Drop for LogPrinter {
+    fn drop(&mut self) {
+        for task in self.tasks.drain(..).rev() {
+            let result = futures::executor::block_on(task);
+            println!("Finalized LogPrinter {:?}", result);
+        }
+    }
+}
+
+impl LogPrinter {
+    fn new() -> Self {
+        Self {
+            tasks: vec![],
+        }
+    }
+
+    fn print(&mut self, log_stream: Fuse<(impl Stream<Item=String> + Unpin + Sized + Send + 'static)>) {
+        let mut s = log_stream;
+        let handle = tokio::spawn(async move {
+            while select! {
+                msg = s.next() => match msg {
+                    Some(msg) => {
+                        let msg: String = msg;
+                        println!("{}", msg);
+                        true
+                    },
+                    None => false
+                },
+            } {}
+        });
+        self.tasks.push(handle);
+    }
 }
 
 async fn get_container_gateway(docker: &Docker, container: &ContainerCreateResponse) -> String {
@@ -538,4 +502,35 @@ async fn get_container_exit_code(docker: &Docker, container: &ContainerCreateRes
         Err(e) => Err(e.into())
     };
     exit_code
+}
+
+async fn docker_read_output(result: StartExecResults) -> (String, String) {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    match result {
+        StartExecResults::Attached { mut output, .. } => {
+            while let Some(msg) = output.next().await {
+                match msg.unwrap() {
+                    LogOutput::StdOut { message } => { stdout.push_str(std::str::from_utf8(&*message).unwrap()) }
+                    LogOutput::StdErr { message } => { stderr.push_str(std::str::from_utf8(&*message).unwrap()) }
+                    _ => {}
+                }
+            }
+        }
+        StartExecResults::Detached => {
+            println!("detached");
+        }
+    }
+    (stdout, stderr)
+}
+
+async fn docker_exec(docker: &Docker, container: &ContainerCreateResponse, command: Vec<&str>) -> (CreateExecResults, StartExecResults) {
+    let exec = docker.create_exec(&*container.id, CreateExecOptions {
+        cmd: Some(command),
+        attach_stdout: Some(true),
+        attach_stderr: Some(true),
+        ..Default::default()
+    }).await.unwrap();
+    let result = docker.start_exec(&*exec.id, None).await.unwrap();
+    (exec, result)
 }
