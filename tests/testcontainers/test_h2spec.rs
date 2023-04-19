@@ -75,7 +75,11 @@ async fn test_skrouterd_sanity() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let docker = Docker::connect_with_local_defaults().unwrap();
-    docker_pull(&docker, skupper_router_image).await;
+
+    // prefetch all images before creating containers
+    find_or_pull_image(&docker, skupper_router_image).await;
+    find_or_pull_image(&docker, NETCAT_IMAGE).await;
+
     let skrouterd = create_and_start_container(
         &docker, skupper_router_image, "skrouterd_sanity",
         Config {
