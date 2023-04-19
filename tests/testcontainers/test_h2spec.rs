@@ -50,8 +50,7 @@ macro_rules! collection {
 }
 
 // https://hub.docker.com/r/summerwind/h2spec
-const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";
-// do not prefix with `docker.io/`, docker won't find it
+const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `docker.io/`, docker won't find it
 // https://nixery.dev/
 const NGHTTP2_IMAGE: &str = "nixery.dev/nghttp2:latest";
 const NETCAT_IMAGE: &str = "nixery.dev/netcat:latest";
