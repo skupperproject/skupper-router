@@ -53,7 +53,8 @@ void qd_log_impl(qd_log_source_t *source, qd_log_level_t level, const char *file
  */
 void qd_log_impl_v1(qd_log_source_t *source, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
     __attribute__((format(printf, 5, 6)));
-void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_level, const char *file, int line, const char *fmt, va_list ap);
+void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_level, const char *file, int line, const char *fmt, va_list ap)
+    __attribute__((format(printf, 6, 0)));
 
 /** Log a message
  * Note: does not evaluate the format args unless the log message is enabled.

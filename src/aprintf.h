@@ -24,7 +24,7 @@
 /**
    Variadic appending printf - see aprintf()
  */
-int vaprintf(char **begin, char *end, const char *format, va_list ap_in);
+int vaprintf(char **begin, char *end, const char *format, va_list ap_in) __attribute__((format(printf, 3, 0)));
 
 /**
    Appending printf.

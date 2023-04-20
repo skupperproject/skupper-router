@@ -110,7 +110,7 @@ const char big_string[] =
     "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
 
 
-void debug(const char *format, ...)
+__attribute__((format(printf, 1, 2))) void debug(const char *format, ...)
 {
     va_list args;
 
