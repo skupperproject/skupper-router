@@ -97,7 +97,7 @@ const uint8_t msg_header[] = {
 };
 
 
-void debug(const char *format, ...)
+__attribute__((format(printf, 1, 2))) void debug(const char *format, ...)
 {
     va_list args;
 

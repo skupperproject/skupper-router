@@ -135,6 +135,7 @@ static void quote(char* bytes, int n, char **begin, char *end) {
 /**
  * Populates the buffer with formatted epoch_time
  */
+__attribute__((format(strftime, 2, 0)))
 static void format_time(pn_timestamp_t epoch_time, char *format, char *buffer, size_t len)
 {
     struct timeval local_timeval;

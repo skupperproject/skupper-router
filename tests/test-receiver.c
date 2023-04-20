@@ -58,7 +58,7 @@ uint64_t count = 0;
 uint64_t limit = 0;   // if > 0 stop after limit messages arrive
 
 
-void debug(const char *format, ...)
+__attribute__((format(printf, 1, 2))) void debug(const char *format, ...)
 {
     va_list args;
 
