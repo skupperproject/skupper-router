@@ -21,16 +21,21 @@ use std::env;
 use std::io::{stdout, Write};
 use std::time::Duration;
 
-use bollard::container::{Config, CreateContainerOptions, InspectContainerOptions, KillContainerOptions, LogOutput, LogsOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions, WaitContainerOptions};
 use bollard::Docker;
-use bollard::errors::Error;
+use bollard::container::{Config, CreateContainerOptions, InspectContainerOptions, KillContainerOptions, LogOutput, LogsOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions, WaitContainerOptions};
 use bollard::errors::Error::DockerResponseServerError;
+use bollard::errors::Error;
+use bollard::exec::{CreateExecOptions, CreateExecResults, StartExecResults};
 use bollard::image::{CreateImageOptions, ListImagesOptions};
 use bollard::models::{ContainerCreateResponse, ContainerWaitResponse, CreateImageInfo, HostConfig, NetworkCreateResponse, PortBinding};
 use bollard::network::{CreateNetworkOptions, InspectNetworkOptions};
-use futures::{FutureExt, pin_mut, select, Stream, stream, stream_select};
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream::{Fuse};
+use futures::{FutureExt, pin_mut, select, Stream, stream, stream_select};
+use tokio::task::JoinHandle;
+use speculoos::assert_that;
+use speculoos::prelude::StrAssertions;
 
 // https://stackoverflow.com/questions/27582739/how-do-i-create-a-hashmap-literal
 macro_rules! collection {
@@ -49,6 +54,66 @@ const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `do
 // https://nixery.dev/
 const NGHTTP2_IMAGE: &str = "nixery.dev/nghttp2:latest";
 const NETCAT_IMAGE: &str = "nixery.dev/netcat:latest";
+
+/**
+ * Starts skrouterd and queries it with skmanage from inside the same container.
+ *
+ * Issue #925: ModuleNotFoundError: No module named 'proton'
+ */
+#[tokio::test(flavor = "multi_thread")]
+async fn test_skrouterd_sanity() -> Result<(), Box<dyn std::error::Error>> {
+    let skupper_router_image = &env::var("QDROUTERD_IMAGE").unwrap_or(String::from("quay.io/skupper/skupper-router:latest"));
+    println!("Using router image: {}", skupper_router_image);
+
+    let hostconfig: HostConfig = HostConfig {
+        cap_add: Some(vec!["SYS_PTRACE".to_string()]),
+        port_bindings: Some(collection! {
+            "5672/tcp".to_string() => Some(vec![PortBinding{host_ip: None, host_port: None}]),
+        }),
+        ..Default::default()
+    };
+
+    let docker = Docker::connect_with_local_defaults().unwrap();
+
+    // prefetch all images before creating containers
+    find_or_pull_image(&docker, skupper_router_image).await;
+    find_or_pull_image(&docker, NETCAT_IMAGE).await;
+
+    let skrouterd = create_and_start_container(
+        &docker, skupper_router_image, "skrouterd_sanity",
+        Config {
+            host_config: Some(hostconfig.clone()),
+            env: Some(vec![
+                format!("QDROUTERD_DEBUG={}", "asan").as_str(),
+            ]),
+            ..Default::default()
+        }).await;
+
+    let mut log_printer = LogPrinter::new();
+    let logs_skrouterd = stream_container_logs(&docker, "skrouterd", &skrouterd);
+
+    log_printer.print(logs_skrouterd.fuse());
+
+    let gateway = get_container_gateway(&docker, &skrouterd).await;
+    let ipport = get_container_exposed_ports(&docker, &skrouterd, "5672/tcp").await;
+    wait_for_port_using_nc(&docker, hostconfig, &*gateway, &*ipport.host_port.unwrap()).await?;
+
+    let skstat_command = vec!["skstat", "-l"];
+    let (exec, result) = docker_exec(&docker, &skrouterd, skstat_command).await;
+    let (stdout, stderr) = tokio::time::timeout(Duration::from_secs(10),docker_read_output(result)).await.unwrap();
+    println!("{}", stdout);
+    println!("{}", stderr);
+
+    assert_that(&stdout).contains("Router Links");
+    assert_that(&stdout).contains("$management");
+
+    let exec_result = docker.inspect_exec(&*exec.id).await?;
+    assert_eq!(exec_result.exit_code, Some(0));
+
+    docker.stop_container(&*skrouterd.id, None).await.unwrap();
+
+    return Ok(());
+}
 
 const ROUTER_CONFIG: &str = r#"
 router {
@@ -163,11 +228,9 @@ async fn test_h2spec() {
         }).await;
     let logs_skrouterd = stream_container_logs(&docker, "skrouterd", &container_skrouterd);
 
-    let inspection_skrouterd = docker.inspect_container(&*container_skrouterd.id, Some(InspectContainerOptions { size: false })).await.unwrap();
-    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
-    let hostname = network_settings_skrouterd.networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
+    let hostname = get_container_hostname(&docker, &container_skrouterd).await;
 
-    wait_for_port(&docker, hostconfig.clone(), &hostname, "24162").await.expect("Port was not open in time");
+    wait_for_port_using_nc(&docker, hostconfig.clone(), &hostname, "24162").await.expect("Port was not open in time");
 
     // container_h2spec
 
@@ -225,8 +288,69 @@ async fn test_h2spec() {
     assert_eq!(0, router_exit_code.unwrap());
 }
 
+struct LogPrinter {
+    tasks: Vec<JoinHandle<()>>,
+}
+
+impl Drop for LogPrinter {
+    fn drop(&mut self) {
+        for task in self.tasks.drain(..).rev() {
+            let result = futures::executor::block_on(task);
+            println!("Finalized LogPrinter {:?}", result);
+        }
+    }
+}
+
+impl LogPrinter {
+    fn new() -> Self {
+        Self {
+            tasks: vec![],
+        }
+    }
+
+    fn print(&mut self, log_stream: Fuse<(impl Stream<Item=String> + Unpin + Sized + Send + 'static)>) {
+        let mut s = log_stream;
+        let handle = tokio::spawn(async move {
+            while select! {
+                msg = s.next() => match msg {
+                    Some(msg) => {
+                        let msg: String = msg;
+                        println!("{}", msg);
+                        true
+                    },
+                    None => false
+                },
+            } {}
+        });
+        self.tasks.push(handle);
+    }
+}
+
+async fn get_container_gateway(docker: &Docker, container: &ContainerCreateResponse) -> String {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let gateway = network_settings_skrouterd.gateway.unwrap();
+    gateway
+}
+
+async fn get_container_exposed_ports(docker: &Docker, container: &ContainerCreateResponse, port: &str) -> PortBinding {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let ports = network_settings_skrouterd.ports.unwrap();
+    let amqp = ports[port].clone().unwrap();
+    let ipport = amqp.first().unwrap();
+    return ipport.clone()
+}
+
+async fn get_container_hostname(docker: &Docker, container: &ContainerCreateResponse) -> String {
+    let inspection_skrouterd = docker.inspect_container(&*container.id, Some(InspectContainerOptions { size: false })).await.unwrap();
+    let network_settings_skrouterd = inspection_skrouterd.network_settings.unwrap();
+    let hostname = network_settings_skrouterd.networks.unwrap().values().take(1).next().unwrap().ip_address.as_ref().unwrap().clone();
+    hostname
+}
+
 /// Runs a nc container which tries to connect to the provided hostname and port.
-async fn wait_for_port(docker: &Docker, hostconfig: HostConfig, hostname: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn wait_for_port_using_nc(docker: &Docker, hostconfig: HostConfig, hostname: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
     let retry_policy = again::RetryPolicy::exponential(Duration::from_secs(1))
         .with_jitter(true)
         .with_max_delay(Duration::from_secs(3))
@@ -381,4 +505,35 @@ async fn get_container_exit_code(docker: &Docker, container: &ContainerCreateRes
         Err(e) => Err(e.into())
     };
     exit_code
+}
+
+async fn docker_read_output(result: StartExecResults) -> (String, String) {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    match result {
+        StartExecResults::Attached { mut output, .. } => {
+            while let Some(msg) = output.next().await {
+                match msg.unwrap() {
+                    LogOutput::StdOut { message } => { stdout.push_str(std::str::from_utf8(&*message).unwrap()) }
+                    LogOutput::StdErr { message } => { stderr.push_str(std::str::from_utf8(&*message).unwrap()) }
+                    _ => {}
+                }
+            }
+        }
+        StartExecResults::Detached => {
+            println!("detached");
+        }
+    }
+    (stdout, stderr)
+}
+
+async fn docker_exec(docker: &Docker, container: &ContainerCreateResponse, command: Vec<&str>) -> (CreateExecResults, StartExecResults) {
+    let exec = docker.create_exec(&*container.id, CreateExecOptions {
+        cmd: Some(command),
+        attach_stdout: Some(true),
+        attach_stderr: Some(true),
+        ..Default::default()
+    }).await.unwrap();
+    let result = docker.start_exec(&*exec.id, None).await.unwrap();
+    (exec, result)
 }

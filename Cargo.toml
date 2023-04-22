@@ -27,7 +27,8 @@ edition = "2021"
 [dependencies]
 
 [dev-dependencies]
+again = "0.1"
+bollard = "0.14"
 futures = "0.3"
 tokio = { version = "1", features = ["macros", "time"] }
-bollard = "0.14.0"
-again = "0.1"
+speculoos = "0.9"
