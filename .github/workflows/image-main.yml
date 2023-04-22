@@ -29,7 +29,24 @@ jobs:
     name: Publish skupper-router image
     runs-on: ubuntu-latest
     steps:
+      - name: Check that container job from build workflow succeeded
+        run: |
+          curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            ${{ github.event.workflow_run.jobs_url }} > jobs.json
+
+          conclusion=$(jq < jobs.json --raw-output '.jobs[] |  select( .name == "Container image") | .conclusion')
+          echo ${conclusion}
+
+          [[ ${conclusion} == "success" ]]
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v3
+
       - run: |
           # build and publish the main image
           # Use {GITHUB_SHA::8} for shorter SHA
