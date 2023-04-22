@@ -121,14 +121,6 @@ else()
   set(SYSTEM_TESTS_DELIVERY_ABORT system_tests_delivery_abort)
 endif()
 
-# There are some bugs in the Proton TLS 0.37.0 code
-# We are not going to run any TLS tests when router is compiled with Proton 0.37.0 
-if(${Proton_VERSION} VERSION_LESS "0.38.0")
-  #nothing to do
-else()
-  set(SYSTEM_TESTS_ADAPTOR_TLS_TESTS system_tests_tcp_adaptor_tls system_tests_http2_tls)
-endif()
-
 # System test python modules
 foreach(py_test_module
 #   system_tests_broker
@@ -178,7 +170,8 @@ foreach(py_test_module
     system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_tcp_adaptor
-    ${SYSTEM_TESTS_ADAPTOR_TLS_TESTS}
+    system_tests_tcp_adaptor_tls
+    system_tests_http2_tls
     system_tests_heartbeats
     system_tests_address_watch
     system_tests_router_annotations
