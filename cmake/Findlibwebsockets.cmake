@@ -20,15 +20,15 @@
 include(FindPackageHandleStandardArgs)
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(libunwind IMPORTED_TARGET libunwind)
+pkg_check_modules(libwebsockets REQUIRED IMPORTED_TARGET libwebsockets)
 
-find_package_handle_standard_args(libunwind
-    REQUIRED_VARS libunwind_FOUND
-    VERSION_VAR libunwind_VERSION
+find_package_handle_standard_args(libwebsockets
+    REQUIRED_VARS libwebsockets_FOUND
+    VERSION_VAR libwebsockets_VERSION
     HANDLE_COMPONENTS)
 
-set_package_properties(libunwind PROPERTIES
-    TYPE RECOMMENDED
-    PURPOSE "Used to dump the stack on crash"
-    DESCRIPTION "defines a portable and efficient C programming interface (API) to determine the call-chain of a program"
-    URL "https://www.nongnu.org/libunwind")
+set_package_properties(libwebsockets PROPERTIES
+    TYPE REQUIRED
+    PURPOSE "Enables the /healthz endpoint and AMQP over websocket connections"
+    DESCRIPTION "flexible, lightweight pure C library for implementing modern network protocols"
+    URL "https://libwebsockets.org")

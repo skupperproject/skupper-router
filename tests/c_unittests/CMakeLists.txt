@@ -31,6 +31,7 @@ endif()
 add_library(static_accessors_server_c SHARED
         static_accessors_server_c.c)
 target_compile_options(static_accessors_server_c PRIVATE -fvisibility=hidden)
+target_link_libraries(static_accessors_server_c PRIVATE Proton::core Python::Python)
 
 add_executable(c_unittests
         qdr_stubbing_probe.cpp
