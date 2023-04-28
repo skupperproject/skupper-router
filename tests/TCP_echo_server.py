@@ -19,10 +19,13 @@
 # under the License.
 #
 
+#
+# A simple TCP echo server that supports TLS connections
+#
+
 import argparse
-import selectors
+import asyncio
 import signal
-import socket
 import sys
 import ssl
 import time
@@ -32,27 +35,6 @@ from typing import Union
 
 from system_test import Logger
 from system_test import TIMEOUT
-
-
-class ClientRecord:
-    """
-    Object to register with the selector 'data' field
-    for incoming user connections. This is *not* used
-    for the listening socket.
-    This object holds the socketId in the address and
-    the inbound and outbound data list buffers for this
-    socket's payload.
-    """
-    def __init__(self, address):
-        self.addr = address
-        self.inb = b''
-        self.outb = b''
-
-    def __repr__(self):
-        return str(self.addr) + " len(in)=" + str(len(self.inb)) + " len(out)=" + str(len(self.outb))
-
-    def __str__(self):
-        return self.__repr__()
 
 
 class GracefulExitSignaler:
@@ -81,11 +63,52 @@ def split_chunk_for_display(raw_bytes):
     return result
 
 
+class TcpEchoServerHandler(asyncio.Protocol):
+    def __init__(self, echo_server):
+        self.peername = "UNKNOWN"
+        self.echo_server = echo_server
+        self.logger = echo_server.logger
+        self.name = echo_server.prefix
+        super(TcpEchoServerHandler, self).__init__()
+
+    def connection_made(self, transport):
+        self.peername = "%s:%s" % transport.get_extra_info('peername')
+        self.transport = transport
+        self.logger.log(f" {self.name}: Accepted connection from {self.peername}")
+
+        if self.echo_server.conn_stall > 0.0:
+            self.logger.log(f' {self.name}: Connection from {self.peername} stall start')
+            time.sleep(self.echo_server.conn_stall)
+            self.logger.log(f' {self.name}: Connection from {self.peername} stall end')
+        if self.echo_server.close_on_conn:
+            self.logger.log(f' {self.name}: Connection from {self.peername} closing due to close_on_conn')
+            self.transport.close()
+            return
+
+    def connection_lost(self, exc):
+        self.logger.log(f' {self.name}: Connection to {self.peername} lost, exception={exc}')
+
+    def eof_received(self):
+        self.logger.log(f' {self.name}: EOF received from peer {self.peername}')
+        return False
+
+    def data_received(self, data):
+        self.logger.log(f' {self.name}: peer {self.peername} received: {split_chunk_for_display(data)}')
+        self.echo_server.total_bytes_received += len(data)
+
+        if self.echo_server.close_on_data:
+            self.logger.log(f' {self.name}: closing peer {self.peername} due to close_on_data')
+            self.transport.close()
+            return
+
+        self.transport.write(data)
+        self.logger.log(f' {self.name}: peer {self.peername} reply written')
+
+
 class TcpEchoServer:
     def __init__(self, prefix="ECHO_SERVER",
+                 host='127.0.0.1',
                  port: Union[str, int] = "0",
-                 echo_count=0,
-                 timeout=0.0,
                  logger=None,
                  conn_stall=0.0,
                  close_on_conn=False,
@@ -100,30 +123,28 @@ class TcpEchoServer:
         :param timeout: exit after this many seconds
         :param logger: Logger() object
         """
-        self.sock: socket.socket
         self.prefix = prefix
         self.port = int(port)
-        self.echo_count = echo_count
-        self.timeout = timeout
         self.logger = logger
         self.conn_stall = conn_stall
         self.close_on_conn = close_on_conn
         self.close_on_data = close_on_data
-        self.keep_running = True
-        self.HOST = '127.0.0.1'
+        self.HOST = host
         self._cv = Condition()
         self._is_running = None
-        self.exit_status = None
         self.error = None
         self.ssl_info = ssl_info
-        self.ssl_sock = None
         self.total_bytes_received = 0
-        self.sel = selectors.DefaultSelector()
+
+        self.loop = None
+        self.server = None
+
         self._thread = Thread(target=self.run)
         self._thread.daemon = True
         # Note: do not add any code after the following thread.start()
         # The run() method starts running immediately after call to start().
         self._thread.start()
+        _ = self.is_running  # pause until server is bound and listening
 
     @property
     def is_running(self):
@@ -138,8 +159,9 @@ class TcpEchoServer:
             self._cv.notify_all()
 
     def get_listening_port(self) -> int:
-        address, port, *_ = self.sock.getsockname()
-        return port
+        if self.is_running:
+            return self.port
+        return 0
 
     def run(self):
         """
@@ -151,215 +173,66 @@ class TcpEchoServer:
         :return:
         """
         try:
-            # set up spontaneous exit settings
-            start_time = time.time()
-            total_echoed = 0
-
-            # set up listening socket
-            try:
-                if self.ssl_info:
-                    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                    context.load_verify_locations(cafile=self.ssl_info['CA_CERT'])
-                    context.load_cert_chain(certfile=self.ssl_info['SERVER_CERTIFICATE'],
+            ssl_context = None
+            if self.ssl_info:
+                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ssl_context.load_verify_locations(cafile=self.ssl_info['CA_CERT'])
+                ssl_context.load_cert_chain(certfile=self.ssl_info['SERVER_CERTIFICATE'],
                                             keyfile=self.ssl_info['SERVER_PRIVATE_KEY'])
-                    sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-                    sck.bind((self.HOST, int(self.port)))
-                    self.sock = context.wrap_socket(sck, server_side=True)
-                    # self.sock.listen(n) - where n is the number of unaccepted connections that the
-                    # system will allow before refusing new connections.
-                    # Since the CI system is low on resources, it might take time for the echo server
-                    # to accept TLS connections. Test setting the value of n to socket.SOMAXCONN
-                    self.sock.listen(socket.SOMAXCONN)
-                    self.sock.setblocking(False)
-                    self.sel.register(self.sock, selectors.EVENT_READ, data=None)
-                    if self.port == 0:
-                        self.port = self.get_listening_port()
-                    self.logger.log(' %s Listening on host:%s, TLS enabled port:%s' % (self.prefix, self.HOST, self.port))
-                else:
-                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.sock.bind((self.HOST, self.port))
-                    self.sock.listen(socket.SOMAXCONN)
-                    if self.port == 0:
-                        self.port = self.get_listening_port()
-                    self.sock.setblocking(False)
-                    self.sel.register(self.sock, selectors.EVENT_READ, data=None)
-                    self.logger.log(' %s Listening on host:%s, port:%s' % (self.prefix, self.HOST, self.port))
-            except Exception:
-                self.error = ('%s Opening listen socket %s:%s exception: %s' %
-                              (self.prefix, self.HOST, self.port, traceback.format_exc()))
-                self.logger.log(self.error)
-                return 1
+        except Exception:
+            self.error = ('%s configuring ssl_context for %s:%s exception: %s' %
+                          (self.prefix, self.HOST, self.port, traceback.format_exc()))
+            self.logger.log(self.error)
+            return 1
+
+        # run the client socket event loop until it is cancelled
+        try:
+            asyncio.run(self.event_loop(ssl_context, self.conn_stall,
+                                        self.close_on_conn,
+                                        self.close_on_data))
+        except asyncio.CancelledError:
+            pass
+
+        self.is_running = False
+
+    async def event_loop(self, ssl_context, conn_stall, close_on_conn, close_on_data):
+        try:
+            self.loop = asyncio.get_running_loop()
+
+            self.server = await self.loop.create_server(
+                lambda: TcpEchoServerHandler(self),
+                host=self.HOST,
+                port=self.port,
+                ssl=ssl_context,
+                reuse_address=True,
+                start_serving=True)
+
+            if self.port == 0:
+                self.port = self.server.sockets[0].getsockname()[1]
 
             # notify whoever is waiting on the condition variable for this
             self.is_running = True
-            # event loop
-            while True:
-                if not self.keep_running:
-                    self.exit_status = "INFO: command shutdown:"
-                    break
-                if self.timeout > 0.0:
-                    elapsed = time.time() - start_time
-                    if elapsed > self.timeout:
-                        self.exit_status = "Exiting due to timeout. Total echoed = %d" % total_echoed
-                        break
-                if self.echo_count > 0:
-                    if total_echoed >= self.echo_count:
-                        self.exit_status = "Exiting due to echo byte count. Total echoed = %d" % total_echoed
-                        break
-                events = self.sel.select(timeout=1)
-                if events:
-                    for key, mask in events:
-                        if key.data is None:
-                            if key.fileobj is self.sock:
-                                self.do_accept(key.fileobj,
-                                               self.sel,
-                                               self.logger,
-                                               self.conn_stall,
-                                               self.close_on_conn,
-                                               self.ssl_info)
-                            else:
-                                pass  # Only listener 'sock' has None in opaque data field
-                        else:
-                            n_echoed = self.do_service(key, mask, self.sel, self.logger, self.close_on_data, self.ssl_info)
-                            total_echoed += n_echoed
-                else:
-                    pass   # select timeout. probably.
 
-            self.logger.log(' %s unregistering selector' % self.prefix)
-            self.sel.unregister(self.sock)
-            self.sock.close()
+            self.logger.log(' %s Listening on host:%s, TLS enabled port:%s' % (self.prefix, self.HOST, self.port))
+
+            async with self.server:
+                await self.server.serve_forever()
 
         except Exception:
             self.error = "ERROR: exception : '%s'" % traceback.format_exc()
 
-        self.is_running = False
-
-    def do_accept(self, sock, sel, logger, conn_stall, close_on_conn, ssl_info=None):
-        conn, addr = sock.accept()
-        tls_string = "TLS" if ssl_info else ''
-        logger.log('%s Accepted %s connection from %s:%d' % (self.prefix, tls_string, addr[0], addr[1]))
-        if conn_stall > 0.0:
-            logger.log(' %s Connection from %s:%d stall start' % (self.prefix, addr[0], addr[1]))
-            time.sleep(conn_stall)
-            logger.log('%s Connection from %s:%d stall end' % (self.prefix, addr[0], addr[1]))
-        if close_on_conn:
-            logger.log('%s Connection from %s:%d closing due to close_on_conn' % (self.prefix, addr[0], addr[1]))
-            conn.close()
-            return
-        conn.setblocking(False)
-        events = selectors.EVENT_READ | selectors.EVENT_WRITE
-        sel.register(conn, events, data=ClientRecord(addr))
-        self.logger.log("%s registered %s selector" % (self.prefix, tls_string))
-
-    def do_service(self, key, mask, sel, logger, close_on_data, ssl_info=None):
-        retval = 0
-        sock = key.fileobj
-        data = key.data
-        if mask & selectors.EVENT_READ:
-            ssl_want_read = False
-            try:
-                if ssl_info:
-                    try:
-                        recv_data = b''
-                        while True:
-                            rcv_data = sock.recv(1024)
-                            if rcv_data:
-                                recv_data += rcv_data
-                            else:
-                                break
-                    except ssl.SSLWantReadError:
-                        ssl_want_read = True
-                        len_recv_data = len(recv_data) if recv_data else 0
-                        self.logger.log("ECHO SERVER ssl.SSLWantReadError, recv_data=%d" % len_recv_data)
-                else:
-                    recv_data = sock.recv(1024)
-            except IOError:
-                logger.log(' %s Connection to %s:%d IOError: %s' %
-                           (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                sel.unregister(sock)
-                sock.close()
-                return 0
-            except Exception:
-                self.error = (' %s Connection to %s:%d exception: %s' %
-                              (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                logger.log(self.error)
-                sel.unregister(sock)
-                sock.close()
-                return 1
-            if recv_data:
-                self.total_bytes_received += len(recv_data)
-                data.outb += recv_data
-                logger.log('%s read from: %s:%d len:%d: %s, bytes received so far=%d' % (self.prefix, data.addr[0],
-                                                                                         data.addr[1], len(recv_data),
-                                                                                         split_chunk_for_display(recv_data),
-                                                                                         self.total_bytes_received))
-                if close_on_data:
-                    logger.log('%s Connection to %s:%d closed due to close_on_data' % (self.prefix, data.addr[0], data.addr[1]))
-                    sel.unregister(sock)
-                    sock.close()
-                    return 0
-
-                sel.modify(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
-            else:
-                while data.outb:
-                    logger.log('%s Client closed: flush client input to %s:%d' % (self.prefix, data.addr[0], data.addr[1]))
-                    try:
-                        sent = sock.send(data.outb)
-                        data.outb = data.outb[sent:]
-                    except IOError:
-                        logger.log('%s Connection to %s:%d IOError: %s' %
-                                   (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                        sel.unregister(sock)
-                        sock.close()
-                        return 0
-                    except Exception:
-                        self.error = ('%s Connection to %s:%d exception: %s' %
-                                      (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                        logger.log(self.error)
-                        sel.unregister(sock)
-                        sock.close()
-                        return 1
-                if not ssl_want_read:
-                    # If you did not receive any data from a socket on a READ event, it means that the other side
-                    # has closed its connection but that is not true for SSL connections.
-                    logger.log(
-                        ' %s Client closed: closing connection to %s:%d' % (self.prefix, data.addr[0], data.addr[1]))
-                    sel.unregister(sock)
-                    sock.close()
-                return 0
-        if mask & selectors.EVENT_WRITE:
-            if data.outb:
-                try:
-                    sent = sock.send(data.outb)
-                except IOError:
-                    logger.log('%s Connection to %s:%d IOError: %s' %
-                               (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                    sel.unregister(sock)
-                    sock.close()
-                    return 0
-                except Exception:
-                    self.error = ('%s Connection to %s:%d exception: %s' %
-                                  (self.prefix, data.addr[0], data.addr[1], traceback.format_exc()))
-                    logger.log(self.error)
-                    sel.unregister(sock)
-                    sock.close()
-                    return 1
-                if sent:
-                    retval += sent
-                if sent > 0:
-                    logger.log('%s write to: %s:%d len:%d: %s' % (self.prefix, data.addr[0], data.addr[1], sent,
-                                                                  split_chunk_for_display(data.outb[:sent])))
-                else:
-                    logger.log('%s write to : %s:%d len:0' % (self.prefix, data.addr[0], data.addr[1]))
-                data.outb = data.outb[sent:]
-            else:
-                sel.modify(sock, selectors.EVENT_READ, data=data)
-        return retval
-
     def wait(self, timeout=TIMEOUT):
         self.logger.log(" %s Server is shutting down" % self.prefix)
-        self.keep_running = False
+        if self.loop:
+            def _cancel_server():
+                loop = asyncio.get_running_loop()
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+
+            self.loop.call_soon_threadsafe(_cancel_server)
         self._thread.join(timeout)
+        self.logger.log(" %s Server shutdown completed" % self.prefix)
 
 
 def main(argv):
@@ -369,6 +242,9 @@ def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument('--port', '-p',
                    help='Required listening port number')
+    p.add_argument('--host',
+                   default='127.0.0.1',
+                   help='Address to bind to')
     p.add_argument('--name',
                    help='Optional logger prefix')
     p.add_argument('--echo', '-e', type=int, default=0, const=1, nargs="?",
@@ -390,6 +266,15 @@ def main(argv):
     p.add_argument('--close-on-data',
                    action='store_true',
                    help='Close client connection as soon as data arrives.')
+
+    # TLS configuration
+    p.add_argument('--ca-file',
+                   help='Path to the file containing the CA certificate (PEM)')
+    p.add_argument('--cert-file',
+                   help='Path to the server self-identifying certificate file (PEM)')
+    p.add_argument('--key-file',
+                   help='Path to server key file (PEM)')
+
     del argv[0]
     args = p.parse_args(argv)
 
@@ -413,6 +298,14 @@ def main(argv):
     if args.connect_stall < 0.0:
         raise Exception("Connect-stall must be greater than or equal to zero")
 
+    ssl_info = {}
+    if args.ca_file is not None:
+        ssl_info['CA_CERT'] = args.ca_file
+    if args.cert_file is not None:
+        ssl_info['SERVER_CERTIFICATE'] = args.cert_file
+    if args.key_file is not None:
+        ssl_info['SERVER_PRIVATE_KEY'] = args.key_file
+
     signaller = GracefulExitSignaler()
     server = None
 
@@ -422,8 +315,9 @@ def main(argv):
                         print_to_console=args.log,
                         save_for_dump=False)
 
-        server = TcpEchoServer(prefix, port, args.echo, args.timeout, logger,
-                               args.connect_stall, args.close_on_connect, args.close_on_data)
+        server = TcpEchoServer(prefix, args.host, port, logger,
+                               args.connect_stall, args.close_on_connect,
+                               args.close_on_data, ssl_info=ssl_info)
 
         keep_running = True
         while keep_running:
@@ -432,9 +326,6 @@ def main(argv):
                 logger.log("ECHO SERVER %s stopped with error: %s" % (prefix, server.error))
                 keep_running = False
                 retval = 1
-            if server.exit_status is not None:
-                logger.log("ECHO SERVER  %s stopped with status: %s" % (prefix, server.exit_status))
-                keep_running = False
             if signaller.kill_now:
                 logger.log("ECHO SERVER  %s Process killed with signal" % prefix)
                 keep_running = False
@@ -446,9 +337,6 @@ def main(argv):
         if logger is not None:
             logger.log("ECHO SERVER  %s Exception: %s" % (prefix, traceback.format_exc()))
         retval = 1
-
-    if server is not None and server.sock is not None:
-        server.sock.close()
 
     return retval
 
