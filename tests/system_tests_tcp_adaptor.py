@@ -788,11 +788,6 @@ class CommonTcpTests:
                                         (test_name, es.prefix, es.error))
                         result = es.error
                         break
-                    if es.exit_status is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with status: %s" %
-                                        (test_name, es.prefix, es.exit_status))
-                        result = es.exit_status
-                        break
                 if result is not None:
                     break
 
@@ -886,11 +881,6 @@ class CommonTcpTests:
                         self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
                                         (test_name, es.prefix, es.error))
                         result = es.error
-                        break
-                    if es.exit_status is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with status: %s" %
-                                        (test_name, es.prefix, es.exit_status))
-                        result = es.exit_status
                         break
                 if result is not None:
                     break
@@ -1002,11 +992,6 @@ class CommonTcpTests:
                         self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
                                         (test_name, es.prefix, es.error))
                         result = es.error
-                        break
-                    if es.exit_status is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with status: %s" %
-                                        (test_name, es.prefix, es.exit_status))
-                        result = es.exit_status
                         break
                 if result is not None:
                     break
