@@ -191,14 +191,6 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
     // for initiating a connection to the server
     hconn->server.reconnect_timer = qd_timer(qdr_http1_adaptor->core->qd, _do_reconnect, hconn);
 
-    //
-    // Start a connection level vanflow record. The parent of the connection level
-    // vanflow record is the associated connector's vanflow record.
-    //
-    hconn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
-    vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-    vflow_add_rate(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-
     // Create the qdr_connection
     qdr_connection_info_t *info = qdr_connection_info(false, //bool             is_encrypted,
                                                       false, //bool             is_authenticated,
@@ -268,12 +260,18 @@ qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector
     qd_log(qdr_http1_adaptor->log, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
            hconn->conn_id, hconn->cfg.host_port);
 
+    // setup Vanflow records for the connector and its child connection
+
     connector->vflow = vflow_start_record(VFLOW_RECORD_CONNECTOR, 0);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "http1");
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_NAME, connector->config->adaptor_config->name);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, connector->config->adaptor_config->host);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->config->adaptor_config->port);
     vflow_set_string(connector->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS, connector->config->adaptor_config->address);
+
+    hconn->vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->vflow);
+    vflow_set_uint64(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(hconn->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
 
     // lock out the core activation thread.  Up until this point the core
     // thread cannot activate the qdr_connection_t since the
