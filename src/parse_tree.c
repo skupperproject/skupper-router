@@ -184,8 +184,7 @@ static bool normalize_pattern(qd_parse_tree_type_t type, char *pattern)
     }
 
     if (original) {
-        qd_log(qd_log_source("DEFAULT"), QD_LOG_NOTICE,
-               "configured pattern '%s' optimized and re-written to '%s'",
+        qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_NOTICE, "configured pattern '%s' optimized and re-written to '%s'",
                original, pattern);
         free(original);
     }
@@ -215,7 +214,6 @@ typedef struct qd_parse_node qd_parse_node_t;
 
 struct qd_parse_tree {
     qd_parse_node_t      *root;
-    qd_log_source_t      *log_source;
     qd_hash_t            *hash;
     qd_parse_tree_type_t  type;
     uint32_t              next_hkey_prefix;  // next # for hash key prefix
@@ -445,7 +443,7 @@ static qd_error_t parse_node_add_pattern(qd_parse_tree_t *tree, char *pattern, v
             node->pattern = pattern;
             pattern = 0;
             node->payload = payload;
-            qd_log(tree->log_source, QD_LOG_TRACE, "Parse tree add pattern '%s'", node->pattern);
+            qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_TRACE, "Parse tree add pattern '%s'", node->pattern);
         }
     }
 
@@ -655,8 +653,7 @@ qd_parse_tree_t *qd_parse_tree_new(qd_parse_tree_type_t type)
     qd_parse_tree_t *tree = new_qd_parse_tree_t();
     if (tree) {
         ZERO(tree);
-        tree->type = type;
-        tree->log_source = qd_log_source("DEFAULT");
+        tree->type             = type;
         tree->next_hkey_prefix = 1;
         tree->root = new_parse_node(tree, QD_PARSE_NODE_ROOT, 0, 0);
         if (!tree->root) {
@@ -690,7 +687,7 @@ bool qd_parse_tree_retrieve_match(qd_parse_tree_t *tree,
     *payload = NULL;
     qd_parse_tree_search(tree, value, get_first, payload);
     if (*payload == NULL)
-        qd_log(tree->log_source, QD_LOG_TRACE, "Parse tree match not found");
+        qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_TRACE, "Parse tree match not found");
     return *payload != NULL;
 }
 
@@ -702,7 +699,7 @@ void qd_parse_tree_search(qd_parse_tree_t *tree,
 {
     token_iterator_t t_iter;
     char *str = (char *)qd_iterator_copy_const(value);
-    qd_log(tree->log_source, QD_LOG_TRACE, "Parse tree search for '%s'", str);
+    qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_TRACE, "Parse tree search for '%s'", str);
 
     token_iterator_init(&t_iter, tree->type, str);
     parse_node_find(tree, tree->root, &t_iter, callback, handle);
@@ -961,7 +958,7 @@ void qd_parse_tree_search_str(qd_parse_tree_t *tree,
     token_iterator_t t_iter;
     // @TODO(kgiusti) for now:
     char *str = strdup(value);
-    qd_log(tree->log_source, QD_LOG_TRACE, "Parse tree(str) search for '%s'", str);
+    qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_TRACE, "Parse tree(str) search for '%s'", str);
 
     token_iterator_init(&t_iter, tree->type, str);
     parse_node_find(tree, tree->root, &t_iter, callback, handle);
@@ -978,7 +975,7 @@ bool qd_parse_tree_retrieve_match_str(qd_parse_tree_t *tree,
     *payload = NULL;
     qd_parse_tree_search_str(tree, value, get_first, payload);
     if (*payload == NULL)
-        qd_log(tree->log_source, QD_LOG_TRACE, "Parse tree(str) match not found");
+        qd_log(QD_LOG_MODULE_DEFAULT, QD_LOG_TRACE, "Parse tree(str) match not found");
     return *payload != NULL;
 }
 

@@ -37,8 +37,7 @@
 // Control Functions
 //===============================================================================
 
-static qd_dispatch_t   *dispatch   = 0;
-static qd_log_source_t *log_source = 0;
+static qd_dispatch_t   *dispatch               = 0;
 static PyObject        *dispatch_module = 0;
 static PyObject        *message_type = 0;
 static PyObject        *dispatch_python_pkgdir = 0;
@@ -48,7 +47,6 @@ static void qd_python_setup(void);
 
 void qd_python_initialize(qd_dispatch_t *qd, const char *python_pkgdir)
 {
-    log_source = qd_log_source("PYTHON");
     dispatch = qd;
     if (python_pkgdir)
         dispatch_python_pkgdir = PyUnicode_FromString(python_pkgdir);
@@ -60,7 +58,6 @@ void qd_python_initialize(qd_dispatch_t *qd, const char *python_pkgdir)
     qd_python_setup();
     PyEval_SaveThread(); // drop the Python GIL; we will reacquire it in other threads as needed
 }
-
 
 void qd_python_finalize(void)
 {
@@ -152,9 +149,7 @@ static PyObject *parsed_to_py_string(qd_parsed_field_t *field)
         free(buffer);
 
     if (!result)
-        qd_log(log_source, QD_LOG_DEBUG,
-               "Cannot convert field type 0x%X to python string object",
-               tag);
+        qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_DEBUG, "Cannot convert field type 0x%X to python string object", tag);
 
     return result;
 }
@@ -188,8 +183,7 @@ qd_error_t qd_py_to_composed(PyObject *value, qd_composed_field_t *field)
             qd_compose_insert_string(field, data);
             free(data);
         } else {
-            qd_log(log_source, QD_LOG_ERROR,
-                   "Unable to convert python unicode object");
+            qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_ERROR, "Unable to convert python unicode object");
         }
     }
     else if (PyBytes_Check(value)) {
@@ -508,9 +502,7 @@ PyObject *qd_field_to_py(qd_parsed_field_t *field)
 //===============================================================================
 
 typedef struct {
-    PyObject_HEAD
-    PyObject *module_name;
-    qd_log_source_t *log_source;
+    PyObject_HEAD qd_log_module_t log_module;
 } LogAdapter;
 
 
@@ -519,19 +511,18 @@ static int LogAdapter_init(LogAdapter *self, PyObject *args, PyObject *kwds)
     const char *text;
     if (!PyArg_ParseTuple(args, "s", &text))
         return -1;
-
-    self->module_name = PyUnicode_FromString(text);
-    self->log_source  = qd_log_source(text);
+    self->log_module = get_log_module_from_module_name((char *) text);
+    if (self->log_module == -1) {
+        qd_error(QD_ERROR_MESSAGE, "Invalid log module - %s", (char *) text);
+    }
     return 0;
 }
 
 
 static void LogAdapter_dealloc(LogAdapter* self)
 {
-    Py_XDECREF(self->module_name);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
-
 
 static PyObject* qd_python_log(PyObject *self, PyObject *args)
 {
@@ -546,7 +537,7 @@ static PyObject* qd_python_log(PyObject *self, PyObject *args)
     LogAdapter *self_ptr = (LogAdapter*) self;
     //char       *logmod   = PyString_AS_STRING(self_ptr->module_name);
 
-    qd_log_impl(self_ptr->log_source, level, file, line, "%s", text);
+    qd_log_impl(self_ptr->log_module, level, file, line, "%s", text);
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -785,8 +776,7 @@ static PyObject *qd_python_send(PyObject *self, PyObject *args)
                 qdr_send_to2(ioa->core, msg, a_str, (bool) no_echo, (bool) control);
                 free(a_str);
             } else {
-                qd_log(log_source, QD_LOG_ERROR,
-                       "Unable to convert message address to C string");
+                qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_ERROR, "Unable to convert message address to C string");
             }
             Py_DECREF(address);
         }
@@ -835,7 +825,7 @@ static void qd_python_setup(void)
 {
     if ((PyType_Ready(&LogAdapterType) < 0) || (PyType_Ready(&IoAdapterType) < 0)) {
         qd_error_py();
-        qd_log(log_source, QD_LOG_CRITICAL, "Unable to initialize Adapters");
+        qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_CRITICAL, "Unable to initialize Adapters");
         abort();
     } else {
         //
@@ -850,7 +840,8 @@ static void qd_python_setup(void)
         PyObject *m = PyImport_ImportModule(DISPATCH_MODULE);
         if (!m) {
             qd_error_py();
-            qd_log(log_source, QD_LOG_CRITICAL, "Cannot load dispatch extension module '%s'", DISPATCH_MODULE);
+            qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_CRITICAL, "Cannot load dispatch extension module '%s'",
+                   DISPATCH_MODULE);
             exit(1);
         }
 

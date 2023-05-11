@@ -53,7 +53,7 @@ class DisplayNameService:
         # profile_dict will be a mapping from ssl_profile_name to the SSLProfile object
         self.profile_dict: Dict[str, SSLProfile] = {}
         self.io_adapter = None
-        self.log_adapter = dispatch.LogAdapter("DISPLAYNAME")
+        self.log_adapter = dispatch.LogAdapter("AGENT")
 
     def log(self, level, text):
         info = traceback.extract_stack(limit=2)[0]  # Caller frame info

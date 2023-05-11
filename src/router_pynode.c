@@ -29,7 +29,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static qd_log_source_t *log_source       = 0;
 static PyObject        *pyRouter         = 0;
 static PyObject        *pyTick           = 0;
 static PyObject        *pySetMobileSeq   = 0;
@@ -377,7 +376,6 @@ static void qd_router_link_lost(void *context, int link_mask_bit)
 qd_error_t qd_router_python_setup(qd_router_t *router)
 {
     qd_error_clear();
-    log_source = qd_log_source("ROUTER");
 
     qdr_core_route_table_handlers(router->router_core,
                                   router,

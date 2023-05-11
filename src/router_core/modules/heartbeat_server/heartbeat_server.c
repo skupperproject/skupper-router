@@ -76,8 +76,7 @@ static void _on_first_attach(void            *bind_context,
     if (qdrc_endpoint_get_direction_CT(endpoint) != QD_INCOMING) {
         *link_context = 0;
         qdrc_endpoint_detach_CT(_server_state.core, endpoint, 0);
-        qd_log(_server_state.core->log, QD_LOG_ERROR,
-               "Attempt to attach to heartbeat server rejected (container=%s)",
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR, "Attempt to attach to heartbeat server rejected (container=%s)",
                (conn->connection_info) ? conn->connection_info->container : "<unknown>");
         qdr_terminus_free(remote_source);
         qdr_terminus_free(remote_target);
@@ -96,9 +95,9 @@ static void _on_first_attach(void            *bind_context,
     qdrc_endpoint_second_attach_CT(_server_state.core, endpoint, remote_source, remote_target);
     qdrc_endpoint_flow_CT(_server_state.core, endpoint, CREDIT_WINDOW, false);
 
-    qd_log(_server_state.core->log, QD_LOG_INFO,
-           "[C%"PRIu64"] Client attached to heartbeat server (container=%s, endpoint=%p)",
-           epr->conn_id, epr->container_id, (void*) endpoint);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+           "[C%" PRIu64 "] Client attached to heartbeat server (container=%s, endpoint=%p)", epr->conn_id,
+           epr->container_id, (void *) endpoint);
 }
 
 
@@ -108,9 +107,9 @@ static void _on_cleanup(void *link_context)
 {
     endpoint_ref_t *epr = (endpoint_ref_t*) link_context;
     if (epr != 0) {
-        qd_log(_server_state.core->log, QD_LOG_INFO,
-            "[C%"PRIu64"] Client detached from heartbeat server (container=%s, endpoint=%p)",
-            epr->conn_id, epr->container_id, (void*) epr->endpoint);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+               "[C%" PRIu64 "] Client detached from heartbeat server (container=%s, endpoint=%p)", epr->conn_id,
+               epr->container_id, (void *) epr->endpoint);
         DEQ_REMOVE(_server_state.endpoints, epr);
         free_endpoint_ref_t(epr);
     }
@@ -132,8 +131,9 @@ static void on_timer(qdr_core_t *core, void *context)
     endpoint_ref_t *epr = DEQ_HEAD(_server_state.endpoints);
     while (epr) {
         if (qdr_core_uptime_ticks(core) - epr->last_heartbeat > HEARTBEAT_THRESHOLD) {
-            qd_log(core->log, QD_LOG_ERROR, "[C%" PRIu64 "] Lost heartbeat from container %s, closing connection",
-                   epr->conn_id, epr->container_id);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR,
+                   "[C%" PRIu64 "] Lost heartbeat from container %s, closing connection", epr->conn_id,
+                   epr->container_id);
             qdr_close_connection_CT(core, epr->conn);
         }
         epr = DEQ_NEXT(epr);

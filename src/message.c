@@ -98,22 +98,7 @@ ALLOC_DEFINE(qd_message_stream_data_t);
 
 typedef void (*buffer_process_t) (void *context, const unsigned char *base, int length);
 
-qd_log_source_t* log_source = 0;
-
-qd_log_source_t *qd_message_log_source(void)
-{
-    if(log_source)
-        return log_source;
-    else {
-        qd_message_initialize();
-        return log_source;
-    }
-}
-
-void qd_message_initialize(void)
-{
-    log_source = qd_log_source("MESSAGE");
-}
+void qd_message_initialize(void) {}
 
 int qd_message_repr_len(void)
 {
@@ -1855,9 +1840,7 @@ void qd_message_send(qd_message_t *in_msg,
                 pn_delivery_abort(pn_link_current(pnl));
             }
 
-            qd_log(qd_message_log_source(),
-                   QD_LOG_WARNING,
-                   "Sending data on link %s has failed (code=%zi)",
+            qd_log(QD_LOG_MODULE_MESSAGE, QD_LOG_WARNING, "Sending data on link %s has failed (code=%zi)",
                    pn_link_name(pnl), bytes_sent);
 
         } else {
@@ -1914,8 +1897,7 @@ void qd_message_send(qd_message_t *in_msg,
                 // retry later...
                 //
                 buf = 0;
-                qd_log(qd_message_log_source(), QD_LOG_DEBUG,
-                       "Link %s output limit reached", pn_link_name(pnl));
+                qd_log(QD_LOG_MODULE_MESSAGE, QD_LOG_DEBUG, "Link %s output limit reached", pn_link_name(pnl));
             }
         }
 

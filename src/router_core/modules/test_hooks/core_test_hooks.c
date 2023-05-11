@@ -493,8 +493,7 @@ static uint64_t _client_on_reply_cb(qdr_core_t    *core,
                                     qd_iterator_t *app_properties,
                                     qd_iterator_t *body)
 {
-    qd_log(core->log, QD_LOG_TRACE,
-           "client test reply received rc=%p", request_context);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test reply received rc=%p", request_context);
 
     qd_iterator_free(app_properties);
     qd_iterator_free(body);
@@ -509,9 +508,8 @@ static void _client_on_ack_cb(qdr_core_t    *core,
                               uint64_t       disposition)
 {
     test_client_t *tc = (test_client_t *)user_context;
-    qd_log(core->log, QD_LOG_TRACE,
-           "client test request ack rc=%p d=%"PRIu64,
-           request_context, disposition);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test request ack rc=%p d=%" PRIu64, request_context,
+           disposition);
     assert((long) request_context < tc->counter);
 }
 
@@ -525,9 +523,7 @@ static void _client_on_done_cb(qdr_core_t    *core,
     // log message during the tests
     test_client_t *tc = (test_client_t *)user_context;
     qd_log_level_t level = (error) ? QD_LOG_ERROR : QD_LOG_TRACE;
-    qd_log(core->log, level,
-           "client test request done error=%s",
-           (error) ? error : "None");
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, level, "client test request done error=%s", (error) ? error : "None");
     if (!error && tc->credit > 0) {
         _do_send(tc);
     }
@@ -561,17 +557,15 @@ static void _do_send(test_client_t *tc)
         assert(rc == 0);
         ++tc->counter;
         --tc->credit;
-        qd_log(tc->module->core->log, QD_LOG_TRACE,
-               "client test message sent id=%"PRIi64" c=%d", tc->counter - 1, tc->credit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test message sent id=%" PRIi64 " c=%d", tc->counter - 1,
+               tc->credit);
     }
 }
 
 static void _client_on_state_cb(qdr_core_t *core, qdrc_client_t *core_client,
                                 void *user_context, bool active)
 {
-    test_client_t *tc = (test_client_t *)user_context;
-    qd_log(tc->module->core->log, QD_LOG_TRACE,
-           "client test on state active=%c", active ? 'T' : 'F');
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test on state active=%c", active ? 'T' : 'F');
 }
 
 static void _client_on_flow_cb(qdr_core_t *core, qdrc_client_t *core_client,
@@ -583,8 +577,8 @@ static void _client_on_flow_cb(qdr_core_t *core, qdrc_client_t *core_client,
     if (!tc->core_client)
         return;
 
-    qd_log(tc->module->core->log, QD_LOG_TRACE,
-           "client test on flow c=%d d=%c", available_credit, drain ? 'T' : 'F');
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test on flow c=%d d=%c", available_credit,
+           drain ? 'T' : 'F');
     tc->credit = available_credit;
     if (drain) {
         while (tc->credit > 0)
@@ -598,43 +592,40 @@ static void _on_conn_event(void *context, qdrc_event_t type, qdr_connection_t *c
 {
     test_client_t *tc = (test_client_t *)context;
 
-    qd_log(tc->module->core->log, QD_LOG_TRACE, "client test on conn event");
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test on conn event");
 
     switch (type) {
     case QDRC_EVENT_CONN_OPENED:
-        qd_log(tc->module->core->log, QD_LOG_TRACE, "client test conn open");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test conn open");
         if (tc->conn)  // already have a conn, ignore
             return;
         // look for the special test container id
-        const char *cid = ((conn->connection_info)
-                           ? conn->connection_info->container
-                           : NULL);
-        qd_log(tc->module->core->log, QD_LOG_TRACE, "client test container-id=%s", cid);
+        const char *cid = ((conn->connection_info) ? conn->connection_info->container : NULL);
 
         if (cid && strcmp(cid, "io.skupper.router.test_core_client") == 0) {
-            qd_log(tc->module->core->log, QD_LOG_TRACE, "client test connection opened");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test connection opened");
             qdr_terminus_t *target = qdr_terminus(NULL);
             qdr_terminus_set_address(target, "test_client_address");
-            tc->conn = conn;
+            tc->conn        = conn;
             tc->core_client = qdrc_client_CT(tc->module->core,
                                              tc->conn,
                                              target,
-                                             10,   // reply credit window
-                                             tc,   // user context
+                                             10,  // reply credit window
+                                             tc,  // user context
                                              _client_on_state_cb,
                                              _client_on_flow_cb);
             assert(tc->core_client);
         }
         break;
     case QDRC_EVENT_CONN_CLOSED:
-        qd_log(tc->module->core->log, QD_LOG_TRACE, "client test conn closed");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test conn closed");
         if (tc->conn == conn) {
             tc->conn = NULL;
             tc->credit = 0;
             tc->counter = 0;
             qdrc_client_free_CT(tc->core_client);
             tc->core_client = NULL;
-            qd_log(tc->module->core->log, QD_LOG_TRACE, "client test connection closed");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test connection closed");
         }
         break;
     }
@@ -653,7 +644,7 @@ static void qdrc_test_client_api_setup(test_module_t *test_module)
                                               _on_conn_event,
                                               0, 0, 0, tc);
 
-    qd_log(test_module->core->log, QD_LOG_TRACE, "client test registered %p", (void *) tc->conn_events);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_TRACE, "client test registered %p", (void *) tc->conn_events);
 }
 
 

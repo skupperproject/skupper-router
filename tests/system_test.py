@@ -1048,7 +1048,7 @@ class Qdrouterd(Process):
                                 meshid = conn[meshid_index]
                                 if meshid not in mesh_list:
                                     mesh_list.append(meshid)
-                    if edges_num == edges and (meshes == None or meshes == len(mesh_list)):
+                    if edges_num == edges and (meshes is None or meshes == len(mesh_list)):
                         return True
                 return False
             except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):

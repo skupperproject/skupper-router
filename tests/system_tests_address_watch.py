@@ -60,7 +60,7 @@ class RouterTest(TestCase):
 
         cls.routers[0].wait_router_connected('B')
         cls.routers[1].wait_router_connected('A')
-        cls.routers[0].is_edge_routers_connected()
+        cls.routers[0].is_edge_routers_connected(num_edges=2)
 
     def test_01_interior_interior(self):
         test = AddressWatchTest(self.routers[0], self.routers[1], 0)

@@ -132,8 +132,7 @@ static void qdr_route_log_CT(qdr_core_t *core, const char *text, const char *nam
     if (!name)
         snprintf(id_string, 64, "%"PRId64, id);
 
-    qd_log(core->log, QD_LOG_INFO, "%s '%s' on %s %s",
-           text, log_name, type, key ? key : "<unknown>");
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO, "%s '%s' on %s %s", text, log_name, type, key ? key : "<unknown>");
 }
 
 

@@ -57,9 +57,11 @@ static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t
         link->deliveries_stuck++;
         core->deliveries_stuck++;
         if (link->deliveries_stuck == 1)
-            qd_log(core->log, QD_LOG_INFO,
-                   "[C%"PRIu64"][L%"PRIu64"] "
-                   "Stuck delivery: At least one delivery on this link has been undelivered/unsettled for more than %d seconds",
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+                   "[C%" PRIu64 "][L%" PRIu64
+                   "] "
+                   "Stuck delivery: At least one delivery on this link has been undelivered/unsettled for more than %d "
+                   "seconds",
                    link->conn ? link->conn->identity : 0, link->identity, stuck_age);
     }
 }
@@ -83,8 +85,9 @@ static void process_link_CT(qdr_core_t *core, qdr_link_t *link)
         (qdr_core_uptime_ticks(core) - link->zero_credit_time > stuck_age)) {
         link->reported_as_blocked = true;
         core->links_blocked++;
-        qd_log(core->log, QD_LOG_INFO,
-               "[C%"PRIu64"][L%"PRIu64"] "
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+               "[C%" PRIu64 "][L%" PRIu64
+               "] "
                "Link blocked with zero credit for %d seconds",
                link->conn ? link->conn->identity : 0, link->identity,
                qdr_core_uptime_ticks(core) - link->zero_credit_time);
@@ -97,7 +100,7 @@ static void timer_handler_CT(qdr_core_t *core, void *context)
     tracker_t  *tracker    = (tracker_t*) context;
     qdr_link_t *first_link = DEQ_HEAD(core->open_links);
 
-    qd_log(core->log, QD_LOG_DEBUG, "Stuck Delivery Detection: Starting detection cycle");
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "Stuck Delivery Detection: Starting detection cycle");
 
     if (!!first_link) {
         set_safe_ptr_qdr_link_t(first_link, &tracker->next_link);
@@ -167,9 +170,9 @@ static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_contex
     qdr_core_timer_schedule_CT(core, tracker->timer, timer_interval);
     *module_context = tracker;
 
-    qd_log(core->log, QD_LOG_INFO,
-           "Stuck delivery detection: Scan interval: %d seconds, Delivery age threshold: %d seconds",
-           timer_interval, stuck_age);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+           "Stuck delivery detection: Scan interval: %d seconds, Delivery age threshold: %d seconds", timer_interval,
+           stuck_age);
 }
 
 

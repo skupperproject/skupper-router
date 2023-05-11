@@ -276,12 +276,14 @@ static void qdr_add_router_CT(qdr_core_t *core, qdr_action_t *action, bool disca
 
     do {
         if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "add_router: Router maskbit out of range: %d", router_maskbit);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "add_router: Router maskbit out of range: %d",
+                   router_maskbit);
             break;
         }
 
         if (core->routers_by_mask_bit[router_maskbit] != 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "add_router: Router maskbit already in use: %d", router_maskbit);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "add_router: Router maskbit already in use: %d",
+                   router_maskbit);
             break;
         }
 
@@ -370,12 +372,14 @@ static void qdr_del_router_CT(qdr_core_t *core, qdr_action_t *action, bool disca
     int router_maskbit = action->args.route_table.router_maskbit;
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "del_router: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "del_router: Router maskbit out of range: %d",
+               router_maskbit);
         return;
     }
 
     if (core->routers_by_mask_bit[router_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "del_router: Deleting nonexistent router: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "del_router: Deleting nonexistent router: %d",
+               router_maskbit);
         return;
     }
 
@@ -430,22 +434,22 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     int conn_maskbit   = action->args.route_table.link_maskbit;  // "link" identifies a connection, not an amqp link
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_link: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Router maskbit out of range: %d", router_maskbit);
         return;
     }
 
     if (conn_maskbit >= qd_bitmask_width() || conn_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_link: Link maskbit out of range: %d", conn_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Link maskbit out of range: %d", conn_maskbit);
         return;
     }
 
     if (core->control_links_by_mask_bit[conn_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_link: Invalid link reference: %d", conn_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Invalid link reference: %d", conn_maskbit);
         return;
     }
 
     if (core->routers_by_mask_bit[router_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_link: Router not found");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Router not found");
         return;
     }
 
@@ -492,12 +496,13 @@ static void qdr_remove_link_CT(qdr_core_t *core, qdr_action_t *action, bool disc
     int router_maskbit = action->args.route_table.router_maskbit;
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "remove_link: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "remove_link: Router maskbit out of range: %d",
+               router_maskbit);
         return;
     }
 
     if (core->routers_by_mask_bit[router_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "remove_link: Router not found");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "remove_link: Router not found");
         return;
     }
 
@@ -521,22 +526,24 @@ static void qdr_set_next_hop_CT(qdr_core_t *core, qdr_action_t *action, bool dis
     int nh_router_maskbit = action->args.route_table.nh_router_maskbit;
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_next_hop: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_next_hop: Router maskbit out of range: %d",
+               router_maskbit);
         return;
     }
 
     if (nh_router_maskbit >= qd_bitmask_width() || nh_router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_next_hop: Next hop router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_next_hop: Next hop router maskbit out of range: %d",
+               router_maskbit);
         return;
     }
 
     if (core->routers_by_mask_bit[router_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_next_hop: Router not found");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_next_hop: Router not found");
         return;
     }
 
     if (core->routers_by_mask_bit[nh_router_maskbit] == 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_next_hop: Next hop router not found");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_next_hop: Next hop router not found");
         return;
     }
 
@@ -556,7 +563,8 @@ static void qdr_remove_next_hop_CT(qdr_core_t *core, qdr_action_t *action, bool 
     int router_maskbit = action->args.route_table.router_maskbit;
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "remove_next_hop: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "remove_next_hop: Router maskbit out of range: %d",
+               router_maskbit);
         return;
     }
 
@@ -574,12 +582,13 @@ static void qdr_set_cost_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     int cost           = action->args.route_table.cost;
 
     if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_cost: Router maskbit out of range: %d", router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_cost: Router maskbit out of range: %d", router_maskbit);
         return;
     }
 
     if (cost < 1) {
-        qd_log(core->log, QD_LOG_CRITICAL, "set_cost: Invalid cost %d for maskbit: %d", cost, router_maskbit);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_cost: Invalid cost %d for maskbit: %d", cost,
+               router_maskbit);
         return;
     }
 
@@ -608,12 +617,13 @@ static void qdr_set_valid_origins_CT(qdr_core_t *core, qdr_action_t *action, boo
 
     do {
         if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "set_valid_origins: Router maskbit out of range: %d", router_maskbit);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_valid_origins: Router maskbit out of range: %d",
+                   router_maskbit);
             break;
         }
 
         if (core->routers_by_mask_bit[router_maskbit] == 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "set_valid_origins: Router not found");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "set_valid_origins: Router not found");
             break;
         }
 
@@ -638,13 +648,14 @@ static void qdr_flush_destinations_CT(qdr_core_t *core, qdr_action_t *action, bo
 
     do {
         if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "flush_destinations: Router maskbit out of range: %d", router_maskbit);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "flush_destinations: Router maskbit out of range: %d",
+                   router_maskbit);
             break;
         }
 
         qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
         if (rnode == 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "flush_destinations: Router not found");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "flush_destinations: Router not found");
             break;
         }
 
@@ -665,13 +676,14 @@ static void qdr_mobile_seq_advanced_CT(qdr_core_t *core, qdr_action_t *action, b
 
     do {
         if (router_maskbit >= qd_bitmask_width() || router_maskbit < 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "seq_advanced: Router maskbit out of range: %d", router_maskbit);
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "seq_advanced: Router maskbit out of range: %d",
+                   router_maskbit);
             break;
         }
 
         qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
         if (rnode == 0) {
-            qd_log(core->log, QD_LOG_CRITICAL, "seq_advanced: Router not found");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "seq_advanced: Router not found");
             break;
         }
 
@@ -693,7 +705,7 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
         qdr_address_t *addr = 0;
 
         char *astring = (char*) qd_iterator_copy(address->iterator);
-        qd_log(core->log, QD_LOG_INFO, "In-process subscription %c/%s", aclass, astring);
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO, "In-process subscription %c/%s", aclass, astring);
         free(astring);
 
         qd_iterator_annotate_prefix(address->iterator, aclass);

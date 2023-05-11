@@ -59,8 +59,8 @@ static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn)
 {
     qdr_link_list_t to_free = DEQ_EMPTY;
 
-    qd_log(core->log, QD_LOG_DEBUG,
-           "[C%"PRIu64"] Streaming link scrubber: scanning connection", conn->identity);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "[C%" PRIu64 "] Streaming link scrubber: scanning connection",
+           conn->identity);
 
     const size_t pool_size = DEQ_SIZE(conn->streaming_link_pool);
     if (pool_size > max_free_pool_size) {
@@ -82,15 +82,15 @@ static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn)
     }
 
     if (DEQ_HEAD(to_free)) {
-        qd_log(core->log, QD_LOG_DEBUG,
-               "[C%"PRIu64"] Streaming link scrubber: found %d idle links", conn->identity, (int)DEQ_SIZE(to_free));
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "[C%" PRIu64 "] Streaming link scrubber: found %d idle links",
+               conn->identity, (int) DEQ_SIZE(to_free));
 
         while (DEQ_HEAD(to_free)) {
             qdr_link_t *link = DEQ_HEAD(to_free);
             DEQ_REMOVE_HEAD_N(STREAMING_POOL, to_free);
-            qd_log(core->log, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] Streaming link scrubber: closing idle link %s",
-                   link->conn->identity, link->identity, (link->name) ? link->name : "");
+            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "][L%" PRIu64 "] Streaming link scrubber: closing idle link %s", link->conn->identity,
+                   link->identity, (link->name) ? link->name : "");
             qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NONE, true);
         }
     }
@@ -103,7 +103,7 @@ static void timer_handler_CT(qdr_core_t *core, void *context)
     qdr_connection_ref_t *first_ref = DEQ_HEAD(core->streaming_connections);
 
     if (!!first_ref) {
-        qd_log(core->log, QD_LOG_DEBUG, "Starting streaming link scrubber scan");
+        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "Starting streaming link scrubber scan");
         set_safe_ptr_qdr_connection_ref_t(first_ref, &tracker->next_conn_ref);
         qdr_action_t *action = qdr_action(qdr_streaming_link_scrubber_CT, "streaming_link_scrubber");
         action->args.general.context_1 = tracker;
@@ -173,8 +173,9 @@ static void qcm_streaming_link_scrubber_init_CT(qdr_core_t *core, void **module_
     qdr_core_timer_schedule_CT(core, tracker->timer, timer_interval);
     *module_context = tracker;
 
-    qd_log(core->log, QD_LOG_INFO,
-           "Streaming link scrubber: Scan interval: %d seconds, max free pool: %d links", timer_interval, max_free_pool_size);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+           "Streaming link scrubber: Scan interval: %d seconds, max free pool: %d links", timer_interval,
+           max_free_pool_size);
 }
 
 

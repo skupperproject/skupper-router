@@ -797,8 +797,6 @@ DEQ_DECLARE(qdr_edge_peer_t, qdr_edge_peer_list_t);
 
 struct qdr_core_t {
     qd_dispatch_t     *qd;
-    qd_log_source_t   *log;
-    qd_log_source_t   *agent_log;
     sys_thread_t      *thread;
 
     qdr_action_list_t  action_list_background;  /// Actions processed only when the action_list is empty

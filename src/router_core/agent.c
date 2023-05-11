@@ -45,7 +45,6 @@ struct qdr_agent_t {
     qdr_manage_response_t  response_handler;
     qdr_subscription_t    *subscription_mobile;
     qdr_subscription_t    *subscription_local;
-    qd_log_source_t       *log_source;
 };
 
 
@@ -130,7 +129,6 @@ qdr_agent_t *qdr_agent(qdr_core_t *core)
     DEQ_INIT(agent->outgoing_query_list);
     sys_mutex_init(&agent->query_lock);
     agent->timer = qd_timer(core->qd, qdr_agent_response_handler, core);
-    agent->log_source = qd_log_source("AGENT");
     return agent;
 }
 

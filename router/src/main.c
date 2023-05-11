@@ -35,8 +35,7 @@
 #include <unistd.h>
 
 static int            exit_with_sigint = 0;
-static qd_dispatch_t *dispatch = 0;
-static qd_log_source_t *log_source = 0;
+static qd_dispatch_t *dispatch         = 0;
 static const char* argv0 = 0;
 
 // Install the panic handler for fatal signals. see panic.c
@@ -76,7 +75,7 @@ static void signal_handler(int signum)
 
 static void check(int fd) {
     if (qd_error_code()) {
-        qd_log(log_source, QD_LOG_CRITICAL, "Router start-up failed: %s", qd_error_message());
+        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_CRITICAL, "Router start-up failed: %s", qd_error_message());
         dprintf(fd, "%s: %s\n", argv0, qd_error_message());
         close(fd);
         exit(1);
@@ -97,7 +96,6 @@ static void main_process(const char *config_path, const char *python_pkgdir, boo
     panic_handler_init();
     dispatch = qd_dispatch(python_pkgdir, test_hooks);
     check(fd);
-    log_source = qd_log_source("MAIN"); /* Logging is initialized by qd_dispatch. */
     qd_dispatch_validate_config(config_path);
     check(fd);
     qd_dispatch_load_config(dispatch, config_path);

@@ -89,8 +89,6 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     // module logs to the ROUTER_CORE module. There is no need to free the core->log as all log sources are.
     // freed by qd_dispatch_free()
     //
-    core->log = qd_log_source("ROUTER_CORE");
-
     //
     // Set up the threading support
     //
@@ -1131,7 +1129,7 @@ qdr_protocol_adaptor_t *qdr_protocol_adaptor(qdr_core_t                *core,
 {
     qdr_protocol_adaptor_t *adaptor = NEW(qdr_protocol_adaptor_t);
 
-    qd_log(core->log, QD_LOG_INFO, "Protocol adaptor registered: %s", name);
+    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO, "Protocol adaptor registered: %s", name);
 
     DEQ_ITEM_INIT(adaptor);
     adaptor->name                    = name;

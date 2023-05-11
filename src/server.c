@@ -58,7 +58,6 @@ struct qd_server_t {
     const char               *sasl_config_name;
     pn_proactor_t            *proactor;
     qd_container_t           *container;
-    qd_log_source_t          *log_source;
     qd_log_source_t          *protocol_log_source; // Log source for the PROTOCOL module
     void                     *start_context;
     sys_cond_t                cond;
@@ -108,7 +107,7 @@ void transport_tracer(pn_transport_t *transport, const char *message)
     qd_connection_t *ctx = (qd_connection_t*) pn_transport_get_context(transport);
     if (ctx) {
         // The PROTOCOL module is used exclusively for logging protocol related tracing. The protocol could be AMQP, HTTP, TCP etc.
-        qd_log(ctx->server->protocol_log_source, QD_LOG_TRACE, "[C%"PRIu64"]:%s", ctx->connection_id, message);
+        qd_log(QD_LOG_MODULE_PROTOCOL, QD_LOG_TRACE, "[C%" PRIu64 "]:%s", ctx->connection_id, message);
     }
 }
 
@@ -117,7 +116,8 @@ void connection_transport_tracer(pn_transport_t *transport, const char *message)
     qd_connection_t *ctx = (qd_connection_t*) pn_transport_get_context(transport);
     if (ctx) {
         // Unconditionally write the log at TRACE level to the log file.
-        qd_log_impl_v1(ctx->server->protocol_log_source, QD_LOG_TRACE,  __FILE__, __LINE__, "[C%"PRIu64"]:%s", ctx->connection_id, message);
+        qd_log_impl_v1(QD_LOG_MODULE_PROTOCOL, QD_LOG_TRACE, __FILE__, __LINE__, "[C%" PRIu64 "]:%s",
+                       ctx->connection_id, message);
     }
 }
 
@@ -247,7 +247,8 @@ static const char *transport_get_user(qd_connection_t *conn, pn_transport_t *tpo
             }
             else {
                 // This is an unrecognized component. log a critical error
-                qd_log(conn->server->log_source, QD_LOG_CRITICAL, "[C%"PRIu64"] Unrecognized component '%c' in uidFormat ", conn->connection_id, components[x]);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL,
+                       "[C%" PRIu64 "] Unrecognized component '%c' in uidFormat ", conn->connection_id, components[x]);
                 return 0;
             }
         }
@@ -323,11 +324,13 @@ static const char *transport_get_user(qd_connection_t *conn, pn_transport_t *tpo
                     user_id = py_string_2_c(result);
                     Py_XDECREF(result);
                 } else {
-                    qd_log(conn->server->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] Internal: failed to read displaynameservice query result", conn->connection_id);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_DEBUG,
+                           "[C%" PRIu64 "] Internal: failed to read displaynameservice query result",
+                           conn->connection_id);
                 }
                 qd_python_unlock(lock_state);
             }
-            qd_log(conn->server->log_source, QD_LOG_DEBUG, "User id is '%s' ", user_id);
+            qd_log(QD_LOG_MODULE_SERVER, QD_LOG_DEBUG, "User id is '%s' ", user_id);
             return user_id;
         }
     }
@@ -633,13 +636,12 @@ static void on_accept(pn_event_t *e, qd_listener_t *listener)
     pn_listener_t *pn_listener = pn_event_listener(e);
     qd_connection_t *ctx = qd_server_connection(listener->server, &listener->config);
     if (!ctx) {
-        qd_log(listener->server->log_source, QD_LOG_CRITICAL,
-               "Allocation failure during accept to %s", listener->config.host_port);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL, "Allocation failure during accept to %s",
+               listener->config.host_port);
         return;
     }
     ctx->listener = listener;
-    qd_log(listener->server->log_source, QD_LOG_TRACE,
-           "[C%"PRIu64"]: Accepting incoming connection to '%s'",
+    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "]: Accepting incoming connection to '%s'",
            ctx->connection_id, ctx->listener->config.host_port);
     /* Asynchronous accept, configure the transport on PN_CONNECTION_BOUND */
     pn_listener_accept(pn_listener, ctx->pn_conn);
@@ -703,7 +705,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
     // and also set the transport tracer callback.
     // Note here that if trace level logging is enabled on the DEFAULT module, all modules are logging at trace level too.
     //
-    if (qd_log_enabled(ctx->server->protocol_log_source, QD_LOG_TRACE)) {
+    if (qd_log_enabled(QD_LOG_MODULE_PROTOCOL, QD_LOG_TRACE)) {
         pn_transport_trace(tport, PN_TRACE_FRM);
         pn_transport_set_tracer(tport, transport_tracer);
     }
@@ -726,7 +728,8 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
 
         // Set up SSL
         if (config->ssl_profile)  {
-            qd_log(ctx->server->log_source, QD_LOG_TRACE, "[C%"PRIu64"] Configuring SSL on %s", ctx->connection_id, name);
+            qd_log(QD_LOG_MODULE_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "] Configuring SSL on %s", ctx->connection_id,
+                   name);
             if (listener_setup_ssl(ctx, config, tport) != QD_ERROR_NONE) {
                 connect_fail(ctx, QD_AMQP_COND_INTERNAL_ERROR, "%s on %s", qd_error_message(), name);
                 return;
@@ -747,13 +750,13 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
         sys_mutex_unlock(&ctx->server->lock);
 
-        qd_log(ctx->server->log_source, QD_LOG_INFO, "[C%"PRIu64"] Accepted connection to %s from %s",
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Accepted connection to %s from %s",
                ctx->connection_id, name, ctx->rhost_port);
     } else if (ctx->connector) { /* Establishing an outgoing connection */
         config = &ctx->connector->config;
         if (!setup_ssl_sasl_and_open(ctx)) {
-            qd_log(ctx->server->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Connection aborted due to internal setup error",
-               ctx->connection_id);
+            qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR, "[C%" PRIu64 "] Connection aborted due to internal setup error",
+                   ctx->connection_id);
             pn_transport_close_tail(tport);
             pn_transport_close_head(tport);
             return;
@@ -818,9 +821,8 @@ pn_proactor_t *qd_server_proactor(const qd_server_t *qd_server)
     return qd_server->proactor;
 }
 
-static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context) {
-    qd_log_source_t *log = qd_server->log_source;
-
+static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context)
+{
     qd_listener_t *li = (qd_listener_t*) context;
     const char *host_port = li->config.host_port;
     const char *port = li->config.port;
@@ -837,19 +839,19 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
             pn_netaddr_str(na, str, sizeof(str));
             // "str" contains the host and port on which this listener is listening.
             if (li->config.name)
-                qd_log(log, QD_LOG_NOTICE, "Listening on %s (%s)", str, li->config.name);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_NOTICE, "Listening on %s (%s)", str, li->config.name);
             else
-                qd_log(log, QD_LOG_NOTICE, "Listening on %s", str);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_NOTICE, "Listening on %s", str);
         }
         else {
-            qd_log(log, QD_LOG_NOTICE, "Listening on %s", host_port);
+            qd_log(QD_LOG_MODULE_SERVER, QD_LOG_NOTICE, "Listening on %s", host_port);
         }
 
         break;
     }
 
     case PN_LISTENER_ACCEPT:
-        qd_log(log, QD_LOG_TRACE, "Accepting connection on %s", host_port);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_TRACE, "Accepting connection on %s", host_port);
         on_accept(e, li);
         break;
 
@@ -857,16 +859,15 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
         if (li->pn_listener) {
             pn_condition_t *cond = pn_listener_condition(li->pn_listener);
             if (pn_condition_is_set(cond)) {
-                qd_log(log, QD_LOG_ERROR, "Listener error on %s: %s (%s)", host_port,
-                       pn_condition_get_description(cond),
-                       pn_condition_get_name(cond));
-                if (li->exit_on_error) {
-                    qd_log(log, QD_LOG_CRITICAL, "Shutting down, required listener failed %s",
-                           host_port);
-                    exit(1);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR, "Listener error on %s: %s (%s)", host_port,
+                           pn_condition_get_description(cond), pn_condition_get_name(cond));
+                    if (li->exit_on_error) {
+                        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL, "Shutting down, required listener failed %s",
+                               host_port);
+                        exit(1);
                 }
             } else {
-                qd_log(log, QD_LOG_TRACE, "Listener closed on %s", host_port);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_TRACE, "Listener closed on %s", host_port);
             }
             pn_listener_set_context(li->pn_listener, 0);
             li->pn_listener = 0;
@@ -878,7 +879,6 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
         break;
     }
 }
-
 
 bool qd_connector_has_failover_info(qd_connector_t* ct)
 {
@@ -1057,15 +1057,15 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                             pn_condition_get_name(condition), pn_condition_get_description(condition));
                     strcpy(ctx->connector->conn_msg, conn_msg);
 
-                    qd_log(qd_server->log_source, QD_LOG_ERROR, "%s", conn_msg);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR, "%s", conn_msg);
                 } else {
                     qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection to %s failed", ctx->connection_id, config->host_port);
                     strcpy(ctx->connector->conn_msg, conn_msg);
-                    qd_log(qd_server->log_source, QD_LOG_ERROR, "%s", conn_msg);
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR, "%s", conn_msg);
                 }
             } else if (ctx && ctx->listener) { /* Incoming connection */
                 if (condition && pn_condition_is_set(condition)) {
-                    qd_log(ctx->server->log_source, QD_LOG_ERROR,
+                    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
                            "[C%" PRIu64 "] Connection from %s (to %s) failed: %s %s", ctx->connection_id,
                            ctx->rhost_port, ctx->listener->config.host_port, pn_condition_get_name(condition),
                            pn_condition_get_description(condition));
@@ -1158,7 +1158,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
     // connection until pn_proactor_connect is called below
     qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
     if (!qd_conn) {                 /* Try again later */
-        qd_log(connector->server->log_source, QD_LOG_CRITICAL, "Allocation failure connecting to %s",
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL, "Allocation failure connecting to %s",
                connector->config.host_port);
         connector->delay = 10000;
         connector->state = CXTR_STATE_CONNECTING;
@@ -1192,8 +1192,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
     if (config->sasl_password)
         pn_connection_set_password(qd_conn->pn_conn, config->sasl_password);
 
-    qd_log(connector->server->log_source, QD_LOG_TRACE,
-           "[C%"PRIu64"] Connecting to %s", qd_conn->connection_id, host_port);
+    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
     /* Note: the transport is configured in the PN_CONNECTION_BOUND event */
     pn_proactor_connect(connector->server->proactor, qd_conn->pn_conn, host_port);
     // at this point the qd_conn may now be scheduled on another thread
@@ -1223,9 +1222,9 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
         // set our trusted database for checking the peer's cert:
         if (config->ssl_trusted_certificate_db) {
             if (pn_ssl_domain_set_trusted_ca_db(domain, config->ssl_trusted_certificate_db)) {
-                qd_log(ct->server->log_source, QD_LOG_ERROR,
-                       "SSL CA configuration failed for connection [C%"PRIu64"] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "SSL CA configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
+                       config->host, config->port);
                 failed = true;
             }
         }
@@ -1234,10 +1233,10 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
         if (pn_ssl_domain_set_peer_authentication(domain,
                                                   PN_SSL_VERIFY_PEER,
                                                   config->ssl_trusted_certificate_db)) {
-            qd_log(ct->server->log_source, QD_LOG_ERROR,
-                    "SSL peer auth configuration failed for connection [C%"PRIu64"] to %s:%s",
-                    ctx->connection_id, config->host, config->port);
-                failed = true;
+            qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                   "SSL peer auth configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
+                   config->host, config->port);
+            failed = true;
         }
 
         // configure our certificate if the peer requests one:
@@ -1246,8 +1245,8 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
                                               config->ssl_certificate_file,
                                               config->ssl_private_key_file,
                                               config->ssl_password)) {
-                qd_log(ct->server->log_source, QD_LOG_ERROR,
-                       "SSL local certificate configuration failed for connection [C%"PRIu64"] to %s:%s",
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "SSL local certificate configuration failed for connection [C%" PRIu64 "] to %s:%s",
                        ctx->connection_id, config->host, config->port);
                 failed = true;
             }
@@ -1255,17 +1254,17 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
 
         if (config->ssl_ciphers) {
             if (pn_ssl_domain_set_ciphers(domain, config->ssl_ciphers)) {
-                qd_log(ct->server->log_source, QD_LOG_ERROR,
-                       "SSL cipher configuration failed for connection [C%"PRIu64"] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "SSL cipher configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
+                       config->host, config->port);
                 failed = true;
             }
         }
 
         if (config->ssl_protocols) {
             if (pn_ssl_domain_set_protocols(domain, config->ssl_protocols)) {
-                qd_log(ct->server->log_source, QD_LOG_ERROR,
-                       "Permitted TLS protocols configuration failed for connection [C%"PRIu64"] to %s:%s",
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "Permitted TLS protocols configuration failed for connection [C%" PRIu64 "] to %s:%s",
                        ctx->connection_id, config->host, config->port);
                 failed = true;
             }
@@ -1274,9 +1273,9 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
         //If ssl is enabled and verify_host_name is true, instruct proton to verify peer name
         if (config->verify_host_name) {
             if (pn_ssl_domain_set_peer_authentication(domain, PN_SSL_VERIFY_PEER_NAME, NULL)) {
-                qd_log(ct->server->log_source, QD_LOG_ERROR,
-                        "SSL peer host name verification configuration failed for connection [C%"PRIu64"] to %s:%s",
-                        ctx->connection_id, config->host, config->port);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "SSL peer host name verification configuration failed for connection [C%" PRIu64 "] to %s:%s",
+                       ctx->connection_id, config->host, config->port);
                 failed = true;
             }
         }
@@ -1284,9 +1283,9 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
         if (!failed) {
             ctx->ssl = pn_ssl(tport);
             if (pn_ssl_init(ctx->ssl, domain, 0) != 0) {
-                 qd_log(ct->server->log_source, QD_LOG_ERROR,
-                        "SSL domain internal initialization failed for connection [C%"PRIu64"] to %s:%s",
-                        ctx->connection_id, config->host, config->port);
+                qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR,
+                       "SSL domain internal initialization failed for connection [C%" PRIu64 "] to %s:%s",
+                       ctx->connection_id, config->host, config->port);
                 failed = true;
             }
         }
@@ -1322,8 +1321,7 @@ static void try_open_cb(void *context)
     // CONNECTOR - ENTITY_CACHE lock inversion deadlock window.
     qd_connection_t *ctx = new_qd_connection_t();
     if (!ctx) {
-        qd_log(ct->server->log_source, QD_LOG_CRITICAL, "Allocation failure connecting to %s",
-               ct->config.host_port);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL, "Allocation failure connecting to %s", ct->config.host_port);
         ct->delay = 10000;
         ct->state = CXTR_STATE_CONNECTING;
         qd_timer_schedule(ct->timer, ct->delay);
@@ -1356,8 +1354,6 @@ qd_server_t *qd_server(qd_dispatch_t *qd, int thread_count, const char *containe
     memcpy(qd_server, &tmp, sizeof(tmp));
 
     qd_server->qd               = qd;
-    qd_server->log_source       = qd_log_source("SERVER");
-    qd_server->protocol_log_source = qd_log_source("PROTOCOL");
     qd_server->container_name   = container_name;
     qd_server->sasl_config_path = sasl_config_path;
     qd_server->sasl_config_name = sasl_config_name;
@@ -1379,9 +1375,9 @@ qd_server_t *qd_server(qd_dispatch_t *qd, int thread_count, const char *containe
     qd_server->next_connection_id     = 1;
     qd_server->py_displayname_obj     = 0;
 
-    qd_server->http = qd_http_server(qd_server, qd_server->log_source);
+    qd_server->http = qd_http_server(qd_server);
 
-    qd_log(qd_server->log_source, QD_LOG_INFO, "Container Name: %s", qd_server->container_name);
+    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_INFO, "Container Name: %s", qd_server->container_name);
 
     return qd_server;
 }
@@ -1396,9 +1392,7 @@ void qd_server_free(qd_server_t *qd_server)
 
     qd_connection_t *ctx = DEQ_HEAD(qd_server->conn_list);
     while (ctx) {
-        qd_log(qd_server->log_source, QD_LOG_INFO,
-               "[C%"PRIu64"] Closing connection on shutdown",
-               ctx->connection_id);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Closing connection on shutdown", ctx->connection_id);
         DEQ_REMOVE_HEAD(qd_server->conn_list);
         if (ctx->pn_conn) {
             pn_transport_t *tport = pn_connection_transport(ctx->pn_conn);
@@ -1487,9 +1481,8 @@ void qd_server_run(qd_dispatch_t *qd)
     int i;
     assert(qd_server);
     assert(qd_server->container); // Server can't run without a container
-    qd_log(qd_server->log_source,
-           QD_LOG_NOTICE, "Operational, %d Threads Running (process ID %ld)",
-           qd_server->thread_count, (long)getpid()); // Log message is matched in system_tests
+    qd_log(QD_LOG_MODULE_SERVER, QD_LOG_NOTICE, "Operational, %d Threads Running (process ID %ld)",
+           qd_server->thread_count, (long) getpid());  // Log message is matched in system_tests
 
     const uintmax_t ram_size = qd_platform_memory_size();
     const uint64_t  vm_size = qd_router_memory_usage();
@@ -1498,13 +1491,12 @@ void qd_server_run(qd_dispatch_t *qd)
         const char *suffix_ram = 0;
         double vm = normalize_memory_size(vm_size, &suffix_vm);
         double ram = normalize_memory_size(ram_size, &suffix_ram);
-        qd_log(qd_server->log_source, QD_LOG_NOTICE,
-               "Process VmSize %.2f %s (%.2f %s available memory)",
-               vm, suffix_vm, ram, suffix_ram);
+        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_NOTICE, "Process VmSize %.2f %s (%.2f %s available memory)", vm, suffix_vm,
+               ram, suffix_ram);
     }
 
 #ifndef NDEBUG
-    qd_log(qd_server->log_source, QD_LOG_INFO, "Running in DEBUG Mode");
+    qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Running in DEBUG Mode");
 #endif
     const int n = qd_server->thread_count;
     sys_thread_t **threads = (sys_thread_t **)qd_calloc(n, sizeof(sys_thread_t*));
@@ -1520,9 +1512,8 @@ void qd_server_run(qd_dispatch_t *qd)
     }
     free(threads);
 
-    qd_log(qd_server->log_source, QD_LOG_NOTICE, "Shut Down");
+    qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_NOTICE, "Shut Down");
 }
-
 
 void qd_server_stop(qd_dispatch_t *qd)
 {
@@ -1656,8 +1647,7 @@ static bool qd_listener_listen_pn(qd_listener_t *li) {
         sys_atomic_inc(&li->ref_count); /* In use by proactor, PN_LISTENER_CLOSE will dec */
         /* Listen is asynchronous, log "listening" message on PN_LISTENER_OPEN event */
     } else {
-        qd_log(li->server->log_source, QD_LOG_CRITICAL, "No memory listening on %s",
-               li->config.host_port);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_CRITICAL, "No memory listening on %s", li->config.host_port);
      }
     return li->pn_listener;
 }
@@ -1668,8 +1658,7 @@ static bool qd_listener_listen_http(qd_listener_t *li) {
         qd_http_server_listen(li->server->http, li);
         return li->http;
     } else {
-        qd_log(li->server->log_source, QD_LOG_ERROR, "No HTTP support to listen on %s",
-               li->config.host_port);
+        qd_log(QD_LOG_MODULE_SERVER, QD_LOG_ERROR, "No HTTP support to listen on %s", li->config.host_port);
         return false;
     }
 }

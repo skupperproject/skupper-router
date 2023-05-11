@@ -64,11 +64,9 @@ static __thread struct {
     qd_error_t error_code;
 } ts = {{0}, 0};
 
-static qd_log_source_t* log_source = 0;
-
 void qd_error_initialize(void)
 {
-    log_source = qd_log_source("ERROR");
+    // log_source = qd_log_source("ERROR");
 }
 
 qd_error_t qd_error_vimpl(qd_error_t code, const char *file, int line, const char *fmt, va_list ap) {
@@ -84,7 +82,7 @@ qd_error_t qd_error_vimpl(qd_error_t code, const char *file, int line, const cha
             aprintf(&begin, end, "%d: ", code);
         vaprintf(&begin, end, fmt, ap);
         // NOTE: Use the file/line from the qd_error macro, not this line in error.c
-        qd_log_impl(log_source, QD_LOG_ERROR, file, line, "%s", qd_error_message());
+        qd_log_impl(QD_LOG_MODULE_ERROR, QD_LOG_ERROR, file, line, "%s", qd_error_message());
         return code;
     }
     else
@@ -126,7 +124,8 @@ static void py_set_item(PyObject *dict, const char* name, PyObject *value) {
 static void log_trace_py(PyObject *type, PyObject *value, PyObject* trace, qd_log_level_t level,
                          const char *file, int line)
 {
-    if (!qd_log_enabled(log_source, level)) return;
+    if (!qd_log_enabled(QD_LOG_MODULE_ERROR, level))
+        return;
     if (!(type && value && trace)) return;
 
     PyObject *module = PyImport_ImportModule("traceback");
@@ -154,7 +153,7 @@ static void log_trace_py(PyObject *type, PyObject *value, PyObject* trace, qd_lo
 	char *trace = py_string_2_c(result);
 	if (trace) {
             if (strlen(trace) < QD_LOG_TEXT_MAX) {
-                qd_log_impl(log_source, level, file, line, "%s", trace);
+                qd_log_impl(QD_LOG_MODULE_ERROR, level, file, line, "%s", trace);
             } else {
                 // Keep as much of the the tail of the trace as we can.
                 const char *tail = trace;
@@ -162,8 +161,7 @@ static void log_trace_py(PyObject *type, PyObject *value, PyObject* trace, qd_lo
                     tail = strchr(tail, '\n');
                     if (tail) ++tail;
                 }
-                qd_log_impl(log_source, level, file, line,
-                            "Traceback truncated:\n%s", tail ? tail : "");
+                qd_log_impl(QD_LOG_MODULE_ERROR, level, file, line, "Traceback truncated:\n%s", tail ? tail : "");
             }
             free(trace);
         }
@@ -219,7 +217,7 @@ qd_error_t qd_error_errno_impl(int errnum, const char *file, int line, const cha
         if(strerror_r(errnum, begin, end - begin) != 0) {
             snprintf(begin, end - begin, "Unknown error %d", errnum);
         }
-        qd_log_impl(log_source, QD_LOG_ERROR, file, line, "%s", em);
+        qd_log_impl(QD_LOG_MODULE_ERROR, QD_LOG_ERROR, file, line, "%s", em);
         return qd_error_code();
     }
     else

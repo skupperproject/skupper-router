@@ -107,7 +107,6 @@ DEQ_DECLARE(qdc_node_type_t, qdc_node_type_list_t);
 
 struct qd_container_t {
     qd_dispatch_t        *qd;
-    qd_log_source_t      *log_source;
     qd_server_t          *server;
     qd_hash_t            *node_type_map;
     qd_hash_t            *node_map;
@@ -322,8 +321,7 @@ static void close_links(qd_container_t *container, pn_connection_t *conn, bool p
         if (qd_link && qd_link->node) {
             qd_node_t *node = qd_link->node;
             if (print_log)
-                qd_log(container->log_source, QD_LOG_DEBUG,
-                       "Aborting link '%s' due to parent connection end",
+                qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
                        pn_link_name(pn_link));
             node->ntype->link_detach_handler(node->context, qd_link, QD_LOST);
         }
@@ -617,9 +615,8 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                                         assert(qd_conn->n_senders >= 0);
                                     }
                                 }
-                                qd_log(container->log_source, QD_LOG_DEBUG,
-                                       "Aborting link '%s' due to parent session end",
-                                       pn_link_name(pn_link));
+                                qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_DEBUG,
+                                       "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
                                 qd_link->node->ntype->link_detach_handler(qd_link->node->context,
                                                                           qd_link, QD_LOST);
                             }
@@ -685,14 +682,12 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                 if (qd_conn->policy_counted && qd_conn->policy_settings) {
                     if (pn_link_is_sender(pn_link)) {
                         qd_conn->n_receivers--;
-                        qd_log(container->log_source, QD_LOG_TRACE,
-                               "Closed receiver link %s. n_receivers: %d",
+                        qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Closed receiver link %s. n_receivers: %d",
                                pn_link_name(pn_link), qd_conn->n_receivers);
                         assert (qd_conn->n_receivers >= 0);
                     } else {
                         qd_conn->n_senders--;
-                        qd_log(container->log_source, QD_LOG_TRACE,
-                               "Closed sender link %s. n_senders: %d",
+                        qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Closed sender link %s. n_senders: %d",
                                pn_link_name(pn_link), qd_conn->n_senders);
                         assert (qd_conn->n_senders >= 0);
                     }
@@ -760,7 +755,6 @@ qd_container_t *qd_container(qd_dispatch_t *qd)
 
     ZERO(container);
     container->qd            = qd;
-    container->log_source    = qd_log_source("CONTAINER");
     container->server        = qd->server;
     container->node_type_map = qd_hash(6,  4, 1);  // 64 buckets, item batches of 4
     container->node_map      = qd_hash(10, 32, 0); // 1K buckets, item batches of 32
@@ -770,7 +764,7 @@ qd_container_t *qd_container(qd_dispatch_t *qd)
     DEQ_INIT(container->node_type_list);
 
     qd_server_set_container(qd, container);
-    qd_log(container->log_source, QD_LOG_TRACE, "Container Initialized");
+    qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Container Initialized");
     return container;
 }
 
@@ -825,7 +819,7 @@ int qd_container_register_node_type(qd_dispatch_t *qd, const qd_node_type_t *nt)
     qd_iterator_free(iter);
     if (result < 0)
         return result;
-    qd_log(container->log_source, QD_LOG_TRACE, "Node Type Registered - %s", nt->type_name);
+    qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Node Type Registered - %s", nt->type_name);
 
     return 0;
 }
@@ -843,10 +837,10 @@ qd_node_t *qd_container_set_default_node_type(qd_dispatch_t        *qd,
 
     if (nt) {
         container->default_node = qd_container_create_node(qd, nt, 0, context, supported_dist, QD_LIFE_PERMANENT);
-        qd_log(container->log_source, QD_LOG_TRACE, "Node of type '%s' installed as default node", nt->type_name);
+        qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Node of type '%s' installed as default node", nt->type_name);
     } else {
         container->default_node = 0;
-        qd_log(container->log_source, QD_LOG_TRACE, "Default node removed");
+        qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Default node removed");
     }
 
     return container->default_node;
@@ -892,7 +886,7 @@ qd_node_t *qd_container_create_node(qd_dispatch_t        *qd,
     }
 
     if (name)
-        qd_log(container->log_source, QD_LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
+        qd_log(QD_LOG_MODULE_CONTAINER, QD_LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
 
     return node;
 }
