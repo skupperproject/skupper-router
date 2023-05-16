@@ -135,7 +135,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 }
                 sys_mutex_unlock(&li->lock);
                 if (up)
-                    qd_log(log, QD_LOG_INFO, "Listener %s: listening for client connections on %s with backlog %d",
+                    qd_log(log, QD_LOG_DEBUG, "Listener %s: listening for client connections on %s with backlog %d",
                            li->name, li->host_port, li->backlog);
                 break;
             }
@@ -164,7 +164,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 qd_log(log, QD_LOG_ERROR, "Listener %s: proactor listener error on %s: %s (%s)", li->name,
                        li->host_port, pn_condition_get_name(cond), pn_condition_get_description(cond));
             } else {
-                qd_log(log, QD_LOG_INFO, "Listener %s: stopped listening for client connections on %s", li->name,
+                qd_log(log, QD_LOG_DEBUG, "Listener %s: stopped listening for client connections on %s", li->name,
                        li->host_port);
             }
 
