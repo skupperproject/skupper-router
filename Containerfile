@@ -19,12 +19,13 @@
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest as builder
 
-RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
+RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
+ && microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel python3-pip \
-    libnghttp2-devel \
+    libnghttp2-devel libunwind-devel \
     wget tar patch findutils git libasan libubsan libtsan \
  && microdnf clean all -y
 
@@ -43,11 +44,12 @@ RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupp
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # gdb and sanitizers are part of final image as they can be used as debug options for Skupper
-RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
+RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
+ && microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
     python3 \
-    libnghttp2 \
+    libnghttp2 libunwind \
     gdb libasan libubsan libtsan \
     gettext hostname iputils \
     shadow-utils \

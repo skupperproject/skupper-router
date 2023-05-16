@@ -846,7 +846,7 @@ jobs:
           dnf config-manager --set-enabled powertools
           dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release 'dnf-command(copr)' 'dnf-command(builddep)'
           dnf copr enable -y clime/rpkg-util
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git rpkg
+          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git rpkg libunwind-devel
 
       - uses: actions/checkout@v3
 

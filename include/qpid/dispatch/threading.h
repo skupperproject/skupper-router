@@ -65,5 +65,6 @@ sys_thread_t *sys_thread(const char *thread_name, void *(*run_function) (void *)
 void          sys_thread_free(sys_thread_t *thread);
 void          sys_thread_join(sys_thread_t *thread);
 sys_thread_t *sys_thread_self(void);
+const char   *sys_thread_name(sys_thread_t *thread);  // use self if thread == 0
 
 #endif

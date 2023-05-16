@@ -136,6 +136,7 @@ struct sys_thread_t {
     pthread_t thread;
     void *(*f)(void *);
     void *arg;
+    char  name[16];
 };
 
 // initialize the per-thread _self to a non-zero value.  This dummy value will
@@ -143,9 +144,8 @@ struct sys_thread_t {
 // of execution (which is not a pthread).  Using a non-zero value provides a
 // way to distinguish a thread id from a zero (unset) value.
 //
-static sys_thread_t  _main_thread_id;
-static __thread sys_thread_t *_self = &_main_thread_id;
-
+static sys_thread_t           _main_thread_id = {.name = "main"};
+static __thread sys_thread_t *_self           = &_main_thread_id;
 
 // bootstrap _self before calling thread's main function
 //
@@ -163,16 +163,25 @@ sys_thread_t *sys_thread(const char *thread_name, void *(*run_function) (void *)
     sys_thread_t *thread = NEW(sys_thread_t);
     thread->f = run_function;
     thread->arg = arg;
+    strcpy(thread->name, thread_name);
     pthread_create(&(thread->thread), 0, _thread_init, (void*) thread);
-    pthread_setname_np(thread->thread, thread_name);
+    pthread_setname_np(thread->thread, thread->name);
     return thread;
 }
 
+// note: called by signal handler, do not invoke async signal unsafe code in this function!  See man signal(7)
 sys_thread_t *sys_thread_self(void)
 {
     return _self;
 }
 
+// note: called by signal handler, do not invoke async signal unsafe code in this function!  See man signal(7)
+const char *sys_thread_name(sys_thread_t *thread)
+{
+    if (thread == 0)
+        thread = _self;
+    return thread->name;
+}
 
 void sys_thread_free(sys_thread_t *thread)
 {
