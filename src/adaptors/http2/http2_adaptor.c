@@ -1878,7 +1878,7 @@ static void qdr_http_activate(void *notused, qdr_connection_t *c)
         }
         else if (conn->activate_timer) {
             schedule_activation(conn, 0);
-            qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Activation triggered, no socket yet so scheduled timer", conn->conn_id);
+            qd_log(http2_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] Activation triggered, no socket yet so scheduled timer", conn->conn_id);
         } else {
             qd_log(http2_adaptor->log_source, QD_LOG_ERROR, "[C%"PRIu64"] Cannot activate", conn->conn_id);
         }
@@ -1894,7 +1894,7 @@ static int qdr_http_push(void *context, qdr_link_t *link, int limit)
 
 static void http_connector_establish(qdr_http2_connection_t *conn)
 {
-    qd_log(http2_adaptor->log_source, QD_LOG_INFO, "[C%"PRIu64"] Connecting to %s", conn->conn_id, conn->config->adaptor_config->host_port);
+    qd_log(http2_adaptor->log_source, QD_LOG_DEBUG, "[C%"PRIu64"] Connecting to %s", conn->conn_id, conn->config->adaptor_config->host_port);
     sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
     if (conn->require_tls) {
         // Create the qd_tls_t object
