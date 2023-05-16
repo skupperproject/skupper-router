@@ -34,6 +34,9 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Perform link time optimization" ON)
 
+# preserve frame pointers for ease of debugging and profiling
+#  see https://fedoraproject.org/wiki/Changes/fno-omit-frame-pointer
+add_compile_options(-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
 
 # Set warning compile flags
 set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors
