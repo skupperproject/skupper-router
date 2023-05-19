@@ -28,10 +28,15 @@
 #include "qpid/dispatch/threading.h"
 
 #include <assert.h>
+#include <dlfcn.h>
 #include <errno.h>
+#include <limits.h>
+#include <link.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -42,6 +47,10 @@
 #endif
 
 static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext);
+
+// expected to be defined by the linker
+//
+extern char *program_invocation_name;
 
 // Define those signals which will be handled.
 //
@@ -61,6 +70,63 @@ static const panic_signal_info_t panic_signals[] = {
 };
 // clang-format on
 
+// Memory map including mapped file path
+//
+typedef struct {
+    uintptr_t base_address;
+    char      path[PATH_MAX];
+} mem_map_t;
+
+#define MAX_MAP_ENTRIES 64
+
+static mem_map_t mem_map[MAX_MAP_ENTRIES];
+static int       mem_map_count = 0;
+
+// for sorting the map
+//
+static int map_compare(const void *arg1, const void *arg2)
+{
+    mem_map_t *entry1 = (mem_map_t *) arg1;
+    mem_map_t *entry2 = (mem_map_t *) arg2;
+    assert(entry1->base_address != entry2->base_address);
+    return entry1->base_address > entry2->base_address ? 1 : -1;
+}
+
+static void lib_map_init(void)
+{
+    struct link_map *map = 0;
+
+    void *handle = dlopen(NULL, RTLD_NOW);
+    if (handle) {
+        int rc = dlinfo(handle, RTLD_DI_LINKMAP, &map);
+        if (rc == 0) {
+            while (map) {
+                assert(mem_map_count < MAX_MAP_ENTIRIES);  // update MAX_MAP_ENTRIES, too small!
+
+                mem_map_t *entry = &mem_map[mem_map_count++];
+
+                entry->base_address = (uintptr_t) map->l_addr;
+
+                // KAG: I'm not particularly sure what's going on here, but if map->l_name has strlen() == 0 apparently
+                // it means this executable
+                if (map->l_name) {
+                    if (strlen(map->l_name) == 0) {
+                        snprintf(entry->path, PATH_MAX, "%s", program_invocation_name);
+                    } else {
+                        snprintf(entry->path, PATH_MAX, "%s", map->l_name);
+                    }
+                } else {
+                    snprintf(entry->path, PATH_MAX, "?? UNKNOWN ??");
+                }
+                map = map->l_next;
+            }
+        }
+        dlclose(handle);
+    }
+
+    qsort(mem_map, mem_map_count, sizeof(mem_map[0]), map_compare);
+}
+
 /**
  * Install the panic signal handler. This is done early in the router initialization so do not attempt to log or use the
  * alloc pool, etc. This is not called during a signal handler so there is no need to avoid async signal unsafe calls.
@@ -68,6 +134,7 @@ static const panic_signal_info_t panic_signals[] = {
 void panic_handler_init(void)
 {
     if (getenv("SKUPPER_ROUTER_DISABLE_PANIC_HANDLER") == 0) {
+        lib_map_init();
         struct sigaction sa = {
             // use SA_RESETHAND since if the stack unwind fails the default signal handler (coredump) will be invoked
             .sa_flags     = SA_SIGINFO | SA_RESETHAND,
@@ -91,12 +158,6 @@ void panic_handler_init(void)
 #define BUFFER_SIZE     256
 static unsigned char buffer[BUFFER_SIZE];
 
-// expected to be defined by the linker
-//
-extern char  __executable_start[];
-extern char  __etext[];
-extern char *program_invocation_name;
-
 // async signal safe
 //
 static void print(const char *str)
@@ -107,6 +168,8 @@ static void print(const char *str)
 }
 
 // print a register as a hex string
+// async signal safe
+//
 static void print_reg(uintptr_t reg)
 {
     int            i   = sizeof(reg) * 2;
@@ -123,6 +186,8 @@ static void print_reg(uintptr_t reg)
 }
 
 // print a base-ten unsigned integer
+// async signal safe
+//
 static void print_uint(uintptr_t num)
 {
     if (num == 0)
@@ -140,6 +205,28 @@ static void print_uint(uintptr_t num)
 }
 
 #ifdef HAVE_LIBUNWIND
+
+// given an address find it's mapping and offset
+// async signal safe
+//
+static bool get_offset(uintptr_t address, uintptr_t *offset, const char **path)
+{
+    *offset = 0;
+    *path   = 0;
+
+    // map is sorted lowest address first
+    int index = mem_map_count;
+    while (index-- > 0) {
+        mem_map_t *entry = &mem_map[index];
+        if (address >= entry->base_address) {
+            *offset = address - entry->base_address;
+            *path   = entry->path;
+            return true;
+        }
+    }
+
+    return false;
+}
 
 static void print_libunwind_error(int err)
 {
@@ -209,8 +296,40 @@ static void print_registers(unw_cursor_t *cursor)
     print_reg(r10);
     print(" R15: 0x");
     print_reg(r15);
-    print("\n\n");
+    print("\n");
 #endif  // UNW_TARGET_X86_64
+
+    unw_word_t sp = {0};
+    unw_get_reg(cursor, UNW_REG_SP, &sp);
+
+    print("      SP:  0x");
+    print_reg(sp);
+    print("\n\n");
+}
+
+static void print_stack_frame(int index, unw_cursor_t *cursor)
+{
+    unw_word_t ip = {0};
+
+    unw_get_reg(cursor, UNW_REG_IP, &ip);
+
+    uintptr_t   offset = 0;
+    const char *path   = 0;
+
+    print("[");
+    print_uint((uintptr_t) index);
+    print("] IP: 0x");
+    print_reg(ip);
+
+    if (get_offset((uintptr_t) ip, &offset, &path)) {
+        print(" (");
+        print(path);
+        print(" + 0x");
+        print_reg(offset);
+        print(")");
+    }
+    print("\n");
+    print_registers(cursor);
 }
 
 static void print_backtrace(unw_context_t *context)
@@ -226,9 +345,6 @@ static void print_backtrace(unw_context_t *context)
 
     print("\nBacktrace:\n");
 
-    unw_word_t ip = {0};
-    unw_word_t sp = {0};
-
     for (int i = 0; i < BACKTRACE_LIMIT; i++) {
         int ret = unw_step(&cursor);
 
@@ -241,20 +357,7 @@ static void print_backtrace(unw_context_t *context)
             break;
         }
 
-        unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        unw_get_reg(&cursor, UNW_REG_SP, &sp);
-
-        ptrdiff_t offset = ((char *) ip) - __executable_start;
-        print("[");
-        print_uint((uintptr_t) i);
-        print("] IP: 0x");
-        print_reg(ip);
-        print(" offset: 0x");
-        print_reg(offset);
-        print(" SP:  0x");
-        print_reg(sp);
-        print("\n");
-        print_registers(&cursor);
+        print_stack_frame(i, &cursor);
     }
 }
 
@@ -303,13 +406,18 @@ static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext)
 
     // Text segment mapping
 
-    print("Text segment start: 0x");
-    print_reg((uintptr_t) __executable_start);
-    print(" end: 0x");
-    print_reg((uintptr_t) __etext);
-    print("\n");
+#ifndef HAVE_LIBUNWIND
+    print("Memory Map:\n");
+    for (int i = 0; i < mem_map_count; ++i) {
+        print_reg(mem_map[i].base_address);
+        print(": ");
+        print(mem_map[i].path);
+        print("\n");
+    }
 
-#ifdef HAVE_LIBUNWIND
+    print("!!! libunwind not present: backtrace unavailable !!!\n");
+
+#else  // HAVE_LIBUNWIND
 
     unw_context_t context;
 
@@ -319,14 +427,7 @@ static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext)
         return;
     }
 
-    // Registers
-
-    // int index = print_registers(&context);
-
-    // Backtrace
     print_backtrace(&context);
-#else
-    print("!!! libunwind not present: backtrace unavailable !!!\n");
 #endif
     print("*** END ***\n");
 }
