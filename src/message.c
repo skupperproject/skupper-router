@@ -1840,7 +1840,7 @@ void qd_message_send(qd_message_t *in_msg,
                 pn_delivery_abort(pn_link_current(pnl));
             }
 
-            qd_log(QD_LOG_MODULE_MESSAGE, QD_LOG_WARNING, "Sending data on link %s has failed (code=%zi)",
+            qd_log(LOG_MESSAGE, QD_LOG_WARNING, "Sending data on link %s has failed (code=%zi)",
                    pn_link_name(pnl), bytes_sent);
 
         } else {
@@ -1897,7 +1897,7 @@ void qd_message_send(qd_message_t *in_msg,
                 // retry later...
                 //
                 buf = 0;
-                qd_log(QD_LOG_MODULE_MESSAGE, QD_LOG_DEBUG, "Link %s output limit reached", pn_link_name(pnl));
+                qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "Link %s output limit reached", pn_link_name(pnl));
             }
         }
 

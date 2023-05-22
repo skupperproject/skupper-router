@@ -125,7 +125,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     set_safe_ptr_qdr_connection_t(conn, &action->args.connection.conn);
     action->args.connection.connection_label = qdr_field(label);
     action->args.connection.container_id     = qdr_field(remote_container_id);
-    if (qd_log_enabled(QD_LOG_MODULE_PROTOCOL, QD_LOG_TRACE)) {
+    if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_TRACE)) {
         action->args.connection.enable_protocol_trace = true;
     }
     qdr_action_enqueue(core, action);
@@ -135,7 +135,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
 
     pn_data_format(connection_info->connection_properties, props_str, &props_len);
 
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "[C%" PRIu64
            "] Connection Opened: dir=%s host=%s encrypted=%s"
            " auth=%s user=%s container_id=%s props=%s",
@@ -1127,7 +1127,7 @@ static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_li
     //
     // Log the link closure
     //
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "[C%" PRIu64 "][L%" PRIu64 "] %s: del=%" PRIu64 " presett=%" PRIu64 " psdrop=%" PRIu64 " acc=%" PRIu64
            " rej=%" PRIu64 " rel=%" PRIu64 " mod=%" PRIu64 " delay1=%" PRIu64 " delay10=%" PRIu64 " blocked=%s",
            conn->identity, link->identity, log_text, link->total_deliveries, link->presettled_deliveries,
@@ -1226,12 +1226,12 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     source_str[0] = '\0';
     target_str[0] = '\0';
 
-    if (qd_log_enabled(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO)) {
+    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_INFO)) {
         qdr_terminus_format(source, source_str, &source_len);
         qdr_terminus_format(target, target_str, &target_len);
     }
 
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "[C%" PRIu64 "][L%" PRIu64 "] Link attached: dir=%s source=%s target=%s", conn->identity, link->identity,
            dir == QD_INCOMING ? "in" : "out", source_str, target_str);
 
@@ -1430,7 +1430,7 @@ void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,            //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,            //
            "CGROUP qdr_connection_group_setup_CT - %lx (%s)",  //
            (ulong) conn, conn->connection_info->host);
     //
@@ -1441,14 +1441,14 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
     const char *correlator = conn->connection_info->group_correlator;
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
         assert(core->group_correlator_by_maskbit[conn->mask_bit][0] == '\0');
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
         strncpy(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE);
 
         qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
             if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %lx",
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %lx",
                        (ulong) member);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
                 DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
@@ -1464,7 +1464,7 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
 static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %lx", (ulong) conn);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %lx", (ulong) conn);
     //
     // Scan the correlators-by-maskbit to see if this member's correlator is active.
     // If so, import this into the active group and reset the cursor.
@@ -1481,12 +1481,12 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
     }
 
     if (!!parent) {
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to parent: %lx", (ulong) parent);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to parent: %lx", (ulong) parent);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
         DEQ_INSERT_TAIL_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
     } else {
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to unallocated");
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to unallocated");
         DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, conn);
     }
 }
@@ -1495,7 +1495,7 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %lx", (ulong) conn);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %lx", (ulong) conn);
     //
     // Remove the correlator from the maskbit index.
     // Clear the group list in this connection and nullify the cursor.
@@ -1504,12 +1504,12 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
     const char *correlator = conn->connection_info->group_correlator;
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
         assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = NULL (was %s)", conn->mask_bit,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = NULL (was %s)", conn->mask_bit,
                correlator);
         core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
 
         while (!!DEQ_HEAD(conn->connection_group)) {
-            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,        //
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,        //
                    "CGROUP     removing member from parent: %lx",  //
                    (ulong) DEQ_HEAD(conn->connection_group));
             DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
@@ -1520,7 +1520,7 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
             if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                        "CGROUP     removing unallocated with matching correlator: %lx", (ulong) member);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
             }
@@ -1533,7 +1533,7 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
 static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %lx",
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %lx",
            (ulong) conn);
     //
     // Search for the correlator in the maskbit index.
@@ -1552,7 +1552,7 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
     }
 
     if (!!parent) {
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx", (ulong) parent);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx", (ulong) parent);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
         DEQ_REMOVE_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
@@ -1561,7 +1561,7 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
         while (!!ptr) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, ptr);
             if (ptr == conn) {
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from unallocated");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from unallocated");
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, ptr);
                 break;
             }
@@ -1606,7 +1606,7 @@ static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, boo
                 assert(core->rnode_conns_by_mask_bit[conn->mask_bit] == 0);
                 core->rnode_conns_by_mask_bit[conn->mask_bit] = conn;
             } else {
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "Exceeded maximum inter-router connection count");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "Exceeded maximum inter-router connection count");
                 conn->role = QDR_ROLE_NORMAL;
                 break;
             }
@@ -1712,7 +1712,7 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
             qdr_add_connection_ref(&core->streaming_connections, conn);
             conn->has_streaming_links = true;
         }
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] Created new outgoing streaming link %s", conn->identity,
                out_link->identity, out_link->name);
     }
@@ -1805,7 +1805,7 @@ static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, boo
 
     qdrc_event_conn_raise(core, QDRC_EVENT_CONN_CLOSED, conn);
 
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO, "[C%" PRIu64 "] Connection Closed", conn->identity);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "[C%" PRIu64 "] Connection Closed", conn->identity);
 
     DEQ_REMOVE(core->open_connections, conn);
     qdr_connection_free(conn);
@@ -2007,7 +2007,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_FORBIDDEN, true);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
                "[C%" PRIu64 "] Router attach forbidden on non-inter-router connection", conn->identity);
         return;
     }
@@ -2022,7 +2022,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_WRONG_ROLE, true);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
                "[C%" PRIu64 "] Endpoint attach forbidden on inter-router connection", conn->identity);
         return;
     }
@@ -2039,7 +2039,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
     // Grab the formatted terminus strings before we schedule any IO-thread processing that
     // might get ahead of us and free the terminus objects before we issue the log.
     //
-    if (qd_log_enabled(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO)) {
+    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_INFO)) {
         qdr_terminus_format(source, source_str, &source_len);
         qdr_terminus_format(target, target_str, &target_len);
     }
@@ -2066,7 +2066,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
                     qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
                     qdr_terminus_free(source);
                     qdr_terminus_free(target);
-                    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR,
+                    qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
                            "[C%" PRIu64 "] Endpoint attach failed - no address lookup handler", conn->identity);
                     return;
                 }
@@ -2105,7 +2105,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
                 qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
                 qdr_terminus_free(source);
                 qdr_terminus_free(target);
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR,
+                qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
                        "[C%" PRIu64 "] Endpoint attach failed - no address lookup handler", conn->identity);
                 return;
             }
@@ -2129,7 +2129,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         }
     }
 
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "[C%" PRIu64 "][L%" PRIu64 "] Link attached: dir=%s source=%s target=%s", conn->identity, link->identity,
            dir == QD_INCOMING ? "in" : "out", source_str, target_str);
 }

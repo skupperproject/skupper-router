@@ -149,7 +149,7 @@ static PyObject *parsed_to_py_string(qd_parsed_field_t *field)
         free(buffer);
 
     if (!result)
-        qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_DEBUG, "Cannot convert field type 0x%X to python string object", tag);
+        qd_log(LOG_PYTHON, QD_LOG_DEBUG, "Cannot convert field type 0x%X to python string object", tag);
 
     return result;
 }
@@ -183,7 +183,7 @@ qd_error_t qd_py_to_composed(PyObject *value, qd_composed_field_t *field)
             qd_compose_insert_string(field, data);
             free(data);
         } else {
-            qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_ERROR, "Unable to convert python unicode object");
+            qd_log(LOG_PYTHON, QD_LOG_ERROR, "Unable to convert python unicode object");
         }
     }
     else if (PyBytes_Check(value)) {
@@ -776,7 +776,7 @@ static PyObject *qd_python_send(PyObject *self, PyObject *args)
                 qdr_send_to2(ioa->core, msg, a_str, (bool) no_echo, (bool) control);
                 free(a_str);
             } else {
-                qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_ERROR, "Unable to convert message address to C string");
+                qd_log(LOG_PYTHON, QD_LOG_ERROR, "Unable to convert message address to C string");
             }
             Py_DECREF(address);
         }
@@ -825,7 +825,7 @@ static void qd_python_setup(void)
 {
     if ((PyType_Ready(&LogAdapterType) < 0) || (PyType_Ready(&IoAdapterType) < 0)) {
         qd_error_py();
-        qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_CRITICAL, "Unable to initialize Adapters");
+        qd_log(LOG_PYTHON, QD_LOG_CRITICAL, "Unable to initialize Adapters");
         abort();
     } else {
         //
@@ -840,7 +840,7 @@ static void qd_python_setup(void)
         PyObject *m = PyImport_ImportModule(DISPATCH_MODULE);
         if (!m) {
             qd_error_py();
-            qd_log(QD_LOG_MODULE_PYTHON, QD_LOG_CRITICAL, "Cannot load dispatch extension module '%s'",
+            qd_log(LOG_PYTHON, QD_LOG_CRITICAL, "Cannot load dispatch extension module '%s'",
                    DISPATCH_MODULE);
             exit(1);
         }

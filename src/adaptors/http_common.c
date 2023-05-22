@@ -59,7 +59,7 @@ static void qd_free_http_adaptor_config(qd_http_adaptor_config_t *config)
     if (!config)
         return;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO,
            "Deleted HTTP adaptor configuration '%s' for address %s, %s, siteId %s.", config->adaptor_config->name,
            config->adaptor_config->address, config->adaptor_config->host_port, config->adaptor_config->site_id);
 
@@ -134,7 +134,7 @@ qd_http_listener_t *qd_dispatch_configure_http_listener(qd_dispatch_t *qd, qd_en
     assert(listener);
 
     if (qd_load_http_adaptor_config(listener->config, entity) != QD_ERROR_NONE) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpListener: %s",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpListener: %s",
                qd_error_message());
         qd_http_listener_decref(listener);
         return 0;
@@ -198,7 +198,7 @@ qd_http_connector_t *qd_dispatch_configure_http_connector(qd_dispatch_t *qd, qd_
     assert(conn);
 
     if (qd_load_http_adaptor_config(conn->config, entity) != QD_ERROR_NONE) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpConnector: %s",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR, "Unable to configure a new httpConnector: %s",
                qd_error_message());
         qd_http_connector_decref(conn);
         return 0;
@@ -378,7 +378,7 @@ static http_request_info_records_t *_get_request_info(void)
 
 static void insert_column(qdr_core_t *core, qdr_http_request_info_t *record, int col, qd_composed_field_t *body)
 {
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "Insert column %i for %p", col, (void *) record);
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "Insert column %i for %p", col, (void *) record);
 
     if (!record)
         return;
@@ -503,7 +503,7 @@ static qdr_http_request_info_t *find_by_identity(qdr_core_t *core, qd_iterator_t
 
 void qdra_http_request_info_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
 {
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "query for first http request info (%i)", offset);
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "query for first http request info (%i)", offset);
     query->status = QD_AMQP_OK;
 
     if (offset >= DEQ_SIZE(_get_request_info()->records)) {
@@ -558,7 +558,7 @@ void qdra_http_request_info_get_CT(qdr_core_t          *core,
     if (!identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "Name not supported. Identity required";
-        qd_log(QD_LOG_MODULE_AGENT, QD_LOG_ERROR, "Error performing READ of %s: %s", HTTP_REQUEST_INFO_TYPE,
+        qd_log(LOG_AGENT, QD_LOG_ERROR, "Error performing READ of %s: %s", HTTP_REQUEST_INFO_TYPE,
                query->status.description);
     } else {
         record = find_by_identity(core, identity);
@@ -662,12 +662,12 @@ static void _add_http_request_info_CT(qdr_core_t *core, qdr_action_t *action, bo
         if (_update_qdr_http_request_info(record, update)) {
             updated = true;
             _free_qdr_http_request_info(update);
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "Updated http request info %s", record->key);
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "Updated http request info %s", record->key);
         }
     }
     if (!updated) {
         DEQ_INSERT_TAIL(_get_request_info()->records, update);
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "Added http request info %s (%zu)", update->key,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "Added http request info %s (%zu)", update->key,
                DEQ_SIZE(_get_request_info()->records));
     }
 }
@@ -739,7 +739,7 @@ void qd_http_record_request(qdr_core_t *core, const char * method, uint32_t stat
     detail->requests = 1;
     DEQ_INSERT_TAIL(record->detail, detail);
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "Adding http request info %s", record->key);
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "Adding http request info %s", record->key);
     _add_http_request_info(core, record);
 }
 

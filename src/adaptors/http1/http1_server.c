@@ -135,7 +135,7 @@ static void _on_tls_connection_secured(qd_tls_t *tls, void *context)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t *) context;
     assert(hconn && hconn->tls);
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] TLS handshake succeeded: connection secure",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] TLS handshake succeeded: connection secure",
            hconn->conn_id);
     if (hconn->qdr_conn && hconn->qdr_conn->connection_info) {
         qd_tls_update_connection_info(hconn->tls, hconn->qdr_conn->connection_info);
@@ -160,7 +160,7 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
         if (!hconn->tls) {
             // TLS was not configured successfully using the details in the connector and SSLProfile. See the logs for
             // additional detail
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_ERROR,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR,
                    "[C%" PRIu64 "] Error setting up TLS on connector %s to %s", hconn->conn_id,
                    connector->config->adaptor_config->name, connector->config->adaptor_config->host_port);
             free_qdr_http1_connection_t(hconn);
@@ -227,7 +227,7 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
 
     // wait for the raw connection to come up before creating the in and out links
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP connection to server created",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP connection to server created",
            hconn->conn_id);
 
     return hconn;
@@ -242,7 +242,7 @@ qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector
                                                   qd_entity_t *entity)
 {
     if (connector->config->adaptor_config->ssl_profile_name) {
-        connector->tls_domain = qd_tls_domain(connector->config->adaptor_config, qd, QD_LOG_MODULE_HTTP_ADAPTOR,
+        connector->tls_domain = qd_tls_domain(connector->config->adaptor_config, qd, LOG_HTTP_ADAPTOR,
                                               http1_alpn_protocols, HTTP1_NUM_ALPN_PROTOCOLS, false);
         if (!connector->tls_domain) {
             // note qd_tls_domain logged the error
@@ -258,7 +258,7 @@ qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector
         return 0;
     }
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating connection to HTTP server %s",
            hconn->conn_id, hconn->cfg.host_port);
 
     // setup Vanflow records for the connector and its child connection
@@ -298,7 +298,7 @@ qd_http_connector_t *qd_http1_configure_connector(qd_http_connector_t *connector
 void qd_http1_delete_connector(qd_dispatch_t *ignored, qd_http_connector_t *connector)
 {
     if (connector) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s",
                connector->config->adaptor_config->address, connector->config->adaptor_config->host,
                connector->config->adaptor_config->port);
 
@@ -393,7 +393,7 @@ static void _setup_server_links(qdr_http1_connection_t *hconn)
                                                &(hconn->in_link_id));
         qdr_link_set_context(hconn->in_link, hconn);
 
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] HTTP server response link created", hconn->conn_id, hconn->in_link_id);
     }
 
@@ -415,7 +415,7 @@ static void _setup_server_links(qdr_http1_connection_t *hconn)
         hconn->out_link_credit = DEFAULT_CAPACITY;
         qdr_link_flow(hconn->adaptor->core, hconn->out_link, DEFAULT_CAPACITY, false);
 
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] HTTP server request link created", hconn->conn_id, hconn->out_link_id);
     }
 
@@ -452,7 +452,7 @@ static void _teardown_server_links(qdr_http1_connection_t *hconn)
     hconn->http_conn = 0;
 
     if (hconn->out_link) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Closing outgoing HTTP link",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Closing outgoing HTTP link",
                hconn->conn_id, hconn->out_link_id);
         qdr_link_set_context(hconn->out_link, 0);
         qdr_link_detach(hconn->out_link, QD_CLOSED, 0);
@@ -460,7 +460,7 @@ static void _teardown_server_links(qdr_http1_connection_t *hconn)
     }
 
     if (hconn->in_link) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Closing incoming HTTP link",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Closing incoming HTTP link",
                hconn->conn_id, hconn->in_link_id);
         qdr_link_set_context(hconn->in_link, 0);
         qdr_link_detach(hconn->in_link, QD_CLOSED, 0);
@@ -499,7 +499,7 @@ static void _do_reconnect(void *context)
     if (!hconn->qdr_conn) {
         // the qdr_connection_t has been closed and there is no raw_conn to
         // clean up. It is now safe to delete hconn
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x server connection closed",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x server connection closed",
                hconn->conn_id);
         qdr_http1_connection_free(hconn);
         return;
@@ -510,7 +510,7 @@ static void _do_reconnect(void *context)
     //
     _server_request_t *hreq = (_server_request_t *) DEQ_HEAD(hconn->requests);
     while (hreq && (_is_complete_ok(hreq) || hreq->cancelled)) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP request msg-id=%" PRIu64 " completed%s!",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP request msg-id=%" PRIu64 " completed%s!",
                hconn->conn_id, hreq->base.msg_id, hreq->cancelled ? " (cancelled)" : "");
         _finalize_request(hreq);                                          // frees hreq, removed from hconn->requests
         assert(hreq != (_server_request_t *) DEQ_HEAD(hconn->requests));  // shut up, coverity
@@ -530,7 +530,7 @@ static void _do_reconnect(void *context)
     }
     sys_mutex_unlock(&qdr_http1_adaptor->lock);
     if (connecting)
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to HTTP server...", conn_id);
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to HTTP server...", conn_id);
 }
 
 // handle PN_RAW_CONNECTION_NEED_READ_BUFFERS
@@ -540,7 +540,7 @@ static void _replenish_empty_read_buffers(qdr_http1_connection_t *hconn)
 
     if (!hconn->q2_blocked) {
         int granted = qd_raw_connection_grant_read_buffers(hconn->raw_conn);
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] %d read buffers granted", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] %d read buffers granted", hconn->conn_id,
                granted);
     }
 }
@@ -562,14 +562,14 @@ static int64_t _take_output_data(void *context, qd_adaptor_buffer_list_t *abufs,
     if (hreq && !hreq->cancelled) {
         total_octets = qdr_http1_get_out_buffers(&hreq->out_data, abufs, limit - DEQ_SIZE(*abufs));
         if (total_octets) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] queueing %" PRIi64 " encoded bytes for output (%zu buffers)", hconn->conn_id,
                    total_octets, DEQ_SIZE(*abufs));
             hconn->out_http1_octets += total_octets;
             hreq->base.out_http1_octets += total_octets;
         } else if (hreq->close_on_complete && _request_tx_done(hreq)) {
             hconn->output_closed = true;
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] request message written and close on complete true: closing write stream",
                    hconn->conn_id);
             total_octets = QD_IO_EOS;
@@ -611,13 +611,13 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
                 qd_buffer_list_t qbuf_list = DEQ_EMPTY;
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
 
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        "[C%" PRIu64 "] pushing %" PRIu64 " received bytes into codec (%zu buffers)", hconn->conn_id,
                        octets, DEQ_SIZE(qbuf_list));
 
                 int error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
                 if (error) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING,
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING,
                            "[C%" PRIu64 "] Incoming response message failed to parse, closing connection",
                            hconn->conn_id);
                     pn_raw_connection_read_close(hconn->raw_conn);
@@ -651,13 +651,13 @@ static int _do_raw_io(qdr_http1_connection_t *hconn)
             }
         } else {
             // truncated responses will be cancelled when the connection closes.
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] codec detected truncated response message!", hconn->conn_id);
             assert(close_output);
         }
 
         if (close_output && !hconn->output_closed) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] raw connection read closed and input drained, closing raw connection write",
                    hconn->conn_id);
             hconn->output_closed = true;
@@ -713,13 +713,13 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
                 qd_buffer_list_t qbuf_list = DEQ_EMPTY;
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
 
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        "[C%" PRIu64 "] pushing %" PRIu64 " received bytes into codec (%zu buffers)", hconn->conn_id,
                        octets, DEQ_SIZE(qbuf_list));
 
                 error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);
                 if (error) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING,
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING,
                            "[C%" PRIu64 "] Incoming response message failed to parse, closing connection",
                            hconn->conn_id);
                     pn_raw_connection_read_close(hconn->raw_conn);
@@ -751,14 +751,14 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
         bool truncated    = false;
 
         if (!close_notify) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] TLS input closed without close-notify",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] TLS input closed without close-notify",
                    hconn->conn_id);
 
             // Peer may have truncated the response message
             _server_request_t *hreq = (_server_request_t *) DEQ_HEAD(hconn->requests);
             if (hreq && _is_io_in_progress(hreq)) {
                 if (!_response_rx_done(hreq)) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                            "[C%" PRIu64 "] TLS detected truncated response message!", hconn->conn_id);
                     truncated = true;
                     _cancel_request(hreq, "Invalid response message: truncated body");
@@ -779,7 +779,7 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
         }
 
         if (close_output && !hconn->output_closed) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] TLS input closed and drained, closing TLS output", hconn->conn_id);
             hconn->output_closed = true;
             pn_raw_connection_wake(hconn->raw_conn);  // force I/O loop to run to do close_notify
@@ -810,7 +810,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
 
     if (!hconn) return;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] HTTP server proactor event %s", hconn->conn_id,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] HTTP server proactor event %s", hconn->conn_id,
            pn_event_type_name(pn_event_type(e)));
 
     switch (pn_event_type(e)) {
@@ -823,7 +823,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         qd_set_vflow_netaddr_string(hconn->vflow, hconn->raw_conn, false);
         if (hconn->oper_status == QD_CONN_OPER_DOWN) {
             hconn->oper_status = QD_CONN_OPER_UP;
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x server %s connection established",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x server %s connection established",
                    hconn->conn_id, hconn->cfg.host_port);
         }
 
@@ -856,7 +856,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                 _cancel_request(hreq, "Network connection to the server has closed");
             }
             if (hreq->cancelled || _is_complete_ok(hreq)) {
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                        "[C%" PRIu64 "] HTTP request msg-id=%" PRIu64 " completed%s!", hconn->conn_id, hreq->base.msg_id,
                        hreq->cancelled ? " (cancelled)" : "");
                 _finalize_request(hreq);  // frees hreq, removed from hconn->requests
@@ -895,7 +895,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                 // more messages will be sent to us. Notify meatspace:
                 if (hconn->oper_status == QD_CONN_OPER_UP) {
                     hconn->oper_status = QD_CONN_OPER_DOWN;
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x server %s disconnected",
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x server %s disconnected",
                            hconn->conn_id, hconn->cfg.host_port);
                 }
             }
@@ -938,7 +938,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
                 qd_timer_schedule(hconn->server.reconnect_timer, 0);
             sys_mutex_unlock(&qdr_http1_adaptor->lock);
             if (free_hconn) {
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x server connection closed",
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x server connection closed",
                        hconn->conn_id);
                 qdr_http1_connection_free(hconn);
             }
@@ -949,7 +949,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         // Note: wake events may occur before the raw connection is established
         if (sys_atomic_set(&hconn->q2_restart, 0)) {
             // note: unit tests grep for this log!
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] server link unblocked from Q2 limit",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] server link unblocked from Q2 limit",
                    hconn->conn_id);
             hconn->q2_blocked = false;
             _replenish_empty_read_buffers(hconn);  // restart receiver flow
@@ -1048,7 +1048,7 @@ static void _server_tx_buffers_cb(h1_codec_request_state_t *hrs, qd_buffer_list_
     if (hreq->request_discard)
         qd_buffer_list_free_buffers(blist);
     else {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] %u request bytes encoded",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] %u request bytes encoded",
                hconn->conn_id, hconn->out_link_id, len);
         qdr_http1_enqueue_buffer_list(&hreq->out_data, blist, len);
     }
@@ -1065,7 +1065,7 @@ static void _server_tx_stream_data_cb(h1_codec_request_state_t *hrs, qd_message_
     if (hreq->request_discard)
         qd_message_stream_data_release(stream_data);
     else {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] %zu body data bytes encoded",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] %zu body data bytes encoded",
                hconn->conn_id, hconn->out_link_id, qd_message_stream_data_payload_length(stream_data));
         qdr_http1_enqueue_stream_data(&hreq->out_data, stream_data);
     }
@@ -1099,7 +1099,7 @@ static int _server_rx_response_cb(h1_codec_request_state_t *hrs,
     // expected to be in-order
     assert(hreq && hreq == (_server_request_t*) DEQ_HEAD(hconn->requests));
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "][L%" PRIu64 "] HTTP msg_id=%" PRIu64
            " response received: status=%d phrase=%s version=%" PRIi32 ".%" PRIi32,
            hconn->conn_id, hconn->in_link_id, hreq->base.msg_id, status_code, reason_phrase ? reason_phrase : "<NONE>",
@@ -1143,7 +1143,7 @@ static int _server_rx_header_cb(h1_codec_request_state_t *hrs, const char *key, 
     _server_request_t       *hreq = (_server_request_t*) h1_codec_request_state_get_context(hrs);
     qdr_http1_connection_t *hconn = hreq->base.hconn;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "]L%" PRIu64 "] HTTP response header received: key='%s' value='%s'", hconn->conn_id,
            hconn->in_link_id, key, value);
 
@@ -1171,7 +1171,7 @@ static int _server_rx_headers_done_cb(h1_codec_request_state_t *hrs, bool has_bo
     _server_request_t       *hreq = (_server_request_t*) h1_codec_request_state_get_context(hrs);
     qdr_http1_connection_t *hconn = hreq->base.hconn;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] HTTP response headers done.",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] HTTP response headers done.",
            hconn->conn_id, hconn->in_link_id);
 
     // expect: running incoming request at tail
@@ -1236,7 +1236,7 @@ static int _server_rx_headers_done_cb(h1_codec_request_state_t *hrs, bool has_bo
         if (hconn->in_link_credit > 0 && rmsg == DEQ_HEAD(hreq->responses)) {
             hconn->in_link_credit -= 1;
 
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "][L%" PRIu64 "] Delivering msg-id=%" PRIu64 " response to router addr=%s",
                    hconn->conn_id, hconn->in_link_id, hreq->base.msg_id, hreq->base.response_addr);
 
@@ -1262,7 +1262,7 @@ static int _server_rx_body_cb(h1_codec_request_state_t *hrs, qd_buffer_list_t *b
     qdr_http1_connection_t *hconn = hreq->base.hconn;
     bool                    q2_blocked = false;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "][L%" PRIu64 "] HTTP response body received len=%zu.", hconn->conn_id, hconn->in_link_id, len);
 
     _server_response_msg_t *rmsg  = DEQ_TAIL(hreq->responses);
@@ -1277,10 +1277,10 @@ static int _server_rx_body_cb(h1_codec_request_state_t *hrs, qd_buffer_list_t *b
         // note: unit tests grep for this log!
         hconn->q2_blocked = true;
         if (rmsg->dlv)
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " server link blocked on Q2 limit",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " server link blocked on Q2 limit",
                    DLV_ARGS(rmsg->dlv));
         else
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] server link blocked on Q2 limit",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] server link blocked on Q2 limit",
                    hconn->conn_id);
     }
 
@@ -1312,7 +1312,7 @@ static void _server_rx_done_cb(h1_codec_request_state_t *hrs)
         }
     }
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "][L%" PRIu64 "] HTTP response message msg-id=%" PRIu64 " decoding complete.", hconn->conn_id,
            hconn->in_link_id, hreq->base.msg_id);
 
@@ -1371,7 +1371,7 @@ static void _server_request_complete_cb(h1_codec_request_state_t *hrs, bool canc
     // Set the inbound octets for this request.
     //
     vflow_set_uint64(hreq->base.vflow, VFLOW_ATTRIBUTE_OCTETS, in_octets);
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "] HTTP request/response %s. Bytes read: %" PRIu64 " written: %" PRIu64, hconn->conn_id,
            cancelled ? "cancelled!" : "codec done", in_octets, out_octets);
 }
@@ -1395,7 +1395,7 @@ void qdr_http1_server_core_link_flow(qdr_http1_adaptor_t    *adaptor,
     assert(qdr_link_is_anonymous(link));  // remove me
     hconn->in_link_credit += credit;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] Credit granted on response link: %d",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "][L%" PRIu64 "] Credit granted on response link: %d",
            hconn->conn_id, hconn->in_link_id, hconn->in_link_credit);
 
     if (hconn->in_link_credit > 0) {
@@ -1413,7 +1413,7 @@ void qdr_http1_server_core_link_flow(qdr_http1_adaptor_t    *adaptor,
 
                 hconn->in_link_credit -= 1;
 
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        "[C%" PRIu64 "][L%" PRIu64 "] Delivering blocked response to router addr=%s", hconn->conn_id,
                        hconn->in_link_id, hreq->base.response_addr);
 
@@ -1449,7 +1449,7 @@ void qdr_http1_server_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
 {
     _server_request_t *hreq = (_server_request_t *) hbase;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " HTTP response delivery update, outcome=0x%" PRIx64 "%s",
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " HTTP response delivery update, outcome=0x%" PRIx64 "%s",
            DLV_ARGS(dlv), disp, settled ? " settled" : "");
 
     if (settled) {
@@ -1460,7 +1460,7 @@ void qdr_http1_server_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
                 if (qd_message_receive_complete(rmsg->msg)) {
                     _server_response_msg_free(hreq, rmsg);
                 } else if (disp == PN_RELEASED || disp == PN_REJECTED || disp == PN_MODIFIED) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING,
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING,
                            DLV_FMT " Response message was not accepted by client, outcome=0x%" PRIx64, DLV_ARGS(dlv),
                            disp);
                     qd_message_set_discard(rmsg->msg, true);
@@ -1478,7 +1478,7 @@ void qdr_http1_server_core_delivery_update(qdr_http1_adaptor_t      *adaptor,
             if (!hreq->request_settled) {
                 hreq->request_settled = true;
                 if (hreq->request_dlv) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " request message accepted",
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " request message accepted",
                            DLV_ARGS(hreq->request_dlv));
                     qdr_delivery_remote_state_updated(qdr_http1_adaptor->core,
                                                       hreq->request_dlv,
@@ -1520,7 +1520,7 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     qd_iterator_free(msg_id_itr);
 
     if (!ok) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, "[C%" PRIu64 "][L%" PRIu64 "] Rejecting message missing id.",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, "[C%" PRIu64 "][L%" PRIu64 "] Rejecting message missing id.",
                hconn->conn_id, hconn->out_link_id);
         return 0;
     }
@@ -1530,7 +1530,7 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     qd_iterator_free(reply_to_itr);
 
     if (!reply_to && !hconn->cfg.event_channel) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING,
                "[C%" PRIu64 "][L%" PRIu64 "] Rejecting message no reply-to.", hconn->conn_id, hconn->out_link_id);
         return 0;
     }
@@ -1563,7 +1563,7 @@ static _server_request_t *_create_request_context(qdr_http1_connection_t *hconn,
     //
     vflow_latency_start(hreq->base.vflow);
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "][L%" PRIu64 "] New HTTP Request msg-id=%" PRIu64 " reply-to=%s.", hconn->conn_id,
            hconn->out_link_id, msg_id, reply_to);
     return hreq;
@@ -1633,7 +1633,7 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
 
     // done copying and converting!
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
            "[C%" PRIu64 "][L%" PRIu64 "] Encoding request method=%s target=%s", hconn->conn_id, hconn->out_link_id,
            method_str, target_str);
 
@@ -1661,7 +1661,7 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
             //if host override option is in use, write the configured
             //value rather than that submitted by client
             char *header_key = (char*) qd_iterator_copy(i_key);
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "][L%" PRIu64 "] Encoding request header %s:%s", hconn->conn_id, hconn->out_link_id,
                    header_key, hconn->cfg.host_override);
 
@@ -1679,7 +1679,7 @@ static uint64_t _send_request_headers(_server_request_t *hreq, qd_message_t *msg
             char *header_key = (char*) qd_iterator_copy(i_key);
             char *header_value = (char*) qd_iterator_copy(i_value);
 
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "][L%" PRIu64 "] Encoding request header %s:%s", hconn->conn_id, hconn->out_link_id,
                    header_key, header_value);
 
@@ -1721,7 +1721,7 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
 
         uint64_t dispo = _send_request_headers(hreq, msg);
         if (dispo) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Rejecting malformed message msg-id=%" PRIu64,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Rejecting malformed message msg-id=%" PRIu64,
                    DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
             hreq->request_dispo = dispo;
             return hreq->request_dispo;
@@ -1732,10 +1732,10 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
         qd_message_stream_data_t *stream_data = 0;
         switch (qd_message_next_stream_data(msg, &stream_data)) {
             case QD_MESSAGE_STREAM_DATA_BODY_OK: {
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " Encoding request body data",
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " Encoding request body data",
                        DLV_ARGS(hreq->request_dlv));
                 if (h1_codec_tx_body(hreq->base.lib_rs, stream_data)) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " body data encode failed",
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " body data encode failed",
                            DLV_ARGS(hreq->request_dlv));
                     hreq->request_dispo = PN_REJECTED;
                     return hreq->request_dispo;
@@ -1749,7 +1749,7 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
 
             case QD_MESSAGE_STREAM_DATA_NO_MORE: {
                 bool ignore;
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        DLV_FMT " HTTP Request msg-id=%" PRIu64 " body data encode complete",
                        DLV_ARGS(hreq->request_dlv), hreq->base.msg_id);
                 hreq->request_dispo = PN_ACCEPTED;
@@ -1761,13 +1761,13 @@ static uint64_t _encode_request_message(_server_request_t *hreq)
                 return 0;  // wait for more
 
             case QD_MESSAGE_STREAM_DATA_INVALID:
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Rejecting corrupted body data.",
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Rejecting corrupted body data.",
                        DLV_ARGS(hreq->request_dlv));
                 hreq->request_dispo = PN_REJECTED;
                 return hreq->request_dispo;
 
             case QD_MESSAGE_STREAM_DATA_ABORTED:
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        DLV_FMT " HTTP Request msg-id=%" PRIu64 " message aborted", DLV_ARGS(hreq->request_dlv),
                        hreq->base.msg_id);
                 hreq->request_dispo = PN_REJECTED;
@@ -1797,7 +1797,7 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
 
         if (qd_message_aborted(msg)) {
             // can safely discard since it was yet to be processed
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Discarding aborted request",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Discarding aborted request",
                    DLV_ARGS(delivery));
             qd_message_set_send_complete(msg);
             qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
@@ -1810,7 +1810,7 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             return 0;
 
         case QD_MESSAGE_DEPTH_INVALID:
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Malformed HTTP/1.x message",
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Malformed HTTP/1.x message",
                    DLV_ARGS(delivery));
             qd_message_set_send_complete(msg);
             qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
@@ -1819,7 +1819,7 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
         case QD_MESSAGE_DEPTH_OK:
             hreq = _create_request_context(hconn, msg);
             if (!hreq) {
-                    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Discarding malformed message.",
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Discarding malformed message.",
                            DLV_ARGS(delivery));
                     qd_message_set_send_complete(msg);
                     qdr_link_flow(qdr_http1_adaptor->core, link, 1, false);
@@ -1845,7 +1845,7 @@ uint64_t qdr_http1_server_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
                 // not done receiving yet
                 break;
             case PN_ACCEPTED:
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                        "[C%" PRIu64 "][L%" PRIu64 "] HTTP request message msg-id=%" PRIu64 " encoding complete",
                        hconn->conn_id, hconn->out_link_id, hreq->base.msg_id);
                 qd_message_set_send_complete(msg);
@@ -1929,7 +1929,7 @@ static void _cancel_request(_server_request_t *hreq, const char *error)
 
     if (!hreq->cancelled) {
         hreq->cancelled = true;
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_WARNING,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_WARNING,
                "[C%" PRIu64 "][L%" PRIu64 "] Cancelling HTTP Request msg-id=%" PRIu64 ": %s", hconn->conn_id,
                hconn->out_link_id, hreq->base.msg_id, error);
 

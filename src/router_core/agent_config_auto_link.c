@@ -336,7 +336,7 @@ void qdra_config_auto_link_delete_CT(qdr_core_t    *core,
     if (!name && !identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "No name or identity provided";
-        qd_log(QD_LOG_MODULE_AGENT,
+        qd_log(LOG_AGENT,
                QD_LOG_ERROR,
                "Error performing DELETE of %s: %s",
                CONFIG_AUTOLINK_TYPE,
@@ -384,7 +384,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (!!al) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Name conflicts with an existing entity";
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
                    CONFIG_AUTOLINK_TYPE,
@@ -395,7 +395,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (!qd_parse_is_map(in_body)) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Body of request must be a map";
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
                    CONFIG_AUTOLINK_TYPE,
@@ -410,7 +410,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (!addr_field) {
             addr_field       = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_ADDR]);
             if (addr_field)
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_WARNING,
                    "The 'addr' attribute of autoLink has been deprecated. Use 'address' instead");
         }
@@ -418,7 +418,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (! dir_field) {
             dir_field        = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_DIR]);
             if (dir_field)
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_WARNING,
                    "The 'dir' attribute of autoLink has been deprecated. Use 'direction' instead");
         }
@@ -429,7 +429,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (!external_addr) {
             external_addr    = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_EXT_ADDR]);
             if (external_addr)
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_WARNING,
                    "The 'externalAddr' attribute of autoLink has been deprecated. Use 'externalAddress' instead");
         }
@@ -438,7 +438,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (connection_field && container_field) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Both connection and containerId cannot be specified. Specify only one";
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
                    CONFIG_AUTOLINK_TYPE,
@@ -452,7 +452,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (!addr_field || !dir_field) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "address and direction fields are mandatory";
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
                    CONFIG_AUTOLINK_TYPE,
@@ -465,7 +465,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (error) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = error;
-            qd_log(QD_LOG_MODULE_AGENT,
+            qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
                    CONFIG_AUTOLINK_TYPE,
@@ -506,7 +506,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
     } else {
         if (query->status.status / 100 > 2)
             qd_log(
-                QD_LOG_MODULE_ROUTER_CORE, QD_LOG_ERROR, "Error configuring autoLink: %s", query->status.description);
+                LOG_ROUTER_CORE, QD_LOG_ERROR, "Error configuring autoLink: %s", query->status.description);
         qdr_query_free(query);
     }
 }
@@ -539,7 +539,7 @@ void qdra_config_auto_link_get_CT(qdr_core_t    *core,
     if (!name && !identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "No name or identity provided";
-        qd_log(QD_LOG_MODULE_AGENT,
+        qd_log(LOG_AGENT,
                QD_LOG_ERROR,
                "Error performing READ of %s: %s",
                CONFIG_AUTOLINK_TYPE,

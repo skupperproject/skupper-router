@@ -1129,7 +1129,7 @@ qdr_protocol_adaptor_t *qdr_protocol_adaptor(qdr_core_t                *core,
 {
     qdr_protocol_adaptor_t *adaptor = NEW(qdr_protocol_adaptor_t);
 
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_INFO, "Protocol adaptor registered: %s", name);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Protocol adaptor registered: %s", name);
 
     DEQ_ITEM_INIT(adaptor);
     adaptor->name                    = name;

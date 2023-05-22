@@ -96,14 +96,14 @@ static inline qdr_link_t *get_outgoing_streaming_link(qdr_core_t *core, qdr_conn
     if (out_link) {
         DEQ_REMOVE_HEAD_N(STREAMING_POOL, conn->streaming_link_pool);
         out_link->in_streaming_pool = false;
-        qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] Taking streaming link %s from free pool", conn->identity,
                out_link->identity, out_link->name);
     } else {
         // no free links - create a new one
         out_link = qdr_connection_new_streaming_link_CT(core, conn);
         if (!out_link) {
-            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_WARNING,
+            qd_log(LOG_ROUTER_CORE, QD_LOG_WARNING,
                    "[C%" PRIu64 "] Unable to setup new outgoing streaming message link", conn->identity);
             return 0;
         }
@@ -123,7 +123,7 @@ static int qdr_forward_message_null_CT(qdr_core_t      *core,
                                        bool             exclude_inprocess,
                                        bool             control)
 {
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_CRITICAL, "NULL Message Forwarder Invoked");
+    qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "NULL Message Forwarder Invoked");
     return 0;
 }
 
@@ -168,7 +168,7 @@ qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *in
     out_dlv->link_id     = out_link->identity;
     out_dlv->conn_id     = out_link->conn_id;
     sys_mutex_init(&out_dlv->dispo_lock);
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery created qdr_forward_new_delivery_CT",
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery created qdr_forward_new_delivery_CT",
            DLV_ARGS(out_dlv));
 
     if (in_dlv) {
@@ -812,7 +812,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
     //
     assert(!control);
 #ifdef LOG_FORWARD_BALANCED
-    qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced: %s locals=%d remotes=%d",
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced: %s locals=%d remotes=%d",
            qd_hash_key_by_handle(addr->hash_handle), DEQ_SIZE(addr->rlinks), qd_bitmask_cardinality(addr->rnodes));
 #endif
 
@@ -870,7 +870,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
             }
 
 #ifdef LOG_FORWARD_BALANCED
-            qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced:   local candidate: %" PRIu32, value);
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced:   local candidate: %" PRIu32, value);
 #endif
         }
 
@@ -929,7 +929,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                 }
 
 #ifdef LOG_FORWARD_BALANCED
-                qd_log(QD_LOG_MODULE_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced:   remote candidate: %" PRIu32, value);
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "ForwardBalanced:   remote candidate: %" PRIu32, value);
 #endif
             }
         }

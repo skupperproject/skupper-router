@@ -178,12 +178,12 @@ void qdr_http1_close_connection(qdr_http1_connection_t *hconn, const char *error
     hconn->closing = true;
 
     if (error) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_ERROR, "[C%" PRIu64 "] Connection closing: %s", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_ERROR, "[C%" PRIu64 "] Connection closing: %s", hconn->conn_id,
                error);
     }
 
     if (hconn->raw_conn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating close of connection",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Initiating close of connection",
                hconn->conn_id);
         pn_raw_connection_close(hconn->raw_conn);
     }
@@ -337,7 +337,7 @@ static void _core_connection_activate_CT(void *context, qdr_connection_t *conn)
     }
     sys_mutex_unlock(&qdr_http1_adaptor->lock);
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Connection %s", conn->identity,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Connection %s", conn->identity,
            activated ? "activated" : "down, unable to activate");
 }
 
@@ -351,7 +351,7 @@ static void _core_link_first_attach(void               *context,
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_connection_get_context(conn);
     if (hconn)
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Link first attach", hconn->conn_id);
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Link first attach", hconn->conn_id);
 }
 
 
@@ -363,7 +363,7 @@ static void _core_link_second_attach(void          *context,
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (!hconn) return;
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link second attach", hconn->conn_id,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link second attach", hconn->conn_id,
            link->identity);
 
     if (hconn->type == HTTP1_CONN_CLIENT) {
@@ -377,7 +377,7 @@ static void _core_link_detach(void *context, qdr_link_t *link, qdr_error_t *erro
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link detach", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link detach", hconn->conn_id,
                link->identity);
 
         qdr_link_set_context(link, 0);
@@ -393,7 +393,7 @@ static void _core_link_flow(void *context, qdr_link_t *link, int credit)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link flow (%d)", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link flow (%d)", hconn->conn_id,
                link->identity, credit);
         if (hconn->type == HTTP1_CONN_SERVER)
             qdr_http1_server_core_link_flow((qdr_http1_adaptor_t*) context, hconn, link, credit);
@@ -407,7 +407,7 @@ static void _core_link_offer(void *context, qdr_link_t *link, int delivery_count
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link offer (%d)", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link offer (%d)", hconn->conn_id,
                link->identity, delivery_count);
     }
 }
@@ -417,7 +417,7 @@ static void _core_link_drained(void *context, qdr_link_t *link)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link drained", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link drained", hconn->conn_id,
                link->identity);
     }
 }
@@ -427,7 +427,7 @@ static void _core_link_drain(void *context, qdr_link_t *link, bool mode)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link drain %s", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link drain %s", hconn->conn_id,
                link->identity, mode ? "ON" : "OFF");
     }
 }
@@ -437,7 +437,7 @@ static int _core_link_push(void *context, qdr_link_t *link, int limit)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_link_get_context(link);
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link push %d", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link push %d", hconn->conn_id,
                link->identity, limit);
         return qdr_link_process_deliveries(qdr_http1_adaptor->core, link, limit);
     }
@@ -453,7 +453,7 @@ static uint64_t _core_link_deliver(void *context, qdr_link_t *link, qdr_delivery
     uint64_t outcome = PN_RELEASED;
 
     if (hconn) {
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Core link deliver (%s)", DLV_ARGS(delivery),
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Core link deliver (%s)", DLV_ARGS(delivery),
                settled ? "settled" : "unsettled");
 
         if (hconn->type == HTTP1_CONN_SERVER)
@@ -471,7 +471,7 @@ static int _core_link_get_credit(void *context, qdr_link_t *link)
     int credit = 0;
     if (hconn) {
         credit = (link == hconn->in_link) ? hconn->in_link_credit : hconn->out_link_credit;
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link get credit (%d)",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Link get credit (%d)",
                hconn->conn_id, link->identity, credit);
     }
 
@@ -486,7 +486,7 @@ static void _core_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t d
     qdr_http1_request_base_t *hreq = (qdr_http1_request_base_t*) qdr_delivery_get_context(dlv);
     if (hreq) {
         qdr_http1_connection_t *hconn = hreq->hconn;
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " core delivery update disp=0x%" PRIx64 " %s",
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " core delivery update disp=0x%" PRIx64 " %s",
                DLV_ARGS(dlv), disp, settled ? "settled" : "unsettled");
 
         if (hconn->type == HTTP1_CONN_SERVER)
@@ -508,7 +508,7 @@ static void _core_conn_close(void *context, qdr_connection_t *conn, qdr_error_t 
         assert(hconn->qdr_conn == conn);
         char *desc = error ? qdr_error_description(error) : 0;
 
-        qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x %s", hconn->conn_id,
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x %s", hconn->conn_id,
                desc ? desc : "connection closed by management");
 
         if (hconn->type == HTTP1_CONN_SERVER)
@@ -526,7 +526,7 @@ static void _core_conn_trace(void *context, qdr_connection_t *conn, bool trace)
     if (hconn) {
         hconn->trace = trace;
         if (trace)
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] HTTP/1.x trace enabled", hconn->conn_id);
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] HTTP/1.x trace enabled", hconn->conn_id);
     }
 }
 
@@ -570,12 +570,12 @@ static void qd_http1_adaptor_init(qdr_core_t *core, void **adaptor_context)
 
 static void qd_http1_adaptor_final(void *adaptor_context)
 {
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_INFO, "Shutting down HTTP/1.x protocol adaptor");
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "Shutting down HTTP/1.x protocol adaptor");
 
     qdr_http1_adaptor_t *adaptor = (qdr_http1_adaptor_t*) adaptor_context;
     qdr_protocol_adaptor_free(adaptor->core, adaptor->adaptor);
 
-    qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_DEBUG,
+    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
            "HTTP/1.x %zu connections, %zu listeners, and %zu connectors still active", DEQ_SIZE(adaptor->connections),
            DEQ_SIZE(adaptor->listeners), DEQ_SIZE(adaptor->connectors));
 
@@ -637,7 +637,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
         }
 
         if (*input_octets) {
-            qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                    "[C%" PRIu64 "] %" PRIu64 " bytes read from raw connection", conn_id, *input_octets);
         }
     }
@@ -666,7 +666,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
             }
 
             if (out_octets > 0) {
-                qd_log(QD_LOG_MODULE_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        "[C%" PRIu64 "] %" PRId64 " bytes written to the raw connection", conn_id, out_octets);
             }
         }

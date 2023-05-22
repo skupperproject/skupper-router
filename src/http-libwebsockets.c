@@ -55,7 +55,7 @@ static void logger(int lll, const char *line)  {
     while (len > 1 && isspace(line[len-1])) { /* Strip trailing newline */
         --len;
     }
-    qd_log(QD_LOG_MODULE_HTTP, qd_level(lll), "%.*s", (int) len, line);
+    qd_log(LOG_HTTP, qd_level(lll), "%.*s", (int) len, line);
 }
 
 static void log_init(void)
@@ -63,7 +63,7 @@ static void log_init(void)
     int levels = 0;
     for (int i = 0; i < LLL_COUNT; ++i) {
         int lll = 1<<i;
-        levels |= qd_log_enabled(QD_LOG_MODULE_HTTP, qd_level(lll)) ? lll : 0;
+        levels |= qd_log_enabled(LOG_HTTP, qd_level(lll)) ? lll : 0;
     }
     lws_set_log_level(levels, logger);
 }
@@ -165,7 +165,7 @@ static inline int unexpected_close(struct lws *wsi, const char *msg) {
                      (unsigned char*)msg, strlen(msg));
     char peer[64];
     lws_get_peer_simple(wsi, peer, sizeof(peer));
-    qd_log(QD_LOG_MODULE_HTTP, QD_LOG_ERROR, "Error on HTTP connection from %s: %s", peer, msg);
+    qd_log(LOG_HTTP, QD_LOG_ERROR, "Error on HTTP connection from %s: %s", peer, msg);
     return -1;
 }
 
@@ -284,7 +284,7 @@ static qd_lws_listener_t *qd_lws_listener(qd_http_server_t *hs, qd_listener_t *l
         li->http = hl;
         sys_atomic_inc(&li->ref_count); /* Keep it around till qd_http_server_free() */
     } else {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_CRITICAL, "No memory for HTTP listen on %s", li->config.host_port);
+        qd_log(LOG_HTTP, QD_LOG_CRITICAL, "No memory for HTTP listen on %s", li->config.host_port);
     }
     return hl;
 }
@@ -305,7 +305,7 @@ static int is_ipv6_address(qd_http_server_t *hs, const char* host, const char* p
     struct addrinfo hints = {0, AF_UNSPEC, SOCK_STREAM};
     int code = getaddrinfo(host, port, &hints, &addr);
     if (code) {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_ERROR, "getaddrinfo(%s, %s) failed with %s", host, port, gai_strerror(code));
+        qd_log(LOG_HTTP, QD_LOG_ERROR, "getaddrinfo(%s, %s) failed with %s", host, port, gai_strerror(code));
     } else {
         result = addr->ai_family == AF_INET6;
         freeaddrinfo(addr);
@@ -320,7 +320,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
 
     int port = qd_port_int(config->port);
     if (port < 0) {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_ERROR, "HTTP listener %s has invalid port %s", config->host_port,
+        qd_log(LOG_HTTP, QD_LOG_ERROR, "HTTP listener %s has invalid port %s", config->host_port,
                config->port);
         goto error;
     }
@@ -361,7 +361,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     info.ssl_cipher_list = CIPHER_LIST;
     info.options |= LWS_SERVER_OPTION_VALIDATE_UTF8;
     if (!is_ipv6_address(hs, strlen(config->host) == 0 ? 0 : config->host, config->port)) {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
         info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
     }
     if (config->ssl_profile) {
@@ -381,7 +381,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     info.finalize_arg = hl;
     hl->vhost = lws_create_vhost(hs->context, &info);
     if (!hl->vhost) {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
         goto error;
     }
 
@@ -394,18 +394,18 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
         const int resolved_port = lws_get_vhost_port(hl->vhost);
         assert(resolved_port != -1); // already checked the vhost is successfully started
         if (config->name)
-            qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
+            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
                    config->name);
         else
-            qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d", config->host, resolved_port);
+            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d", config->host, resolved_port);
     } else {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s", config->host_port);
     }
     return;
 
   error:
     if (hl->listener->exit_on_error) {
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_CRITICAL, "Shutting down, required listener failed %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_CRITICAL, "Shutting down, required listener failed %s", config->host_port);
         exit(1);
     }
     qd_lws_listener_free(hl);
@@ -413,7 +413,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
 
 static void listener_close(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     qd_server_config_t *config = &hl->listener->config;
-    qd_log(QD_LOG_MODULE_HTTP, QD_LOG_NOTICE, "Stopped listening for HTTP on %s", config->host_port);
+    qd_log(LOG_HTTP, QD_LOG_NOTICE, "Stopped listening for HTTP on %s", config->host_port);
     lws_vhost_destroy(hl->vhost);
 }
 
@@ -707,9 +707,9 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
         while (stats->current < metrics_length) {
             if (write_metric(&position, end, &metrics[stats->current], &stats->context->stats)) {
                 stats->current++;
-                qd_log(QD_LOG_MODULE_HTTP, QD_LOG_DEBUG, "wrote metric %lu of %lu", stats->current, metrics_length);
+                qd_log(LOG_HTTP, QD_LOG_DEBUG, "wrote metric %lu of %lu", stats->current, metrics_length);
             } else {
-                qd_log(QD_LOG_MODULE_HTTP, QD_LOG_WARNING, "insufficient space in buffer");
+                qd_log(LOG_HTTP, QD_LOG_WARNING, "insufficient space in buffer");
                 break;
             }
         }
@@ -717,11 +717,11 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
         int alloc_cur = 0;
         while (alloc_cur < allocator_metrics_length) {
             if (write_allocator_metric(&position, end, &allocator_metrics[alloc_cur])) {
-                qd_log(QD_LOG_MODULE_HTTP, QD_LOG_DEBUG, "wrote allocator metric %i of %lu", alloc_cur,
+                qd_log(LOG_HTTP, QD_LOG_DEBUG, "wrote allocator metric %i of %lu", alloc_cur,
                        allocator_metrics_length);
                 alloc_cur++;
             } else {
-                qd_log(QD_LOG_MODULE_HTTP, QD_LOG_WARNING, "insufficient space in buffer");
+                qd_log(LOG_HTTP, QD_LOG_WARNING, "insufficient space in buffer");
                 break;
             }
         }
@@ -840,7 +840,7 @@ static int callback_amqpws(struct lws *wsi, enum lws_callback_reasons reason,
             return unexpected_close(c->wsi, pn_code(err));
         }
         strncpy(c->qd_conn->rhost_port, c->qd_conn->rhost, sizeof(c->qd_conn->rhost_port));
-        qd_log(QD_LOG_MODULE_HTTP, QD_LOG_DEBUG, "[%" PRIu64 "] upgraded HTTP connection from %s to AMQPWS",
+        qd_log(LOG_HTTP, QD_LOG_DEBUG, "[%" PRIu64 "] upgraded HTTP connection from %s to AMQPWS",
                qd_connection_connection_id(c->qd_conn), qd_connection_name(c->qd_conn));
         return handle_events(c);
     }
@@ -917,7 +917,7 @@ static int callback_amqpws(struct lws *wsi, enum lws_callback_reasons reason,
 
 static void* http_thread_run(void* v) {
     qd_http_server_t *hs = v;
-    qd_log(QD_LOG_MODULE_HTTP, QD_LOG_INFO, "HTTP server thread running");
+    qd_log(LOG_HTTP, QD_LOG_INFO, "HTTP server thread running");
     int result = 0;
     while(result >= 0) {
         /* Send a USER event to run transport ticks, may decrease hs->next_tick. */
@@ -955,7 +955,7 @@ static void* http_thread_run(void* v) {
             }
         }
     }
-    qd_log(QD_LOG_MODULE_HTTP, QD_LOG_INFO, "HTTP server thread exit");
+    qd_log(LOG_HTTP, QD_LOG_INFO, "HTTP server thread exit");
     return NULL;
 }
 
@@ -999,7 +999,7 @@ qd_http_server_t *qd_http_server(qd_server_t *s)
         hs->server  = s;
         hs->core = 0; // not yet available
         if (!hs->context) {
-            qd_log(QD_LOG_MODULE_HTTP, QD_LOG_CRITICAL, "No memory starting HTTP server");
+            qd_log(LOG_HTTP, QD_LOG_CRITICAL, "No memory starting HTTP server");
             qd_http_server_free(hs);
             hs = NULL;
         }

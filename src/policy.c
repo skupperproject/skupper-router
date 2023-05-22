@@ -118,7 +118,7 @@ qd_policy_t *qd_policy(qd_dispatch_t *qd)
     sys_mutex_init(&stats_lock);
     sys_mutex_init(&policy->tree_lock);
 
-    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_TRACE, "Policy Initialized");
+    qd_log(LOG_POLICY, QD_LOG_TRACE, "Policy Initialized");
     return policy;
 }
 
@@ -145,7 +145,7 @@ qd_error_t qd_entity_configure_policy(qd_policy_t *policy, qd_entity_t *entity)
 {
     module = PyImport_ImportModule("skupper_router_internal.policy.policy_manager");
     if (!module) {
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_CRITICAL,
+        qd_log(LOG_POLICY, QD_LOG_CRITICAL,
                "Required internal policy manager python module did not load. Shutting down.");
         exit(1);
     }
@@ -156,7 +156,7 @@ qd_error_t qd_entity_configure_policy(qd_policy_t *policy, qd_entity_t *entity)
         qd_entity_opt_string(entity, "policyDir", 0); CHECK();
     policy->enableVhostPolicy = qd_entity_opt_bool(entity, "enableVhostPolicy", false); CHECK();
     policy->enableVhostNamePatterns = qd_entity_opt_bool(entity, "enableVhostNamePatterns", false); CHECK();
-    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+    qd_log(LOG_POLICY, QD_LOG_INFO,
            "Policy configured maxConnections: %d, "
            "policyDir: '%s',"
            "access rules enabled: '%s', "
@@ -255,7 +255,7 @@ bool qd_policy_socket_accept(qd_policy_t *policy, const char *hostname)
         n_processed++;
         nc = n_connections;
         sys_mutex_unlock(&stats_lock);
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_TRACE,
                "ALLOW Connection '%s' based on global connection count. nConnections= %d", hostname, nc);
     } else {
         // connection denied
@@ -265,7 +265,7 @@ bool qd_policy_socket_accept(qd_policy_t *policy, const char *hostname)
         n_processed++;
         nc = n_connections;
         sys_mutex_unlock(&stats_lock);
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+        qd_log(LOG_POLICY, QD_LOG_INFO,
                "DENY Connection '%s' based on global connection count. nConnections= %d", hostname, nc);
     }
     return result;
@@ -293,11 +293,11 @@ void qd_policy_socket_close(qd_policy_t *policy, const qd_connection_t *conn)
                 if (result) {
                     Py_XDECREF(result);
                 } else {
-                    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: result");
+                    qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: result");
                 }
                 Py_XDECREF(close_connection);
             } else {
-                qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: close_connection");
+                qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: close_connection");
             }
         }
         qd_python_unlock(lock_state);
@@ -305,7 +305,7 @@ void qd_policy_socket_close(qd_policy_t *policy, const qd_connection_t *conn)
     const char *hostname = qd_connection_name(conn);
     if (conn->policy_settings && conn->policy_settings->denialCounts) {
         qd_policy_denial_counts_t *qpdc = conn->policy_settings->denialCounts;
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG,
+        qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64
                "] Connection '%s' closed with resources n_sessions=%d, n_senders=%d, n_receivers=%d, "
                "sessions_denied=%" PRIu64 ", senders_denied=%" PRIu64 ", receivers_denied=%" PRIu64
@@ -429,18 +429,18 @@ bool qd_policy_lookup_vhost_alias(
                 if (res_string && res_len < name_buf_size) {
                     strcpy(name_buf, res_string);
                 } else {
-                    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_ERROR,
+                    qd_log(LOG_POLICY, QD_LOG_ERROR,
                            "Internal: lookup_vhost_alias: insufficient buffer for name");
                 }
                 Py_XDECREF(result);
                 free(res_string);
                 res = !!name_buf[0]; // settings name returned
             } else {
-                qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: result");
+                qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: result");
             }
             Py_XDECREF(lookup_vhost_alias);
         } else {
-            qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: lookup_vhost_alias");
+            qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: lookup_vhost_alias");
         }
     }
     qd_python_unlock(lock_state);
@@ -488,23 +488,23 @@ bool qd_policy_open_lookup_user(
                 if (res_string && res_len < name_buf_size) {
                     strcpy(name_buf, res_string);
                 } else {
-                    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_ERROR, "Internal: lookup_user: insufficient buffer for name");
+                    qd_log(LOG_POLICY, QD_LOG_ERROR, "Internal: lookup_user: insufficient buffer for name");
                 }
                 Py_XDECREF(result);
                 free(res_string);
                 res = !!name_buf[0]; // settings name returned
             } else {
-                qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result");
+                qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result");
             }
             Py_XDECREF(lookup_user);
         } else {
-            qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_user");
+            qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_user");
         }
     }
     qd_python_unlock(lock_state);
 
     if (name_buf[0]) {
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_TRACE,
                "[C%" PRIu64
                "] ALLOW AMQP Open lookup_user: %s, rhost: %s, vhost: %s, connection: %s. Usergroup: '%s'%s",
                conn_id, username, hostip, vhost, conn_name, name_buf, (res ? "" : " Internal error."));
@@ -570,15 +570,15 @@ bool qd_policy_open_fetch_settings(
                     }
                     Py_XDECREF(result2);
                 } else {
-                    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result2");
+                    qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result2");
                 }
                 Py_XDECREF(lookup_settings);
             } else {
-                qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_settings");
+                qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_settings");
             }
             Py_XDECREF(upolicy);
         } else {
-            qd_log(QD_LOG_MODULE_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: upolicy");
+            qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: upolicy");
         }
     }
     qd_python_unlock(lock_state);
@@ -633,11 +633,11 @@ bool qd_policy_approve_amqp_session(pn_session_t *ssn, qd_connection_t *qd_conn)
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(conn);
     if (result) {
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_TRACE,
                "[C%" PRIu64 "] ALLOW AMQP Begin Session. user: %s, rhost: %s, vhost: %s", qd_conn->connection_id,
                qd_conn->user_id, hostip, vhost);
     } else {
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+        qd_log(LOG_POLICY, QD_LOG_INFO,
                "[C%" PRIu64 "] DENY AMQP Begin Session due to session limit. user: %s, rhost: %s, vhost: %s",
                qd_conn->connection_id, qd_conn->user_id, hostip, vhost);
     }
@@ -1031,7 +1031,7 @@ bool qd_policy_approve_message_target(qd_iterator_t *address, qd_connection_t *q
 
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(qd_connection_pn(qd_conn));
-    qd_log(QD_LOG_MODULE_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+    qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
            "[C%" PRIu64 "] %s AMQP message to '%s' for user '%s', rhost '%s', vhost '%s' based on target address",
            qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
 
@@ -1053,7 +1053,7 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
     if (qd_conn->policy_settings->spec.maxSenders) {
         if (qd_conn->n_senders == qd_conn->policy_settings->spec.maxSenders) {
             // Max sender limit specified and violated.
-            qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+            qd_log(LOG_POLICY, QD_LOG_INFO,
                    "[C%" PRIu64
                    "] DENY AMQP Attach sender for user '%s', rhost '%s', vhost '%s' based on maxSenders limit",
                    qd_conn->connection_id, qd_conn->user_id, hostip, vhost);
@@ -1072,7 +1072,7 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // a target is specified
         lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, target, false);
 
-        qd_log(QD_LOG_MODULE_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach sender link '%s' for user '%s', rhost '%s', vhost '%s' based on link target name",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
@@ -1085,7 +1085,7 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // A sender with no remote target.
         // This happens all the time with anonymous relay
         lookup = qd_conn->policy_settings->spec.allowAnonymousSender;
-        qd_log(QD_LOG_MODULE_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach anonymous sender for user '%s', rhost '%s', vhost '%s'",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         if (!lookup) {
@@ -1106,7 +1106,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
     if (qd_conn->policy_settings->spec.maxReceivers) {
         if (qd_conn->n_receivers == qd_conn->policy_settings->spec.maxReceivers) {
             // Max sender limit specified and violated.
-            qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+            qd_log(LOG_POLICY, QD_LOG_INFO,
                    "[C%" PRIu64
                    "] DENY AMQP Attach receiver for user '%s', rhost '%s', vhost '%s' based on maxReceivers limit",
                    qd_conn->connection_id, qd_conn->user_id, hostip, vhost);
@@ -1122,7 +1122,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
     bool dynamic_src = pn_terminus_is_dynamic(pn_link_remote_source(pn_link));
     if (dynamic_src) {
         bool lookup = qd_conn->policy_settings->spec.allowDynamicSource;
-        qd_log(QD_LOG_MODULE_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach receiver dynamic source for user '%s', rhost '%s', vhost '%s',",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         // Dynamic source policy rendered the decision
@@ -1136,7 +1136,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
         // a source is specified
         bool lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, source, true);
 
-        qd_log(QD_LOG_MODULE_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s' based on link source name",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), source, qd_conn->user_id, hostip, vhost);
@@ -1147,7 +1147,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
         }
     } else {
         // A receiver with no remote source.
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_INFO,
+        qd_log(LOG_POLICY, QD_LOG_INFO,
                "[C%" PRIu64 "] DENY AMQP Attach receiver link '' for user '%s', rhost '%s', vhost '%s'",
                qd_conn->connection_id, qd_conn->user_id, hostip, vhost);
         _qd_policy_deny_amqp_receiver_link(pn_link, qd_conn, QD_AMQP_COND_UNAUTHORIZED_ACCESS);
@@ -1254,7 +1254,7 @@ void qd_policy_amqp_open_connector(qd_connection_t *qd_conn) {
                     qd_conn->policy_settings->spec.outgoingConnection = true;
                     qd_conn->policy_counted = true; // Count senders and receivers for this connection
                 } else {
-                    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_ERROR,
+                    qd_log(LOG_POLICY, QD_LOG_ERROR,
                            "[C%" PRIu64 "] Failed to find policyVhost settings for connection '%d', policyVhost: '%s'",
                            qd_conn->connection_id, conn_id, policy_vhost);
                     connection_allowed = false;
@@ -1324,7 +1324,7 @@ bool qd_policy_host_pattern_add(qd_policy_t *policy, const char *hostPattern)
     if (rc != QD_ERROR_NONE) {
         const char *err = qd_error_name(rc);
         free(payload);
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_WARNING, "vhost hostname pattern '%s' add failed: %s", hostPattern,
+        qd_log(LOG_POLICY, QD_LOG_WARNING, "vhost hostname pattern '%s' add failed: %s", hostPattern,
                err ? err : "unknown error");
         qd_error_clear();  // allow policy agent to raise PolicyError
     }
@@ -1341,7 +1341,7 @@ void qd_policy_host_pattern_remove(qd_policy_t *policy, const char *hostPattern)
     if (oldp) {
         free(oldp);
     } else {
-        qd_log(QD_LOG_MODULE_POLICY, QD_LOG_WARNING, "vhost hostname pattern '%s' for removal not found", hostPattern);
+        qd_log(LOG_POLICY, QD_LOG_WARNING, "vhost hostname pattern '%s' for removal not found", hostPattern);
     }
 }
 
@@ -1356,7 +1356,7 @@ char * qd_policy_host_pattern_lookup(qd_policy_t *policy, const char *hostPatter
     if (!matched) {
         payload = 0;
     }
-    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_TRACE, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
+    qd_log(LOG_POLICY, QD_LOG_TRACE, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
            (payload ? (char *) payload : "null"));
     return payload;
 }

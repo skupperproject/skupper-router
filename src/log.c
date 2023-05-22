@@ -545,7 +545,7 @@ void qd_log_initialize(void)
 
     sys_mutex_init(&log_source_lock);
 
-    default_log_source                   = qd_log_source(QD_LOG_MODULE_DEFAULT);
+    default_log_source                   = qd_log_source(LOG_DEFAULT);
     default_log_source->mask = levels[INFO].mask;
     default_log_source->includeTimestamp = true;
     default_log_source->includeSource = 0;

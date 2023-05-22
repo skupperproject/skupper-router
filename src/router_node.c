@@ -371,7 +371,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
     // the message processing is expensive as this is done for every message received.
     // Do not bother if not tracing.
 
-    if (qd_log_enabled(QD_LOG_MODULE_MESSAGE, QD_LOG_TRACE)) {
+    if (qd_log_enabled(LOG_MESSAGE, QD_LOG_TRACE)) {
         const qd_server_config_t *cf = qd_connection_config(conn);
         if (!cf) return;
         size_t repr_len = qd_message_repr_len();
@@ -382,7 +382,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
         if (msg_str) {
             const char *src = pn_terminus_get_address(pn_link_source(pn_link));
             const char *tgt = pn_terminus_get_address(pn_link_target(pn_link));
-            qd_log(QD_LOG_MODULE_MESSAGE, QD_LOG_TRACE, "[C%" PRIu64 "]: %s %s on link '%s' (%s -> %s)",
+            qd_log(LOG_MESSAGE, QD_LOG_TRACE, "[C%" PRIu64 "]: %s %s on link '%s' (%s -> %s)",
                    qd_connection_connection_id(conn), pn_link_is_sender(pn_link) ? "Sent" : "Received", msg_str,
                    pn_link_name(pn_link), src ? src : "", tgt ? tgt : "");
         }
@@ -562,7 +562,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     const qd_message_depth_status_t depth_valid = qd_message_check_depth(msg, depth);
     switch (depth_valid) {
     case QD_MESSAGE_DEPTH_INVALID:
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG,
+            qd_log(LOG_ROUTER, QD_LOG_DEBUG,
                    "[C%" PRIu64 "][L%" PRIu64 "] Incoming message validation failed - rejected", conn->connection_id,
                    qd_link_link_id(link));
             qd_message_set_discard(msg, true);
@@ -583,7 +583,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         pn_delivery_tag_t dtag = pn_delivery_tag(pnd);
 
         if (dtag.size > QDR_DELIVERY_TAG_MAX) {
-        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG, "link route delivery failure: msg tag size exceeded %zd (max=%d)",
+        qd_log(LOG_ROUTER, QD_LOG_DEBUG, "link route delivery failure: msg tag size exceeded %zd (max=%d)",
                dtag.size, QDR_DELIVERY_TAG_MAX);
         qd_message_set_discard(msg, true);
         pn_link_flow(pn_link, 1);
@@ -625,7 +625,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
                 // user_id property in message is not blank
                 if (!qd_iterator_equal(userid_iter, (const unsigned char *)conn->user_id)) {
                     // This message is rejected: attempted user proxy is disallowed
-                    qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG,
+                    qd_log(LOG_ROUTER, QD_LOG_DEBUG,
                            "[C%" PRIu64 "][L%" PRIu64 "] Message rejected due to user_id proxy violation. User:%s",
                            conn->connection_id, qd_link_link_id(link), conn->user_id);
                     qd_message_set_discard(msg, true);
@@ -645,7 +645,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
 
     const char *ra_error = qd_message_parse_router_annotations(msg);
     if (ra_error) {
-        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_WARNING,
+        qd_log(LOG_ROUTER, QD_LOG_WARNING,
                "[C%" PRIu64 "][L%" PRIu64 "] Message rejected - invalid router annotations section: %s",
                conn->connection_id, qd_link_link_id(link), ra_error);
 
@@ -680,7 +680,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     //
     if (!receive_complete) {
         if (qd_message_is_streaming(msg) || qd_message_is_Q2_blocked(msg)) {
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG,
+            qd_log(LOG_ROUTER, QD_LOG_DEBUG,
                    "[C%" PRIu64 "][L%" PRIu64 "] Incoming message classified as streaming. User:%s",
                    conn->connection_id, qd_link_link_id(link), conn->user_id);
         } else {
@@ -741,7 +741,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
                                                qd_delivery_read_remote_state(pnd));
             } else {
                 //reject
-                qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG,
+                qd_log(LOG_ROUTER, QD_LOG_DEBUG,
                        "[C%" PRIu64 "][L%" PRIu64 "] Message rejected due to policy violation on target. User:%s",
                        conn->connection_id, qd_link_link_id(link), conn->user_id);
                 qd_message_set_discard(msg, true);
@@ -795,7 +795,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         //
         // If there is no delivery, the message is now and will always be unroutable because there is no address.
         //
-        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Message rejected - no address present",
+        qd_log(LOG_ROUTER, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] Message rejected - no address present",
                conn->connection_id, qd_link_link_id(link));
         qd_bitmask_free(link_exclusions);
         qd_message_set_discard(msg, true);
@@ -1282,7 +1282,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                     if (!pn_data_next(props)) break;
                     if (is_router && pn_data_type(props) == PN_INT) {
                         const int annos_version = (int) pn_data_get_int(props);
-                        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG, "Remote router annotations version: %d",
+                        qd_log(LOG_ROUTER, QD_LOG_DEBUG, "Remote router annotations version: %d",
                                annos_version);
                     }
 
@@ -1473,7 +1473,7 @@ static bool parse_failover_property_list(qd_router_t *router, qd_connection_t *c
                     // Only inserts if not yet part of failover list
                     if ( insert_tail ) {
                         DEQ_INSERT_TAIL(conn->connector->conn_info_list, item);
-                        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_DEBUG, "Added %s as backup host", item->host_port);
+                        qd_log(LOG_ROUTER, QD_LOG_DEBUG, "Added %s as backup host", item->host_port);
                         found_failover = true;
                     }
                     else {
@@ -1623,20 +1623,20 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
 
     switch (router->router_mode) {
         case QD_ROUTER_MODE_STANDALONE:
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Router started in Standalone mode");
+            qd_log(LOG_ROUTER, QD_LOG_INFO, "Router started in Standalone mode");
             break;
         case QD_ROUTER_MODE_INTERIOR:
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Router started in Interior mode, area=%s id=%s", area, id);
+            qd_log(LOG_ROUTER, QD_LOG_INFO, "Router started in Interior mode, area=%s id=%s", area, id);
             break;
         case QD_ROUTER_MODE_EDGE:
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Router started in Edge mode");
+            qd_log(LOG_ROUTER, QD_LOG_INFO, "Router started in Edge mode");
             break;
         case QD_ROUTER_MODE_ENDPOINT:
-            qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Router started in Endpoint mode");
+            qd_log(LOG_ROUTER, QD_LOG_INFO, "Router started in Endpoint mode");
             break;
     }
 
-    qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_INFO, "Version: %s", QPID_DISPATCH_VERSION);
+    qd_log(LOG_ROUTER, QD_LOG_INFO, "Version: %s", QPID_DISPATCH_VERSION);
 
     return router;
 }
@@ -2192,5 +2192,5 @@ void qd_connection_log_policy_denial(qd_link_t *link, const char *text)
             c_id = rlink->conn->identity;
         }
     }
-    qd_log(QD_LOG_MODULE_POLICY, QD_LOG_WARNING, "[C%" PRIu64 "][L%" PRIu64 "] %s", c_id, l_id, text);
+    qd_log(LOG_POLICY, QD_LOG_WARNING, "[C%" PRIu64 "][L%" PRIu64 "] %s", c_id, l_id, text);
 }

@@ -75,7 +75,7 @@ static void signal_handler(int signum)
 
 static void check(int fd) {
     if (qd_error_code()) {
-        qd_log(QD_LOG_MODULE_ROUTER, QD_LOG_CRITICAL, "Router start-up failed: %s", qd_error_message());
+        qd_log(LOG_ROUTER, QD_LOG_CRITICAL, "Router start-up failed: %s", qd_error_message());
         dprintf(fd, "%s: %s\n", argv0, qd_error_message());
         close(fd);
         exit(1);

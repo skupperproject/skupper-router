@@ -100,7 +100,7 @@ static void send_mesh_id_to_interior(void)
         state.interior_sender_credit--;
         state.interior_needs_update = false;
 
-        qd_log(QD_LOG_MODULE_ROUTER_CORE,
+        qd_log(LOG_ROUTER_CORE,
                QD_LOG_INFO,
                "EDGE_MESH - Mesh identifier sent to Interior: %s",
                state.core->edge_mesh_identifier);
