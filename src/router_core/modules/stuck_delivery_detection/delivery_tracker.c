@@ -149,7 +149,7 @@ static void action_handler_CT(qdr_core_t *core, qdr_action_t *action, bool disca
 
 static bool qdrc_delivery_tracker_enable_CT(qdr_core_t *core)
 {
-    if (core->qd->test_hooks) {
+    if (qd_router_test_mode_enabled()) {
         //
         // Test hooks are enabled, override the timing constants with the test values
         //

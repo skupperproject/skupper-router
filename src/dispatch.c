@@ -74,15 +74,26 @@ qd_dispatch_t *qd_dispatch_get_dispatch(void)
     return qd;
 }
 
+/* Test mode is a global state. It is set at startup and does not change for the life of the router.
+ */
+static bool _test_mode = false;
+
+bool qd_router_test_mode_enabled(void)
+{
+    return _test_mode;
+}
+
 qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
 {
+    _test_mode = test_hooks;
+
     //
     // Seed the random number generator
     //
     struct timeval time;
     gettimeofday(&time, NULL);
     srandom((unsigned int)time.tv_sec + ((unsigned int)time.tv_usec << 11));
-    
+
     qd = NEW(qd_dispatch_t);
     ZERO(qd);
 
@@ -106,8 +117,7 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     qd_dispatch_set_router_area(qd, strdup("0"));
     qd_dispatch_set_router_id(qd, strdup("0"));
     qd->router_mode = QD_ROUTER_MODE_ENDPOINT;
-    qd->default_treatment   = QD_TREATMENT_ANYCAST_BALANCED;
-    qd->test_hooks          = test_hooks;
+    qd->default_treatment = QD_TREATMENT_ANYCAST_BALANCED;
 
     qd_python_initialize(qd, python_pkgdir);
     if (qd_error_code()) { qd_dispatch_free(qd); return 0; }

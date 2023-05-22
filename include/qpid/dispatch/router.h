@@ -141,6 +141,11 @@ qd_router_forwarder_t *qd_router_get_forwarder(qd_address_treatment_t t);
 /** Retrieve the routers current memory usage (in bytes) */
 uint64_t qd_router_memory_usage(void);
 
+/** Return true if the router is running in test mode. Test mode can be enabled by passing the '-T' command line option
+ * to the router on startup.
+ */
+bool qd_router_test_mode_enabled(void);
+
 ///@}
 
 #endif
