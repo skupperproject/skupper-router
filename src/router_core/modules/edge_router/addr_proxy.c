@@ -506,7 +506,7 @@ static void on_transfer(void           *link_context,
         qd_parse_free(body);
         qd_iterator_free(iter);
     } else {
-        qd_log(ap->core->log, QD_LOG_ERROR,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
                "Edge Address Proxy: received an invalid message body, rejecting");
         dispo = PN_REJECTED;
     }

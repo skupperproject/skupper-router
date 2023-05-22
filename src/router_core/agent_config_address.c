@@ -287,7 +287,11 @@ void qdra_config_address_delete_CT(qdr_core_t    *core,
     if (!name && !identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "No name or identity provided";
-        qd_log(core->agent_log, QD_LOG_ERROR, "Error performing DELETE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+        qd_log(LOG_AGENT,
+               QD_LOG_ERROR,
+               "Error performing DELETE of %s: %s",
+               CONFIG_ADDRESS_TYPE,
+               query->status.description);
     }
     else {
         if (identity)
@@ -332,7 +336,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (!!addr) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Name conflicts with an existing entity";
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -340,7 +348,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (!qd_parse_is_map(in_body)) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Body of request must be a map";
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -368,7 +380,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (msg) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = msg;
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -379,7 +395,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (!pattern) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = msg;
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -389,7 +409,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (priority > QDR_MAX_PRIORITY ) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Priority value, if present, must be between 0 and QDR_MAX_PRIORITY";
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -401,7 +425,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         if (!addr) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = "Out of memory";
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
         ZERO(addr);
@@ -418,7 +446,11 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
             free_qdr_address_config_t(addr);
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = qd_error_name(rc);
-            qd_log(core->agent_log, QD_LOG_ERROR, "Error performing CREATE of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_ADDRESS_TYPE,
+                   query->status.description);
             break;
         }
 
@@ -497,7 +529,11 @@ void qdra_config_address_get_CT(qdr_core_t    *core,
     if (!name && !identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "No name or identity provided";
-        qd_log(core->agent_log, QD_LOG_ERROR, "Error performing READ of %s: %s", CONFIG_ADDRESS_TYPE, query->status.description);
+        qd_log(LOG_AGENT,
+               QD_LOG_ERROR,
+               "Error performing READ of %s: %s",
+               CONFIG_ADDRESS_TYPE,
+               query->status.description);
     }
     else {
         if (identity) //If there is identity, ignore the name

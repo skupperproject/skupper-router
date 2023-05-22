@@ -1344,6 +1344,7 @@
                         "TCP_ADAPTOR",
                         "HTTP_ADAPTOR",
                         "FLOW_LOG",
+                        "ADDRESS_WATCH",
                         "DEFAULT"
                     ],
                     "required": true,

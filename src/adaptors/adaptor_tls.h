@@ -40,7 +40,7 @@ typedef struct qd_tls_t qd_tls_t;
  *
  * @param config - Pointer to the qd_adaptor_config_t object which contains the sslProfile information.
  * @param qd - Pointer to the qd_dispatch_t object.
- * @param log_source - the log source for logging. Adopted by all child qd_tls_t instances.
+ * @param log_module - the log module for logging. Adopted by all child qd_tls_t instances.
  * @param alpn_protocols - An array of protocols supported by the application layer used when performing
  * Application-Layer Protocol Negotiation (ALPN).
  * @param alpn_protocol_count - The count of elements in the alpn_protocols array.
@@ -50,7 +50,7 @@ typedef struct qd_tls_t qd_tls_t;
  */
 qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                const qd_dispatch_t       *qd,
-                               qd_log_source_t           *log_source,
+                               qd_log_module_t            log_module,
                                const char                *alpn_protocols[],
                                size_t                     alpn_protocol_count,
                                bool                       is_listener);

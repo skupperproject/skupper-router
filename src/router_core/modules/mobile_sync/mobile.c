@@ -65,7 +65,6 @@ typedef struct {
     qdr_core_timer_t          *timer;
     qdr_subscription_t        *message_sub1;
     qdr_subscription_t        *message_sub2;
-    qd_log_source_t           *log;
     uint64_t                   mobile_seq;
     qdr_address_list_t         sync_addrs;
 } qdrm_mobile_sync_t;
@@ -86,7 +85,8 @@ static void log_unknown_router(qdrm_mobile_sync_t *msync, qd_parsed_field_t *id_
     // There is a possibility here that router_id is null but that is fine. We want to print it out either way
     // which will help us in debugging.
     //
-    qd_log(msync->log, QD_LOG_WARNING, "Received %s from an unknown router with router id %s", opcode, r_id);
+    qd_log(LOG_ROUTER_MA, QD_LOG_WARNING, "Received %s from an unknown router with router id %s", opcode,
+           r_id);
     free(r_id);
 }
 
@@ -485,8 +485,9 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     //
     // Trace log the activity of this sequence update.
     //
-    qd_log(msync->log, QD_LOG_DEBUG, "New mobile sequence: mobile_seq=%"PRIu64", addrs_synced=%ld, fanout=%d",
-           msync->mobile_seq, sync_count, fanout);
+    qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG,
+           "New mobile sequence: mobile_seq=%" PRIu64 ", addrs_synced=%ld, fanout=%d", msync->mobile_seq, sync_count,
+           fanout);
 }
 
 
@@ -512,14 +513,15 @@ static void qcm_mobile_sync_on_mar_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             if (version > PROTOCOL_VERSION) {
                 if (!BIT_IS_SET(router->sync_mask, ADDR_SYNC_ROUTER_VERSION_LOGGED)) {
                     BIT_SET(router->sync_mask, ADDR_SYNC_ROUTER_VERSION_LOGGED);
-                    qd_log(msync->log, QD_LOG_WARNING, "Received MAR at protocol version %"PRIu32" from %s.  Ignoring.",
-                           version, (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1);
+                    qd_log(LOG_ROUTER_MA, QD_LOG_WARNING,
+                           "Received MAR at protocol version %" PRIu32 " from %s.  Ignoring.", version,
+                           (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1);
                 }
                 return;
             }
 
-            qd_log(msync->log, QD_LOG_DEBUG, "Received MAR from %s, have_seq=%"PRIu64,
-                   (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1, have_seq);
+            qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Received MAR from %s, have_seq=%" PRIu64,
+                   (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1, have_seq);
 
             if (have_seq < msync->mobile_seq) {
                 //
@@ -533,7 +535,8 @@ static void qcm_mobile_sync_on_mar_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                 //
                 // Trace log the activity of this sequence update.
                 //
-                qd_log(msync->log, QD_LOG_DEBUG, "Sent MAU to requestor: mobile_seq=%"PRIu64, msync->mobile_seq);
+                qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Sent MAU to requestor: mobile_seq=%" PRIu64,
+                       msync->mobile_seq);
             }
         } else {
             log_unknown_router(msync, id_field, "MAR");
@@ -562,8 +565,8 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             if (version > PROTOCOL_VERSION) {
                 if (!BIT_IS_SET(router->sync_mask, ADDR_SYNC_ROUTER_VERSION_LOGGED)) {
                     BIT_SET(router->sync_mask, ADDR_SYNC_ROUTER_VERSION_LOGGED);
-                    qd_log(msync->log, QD_LOG_WARNING, "Received MAU at protocol version %"PRIu32" from %s.  Ignoring.",
-                           version, router_id);
+                    qd_log(LOG_ROUTER_MA, QD_LOG_WARNING,
+                           "Received MAU at protocol version %" PRIu32 " from %s.  Ignoring.", version, router_id);
                 }
                 return;
             }
@@ -583,7 +586,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                 || (!!del_field && !qd_parse_is_list(del_field))
                 || (!!exist_field && (!!add_field || !!del_field))
                 || (!exist_field && (!add_field || !del_field))) {
-                qd_log(msync->log, QD_LOG_ERROR, "Received malformed MAU from %s", router_id);
+                qd_log(LOG_ROUTER_MA, QD_LOG_ERROR, "Received malformed MAU from %s", router_id);
                 return;
             }
 
@@ -605,7 +608,7 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
             BIT_CLEAR(router->sync_mask, ADDR_SYNC_ROUTER_MA_REQUESTED);
             router->mobile_seq = mobile_seq;
 
-            qd_log(msync->log, QD_LOG_DEBUG, "Received MAU (%s) from %s, mobile_seq=%"PRIu64,
+            qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Received MAU (%s) from %s, mobile_seq=%" PRIu64,
                    !!exist_field ? "absolute" : "differential", router_id, mobile_seq);
 
             //
@@ -676,9 +679,10 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                             addr->cost_epoch--;
                             qdr_addr_start_inlinks_CT(msync->core, addr);
 
-                            qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' added to address '%s', treatment: %d",
-                            (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
-                            (const char*) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
+                            qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG,
+                                   "MAU: Router '%s' added to address '%s', treatment: %d",
+                                   (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                                   (const char *) qd_hash_key_by_handle(addr->hash_handle), addr->treatment);
 
                             qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_ADDED_REMOTE_DEST, addr);
                             qdr_trigger_address_watch_CT(msync->core, addr);
@@ -706,9 +710,9 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                             router->ref_count--;
                             addr->cost_epoch--;
 
-                            qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
-                            (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
-                            (const char*) qd_hash_key_by_handle(addr->hash_handle));
+                            qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
+                                   (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                                   (const char *) qd_hash_key_by_handle(addr->hash_handle));
 
                             qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST, addr);
                             qdr_trigger_address_watch_CT(msync->core, addr);
@@ -734,9 +738,9 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                         router->ref_count--;
                         addr->cost_epoch--;
 
-                        qd_log(msync->log, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
-                        (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
-                        (const char*) qd_hash_key_by_handle(addr->hash_handle));
+                        qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "MAU: Router '%s' removed from address '%s'",
+                               (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1,
+                               (const char *) qd_hash_key_by_handle(addr->hash_handle));
 
                         qdrc_event_addr_raise(msync->core, QDRC_EVENT_ADDR_REMOVED_REMOTE_DEST, addr);
                         qdr_trigger_address_watch_CT(msync->core, addr);
@@ -799,7 +803,8 @@ static void qcm_mobile_sync_on_became_local_dest_CT(qdrm_mobile_sync_t *msync, q
     if (!qcm_mobile_sync_addr_is_mobile(addr))
         return;
 
-    qd_log(msync->log, QD_LOG_DEBUG, "Became Local Dest: %s", (const char*) qd_hash_key_by_handle(addr->hash_handle));
+    qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Became Local Dest: %s",
+           (const char *) qd_hash_key_by_handle(addr->hash_handle));
 
     if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_ADD_LIST | ADDR_SYNC_ADDRESS_IN_UPDATE_LIST))
         return;
@@ -823,7 +828,8 @@ static void qcm_mobile_sync_on_no_longer_local_dest_CT(qdrm_mobile_sync_t *msync
     if (!qcm_mobile_sync_addr_is_mobile(addr))
         return;
 
-    qd_log(msync->log, QD_LOG_DEBUG, "No Longer Local Dest: %s", (const char*) qd_hash_key_by_handle(addr->hash_handle));
+    qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "No Longer Local Dest: %s",
+           (const char *) qd_hash_key_by_handle(addr->hash_handle));
 
     if (BIT_IS_SET(addr->sync_mask, ADDR_SYNC_ADDRESS_IN_DEL_LIST))
         return;
@@ -913,8 +919,8 @@ static void qcm_mobile_sync_on_router_advanced_CT(qdrm_mobile_sync_t *msync, qdr
     //
     // Trace log the activity of this sequence update.
     //
-    qd_log(msync->log, QD_LOG_DEBUG, "Send MAR request to router %s, have_seq=%"PRIu64", fanout=%d",
-           (const char*) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1, router->mobile_seq, fanout);
+    qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Send MAR request to router %s, have_seq=%" PRIu64 ", fanout=%d",
+           (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1, router->mobile_seq, fanout);
 }
 
 
@@ -1023,11 +1029,6 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
                                              QD_TREATMENT_MULTICAST_ONCE, true, false, qcm_mobile_sync_on_message_CT, msync);
     msync->message_sub2 = qdr_core_subscribe(core, "qdrouter.ma", 'T',
                                              QD_TREATMENT_MULTICAST_ONCE, true, false, qcm_mobile_sync_on_message_CT, msync);
-
-    //
-    // Create a log source for mobile address sync
-    //
-    msync->log = qd_log_source("ROUTER_MA");
 
     *module_context = msync;
 }

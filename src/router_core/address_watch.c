@@ -159,7 +159,7 @@ static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bo
                 DEQ_ITEM_INIT(addr);
                 DEQ_INSERT_TAIL(core->addrs, addr);
             } else {
-                qd_log(core->log, QD_LOG_CRITICAL, "Failed to create address for watch");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "Failed to create address for watch");
                 assert(false);
             }
         }

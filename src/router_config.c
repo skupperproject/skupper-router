@@ -61,13 +61,13 @@ qd_error_t qd_router_configure_address(qd_router_t *router, qd_entity_t *entity)
         prefix = qd_entity_opt_string(entity, "prefix", 0);
 
         if (prefix && pattern) {
-            qd_log(router->log_source, QD_LOG_WARNING,
+            qd_log(LOG_ROUTER, QD_LOG_WARNING,
                    "Cannot set both 'prefix' and 'pattern': ignoring"
                    " configured address %s, %s",
                    prefix, pattern);
             break;
         } else if (!prefix && !pattern) {
-            qd_log(router->log_source, QD_LOG_WARNING,
+            qd_log(LOG_ROUTER, QD_LOG_WARNING,
                    "Must set either 'prefix' or 'pattern' attribute:"
                    " ignoring configured address");
             break;

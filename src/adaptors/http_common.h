@@ -29,8 +29,6 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/timer.h"
 
-#define QD_HTTP_LOG_SOURCE "HTTP_ADAPTOR"
-
 typedef enum {
     HTTP1,
     HTTP2,

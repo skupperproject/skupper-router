@@ -481,7 +481,11 @@ void qdra_connection_get_CT(qdr_core_t    *core,
     if (!identity) {
         query->status = QD_AMQP_BAD_REQUEST;
         query->status.description = "Name not supported. Identity required";
-        qd_log(core->agent_log, QD_LOG_ERROR, "Error performing READ of %s: %s", CONNECTION_TYPE, query->status.description);
+        qd_log(LOG_AGENT,
+               QD_LOG_ERROR,
+               "Error performing READ of %s: %s",
+               CONNECTION_TYPE,
+               query->status.description);
     }
     else {
         conn = qdr_connection_find_by_identity_CT(core, identity);
@@ -524,7 +528,11 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
             // Inter-router and edge connections may not be force-closed
             if (conn->role != QDR_ROLE_INTER_ROUTER && conn->role != QDR_ROLE_EDGE_CONNECTION) {
                 qdr_close_connection_CT(core, conn);
-                qd_log(core->log, QD_LOG_INFO, "[C%"PRIu64"] Connection force-closed by request from connection [C%"PRIu64"]", conn->identity, query->in_conn);
+                qd_log(LOG_AGENT,
+                       QD_LOG_INFO,
+                       "[C%" PRIu64 "] Connection force-closed by request from connection [C%" PRIu64 "]",
+                       conn->identity,
+                       query->in_conn);
                 query->status = QD_AMQP_OK;
                 qdr_manage_write_connection_map_CT(core, conn, query->body, qdr_connection_columns);
             }

@@ -41,6 +41,7 @@
 #define TEXT_MAX QD_LOG_TEXT_MAX
 #define LOG_MAX (QD_LOG_TEXT_MAX+128)
 #define LIST_MAX 1000
+#define NUM_LOG_SOURCES 20
 
 const char *QD_LOG_STATS_TYPE = "logStats";
 
@@ -50,6 +51,11 @@ int qd_log_max_len(void)
 {
     return TEXT_MAX;
 }
+
+const char *log_module_names[] = {"ROUTER",      "ROUTER_CORE",  "ROUTER_HELLO", "ROUTER_LS",     "ROUTER_MA",
+                                  "MESSAGE",     "SERVER",       "AGENT",        "CONTAINER",     "ERROR",
+                                  "POLICY",      "HTTP",         "CONN_MGR",     "PYTHON",        "PROTOCOL",
+                                  "TCP_ADAPTOR", "HTTP_ADAPTOR", "FLOW_LOG",     "ADDRESS_WATCH", "DEFAULT"};
 
 typedef struct qd_log_entry_t qd_log_entry_t;
 
@@ -63,18 +69,23 @@ struct qd_log_entry_t {
     char            text[TEXT_MAX];
 };
 
+qd_log_source_t *log_sources[NUM_LOG_SOURCES] = {0};
+
 ALLOC_DECLARE(qd_log_entry_t);
 ALLOC_DEFINE(qd_log_entry_t);
 
 DEQ_DECLARE(qd_log_entry_t, qd_log_list_t);
 static qd_log_list_t         entries = {0};
 
-static void qd_log_entry_free_lh(qd_log_entry_t* entry) {
-    DEQ_REMOVE(entries, entry);
-    free(entry->file);
-    free(entry->module);
-    free_qd_log_entry_t(entry);
-}
+typedef enum { DEFAULT, NONE, TRACE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, N_LEVELS } level_index_t;
+#define MIN_VALID_LEVEL_INDEX TRACE
+#define MAX_VALID_LEVEL_INDEX CRITICAL
+#define N_LEVEL_INDICES       (MAX_VALID_LEVEL_INDEX - MIN_VALID_LEVEL_INDEX + 1)
+#define LEVEL_INDEX(LEVEL)    ((LEVEL) -TRACE)
+
+static const char *SINK_STDOUT = "stdout";
+static const char *SINK_STDERR = "stderr";
+static const char *SINK_SYSLOG = "syslog";
 
 // Ref-counted log sink, may be shared by several sources.
 typedef struct log_sink_t {
@@ -92,11 +103,69 @@ static log_sink_list_t sink_list = {0};
 const char *format = "%Y-%m-%d %H:%M:%S.%%06lu %z";
 bool utc = false;
 
+struct qd_log_source_t {
+    DEQ_LINKS(qd_log_source_t);
+    char       *module;
+    int         mask;
+    int         includeTimestamp; /* boolean or -1 means not set */
+    int         includeSource;    /* boolean or -1 means not set */
+    bool        syslog;
+    log_sink_t *sink;
+    uint64_t    severity_histogram[N_LEVEL_INDICES];
+};
+
+static sys_mutex_t log_source_lock;
+
+typedef struct level_t {
+    const char *name;
+    int         bit;   // QD_LOG bit
+    int         mask;  // Bit or higher
+    const int   syslog;
+} level_t;
+
+#define ALL_BITS (QD_LOG_CRITICAL | (QD_LOG_CRITICAL - 1))
+
+#define LEVEL(name, QD_LOG, SYSLOG)                    \
+    {                                                  \
+        name, QD_LOG, ALL_BITS & ~(QD_LOG - 1), SYSLOG \
+    }
+
+static level_t levels[] = {{"default", -1, -1, 0},
+                           {"none", 0, 0, 0},
+                           LEVEL("trace", QD_LOG_TRACE, LOG_DEBUG), /* syslog has no trace level */
+                           LEVEL("debug", QD_LOG_DEBUG, LOG_DEBUG),
+                           LEVEL("info", QD_LOG_INFO, LOG_INFO),
+                           LEVEL("notice", QD_LOG_NOTICE, LOG_NOTICE),
+                           LEVEL("warning", QD_LOG_WARNING, LOG_WARNING),
+                           LEVEL("error", QD_LOG_ERROR, LOG_ERR),
+                           LEVEL("critical", QD_LOG_CRITICAL, LOG_CRIT)};
+
+static const level_t invalid_level = {"invalid", -2, -2, 0};
+
+static char level_names[TEXT_MAX] = {0}; /* Set up in qd_log_initialize */
+
+qd_log_module_t get_log_module_from_module_name(char *module_name)
+{
+    for (int i = 0; i < NUM_LOG_SOURCES; i++) {
+        if (!strcmp(module_name, log_module_names[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void qd_log_entry_free_lh(qd_log_entry_t *entry)
+{
+    DEQ_REMOVE(entries, entry);
+    free(entry->file);
+    free(entry->module);
+    free_qd_log_entry_t(entry);
+}
+
 void qd_log_global_options(const char* _format, bool _utc) {
     if (_format) format = _format;
     utc = _utc;
 }
-
 
 void qd_log_formatted_time(struct timeval *time, char *buf, size_t buflen)
 {
@@ -106,12 +175,6 @@ void qd_log_formatted_time(struct timeval *time, char *buf, size_t buflen)
     strftime(fmt, sizeof fmt, format, tm_time);
     snprintf(buf, buflen, fmt, time->tv_usec);
 }
-
-
-static const char* SINK_STDOUT = "stdout";
-static const char* SINK_STDERR = "stderr";
-static const char* SINK_SYSLOG = "syslog";
-static const char* SOURCE_DEFAULT = "DEFAULT";
 
 static log_sink_t* find_log_sink_lh(const char* name) {
     log_sink_t* sink = DEQ_HEAD(sink_list);
@@ -179,57 +242,6 @@ static log_sink_t* log_sink_lh(const char* name) {
     return sink;
 }
 
-
-typedef enum {DEFAULT, NONE, TRACE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, N_LEVELS} level_index_t;
-#define MIN_VALID_LEVEL_INDEX TRACE
-#define MAX_VALID_LEVEL_INDEX CRITICAL
-#define N_LEVEL_INDICES (MAX_VALID_LEVEL_INDEX - MIN_VALID_LEVEL_INDEX + 1)
-#define LEVEL_INDEX(LEVEL) ((LEVEL) - TRACE)
-
-struct qd_log_source_t {
-    DEQ_LINKS(qd_log_source_t);
-    char *module;
-    int mask;
-    int includeTimestamp;       /* boolean or -1 means not set */
-    int includeSource;          /* boolean or -1 means not set */
-    bool syslog;
-    log_sink_t *sink;
-    uint64_t severity_histogram[N_LEVEL_INDICES];
-};
-
-DEQ_DECLARE(qd_log_source_t, qd_log_source_list_t);
-
-static sys_mutex_t           log_source_lock;
-static qd_log_source_list_t  source_list = {0};
-
-
-typedef struct level_t {
-    const char* name;
-    int bit;     // QD_LOG bit
-    int mask;    // Bit or higher
-    const int syslog;
-} level_t;
-
-#define ALL_BITS (QD_LOG_CRITICAL | (QD_LOG_CRITICAL-1))
-
-#define LEVEL(name, QD_LOG, SYSLOG) { name, QD_LOG,  ALL_BITS & ~(QD_LOG-1), SYSLOG }
-
-static level_t levels[] = {
-    {"default", -1, -1, 0},
-    {"none", 0, 0, 0},
-    LEVEL("trace",    QD_LOG_TRACE, LOG_DEBUG), /* syslog has no trace level */
-    LEVEL("debug",    QD_LOG_DEBUG, LOG_DEBUG),
-    LEVEL("info",     QD_LOG_INFO, LOG_INFO),
-    LEVEL("notice",   QD_LOG_NOTICE, LOG_NOTICE),
-    LEVEL("warning",  QD_LOG_WARNING, LOG_WARNING),
-    LEVEL("error",    QD_LOG_ERROR, LOG_ERR),
-    LEVEL("critical", QD_LOG_CRITICAL, LOG_CRIT)
-};
-
-static const level_t invalid_level = {"invalid", -2, -2, 0};
-
-static char level_names[TEXT_MAX] = {0}; /* Set up in qd_log_initialize */
-
 /// Return NULL and set qd_error if not a valid bit.
 static const level_t* level_for_bit(int bit) {
     level_index_t i = 0;
@@ -290,16 +302,6 @@ static int enable_mask(const char *enable_) {
     }
     free(enable);
     return mask;
-}
-
-/// Caller must hold log_source_lock
-static qd_log_source_t* lookup_log_source_lh(const char *module)
-{
-    if (strcasecmp(module, SOURCE_DEFAULT) == 0)
-        return default_log_source;
-    qd_log_source_t *src = DEQ_HEAD(source_list);
-    DEQ_FIND(src, strcasecmp(module, src->module) == 0);
-    return src;
 }
 
 static bool default_bool(int value, int default_value) {
@@ -363,23 +365,25 @@ static void qd_log_source_defaults(qd_log_source_t *log_source) {
 }
 
 /// Caller must hold the log_source_lock
-static qd_log_source_t *qd_log_source_lh(const char *module)
+static qd_log_source_t *qd_log_source_lh(qd_log_module_t module)
 {
-    qd_log_source_t *log_source = lookup_log_source_lh(module);
+    qd_log_source_t *log_source = log_sources[module];
+
     if (!log_source)
     {
         log_source = NEW(qd_log_source_t);
         ZERO(log_source);
-        log_source->module = (char*) malloc(strlen(module) + 1);
-        strcpy(log_source->module, module);
+        const char *module_name = log_module_names[module];
+        log_source->module      = (char *) malloc(strlen(module_name) + 1);
+        strcpy(log_source->module, module_name);
         qd_log_source_defaults(log_source);
-        DEQ_INSERT_TAIL(source_list, log_source);
+        log_sources[module] = log_source;
         qd_entity_cache_add(QD_LOG_STATS_TYPE, log_source);
     }
     return log_source;
 }
 
-qd_log_source_t *qd_log_source(const char *module)
+qd_log_source_t *qd_log_source(qd_log_module_t module)
 {
     sys_mutex_lock(&log_source_lock);
     qd_log_source_t* src = qd_log_source_lh(module);
@@ -387,7 +391,7 @@ qd_log_source_t *qd_log_source(const char *module)
     return src;
 }
 
-qd_log_source_t *qd_log_source_reset(const char *module)
+qd_log_source_t *qd_log_source_reset(qd_log_module_t module)
 {
     sys_mutex_lock(&log_source_lock);
     qd_log_source_t* src = qd_log_source_lh(module);
@@ -396,20 +400,40 @@ qd_log_source_t *qd_log_source_reset(const char *module)
     return src;
 }
 
-static void qd_log_source_free_lh(qd_log_source_t* src) {
-    DEQ_REMOVE(source_list, src);
-    log_sink_free_lh(src->sink);
-    free(src->module);
-    free(src);
+static void qd_log_source_free_lh(qd_log_module_t module)
+{
+    qd_log_source_t *src = log_sources[module];
+    if (src) {
+        log_sink_free_lh(src->sink);
+        free(src->module);
+        free(src);
+        log_sources[module] = 0;
+    }
 }
 
-bool qd_log_enabled(qd_log_source_t *source, qd_log_level_t level) {
+bool qd_log_enabled(qd_log_module_t module, qd_log_level_t level)
+{
+    qd_log_source_t *source = qd_log_source(module);
     if (!source) return false;
     int mask = source->mask == -1 ? default_log_source->mask : source->mask;
     return level & mask;
 }
 
-void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_level, const char *file, int line, const char *fmt, va_list ap)
+bool log_enabled_lh(qd_log_source_t *source, qd_log_level_t level)
+{
+    if (!source)
+        return false;
+    int mask = source->mask == -1 ? default_log_source->mask : source->mask;
+    return level & mask;
+}
+
+void qd_vlog_impl(qd_log_module_t module,
+                  qd_log_level_t  level,
+                  bool            check_level,
+                  const char     *file,
+                  int             line,
+                  const char     *fmt,
+                  va_list         ap)
 {
     /*-----------------------------------------------
       Count this log-event in this log's histogram
@@ -417,6 +441,7 @@ void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_leve
       We can always decide not to look at it later,
       based on its used/unused status.
     -----------------------------------------------*/
+    qd_log_source_t *source      = qd_log_source(module);
     int level_index = level_index_for_bit(level);
     if (level_index < 0)
         qd_error_clear();
@@ -424,7 +449,7 @@ void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_leve
         source->severity_histogram[level_index]++;
 
     if (check_level) {
-        if (!qd_log_enabled(source, level))
+        if (!qd_log_enabled(module, level))
             return;
     }
 
@@ -451,20 +476,20 @@ void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_leve
     sys_mutex_unlock(&log_source_lock);
 }
 
-void qd_log_impl_v1(qd_log_source_t *source, qd_log_level_t level,  const char *file, int line, const char *fmt, ...)
+void qd_log_impl_v1(qd_log_module_t module, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    qd_vlog_impl(source, level, false, file, line, fmt, ap);
+    qd_vlog_impl(module, level, false, file, line, fmt, ap);
     va_end(ap);
 }
 
-void qd_log_impl(qd_log_source_t *source, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
+void qd_log_impl(qd_log_module_t module, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
 {
-  va_list ap;
-  va_start(ap, fmt);
-  qd_vlog_impl(source, level, true, file, line, fmt, ap);
-  va_end(ap);
+    va_list ap;
+    va_start(ap, fmt);
+    qd_vlog_impl(module, level, true, file, line, fmt, ap);
+    va_end(ap);
 }
 
 static PyObject *inc_none(void)
@@ -510,7 +535,6 @@ QD_EXPORT PyObject *qd_log_recent_py(long limit) {
 void qd_log_initialize(void)
 {
     DEQ_INIT(entries);
-    DEQ_INIT(source_list);
     DEQ_INIT(sink_list);
 
     // Set up level_names for use in error messages.
@@ -521,7 +545,7 @@ void qd_log_initialize(void)
 
     sys_mutex_init(&log_source_lock);
 
-    default_log_source = qd_log_source(SOURCE_DEFAULT);
+    default_log_source                   = qd_log_source(LOG_DEFAULT);
     default_log_source->mask = levels[INFO].mask;
     default_log_source->includeTimestamp = true;
     default_log_source->includeSource = 0;
@@ -530,8 +554,8 @@ void qd_log_initialize(void)
 
 
 void qd_log_finalize(void) {
-    while (DEQ_HEAD(source_list))
-        qd_log_source_free_lh(DEQ_HEAD(source_list));
+    for (int i = 0; i < NUM_LOG_SOURCES; i++)
+        qd_log_source_free_lh(i);
     while (DEQ_HEAD(entries))
         qd_log_entry_free_lh(DEQ_HEAD(entries));
     while (DEQ_HEAD(sink_list))
@@ -606,7 +630,8 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
         //
         sys_mutex_lock(&log_source_lock);
 
-        qd_log_source_t *src = qd_log_source_lh(module); /* The original(already existing) log source */
+        qd_log_module_t  log_module = get_log_module_from_module_name(module);
+        qd_log_source_t *src        = qd_log_source_lh(log_module);
 
         if (has_output_file) {
             log_sink_t* sink = log_sink_lh(outputFile);
@@ -643,7 +668,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
                 src->mask = mask;
             }
 
-            if (qd_log_enabled(src, QD_LOG_TRACE)) {
+            if (log_enabled_lh(src, QD_LOG_TRACE)) {
                 trace_enabled = true;
             }
         }

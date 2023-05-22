@@ -138,7 +138,6 @@ typedef struct {
     char                *event_address_my_flow;
     char                *command_address;
     bool                 sleeping;
-    qd_log_source_t     *log;
     vflow_work_list_t    work_list;
     vflow_record_t      *local_router;
     char                *local_router_id;
@@ -771,7 +770,7 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
     }
 
     record->never_logged = false;
-    qd_log(state->log, QD_LOG_INFO, "%s", line);
+    qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "%s", line);
 }
 
 
@@ -1155,14 +1154,14 @@ static void _vflow_all_address_status_TH(vflow_work_t *work, bool discard)
         //
         // Start sending beacon messages to the all_address.
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collector detected.  Begin sending beacons.");
         state->all_address_usable = true;
         _vflow_send_heartbeat();
     } else if (!now_usable && state->all_address_usable) {
         //
         // Stop sending beacons.  Nobody is listening.
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collector lost.  Stop sending beacons.");
         state->all_address_usable = false;
         if (!!state->heartbeat_timer) {
             qd_timer_cancel(state->heartbeat_timer);
@@ -1182,13 +1181,14 @@ static void _vflow_my_address_status_TH(vflow_work_t *work, bool discard)
         //
         // Start sending log records
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collector for this router detected.  Begin sending flow events.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO,
+               "Event collector for this router detected.  Begin sending flow events.");
         state->my_address_usable = true;
     } else if (!now_usable && state->my_address_usable) {
         //
         // Stop sending log records
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collector for this router lost.  Stop sending flow events.");
         state->my_address_usable = false;
     }
 }
@@ -1205,13 +1205,13 @@ static void _vflow_my_flow_address_status_TH(vflow_work_t *work, bool discard)
         //
         // Start sending log records
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collection for flow events detected.  Begin sending flow events.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for flow events detected.  Begin sending flow events.");
         state->my_flow_address_usable = true;
     } else if (!now_usable && state->my_flow_address_usable) {
         //
         // Stop sending log records
         //
-        qd_log(state->log, QD_LOG_INFO, "Event collection for flow events ended.  Stop sending flow events.");
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for flow events ended.  Stop sending flow events.");
         state->my_flow_address_usable = false;
     }
 }
@@ -1233,7 +1233,7 @@ static void *_vflow_thread_TH(void *context)
     vflow_work_list_t local_work_list = DEQ_EMPTY;
     qdr_core_t *core = (qdr_core_t*) context;
 
-    qd_log(state->log, QD_LOG_INFO, "Protocol logging started");
+    qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Protocol logging started");
 
     while (running) {
         //
@@ -1287,7 +1287,7 @@ static void *_vflow_thread_TH(void *context)
     //
     _vflow_free_record_TH(state->local_router, true);
 
-    qd_log(state->log, QD_LOG_INFO, "Protocol logging completed");
+    qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Protocol logging completed");
     return 0;
 }
 
@@ -1435,7 +1435,7 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
             _vflow_post_work(work);
         } else {
             free_vflow_work_t(work);
-            qd_log(state->log, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
+            qd_log(LOG_FLOW_LOG, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
         }
     }
 }
@@ -1560,7 +1560,7 @@ static uint64_t _vflow_on_message(void                    *context,
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
         if (!!subject_iter) {
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
-                qd_log(state->log, QD_LOG_INFO, "FLUSH request received");
+                qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
             }
             qd_iterator_free(subject_iter);
@@ -1646,7 +1646,6 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
         DEQ_INIT(state->unflushed_nonflow_records[slot]);
     }
 
-    state->log       = qd_log_source("FLOW_LOG");
     sys_mutex_init(&state->lock);
     sys_mutex_init(&state->id_lock);
     sys_cond_init(&state->condition);

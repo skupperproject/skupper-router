@@ -37,48 +37,83 @@ typedef enum {
     QD_LOG_CRITICAL =0x40, ///< Critical error, data loss or process shut-down.
 } qd_log_level_t;
 
+/** Logging modules */
+typedef enum {
+    LOG_ROUTER,
+    LOG_ROUTER_CORE,
+    LOG_ROUTER_HELLO,
+    LOG_ROUTER_LS,
+    LOG_ROUTER_MA,
+    LOG_MESSAGE,
+    LOG_SERVER,
+    LOG_AGENT,
+    LOG_CONTAINER,
+    LOG_ERROR,
+    LOG_POLICY,
+    LOG_HTTP,
+    LOG_CONN_MGR,
+    LOG_PYTHON,
+    LOG_PROTOCOL,
+    LOG_TCP_ADAPTOR,
+    LOG_HTTP_ADAPTOR,
+    LOG_FLOW_LOG,
+    LOG_ADDRESS_WATCH,
+    LOG_DEFAULT
+} qd_log_module_t;
+
 typedef struct qd_log_source_t qd_log_source_t;
 
-qd_log_source_t* qd_log_source(const char *module);
+/**
+ * Get the log module from module name.
+ *
+ * @param module_name whose corresponding log module is required.
+ */
+qd_log_module_t get_log_module_from_module_name(char *module_name);
 
+/**
+ * Get the log source record from the passed in log module.
+ *
+ * @param qd_log_module_t module - the log module whose log source is required.
+ */
+qd_log_source_t *qd_log_source(qd_log_module_t module);
+
+bool qd_log_enabled(qd_log_module_t module, qd_log_level_t level);
 /**@internal*/
-bool qd_log_enabled(qd_log_source_t *source, qd_log_level_t level);
-/**@internal*/
-void qd_log_impl(qd_log_source_t *source, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
+void qd_log_impl(qd_log_module_t module, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
     __attribute__((format(printf, 5, 6)));
 
 /**
  * Another version of the qd_log_impl function. This function unconditionally writes the the message to the log file.
  * It does not check to see if the passed in log level is enabled.
  */
-void qd_log_impl_v1(qd_log_source_t *source, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
+void qd_log_impl_v1(qd_log_module_t module, qd_log_level_t level, const char *file, int line, const char *fmt, ...)
     __attribute__((format(printf, 5, 6)));
-void qd_vlog_impl(qd_log_source_t *source, qd_log_level_t level, bool check_level, const char *file, int line, const char *fmt, va_list ap)
-    __attribute__((format(printf, 6, 0)));
+void qd_vlog_impl(qd_log_module_t module, qd_log_level_t level, bool check_level, const char *file, int line,
+                  const char *fmt, va_list ap) __attribute__((format(printf, 6, 0)));
 
 /** Log a message
  * Note: does not evaluate the format args unless the log message is enabled.
- * @param source qd_log_source_t* source of log message.
+ * @param module qd_log_module_t module of log message.
  * @param level qd_log_level_t log level of message.
  * @param ... printf style format string and arguments.
  */
-#define qd_log(source, level, ...)                                      \
-    do {                                                                \
-        if (qd_log_enabled(source, level))                              \
-            qd_log_impl(source, level, __FILE__, __LINE__, __VA_ARGS__); \
-    } while(0)
+#define qd_log(module, level, ...)                                       \
+    do {                                                                 \
+        if (qd_log_enabled(module, level))                               \
+            qd_log_impl(module, level, __FILE__, __LINE__, __VA_ARGS__); \
+    } while (0)
 
 /** Log a message, using a va_list.
  * Note: does not evaluate the format args unless the log message is enabled.
- * @param source qd_log_source_t* source of log message.
+ * @param module qd_log_module_t module of log message..
  * @param level qd_log_level_t log level of message.
  * @param ap va_list argument pack.
  */
-#define qd_vlog(source, level, fmt, ap)                                 \
-    do {                                                                \
-        if (qd_log_enabled(source, level))                              \
-            qd_vlog_impl(source, level, true, __FILE__, __LINE__, fmt, ap);   \
-    } while(0)
+#define qd_vlog(module, level, fmt, ap)                                     \
+    do {                                                                    \
+        if (qd_log_enabled(module, level))                                  \
+            qd_vlog_impl(module, level, true, __FILE__, __LINE__, fmt, ap); \
+    } while (0)
 
 /** Maximum length for a log message */
 int qd_log_max_len(void);

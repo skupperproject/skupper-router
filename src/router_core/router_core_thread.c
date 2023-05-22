@@ -130,9 +130,9 @@ void qdr_modules_init(qdr_core_t *core)
         module->enabled = module->enable(core);
         if (module->enabled) {
             module->on_init(core, &module->context);
-            qd_log(core->log, QD_LOG_INFO, "Core module enabled: %s", module->name);
+            qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Core module enabled: %s", module->name);
         } else
-            qd_log(core->log, QD_LOG_INFO, "Core module present but disabled: %s", module->name);
+            qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Core module present but disabled: %s", module->name);
 
         module = DEQ_NEXT(module);
     }
@@ -147,7 +147,7 @@ void qdr_modules_finalize(qdr_core_t *core)
     qdrc_module_t *module = DEQ_TAIL(registered_modules);
     while (module) {
         if (module->enabled) {
-            qd_log(core->log, QD_LOG_INFO, "Finalizing core module: %s", module->name);
+            qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Finalizing core module: %s", module->name);
             module->on_final(module->context);
         }
         module = DEQ_PREV(module);
@@ -196,7 +196,8 @@ void *router_core_thread(void *arg)
     qdr_action_list_t  action_list = DEQ_EMPTY;
     qdr_action_t      *bg_action = 0;
 
-    qd_log(core->log, QD_LOG_INFO, "Router Core thread running. %s/%s", core->router_area, core->router_id);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Router Core thread running. %s/%s", core->router_area,
+           core->router_id);
     while (core->running) {
         //
         // Use the lock only to protect the condition variable and the action lists
@@ -234,7 +235,8 @@ void *router_core_thread(void *arg)
         //
         if (bg_action) {
             if (bg_action->label)
-                qd_log(core->log, QD_LOG_TRACE, "Core background action '%s'%s", bg_action->label, core->running ? "" : " (discard)");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, "Core background action '%s'%s", bg_action->label,
+                       core->running ? "" : " (discard)");
             bg_action->action_handler(core, bg_action, !core->running);
             free_qdr_action_t(bg_action);
             bg_action = 0;
@@ -248,7 +250,8 @@ void *router_core_thread(void *arg)
         while (action) {
             DEQ_REMOVE_HEAD(action_list);
             if (action->label)
-                qd_log(core->log, QD_LOG_TRACE, "Core action '%s'%s", action->label, core->running ? "" : " (discard)");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, "Core action '%s'%s", action->label,
+                       core->running ? "" : " (discard)");
             action->action_handler(core, action, !core->running);
             free_qdr_action_t(action);
             action = DEQ_HEAD(action_list);
@@ -269,6 +272,6 @@ void *router_core_thread(void *arg)
         }
     }
 
-    qd_log(core->log, QD_LOG_INFO, "Router Core thread exited");
+    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Router Core thread exited");
     return 0;
 }

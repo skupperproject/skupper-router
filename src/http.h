@@ -29,7 +29,7 @@ struct qd_listener_t;
 struct qd_log_source_t;
 
 /* Create a HTTP server */
-qd_http_server_t *qd_http_server(struct qd_server_t *server, struct qd_log_source_t *log);
+qd_http_server_t *qd_http_server(struct qd_server_t *server);
 
 /* Stop the HTTP server threads */
 void qd_http_server_stop(qd_http_server_t*);

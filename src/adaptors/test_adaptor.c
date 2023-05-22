@@ -40,7 +40,6 @@ static const char *address_fmt = "addr_watch/test_address/%d";
 static qdr_watch_handle_t handle[ADDRESS_COUNT];
 
 static qdr_core_t           *core_ptr        = 0;
-static qd_log_source_t      *log_source      = 0;
 static qdr_subscription_t   *subscription    = 0;
 static dynamic_watch_list_t  dynamic_watches = DEQ_EMPTY;
 
@@ -50,8 +49,9 @@ static void on_watch(void     *context,
                      uint32_t  remote_consumers,
                      uint32_t  local_producers)
 {
-    qd_log(log_source, QD_LOG_INFO, "on_watch(%ld): loc: %"PRIu32" rem: %"PRIu32" prod: %"PRIu32"",
-           (long) context, local_consumers, remote_consumers, local_producers);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO,
+           "on_watch(%ld): loc: %" PRIu32 " rem: %" PRIu32 " prod: %" PRIu32 "", (long) context, local_consumers,
+           remote_consumers, local_producers);
 }
 
 
@@ -63,8 +63,9 @@ static void on_dynamic_watch(void     *context,
 {
     dynamic_watch_t *dw = (dynamic_watch_t*) context;
 
-    qd_log(log_source, QD_LOG_INFO, "On Dynamic Watch: %s loc: %"PRIu32" rem: %"PRIu32" prod: %"PRIu32,
-           dw->address, local_consumers, remote_consumers, local_producers);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO,
+           "On Dynamic Watch: %s loc: %" PRIu32 " rem: %" PRIu32 " prod: %" PRIu32, dw->address, local_consumers,
+           remote_consumers, local_producers);
 
     qd_composed_field_t *field = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, 0);
     qd_compose_start_map(field);
@@ -112,7 +113,7 @@ static void remove_dynamic_watch(dynamic_watch_t *dw)
 
 static void start_watch(const char *address)
 {
-    qd_log(log_source, QD_LOG_INFO, "Start Watch: %s", address);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO, "Start Watch: %s", address);
 
     dynamic_watch_t *dw = NEW(dynamic_watch_t);
     DEQ_ITEM_INIT(dw);
@@ -125,7 +126,7 @@ static void start_watch(const char *address)
 
 static void stop_watch(const char *address)
 {
-    qd_log(log_source, QD_LOG_INFO, "Stop Watch: %s", address);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO, "Stop Watch: %s", address);
 
     dynamic_watch_t *dw = DEQ_HEAD(dynamic_watches);
     while (!!dw) {
@@ -173,7 +174,6 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
     core_ptr = core;
     if (qdr_core_test_hooks_enabled(core)) {
-        log_source = qd_log_source("ADDRESS_WATCH");
         char address[100];
         for (long index = 0; index < ADDRESS_COUNT; index++) {
             sprintf(address, address_fmt, index);
