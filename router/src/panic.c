@@ -101,7 +101,7 @@ static void lib_map_init(void)
         int rc = dlinfo(handle, RTLD_DI_LINKMAP, &map);
         if (rc == 0) {
             while (map) {
-                assert(mem_map_count < MAX_MAP_ENTIRIES);  // update MAX_MAP_ENTRIES, too small!
+                assert(mem_map_count < MAX_MAP_ENTRIES);  // update MAX_MAP_ENTRIES, too small!
 
                 mem_map_t *entry = &mem_map[mem_map_count++];
 
@@ -136,7 +136,6 @@ void panic_handler_init(void)
     if (getenv("SKUPPER_ROUTER_DISABLE_PANIC_HANDLER") == 0) {
         lib_map_init();
         struct sigaction sa = {
-            // use SA_RESETHAND since if the stack unwind fails the default signal handler (coredump) will be invoked
             .sa_flags     = SA_SIGINFO | SA_RESETHAND,
             .sa_sigaction = panic_signal_handler,
         };
