@@ -42,6 +42,7 @@
 %global proton_minimum_version 0.34.0
 %global libwebsockets_minimum_version 3.0.1
 %global libnghttp2_minimum_version 1.33.0
+%global libunwind_minimum_version 1.3.1
 
 Name:          skupper-router
 Version:       {{{ git_dir_version }}}
@@ -57,6 +58,7 @@ Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
 Requires: cyrus-sasl-gssapi
+Requires: libunwind >= %{libunwind_minimum_version}
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
@@ -67,6 +69,7 @@ BuildRequires: python3-devel
 BuildRequires: python3-setuptools
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
+BuildRequires: libunwind-devel >= %{libunwind_minimum_version}
 # man pages --help
 BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}

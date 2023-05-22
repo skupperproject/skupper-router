@@ -30,9 +30,11 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 ##
 set(router_SOURCES
     src/main.c
+    src/panic.c
     )
 
 add_executable(skrouterd ${router_SOURCES})
 target_link_libraries(skrouterd skupper-router)
+target_link_options(skrouterd PUBLIC LINKER:-Map=skrouterd.map)
 
 install(TARGETS skrouterd RUNTIME DESTINATION sbin)

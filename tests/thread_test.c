@@ -36,13 +36,17 @@ static sys_cond_t    cond;
 
 static char         *result;
 
+#define THREAD_NAME_FMT "thrd %hu"
 
-// for test_thread_id
+// for test_thread_id. Note well: never set result to zero here or you'll lose the test failures!
 //
 void *thread_id_thread(void *arg)
 {
     intptr_t index = (intptr_t) arg;
     assert(index < thread_count);
+
+    char expected_name[16];
+    snprintf(expected_name, 16, THREAD_NAME_FMT, (unsigned short) index);
 
     sys_mutex_lock(&mutex);
 
@@ -51,6 +55,8 @@ void *thread_id_thread(void *arg)
         result = "sys_thread_self returned zero!";
     } else if (threads[index] != sys_thread_self()) {
         result = "sys_thread_self mismatch";
+    } else if (strcmp(sys_thread_name(0), expected_name) != 0) {
+        result = "sys_thread_name mismatch";
     }
 
     sys_mutex_unlock(&mutex);
@@ -72,7 +78,7 @@ static char *test_thread_id(void *context)
     memset(threads, 0, sizeof(threads));
     for (intptr_t i = 0; i < thread_count; ++i) {
         char thread_name[16];
-        snprintf(thread_name, sizeof(thread_name), "tst_thrd %ld", i);
+        snprintf(thread_name, sizeof(thread_name), THREAD_NAME_FMT, (unsigned short) i);
         threads[i] = sys_thread(thread_name, thread_id_thread, (void *)i);
     }
 
@@ -82,6 +88,9 @@ static char *test_thread_id(void *context)
         sys_thread_join(threads[i]);
         sys_thread_free(threads[i]);
     }
+
+    if (result)
+        return result;
 
     //
     // test calling sys_thread_self() from the main context.  This context

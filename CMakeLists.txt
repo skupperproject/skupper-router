@@ -151,6 +151,7 @@ find_package(LibWebSockets 4.0.1 REQUIRED)
 ##
 
 find_library(dw_lib dw DOC "libdw used to symbolize QD_MEMORY_DEBUG backtraces")
+find_package(libunwind)
 
 # google benchmark tests are disabled by default
 OPTION(BUILD_BENCHMARKS "Enable building and running benchmarks with Google Benchmark" OFF)
