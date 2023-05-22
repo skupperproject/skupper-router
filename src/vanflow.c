@@ -154,9 +154,11 @@ typedef struct {
     const char          *router_name;
     qdr_watch_handle_t   all_address_watch_handle;
     qdr_watch_handle_t   my_address_watch_handle;
+    qdr_watch_handle_t   my_flow_address_watch_handle;
     qdr_subscription_t  *command_subscription;
     bool                 all_address_usable;
     bool                 my_address_usable;
+    bool                 my_flow_address_usable;
     qd_timer_t          *heartbeat_timer;
     qd_timer_t          *flush_timer;
     uint64_t             next_message_id;
@@ -797,7 +799,11 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_li
             qd_compose_start_list(field);
             qd_compose_insert_long(field, state->next_message_id++);
             qd_compose_insert_null(field);                             // user-id
-            qd_compose_insert_string(field, state->event_address_my);  // to
+            if (nonflow) {                                             // to
+                qd_compose_insert_string(field, state->event_address_my);
+            } else {
+                qd_compose_insert_string(field, state->event_address_my_flow);
+            }
             qd_compose_insert_string(field, "RECORD");                 // subject
             qd_compose_end_list(field);
 
@@ -919,6 +925,9 @@ static void _vflow_flush_TH(qdr_core_t *core)
     //
     if (state->my_address_usable) {
         _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_nonflow_records[state->current_flush_slot], true);
+    }
+
+    if (state->my_flow_address_usable) {
         _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_flow_records[state->current_flush_slot], false);
     }
 
@@ -1185,6 +1194,29 @@ static void _vflow_my_address_status_TH(vflow_work_t *work, bool discard)
 }
 
 
+static void _vflow_my_flow_address_status_TH(vflow_work_t *work, bool discard)
+{
+    if (discard) {
+        return;
+    }
+
+    bool now_usable = work->value.bool_val;
+    if (now_usable && !state->my_flow_address_usable) {
+        //
+        // Start sending log records
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collection for flow events detected.  Begin sending flow events.");
+        state->my_flow_address_usable = true;
+    } else if (!now_usable && state->my_flow_address_usable) {
+        //
+        // Stop sending log records
+        //
+        qd_log(state->log, QD_LOG_INFO, "Event collection for flow events ended.  Stop sending flow events.");
+        state->my_flow_address_usable = false;
+    }
+}
+
+
 //=====================================================================================
 // Module Thread
 //=====================================================================================
@@ -1305,7 +1337,18 @@ static void _vflow_on_my_address_watch(void     *context,
     vflow_work_t *work = _vflow_work(_vflow_my_address_status_TH);
     work->value.bool_val = local_consumers > 0 || remote_consumers > 0;
     _vflow_post_work(work);
+}
 
+
+static void _vflow_on_my_flow_address_watch(void     *context,
+                                            uint32_t  local_consumers,
+                                            uint32_t  in_proc_consumers,
+                                            uint32_t  remote_consumers,
+                                            uint32_t  local_producers)
+{
+    vflow_work_t *work = _vflow_work(_vflow_my_flow_address_status_TH);
+    work->value.bool_val = local_consumers > 0 || remote_consumers > 0;
+    _vflow_post_work(work);
 }
 
 
@@ -1548,6 +1591,8 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
         state->my_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my,  'M',
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
+        state->my_flow_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my_flow,  'M',
+                                                                 QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_flow_address_watch, 0, core);
 
         state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_message, core);
     }
