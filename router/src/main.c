@@ -39,6 +39,9 @@ static qd_dispatch_t *dispatch = 0;
 static qd_log_source_t *log_source = 0;
 static const char* argv0 = 0;
 
+// Install the panic handler for fatal signals. see panic.c
+extern void panic_handler_init(void);
+
 /**
  * Configures the handler function. Specify SIG_IGN to ignore incoming signals.
  */
@@ -91,6 +94,7 @@ static void check(int fd) {
 
 static void main_process(const char *config_path, const char *python_pkgdir, bool test_hooks, int fd)
 {
+    panic_handler_init();
     dispatch = qd_dispatch(python_pkgdir, test_hooks);
     check(fd);
     log_source = qd_log_source("MAIN"); /* Logging is initialized by qd_dispatch. */

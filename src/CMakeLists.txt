@@ -174,6 +174,12 @@ endif()
 
 add_library(skupper-router OBJECT ${qpid_dispatch_SOURCES})
 target_include_directories(skupper-router PRIVATE ${qpid_dispatch_INCLUDES})
+
+if (LIBUNWIND_LIBRARY AND LIBUNWIND_INCLUDE_DIRS)
+  set(qpid_dispatch_LIBRARIES ${qpid_dispatch_LIBRARIES} ${LIBUNWIND_LIBRARY})
+  target_compile_definitions(skupper-router PUBLIC "HAVE_LIBUNWIND")
+endif()
+
 target_link_libraries(skupper-router PRIVATE ${qpid_dispatch_LIBRARIES})
 
 # check for various function availability
