@@ -89,6 +89,7 @@ env_vars = {
     # https://pythonextensionpatterns.readthedocs.io/en/latest/debugging/debug_tools.html
     'PYTHONMALLOC': 'malloc_debug',
     'PYTHONDEVMODE': '1',
+    'QPID_RUNTIME_CHECK': "${RUNTIME_CHECK}",
     'TSAN_OPTIONS': "${RUNTIME_TSAN_ENV_OPTIONS}",
     'ASAN_OPTIONS': "${RUNTIME_ASAN_ENV_OPTIONS}",
     'LSAN_OPTIONS': "${RUNTIME_LSAN_ENV_OPTIONS}",

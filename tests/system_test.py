@@ -367,16 +367,28 @@ class Process(subprocess.Popen):
         self._logger = Logger(title="Process logger for name=%s" % self.name,
                               print_to_console=True)
         kwargs.setdefault('stdin', subprocess.PIPE)
-        with open(self.outfile + '.out', 'w') as out:
+        with open(self.outfile_path, 'w') as out:
             kwargs.setdefault('stdout', out)
             kwargs.setdefault('stderr', subprocess.STDOUT)
             try:
                 super(Process, self).__init__(args, **kwargs)
-                with open(self.outfile + '.cmd', 'w') as f:
+                with open(self.cmdfile_path, 'w') as f:
                     f.write("%s\npid=%s\n" % (' '.join(args), self.pid))
             except Exception as e:
                 raise Exception("subprocess.Popen(%s, %s) failed: %s: %s" %
                                 (args, kwargs, type(e).__name__, e))
+
+    @property
+    def outfile_path(self):
+        """Path to the file containing the process output (stdout+stderr)"""
+        assert self.outfile
+        return self.outfile + ".out"
+
+    @property
+    def cmdfile_path(self):
+        """Path to the file containing the process command line"""
+        assert self.outfile
+        return self.outfile + ".cmd"
 
     def assert_running(self):
         """Assert that the process is still running"""
@@ -389,10 +401,10 @@ class Process(subprocess.Popen):
         self.torndown = True
 
         def error(msg):
-            with open(self.outfile + '.out') as f:
+            with open(self.outfile_path) as f:
                 raise RuntimeError("Process %s (name=%s) error: %s\n%s\n%s\n>>>>\n%s<<<<" % (
                     self.pid, self.name, msg, ' '.join(self.args),
-                    self.outfile + '.cmd', f.read()))
+                    self.cmdfile_path, f.read()))
 
         state = self.poll()
         if state is None:
@@ -441,9 +453,7 @@ class Process(subprocess.Popen):
         :param pattern: The pattern to look for in the process's out file.
         :param retry_kwargs: Retry arguments
         """
-        outfile_path = self.outfile + ".out"
-        assert outfile_path
-        wait_message(pattern, outfile_path, **retry_kwargs)
+        wait_message(pattern, self.outfile_path, **retry_kwargs)
 
 
 class Config:
@@ -774,7 +784,7 @@ class Qdrouterd(Process):
                 # TestCase setUpClass method) that gets cleaned up by the test.
                 pass
 
-        check_output_file(filename=self.outfile + '.out', description="output file")
+        check_output_file(filename=self.outfile_path, description="output file")
         check_output_file(filename=self.dumpfile, description="debug dump file")
 
         if teardown_exc:
@@ -794,8 +804,8 @@ class Qdrouterd(Process):
                 return out
 
             try:
-                for fname in [("output", self.outfile + '.out'),
-                              ("command", self.outfile + '.cmd')]:
+                for fname in [("output", self.outfile_path),
+                              ("command", self.cmdfile_path)]:
                     with open(fname[1]) as f:
                         sys.stderr.write("\nRouter %s %s file:\n>>>>\n" %
                                          (self.config.router_id, fname[0]))
@@ -805,7 +815,7 @@ class Qdrouterd(Process):
                 if self.logfile:
                     sys.stderr.write("\nRouter %s log file tail:\n>>>>\n" %
                                      self.config.router_id)
-                    tail = tail_file(os.path.join(self.outdir, self.logfile))
+                    tail = tail_file(self.logfile_path)
                     for ln in tail:
                         sys.stderr.write("%s" % ln)
                     sys.stderr.write("\n<<<<\n")
@@ -981,7 +991,7 @@ class Qdrouterd(Process):
         """
         # system_tests_log_level_update filters SERVER module logs to a
         # separate file
-        logfile_path = None
+        logfile_path = self.logfile_path
         for log in self.config.sections('log'):
             if log['module'] == 'SERVER':
                 logfile_path = os.path.join(self.outdir, log.get('outputFile'))

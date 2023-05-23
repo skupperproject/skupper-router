@@ -177,6 +177,7 @@ foreach(py_test_module
     system_tests_router_annotations
     system_tests_vflow
     system_tests_expandvars
+    system_tests_panic_handler
     )
 
   string(CONFIGURE "${PYTHON_TEST_COMMAND}" CONFIGURED_PYTHON_TEST_COMMAND)
