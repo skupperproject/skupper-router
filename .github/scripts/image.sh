@@ -19,10 +19,10 @@
 
 set -exo pipefail
 
-DOCKER=docker
+CONTAINER=podman
 PROJECT_NAME=skupper-router
-DOCKER_REGISTRY=quay.io
-DOCKER_ORG=skupper
+CONTAINER_REGISTRY=quay.io
+CONTAINER_ORG=skupper
 
 # If PROJECT_TAG is not defined set PROJECT_TAG to main
 if [ -z "$PROJECT_TAG" ]; then
@@ -32,13 +32,13 @@ fi
 # Building the skupper-router image
 # Pass the VERSION as a build argument so Containerfile can use it when calling compile.sh
 # This version is passed in as a -DVERSION build parameter when building skupper-router.
-${DOCKER} build --build-arg VERSION=$VERSION -t ${PROJECT_NAME}:${PROJECT_TAG}  -f ./Containerfile .
+${CONTAINER} build --build-arg VERSION=$VERSION -t ${PROJECT_NAME}:${PROJECT_TAG}  -f ./Containerfile .
 
 # Pushing only when credentials available
-if [[ -n "${DOCKER_USER}" && -n "${DOCKER_PASSWORD}" ]]; then
-    ${DOCKER} login -u ${DOCKER_USER} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
-    ${DOCKER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
-    ${DOCKER} push ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
+if [[ -n "${CONTAINER_USER}" && -n "${CONTAINER_PASSWORD}" ]]; then
+    ${CONTAINER} login -u ${CONTAINER_USER} -p ${CONTAINER_PASSWORD} ${CONTAINER_REGISTRY}
+    ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
+    ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
 
     # PUSH_LATEST environment variable is exported only in release.yml
     # Only when an actual release tag (for e.g. 2.1.0) is pushed, we push the :latest.
@@ -48,7 +48,7 @@ if [[ -n "${DOCKER_USER}" && -n "${DOCKER_PASSWORD}" ]]; then
          echo 'NOT Pushing :latest tag'
     else
         echo 'Pushing :latest tag'
-        ${DOCKER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:latest
-        ${DOCKER} push ${DOCKER_REGISTRY}/${DOCKER_ORG}/${PROJECT_NAME}:latest
+        ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:latest
+        ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:latest
     fi
 fi
