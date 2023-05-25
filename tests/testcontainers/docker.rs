@@ -33,6 +33,9 @@ use futures::stream::{Fuse};
 use futures::{select, Stream, stream};
 use tokio::task::JoinHandle;
 
+// how long to wait to print remaining container logs
+const DRAIN_LOGS_TIMEOUT: Duration = Duration::from_secs(5);
+
 // https://hub.docker.com/r/summerwind/h2spec
 pub(crate) const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `docker.io/`, docker won't find it
 // https://nixery.dev/
@@ -46,7 +49,9 @@ pub(crate) struct LogPrinter {
 impl Drop for LogPrinter {
     fn drop(&mut self) {
         for task in self.tasks.drain(..).rev() {
-            let result = futures::executor::block_on(task);
+            println!("Finalizing LogPrinter");
+            let result = futures::executor::block_on(
+                tokio::time::timeout(DRAIN_LOGS_TIMEOUT, task));
             println!("Finalized LogPrinter {:?}", result);
         }
     }
