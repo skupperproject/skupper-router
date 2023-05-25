@@ -32,20 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Get the tag name and set it as the DOCKER_TAG env variable.
+      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
         run:  |
-          echo "DOCKER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Build and publish skupper-router image
         run: |
-          export PROJECT_TAG="${DOCKER_TAG}"
-          export VERSION="${DOCKER_TAG}"
+          export PROJECT_TAG="${CONTAINER_TAG}"
+          export VERSION="${CONTAINER_TAG}"
           # This is a release build which means we need to push the :latest tag
           # to the container repo.
           export PUSH_LATEST=true
           ./.github/scripts/image.sh
         env:
-          DOCKER_USER: '${{ secrets.DOCKER_USER }}'
-          DOCKER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
       # Now that we have successfully pushed a tagged version of the skupper-router container
       # we will create a draft release and add as much information to it as possible.
       - name: Create Draft Release
@@ -55,11 +55,11 @@ jobs:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
            tag_name: ${{ github.ref }}
-           release_name: Release ${{ env.DOCKER_TAG }}
+           release_name: Release ${{ env.CONTAINER_TAG }}
            body: |
              The skupper-router is available as an image:
-              - quay.io/skupper/skupper-router:${{ env.DOCKER_TAG }}
+              - quay.io/skupper/skupper-router:${{ env.CONTAINER_TAG }}
 
              Issues fixed in this release
-             - https://github.com/skupperproject/skupper-router/issues?q=is:issue%20milestone:${{ env.DOCKER_TAG }}
+             - https://github.com/skupperproject/skupper-router/issues?q=is:issue%20milestone:${{ env.CONTAINER_TAG }}
            draft: true
