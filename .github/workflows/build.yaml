@@ -791,7 +791,7 @@ jobs:
 
       - name: Build Containerfile
         run: |
-          docker build -t local/skupper-router:local -f ./Containerfile .
+          podman build -t local/skupper-router:local -f ./Containerfile .
 
       # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
       # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
@@ -801,6 +801,11 @@ jobs:
           rustup toolchain install stable --profile minimal
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Start podman service
+        run: |
+          systemctl --user enable --now podman.socket
+          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
 
       - name: Compile and run .rs tests
         run: |

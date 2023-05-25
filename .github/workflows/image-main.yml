@@ -36,5 +36,5 @@ jobs:
           export VERSION="${GITHUB_SHA}"
           ./.github/scripts/image.sh
         env:
-          DOCKER_USER: '${{ secrets.DOCKER_USER }}'
-          DOCKER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
