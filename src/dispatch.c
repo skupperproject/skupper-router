@@ -222,6 +222,7 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     }
 
     qd->thread_count = qd_entity_opt_long(entity, "workerThreads", 4); QD_ERROR_RET();
+    qd->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto"); QD_ERROR_RET();
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
     qd->metadata = qd_entity_opt_string(entity, "metadata", 0); QD_ERROR_RET();
@@ -362,6 +363,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_http_server_free(qd_server_http(qd->server));
 
     free(qd->sasl_config_path);
+    free(qd->data_connection_count);
     free(qd->sasl_config_name);
     qd_connection_manager_free(qd->connection_manager);
     qd_policy_free(qd->policy);
