@@ -211,6 +211,18 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     }
 
     qd->thread_count = qd_entity_opt_long(entity, "workerThreads", 4); QD_ERROR_RET();
+    if (qd->router_mode == QD_ROUTER_MODE_INTERIOR) {
+        // For inter-router connections only, the dataConnectionCount defaults to "auto",
+        // which means it will be determined as a function of the number of worker threads.
+        qd->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto"); QD_ERROR_RET();
+        // If the user has *not* explicitly set the value "0",
+        // then we will have some data connections.
+        if (strcmp(qd->data_connection_count, "0")) {
+            qd->has_data_connectors = true;
+        }
+    } else {
+        qd->data_connection_count = strdup("0");
+    }
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
     qd->metadata = qd_entity_opt_string(entity, "metadata", 0); QD_ERROR_RET();
@@ -351,6 +363,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_http_server_free(qd_server_http(qd->server));
 
     free(qd->sasl_config_path);
+    free(qd->data_connection_count);
     free(qd->sasl_config_name);
     qd_connection_manager_free(qd->connection_manager);
     qd_policy_free(qd->policy);

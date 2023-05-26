@@ -502,7 +502,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
         pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
-    if (ctx->connector && (ctx->connector->is_data_connector || ctx->connector->config.has_data_connectors)) {
+    if (ctx->connector && (ctx->connector->is_data_connector || qd_server->qd->has_data_connectors)) {
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY), QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY));
         pn_data_put_string(pn_connection_properties(conn),

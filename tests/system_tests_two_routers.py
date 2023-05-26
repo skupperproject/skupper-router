@@ -1397,7 +1397,7 @@ class TwoRouterConnection(TestCase):
         cls.B_normal_port_2 = cls.tester.get_port()
 
         TwoRouterConnection.router('A', [
-            ('router', {'mode': 'interior', 'id': 'A'}),
+            ('router', {'mode': 'interior', 'id': 'A', 'dataConnectionCount': '0'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal',
                           'port': cls.tester.get_port()}),
         ]
@@ -1447,7 +1447,6 @@ class TwoRouterConnection(TestCase):
 
         # Since DISPATCH-1093 is fixed, len(results would be 3 which is what
         # we would expect.
-
         if len(results) != 3:
             self.schedule_num_connections_test()
         else:
@@ -1465,10 +1464,9 @@ class TwoRouterConnection(TestCase):
 
         res = self.local_node.query(type='io.skupper.router.connection')
         results = res.results
-
         self.assertEqual(1, len(results))
 
-        long_type = 'io.skupper.router.connector' ''
+        long_type = 'io.skupper.router.connector'
 
         create_command = 'CREATE --type=' + long_type + ' --name=foo' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_1)
 
@@ -1587,7 +1585,7 @@ class StreamingLinkScrubberTest(TestCase):
         def router(name, extra):
             config = [
                 ('router', {'id': 'Router%s' % name,
-                            'mode': 'interior'}),
+                            'mode': 'interior', 'dataConnectionCount': '0'}),
                 ('listener', {'port': cls.tester.get_port()}),
                 ('address', {'prefix': 'closest', 'distribution': 'closest'}),
                 ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
@@ -1605,7 +1603,6 @@ class StreamingLinkScrubberTest(TestCase):
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True, cl_args=["--test-hooks"]))
 
         cls.routers = []
-
         inter_router_port = cls.tester.get_port()
 
         router('A',
@@ -1617,10 +1614,11 @@ class StreamingLinkScrubberTest(TestCase):
         router('B',
                [('connector', {'name': 'connectorToA', 'role':
                                'inter-router',
-                               'port': inter_router_port,
-                               'dataConnectionCount': 0})])
+                               'port': inter_router_port})])
         cls.RouterB = cls.routers[-1]
         cls.RouterB.listener = cls.RouterB.addresses[0]
+
+
 
         cls.RouterA.wait_router_connected('RouterB')
         cls.RouterB.wait_router_connected('RouterA')

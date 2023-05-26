@@ -1179,7 +1179,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     qd_router_connection_get_config(conn, &role, &cost, &name,
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
-    if (conn->connector && conn->connector->config.has_data_connectors) {
+    if (conn->connector && router->qd->has_data_connectors) {
         memcpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
     }
 

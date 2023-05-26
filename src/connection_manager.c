@@ -146,9 +146,6 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
     if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
     if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
-    if (cf->data_connection_count)
-        free(cf->data_connection_count);
-
     if (cf->conn_props) pn_data_free(cf->conn_props);
 
     memset(cf, 0, sizeof(*cf));
@@ -367,23 +364,7 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
-
-    if (strcmp(config->role, "inter-router") == 0) {
-        // For inter-router connections only, the dataConnectionCount defaults to "auto",
-        // which means it will be determined as a function of the number of worker threads.
-        config->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto");
-        CHECK();
-        // If the user has *not* explicitly set the value "0",
-        // then we will have some data connections.
-        if (strcmp(config->data_connection_count, "0")) {
-            config->has_data_connectors = true;
-        }
-    } else {
-        config->data_connection_count = strdup("0");
-    }
-
     set_config_host(config, entity);
-
     if (config->sasl_password) {
         //
         //Process the sasl password field and set the right values based on prefixes.
@@ -791,19 +772,19 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         // for high load, as determined by throughput performance
         // testing.
         //
-          if (!strcmp("auto", ct->config.data_connection_count)) {
+          if (!strcmp("auto", qd->data_connection_count)) {
               // The user has explicitly requested 'auto'.
               connection_count = auto_calc_connection_count(qd);
               qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
                      connection_count);
-          } else if (1 == sscanf(ct->config.data_connection_count, "%u", &connection_count)) {
+          } else if (1 == sscanf(qd->data_connection_count, "%u", &connection_count)) {
               // The user has requested a specific number of connections.
               qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
           } else {
               // The user has entered a non-numeric value that is not 'auto'.
               // This is not a legal value. Default to 'auto' and mention it.
               qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ",
-                     ct->config.data_connection_count);
+                     qd->data_connection_count);
               connection_count = auto_calc_connection_count(qd);
               qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
                      connection_count);
@@ -811,7 +792,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         //
         // If this connection has a data-connection-group, set up the group members now
         //
-        if (ct->config.has_data_connectors) {
+        if (qd->has_data_connectors) {
             qd_generate_discriminator(ct->group_correlator);
             for (uint32_t i = 0; i < connection_count; i++) {
                 qd_connector_t *dc = qd_server_connector(qd->server);
@@ -1022,7 +1003,6 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         // cannot free the timer while holding ct->lock since the
         // timer callback may be running during the call to qd_timer_free
         qd_timer_t *timer = 0;
-        bool        has_data_connectors = ct->config.has_data_connectors;
         void *dct = qd_connection_new_qd_deferred_call_t();
         sys_mutex_lock(&ct->lock);
         timer = ct->timer;
@@ -1046,7 +1026,7 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         //
         // Remove correlated data connectors
         //
-        if (has_data_connectors) {
+        if (qd->has_data_connectors) {
             qd_connector_t *dc = DEQ_HEAD(qd->connection_manager->data_connectors);
             while (!!dc) {
                 qd_connector_t *next = DEQ_NEXT(dc);

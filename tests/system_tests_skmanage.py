@@ -53,7 +53,7 @@ class SkmanageTest(TestCase):
         cls.secure_port = cls.tester.get_port()
         cls.secure_user_port = cls.tester.get_port()
         config_1 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': 'R1'}),
+            ('router', {'mode': 'interior', 'id': 'R1', 'dataConnectionCount':'0'}),
             ('sslProfile', {'name': 'server-ssl',
                             'caCertFile': cls.ssl_file('ca-certificate.pem'),
                             'certFile': cls.ssl_file('server-certificate.pem'),

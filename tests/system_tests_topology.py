@@ -93,7 +93,7 @@ class TopologyTests (TestCase):
 
         def router(name, more_config):
 
-            config = [('router',  {'mode': 'interior', 'id': name}),
+            config = [('router',  {'mode': 'interior', 'id': name, 'dataConnectionCount':'0'}),
                       ('address', {'prefix': 'closest',   'distribution': 'closest'}),
                       ('address', {'prefix': 'balanced',  'distribution': 'balanced'}),
                       ('address', {'prefix': 'multicast', 'distribution': 'multicast'})
