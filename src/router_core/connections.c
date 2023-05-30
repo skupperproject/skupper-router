@@ -40,6 +40,7 @@ static void qdr_link_detach_sent_CT(qdr_core_t *core, qdr_action_t *action, bool
 static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_detach_sent(qdr_link_t *link);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
+static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
 
 ALLOC_DEFINE(qdr_connection_t);
 ALLOC_DEFINE(qdr_connection_work_t);
@@ -1435,7 +1436,32 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
     // matches into this connection's group.
     //
     const char *correlator = conn->connection_info->group_correlator;
+
+    assert(conn->role == QDR_ROLE_INTER_ROUTER);
+    qd_log(core->log, QD_LOG_DEBUG,
+           "CGROUP qdr_connection_group_setup_CT - %lx (%s)",
+           (ulong) conn, conn->connection_info->host);
+
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
+        //
+        // Check the existing set of correlators (by mask-bit) to determine if there exists another
+        // connection with the same correlator.  If found, clear the old correlator and move the old
+        // connection's group members to the unallocated list.  These will be picked up by the new connection.
+        //
+        for (int mask_bit = 0; mask_bit < qd_bitmask_width(); mask_bit++) {
+            if (strncmp(core->group_correlator_by_maskbit[mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0) {
+                qdr_connection_t *old_conn = core->rnode_conns_by_mask_bit[mask_bit];
+                if (!!old_conn) {
+                    qdr_connection_group_cleanup_CT(core, old_conn);
+                }
+            }
+        }
+
+        //
+        // Record the group's correlator in the core record.
+        // Check the unallocated member list for matching correlators.  Import the
+        // matches into this connection's group.
+        //
         assert(core->group_correlator_by_maskbit[conn->mask_bit][0] == '\0');
         qd_log(core->log, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
         strncpy(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE);
@@ -1493,8 +1519,7 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
     qd_log(core->log, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %lx", (ulong) conn);
     //
     // Remove the correlator from the maskbit index.
-    // Clear the group list in this connection and nullify the cursor.
-    // Traverse the unallocated list and remove any connections with this correlator.
+    // Nullify the cursor and move all group members to the unallocated list.
     //
     const char *correlator = conn->connection_info->group_correlator;
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
@@ -1506,10 +1531,11 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
             qd_log(core->log, QD_LOG_DEBUG,                        //
                    "CGROUP     removing member from parent: %lx",  //
                    (ulong) DEQ_HEAD(conn->connection_group));
+            qdr_connection_t *member = DEQ_HEAD(conn->connection_group);
             DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
+            DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, member);
         }
         conn->group_cursor = 0;
-
         qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
