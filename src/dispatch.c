@@ -74,18 +74,19 @@ qd_dispatch_t *qd_dispatch_get_dispatch(void)
     return qd;
 }
 
-/* Test mode is a global state. It is set at startup and does not change for the life of the router.
+/* _test_hooks is set to true when the router is started in test hook mode via the '-T' command line argument. It is a
+ * global state. It is set at startup and does not change for the life of the router.
  */
-static bool _test_mode = false;
+static bool _test_hooks = false;
 
-bool qd_router_test_mode_enabled(void)
+bool qd_router_test_hooks_enabled(void)
 {
-    return _test_mode;
+    return _test_hooks;
 }
 
 qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
 {
-    _test_mode = test_hooks;
+    _test_hooks = test_hooks;
 
     //
     // Seed the random number generator

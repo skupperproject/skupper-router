@@ -173,7 +173,7 @@ static uint64_t on_message(void                    *context,
 static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
     core_ptr = core;
-    if (qd_router_test_mode_enabled()) {
+    if (qd_router_test_hooks_enabled()) {
         char address[100];
         for (long index = 0; index < ADDRESS_COUNT; index++) {
             sprintf(address, address_fmt, index);
@@ -188,7 +188,7 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 
 static void qdr_test_adaptor_final(void *adaptor_context)
 {
-    if (qd_router_test_mode_enabled()) {
+    if (qd_router_test_hooks_enabled()) {
         for (long index = 0; index < ADDRESS_COUNT; index++) {
             qdr_core_unwatch_address(core_ptr, handle[index]);
         }

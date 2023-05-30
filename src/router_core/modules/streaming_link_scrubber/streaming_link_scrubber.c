@@ -152,7 +152,7 @@ static void qdr_streaming_link_scrubber_CT(qdr_core_t *core, qdr_action_t *actio
 
 static bool qcm_streaming_link_scrubber_enable_CT(qdr_core_t *core)
 {
-    if (qd_router_test_mode_enabled()) {
+    if (qd_router_test_hooks_enabled()) {
         //
         // Test mode is enabled, override the timing constants with the test values
         //

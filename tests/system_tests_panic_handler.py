@@ -101,8 +101,7 @@ class PanicHandlerTest(TestCase):
         if (regex.search(crash_dump) is None):
             # libunwind present, expect at least one stack frame:
             regex = re.compile(r"^\[(\d+)\] IP: ", re.MULTILINE)
-            self.assertTrue(len(regex.findall(crash_dump)) > 0,
-                            "No stack frames found!!!")
+            self.assertRegex(crash_dump, regex, "No stack frames found!!!")
 
         regex = re.compile(r"^\*\*\* END \*\*\*$", re.MULTILINE)
         match = regex.search(crash_dump)
