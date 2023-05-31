@@ -664,7 +664,7 @@ static void qdrc_test_client_api_finalize(test_module_t *test_module)
 
 static bool qdrc_test_hooks_enable_CT(qdr_core_t *core)
 {
-    return core->qd->test_hooks;
+    return qd_router_test_hooks_enabled();
 }
 
 

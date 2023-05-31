@@ -152,9 +152,9 @@ static void qdr_streaming_link_scrubber_CT(qdr_core_t *core, qdr_action_t *actio
 
 static bool qcm_streaming_link_scrubber_enable_CT(qdr_core_t *core)
 {
-    if (core->qd->test_hooks) {
+    if (qd_router_test_hooks_enabled()) {
         //
-        // Test hooks are enabled, override the timing constants with the test values
+        // Test mode is enabled, override the timing constants with the test values
         //
         timer_interval = TEST_TIMER_INTERVAL;
         max_free_pool_size = TEST_MAX_FREE_POOL;
