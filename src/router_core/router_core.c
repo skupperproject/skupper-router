@@ -388,11 +388,6 @@ void qdr_router_node_free(qdr_core_t *core, qdr_node_t *rnode)
     free_qdr_node_t(rnode);
 }
 
-bool qdr_core_test_hooks_enabled(const qdr_core_t *core)
-{
-    return core->qd->test_hooks;
-}
-
 int qdr_core_get_worker_thread_count(const qdr_core_t *core)
 {
     return core->worker_thread_count;

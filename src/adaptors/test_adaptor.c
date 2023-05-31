@@ -172,7 +172,7 @@ static uint64_t on_message(void                    *context,
 static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
     core_ptr = core;
-    if (qdr_core_test_hooks_enabled(core)) {
+    if (qd_router_test_hooks_enabled()) {
         log_source = qd_log_source("ADDRESS_WATCH");
         char address[100];
         for (long index = 0; index < ADDRESS_COUNT; index++) {
@@ -188,7 +188,7 @@ static void qdr_test_adaptor_init(qdr_core_t *core, void **adaptor_context)
 
 static void qdr_test_adaptor_final(void *adaptor_context)
 {
-    if (qdr_core_test_hooks_enabled(core_ptr)) {
+    if (qd_router_test_hooks_enabled()) {
         for (long index = 0; index < ADDRESS_COUNT; index++) {
             qdr_core_unwatch_address(core_ptr, handle[index]);
         }
