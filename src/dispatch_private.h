@@ -55,11 +55,10 @@ struct qd_dispatch_t {
     char  *sasl_config_name;
     char  *router_area;
     char  *router_id;
-    qd_router_mode_t  router_mode;
-    bool   test_hooks;
-    bool   timestamps_in_utc;
+    qd_router_mode_t router_mode;
     char  *timestamp_format;
     char  *metadata;
+    bool             timestamps_in_utc;
 };
 
 qd_dispatch_t *qd_dispatch_get_dispatch(void);
