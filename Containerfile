@@ -19,14 +19,14 @@
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest as builder
 
-RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
- && microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
+RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
     gcc gcc-c++ make cmake \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel python3-pip \
-    libnghttp2-devel libunwind-devel \
+    libnghttp2-devel \
     wget tar patch findutils git libasan libubsan libtsan \
+    libtool \
  && microdnf clean all -y
 
 WORKDIR /build
@@ -34,12 +34,14 @@ COPY . .
 ENV PROTON_VERSION=main
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.2
+ENV LIBUNWIND_VERSION=v1.6.2
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
+ENV LIBUNWIND_SOURCE_URL=${LIBUNWIND_SOURCE_URL:-https://github.com/libunwind/libunwind/archive/refs/tags/${LIBUNWIND_VERSION}.tar.gz}
 
 ARG VERSION=UNKNOWN
 ENV VERSION=$VERSION
 RUN .github/scripts/compile.sh
-RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image
+RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image && tar zxpf /libunwind-image.tar.gz --one-top-level=/image
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
@@ -49,7 +51,7 @@ RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
     python3 \
-    libnghttp2 libunwind \
+    libnghttp2 \
     gdb libasan libubsan libtsan \
     gettext hostname iputils \
     shadow-utils \
