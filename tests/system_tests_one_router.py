@@ -3243,13 +3243,12 @@ class DataConnectionCountTest(TestCase):
     def test_60_threads_vs_data_connection_count(self):
         for worker_threads in ('1', '3', '5'):
             for con_count in ('auto', '', '0', '2', '4'):
-
                 # Make the config file.
                 self.config[0][1]['workerThreads'] = worker_threads
                 if con_count == '':
                     del self.config[0][1]['workerThreads']
                 else:
-                    self.config[2][1]['dataConnectionCount'] = con_count
+                    self.config[0][1]['dataConnectionCount'] = con_count
 
                 # Figure out what log message we expect to see.
                 if con_count in ('auto', ''):
