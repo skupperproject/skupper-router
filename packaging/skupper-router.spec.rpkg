@@ -131,10 +131,7 @@ cd %{_builddir}/skupper-router
 %config /etc/skupper-router/skrouterd.conf
 %config /etc/sasl2/skrouterd.conf
 
-%{python3_sitelib}/skupper_router/
-%{python3_sitelib}/skupper_router_site.py
-%{python3_sitelib}/__pycache__/skupper_router_site.*.pyc
-%{python3_sitelib}/skupper_router-*.egg-info
+%{python3_sitelib}/
 
 /usr/share/man/man5/skrouterd.conf.5.gz
 /usr/share/man/man8/skrouterd.8.gz
