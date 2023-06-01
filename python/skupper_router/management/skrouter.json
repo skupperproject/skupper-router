@@ -593,6 +593,13 @@
                     "type": "integer",
                     "graph": true,
                     "description": "The current amount of memory in use by the router process in bytes.  This includes memory provisioned for stack, data, and code (VmSize).  This value is set to Null if the platform does not provide access to the process memory size."
+                },
+                "dataConnectionCount": {
+                    "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers",
+                    "type": "string",
+                    "required": false,
+                    "default": "auto",
+                    "create": true
                 }
             }
         },
@@ -970,13 +977,6 @@
                     "description": "A JSON map containing connection properties.  These will be sent to the peer on connection open.  All map keys are restricted to strings containing only valid ASCII characters, Keys must not start with prefixes 'qd.' or 'x-opt-qd.'.  The following key values are also reserved: 'product', 'version', 'failover-server-list', 'network-host', 'port', 'scheme' 'hostname'",
                     "type": "properties",
                     "required": false,
-                    "create": true
-                },
-                "dataConnectionCount": {
-                    "description": "For inter-router connectors only.  The number of parallel data connections to carry streaming data.",
-                    "type": "string",
-                    "required": false,
-                    "default": "0",
                     "create": true
                 }
             }

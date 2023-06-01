@@ -146,9 +146,7 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
     if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
     if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
-    if (cf->data_connection_count)
-        free(cf->data_connection_count);
-
+    free(cf->data_connection_count);
     if (cf->conn_props) pn_data_free(cf->conn_props);
 
     memset(cf, 0, sizeof(*cf));
@@ -367,11 +365,11 @@ static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *conf
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
 
+
     if (strcmp(config->role, "inter-router") == 0) {
         // For inter-router connections only, the dataConnectionCount defaults to "auto",
         // which means it will be determined as a function of the number of worker threads.
-        config->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto");
-        CHECK();
+        config->data_connection_count = strdup(qd->data_connection_count);
         // If the user has *not* explicitly set the value "0",
         // then we will have some data connections.
         if (strcmp(config->data_connection_count, "0")) {

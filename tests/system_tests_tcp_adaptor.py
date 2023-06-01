@@ -366,8 +366,12 @@ class TcpAdaptorBase(TestCase):
                                             'port': cls.tcp_server_listener_ports[name],
                                             'address': 'ES_ALL',
                                             'siteId': cls.site}
+            if mode == "interior":
+                router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4'}
+            else:
+                router_dict = {'mode': mode, 'id': name}
             config = [
-                ('router', {'mode': mode, 'id': name}),
+                ('router', router_dict),
                 ('listener', {'port': cls.amqp_listener_ports[name]}),
                 ('sslProfile', {'name': 'tcp-listener-ssl-profile',
                                 'caCertFile': CA_CERT,
@@ -505,13 +509,13 @@ class TcpAdaptorBase(TestCase):
         inter_router_port_BC = cls.tester.get_port()
         cls.INTB_edge_port = cls.tester.get_port()
         router('INTB', 'interior',
-               [('connector', {'role': 'inter-router', 'port': inter_router_port_AB, 'dataConnectionCount': 4}),
+               [('connector', {'role': 'inter-router', 'port': inter_router_port_AB}),
                 ('listener', {'role': 'inter-router', 'port': inter_router_port_BC}),
                 ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
 
         cls.INTC_edge_port = cls.tester.get_port()
         router('INTC', 'interior',
-               [('connector', {'role': 'inter-router', 'port': inter_router_port_BC, 'dataConnectionCount': 4}),
+               [('connector', {'role': 'inter-router', 'port': inter_router_port_BC}),
                 ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
 
         cls.logger.log("TCP_TEST Launching edge routers")

@@ -58,7 +58,8 @@ struct qd_dispatch_t {
     qd_router_mode_t router_mode;
     char  *timestamp_format;
     char  *metadata;
-    bool             timestamps_in_utc;
+    bool   timestamps_in_utc;
+    char  *data_connection_count;
 };
 
 qd_dispatch_t *qd_dispatch_get_dispatch(void);
