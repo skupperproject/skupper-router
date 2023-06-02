@@ -31,11 +31,14 @@ if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
   SKUPPER_DIR="$WORKING_DIR"
   PROTON_DIR="$WORKING_DIR/proton/app"
   LWS_DIR="$WORKING_DIR/libwebsockets/app"
+  LIBUNWIND_DIR="$WORKING_DIR/libunwind/app"
   # $REMOTE_SOURCES_DIR was not provided, we will have to download the libwebsockets source from ${LWS_SOURCE_URL}
   # Get the libwebsockets source into a libwebsockets.tar.gz file
   # and untar it into the libwebsockets folder
   wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
-  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}" --strip-components 1
+  wget "${LIBUNWIND_SOURCE_URL}" -O libunwind.tar.gz
+  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}"       --strip-components 1
+  tar -zxf libunwind.tar.gz     --one-top-level="${LIBUNWIND_DIR}" --strip-components 1
 
   # No $REMOTE_SOURCES_DIR was provided, we will have to download the proton source tar.gz from ${PROTON_SOURCE_URL}
   wget "${PROTON_SOURCE_URL}" -O qpid-proton.tar.gz
@@ -46,20 +49,30 @@ else
   # 1. proton sources to be in $REMOTE_SOURCES_DIR/app/proton
   # 2. libwebsockets sources to be in $REMOTE_SOURCES_DIR/app/libwebsockets
   # 3. skupper-router sources to be in $REMOTE_SOURCES_DIR/app/skupper-router
+  # 4. libunwind souces will be in $REMOTE_SOURCES_DIR/app/libunwind
   WORKING_DIR="${REMOTE_SOURCES_DIR}"
   SKUPPER_DIR="${WORKING_DIR}/skupper-router/app"
   PROTON_DIR="${WORKING_DIR}/proton/app"
   LWS_DIR="${WORKING_DIR}/libwebsockets/app"
+  LIBUNWIND_DIR="${WORKING_DIR}/libunwind/app"
   cd "${WORKING_DIR}"
 fi
 
 LWS_BUILD_DIR="${LWS_DIR}/build"
 LWS_INSTALL_DIR="${LWS_DIR}/install"
+LIBUNWIND_INSTALL_DIR="${LIBUNWIND_DIR}/install"
 
 PROTON_INSTALL_DIR="${PROTON_DIR}/proton_install"
 PROTON_BUILD_DIR="${PROTON_DIR}/build"
 SKUPPER_BUILD_DIR="${SKUPPER_DIR}/build"
 
+# We are installing libwebsockets and libunwind from source
+# First, we will install these libraries in /usr/local/lib
+# and the include files in /usr/local/include and when skupper-router is compiled
+# in the subsequent step, it can find the libraries and include files in /usr/local/
+# Second, we install the library *again* in a custom folder so we can
+# tar up the usr folder and untar in the Containerfile so that these libraries
+# can be used by skupper-router runtime.
 
 #region libwebsockets
 # Build libwebsockets library.
@@ -84,9 +97,20 @@ cmake -S "${LWS_DIR}" -B "${LWS_BUILD_DIR}" \
 cmake --build "${LWS_BUILD_DIR}" --parallel "$(nproc)" --verbose
 cmake --install "${LWS_BUILD_DIR}"
 
+# Read about DESTDIR here - https://www.gnu.org/prep/standards/html_node/DESTDIR.html
 DESTDIR="${LWS_INSTALL_DIR}" cmake --install "${LWS_BUILD_DIR}"
 tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
 #endregion libwebsockets
+
+#region libunwind
+pushd "${LIBUNWIND_DIR}"
+autoreconf -i
+./configure
+make install
+DESTDIR="${LIBUNWIND_INSTALL_DIR}" make install
+tar -z -C "${LIBUNWIND_INSTALL_DIR}" -cf /libunwind-image.tar.gz usr
+popd
+#endregion libunwind
 
 do_patch () {
     PATCH_DIR=$1
@@ -110,7 +134,7 @@ do_build () {
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DENABLE_LINKTIME_OPTIMIZATION=ON \
-    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
     -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_INSTALL_PREFIX=/usr

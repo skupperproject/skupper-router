@@ -28,4 +28,6 @@ find_path(LIBUNWIND_INCLUDE_DIRS libunwind.h
 
 if (NOT (LIBUNWIND_INCLUDE_DIRS AND LIBUNWIND_LIBRARY))
   message(STATUS "libunwind library not found: stack dump on crash disabled")
+else()
+  message(STATUS "Found libunwind: stack dump on crash enabled")
 endif()
