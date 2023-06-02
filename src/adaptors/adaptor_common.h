@@ -68,6 +68,11 @@ qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *enti
 void qd_free_adaptor_config(qd_adaptor_config_t *config);
 
 /**
+ * Perform router-startup actions used in the common module.
+ */
+void qd_adaptor_common_init(void);
+
+/**
  * Grants as many read qd_adaptor buffers as returned by pn_raw_connection_read_buffers_capacity().
  * Maximum read capacity is set to 16 in proton raw api.
  *

@@ -17,6 +17,7 @@
  * under the License.
  */
 #include "adaptor_common.h"
+#include "adaptor_buffer.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/connection_manager.h"
@@ -28,6 +29,11 @@
 #include <sys/socket.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
+
+static uint64_t buffer_ceiling = 0;
+static uint64_t buffer_threshold_50;
+static uint64_t buffer_threshold_75;
+static uint64_t buffer_threshold_85;
 
 void qd_free_adaptor_config(qd_adaptor_config_t *config)
 {
@@ -72,16 +78,62 @@ error:
     return qd_error_code();
 }
 
+void qd_adaptor_common_init(void)
+{
+    if (buffer_ceiling > 0) {
+        return;
+    }
+
+    char     *ceiling_string = getenv("SKUPPER_MEMORY_CEILING");
+    uint64_t  memory_ceiling = (uint64_t) 4 * (uint64_t) 1024 * (uint64_t) 1024 * (uint64_t) 1024;  // 4 Gig default
+
+    if (!!ceiling_string) {
+        long long convert = atoll(ceiling_string);
+        if (convert > 0) {
+            memory_ceiling = (uint64_t) convert;
+        }
+    }
+
+    buffer_ceiling = MAX(memory_ceiling / QD_ADAPTOR_MAX_BUFFER_SIZE, 100);
+    buffer_threshold_50 = buffer_ceiling / 2;
+    buffer_threshold_75 = (buffer_ceiling / 20) * 15;
+    buffer_threshold_85 = (buffer_ceiling / 20) * 17;
+}
+
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 {
+#define TIER_1 8  // [0% .. 50%)
+#define TIER_2 4  // [50% .. 75%)
+#define TIER_3 2  // [75% .. 85%)
+#define TIER_4 2  // [85% .. 100%]
+
     assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-    size_t          desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
-    const size_t    granted = desired;
+    size_t desired = TIER_4;
+    size_t capacity = MIN(pn_raw_connection_read_buffers_capacity(pn_raw_conn), TIER_1);
 
-    while (desired) {
+    if (capacity == 0) {
+        return 0;
+    }
+
+    qd_alloc_stats_t *stats   = alloc_stats_qd_adaptor_buffer_t();
+    uint64_t          buffers_in_use = !!stats ? stats->held_by_threads : 0;
+
+    if (buffers_in_use < buffer_threshold_50) {
+        desired = TIER_1;
+    } else if (buffers_in_use < buffer_threshold_75) {
+        desired = TIER_2;
+    } else if (buffers_in_use < buffer_threshold_85) {
+        desired = TIER_3;
+    }
+
+    size_t       already_granted = TIER_1 - capacity;
+    const size_t granted = desired > already_granted ? desired - already_granted : 0;
+    size_t       count = granted;
+
+    while (count) {
         int i;
-        for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
+        for (i = 0; i < count && i < RAW_BUFFER_BATCH; ++i) {
             qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
             raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
             raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
@@ -89,7 +141,7 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
             raw_buffers[i].offset   = 0;
             raw_buffers[i].context  = (uintptr_t) buf;
         }
-        desired -= i;
+        count -= i;
         pn_raw_connection_give_read_buffers(pn_raw_conn, raw_buffers, i);
     }
 

@@ -111,7 +111,8 @@ static inline void *qd_alloc_deref_safe_ptr(const qd_alloc_safe_ptr_t *sp)
     void free_##T(T *p); \
     typedef qd_alloc_safe_ptr_t T##_sp; \
     void set_safe_ptr_##T(T *p, T##_sp *sp); \
-    T *safe_deref_##T(T##_sp sp)
+    T *safe_deref_##T(T##_sp sp); \
+    qd_alloc_stats_t *alloc_stats_##T(void)
 
 /**
  * Define allocator configuration.
