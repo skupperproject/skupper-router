@@ -37,7 +37,7 @@ if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
   # and untar it into the libwebsockets folder
   wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
   wget "${LIBUNWIND_SOURCE_URL}" -O libunwind.tar.gz
-  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}"     --strip-components 1
+  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}"       --strip-components 1
   tar -zxf libunwind.tar.gz     --one-top-level="${LIBUNWIND_DIR}" --strip-components 1
 
   # No $REMOTE_SOURCES_DIR was provided, we will have to download the proton source tar.gz from ${PROTON_SOURCE_URL}
@@ -60,14 +60,19 @@ fi
 
 LWS_BUILD_DIR="${LWS_DIR}/build"
 LWS_INSTALL_DIR="${LWS_DIR}/install"
-
 LIBUNWIND_INSTALL_DIR="${LIBUNWIND_DIR}/install"
-LIBUNWIND_USR_DIR="${LIBUNWIND_INSTALL_DIR}/usr/local"
 
 PROTON_INSTALL_DIR="${PROTON_DIR}/proton_install"
 PROTON_BUILD_DIR="${PROTON_DIR}/build"
 SKUPPER_BUILD_DIR="${SKUPPER_DIR}/build"
 
+# We are installing libwebsockets and libunwind from source
+# First, we will install these libraries in /usr/local/lib
+# and the include files in /usr/local/include and when skupper-router is compiled
+# in the subsequent step, it can find the libraries and include files in /usr/local/
+# Second, we install the library *again* in a custom folder so we can
+# tar up the usr folder and untar in the Containerfile so that these libraries
+# can be used by skupper-router runtime.
 
 #region libwebsockets
 # Build libwebsockets library.
@@ -92,6 +97,7 @@ cmake -S "${LWS_DIR}" -B "${LWS_BUILD_DIR}" \
 cmake --build "${LWS_BUILD_DIR}" --parallel "$(nproc)" --verbose
 cmake --install "${LWS_BUILD_DIR}"
 
+# Read about DESTDIR here - https://www.gnu.org/prep/standards/html_node/DESTDIR.html
 DESTDIR="${LWS_INSTALL_DIR}" cmake --install "${LWS_BUILD_DIR}"
 tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
 #endregion libwebsockets
@@ -100,15 +106,8 @@ tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
 pushd "${LIBUNWIND_DIR}"
 autoreconf -i
 ./configure
-# This make install will install the libunwind in /usr/local/lib
-# and the include files in /usr/local/include and when skupper-router is compiled
-# in the subsequent steps, it can find the libunwind related files in /usr/local
 make install
-
-# We do this to install libunwind in an exclusive install/usr/lib folder
-# so we can tar them up easily into libunwind-image.tar.gz for subsequent use in the Containerfile.
-./configure --prefix="${LIBUNWIND_USR_DIR}"
-make install
+DESTDIR="${LIBUNWIND_INSTALL_DIR}" make install
 tar -z -C "${LIBUNWIND_INSTALL_DIR}" -cf /libunwind-image.tar.gz usr
 popd
 #endregion libunwind
