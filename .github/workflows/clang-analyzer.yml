@@ -1,0 +1,121 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License
+#
+
+name: "clang-analyzer"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ "main" ]
+  schedule:
+    - cron: '32 16 * * 4'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: read
+
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - name: Checkout router repository
+      uses: actions/checkout@v3
+
+    - name: Checkout Proton repository
+      uses: actions/checkout@v3
+      with:
+        repository: apache/qpid-proton
+        ref: main
+        path: 'qpid-proton'
+
+    - name: Install latest llvm
+      run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+    - name: Install cppcheck
+      run: sudo apt install -y cppcheck
+
+    - name: Install dependencies
+      run: |
+        sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
+
+    - name: Install Proton
+      run: |
+        cmake -S qpid-proton -B qpid-proton/install -DBUILD_BINDINGS=c -DBUILD_TLS=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+        cmake --build qpid-proton/install
+        sudo cmake --install qpid-proton/install
+
+    - name: Delete Proton
+      run: rm -rf qpid-proton
+
+    # https://clang-analyzer.llvm.org/command-line.html
+    - name: Create compilation database
+      run: |
+        sudo pip3 install codechecker
+        # disable IPO to make compilation faster
+        cmake -S . -B build -DBUILD_TESTING=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        # perform build so that generated sources get generated
+        cmake --build build
+        CodeChecker analyze build/compile_commands.json -o ./reports
+        # return code 2 seems to mean issues were found, return code 3 means some checkers failed to run
+        # print readable textual output of results
+        CodeChecker parse --print-steps ./reports || true
+        CodeChecker parse --print-steps --export html --output report_html ./reports || true
+
+    - name: Upload rendered HTML
+      uses: actions/upload-pages-artifact@v1
+      with:
+        path: report_html/
+
+  publish:
+    name: "Publish"
+
+    needs: analyze
+    if: github.ref_name == 'main'
+
+    # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    # Allow one concurrent deployment
+    concurrency:
+      group: "github-pages-codechecker"
+      cancel-in-progress: true
+
+    environment:
+      name: github-pages-codechecker
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
