@@ -22,6 +22,7 @@
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/log.h"
 
 #include <proton/netaddr.h>
 
@@ -84,7 +85,7 @@ void qd_adaptor_common_init(void)
         return;
     }
 
-    char     *ceiling_string = getenv("SKUPPER_MEMORY_CEILING");
+    char     *ceiling_string = getenv("SKUPPER_ROUTER_MEMORY_CEILING");
     uint64_t  memory_ceiling = (uint64_t) 4 * (uint64_t) 1024 * (uint64_t) 1024 * (uint64_t) 1024;  // 4 Gig default
 
     if (!!ceiling_string) {
@@ -98,6 +99,8 @@ void qd_adaptor_common_init(void)
     buffer_threshold_50 = buffer_ceiling / 2;
     buffer_threshold_75 = (buffer_ceiling / 20) * 15;
     buffer_threshold_85 = (buffer_ceiling / 20) * 17;
+
+    qd_log(LOG_ROUTER, QD_LOG_INFO, "Adaptor buffer memory ceiling: %"PRIu64" (%"PRIu64" buffers)", memory_ceiling, buffer_ceiling);
 }
 
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
