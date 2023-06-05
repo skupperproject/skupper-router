@@ -17,16 +17,15 @@
  * under the License.
  */
 
-// This file is necessary so that cargo finds the subdirectory
-//  containing the actual tests
-
-// https://doc.rust-lang.org/book/ch11-00-testing.html
-
-
-#[cfg(test)]
-mod testcontainers {
-    mod docker;
-    mod utils;
-    mod test_h2spec;
-    mod test_skrouterd_sanity;
+// https://stackoverflow.com/questions/27582739/how-do-i-create-a-hashmap-literal
+#[macro_export(local_inner_macros)]
+macro_rules! collection {
+    // map-like
+    ($($k:expr => $v:expr),* $(,)?) => {{
+        core::convert::From::from([$(($k, $v),)*])
+    }};
+    // set-like
+    ($($v:expr),* $(,)?) => {{
+        core::convert::From::from([$($v,)*])
+    }};
 }

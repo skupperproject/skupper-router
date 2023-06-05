@@ -31,4 +31,4 @@ again = "0.1"
 bollard = "0.14"
 futures = "0.3"
 tokio = { version = "1", features = ["macros", "time"] }
-speculoos = "0.9"
+speculoos = "0.11.0"
