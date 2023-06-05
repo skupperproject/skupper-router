@@ -17,10 +17,12 @@
  * under the License.
  */
 #include "adaptor_common.h"
+#include "adaptor_buffer.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/log.h"
 
 #include <proton/netaddr.h>
 
@@ -28,6 +30,11 @@
 #include <sys/socket.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
+
+static uint64_t buffer_ceiling = 0;
+static uint64_t buffer_threshold_50;
+static uint64_t buffer_threshold_75;
+static uint64_t buffer_threshold_85;
 
 void qd_free_adaptor_config(qd_adaptor_config_t *config)
 {
@@ -72,16 +79,109 @@ error:
     return qd_error_code();
 }
 
+void qd_adaptor_common_init(void)
+{
+    if (buffer_ceiling > 0) {
+        return;
+    }
+
+    char     *ceiling_string = getenv("SKUPPER_ROUTER_MEMORY_CEILING");
+    uint64_t  memory_ceiling = (uint64_t) 4 * (uint64_t) 1024 * (uint64_t) 1024 * (uint64_t) 1024;  // 4 Gig default
+
+    if (!!ceiling_string) {
+        long long convert = atoll(ceiling_string);
+        if (convert > 0) {
+            memory_ceiling = (uint64_t) convert;
+        }
+    }
+
+    buffer_ceiling = MAX(memory_ceiling / QD_ADAPTOR_MAX_BUFFER_SIZE, 100);
+    buffer_threshold_50 = buffer_ceiling / 2;
+    buffer_threshold_75 = (buffer_ceiling / 20) * 15;
+    buffer_threshold_85 = (buffer_ceiling / 20) * 17;
+
+    qd_log(LOG_ROUTER, QD_LOG_INFO, "Adaptor buffer memory ceiling: %"PRIu64" (%"PRIu64" buffers)", memory_ceiling, buffer_ceiling);
+}
+
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 {
+    //
+    // Define the allocation tiers.  The tier values are the number of read buffers to be granted
+    // to raw connections based on the percentage of usage of the router-wide buffer ceiling.
+    //
+#define TIER_1 8  // [0% .. 50%)
+#define TIER_2 4  // [50% .. 75%)
+#define TIER_3 2  // [75% .. 85%)
+#define TIER_4 2  // [85% .. 100%]
+
     assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-    size_t          desired = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
-    const size_t    granted = desired;
 
-    while (desired) {
+    //
+    // Get the read-buffer capacity for the connection.
+    //
+    size_t capacity = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
+
+    //
+    // If there's no capacity, exit now before doing any further wasted work.
+    //
+    if (capacity == 0) {
+        return 0;
+    }
+
+    //
+    // Since we can't query Proton for the maximum read-buffer capacity, we will infer it from
+    // calls to pn_raw_connection_read_buffers_capacity.
+    //
+    static size_t max_capacity = 0;
+    if (capacity > max_capacity) {
+        max_capacity = capacity;
+    }
+
+    //
+    // Get the "held_by_threads" stats for adaptor buffers as an approximation of how many
+    // buffers are in-use.  This is an approximation since it also counts free buffers held
+    // in the per-thread free-pools.  Since we will be dealing with large numbers here, the
+    // number of buffers in free-pools will not be significant.
+    //
+    // Note that there is a thread race on the access of this value.  There's no danger associated
+    // with getting a partial or corrupted value from time to time.
+    //
+    // Note also that the stats pointer may be NULL if no buffers have yet been allocated.
+    //
+    qd_alloc_stats_t *stats          = alloc_stats_qd_adaptor_buffer_t();
+    uint64_t          buffers_in_use = !!stats ? stats->held_by_threads : 0;
+
+    //
+    // Choose the grant-allocation tier based on the number of buffers in use.
+    //
+    size_t desired = TIER_4;
+    if (buffers_in_use < buffer_threshold_50) {
+        desired = TIER_1;
+    } else if (buffers_in_use < buffer_threshold_75) {
+        desired = TIER_2;
+    } else if (buffers_in_use < buffer_threshold_85) {
+        desired = TIER_3;
+    }
+
+    //
+    // Determine how many of the desired buffers are already granted.  This will always be a
+    // non-negative value.
+    //
+    size_t already_granted = max_capacity - capacity;
+
+    //
+    // If we desire to grant additional buffers, calculate the number to grant now.
+    //
+    const size_t to_grant = desired > already_granted ? desired - already_granted : 0;
+    size_t       count    = to_grant;
+
+    //
+    // Grant the buffers in batches.
+    //
+    while (count) {
         int i;
-        for (i = 0; i < desired && i < RAW_BUFFER_BATCH; ++i) {
+        for (i = 0; i < count && i < RAW_BUFFER_BATCH; ++i) {
             qd_adaptor_buffer_t *buf = qd_adaptor_buffer();
             raw_buffers[i].bytes    = (char *) qd_adaptor_buffer_base(buf);
             raw_buffers[i].capacity = qd_adaptor_buffer_capacity(buf);
@@ -89,11 +189,11 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
             raw_buffers[i].offset   = 0;
             raw_buffers[i].context  = (uintptr_t) buf;
         }
-        desired -= i;
+        count -= i;
         pn_raw_connection_give_read_buffers(pn_raw_conn, raw_buffers, i);
     }
 
-    return granted;
+    return to_grant;
 }
 
 int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist)
