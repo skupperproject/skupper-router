@@ -48,7 +48,7 @@ class CoreClientAPITest(TestCase):
     def test_send_receive(self):
         ts = TestService(self.router.addresses[0], credit=250)
         ts.run()
-        self.assertTrue(ts.error is None)
+        self.assertIsNone(ts.error)
         self.assertEqual(250, ts.in_count)
         self.assertEqual(250, ts.out_count)
 

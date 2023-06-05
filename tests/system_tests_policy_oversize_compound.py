@@ -795,7 +795,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_60 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         iafter, oafter = self.sense_n_closed_lines(self.EB1)
@@ -843,7 +843,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_61 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         iafter, oafter = self.sense_n_closed_lines(self.EB1)
@@ -883,7 +883,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_70 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         # EB1 must close connection to sender (odelta == 1) but
@@ -938,7 +938,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_80 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         iafter, oafter = self.sense_n_closed_lines(self.EB1)
@@ -988,7 +988,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_81 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         iafter, oafter = self.sense_n_closed_lines(self.EA1)
@@ -1038,7 +1038,7 @@ class MaxMessageSizeBlockOversize(TestCase):
         if test.error is not None:
             test.logger.log("test_82 test error: %s" % (test.error))
             test.logger.dump()
-        self.assertTrue(test.error is None)
+        self.assertIsNone(test.error)
 
         # Verify that interrouter link was shut down
         iafter, oafter = self.sense_n_closed_lines(self.INT_A)

@@ -354,7 +354,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
                                         ssl_info=ssl_info,
                                         data=b"test_alpn_http11",
                                         cl_args=['-alpn', 'http/1.1'])
-        self.assertTrue(b"Verification: OK" in out and b"Verify return code: 0 (ok)")
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
         # The openssl client has negotiated http/1.1 as the ALPN protocol with the router QDR.A.
         self.assertIn(b"ALPN protocol: http/1.1", out)
         # The openssl client is sending b"test_alpn_http11" to the QDR.A. This will travel from QDR.A to
@@ -373,7 +374,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
                                         ssl_info=ssl_info,
                                         data=b"test_alpn_http2",
                                         cl_args=['-alpn', 'h2'])
-        self.assertTrue(b"Verification: OK" in out and b"Verify return code: 0 (ok)")
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
         self.assertIn(b"ALPN protocol: h2", out)
         # Check the outfile of the openssl server to make sure the data we sent the router reached it.
         self.openssl_server_alpn_http2.wait_out_message("test_alpn_http2")
@@ -387,7 +389,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
                                         ssl_info=ssl_info,
                                         data=b"test_no_alpn")
 
-        self.assertTrue(b"Verification: OK" in out and b"Verify return code: 0 (ok)")
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
         # We did not negotiate any ALPN, so the check the client output to see if it says so.
         self.assertIn(b"No ALPN negotiated", out)
         # Without ALPN, the data the client sent, still reached the server, which is good.
@@ -421,7 +424,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
                                         ssl_info=ssl_info,
                                         data=b"test_auth_peer_pass",
                                         cl_args=['-alpn', 'h2'])
-        self.assertTrue(b"Verification: OK" in out and b"Verify return code: 0 (ok)")
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
         self.assertIn(b"ALPN protocol: h2", out)
         self.openssl_server_alpn_http2.wait_out_message("test_auth_peer_pass")
 
@@ -432,7 +436,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
                                         ssl_info=ssl_info,
                                         data=b"test_tlsv12",
                                         cl_args=['-tls1_2'])
-        self.assertTrue(b"Verification: OK" in out and b"Verify return code: 0 (ok)")
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
         # The data that the openssl client sent to the router is seen in the openssl server logs which
         # means that TLSv1.2 worked.
         self.openssl_server_tlsv1_2.wait_out_message("test_tlsv12")

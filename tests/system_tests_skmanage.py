@@ -204,7 +204,7 @@ class SkmanageTest(TestCase):
         The skmanage GET-ANNOTATIONS call must return an empty dict since we don't support annotations at the moment.
         """
         out = json.loads(self.run_skmanage("get-annotations"))
-        self.assertTrue(len(out) == 0)
+        self.assertEqual(len(out), 0)
 
     def test_get_types(self):
         out = json.loads(self.run_skmanage("get-types"))
@@ -289,7 +289,7 @@ class SkmanageTest(TestCase):
             json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT outputFile="))
         except Exception as e:
             exception = True
-            self.assertTrue("InternalServerErrorStatus: CError: Configuration: Failed to open log file ''" in str(e))
+            self.assertIn("InternalServerErrorStatus: CError: Configuration: Failed to open log file ''", str(e))
         self.assertTrue(exception)
 
         # Set a valid 'output'
@@ -425,7 +425,7 @@ class SkmanageTest(TestCase):
             self.run_skmanage(delete_command)
         except Exception as e:
             exception_occurred = True
-            self.assertTrue(("NotFoundStatus: No entity with name=%s" % name) in str(e))
+            self.assertIn(("NotFoundStatus: No entity with name=%s" % name), str(e))
 
         self.assertTrue(exception_occurred)
 
@@ -606,12 +606,12 @@ class SkmanageTest(TestCase):
 
         if sys.platform.lower().startswith('linux'):
             # @TODO(kgiusti) - linux only for now
-            self.assertTrue(mem is not None)
-            self.assertTrue(mem >= 0)
+            self.assertIsNotNone(mem)
+            self.assertGreaterEqual(mem, 0)
         else:
             # @TODO(kgiusti) - update test to handle other platforms as support
             # is added
-            self.assertTrue(mem is None)
+            self.assertIsNone(mem)
 
     def test_ssl_connection(self):
         """Verify skmanage can securely connect via SSL"""

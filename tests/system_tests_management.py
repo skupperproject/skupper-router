@@ -205,7 +205,7 @@ class ManagementTest(system_test.TestCase):
         entity.delete()
         response = self.node.query(type=LISTENER, attribute_names=['name'])
         for l in response.get_dicts():
-            self.assertTrue(l['name'] != 'foo')
+            self.assertNotEqual(l['name'], 'foo')
 
     def test_log(self):
         """Create, update and query log entities"""

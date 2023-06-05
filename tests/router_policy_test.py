@@ -167,7 +167,7 @@ class PolicyFile(TestCase):
 
     def test_policy1_test_zeke_ok(self):
         p1 = PolicyFile.policy.lookup_user('zeke', '192.168.100.5', 'photoserver', '192.168.100.5:33333', 1)
-        self.assertTrue(p1 == 'test')
+        self.assertEqual(p1, 'test')
         upolicy = {}
         self.assertTrue(
             PolicyFile.policy.lookup_settings('photoserver', p1, upolicy)
