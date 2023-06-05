@@ -115,15 +115,24 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
 
     //
-    // Get the read-buffer capacity for the connection.  Cap this value at the TIER_1 level.
+    // Get the read-buffer capacity for the connection.
     //
-    size_t capacity = MIN(pn_raw_connection_read_buffers_capacity(pn_raw_conn), TIER_1);
+    size_t capacity = pn_raw_connection_read_buffers_capacity(pn_raw_conn);
 
     //
     // If there's no capacity, exit now before doing any further wasted work.
     //
     if (capacity == 0) {
         return 0;
+    }
+
+    //
+    // Since we can't query Proton for the maximum read-buffer capacity, we will infer it from
+    // calls to pn_raw_connection_read_buffers_capacity.
+    //
+    static size_t max_capacity = 0;
+    if (capacity > max_capacity) {
+        max_capacity = capacity;
     }
 
     //
@@ -156,7 +165,7 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
     // Determine how many of the desired buffers are already granted.  This will always be a
     // non-negative value.
     //
-    size_t already_granted = TIER_1 - capacity;
+    size_t already_granted = max_capacity - capacity;
 
     //
     // If we desire to grant additional buffers, calculate the number to grant now.
