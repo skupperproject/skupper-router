@@ -102,6 +102,10 @@ void qd_adaptor_common_init(void)
 
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 {
+    //
+    // Define the allocation tiers.  The tier values are the number of read buffers to be granted
+    // to raw connections based on the percentage of usage of the router-wide buffer ceiling.
+    //
 #define TIER_1 8  // [0% .. 50%)
 #define TIER_2 4  // [50% .. 75%)
 #define TIER_3 2  // [75% .. 85%)
@@ -109,16 +113,37 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 
     assert(pn_raw_conn);
     pn_raw_buffer_t raw_buffers[RAW_BUFFER_BATCH];
-    size_t desired = TIER_4;
+
+    //
+    // Get the read-buffer capacity for the connection.  Cap this value at the TIER_1 level.
+    //
     size_t capacity = MIN(pn_raw_connection_read_buffers_capacity(pn_raw_conn), TIER_1);
 
+    //
+    // If there's no capacity, exit now before doing any further wasted work.
+    //
     if (capacity == 0) {
         return 0;
     }
 
-    qd_alloc_stats_t *stats   = alloc_stats_qd_adaptor_buffer_t();
+    //
+    // Get the "held_by_threads" stats for adaptor buffers as an approximation of how many
+    // buffers are in-use.  This is an approximation since it also counts free buffers held
+    // in the per-thread free-pools.  Since we will be dealing with large numbers here, the
+    // number of buffers in free-pools will not be significant.
+    //
+    // Note that there is a thread race on the access of this value.  There's no danger associated
+    // with getting a partial or corrupted value from time to time.
+    //
+    // Note also that the stats pointer may be NULL if no buffers have yet been allocated.
+    //
+    qd_alloc_stats_t *stats          = alloc_stats_qd_adaptor_buffer_t();
     uint64_t          buffers_in_use = !!stats ? stats->held_by_threads : 0;
 
+    //
+    // Choose the grant-allocation tier based on the number of buffers in use.
+    //
+    size_t desired = TIER_4;
     if (buffers_in_use < buffer_threshold_50) {
         desired = TIER_1;
     } else if (buffers_in_use < buffer_threshold_75) {
@@ -127,10 +152,21 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
         desired = TIER_3;
     }
 
-    size_t       already_granted = TIER_1 - capacity;
-    const size_t granted = desired > already_granted ? desired - already_granted : 0;
-    size_t       count = granted;
+    //
+    // Determine how many of the desired buffers are already granted.  This will always be a
+    // non-negative value.
+    //
+    size_t already_granted = TIER_1 - capacity;
 
+    //
+    // If we desire to grant additional buffers, calculate the number to grant now.
+    //
+    const size_t to_grant = desired > already_granted ? desired - already_granted : 0;
+    size_t       count    = to_grant;
+
+    //
+    // Grant the buffers in batches.
+    //
     while (count) {
         int i;
         for (i = 0; i < count && i < RAW_BUFFER_BATCH; ++i) {
@@ -145,7 +181,7 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
         pn_raw_connection_give_read_buffers(pn_raw_conn, raw_buffers, i);
     }
 
-    return granted;
+    return to_grant;
 }
 
 int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor_buffer_list_t *blist)
