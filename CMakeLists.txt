@@ -33,16 +33,17 @@ set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_ENABLE_EXPORTS TRUE)
 option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Perform link time optimization" ON)
+option(ENABLE_WARNING_ERROR "Consider compiler warnings to be errors" ON)
 
 # preserve frame pointers for ease of debugging and profiling
 #  see https://fedoraproject.org/wiki/Changes/fno-omit-frame-pointer
 add_compile_options(-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
 
 # Set warning compile flags
-set(C_WARNING_GNU -Wall -Wextra -Werror -Wpedantic -pedantic-errors
+set(C_WARNING_GNU -Wall -Wextra -Wpedantic -pedantic-errors
         $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes> $<$<COMPILE_LANGUAGE:C>:-Wold-style-definition> -Wimplicit-fallthrough=3
         -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
-set(C_WARNING_Clang -Wall -Wextra -Werror -Wpedantic
+set(C_WARNING_Clang -Wall -Wextra -Wpedantic
         -Wstrict-prototypes -Wold-style-definition
         -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
 
@@ -68,6 +69,10 @@ set(C_EXTRA_Clang )
 set(C_WARNING_FLAGS ${C_WARNING_${CMAKE_C_COMPILER_ID}})
 set(C_EXTRA_FLAGS ${C_EXTRA_${CMAKE_C_COMPILER_ID}})
 add_compile_options(${C_WARNING_FLAGS} ${C_EXTRA_FLAGS})
+
+if (ENABLE_WARNING_ERROR)
+    add_compile_options(-Werror)
+endif (ENABLE_WARNING_ERROR)
 
 # Set default build type. Must use FORCE because project() sets default to ""
 if (NOT CMAKE_BUILD_TYPE)

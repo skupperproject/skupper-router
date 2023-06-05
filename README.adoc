@@ -385,4 +385,7 @@ The version of skupper-router being used can be obtained running `skrouterd --ve
 |Benchmarking tests will be built.
 The `libbenchmark` library is required by the benchmarks.
 
+|`-DENABLE_WARNING_ERROR=OFF`
+|Build will be allowed to succeed when compilation warnings are present.
+
 |===
