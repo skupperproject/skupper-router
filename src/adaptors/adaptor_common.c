@@ -100,7 +100,7 @@ void qd_adaptor_common_init(void)
     buffer_threshold_75 = (buffer_ceiling / 20) * 15;
     buffer_threshold_85 = (buffer_ceiling / 20) * 17;
 
-    qd_log(LOG_ROUTER, QD_LOG_INFO, "Adaptor buffer memory ceiling: %"PRIu64" (%"PRIu64" buffers)", memory_ceiling, buffer_ceiling);
+    //qd_log(LOG_ROUTER, QD_LOG_INFO, "Adaptor buffer memory ceiling: %"PRIu64" (%"PRIu64" buffers)", memory_ceiling, buffer_ceiling);
 }
 
 int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
