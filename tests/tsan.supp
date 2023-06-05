@@ -83,6 +83,9 @@ race:^__lws_logv$
 # ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
 race:^qd_entity_refresh_connector$
 
+# #1107 - Suppress warnings on benign race in accessing memory stats
+race:^qd_raw_connection_grant_read_buffers$
+
 
 #
 # External libraries

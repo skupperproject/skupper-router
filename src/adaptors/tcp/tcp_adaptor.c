@@ -2245,6 +2245,7 @@ static void qdr_tcp_activate_CT(void *notused, qdr_connection_t *c)
  */
 static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
+    qd_adaptor_common_init();
     qdr_tcp_adaptor_t *adaptor = NEW(qdr_tcp_adaptor_t);
     adaptor->core    = core;
     adaptor->adaptor = qdr_protocol_adaptor(core,
