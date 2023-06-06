@@ -36,10 +36,10 @@
 
 # This package builds and statically links against its own proton-c library
 # so we can use newest Proton features even before it is packaged for our distro
-%global proton_vendored_version 0.38.0
+%global proton_vendored_version 0.39.0
 %define proton_install_prefix %{_builddir}/qpid-proton-%{proton_vendored_version}/install
 
-%global proton_minimum_version 0.34.0
+%global proton_minimum_version 0.37.0
 %global libwebsockets_minimum_version 3.0.1
 %global libnghttp2_minimum_version 1.33.0
 %global libunwind_minimum_version 1.3.1

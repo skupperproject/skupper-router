@@ -52,7 +52,7 @@ jobs:
         runtimeCheck: [asan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.38.0
+          - 0.39.0
     env:
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
@@ -207,7 +207,7 @@ jobs:
         runtimeCheck: [asan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.38.0
+          - 0.39.0
         shard: [1, 2]
         shards: [2]
     env:
@@ -316,7 +316,7 @@ jobs:
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.38.0
+          - 0.39.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
         include:
@@ -364,7 +364,7 @@ jobs:
             cc: gcc
             cxx: g++
             runtimeCheck: OFF
-            protonGitRef: 0.38.0
+            protonGitRef: 0.39.0
             shard: 1
             shards: 2
           - os: ubuntu-20.04
@@ -373,7 +373,7 @@ jobs:
             cc: gcc
             cxx: g++
             runtimeCheck: OFF
-            protonGitRef: 0.38.0
+            protonGitRef: 0.39.0
             shard: 2
             shards: 2
           # coverage
@@ -384,7 +384,7 @@ jobs:
             cxx: g++
             buildType: Coverage
             runtimeCheck: OFF
-            protonGitRef: 0.38.0
+            protonGitRef: 0.39.0
             routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|adaptor_buffer_test|router_engine_test|management_test|router_policy_test|test_command'"
             shard: 1
             shards: 1
