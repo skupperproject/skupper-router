@@ -1134,6 +1134,15 @@ class CommonTcpTests:
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
     def test_20_tcp_connect_disconnect(self):
         name = "test_20_tcp_connect_disconnect"
+        # This test starts an echo pair on Router INTA. The echo client opens a connection
+        # to INTA and immediately closes the connection without sending any data (sizes=[0])
+        # The router *might* open a connection to the echo server
+        # in some cases, and in other cases, the router might sense that the client connection has
+        # already been closed by the echo client without sending any data and hence the router will
+        # not bother to open a connection on the server side. This really depends on how fast the router
+        # gets the disconnect event from the proton raw connection API.
+        # The connectionsOpened and connectionsClosed counters might not match depending on if the
+        # server side connection was created or not.
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[0])]
         result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
@@ -1339,7 +1348,9 @@ class CommonTcpTests:
             assert "connectionsOpened" in output
             assert output["connectionsOpened"] > 0
             # egress_dispatcher connection opens and should never close
-            assert output["connectionsOpened"] == output["connectionsClosed"] + 1
+            if ncat_available():
+                # See the comments in test_20_tcp_connect_disconnect()
+                self.assertIn(output["connectionsOpened"], (output["connectionsClosed"] + 1, output["connectionsClosed"] + 2))
             assert output["bytesIn"] == output["bytesOut"]
         self.logger.log(tname + " SUCCESS")
 
