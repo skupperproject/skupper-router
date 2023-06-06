@@ -221,7 +221,7 @@ static void DISABLED_BM_TCPEchoServerLatencyWithoutQDR(benchmark::State &state)
     lm.latencyMeasureLoop(state, est.port());
 }
 
-BENCHMARK(DISABLED_BM_TCPEchoServerLatencyWithoutQDR)->Unit(benchmark::kMillisecond);
+// BENCHMARK(DISABLED_BM_TCPEchoServerLatencyWithoutQDR)->Unit(benchmark::kMillisecond);
 
 class DispatchRouterThreadTCPLatencyTest
 {
@@ -316,7 +316,7 @@ static void DISABLED_BM_TCPEchoServerLatency1QDRThread(benchmark::State &state)
     est.reset();
 }
 
-BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRThread)->Unit(benchmark::kMillisecond);
+// BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRThread)->Unit(benchmark::kMillisecond);
 
 static void DISABLED_BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &state)
 {
@@ -337,7 +337,7 @@ static void DISABLED_BM_TCPEchoServerLatency1QDRSubprocess(benchmark::State &sta
     }
 }
 
-BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRSubprocess)->Unit(benchmark::kMillisecond);
+// BENCHMARK(DISABLED_BM_TCPEchoServerLatency1QDRSubprocess)->Unit(benchmark::kMillisecond);
 
 static void DISABLED_BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &state)
 {
@@ -364,4 +364,4 @@ static void DISABLED_BM_TCPEchoServerLatency2QDRSubprocess(benchmark::State &sta
     }
 }
 
-BENCHMARK(DISABLED_BM_TCPEchoServerLatency2QDRSubprocess)->Unit(benchmark::kMillisecond);
+// BENCHMARK(DISABLED_BM_TCPEchoServerLatency2QDRSubprocess)->Unit(benchmark::kMillisecond);
