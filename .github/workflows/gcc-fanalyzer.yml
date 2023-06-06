@@ -91,7 +91,7 @@ jobs:
       run: |
         dnf install -y npm
         npm install -g @microsoft/sarif-multitool
-        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --recurse --output-file merged.sarif
+        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --output-file merged.sarif
         python3 scripts/gha_sarif_masher.py --basedir "${PWD}" --output mashed.sarif merged.sarif
         npx -y @microsoft/sarif-multitool rewrite mashed.sarif --normalize-for-ghas --output current.sarif --sarif-output-version Current
       env:
