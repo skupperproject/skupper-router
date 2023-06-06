@@ -28,6 +28,7 @@ from proton.reactor import Container
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
 from system_test import unittest
 from system_test import QdManager
+from system_test import retry_assertion
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
 
@@ -254,15 +255,19 @@ class AutoLinkRetryTest(TestCase):
                 Timer(self.timer_delay, self.check_auto_link).start()
 
     def test_auto_link_reattach(self):
-        long_type = 'io.skupper.router.router.config.autoLink'
-        query_command = 'QUERY --type=' + long_type
-        output = json.loads(self.run_skmanage(query_command))
+        def check_autolink_status():
+            long_type = 'io.skupper.router.router.config.autoLink'
+            query_command = 'QUERY --type=' + long_type
+            output = json.loads(self.run_skmanage(query_command))
 
-        # Since the distribution of the autoLinked address 'examples'
-        # is set to unavailable, the link route will initially be in the
-        # failed state
-        self.assertEqual(output[0]['operStatus'], 'failed')
-        self.assertEqual(output[0]['lastError'], 'Node not found')
+            # Since the distribution of the autoLinked address 'examples'
+            # is set to unavailable, the auto link will initially be in the
+            # 'attaching' state. When the attach fails, the auto link will transition
+            # to the 'failed' state.
+            self.assertEqual(output[0]['operStatus'], 'failed')
+            self.assertEqual(output[0]['lastError'], 'Node not found')
+
+        retry_assertion(check_autolink_status, delay=2)
 
         # Now, we delete the address 'examples' (it becomes available)
         # The Router A must now
