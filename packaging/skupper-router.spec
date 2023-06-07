@@ -19,15 +19,14 @@
 
 # Tutorial for .spec files is available at https://rpm-packaging-guide.github.io
 
-# This .spec file uses `rpkg` (https://pagure.io/rpkg-util) to provide
+# This .spec file uses `packit` (https://packit.dev/docs/cli/srpm/) to provide
 # pleasant user experience to developers.
-# rpkg-util v3 is required, v2 will fail to recognize some macros in this file.
 #
-#  Command                  Description
-# `rpkg srpm`              Creates a *.src.rpm file in /tmp/rpkg (exact path is printed)
-# `rpkg local --nocheck`   Builds a *.rpm for your system in /tmp/rpkg (exact path is printed)
+#  Command                           Description
+# `packit srpm`                      Creates a *.src.rpm file in the local directory (exact path is printed)
+# `packit build locally`             Builds a *.rpm for your system in the local directory (exact path is printed)
 #
-# See `man rpkg` for more commands. See `man rpkg-macros` for explanation of the triple-{ macros.
+# See `man packit` for more commands. See https://packit.dev/docs/actions/#fix-spec-file for explanation of "actions".
 
 # not undefine, that would break COPR, https://pagure.io/rpkg-util/issue/44
 %define _disable_source_fetch 0
@@ -45,12 +44,11 @@
 %global libunwind_minimum_version 1.3.1
 
 Name:          skupper-router
-Version:       {{{ git_dir_version }}}
-Release:       2.0.0%{?dist}
+Version:       2.x.y
+Release:       1%{?dist}
 Summary:       The skrouterd router daemon for Skupper.io
 License:       ASL 2.0
 URL:           https://skupper.io
-VCS:           {{{ git_dir_vcs }}}
 
 Requires: python3
 Requires: skupper-router-common == %{version}
@@ -75,13 +73,14 @@ BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
 # check ctest
 BuildRequires: cyrus-sasl-plain
+BuildRequires: openssl
 
 # proton-c requirements
 BuildRequires: openssl-devel
 BuildRequires: cyrus-sasl-devel
 
 # skupper-router sources
-Source0: {{{ git_dir_pack }}}
+Source0: packit-placeholder-value.tar.gz
 # vendored qpid-proton
 Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
 
@@ -89,7 +88,7 @@ Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid
 A lightweight message router, written in C and built on Qpid Proton, that provides flexible and scalable interconnect backend for Skupper.io Level 7 Virtual Application Network.
 
 %prep
-{{{ git_dir_setup_macro }}}
+%setup -T -b 0 -q -n skupper-router
 %setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
 
 %build
@@ -103,12 +102,12 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
     -DBUILD_BINDINGS=OFF \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl \
     -DBUILD_STATIC_LIBS=ON \
-    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DCMAKE_INSTALL_PREFIX=%{proton_install_prefix}
 %__cmake --build "%{__cmake_builddir}" %{?_smp_mflags} --verbose
 %__cmake --install "%{__cmake_builddir}"
 
-cd %{_builddir}/skupper-router
+cd %{_builddir}/skupper-router-%{version}
 %cmake \
     -DVERSION="%{version}" \
     -DPython_EXECUTABLE=%{python3} \
@@ -118,11 +117,11 @@ cd %{_builddir}/skupper-router
 %cmake_build --target all --target man
 
 %install
-cd %{_builddir}/skupper-router
+cd %{_builddir}/skupper-router-%{version}
 %cmake_install
 
 %check
-cd %{_builddir}/skupper-router
+cd %{_builddir}/skupper-router-%{version}
 %ctest
 
 %files
@@ -131,10 +130,7 @@ cd %{_builddir}/skupper-router
 %config /etc/skupper-router/skrouterd.conf
 %config /etc/sasl2/skrouterd.conf
 
-%{python3_sitelib}/skupper_router/
-%{python3_sitelib}/skupper_router_site.py
-%{python3_sitelib}/__pycache__/skupper_router_site.*.pyc
-%{python3_sitelib}/skupper_router-*.egg-info
+%{python3_sitelib}/
 
 /usr/share/man/man5/skrouterd.conf.5.gz
 /usr/share/man/man8/skrouterd.8.gz
@@ -200,4 +196,4 @@ BuildArch: noarch
 %license /usr/share/doc/skupper-router/LICENSE
 
 %changelog
-{{{ git_dir_changelog }}}
+%autochangelog
