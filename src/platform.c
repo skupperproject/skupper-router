@@ -28,8 +28,14 @@
 #include <stdio.h>
 #include <sys/resource.h>
 
+static uintmax_t computed_memory_size = 0;
+
 uintmax_t qd_platform_memory_size(void)
 {
+    if (computed_memory_size > 0) {
+        return computed_memory_size;
+    }
+
     bool found = false;
     uintmax_t rlimit = UINTMAX_MAX;
 
@@ -105,7 +111,8 @@ uintmax_t qd_platform_memory_size(void)
 
     if (found) {
         uintmax_t tmp = MIN(mlimit, climit);
-        return MIN(rlimit, tmp);
+        computed_memory_size = MIN(rlimit, tmp);
+        return computed_memory_size;
     }
 
     return 0;
