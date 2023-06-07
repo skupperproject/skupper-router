@@ -36,7 +36,7 @@ downstream_package_name: skupper-router
 jobs:
 
   # run build/tests on some interesting architectures
-  - job: tests
+  - job: copr_build
     trigger: pull_request
     targets:
       - epel-9-aarch64
