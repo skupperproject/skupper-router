@@ -17,14 +17,14 @@
 # under the License.
 #
 
-name: Release skupper-router
+name: Release candidate skupper-router
 on:
   push:
     # Sequence of patterns matched against tags
     # Right now, we run this job automatically when a semantically versioned
     # tag is pushed.
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
 
 jobs:
   build:
@@ -40,27 +40,9 @@ jobs:
           export PROJECT_TAG="${CONTAINER_TAG}"
           export VERSION="${CONTAINER_TAG}"
           export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          # This is a release build which means we need to push the :latest tag
-          # to the container repo.
-          export PUSH_LATEST=true
+          # This is a candidate release build which means we WON'T push the :latest tag to the container repo.
+          unset PUSH_LATEST
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
           CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-      # Now that we have successfully pushed a tagged version of the skupper-router container
-      # we will create a draft release and add as much information to it as possible.
-      - name: Create Draft Release
-        id:  create_release
-        uses: actions/create-release@v1
-        env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-           tag_name: ${{ github.ref }}
-           release_name: Release ${{ env.CONTAINER_TAG }}
-           body: |
-             The skupper-router is available as an image:
-              - quay.io/skupper/skupper-router:${{ env.CONTAINER_TAG }}
-
-             Issues fixed in this release
-             - https://github.com/skupperproject/skupper-router/issues?q=is:issue%20milestone:${{ env.CONTAINER_TAG }}
-           draft: true
