@@ -73,6 +73,7 @@ BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
 # check ctest
 BuildRequires: cyrus-sasl-plain
+BuildRequires: openssl
 
 # proton-c requirements
 BuildRequires: openssl-devel
