@@ -215,6 +215,14 @@ static void qcm_mobile_sync_compose_addr_descriptor(const qdr_address_t *addr, q
 static qd_iterator_t *qcm_mobile_sync_parse_addr_descriptor(qd_parsed_field_t *field, int *treatment, int *inlink_count, char *sole_destination_mesh)
 {
     qd_iterator_t *iter = 0;
+
+    if (!!treatment)
+        *treatment = -1;  // no hint, use default
+    if (!!inlink_count)
+        *inlink_count = 0;
+    if (!!sole_destination_mesh)
+        sole_destination_mesh[0] = '\0';
+
     if (qd_parse_is_list(field)) {
         size_t count = qd_parse_sub_count(field);
         for (size_t i = 0; i < count; i++) {
@@ -637,7 +645,6 @@ static void qcm_mobile_sync_on_mau_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                 int            inlink_count;
                 char           sole_destination_mesh[QD_DISCRIMINATOR_BYTES];
 
-                sole_destination_mesh[0] = '\0';
                 qd_iterator_t *iter = qcm_mobile_sync_parse_addr_descriptor(addr_field, &treatment_hint, &inlink_count, sole_destination_mesh);
                 qdr_address_t *addr = 0;
 
