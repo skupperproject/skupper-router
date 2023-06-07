@@ -23,6 +23,7 @@
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/log.h"
+#include "qpid/dispatch/platform.h"
 
 #include <proton/netaddr.h>
 
@@ -86,7 +87,14 @@ void qd_adaptor_common_init(void)
     }
 
     char     *ceiling_string = getenv("SKUPPER_ROUTER_MEMORY_CEILING");
-    uint64_t  memory_ceiling = (uint64_t) 4 * (uint64_t) 1024 * (uint64_t) 1024 * (uint64_t) 1024;  // 4 Gig default
+    uint64_t  memory_ceiling = (uint64_t) qd_platform_memory_size();
+
+    //
+    // In the event the platform module fails to return a size, just use 4Gig.
+    //
+    if (memory_ceiling == 0) {
+        memory_ceiling = (uint64_t) 4 * (uint64_t) 1024 * (uint64_t) 1024 * (uint64_t) 1024;
+    }
 
     if (!!ceiling_string) {
         long long convert = atoll(ceiling_string);
