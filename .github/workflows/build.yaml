@@ -822,7 +822,7 @@ jobs:
       matrix:
         os: [ 'ubuntu-20.04' ]
         container: [ 'centos' ]
-        containerTag: [ 'stream8' ]
+        containerTag: [ 'stream9' ]
 
     container:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
@@ -833,31 +833,40 @@ jobs:
       DNF: ${{github.workspace}}/build
 
     steps:
-      - name: Install build dependencies (1/2)
+
+      - name: Enable additional package repositories for CentOS 8
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream8' }}
         run: |
-          dnf install -y 'dnf-command(config-manager)'
+          dnf -y install epel-release 'dnf-command(config-manager)'
           dnf config-manager --set-enabled powertools
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release 'dnf-command(copr)' 'dnf-command(builddep)'
-          dnf copr enable -y clime/rpkg-util
-          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git rpkg libunwind-devel
+
+      - name: Enable additional package repositories for CentOS 9
+        if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream9' }}
+        run: |
+          dnf -y install epel-release 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled crb
+
+      - name: Install packit
+        run: |
+          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release
+          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git packit
 
       - uses: actions/checkout@v3
 
       - name: Take ownership of the checkout directory (Git CVE-2022-24765)
         run: chown --recursive --reference=/ .
 
-      - name: Deploy the spec.rpkg file to /
-        run: ln -s packaging/skupper-router.spec.rpkg ./
-
-      - name: Install build dependencies (2/2)
+      - name: Install srpm build dependencies
         run: |
-          rpkg spec --outdir /tmp/rpkg
-          dnf builddep --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y /tmp/rpkg/skupper-router.spec
+          dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y 'dnf-command(builddep)'
+          dnf builddep --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y packaging/skupper-router.spec
 
-      - name: Build packages
+      - name: Build skupper-router src.rpm and the rpm packages
         run: |
           mkdir /tmp/skupper-rpms
-          rpkg local --nocheck --outdir /tmp/skupper-rpms
+
+          packit srpm
+          rpmbuild --rebuild skupper-router*.src.rpm --nocheck --define '_rpmdir /tmp/skupper-rpms' --define 'debug_package %{nil}'
 
       - name: Install built packages
         run: |
