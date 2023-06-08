@@ -382,6 +382,7 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
         qd_message_stream_data_release(stream_data->next_stream_data);
         stream_data->next_stream_data = 0;
 
+        set_stream_data_delivery_flags(stream_data, stream_data->in_dlv);
         qdr_delivery_decref(http2_adaptor->core, stream_data->in_dlv, "HTTP2 adaptor in_dlv - free_http2_stream_data");
     }
 
@@ -393,6 +394,7 @@ static void free_http2_stream_data(qdr_http2_stream_data_t *stream_data, bool on
 
         qd_message_stream_data_release(stream_data->next_stream_data);
         stream_data->next_stream_data = 0;
+        set_stream_data_delivery_flags(stream_data, stream_data->in_dlv);
         qdr_delivery_decref(http2_adaptor->core, stream_data->out_dlv,
                             "HTTP2 adaptor out_dlv - free_http2_stream_data");
     }
@@ -1251,8 +1253,17 @@ static int on_frame_recv_callback(nghttp2_session *session,
                     qdr_delivery_remote_state_updated(http2_adaptor->core, stream_data->out_dlv,
                                                       stream_data->out_dlv_local_disposition, true, 0, false);
                 }
-                if (stream_data->in_dlv) {
-                    qdr_delivery_set_context(stream_data->in_dlv, 0);
+                if (stream_data->in_dlv && !stream_data->in_dlv_decrefed) {
+                    // The stream_data->in_dlv could sometimes be freed from underneath when there
+                    // is a race between the connection close and the handling of the RST_STREAM
+                    // Procced to set the context only if the stream_data->in_dlv_decrefed has not already been
+                    // decrefed.
+                    // Fix for https://github.com/skupperproject/skupper-router/issues/1106
+                    if (stream_data->in_dlv_decrefed) {
+                        stream_data->in_dlv = 0;
+                    } else {
+                        qdr_delivery_set_context(stream_data->in_dlv, 0);
+                    }
                 }
                 qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
                        "[C%" PRIu64 "][S%" PRId32 "] HTTP2 NGHTTP2_RST_STREAM frame received, freeing stream data",
@@ -1980,8 +1991,8 @@ static void qdr_http_delivery_update(void *context, qdr_delivery_t *dlv, uint64_
                    stream_data->conn->conn_id, stream_data->stream_id);
         }
 
-        qdr_delivery_decref(http2_adaptor->core, dlv, "HTTP2 adaptor  - qdr_http_delivery_update");
         set_stream_data_delivery_flags(stream_data, dlv);
+        qdr_delivery_decref(http2_adaptor->core, dlv, "HTTP2 adaptor  - qdr_http_delivery_update");
 
         if (send_complete && stream_data->status == QD_STREAM_FULLY_CLOSED) {
             // When all the necessary HTTP2 frames have been sent and the stream is fully closed, free the stream.
@@ -2464,8 +2475,10 @@ uint64_t handle_outgoing_http(qdr_http2_stream_data_t *stream_data)
                        "] In handle_outgoing_http, qdr_delivery_remote_state_updated(stream_data->out_dlv)",
                        conn->conn_id, stream_data->stream_id);
                 stream_data->disp_updated = true;
-                qdr_delivery_decref(http2_adaptor->core, stream_data->out_dlv, "HTTP2 adaptor out_dlv - handle_outgoing_http");
                 set_stream_data_delivery_flags(stream_data, stream_data->out_dlv);
+                qdr_delivery_decref(http2_adaptor->core, stream_data->out_dlv,
+                                    "HTTP2 adaptor out_dlv - handle_outgoing_http");
+                stream_data->out_dlv = 0;
             }
         }
         qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] Finished handle_outgoing_http", conn->conn_id);
