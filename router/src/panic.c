@@ -135,10 +135,9 @@ void panic_handler_init(void)
 {
     if (getenv("SKUPPER_ROUTER_DISABLE_PANIC_HANDLER") == 0) {
         lib_map_init();
-        struct sigaction sa = {
-            .sa_flags     = SA_SIGINFO | SA_RESETHAND,
-            .sa_sigaction = panic_signal_handler,
-        };
+        struct sigaction sa = {0};
+        sa.sa_flags         = (int) (SA_SIGINFO | SA_RESETHAND);
+        sa.sa_sigaction     = panic_signal_handler;
 
         sigemptyset(&sa.sa_mask);
 
