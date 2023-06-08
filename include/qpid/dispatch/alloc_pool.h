@@ -108,14 +108,14 @@ static inline void *qd_alloc_deref_safe_ptr(const qd_alloc_safe_ptr_t *sp)
 #define ALLOC_DECLARE(T) \
     extern __thread qd_alloc_pool_t *__local_pool_##T; \
     T *new_##T(void);    \
-    void free_##T(T *p)
+    void free_##T(T *p); \
+    qd_alloc_stats_t *alloc_stats_##T(void)
 
 #define ALLOC_DECLARE_SAFE(T) \
     ALLOC_DECLARE(T); \
     typedef qd_alloc_safe_ptr_t T##_sp; \
     void set_safe_ptr_##T(T *p, T##_sp *sp); \
-    T *safe_deref_##T(T##_sp sp); \
-    qd_alloc_stats_t *alloc_stats_##T(void)
+    T *safe_deref_##T(T##_sp sp)
 
 /**
  * Define allocator configuration.
