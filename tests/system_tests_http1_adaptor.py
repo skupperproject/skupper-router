@@ -2801,7 +2801,7 @@ class Http1TLSListenerErrorTests(TestCase):
 @unittest.skipIf(not nginx_available() or not curl_available(), "both nginx and curl needed")
 class Http1AdaptorTwoRouterNginxTLS(TestCase):
     """
-    Verify curl requests across two routers to an nginx server
+    Verify requests across two routers to an nginx server connected via TLS
     """
     @classmethod
     def setUpClass(cls):
@@ -2905,7 +2905,7 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
                          '--cert', f"{CLIENT_CERTIFICATE}:client-password",
                          '--key', CLIENT_PRIVATE_KEY]
 
-    def test_get_image_jpg(self):
+    def test_curl_get_image_jpg(self):
         images = ['test.jpg',
                   'pug.png',
                   'skupper.png',
@@ -2924,12 +2924,30 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
             self.assertEqual(get_digest(in_file), get_digest(out_file),
                              f"Error: {out_file} corrupted by HTTP/1 transfer!")
 
-    def test_get_html(self):
+    def test_curl_get_html(self):
         pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
         for page in pages:
             in_file = os.path.join(NginxServer.HTML_FOLDER, page)
             out_file = os.path.join(self.INTA.outdir, 'curl-html', page)
             url = f"https://localhost:{self.http_listener_port}/{page}"
+            (rc, _, err) = run_curl(args=self.curl_args +
+                                    ['--verbose',
+                                     '--create-dirs',
+                                     '--output', out_file,
+                                     '-G', url])
+            self.assertEqual(0, rc, f"curl failed: {err}")
+            self.assertEqual(get_digest(in_file), get_digest(out_file),
+                             f"Error: {out_file} corrupted by HTTP/1 transfer!")
+
+    def test_curl_credit_replenish(self):
+        """
+        Verify AMQP credit is replenished by sending > the default credit window
+        requests across the routers.  The default credit window is 250
+        """
+        in_file = os.path.join(NginxServer.HTML_FOLDER, 'index.html')
+        out_file = os.path.join(self.INTA.outdir, 'curl-credit', 'index.html')
+        url = f"https://localhost:{self.http_listener_port}/index.html"
+        for index in range(300):
             (rc, _, err) = run_curl(args=self.curl_args +
                                     ['--verbose',
                                      '--create-dirs',
