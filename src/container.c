@@ -72,7 +72,7 @@ struct qd_link_t {
     uint64_t                    link_id;
 };
 
-ALLOC_DEFINE(qd_link_t);
+ALLOC_DEFINE_SAFE(qd_link_t);
 ALLOC_DEFINE(qd_link_ref_t);
 
 /** Encapsulates a proton session */

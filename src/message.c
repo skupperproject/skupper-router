@@ -92,7 +92,7 @@ static const char * const section_names[QD_DEPTH_ALL + 1] = {
 
 PN_HANDLE(PN_DELIVERY_CTX)
 
-ALLOC_DEFINE_CONFIG(qd_message_t, sizeof(qd_message_pvt_t), 0, 0);
+ALLOC_DEFINE_CONFIG_SAFE(qd_message_t, sizeof(qd_message_pvt_t), 0, 0);
 ALLOC_DEFINE(qd_message_content_t);
 ALLOC_DEFINE(qd_message_stream_data_t);
 
