@@ -45,8 +45,8 @@ if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
             # Running the tests produce the files with the .gcda extension in the build/profile-dir folder
             # For now, we are only running the adaptor based tests to keep it quick.
             # Even if one of the adaptor tests fail, we will go ahead and create the final executable.
-            COMMAND ${CMAKE_CTEST_COMMAND} -j4 -V -R tcp || (exit 0)
-            COMMAND ${CMAKE_CTEST_COMMAND} -j4 -V -R http || (exit 0)
+            COMMAND QPID_SYSTEM_TEST_TIMEOUT=300 ${CMAKE_CTEST_COMMAND} -j4 -V -R tcp || (exit 0)
+            COMMAND QPID_SYSTEM_TEST_TIMEOUT=300 ${CMAKE_CTEST_COMMAND} -j4 -V -R http || (exit 0)
             # Set the ENABLE_PROFILE_GUIDED_OPTIMIZATION=OFF so that we don't once again create profile data.
             COMMAND ${CMAKE_COMMAND} ${CMAKE_BINARY_DIR} -DENABLE_PROFILE_GUIDED_OPTIMIZATION=OFF -DCMAKE_EXE_LINKER_FLAGS=-fprofile-use=${CMAKE_BINARY_DIR}/profile-data
 
