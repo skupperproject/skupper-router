@@ -449,7 +449,8 @@ class TcpAdaptorOpenSSLTests(TestCase):
         # going to be happy.
         _, _ = self.opensslclient(port=self.router_listener_port_server_auth_peer,
                                   ssl_info=ssl_info,
-                                  data=b"test_connector_requires_client_auth")
+                                  data=b"test_connector_requires_client_auth",
+                                  expect=Process.EXIT_OK)
         # There will be an message on the openssl server out file that the peer did not return a certificate since
         # the corresponding connector sslProfile did not have a client cert set on it.
         self.openssl_server_auth_peer.wait_out_message("SSL routines:tls_process_client_certificate:peer "
