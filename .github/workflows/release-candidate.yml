@@ -40,6 +40,10 @@ jobs:
           export PROJECT_TAG="${CONTAINER_TAG}"
           export VERSION="${CONTAINER_TAG}"
           export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          # Verify if build number is unique, otherwise fail
+          curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
+            jq .tags | grep -E '^\[\]$' || \
+            { echo Unable to get a unique build number ; exit 1 ; }
           # This is a candidate release build which means we WON'T push the :latest tag to the container repo.
           unset PUSH_LATEST
           ./.github/scripts/image.sh
