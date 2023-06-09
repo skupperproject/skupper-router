@@ -871,7 +871,7 @@ class CommonHttp1Edge2EdgeTest:
 
     def test_03_server_pining_for_the_fjords(self):
         """
-        Test permanent loss of server
+        Test permanent loss of server.
         """
         if self.skip.get("test_03_server_pining_for_the_fjords"):
             self.skipTest("Not supported")
