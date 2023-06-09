@@ -98,8 +98,8 @@ class Http1OverTcpEdge2EdgeTest(Http1Edge2EdgeTestBase, CommonHttp1Edge2EdgeTest
         #  <clients>                   <servers>
 
         # Http1 will auto-generate a response, TCP will not:
-        cls.skip = {'test_04_server_pining_for_the_fjords': True,
-                    'test_03_server_reconnect': True}
+        cls.skip = {'test_03_server_pining_for_the_fjords': True,
+                    'test_02_server_reconnect': True}
 
         super(Http1OverTcpEdge2EdgeTest, cls).\
             router('INT.A', 'interior', [('listener', {'role': 'edge', 'port': cls.INTA_edge1_port}),

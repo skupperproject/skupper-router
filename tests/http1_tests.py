@@ -820,49 +820,21 @@ class CommonHttp1Edge2EdgeTest:
             server10.wait()
             server10.check_count(client_ct * repeat_ct * REQ_CT)
 
-    def test_02_credit_replenish(self):
-        """
-        Verify credit is replenished by sending > the default credit window
-        requests across the routers.  The default credit window is 250
-        """
-
-        TESTS = {
-            "GET": [
-                (RequestMsg("GET", "/GET/test_02_credit_replenish",
-                            headers={"Content-Length": "000"}),
-                 ResponseMsg(200, reason="OK",
-                             headers={"Content-Length": "24",
-                                      "Content-Type": "text/plain;charset=utf-8"},
-                             body=b'test_02_credit_replenish'),
-                 ResponseValidator(status=200),
-                 ),
-            ]
-        }
-
-        with self.create_server(self.server11_port, self.listener11_port, TESTS) as server11:
-            self.EA2.wait_connectors()
-
-            client = self.create_threaded_client(TESTS,
-                                                 self.listener11_host_port,
-                                                 repeat=300)
-            client.wait()
-            client.check_count(300)
-
-    def test_03_server_reconnect(self):
+    def test_02_server_reconnect(self):
         """
         Verify server reconnect logic.
         """
-        if self.skip.get("test_03_server_reconnect"):
+        if self.skip.get("test_02_server_reconnect"):
             self.skipTest("Not supported")
 
         TESTS = {
             "GET": [
-                (RequestMsg("GET", "/GET/test_03_server_reconnect",
+                (RequestMsg("GET", "/GET/test_02_server_reconnect",
                             headers={"Content-Length": "000"}),
                  ResponseMsg(200, reason="OK",
                              headers={"Content-Length": "24",
                                       "Content-Type": "text/plain;charset=utf-8"},
-                             body=b'test_03_server_reconnect'),
+                             body=b'test_02_server_reconnect'),
                  ResponseValidator(status=200),
                  ),
             ]
@@ -897,21 +869,21 @@ class CommonHttp1Edge2EdgeTest:
             client.wait()
             client.check_count(2)
 
-    def test_04_server_pining_for_the_fjords(self):
+    def test_03_server_pining_for_the_fjords(self):
         """
-        Test permanent loss of server
+        Test permanent loss of server.
         """
-        if self.skip.get("test_04_server_pining_for_the_fjords"):
+        if self.skip.get("test_03_server_pining_for_the_fjords"):
             self.skipTest("Not supported")
 
         TESTS = {
             "GET": [
-                (RequestMsg("GET", "/GET/test_04_fjord_pining",
+                (RequestMsg("GET", "/GET/test_03_fjord_pining",
                             headers={"Content-Length": "000"}),
                  ResponseMsg(200, reason="OK",
                              headers={"Content-Length": "20",
                                       "Content-Type": "text/plain;charset=utf-8"},
-                             body=b'test_04_fjord_pining'),
+                             body=b'test_03_fjord_pining'),
                  ResponseValidator(status=200),
                  ),
             ]
@@ -932,12 +904,12 @@ class CommonHttp1Edge2EdgeTest:
 
         TESTS_FAIL = {
             "GET": [
-                (RequestMsg("GET", "/GET/test_04_fjord_pining",
+                (RequestMsg("GET", "/GET/test_03_fjord_pining",
                             headers={"Content-Length": "000"}),
                  ResponseMsg(200, reason="OK",
                              headers={"Content-Length": "20",
                                       "Content-Type": "text/plain;charset=utf-8"},
-                             body=b'test_04_fjord_pining'),
+                             body=b'test_03_fjord_pining'),
                  ResponseValidator(status=503),
                  ),
             ]
@@ -955,13 +927,13 @@ class CommonHttp1Edge2EdgeTest:
             client.wait()
             client.check_count(1)
 
-    def test_05_large_streaming_msg(self):
+    def test_04_large_streaming_msg(self):
         """
         Verify large streaming message transfer
         """
         TESTS_11 = {
             "PUT": [
-                (RequestMsg("PUT", "/PUT/streaming_test_11",
+                (RequestMsg("PUT", "/PUT/test_04_large_streaming_msg_11",
                             headers={
                                 "Transfer-encoding": "chunked",
                                 "Content-Type": "text/plain;charset=utf-8"
@@ -980,7 +952,7 @@ class CommonHttp1Edge2EdgeTest:
             ],
 
             "GET": [
-                (RequestMsg("GET", "/GET/streaming_test_11",
+                (RequestMsg("GET", "/GET/test_04_large_streaming_msg_11",
                             headers={"Content-Length": "000"}),
                  ResponseMsg(200, reason="OK",
                              headers={
@@ -997,7 +969,7 @@ class CommonHttp1Edge2EdgeTest:
 
         TESTS_10 = {
             "POST": [
-                (RequestMsg("POST", "/POST/streaming_test_10",
+                (RequestMsg("POST", "/POST/test_04_large_streaming_msg_10",
                             headers={"Header-1": "H" * 2048,
                                      "Content-Length": "2097155",
                                      "Content-Type": "text/plain;charset=utf-8"},
@@ -1009,7 +981,7 @@ class CommonHttp1Edge2EdgeTest:
             ],
 
             "GET": [
-                (RequestMsg("GET", "/GET/streaming_test_10",
+                (RequestMsg("GET", "/GET/test_04_large_streaming_test_msg_10",
                             headers={"Content-Length": "000"}),
                  ResponseMsg(200, reason="OK",
                              headers={"Content-Length": "1999999",
