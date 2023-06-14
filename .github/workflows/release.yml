@@ -40,6 +40,7 @@ jobs:
           export PROJECT_TAG="${CONTAINER_TAG}"
           export VERSION="${CONTAINER_TAG}"
           export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
           # Verify if build number is unique, otherwise fail
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
             jq .tags | grep -E '^\[\]$' || \
@@ -55,6 +56,7 @@ jobs:
       # we will create a draft release and add as much information to it as possible.
       - name: Create Draft Release
         id:  create_release
+        if: env.BUILD_NUMBER == '1'
         uses: actions/create-release@v1
         env:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
