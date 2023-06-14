@@ -29,14 +29,20 @@ under the License
   and push the tag to the skupper-router git repo. The tag name should contain the release number you are trying
   to release E.g. 2.0.0
   ** Note that there is no need to change any versions on the branch. The *tag name* will be used as the *container's tag*
+* If you are preparing a release candidate, then the tag name should contain the release number and a suffix that matches
+  the regex pattern `-rc[0-9]+` (E.g. 2.4.0-rc1)
 * The *https://github.com/skupperproject/skupper-router/blob/main/.github/workflows/release.yml[Release skupper-router,window=_blank]*
   workflow will be automatically triggered once a tag matching the pattern x.y.z (E.g. 2.0.0) is pushed to the git repo.
   This release workflow will:
   ** Compile the skupper-router project using the newly created tag and using the latest release version of proton
   specified in the https://github.com/skupperproject/skupper-router/blob/main/Containerfile[Containerfile,window=_blank]
   and push the image to quay.io
-  *** The skupper-router image tag name will be obtained from the name of the tag that was used to initiate the release workflow.
+  *** The skupper-router image tag name will be obtained from the name of the tag that was used to initiate the release workflow
+  *** An extra tag will be added, and it will be composed by the tag used to initiate the release workflow and the build number
+      of the related tag, which is automatically determined based on published image tags (E.g. for 2.0.0, it can be 2.0.0-1, 2.0.0-2 or 2.0.0-N).
   ** Creates a *draft release* which can be seen here - https://github.com/skupperproject/skupper-router/releases/
+    *** Note that the *draft release* will NOT be created for release candidates, therefore if you are preparing a release
+        candidate you don't need to publish anything.
 * Edit the draft release by clicking the pencil link and verify if the details in the draft release are accurate.
   ** Add more details to the text box if necessary. The text box should already contain a link to the issues that
      were fixed in this milestone.
@@ -57,5 +63,6 @@ under the License
   ** Create a test image using the "Run Workflow" dropdown in the "Manual skupper-router image build"
      page from the Actions tab in github. Make sure the "Push :latest tag?" checkbox is unchecked while creating this test re-spin.
   ** Once the test image is created, use it in skupper-ci and make sure all CI tests pass.
-* Once the skupper CI tests are successful, go back to the "Manual skupper-router image build" page and choose the
-  correct tag (same tag from earlier release, for e.g. 2.3.0) and check the "Push :latest tag?"
+* Once the skupper CI tests are successful, go to the *https://github.com/skupperproject/skupper-router/actions/workflows/release.yml[Release skupper-router]*
+  action page and find the workflow run for the respective tag
+* Open the correct workflow run for the tag to be updated and click "Re-run all jobs"
