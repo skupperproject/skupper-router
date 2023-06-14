@@ -17,10 +17,26 @@
 # under the License.
 #
 
+# Find libwebsockets include dirs and libraries.
+#
+# Sets the following variables:
+#
+#   libwebsockets_FOUND            - True if headers and requested libraries were found
+#   libwebsockets_VERSION          - The library version number
+
 include(FindPackageHandleStandardArgs)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(libwebsockets REQUIRED IMPORTED_TARGET libwebsockets)
+
+# strip trailing version elaboration, e.g. #define LWS_LIBRARY_VERSION "4.1.6-git..."
+if(DEFINED libwebsockets_VERSION)
+  string(REGEX REPLACE
+      "^([0-9.]+).*$"
+      "\\1"
+      libwebsockets_VERSION
+      "${libwebsockets_VERSION}")
+endif()
 
 find_package_handle_standard_args(libwebsockets
     REQUIRED_VARS libwebsockets_FOUND
