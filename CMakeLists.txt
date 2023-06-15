@@ -20,6 +20,13 @@
 cmake_minimum_required(VERSION 3.20)
 project(skupper-router LANGUAGES C CXX)
 
+include(CheckCCompilerFlag)
+include(CheckLibraryExists)
+include(CheckSymbolExists)
+include(CheckFunctionExists)
+include(CheckIncludeFiles)
+include(CMakeDependentOption)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON) # gnu11
@@ -38,7 +45,11 @@ option(ENABLE_PROFILE_GUIDED_OPTIMIZATION "Perform profile guided optimization" 
 
 # preserve frame pointers for ease of debugging and profiling
 #  see https://fedoraproject.org/wiki/Changes/fno-omit-frame-pointer
-add_compile_options(-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
+add_compile_options(-fno-omit-frame-pointer)
+check_c_compiler_flag(-mno-omit-leaf-frame-pointer CC_HAVE_MNO_OMIT_LEAF_FRAME_POINTER)
+if(CC_HAVE_MNO_OMIT_LEAF_FRAME_POINTER)
+  add_compile_options(-mno-omit-leaf-frame-pointer)
+endif()
 
 # Set warning compile flags
 set(C_WARNING_GNU -Wall -Wextra -Wpedantic -pedantic-errors
@@ -153,12 +164,6 @@ else(NOT DEFINED VERSION)
 endif(NOT DEFINED VERSION)
 
 message(STATUS "Setting skupper-router version to ${QPID_DISPATCH_VERSION}")
-
-include(CheckLibraryExists)
-include(CheckSymbolExists)
-include(CheckFunctionExists)
-include(CheckIncludeFiles)
-include(CMakeDependentOption)
 
 ##
 ## Find dependencies
