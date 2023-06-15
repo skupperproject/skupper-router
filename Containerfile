@@ -31,7 +31,7 @@ RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.
 
 WORKDIR /build
 COPY . .
-ENV PROTON_VERSION=main
+ENV PROTON_VERSION=0.39.0
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.2
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
