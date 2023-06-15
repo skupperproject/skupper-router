@@ -585,6 +585,9 @@ static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_mes
                 octet_count += raw_buffers[i].size;
                 if (qd_buffer_size(buf) > 0) {
                     DEQ_INSERT_TAIL(qd_buffers, buf);
+                    if (conn->listener_side) {
+                        // TODO - Call the protocol observer.
+                    }
                 } else {
                     qd_buffer_free(buf);
                 }
@@ -619,6 +622,9 @@ static uint64_t consume_write_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_me
             pn_raw_buffer_t raw_buffers[actual];
             qd_buffer_t *buf = DEQ_HEAD(buffers);
             for (size_t i = 0; i < actual; i++) {
+                if (conn->listener_side) {
+                    // TODO - Call the protocol observer
+                }
                 raw_buffers[i].context  = (uintptr_t) buf;
                 raw_buffers[i].bytes    = (char*) qd_buffer_base(buf);
                 raw_buffers[i].capacity = qd_buffer_capacity(buf);
@@ -681,6 +687,9 @@ static uint64_t consume_message_body_XSIDE_IO(tcplite_connection_t *conn, qd_mes
     //       every subsequent buffer will have an offset of 0.
     //
     while (!!conn->outbound_body && pn_raw_connection_write_buffers_capacity(conn->raw_conn) > 0) {
+        if (conn->listener_side) {
+            // TODO - Call the protocol observer
+        }
         pn_raw_buffer_t raw_buffer;
         raw_buffer.context  = 0;
         raw_buffer.bytes    = (char*) qd_buffer_base(conn->outbound_body);

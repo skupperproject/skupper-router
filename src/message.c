@@ -2431,11 +2431,6 @@ void qd_message_raw_body_and_start_cutthrough(qd_message_t *in_msg, qd_buffer_t 
 
 void qd_message_release_raw_body(qd_message_t *in_msg)
 {
-    qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
-    qd_message_content_t *content = msg->content;
-
-    assert(IS_ATOMIC_FLAG_SET(&content->uct_enabled));
-
     //
     // This function intentionally left blank.
     //
