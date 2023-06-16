@@ -55,13 +55,13 @@ add_executable(unit_tests_size ${unit_test_size_SOURCES})
 target_link_libraries(unit_tests_size skupper-router)
 
 add_executable(test-sender test-sender.c)
-target_link_libraries(test-sender ${Proton_LIBRARIES})
+target_link_libraries(test-sender Proton::qpid-proton)
 
 add_executable(test-receiver test-receiver.c)
-target_link_libraries(test-receiver ${Proton_LIBRARIES})
+target_link_libraries(test-receiver Proton::qpid-proton)
 
 add_executable(clogger clogger.c)
-target_link_libraries(clogger ${Proton_LIBRARIES})
+target_link_libraries(clogger Proton::qpid-proton)
 
 add_executable(threaded_timer_test threaded_timer_test.c)
 target_link_libraries(threaded_timer_test skupper-router)

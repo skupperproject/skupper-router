@@ -17,31 +17,18 @@
 # under the License.
 #
 
-# Sets LIBNGHTTP2_VERSION_STRING from nghttp2ver.h
+include(FindPackageHandleStandardArgs)
+find_package(PkgConfig REQUIRED)
 
-find_library(NGHTTP2_LIBRARIES
-  NAMES libnghttp2 nghttp2
-)
+pkg_check_modules(libnghttp2 REQUIRED IMPORTED_TARGET libnghttp2)
 
-find_path(NGHTTP2_INCLUDE_DIRS
-  NAMES "nghttp2/nghttp2.h" "nghttp2/nghttp2ver.h"
-  HINTS "${CMAKE_INSTALL_PREFIX}/include"
-  PATHS "/usr/include"
-)
+find_package_handle_standard_args(libnghttp2
+    REQUIRED_VARS libnghttp2_FOUND
+    VERSION_VAR libnghttp2_VERSION
+    HANDLE_COMPONENTS)
 
-if(NGHTTP2_INCLUDE_DIRS AND EXISTS "${NGHTTP2_INCLUDE_DIRS}/nghttp2/nghttp2ver.h")
-  # Extract the version info from nghttp2ver.h and set it in LIBNGHTTP2_VERSION_STRING
-  file(STRINGS "${NGHTTP2_INCLUDE_DIRS}/nghttp2/nghttp2ver.h" libnghttp2_version_str
-    REGEX "^#define[ \t]+NGHTTP2_VERSION[ \t]+\"[^\"]+\"")
-  string(REGEX REPLACE "^#define[ \t]+NGHTTP2_VERSION[ \t]+\"([^\"]+)\".*" "\\1"
-    LIBNGHTTP2_VERSION_STRING "${libnghttp2_version_str}")
-  unset(libnghttp2_version_str)
-endif()
-
-if (LIBNGHTTP2_VERSION_STRING AND libnghttp2_FIND_VERSION AND (LIBNGHTTP2_VERSION_STRING VERSION_LESS libnghttp2_FIND_VERSION))
-  message(STATUS "Found libnghttp2 version ${LIBNGHTTP2_VERSION_STRING} but at least ${libnghttp2_FIND_VERSION} is required. http2 support is disabled")
-else()
-  include(FindPackageHandleStandardArgs)
-  find_package_handle_standard_args(
-    libnghttp2 DEFAULT_MSG LIBNGHTTP2_VERSION_STRING NGHTTP2_LIBRARIES NGHTTP2_INCLUDE_DIRS)
-endif()
+set_package_properties(libnghttp2 PROPERTIES
+    TYPE REQUIRED
+    PURPOSE "Enables the HTTP/2 router adaptor"
+    DESCRIPTION "HTTP/2 C Library and tools"
+    URL "https://nghttp2.org")

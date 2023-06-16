@@ -143,22 +143,18 @@ set(qpid_dispatch_INCLUDES
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/router_core
-  ${LIBWEBSOCKETS_INCLUDE_DIRS}
-  ${NGHTTP2_INCLUDE_DIRS}
   )
 
 set(qpid_dispatch_LIBRARIES
   ${CMAKE_DL_LIBS}
   ${CMAKE_THREAD_LIBS_INIT}
-  ${LIBWEBSOCKETS_LIBRARIES}
-  ${NGHTTP2_LIBRARIES}
-  ${Proton_Core_LIBRARIES}
-  ${Proton_Proactor_LIBRARIES}
-  ${Proton_Tls_LIBRARIES}
-  ${Python_LIBRARIES}
+  Python::Python
+  PkgConfig::libwebsockets
+  PkgConfig::libnghttp2
+  Proton::core
+  Proton::proactor
+  Proton::tls
   ${rt_lib}
-  ${CMAKE_DL_LIBS}
-  ${Python_LIBRARIES}
   )
 
 if (dw_lib)
@@ -173,14 +169,15 @@ if ((DEFINED ASAN_LIBRARY) OR (DEFINED UBSAN_LIBRARY) OR (DEFINED TSAN_LIBRARY))
 endif()
 
 add_library(skupper-router OBJECT ${qpid_dispatch_SOURCES})
-target_include_directories(skupper-router PRIVATE ${qpid_dispatch_INCLUDES})
+# PUBLIC linking makes the includes and libraries available to tests
+target_include_directories(skupper-router PUBLIC ${qpid_dispatch_INCLUDES})
 
-if (LIBUNWIND_LIBRARY AND LIBUNWIND_INCLUDE_DIRS)
-  set(qpid_dispatch_LIBRARIES ${qpid_dispatch_LIBRARIES} ${LIBUNWIND_LIBRARY})
+if (libunwind_FOUND)
+  set(qpid_dispatch_LIBRARIES ${qpid_dispatch_LIBRARIES} PkgConfig::libunwind)
   target_compile_definitions(skupper-router PUBLIC "HAVE_LIBUNWIND")
 endif()
 
-target_link_libraries(skupper-router PRIVATE ${qpid_dispatch_LIBRARIES})
+target_link_libraries(skupper-router PUBLIC ${qpid_dispatch_LIBRARIES})
 
 # check for various function availability
 check_symbol_exists(getrlimit sys/resource.h QD_HAVE_GETRLIMIT)

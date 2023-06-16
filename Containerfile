@@ -21,7 +21,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:latest as builder
 
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
-    gcc gcc-c++ make cmake \
+    gcc gcc-c++ make cmake pkgconfig \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel python3-pip \
     libnghttp2-devel \
@@ -37,6 +37,7 @@ ENV LWS_VERSION=v4.3.2
 ENV LIBUNWIND_VERSION=v1.6.2
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
 ENV LIBUNWIND_SOURCE_URL=${LIBUNWIND_SOURCE_URL:-https://github.com/libunwind/libunwind/archive/refs/tags/${LIBUNWIND_VERSION}.tar.gz}
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 ARG VERSION=UNKNOWN
 ENV VERSION=$VERSION

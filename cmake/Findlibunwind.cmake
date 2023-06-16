@@ -17,17 +17,18 @@
 # under the License.
 #
 
-# Sets LIBUNWIND_LIBRARY to libunwind if it exists
-# Sets LIBUNWIND_INCLUDE_DIRS to directory containing libunwind.h header
+include(FindPackageHandleStandardArgs)
+find_package(PkgConfig REQUIRED)
 
-find_library(LIBUNWIND_LIBRARY unwind DOC "libunwind is used to dump the stack on crash")
+pkg_check_modules(libunwind IMPORTED_TARGET libunwind)
 
-find_path(LIBUNWIND_INCLUDE_DIRS libunwind.h
-  HINTS "${CMAKE_INSTALL_PREFIX}/include"
-  PATHS "/usr/include")
+find_package_handle_standard_args(libunwind
+    REQUIRED_VARS libunwind_FOUND
+    VERSION_VAR libunwind_VERSION
+    HANDLE_COMPONENTS)
 
-if (NOT (LIBUNWIND_INCLUDE_DIRS AND LIBUNWIND_LIBRARY))
-  message(STATUS "libunwind library not found: stack dump on crash disabled")
-else()
-  message(STATUS "Found libunwind: stack dump on crash enabled")
-endif()
+set_package_properties(libunwind PROPERTIES
+    TYPE RECOMMENDED
+    PURPOSE "Used to dump the stack on crash"
+    DESCRIPTION "defines a portable and efficient C programming interface (API) to determine the call-chain of a program"
+    URL "https://www.nongnu.org/libunwind")

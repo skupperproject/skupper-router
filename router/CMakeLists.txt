@@ -23,8 +23,6 @@ set(DEFAULT_DISPATCH_PYTHON_DIR ${QPID_DISPATCH_PYTHON_DIR})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
 ##
 ## Build the router application
 ##
@@ -34,7 +32,8 @@ set(router_SOURCES
     )
 
 add_executable(skrouterd ${router_SOURCES})
-target_link_libraries(skrouterd skupper-router)
+target_include_directories(skrouterd PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(skrouterd PRIVATE skupper-router)
 target_link_options(skrouterd PUBLIC LINKER:-Map=skrouterd.map)
 
 if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
