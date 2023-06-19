@@ -40,8 +40,11 @@ if [[ -n "${CONTAINER_USER}" && -n "${CONTAINER_PASSWORD}" ]]; then
     ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
     ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}
 
-    ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}
-    ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}
+    # Only publish build number tag if one provided
+    if [[ -n "${BUILD_NUMBER}" ]]; then
+        ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}
+        ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}
+    fi
 
     # PUSH_LATEST environment variable is exported only in release.yml
     # Only when an actual release tag (for e.g. 2.1.0) is pushed, we push the :latest.
