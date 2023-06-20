@@ -25,66 +25,67 @@
 /**
  * Callback type to indicate VAN address for cross-VAN transport.
  *
- * @param transport_context The context provided in protocol_observer_first.
+ * @param transport_context The context provided in qdpo_first.
  * @param address The VAN address to be used to encapsulate this connection.
  */
-typedef void (*protocol_observer_use_address_t) (void *transport_context, const char *address);
+typedef void (*qdpo_use_address_t) (void *transport_context, const char *address);
 
-typedef struct protocol_observer_config_t;
+typedef struct qdpo_config_t qdpo_config_t;
 
 /**
  * Create a new protocol observer context
  *
  * @param use_address Callback address for use-address indications.
  * @param allow_all_protocols If true, allow all protocols and deny exceptions.  If false, deny all and allow exceptions.
- * @return protocol_observer_config_t* Newly allocated config record.
+ * @return qdpo_config_t* Newly allocated config record.
  */
-protocol_observer_config_t *protocol_observer_config(protocol_observer_use_address_t use_address, bool allow_all_protocols);
+qdpo_config_t *qdpo_config(qdpo_use_address_t use_address, bool allow_all_protocols);
 
 /**
  * Free an allocated protocol observer config.
  *
- * @param config Configuration returned by protocol_observer_config
+ * @param config Configuration returned by qdpo_config
  */
-void protocol_observer_config_free(protocol_observer_config_t *config);
+void qdpo_config_free(qdpo_config_t *config);
 
 /**
  * Add an exception to the list of protocols allowed or denied
  *
- * @param config Configuration returned by protocol_observer_config
+ * @param config Configuration returned by qdpo_config
  * @param protocol The name of an application protocol (HTTPv1, TLSv3, ...)
  */
-void protocol_observer_config_add_exception_protocol(protocol_observer_config_t *config, const char *protocol);
+void qdpo_config_add_exception_protocol(qdpo_config_t *config, const char *protocol);
 
 /**
  * Add an address to be mapped from a protocol field.
  *
- * @param config Configuration returned by protocol_observer_config
+ * @param config Configuration returned by qdpo_config
  * @param field The name of the field used for the mapping
  * @param value The value of the above field to map
  * @param address The address mapped to this field value
  */
-void protocol_observer_config_add_address(protocol_observer_config_t *config, const char *field, const char *value, const char *address);
+void qdpo_config_add_address(qdpo_config_t *config, const char *field, const char *value, const char *address);
 
 
-typedef struct protocol_observer_t;
+typedef struct qdpo_t qdpo_t;
+typedef void* qdpo_transport_handle_t;
 
 /**
  * Create a new protocol observer.  Protocol observers take raw octets and attempt to detect the application protocol
  * in use.
  *
  * @param base Indicates which protocol is the base for detection (i.e. TCP, UDP, SCTP)
- * @param config Configuration returned by protocol_observer_config
- * @return protocol_observer_t* Newly allocated observer
+ * @param config Configuration returned by qdpo_config
+ * @return qdpo_t* Newly allocated observer
  */
-protocol_observer_t *protocol_observer(const char *base, protocol_observer_config_t *config);
+qdpo_t *protocol_observer(const char *base, qdpo_config_t *config);
 
 /**
  * Free an allocated observer
  *
  * @param observer The observer returned by protocol_observer
  */
-void protocol_observer_free(protocol_observer_t *observer);
+void qdpo_free(qdpo_t *observer);
 
 /**
  * Provide the first buffer for a new connection.  This is payload sent from the client of the connection.
@@ -94,26 +95,26 @@ void protocol_observer_free(protocol_observer_t *observer);
  * @param transport_context A context unique to this connections transport (used in callbacks)
  * @param buf The buffer containing the protocol payload
  * @param offset The offset into the buffer where the first protocol octet is found
- * @return void* A connection handle that references the observer's state for this connection
+ * @return void* A transport handle that references the observer's state for this connection
  */
-void *protocol_observer_first(protocol_observer_t *observer, vflow_record_t *vflow, void *transport_context, qd_buffer_t *buf, size_t offset);
+qdpo_transport_handle_t qdpo_first(qdpo_t *observer, vflow_record_t *vflow, void *transport_context, qd_buffer_t *buf, size_t offset);
 
 /**
  * Provide subsequent payload data to an already established connection.
  *
- * @param connection_handle The handle returned by protocol_observer_first
+ * @param transport_handle The handle returned by qdpo_first
  * @param from_client True if this payload is from the client, false if from the server
  * @param buf The buffer containing the protocol payload
  * @param offset The offset into the buffer where the next protocol octet is found
  */
-void protocol_observer_data(void *connection_handle, bool from_client, qd_buffer_t *buf, size_t offset);
+void qdpo_data(qdpo_transport_handle_t transport_handle, bool from_client, qd_buffer_t *buf, size_t offset);
 
 /**
  * Indicate the end of a connection.
  *
- * @param connection_handle The handle returned by protocol_observer_first.  This handle
+ * @param connection_handle The handle returned by qdpo_first.  This handle
  *                          should not be used after making this call.
  */
-void protocol_observer_end(void *connection_handle);
+void qdpo_end(qdpo_transport_handle_t transport_handle);
 
 #endif

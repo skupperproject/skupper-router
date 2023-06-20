@@ -226,6 +226,14 @@ static void TL_setup_listener(tcplite_listener_t *li)
     vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->adaptor_config->address);
     vflow_set_uint64(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
     vflow_add_rate(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, VFLOW_ATTRIBUTE_FLOW_RATE_L4);
+
+    //
+    // Set up the protocol observer
+    //
+    // TODO - add configuration to the listener to influence whether and how the observer is set up.
+    //
+    li->protocol_observer_config = qdpo_config(0, true);
+    li->protocol_observer = protocol_observer("tcp", li->protocol_observer_config);
 }
 
 
@@ -318,6 +326,9 @@ static void free_listener(tcplite_listener_t *li)
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Deleted TcpListener for %s, %s:%s",
             li->adaptor_config->address, li->adaptor_config->host, li->adaptor_config->port);
+
+    qdpo_free(li->protocol_observer);
+    qdpo_config_free(li->protocol_observer_config);
 
     qd_timer_free(li->activate_timer);
     qd_tls_domain_decref(li->tls_domain);
@@ -585,8 +596,8 @@ static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_mes
                 octet_count += raw_buffers[i].size;
                 if (qd_buffer_size(buf) > 0) {
                     DEQ_INSERT_TAIL(qd_buffers, buf);
-                    if (conn->listener_side) {
-                        // TODO - Call the protocol observer.
+                    if (conn->listener_side && !!conn->observer_handle) {
+                        qdpo_data(conn->observer_handle, true, buf, 0);
                     }
                 } else {
                     qd_buffer_free(buf);
@@ -622,8 +633,8 @@ static uint64_t consume_write_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_me
             pn_raw_buffer_t raw_buffers[actual];
             qd_buffer_t *buf = DEQ_HEAD(buffers);
             for (size_t i = 0; i < actual; i++) {
-                if (conn->listener_side) {
-                    // TODO - Call the protocol observer
+                if (conn->listener_side && !!conn->observer_handle) {
+                    qdpo_data(conn->observer_handle, false, buf, 0);
                 }
                 raw_buffers[i].context  = (uintptr_t) buf;
                 raw_buffers[i].bytes    = (char*) qd_buffer_base(buf);
@@ -687,8 +698,8 @@ static uint64_t consume_message_body_XSIDE_IO(tcplite_connection_t *conn, qd_mes
     //       every subsequent buffer will have an offset of 0.
     //
     while (!!conn->outbound_body && pn_raw_connection_write_buffers_capacity(conn->raw_conn) > 0) {
-        if (conn->listener_side) {
-            // TODO - Call the protocol observer
+        if (conn->listener_side && !!conn->observer_handle) {
+            qdpo_data(conn->observer_handle, false, conn->outbound_body, offset);
         }
         pn_raw_buffer_t raw_buffer;
         raw_buffer.context  = 0;
