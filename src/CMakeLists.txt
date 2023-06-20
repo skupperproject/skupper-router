@@ -82,6 +82,7 @@ set(qpid_dispatch_SOURCES
   policy.c
   policy_spec.c
   protocol_adaptor.c
+  protocol_observer.c
   proton_utils.c
   posix/threading.c
   python_embedded.c

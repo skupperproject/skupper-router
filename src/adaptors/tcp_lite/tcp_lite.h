@@ -24,6 +24,7 @@
 #include "adaptors/adaptor_common.h"
 #include "adaptors/adaptor_listener.h"
 #include "adaptors/adaptor_tls.h"
+#include <qpid/dispatch/protocol_observer.h>
 
 
 typedef struct tcplite_common_t     tcplite_common_t;
@@ -65,6 +66,8 @@ struct tcplite_listener_t {
     qdr_link_t                *in_link;
     qd_adaptor_listener_t     *adaptor_listener;
     tcplite_connection_list_t  connections;
+    qdpo_config_t             *protocol_observer_config;
+    qdpo_t                    *protocol_observer;
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
     bool                       closing;
@@ -135,6 +138,7 @@ typedef struct tcplite_connection_t {
     char                       *reply_to;
     qd_handler_context_t        context;
     tcplite_connection_state_t  state;
+    qdpo_transport_handle_t    *observer_handle;
     bool                        listener_side;
     bool                        inbound_credit;
     bool                        inbound_first_octet;
