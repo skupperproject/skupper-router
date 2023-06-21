@@ -1,0 +1,256 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+:toc:
+:toclevels: 5
+= Skupper Router Architectural overview
+
+== Brief history
+
+Skupper router started its life in the https://qpid.apache.org/components/cpp-broker[Apache Qpid C++ Broker project].
+The Qpid C++ Broker had a _broker federation_ feature to connect individual brokers and route messages between them.
+This required manual provisioning of routes and was hard to scale and manage in a large deployment.
+Lots of custom code was required to make things work.
+
+What router federation did was to create a network of interconnected brokers and run internet-like routing between them.
+The messaging router idea is to let brokers be brokers and add a separate routing layer to connect them.
+
+.First router commit
+[source]
+----
+commit 438e7e82e17f008997276df528424a3cbb0bd32e
+Author: Ted Ross <tross@apache.org>
+Date:   Thu Oct 24 16:01:31 2013 +0000
+
+	QPID-5257 - Add structure for the Dispatch sub-project
+----
+
+Since then, four developers over 8 years (as of 2022).
+
+=== Broker federation
+
+The primary use of router was _broker federation_.
+That is, virtualization of brokers behind a routing messaging layer.
+Router built many features to support these use-cases.
+
+* Link Routes
+* Autolinks
+* Waypoints/Phases
+* Policy/Vhosts
+* Exchange/Bindings
+
+All this still lives in the https://qpid.apache.org/components/dispatch-router[Apache Qpid Dispatch Router] project.
+
+=== Packet tunnelling (LanQP)
+
+Virtual network interface can be created, that is then serving as entry point to the Router network.
+On the user end, the interface is assigned an IP address and behaves as a regular network card.
+The backed encapsulates the data into AMQP frames and sends them to the router network, which then delivers the data to correct interface on the other end.
+
+This scenario is now much better handled by Skupper.io (see below).
+Old LanQP project (GNU GPL 2+) is at https://github.com/ted-ross/lanqp[ted-ross/lanqp].
+
+=== Interconnected cloud
+
+Public clouds (AWS, Azure, ...) gave rise to a new paradigm of application architecture.
+Microservices: multiple services implementing an aggregate functionality, each service communicates with some other services, horizontal scalability.
+This provides for new use-cases for the router, but also requires new features.
+
+Non-AMQP protocol support (HTTP, HTTPS, TCP) is required to support existing cloud applications.
+On the whole, this add adds a different set of goals from broker integration.
+
+Original version of this idea, implementing a Kubernetes operator for Apache Qpid Dispatch, still lives as the https://github.com/interconnectedcloud[Interconnected cloud].
+
+=== Skupper.io
+
+Divergent use-cases imply divergent goals.
+A car that flies is unlikely to be a good road car.
+Therefore, the Skupper Router builds upon the Apache Qpid Dispatch, but removes the advanced AMQP broker integration features and puts emphasis on the application networking use case.
+Specifically, this means implementing multi-protocol support with focus on non-AMQP protocols, through protocol adaptors.
+
+=== Legacy
+
+After going through all these evolutions, the codebase has been marked by each and carries the marks to this day.
+There is vestigial code as current implementations are influenced by deprecated and already removed features.
+Opportunities for improvements can be found with a pair of fresh eyes.
+
+== Architecture
+
+=== Code organization
+
+Qpid Dispatch codebase was initially split between qpid-dispatch library (`libqpid-dispatch.so`) and a qpid-dispatch-router binary (`qdrouterd`).
+
+The library was designed as a generic infrastructure library for building high performance AMQP 1.0 server applications in C language on top of https://qpid.apache.org/proton[Apache Qpid Proton library].
+It provided reusable implementations of container, links, connections, messages, etc.
+There never were any users of the library besides the Dispatch Router binary, and eventually the library was partially folded into the router binary.
+
+The dispatch library (as an .so artifact) is no more but the current code structure is still heavily influenced by it.
+
+=== Proactor event loop
+
+At the heart of the router lays the proactor event loop, provided by `libqpid-proton-proactor` library.
+Every *worker thread* in the router runs the proactor event loop, and responds to events the loop returns.
+Proactor events can be split into three groups:
+
+1. TODO
+2. TODO
+3. TODO
+
+In order to manipulate shared data, later in the development, a *core thread* has been dedicated to managing shared state.
+The worker threads submit actions to a queue, from which the core thread consumes and performs the actions one by one, in a serialized manner.
+
+The queue is of the Multiple Producer Single Consumer type, implemented as a linked list.
+
+There is a single core thread and one or more worker threads in the router.
+In addition, the libwebsockets event loop runs in its own thread (TODO?) and there are timer thread(s? TODO).
+
+(TODO lousy picture, this needs embedded svg because mermaid just does not seem to have the right diagram type for this.)
+
+```mermaid
+graph LR;
+  subgraph Router core thread;
+    M([$management]);
+    DB[(Route Table)];
+    As[Actions];
+  end;
+  subgraph Proactor;
+    W1["Worker thread <br> (connection)"];
+    W2["Worker thread <br> (timer)"];
+    W3["Worker thread <br> (connection)"];
+    W4["Worker thread <br> (connection)"];
+  end;
+  W1 --> As;
+  DB --> W3;
+  DB --> W4;
+```
+
+== Git repository layout
+
+The router is a C project with embedded CPython.
+There is a lot of Python code, but majority of it is auxiliary, for system-test stuff for CI.
+
+* decisions/
+** enhancement proposal documents
+* docs/notes/
+** internal documentation for developers, coding guidelines
+** routing table, allocation tool; please document
+* etc/
+** config files
+** config format, important, next meeting
+* share/
+** one sad index.html
+* tools/
+** skstat (show high level information)
+** skmanage (lower level CRUD operations on objects)
+** scraper
+*** scraper (developer tool for AMQP log traffic analysis)
+* scripts/, bin/
+** difference unclear, utilities
+* tests/
+** lots of tests, mostly python, unittests in c, some in C++
+* python/
+** python/skupper_router
+*** skrouter.json, management schema; great topic for docs
+** python/skupper_router_internal
+*** management subsystem, routing protocol implementation; part of management moved to C for speed
+*** running in the core thread, so that due to core thread locking; if C core cannot handle it, it delegates to python
+
+=== C/Python split
+
+Python code implements control plane, data paths miss Python and everything there is in C, for performance.
+The routing is part C (mobile address processing) and part Python, recompute paths and update routing tables.
+
+* src/
+** router/src/main.c
+*** main deamon setup
+*** directory is named `router`, because there were plans to also have Qpid Dispatch `broker`
+*** related includes in `include/qpid/dispatch/`
+** include/qpid/dispatch
+** internal only, not installed, initially intended for public consumption (the dispatch library)
+
+== Data plane: “gang of four”
+
+A set of top-level singleton data structures:
+
+* qd_dispatch_t - src/dispatch_private.h
+   ** “top level” structure (?); initialized first
+   ** references to qd_server_t, qd_container_t, qd_router_t
+* qd_server_t - src/server.c
+   ** references proactor
+* qd_container_t - src/container.c
+   ** “node” - AMQP event dispatch layer
+* qd_router_t - src/router_private.h
+   ** references router core (qdr_core_t)
+   ** contains the “node” used by container.c
+
+== Data plane: AMQP handlers (dispatch library)
+
+Interaction among:
+
+* qd_server_t - proactor AMQP event batch handler
+* qd_container_t - dispatches events to AMQP callbacks
+   ** defines a set of callbacks to handler AMQP events
+      *** qd_node_type_t in include/qpid/dispatch/container.h
+   ** callbacks are the interface to the dispatch library “application”
+* qd_router_t - router “application”
+   ** registers callbacks with the container via a “qd_node_type_t”
+   ** see the router_node structure in router_node.c
+
+== Data plane: Proactor event handling
+
+* The main proactor event loop in server.c::thread_run
+   ** qd_server_t handles all events: listener, timer, interrupt, connection
+* qd_server passes connection-related events to the container
+   ** via qd_container_handle_event(container, event, pn_conn, qd_conn)
+   ** only connection-related events, like session, link, delivery, flow, transport, wake
+* qd_container_t - dispatches events to AMQP callbacks
+   ** vectors these events into the qd_router_t callbacks
+* AMQP_xxx functions defined in src/router_node.c
+
+Note well: these are AMQP-specific events, NOT Raw Connection events!
+
+Listener and Raw Conn event handling to be discussed in the future…
+
+== Data plane: router_node.c - the AMQP “adaptor”
+
+Router interacts with proton elements (pn_connection_t, links, deliveries)
+
+“Safe” to touch proton stuff since it is running on a proactor thread (not core!)
+
+Function call naming conventions:
+
+* AMQP_xxx(): driven by incoming proactor events
+   ** peer actions involving connections, links, deliveries, disposition, etc.
+* CORE_xxx(): driven by router-generated work items
+   ** local actions to be sent to the peer, e.g. send a new delivery, accept a link, etc.
+   ** Uses the adaptor interface layer - see router_node.c::qd_router_setup_late()
+   ** Kicked off by PN_CONNECTION_WAKE event
+      *** EXCEPT CORE_connection_activate(_CT): called by core thread
+
+== Data plane: the Adaptor interface
+
+qdr_protocol_adaptor_t: abstraction to allow support of non-AMQP protocols
+
+* used by router_core.c, http1, http2, tcp, etc…
+* “fakes out” the router core: looks like an AMQP connection
+* Associated with the router core’s connection object qdr_connection_t
+* see qdr_protocol_adaptor() in include/qpid/dispatch/protocol_adaptor.h
+   ** router-initiated protocol actions
+      *** create an outgoing link, close a link, grant credit, send a delivery, set dispo, etc.
+   ** qd_connection_activate callback: only callback run on CORE thread!
+      *** schedules the I/O thread (pn_connection_wake(), the dreaded “timer zero”!)
+      *** the rest are run on proactor threads
