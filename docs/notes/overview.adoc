@@ -62,7 +62,7 @@ On the user end, the interface is assigned an IP address and behaves as a regula
 The backed encapsulates the data into AMQP frames and sends them to the router network, which then delivers the data to correct interface on the other end.
 
 This scenario is now much better handled by Skupper.io (see below).
-Old LanQP project (GNU GPL 2+) is at ted-ross/lanqp[https://github.com/ted-ross/lanqp].
+Old LanQP project (GNU GPL 2+) is at https://github.com/ted-ross/lanqp[ted-ross/lanqp].
 
 === Interconnected cloud
 
