@@ -662,6 +662,7 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
     link->zero_credit_time = link->core_ticks;
     link->terminus_survives_disconnect = qdr_terminus_survives_disconnect(local_terminus);
     SET_ATOMIC_BOOL(&link->streaming_deliveries, dir == QD_INCOMING && qdr_terminus_has_capability(target, QD_CAPABILITY_STREAMING_DELIVERIES));
+    link->resend_released_deliveries           = dir == QD_INCOMING && qdr_terminus_has_capability(target, QD_CAPABILITY_RESEND_RELEASED);
     link->no_route = no_route;
     link->priority = QDR_DEFAULT_PRIORITY;
 

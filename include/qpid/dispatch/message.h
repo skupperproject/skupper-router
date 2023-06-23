@@ -199,6 +199,24 @@ void qd_message_set_streaming_annotation(qd_message_t *msg);
 int qd_message_is_streaming(const qd_message_t *msg);
 
 /**
+ * Classify the message as resend-released.
+ *
+ * This classification is used when a message is to be re-routed in the event it is RELEASED.
+ *
+ * @param msg Pointer to an outgoing message.
+ * @param value Boolean value to set or clear the resend-released state.
+ */
+void qd_message_set_resend_released_annotation(qd_message_t *msg, bool value);
+
+/**
+ * Test whether a received message is marked as resend-released.
+ *
+ * @param msg Pointer to an incoming message.
+ * @return true if the received message has the resend-released flag set.
+ */
+bool qd_message_is_resend_released(const qd_message_t *msg);
+
+/**
  * Prevent the router from doing any transformations to the message annotations
  * section of the message.
  *

@@ -28,8 +28,9 @@ static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool 
 static void qdr_delete_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_delivery_continue_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *delivery);
-static void qdr_delivery_anycast_update_CT(qdr_core_t *core, qdr_delivery_t *dlv,
-                                           qdr_delivery_t *peer, bool settled);
+static void qdr_delivery_anycast_propagate_CT(qdr_core_t *core, qdr_delivery_t *dlv,
+                                              qdr_delivery_t *peer, bool settled);
+static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer);
 static bool qdr_delivery_set_remote_delivery_state_CT(qdr_delivery_t *dlv, uint64_t dispo,
                                                       qd_delivery_state_t *dstate);
 
@@ -497,6 +498,14 @@ static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *de
     qd_delivery_state_free(delivery->remote_state);
     sys_mutex_free(&delivery->dispo_lock);
 
+    qd_bitmask_free(delivery->invalidated_neighbors);
+    qdr_link_ref_t *linkref = DEQ_HEAD(delivery->invalidated_links);
+    while (!!linkref) {
+        DEQ_REMOVE_HEAD(delivery->invalidated_links);
+        free_qdr_link_ref_t(linkref);
+        linkref = DEQ_HEAD(delivery->invalidated_links);
+    }
+
     free_qdr_delivery_t(delivery);
 }
 
@@ -658,7 +667,7 @@ void qdr_delivery_decref_CT(qdr_core_t *core, qdr_delivery_t *dlv, const char *l
 }
 
 
-// the remote endpoint has change the state (disposition) or settlement for the
+// the remote endpoint has changed the state (disposition) or settlement for the
 // delivery.  Update the local state/settlement accordingly.
 //
 static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
@@ -697,8 +706,34 @@ static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool 
         //
         // Anycast forwarding - note: peer _may_ be freed after this!
         //
+
+        //
+        // If the disposition is RELEASED and this is an outgoing delivery, attempt to
+        // locally re-forward the peer incoming delivery.  See skupper-router issue #1135.
+        // https://github.com/skupperproject/skupper-router/issues/1135
+        //
+        // If the resend-released feature is enabled for this message, RELEASED dispositions
+        // are not propagated back to the source.  Instead, the delivery is re-forwarded until
+        // the fanout is zero, in which case a generated disposition of RELEASED is sent back
+        // to the previous relay.
+        //
+        qdr_link_t   *peer_link     = !!peer ? safe_deref_qdr_link_t(peer->link_sp) : 0;
+        bool          peer_incoming = !!peer_link && peer_link->link_direction == QD_INCOMING;
+        qd_message_t *msg           = qdr_delivery_message(dlv);
+
+        //
+        // If the disposition is not RELEASED, cancel the resend-released behavior
+        //
+        if (new_disp != PN_RELEASED) {
+            qd_message_set_resend_released_annotation(msg, false);
+        }
+
         qdr_delivery_set_remote_delivery_state_CT(dlv, new_disp, dstate);
-        qdr_delivery_anycast_update_CT(core, dlv, peer, settled);
+        if (new_disp == PN_RELEASED && peer_incoming && !!msg && qd_message_is_resend_released(msg)) {
+            qdr_delivery_anycast_reforward_CT(core, dlv, peer);
+        } else {
+            qdr_delivery_anycast_propagate_CT(core, dlv, peer, settled);
+        }
     }
 
     //
@@ -708,13 +743,74 @@ static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool 
 }
 
 
+// Re-forward the inbound delivery after invalidating the path of the outbound delivery.
+//
+static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer)
+{
+    assert(!dlv->multicast);
+    assert(!peer->multicast);
+
+    //
+    // Invalidate the outgoing path so it will not be re-attempted
+    //
+    if (!!peer->chosen_link) {
+        qdr_link_ref_t *linkref = new_qdr_link_ref_t();
+        ZERO(linkref);
+        linkref->link = peer->chosen_link;
+        DEQ_INSERT_TAIL(peer->invalidated_links, linkref);
+    } else if (peer->chosen_neighbor >= 0) {
+        if (!peer->invalidated_neighbors) {
+            peer->invalidated_neighbors = qd_bitmask(0);
+        }
+        qd_bitmask_set_bit(peer->invalidated_neighbors, peer->chosen_neighbor);
+    }
+
+    //
+    // Unlink the deliveries so the outbound delivery can be freed
+    //
+    qdr_delivery_incref(peer, "qdr_delivery_anycast_reforward_CT - add to action list");
+    qdr_delivery_unlink_peers_CT(core, dlv, peer);
+
+    //
+    // If the inbound (peer) delivery was in a list (unsettled or settled), remove it and
+    // remove the related ref count.
+    //
+    qdr_link_t *in_link = safe_deref_qdr_link_t(peer->link_sp);
+    if (!!in_link) {
+        if (peer->where == QDR_DELIVERY_IN_UNSETTLED) {
+            DEQ_REMOVE(in_link->unsettled, peer);
+            qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_reforward_CT - removed from unsettled");
+            peer->where = QDR_DELIVERY_NOWHERE;
+        } else if (peer->where == QDR_DELIVERY_IN_SETTLED) {
+            DEQ_REMOVE(in_link->settled, peer);
+            qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_reforward_CT - removed from settled");
+            peer->where = QDR_DELIVERY_NOWHERE;
+        }
+    }
+
+    //
+    // Reset the payload references so the delivery content can be re-transmitted.
+    //
+    // TODO - maybe nothing needed here becaue there will be a new outbound delivery
+
+    //
+    // Re-route the inbound delivery through the core link_deliver process
+    //
+    qdr_action_t *action = qdr_action(qdr_link_deliver_CT, "link_deliver_reforward");
+    peer->reforwarded = true;
+    action->args.delivery.delivery = peer;
+    action->args.delivery.more     = !qd_message_receive_complete(peer->msg);
+    qdr_action_enqueue(core, action);
+}
+
+
 // The remote delivery state (disposition) and/or remote settlement for an
 // anycast delivery has changed.  Propagate the changes to its peer delivery.
 //
 // returns true if ownership of error parameter is taken (do not free it)
 //
-static void qdr_delivery_anycast_update_CT(qdr_core_t *core, qdr_delivery_t *dlv,
-                                           qdr_delivery_t *peer, bool settled)
+static void qdr_delivery_anycast_propagate_CT(qdr_core_t *core, qdr_delivery_t *dlv,
+                                              qdr_delivery_t *peer, bool settled)
 {
     bool push           = false;
     bool peer_moved     = false;
@@ -725,7 +821,7 @@ static void qdr_delivery_anycast_update_CT(qdr_core_t *core, qdr_delivery_t *dlv
     assert(!peer || !peer->multicast);
 
     if (peer)
-        qdr_delivery_incref(peer, "qdr_delivery_anycast_update_CT - prevent peer from being freed");
+        qdr_delivery_incref(peer, "qdr_delivery_anycast_propagate_CT - prevent peer from being freed");
 
     //
     // Non-multicast Logic:
@@ -776,11 +872,11 @@ static void qdr_delivery_anycast_update_CT(qdr_core_t *core, qdr_delivery_t *dlv
     // Release the unsettled references if the deliveries were moved/settled
     //
     if (dlv_moved)
-        qdr_delivery_decref_CT(core, dlv, "qdr_delivery_anycast_update CT - dlv removed from unsettled");
+        qdr_delivery_decref_CT(core, dlv, "qdr_delivery_anycast_propagate_CT - dlv removed from unsettled");
     if (peer_moved)
-        qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_update_CT - peer removed from unsettled");
+        qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_propagate_CT - peer removed from unsettled");
     if (peer)
-        qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_update_CT - allow free of peer");
+        qdr_delivery_decref_CT(core, peer, "qdr_delivery_anycast_propagate_CT - allow free of peer");
 }
 
 
