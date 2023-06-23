@@ -18,7 +18,8 @@
 #
 
 from .data import MessageHELLO
-from ..dispatch import LOG_TRACE, LOG_CRITICAL
+from ..dispatch import LOG_DEBUG, LOG_CRITICAL
+from ..dispatch import LOG_DEBUG, LOG_CRITICAL
 
 
 class HelloProtocol:
@@ -44,7 +45,7 @@ class HelloProtocol:
             self.last_hello_ticks = self.ticks
             msg = MessageHELLO(None, self.id, list(self.hellos.keys()), self.container.instance)
             self.container.send('amqp:/_local/qdhello', msg)
-            self.container.log_hello(LOG_TRACE, "SENT: %r" % msg)
+            self.container.log_hello(LOG_DEBUG, "SENT: %r" % msg)
 
     def handle_hello(self, msg, now, link_id, cost):
         if msg.id == self.id:
@@ -64,4 +65,4 @@ class HelloProtocol:
         for key, last_seen in list(self.hellos.items()):
             if now - last_seen > self.hello_max_age:
                 self.hellos.pop(key)
-                self.container.log_hello(LOG_TRACE, "HELLO peer expired: %s" % key)
+                self.container.log_hello(LOG_DEBUG, "HELLO peer expired: %s" % key)

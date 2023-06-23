@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from ..dispatch import LOG_INFO, LOG_TRACE, LOG_DEBUG
+from ..dispatch import LOG_INFO, LOG_DEBUG, LOG_DEBUG
 from .data import LinkState, ProtocolVersion
 from .address import Address
 
@@ -128,7 +128,7 @@ class NodeTracker:
             self.last_topology_change = int(round(now))
             if not self.flux_mode:
                 self.flux_mode = True
-                self.container.log(LOG_TRACE, "Entered Router Flux Mode")
+                self.container.log(LOG_DEBUG, "Entered Router Flux Mode")
 
         ##
         # Handle local link state changes
@@ -138,7 +138,7 @@ class NodeTracker:
             self.link_state.bump_sequence()
             self.recompute_topology = True
             send_ra = True
-            self.container.log_ls(LOG_TRACE, "Local Link State: %r" % self.link_state)
+            self.container.log_ls(LOG_DEBUG, "Local Link State: %r" % self.link_state)
 
         ##
         # Recompute the topology
@@ -254,7 +254,7 @@ class NodeTracker:
         result = (now - self.last_topology_change) <= self.flux_interval
         if not result and self.flux_mode:
             self.flux_mode = False
-            self.container.log(LOG_TRACE, "Exited Router Flux Mode")
+            self.container.log(LOG_DEBUG, "Exited Router Flux Mode")
         return result
 
     def ra_received(self, node_id, version, ls_seq, mobile_seq, instance, now):
@@ -393,7 +393,7 @@ class RouterNode:
         self.need_mobile_request     = False
         self.keep_alive_count        = 0
         self.adapter.add_router("amqp:/_topo/0/%s/qdrouter" % self.id, self.maskbit)
-        self.log(LOG_TRACE, "Node %s created: maskbit=%d" % (self.id, self.maskbit))
+        self.log(LOG_DEBUG, "Node %s created: maskbit=%d" % (self.id, self.maskbit))
         self.adapter.get_agent().add_implementation(self, "router.node")
 
     def refresh_entity(self, attributes):
@@ -422,21 +422,21 @@ class RouterNode:
         self.next_hop_router = None
         self.adapter.set_link(self.maskbit, link_id)
         self.adapter.remove_next_hop(self.maskbit)
-        self.log(LOG_TRACE, "Node %s link set: link_id=%r (removed next hop)" % (self.id, link_id))
+        self.log(LOG_DEBUG, "Node %s link set: link_id=%r (removed next hop)" % (self.id, link_id))
         return True
 
     def remove_link(self):
         if self.peer_link_id is not None:
             self.peer_link_id = None
             self.adapter.remove_link(self.maskbit)
-            self.log(LOG_TRACE, "Node %s link removed" % self.id)
+            self.log(LOG_DEBUG, "Node %s link removed" % self.id)
 
     def delete(self):
         self.adapter.get_agent().remove_implementation(self)
         self.unmap_all_addresses()
         self.adapter.del_router(self.maskbit)
         self.parent._free_maskbit(self.maskbit)
-        self.log(LOG_TRACE, "Node %s deleted" % self.id)
+        self.log(LOG_DEBUG, "Node %s deleted" % self.id)
 
     def set_next_hop(self, next_hop):
         if self.id == next_hop.id:
@@ -450,7 +450,7 @@ class RouterNode:
             return
         self.next_hop_router = next_hop
         self.adapter.set_next_hop(self.maskbit, next_hop.maskbit)
-        self.log(LOG_TRACE, "Node %s next hop set: %s" % (self.id, next_hop.id))
+        self.log(LOG_DEBUG, "Node %s next hop set: %s" % (self.id, next_hop.id))
 
     def set_valid_origins(self, valid_origins):
         if self.valid_origins == valid_origins:
@@ -458,20 +458,20 @@ class RouterNode:
         self.valid_origins = valid_origins
         vo_mb = [self.parent.nodes[N].maskbit for N in valid_origins]
         self.adapter.set_valid_origins(self.maskbit, vo_mb)
-        self.log(LOG_TRACE, "Node %s valid origins: %r" % (self.id, valid_origins))
+        self.log(LOG_DEBUG, "Node %s valid origins: %r" % (self.id, valid_origins))
 
     def set_cost(self, cost):
         if self.cost == cost:
             return
         self.cost = cost
         self.adapter.set_cost(self.maskbit, cost)
-        self.log(LOG_TRACE, "Node %s cost: %d" % (self.id, cost))
+        self.log(LOG_DEBUG, "Node %s cost: %d" % (self.id, cost))
 
     def remove_next_hop(self):
         if self.next_hop_router:
             self.next_hop_router = None
             self.adapter.remove_next_hop(self.maskbit)
-            self.log(LOG_TRACE, "Node %s next hop removed" % self.id)
+            self.log(LOG_DEBUG, "Node %s next hop removed" % self.id)
 
     def is_neighbor(self):
         return self.peer_link_id is not None

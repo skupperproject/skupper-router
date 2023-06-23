@@ -850,7 +850,6 @@ static void qd_python_setup(void)
         //
         PyModule_AddType(m, (PyTypeObject*) &LogAdapterType);
 
-        qd_register_constant(m, "LOG_TRACE",    QD_LOG_TRACE);
         qd_register_constant(m, "LOG_DEBUG",    QD_LOG_DEBUG);
         qd_register_constant(m, "LOG_INFO",     QD_LOG_INFO);
         qd_register_constant(m, "LOG_NOTICE",   QD_LOG_NOTICE);

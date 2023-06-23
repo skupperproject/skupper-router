@@ -516,7 +516,7 @@ void qdr_delivery_link_peers_CT(qdr_delivery_t *in_dlv, qdr_delivery_t *out_dlv)
 
     qdr_link_t *link = qdr_delivery_link(in_dlv);
     if (link) {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, DLV_FMT " :in qdr_delivery_link_peers_CT out: " DLV_FMT,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " :in qdr_delivery_link_peers_CT out: " DLV_FMT,
                DLV_ARGS(in_dlv), DLV_ARGS(out_dlv));
     }
 
@@ -552,7 +552,7 @@ void qdr_delivery_unlink_peers_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_del
     if (!dlv || !peer)
         return;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, DLV_FMT " :in qdr_delivery_unlink_peers_CT out: " DLV_FMT,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " :in qdr_delivery_unlink_peers_CT out: " DLV_FMT,
            DLV_ARGS(dlv), DLV_ARGS(peer));
 
     // first, drop dlv's reference to its peer
@@ -798,7 +798,7 @@ void qdr_delivery_mcast_inbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_d
 
     assert(in_dlv->multicast);  // expect in_dlv to be the inbound delivery
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            DLV_FMT " Remote updated mcast delivery disp=0x%" PRIx64 " settled=%s", DLV_ARGS(in_dlv), new_disp,
            (settled) ? "True" : "False");
 
@@ -837,7 +837,7 @@ void qdr_delivery_mcast_inbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_d
             qdr_delivery_push_CT(core, out_peer);
         }
 
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                DLV_FMT " Updating mcast delivery out peer " DLV_FMT " updated disp=%s settled=%s", DLV_ARGS(in_dlv),
                DLV_ARGS(out_peer), (push) ? "True" : "False", (unlink) ? "True" : "False");
 
@@ -905,10 +905,10 @@ static bool qdr_delivery_mcast_outbound_settled_CT(qdr_core_t *core, qdr_deliver
             *moved = qdr_delivery_settled_CT(core, in_dlv);
         }
 
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, DLV_FMT " mcast delivery has settled, disp=0x%" PRIx64,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " mcast delivery has settled, disp=0x%" PRIx64,
                DLV_ARGS(in_dlv), in_dlv->disposition);
     } else {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                DLV_FMT " mcast delivery out peer " DLV_FMT " has settled, remaining peers=%d", DLV_ARGS(in_dlv),
                DLV_ARGS(out_dlv), peer_count - 1);
     }
@@ -970,7 +970,7 @@ static bool qdr_delivery_mcast_outbound_disposition_CT(qdr_core_t *core, qdr_del
     if (qd_delivery_state_is_terminal(new_disp)) {
         // our mcast impl ignores non-terminal outcomes
 
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                DLV_FMT " mcast delivery out peer " DLV_FMT " disp updated: 0x%" PRIx64, DLV_ARGS(in_dlv),
                DLV_ARGS(out_dlv), new_disp);
 
@@ -998,7 +998,7 @@ static bool qdr_delivery_mcast_outbound_disposition_CT(qdr_core_t *core, qdr_del
             // TODO(kgiusti) what about error parameter?
             in_dlv->disposition = in_dlv->mcast_disposition;
             push = true;
-            qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, DLV_FMT " mcast delivery terminal state set: 0x%" PRIx64,
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " mcast delivery terminal state set: 0x%" PRIx64,
                    DLV_ARGS(in_dlv), in_dlv->disposition);
         }
     }

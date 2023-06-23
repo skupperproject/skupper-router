@@ -69,7 +69,7 @@ class RouterMessageLogTestAll(RouterMessageLogTestBase):
                           'messageLoggingComponents': 'all'}),
 
             ('log', {'module': 'MESSAGE',
-                     'enable': 'trace+',
+                     'enable': 'debug+',
                      'outputFile': 'QDR-message.log'}),
             ('log', {'module': 'DEFAULT',
                      'enable': 'info+',

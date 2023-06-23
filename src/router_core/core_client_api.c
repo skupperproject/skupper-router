@@ -181,7 +181,7 @@ qdrc_client_t *qdrc_client_CT(qdr_core_t *core,
                                                     NULL,   // target terminus
                                                     &receiver_endpoint,
                                                     client);
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "New core client created c=%p", (void *) client);
     return client;
 }
@@ -221,7 +221,7 @@ void qdrc_client_free_CT(qdrc_client_t *client)
     qd_hash_free(client->correlations);
     free(client->reply_to);
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "Core client freed c=%p", (void *) client);
 
     free_qdrc_client_t(client);
@@ -238,7 +238,7 @@ int qdrc_client_request_CT(qdrc_client_t                 *client,
                            qdrc_client_on_ack_CT_t        on_ack_cb,
                            qdrc_client_request_done_CT_t  done_cb)
 {
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, "New core client request created c=%p, rc=%p", (void *) client,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "New core client request created c=%p, rc=%p", (void *) client,
            request_context);
 
     qdrc_client_request_t *req = new_qdrc_client_request_t();
@@ -295,7 +295,7 @@ static void _flush_send_queue_CT(qdrc_client_t *client)
         DEQ_REMOVE_HEAD_N(SEND_Q, client->send_queue);
         req->on_send_queue = false;
 
-        qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,                    //
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,                    //
                "Core client request sent c=%p, rc=%p dlv=%p cid=%s",       //
                (void *) client, req->req_context, (void *) req->delivery,  //
                *req->correlation_id ? req->correlation_id : "<none>");
@@ -362,7 +362,7 @@ static void _free_request_CT(qdrc_client_t *client,
                      error);
     }
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,         //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,         //
            "Freeing core client request c=%p, rc=%p (%s)",  //
            (void *) client, req->req_context,               //
            error ? error : "request complete");
@@ -396,7 +396,7 @@ static void _sender_second_attach_CT(void *context,
 {
     qdrc_client_t *client = (qdrc_client_t *)context;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "Core client sender 2nd attach c=%p", (void *) client);
 
     if (!client->sender_up) {
@@ -414,7 +414,7 @@ static void _receiver_second_attach_CT(void *context,
 {
     qdrc_client_t *client = (qdrc_client_t *)context;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "Core client receiver 2nd attach c=%p", (void *) client);
 
     if (!client->receiver_up) {
@@ -436,7 +436,7 @@ static void _sender_flow_CT(void *context,
     qdr_core_t *core = client->core;
 
     client->tx_credit += available_credit;
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,                //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,                //
            "Core client sender flow granted c=%p credit=%d d=%s",  //
            (void *) client, client->tx_credit, (drain) ? "T" : "F");
     if (client->tx_credit > 0) {
@@ -463,7 +463,7 @@ static void _sender_update_CT(void *context,
 {
     qdrc_client_t *client = (qdrc_client_t *)context;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,                   //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,                   //
            "Core client sender update c=%p dlv=%p d=%" PRIx64 " %s",  //
            (void *) client, (void *) delivery, disposition,           //
            settled ? "settled" : "unsettled");
@@ -510,7 +510,7 @@ static void _receiver_transfer_CT(void *client_context,
     qdr_core_t *core = client->core;
     bool complete = qd_message_receive_complete(message);
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "Core client received msg c=%p complete=%s",  //
            (void *) client, complete ? "T" : "F");
 
@@ -526,7 +526,7 @@ static void _receiver_transfer_CT(void *client_context,
             qd_hash_retrieve(client->correlations, cid_iter, (void **)&req);
             qd_iterator_free(cid_iter);
             if (req) {
-                qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                        "Core client received msg c=%p rc=%p cid=%s",  //
                        (void *) client, req->req_context, req->correlation_id);
 
@@ -576,7 +576,7 @@ static void _sender_detached_CT(void *client_context,
 {
     qdrc_client_t *client = (qdrc_client_t *)client_context;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "Core client sender detached c=%p", (void *) client);
 
     if (client->sender_up) {
@@ -609,7 +609,7 @@ static void _receiver_detached_CT(void *client_context,
 {
     qdrc_client_t *client = (qdrc_client_t *)client_context;
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE,  //
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,  //
            "Core client receiver detached c=%p", (void *) client);
 
     if (client->receiver_up) {

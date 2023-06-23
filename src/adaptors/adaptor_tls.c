@@ -497,7 +497,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
 
     // Do not proceed if TLS has no decrypt input capacity.
     if (fetch_size == 0) {
-        qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] qd_tls_decrypt fetch_size=0, returning", tls->conn_id);
+        qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] qd_tls_decrypt fetch_size=0, returning", tls->conn_id);
         return 0;
     }
 
@@ -514,7 +514,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
                 encrypted_bytes_in += raw_buffers[i].size;
                 size_t consumed = pn_tls_give_decrypt_input_buffers(tls->tls_session, &raw_buffers[i], 1);
                 qd_log(tls->log_module,
-                       QD_LOG_TRACE,
+                       QD_LOG_DEBUG,
                        "[C%" PRIu64 "] qd_tls_decrypt gave raw buffer to pn_tls_give_decrypt_input_buffers, size=%u ",
                        tls->conn_id,
                        raw_buffers[i].size);
@@ -525,7 +525,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
                 // This buffer size is zero, we will free this buffer immediately.
                 //
                 qd_log(tls->log_module,
-                       QD_LOG_TRACE,
+                       QD_LOG_DEBUG,
                        "[C%" PRIu64 "] qd_tls_decrypt raw buffer size=0, did not sent this buffer to TLS, freeing it",
                        tls->conn_id);
                 qd_adaptor_buffer_free(adaptor_buff);
@@ -540,7 +540,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
             return QD_TLS_ERROR;
         }
 
-        qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] qd_tls_decrypt process_tls successful", tls->conn_id);
+        qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] qd_tls_decrypt process_tls successful", tls->conn_id);
 
     give_decrypt_output_buffers:
         while (pn_tls_need_decrypt_output_buffers(tls->tls_session)) {
@@ -565,7 +565,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
             }
 
             qd_log(tls->log_module,
-                   QD_LOG_TRACE,
+                   QD_LOG_DEBUG,
                    "[C%" PRIu64
                    "] qd_tls_decrypt (pn_tls_need_decrypt_output_buffers) process_tls successful, "
                    "given_decrypt_output_buffers=%zu",
@@ -579,7 +579,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
                 qd_get_adaptor_buffer_from_pn_raw_buffer(&decrypted_output_buff);
             DEQ_INSERT_TAIL(*decrypted_buffs, decrypted_adaptor_buff);
             qd_log(tls->log_module,
-                   QD_LOG_TRACE,
+                   QD_LOG_DEBUG,
                    "[C%" PRIu64 "] qd_tls_decrypt pn_tls_take_decrypt_output_buffers, decrypt adaptor buffer size=%zu",
                    tls->conn_id,
                    qd_adaptor_buffer_size(decrypted_adaptor_buff));
@@ -596,7 +596,7 @@ int qd_tls_decrypt(qd_tls_t *tls, pn_raw_connection_t *pn_raw_conn, qd_adaptor_b
 
     tls->tls_has_output = pn_tls_is_encrypt_output_pending(tls->tls_session);
     qd_log(tls->log_module,
-           QD_LOG_TRACE,
+           QD_LOG_DEBUG,
            "[C%" PRIu64 "] qd_tls_decrypt tls->tls_has_output=%i",
            tls->conn_id,
            qd_tls_has_output(tls));
@@ -623,7 +623,7 @@ int qd_tls_encrypt(qd_tls_t *tls, qd_adaptor_buffer_t *unencrypted_buff, qd_adap
     }
 
     if (pn_tls_is_secure(tls->tls_session)) {
-        qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] qd_tls_encrypt tls session is secure", tls->conn_id);
+        qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] qd_tls_encrypt tls session is secure", tls->conn_id);
 
         if (unencrypted_buff) {
             size_t encrypt_input_buff_capacity = pn_tls_get_encrypt_input_buffer_capacity(tls->tls_session);
@@ -636,7 +636,7 @@ int qd_tls_encrypt(qd_tls_t *tls, qd_adaptor_buffer_t *unencrypted_buff, qd_adap
             (void) consumed;  // prevent unused variable warning
             assert(consumed == 1);
             qd_log(tls->log_module,
-                   QD_LOG_TRACE,
+                   QD_LOG_DEBUG,
                    "[C%" PRIu64 "] qd_tls_encrypt pn_tls_give_encrypt_input_buffers success",
                    tls->conn_id);
 
@@ -674,7 +674,7 @@ give_encrypt_output_buffers:
         (void) encrypt_result_buffers_count;  // prevent unused variable warning
 
         qd_log(tls->log_module,
-               QD_LOG_TRACE,
+               QD_LOG_DEBUG,
                "[C%" PRIu64 "] qd_tls_encrypt pn_tls_give_encrypt_output_buffers success",
                tls->conn_id);
 
@@ -686,7 +686,7 @@ give_encrypt_output_buffers:
             return QD_TLS_ERROR;
         }
 
-        qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] qd_tls_encrypt process_tls successful", tls->conn_id);
+        qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] qd_tls_encrypt process_tls successful", tls->conn_id);
     }
 
     pn_raw_buffer_t encrypted_raw_output_buff;
@@ -695,7 +695,7 @@ give_encrypt_output_buffers:
             qd_get_adaptor_buffer_from_pn_raw_buffer(&encrypted_raw_output_buff);
         DEQ_INSERT_TAIL(*encrypted_buffs, encrypted_adaptor_buff);
         qd_log(tls->log_module,
-               QD_LOG_TRACE,
+               QD_LOG_DEBUG,
                "[C%" PRIu64 "] qd_tls_encrypt pn_tls_take_encrypt_output_buffers, encrypted_raw_output_buff.size=%u",
                tls->conn_id,
                encrypted_raw_output_buff.size);
@@ -821,7 +821,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                 if (out_octets > 0) {
                     assert(!DEQ_IS_EMPTY(ubufs) && DEQ_SIZE(ubufs) <= capacity);
                     qd_log(tls->log_module,
-                           QD_LOG_TRACE,
+                           QD_LOG_DEBUG,
                            "[C%" PRIu64 "] %" PRIi64 " unencrypted bytes taken by TLS for encryption (%zu buffers)",
                            tls->conn_id,
                            out_octets,
@@ -839,7 +839,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                     if (out_octets == QD_IO_EOS && tls->output_eos == false) {
                         pn_tls_close_output(tls->tls_session);
                         tls->output_eos = true;
-                        qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] EOS signalled: closing TLS output",
+                        qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] EOS signalled: closing TLS output",
                                tls->conn_id);
                     }
                 }
@@ -871,7 +871,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             if (pushed > 0) {
                 tls->encrypted_input_bytes += total_octets;
                 qd_log(tls->log_module,
-                       QD_LOG_TRACE,
+                       QD_LOG_DEBUG,
                        "[C%" PRIu64 "] %" PRIu64
                        " encrypted bytes read from the raw connection passed to TLS for decryption (%zu buffers)",
                        tls->conn_id,
@@ -893,7 +893,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             int        err             = pn_tls_process(tls->tls_session);
             if (err) {
                 tls->tls_error = true;
-                qd_log(tls->log_module, QD_LOG_TRACE, "[C%" PRIu64 "] pn_tls_process failed: error=%d", tls->conn_id,
+                qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] pn_tls_process failed: error=%d", tls->conn_id,
                        err);
             } else if (check_if_secure && pn_tls_is_secure(tls->tls_session)) {
                 tls->on_secure_cb(tls, tls->user_context);
@@ -919,7 +919,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                 work = true;
                 tls->encrypted_output_bytes += total_octets;
                 qd_log(tls->log_module,
-                       QD_LOG_TRACE,
+                       QD_LOG_DEBUG,
                        "[C%" PRIu64 "] %" PRIu64 " encrypted bytes written to the raw connection by TLS (%zu buffers)",
                        tls->conn_id,
                        total_octets,
@@ -935,7 +935,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
             }
             if (taken) {
                 work = true;
-                qd_log(tls->log_module, QD_LOG_TRACE,
+                qd_log(tls->log_module, QD_LOG_DEBUG,
                        "[C%" PRIu64 "] discarded %zu outgoing encrypted buffers due to raw conn write closed",
                        tls->conn_id, taken);
             }
@@ -960,7 +960,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
         if (taken) {
             work = true;  // more capacity for decrypted output
             *input_data_count += total_octets;
-            qd_log(tls->log_module, QD_LOG_TRACE,
+            qd_log(tls->log_module, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] %" PRIu64 " decrypted bytes taken from TLS for adaptor input (%zu buffers)",
                    tls->conn_id, total_octets, taken);
         }
@@ -1003,7 +1003,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
         // We closed the encrypt side of the TLS connection and we've sent all output
         tls->output_flushed = true;
         if (!pn_raw_connection_is_write_closed(raw_conn)) {
-            qd_log(tls->log_module, QD_LOG_TRACE,
+            qd_log(tls->log_module, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] TLS output closed - closing write side of raw connection", tls->conn_id);
             pn_raw_connection_write_close(raw_conn);
         }
@@ -1013,7 +1013,7 @@ int qd_tls_do_io(qd_tls_t                     *tls,
         || (pn_raw_connection_is_read_closed(raw_conn) && !pn_tls_is_decrypt_output_pending(tls->tls_session))) {
         // TLS will not take any more encrypted input - drain the raw conn input
         if (!pn_raw_connection_is_read_closed(raw_conn)) {
-            qd_log(tls->log_module, QD_LOG_TRACE,
+            qd_log(tls->log_module, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] TLS input closed - closing read side of raw connection", tls->conn_id);
             pn_raw_connection_read_close(raw_conn);
         }

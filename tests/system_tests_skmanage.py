@@ -262,7 +262,6 @@ class SkmanageTest(TestCase):
                       'errorCount',
                       'infoCount',
                       'noticeCount',
-                      'traceCount',
                       'warningCount'
                       ]
         n_log_levels = len(log_levels)
@@ -294,9 +293,9 @@ class SkmanageTest(TestCase):
 
         # Set a valid 'output'
         output = json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT "
-                                              "enable=trace+ outputFile=A.log"))
+                                              "enable=debug+ outputFile=A.log"))
         self.assertEqual("A.log", output['outputFile'])
-        self.assertEqual("trace+", output['enable'])
+        self.assertEqual("debug+", output['enable'])
 
     def create(self, type, name, port, role=None):
         create_command = 'CREATE --type=' + type + ' --name=' + name + ' host=0.0.0.0 port=' + port

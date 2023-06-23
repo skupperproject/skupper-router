@@ -243,7 +243,7 @@ static void _on_watched_address_update(void     *context,
         //
         qd_adaptor_listener_t *li = (qd_adaptor_listener_t*) context;
 
-        qd_log(li->log_module, QD_LOG_TRACE,
+        qd_log(li->log_module, QD_LOG_DEBUG,
                "Listener %s (%s) service address %s consumer count updates:"
                " local=%" PRIu32 " in-process=%" PRIu32 " remote=%" PRIu32,
                li->name, li->host_port, li->service_address, local_consumers, in_proc_consumers, remote_consumers);

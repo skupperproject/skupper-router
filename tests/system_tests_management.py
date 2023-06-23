@@ -214,7 +214,7 @@ class ManagementTest(system_test.TestCase):
         default = node.read(identity='log/DEFAULT')
         self.assertEqual(default.attributes,
                          {'identity': 'log/DEFAULT',
-                          'enable': 'trace+',
+                          'enable': 'debug+',
                           'module': 'DEFAULT',
                           'name': 'log/DEFAULT',
                           'outputFile': 'logrouter.log',
@@ -249,7 +249,6 @@ class ManagementTest(system_test.TestCase):
         # Expect error but no debug
         update_check_log(dict(enable="warning+"))
         update_check_log(dict(enable="error"))
-        update_check_log(dict(enable="TRACE , Error info"))  # Case and space insensitive
 
         # Expect no error if not enabled.
         update_check_log(dict(enable="info,critical"), error=False)
@@ -258,7 +257,7 @@ class ManagementTest(system_test.TestCase):
 
         # Expect debug
         update_check_log(dict(enable="Debug"), error=False, debug=True)
-        update_check_log(dict(enable="trace+"), debug=True)
+        update_check_log(dict(enable="debug+"), debug=True)
 
         # Check defaults are picked up
         update_check_log(dict(enable="default"), error=True, debug=True)

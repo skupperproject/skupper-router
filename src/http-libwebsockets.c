@@ -45,7 +45,7 @@ static qd_log_level_t qd_level(int lll) {
     case LLL_WARN: return QD_LOG_WARNING;
     /* LWS is noisy compared to dispatch on the informative levels, downgrade */
     case LLL_NOTICE: return QD_LOG_DEBUG;
-    default: return QD_LOG_TRACE; /* Everything else to trace  */
+    default: return QD_LOG_DEBUG; /* Everything else to debug  */
     }
 }
 

@@ -27,7 +27,7 @@ The C library also injects the following C extension types to this Python module
 - LogAdapter: Logs to the C logging system.
 - IoAdapter: Receives messages from the router into python.
 (You will see empty stubs in this file but for full implementations and extension injection code see python_embedded.c.
-The logging constants e.g LOG_TRACE, LOG_DEBUG etc. are registered in `qd_python_setup`)
+The logging constants e.g LOG_DEBUG, LOG_DEBUG etc. are registered in `qd_python_setup`)
 
 
 This module also prevents the proton python module from being accidentally loaded.
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
 
 FORBIDDEN: List[str]
 
-LOG_TRACE: int
 LOG_DEBUG: int
 LOG_INFO: int
 LOG_NOTICE: int

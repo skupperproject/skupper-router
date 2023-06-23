@@ -118,7 +118,7 @@ qd_policy_t *qd_policy(qd_dispatch_t *qd)
     sys_mutex_init(&stats_lock);
     sys_mutex_init(&policy->tree_lock);
 
-    qd_log(LOG_POLICY, QD_LOG_TRACE, "Policy Initialized");
+    qd_log(LOG_POLICY, QD_LOG_DEBUG, "Policy Initialized");
     return policy;
 }
 
@@ -255,7 +255,7 @@ bool qd_policy_socket_accept(qd_policy_t *policy, const char *hostname)
         n_processed++;
         nc = n_connections;
         sys_mutex_unlock(&stats_lock);
-        qd_log(LOG_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "ALLOW Connection '%s' based on global connection count. nConnections= %d", hostname, nc);
     } else {
         // connection denied
@@ -504,7 +504,7 @@ bool qd_policy_open_lookup_user(
     qd_python_unlock(lock_state);
 
     if (name_buf[0]) {
-        qd_log(LOG_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64
                "] ALLOW AMQP Open lookup_user: %s, rhost: %s, vhost: %s, connection: %s. Usergroup: '%s'%s",
                conn_id, username, hostip, vhost, conn_name, name_buf, (res ? "" : " Internal error."));
@@ -633,7 +633,7 @@ bool qd_policy_approve_amqp_session(pn_session_t *ssn, qd_connection_t *qd_conn)
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(conn);
     if (result) {
-        qd_log(LOG_POLICY, QD_LOG_TRACE,
+        qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64 "] ALLOW AMQP Begin Session. user: %s, rhost: %s, vhost: %s", qd_conn->connection_id,
                qd_conn->user_id, hostip, vhost);
     } else {
@@ -1031,7 +1031,7 @@ bool qd_policy_approve_message_target(qd_iterator_t *address, qd_connection_t *q
 
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(qd_connection_pn(qd_conn));
-    qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+    qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
            "[C%" PRIu64 "] %s AMQP message to '%s' for user '%s', rhost '%s', vhost '%s' based on target address",
            qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
 
@@ -1072,7 +1072,7 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // a target is specified
         lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, target, false);
 
-        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach sender link '%s' for user '%s', rhost '%s', vhost '%s' based on link target name",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
@@ -1085,7 +1085,7 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // A sender with no remote target.
         // This happens all the time with anonymous relay
         lookup = qd_conn->policy_settings->spec.allowAnonymousSender;
-        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach anonymous sender for user '%s', rhost '%s', vhost '%s'",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         if (!lookup) {
@@ -1122,7 +1122,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
     bool dynamic_src = pn_terminus_is_dynamic(pn_link_remote_source(pn_link));
     if (dynamic_src) {
         bool lookup = qd_conn->policy_settings->spec.allowDynamicSource;
-        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach receiver dynamic source for user '%s', rhost '%s', vhost '%s',",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         // Dynamic source policy rendered the decision
@@ -1136,7 +1136,7 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
         // a source is specified
         bool lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, source, true);
 
-        qd_log(LOG_POLICY, (lookup ? QD_LOG_TRACE : QD_LOG_INFO),
+        qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s' based on link source name",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), source, qd_conn->user_id, hostip, vhost);
@@ -1356,7 +1356,7 @@ char * qd_policy_host_pattern_lookup(qd_policy_t *policy, const char *hostPatter
     if (!matched) {
         payload = 0;
     }
-    qd_log(LOG_POLICY, QD_LOG_TRACE, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
+    qd_log(LOG_POLICY, QD_LOG_DEBUG, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
            (payload ? (char *) payload : "null"));
     return payload;
 }
