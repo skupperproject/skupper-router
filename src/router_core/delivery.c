@@ -485,8 +485,10 @@ static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *de
     //
     qdr_link_t *previous_link = safe_deref_qdr_link_t(delivery->original_link_sp);
     if (!!previous_link) {
+        sys_mutex_lock(&previous_link->conn->work_lock);
         previous_link->open_moved_streams--;
         qd_nullify_safe_ptr(&delivery->original_link_sp);
+        sys_mutex_unlock(&previous_link->conn->work_lock);
     }
 
     qdr_link_work_release(delivery->link_work);
