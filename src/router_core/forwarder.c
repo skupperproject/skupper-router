@@ -863,7 +863,7 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
             if (eligible && eligible_link_value > value) {
                 best_eligible_link  = link;
                 eligible_link_value = value;
-            } else if (!eligible && ineligible_link_value > value) {
+            } else if (!eligible && ineligible_link_value >= value) {
                 best_ineligible_link  = link;
                 ineligible_link_value = value;
             }
@@ -970,8 +970,10 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
             // Account for the fact that the delivery will be on a different link from the one that was chosen
             // in the balancing algorithm.
             //
+            sys_mutex_lock(&original_link->conn->work_lock);
             set_safe_ptr_qdr_link_t(original_link, &in_delivery->original_link_sp);
             original_link->open_moved_streams++;
+            sys_mutex_unlock(&original_link->conn->work_lock);
         }
 
         qdr_delivery_t *out_delivery = qdr_forward_new_delivery_CT(core, in_delivery, chosen_link, msg);
