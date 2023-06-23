@@ -479,6 +479,7 @@ struct qdr_link_t {
     bool                     streaming;         ///< True if this link can be reused for streaming msgs
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     terminus_survives_disconnect;
+    bool                     resend_released_deliveries;
     bool                     no_route;          ///< True if this link is to not receive routed deliveries
     bool                     no_route_bound;    ///< Has the no_route link been bound ? Has the link's owning address been set for no_route links ?
     bool                     proxy;             ///< True if this link represents endpoints on a remote router (used on edge router only)
@@ -494,6 +495,7 @@ struct qdr_link_t {
     uint64_t  rejected_deliveries;
     uint64_t  released_deliveries;
     uint64_t  modified_deliveries;
+    uint64_t  reforwards;
     uint64_t  deliveries_delayed_1sec;
     uint64_t  deliveries_delayed_10sec;
     uint64_t  deliveries_stuck;
@@ -972,6 +974,7 @@ void qdr_edge_free(qdr_edge_t *);
 void qdr_edge_connection_opened(qdr_edge_t *edge, qdr_connection_t *conn);
 void qdr_edge_connection_closed(qdr_edge_t *edge);
 void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, bool on_shutdown);
+void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 
 void qdr_connection_enqueue_work_CT(qdr_core_t            *core,
                                     qdr_connection_t      *conn,

@@ -490,6 +490,27 @@ static inline bool qdr_forward_edge_echo_CT(qdr_delivery_t *in_dlv, qdr_link_t *
 
 
 /**
+ * Determine if the out_link has been invalidated by a previous try
+ */
+static inline bool qdr_invalidated_link_CT(qdr_delivery_t *in_dlv, qdr_link_t *out_link)
+{
+    if (!in_dlv) {
+        return false;
+    }
+
+    qdr_link_ref_t *linkref = DEQ_HEAD(in_dlv->invalidated_links);
+    while (!!linkref) {
+        if (linkref->link == out_link) {
+            return true;
+        }
+        linkref = DEQ_NEXT(linkref);
+    }
+
+    return false;
+}
+
+
+/**
  * Handle forwarding to a subscription
  */
 static void qdr_forward_to_subscriber_CT(qdr_core_t *core, qdr_subscription_t *sub, qdr_delivery_t *in_dlv, qd_message_t *in_msg, bool receive_complete)
@@ -825,6 +846,11 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
             addr->outstanding_deliveries[i] = 0;
     }
 
+    if (!!in_delivery) {
+        in_delivery->chosen_link     = 0;
+        in_delivery->chosen_neighbor = -1;
+    }
+
     qdr_link_t *best_eligible_link       = 0;
     int         best_eligible_conn_bit   = -1;
     uint32_t    eligible_link_value      = UINT32_MAX;
@@ -854,9 +880,9 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
         bool        eligible = link->capacity > value;
 
         //
-        // Only consider links that do not result in edge-echo.
+        // Only consider links that do not result in edge-echo are are not invalidated.
         //
-        if (!qdr_forward_edge_echo_CT(in_delivery, link)) {
+        if (!qdr_forward_edge_echo_CT(in_delivery, link) && !qdr_invalidated_link_CT(in_delivery, link)) {
             //
             // If this is the best eligible link so far, record the fact.
             // Otherwise, if this is the best ineligible link, make note of that.
@@ -914,18 +940,20 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                 int         value     = addr->outstanding_deliveries[conn_bit];
                 bool        eligible  = link->capacity > value;
 
-                //
-                // Link is a candidate, adjust the value by the bias (node cost).
-                //
-                value += rnode->cost;
-                if (eligible && eligible_link_value > value) {
-                    best_eligible_link     = link;
-                    best_eligible_conn_bit = conn_bit;
-                    eligible_link_value    = value;
-                } else if (!eligible && ineligible_link_value > value) {
-                    best_ineligible_link     = link;
-                    best_ineligible_conn_bit = conn_bit;
-                    ineligible_link_value    = value;
+                if (!in_delivery || !in_delivery->invalidated_neighbors || qd_bitmask_value(in_delivery->invalidated_neighbors, conn_bit) == 0) {
+                    //
+                    // Link is a candidate, adjust the value by the bias (node cost).
+                    //
+                    value += rnode->cost;
+                    if (eligible && eligible_link_value > value) {
+                        best_eligible_link     = link;
+                        best_eligible_conn_bit = conn_bit;
+                        eligible_link_value    = value;
+                    } else if (!eligible && ineligible_link_value > value) {
+                        best_ineligible_link     = link;
+                        best_ineligible_conn_bit = conn_bit;
+                        ineligible_link_value    = value;
+                    }
                 }
 
 #ifdef LOG_FORWARD_BALANCED
@@ -956,12 +984,12 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
         chosen_conn_bit = best_ineligible_conn_bit;
     }
 
-    if (chosen_link) {
+    qdr_link_t *original_link = chosen_link;
 
+    if (chosen_link) {
         // DISPATCH-1545 (head of line blocking): if the message is streaming,
         // see if the allows us to open a dedicated link for streaming
         if (!qd_message_receive_complete(msg) && chosen_link->conn->connection_info->streaming_links) {
-            qdr_link_t *original_link = chosen_link;
             chosen_link = get_outgoing_streaming_link(core, chosen_link->conn);
             if (!chosen_link) {
                 return 0;
@@ -984,6 +1012,10 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
         // Bump the appropriate counter based on where we sent the delivery.
         //
         if (chosen_conn_bit >= 0) {  // sent to peer router
+            if (!!in_delivery) {
+                in_delivery->chosen_neighbor = chosen_conn_bit;
+            }
+
             //
             // If the delivery is unsettled account for the outstanding delivery sent inter-router.
             //
@@ -999,6 +1031,9 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
                 core->deliveries_transit++;
         }
         else {
+            if (!!in_delivery) {
+                in_delivery->chosen_link = original_link;
+            }
             addr->deliveries_egress++;
             core->deliveries_egress++;
 

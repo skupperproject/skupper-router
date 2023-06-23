@@ -134,6 +134,7 @@ extern const char * const QD_CAPABILITY_ROUTER_CONTROL;
 extern const char * const QD_CAPABILITY_ROUTER_DATA;
 extern const char * const QD_CAPABILITY_EDGE_DOWNLINK;
 extern const char * const QD_CAPABILITY_STREAMING_DELIVERIES;
+extern const char * const QD_CAPABILITY_RESEND_RELEASED;
 /// @}
 
 /** @name Dynamic Node Properties */

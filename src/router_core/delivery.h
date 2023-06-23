@@ -50,8 +50,6 @@ struct qdr_delivery_t {
     qd_delivery_state_t    *remote_state;        ///< outcome-specific data read from remote endpoint
     qd_delivery_state_t    *local_state;         ///< outcome-specific data to send to remote endpoint
     uint32_t                ingress_time;
-    bool                    settled;
-    bool                    presettled; /// Proton does not have a notion of pre-settled. This flag is introduced in Dispatch and should exclusively be used only to update management counters like presettled delivery counts on links etc. This flag DOES NOT represent the remote settlement state of the delivery.
     qdr_delivery_where_t    where;
     uint8_t                 tag[QDR_DELIVERY_TAG_MAX];
     int                     tag_length;
@@ -61,13 +59,20 @@ struct qdr_delivery_t {
     int                     ingress_index;
     qdr_link_work_t        *link_work;         ///< Delivery work item for this delivery
     qdr_subscription_ref_list_t subscriptions;
-    qdr_delivery_ref_list_t peers;             /// Use this list if there if the delivery has more than one peer.
-    uint32_t                delivery_id;       /// id for logging
-    uint64_t                link_id;           /// id for logging
-    uint64_t                conn_id;           /// id for logging
+    qdr_delivery_ref_list_t peers;                 /// Use this list if the delivery has more than one peer.
+    qdr_link_t             *chosen_link;           /// Pointer to link most recently chosen for forwarding.  This pointer shall never be dereferenced, only compared.
+    int                     chosen_neighbor;       /// Mask-bit of the most recently chosen neighbor router.
+    qd_bitmask_t           *invalidated_neighbors; /// Bitmask of all neighbor routers that have been invalidated in the lifetime of this delivery
+    qdr_link_ref_list_t     invalidated_links;     /// List of links that have been invalidated.  These link pointer shall never be dereferenced, only compared.
+    uint32_t                delivery_id;           /// id for logging
+    uint64_t                link_id;               /// id for logging
+    uint64_t                conn_id;               /// id for logging
+    bool                    settled;
+    bool                    presettled; /// Proton does not have a notion of pre-settled. This flag is introduced in Dispatch and should exclusively be used only to update management counters like presettled delivery counts on links etc. This flag DOES NOT represent the remote settlement state of the delivery.
     bool                    multicast;         /// True if this delivery is targeted for a multicast address.
     bool                    via_edge;          /// True if this delivery arrived via an edge-connection.
     bool                    stuck;             /// True if this delivery was counted as stuck.
+    bool                    reforwarded;       /// True if this delivery was released and re-forwarded.
 };
 
 ALLOC_DECLARE(qdr_delivery_t);

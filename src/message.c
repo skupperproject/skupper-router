@@ -1247,6 +1247,24 @@ void qd_message_set_streaming_annotation(qd_message_t *in_msg)
 }
 
 
+void qd_message_set_resend_released_annotation(qd_message_t *in_msg, bool value)
+{
+    qd_message_pvt_t *msg = (qd_message_pvt_t*) in_msg;
+    if (value) {
+        msg->ra_flags |= MSG_FLAG_RESEND_RELEASED;
+    } else {
+        msg->ra_flags &= ~MSG_FLAG_RESEND_RELEASED;
+    }
+}
+
+
+bool qd_message_is_resend_released(const qd_message_t *msg)
+{
+    const qd_message_pvt_t *msg_pvt = (const qd_message_pvt_t*) msg;
+    return !!(msg_pvt->ra_flags & MSG_FLAG_RESEND_RELEASED);
+}
+
+
 void qd_message_disable_router_annotations(qd_message_t *msg)
 {
     qd_message_content_t *content = ((qd_message_pvt_t *)msg)->content;
@@ -1862,10 +1880,12 @@ void qd_message_send(qd_message_t *in_msg,
 
                 if (next_buf || complete) {
                     //
-                    // this buffer may be freed if there are no more references to it
+                    // this buffer may be freed if there are no more references to it and it is not marked
+                    // as resend-released.  In the latter case, the content buffers may be needed for a
+                    // re-transmission of the message.
                     //
                     uint32_t ref_count = (msg->is_fanout) ? qd_buffer_dec_fanout(buf) : 1;
-                    if (ref_count == 1) {
+                    if (ref_count == 1 && !qd_message_is_resend_released(in_msg)) {
 
                         DEQ_REMOVE(content->buffers, buf);
                         qd_buffer_free(buf);

@@ -28,7 +28,6 @@
 // Internal Functions
 //==================================================================================
 
-static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_send_to_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 
@@ -730,7 +729,7 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
 }
 
 
-static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     if (discard)
         return;
@@ -744,10 +743,13 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
     if (link->conn)
         link->conn->last_delivery_time = qdr_core_uptime_ticks(core);
 
-    link->total_deliveries++;
-
-    if (link->link_type == QD_LINK_ENDPOINT)
-        core->deliveries_ingress++;
+    if (dlv->reforwarded) {
+        link->reforwards++;
+    } else {
+        link->total_deliveries++;
+        if (link->link_type == QD_LINK_ENDPOINT)
+            core->deliveries_ingress++;
+    }
 
     //
     // Record the ingress time so we can track the age of this delivery.
@@ -768,9 +770,18 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
     }
 
     //
+    // If the link has RESEND_RELEASED capability, set the RA flag on the message.
+    //
+    if (link->resend_released_deliveries) {
+        qd_message_t *msg = qdr_delivery_message(dlv);
+        qd_message_set_resend_released_annotation(msg, true);
+    }
+
+    //
     // If this link has a core_endpoint, direct deliveries to that endpoint.
     //
     if (!!link->core_endpoint) {
+        assert(!dlv->reforwarded);
         qdrc_endpoint_do_deliver_CT(core, link->core_endpoint, dlv);
         return;
     }
