@@ -945,9 +945,11 @@ jobs:
       - name: Compile and run .rs tests
         run: |
           cargo check
-          cargo test -- --nocapture
+          cargo test -- --test-threads=1 --nocapture
         env:
           QDROUTERD_IMAGE: local/skupper-router:local
+          CARGO_INCREMENTAL: 0
+          RUST_LOG: info
           RUST_BACKTRACE: 1
 
   rpm:

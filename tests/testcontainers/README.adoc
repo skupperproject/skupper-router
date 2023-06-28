@@ -32,6 +32,16 @@ systemctl --user enable --now podman.socket
 export DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock
 ----
 
+## running tests
+
+[source,shell script]
+----
+# Set QDROUTERD_IMAGE variable to the router image name to be tested
+export QDROUTERD_IMAGE=localhost/local/skupper-router
+export RUST_LOG=info
+cargo test -- --test-threads=1 --nocapture
+----
+
 ## atomic test containers
 
 Tests are implemented as Rust tests that run various container
