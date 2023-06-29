@@ -255,7 +255,7 @@ def main(argv):
                    action='store_true',
                    help='Write activity log to console')
     # Add controlled server misbehavior for testing conditions seen in the field
-    # Stall required to trigger Q2 testing for DISPATCH-1947 and improving test DISPATCH-1981
+    # Stall required to trigger adaptor windowed flow control
     p.add_argument('--connect-stall', type=float, default=0.0, const=1, nargs="?",
                    help='Accept connections but wait this many seconds before reading from socket. Default value "0.0" disables stall')
     # Close on connect - exercises control paths scrutinized under DISPATCH-1968
