@@ -80,27 +80,10 @@ CLIENT_PRIVATE_KEY_PASSWORD = 'client-password'
 CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
 
 
-# This code takes a wild guess how long an echo server must stall
-# receiving input data before Q2 holdoff triggers in the host router
-# on all the various CI systems out there.
-Q2_DELAY_SECONDS = 1.0
-
-# This code needs to know the size in bytes of the holdoff trigger threshold.
-# Whitebox testing knows that the holdoff is specified in some number of
-# buffers. What whitebox testing does not know how big the buffers are
-# or the number of buffers or how many bytes are actually in each buffer.
-# Today the holdoff is probably 128K bytes so use something bigger than that
-# in the test to get the trigger to kick in.
-# On top of that the echo server is undermined by having TCP window or python
-# read the server socket in advance of the echo server asking it to.
-# In a test case the adaptor logged writing almost 3MBytes
-#   2021-02-26 19:11:20.831826 PN_RAW_CONNECTION_WRITTEN Wrote 8192 bytes. Total written 2777007 bytes
-# well before the server started reading from the socket.
-#   2021-02-26 19:11:21.534246 J0#206 TCP_TEST [] [] ECHO_SERVER TcpAdaptor NS_EC2_CONN_STALL Connection from 127.0.0.1:54410 stall end
-#   2021-02-26 19:11:21.534801 J0#207 TCP_TEST [] [] ECHO_SERVER TcpAdaptor NS_EC2_CONN_STALL read from: 127.0.0.1:54410 len:1024:
-# Giving the stalled server 10Mbytes seems to run the TCP window out of capacity
-# so that it stops reading from the TcpConnector and Q2 finally kicks in.
-Q2_TEST_MESSAGE_SIZE = 10000000
+# This code takes a wild guess how long an echo server must stall receiving
+# input data before it fills the adaptor's flow control window in the host
+# router on all the various CI systems out there.
+CONN_STALL_DELAY_SECONDS = 1.0
 
 # local timeout in seconds to wait for one echo client to finish
 echo_timeout = 30
@@ -256,12 +239,13 @@ class TcpAdaptorBase(TestCase):
     #   +------------------------------------------------------------------+
     #
     # Router EC2 has naughty, misbehaving echo servers:
-    #  * conn_stall - delays before reading socket to force triggering Q2 holdoff
+    #  * conn_stall - delays before reading socket to force triggering
+    #    backpressure via the adaptor's flow control window
     #
     # Routers EC2 has a TCP listener for conn_stall echo server.
-    #  * Sending "large" messages through this listener should trigger Q2 holdoff
-    #    on router EC1.
-    #  * A similar listener on INTA does *not* trigger Q2 holdoff on EA1.
+    #  * Sending "large" messages through this listener should trigger
+    #    the flow control window on router EC1.
+    #  * A similar listener on INTA does *not* trigger flow control on EA1.
 
     # Allocate routers in this order
     router_order = ['INTA', 'INTB', 'INTC', 'EA1', 'EA2', 'EB1', 'EB2', 'EC1', 'EC2']
@@ -466,7 +450,7 @@ class TcpAdaptorBase(TestCase):
         server = TcpEchoServer(prefix=server_prefix,
                                port=0,
                                logger=server_logger,
-                               conn_stall=Q2_DELAY_SECONDS,
+                               conn_stall=CONN_STALL_DELAY_SECONDS,
                                ssl_info=cls.ssl_info)
         assert server.is_running
         cls.EC2_conn_stall_connector_port = server.port
@@ -1166,46 +1150,6 @@ class CommonTcpTests:
         if result is not None:
             print(result)
         assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
-        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
-
-    # Q2 holdoff
-    @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
-    def test_60_q2_holdoff(self):
-        # for now, Q2 is disabled to avoid stalling TCP backpressure
-        self.skipTest("Q2 is disabled on TCP adaptor")
-        name = "test_60_q2_holdoff"
-        self.logger.log("TCP_TEST Start %s" % name)
-
-        # Verify going to EC2
-        result = self.do_tcp_echo_singleton(name, self.EC2, self.EC2, Q2_TEST_MESSAGE_SIZE,
-                                            1, self.EC2_conn_stall_listener_port)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
-
-        # search the router log file to verify Q2 was hit
-        for attempt in range(10):
-            block_ct = 0
-            unblock_ct = 0
-            lines = 0
-            with io.open(self.EC2.logfile_path) as f:
-                for line in f:
-                    lines += 1
-                    if 'client link blocked on Q2 limit' in line:
-                        block_ct += 1
-                    if 'client link unblocked from Q2 limit' in line:
-                        unblock_ct += 1
-            if block_ct > 0 and block_ct == unblock_ct:
-                break
-            self.logger.log("Q2 holdoff from EC2 not detected. Wait for log file to update...")
-            time.sleep(0.1)
-        result = "failed" if block_ct == 0 or not block_ct == unblock_ct else "passed"
-        self.logger.log("TCP_TEST %s EC2 log scrape %s. block_ct=%d, unblock_ct=%d, lines=%d" %
-                        (name, result, block_ct, unblock_ct, lines))
-        self.assertTrue(block_ct > 0)
-        self.assertEqual(block_ct, unblock_ct)
-
-        # Declare success
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     def _ncat_runner(self, name, client, server, data=b'abcd', port=None, ssl_info=None):

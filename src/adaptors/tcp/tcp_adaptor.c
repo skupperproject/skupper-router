@@ -130,8 +130,6 @@ struct qdr_tcp_connection_t {
     pn_raw_buffer_t         outgoing_buffs[WRITE_BUFFERS];
     int                     outgoing_buff_count;  // number of buffers with data
     int                     outgoing_buff_idx;    // first buffer with data
-    sys_atomic_t            q2_restart;      // signal to resume receive
-    bool                    q2_blocked;      // stop reading from raw conn
     bool                    require_tls;     // Is TLS required on this connection ?
     DEQ_LINKS(qdr_tcp_connection_t);
 };
@@ -278,34 +276,6 @@ static void qd_free_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd_log_s
     free_qd_tcp_adaptor_config_t(config);
 }
 
-// Per-message callback to resume receiving after Q2 is unblocked on the
-// incoming link.
-// This routine must be thread safe: the thread on which it is running
-// is not an IO thread that owns the underlying pn_raw_conn.
-//
-void qdr_tcp_q2_unblocked_handler(const qd_alloc_safe_ptr_t context)
-{
-    qdr_tcp_connection_t *tc = (qdr_tcp_connection_t*)qd_alloc_deref_safe_ptr(&context);
-    if (tc == 0) {
-        // bad news.
-        assert(false);
-        return;
-    }
-
-    // prevent the tc from being deleted while running:
-    LOCK(&tc->activation_lock);
-
-    if (tc->pn_raw_conn) {
-        sys_atomic_set(&tc->q2_restart, 1);
-        qd_log(tcp_adaptor->log_source, QD_LOG_DEBUG,
-               "[C%"PRIu64"] q2 unblocked: call pn_raw_connection_wake()",
-               tc->conn_id);
-        pn_raw_connection_wake(tc->pn_raw_conn);
-    }
-
-    UNLOCK(&tc->activation_lock);
-}
-
 /**
  * Takes in a list of qd_adaptor_buffer_t objects and copies its contents into the passed in list of qd_buffer_t
  * objects.
@@ -446,13 +416,6 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         return 0;
     }
 
-    // Don't read from proton if in Q2 holdoff
-    if (conn->q2_blocked) {
-        qd_log(log, QD_LOG_DEBUG, DLV_FMT " handle_incoming q2_blocked for %s connection",
-               DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn));
-        return 0;
-    }
-
     // Read buffers available from proton.
     qd_buffer_list_t buffers;
     DEQ_INIT(buffers);
@@ -529,10 +492,6 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         qd_message_compose_2(msg, props, false);
         qd_compose_free(props);
 
-        // set up message q2 unblocked callback handler
-        qd_alloc_safe_ptr_t conn_sp = QD_SAFE_PTR_INIT(conn);
-        qd_message_set_q2_unblocked_handler(msg, qdr_tcp_q2_unblocked_handler, conn_sp);
-
         if (conn->ingress) {
             //
             // Start latency timer for this cross-van connection.
@@ -558,15 +517,10 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 
     // Push the bytes just read into the streaming message
     if (count > 0) {
-        qd_message_stream_data_append(qdr_delivery_message(conn->in_dlv_stream), &buffers, &conn->q2_blocked);
-        if (conn->q2_blocked) {
-            // note: unit tests grep for this log!
-            qd_log(log, QD_LOG_DEBUG, DLV_FMT " %s client link blocked on Q2 limit", DLV_ARGS(conn->in_dlv_stream),
-                   qdr_tcp_connection_role_name(conn));
-        }
-        qd_log(log, QD_LOG_TRACE,
-                DLV_FMT" Continuing %s message with %i bytes",
-                DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn), count);
+        bool ignore;
+        qd_message_stream_data_append(qdr_delivery_message(conn->in_dlv_stream), &buffers, &ignore);
+        qd_log(log, QD_LOG_TRACE, DLV_FMT " Continuing %s message with %i bytes",
+               DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn), count);
         qdr_delivery_continue(tcp_adaptor->core, conn->in_dlv_stream, false);
 
     } else {
@@ -620,7 +574,6 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
     free(tc->remote_address);
     free(tc->global_id);
     free(tc->alpn_protocol);
-    sys_atomic_destroy(&tc->q2_restart);
     sys_atomic_destroy(&tc->raw_closed_read);
     sys_atomic_destroy(&tc->raw_closed_write);
     qd_timer_free(tc->activate_timer);
@@ -1076,9 +1029,6 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     }
     case PN_RAW_CONNECTION_CLOSED_READ: {
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
-        LOCK(&conn->activation_lock);
-        conn->q2_blocked = false;
-        UNLOCK(&conn->activation_lock);
         handle_incoming(conn, "PNRC_CLOSED_READ");
         qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s", conn->conn_id,
                qdr_tcp_connection_role_name(conn));
@@ -1137,24 +1087,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_WAKE: {
-        qd_log(log, QD_LOG_DEBUG,
-               "[C%"PRIu64"] PN_RAW_CONNECTION_WAKE %s",
-               conn->conn_id, qdr_tcp_connection_role_name(conn));
-        if (sys_atomic_set(&conn->q2_restart, 0)) {
-            LOCK(&conn->activation_lock);
-            conn->q2_blocked = false;
-            UNLOCK(&conn->activation_lock);
-            // note: unit tests grep for this log!
-            qd_log(log, QD_LOG_TRACE,
-                   "[C%"PRIu64"] %s client link unblocked from Q2 limit",
-                   conn->conn_id, qdr_tcp_connection_role_name(conn));
-            int read = handle_incoming(conn, "PNRC_WAKE after Q2 unblock");
-
-            qd_log(log, QD_LOG_DEBUG,
-                   "[C%" PRIu64 "] PN_RAW_CONNECTION_WAKE Read %i bytes. Total read %" PRIu64
-                   " bytes, Total encrypted bytes=%" PRIu64 "",
-                   conn->conn_id, read, conn->bytes_in, conn->encrypted_bytes_in);
-        }
+        qd_log(log, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_WAKE %s", conn->conn_id,
+               qdr_tcp_connection_role_name(conn));
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
     }
@@ -1275,7 +1209,6 @@ static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_
     tc->conn_id         = qd_server_allocate_connection_id(server);
     tc->context.context = tc;
     tc->context.handler = &handle_connection_event;
-    sys_atomic_init(&tc->q2_restart, 0);
     sys_atomic_init(&tc->raw_closed_read, 0);
     sys_atomic_init(&tc->raw_closed_write, 0);
     sys_mutex_init(&tc->activation_lock);
