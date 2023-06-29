@@ -91,14 +91,17 @@ struct qdr_tcp_connection_t {
     bool                  flow_enabled;
     bool                  is_egress_dispatcher_conn;
     bool                  connector_closed;//only used if egress_dispatcher=true
-    bool                  in_list;         // This connection is in the adaptor's connections list
-    sys_atomic_t          raw_closed_read;   // proton event seen
-    sys_atomic_t          raw_closed_write;  // proton event seen or write_close called
+    bool                      in_list;         // This connection is in the adaptor's connections list
     bool                  raw_read_shutdown; // stream closed
     bool                  read_eos_seen;
     bool                  window_disabled;   // true: ignore unacked byte window
+    bool                      require_tls;       // Is TLS required on this connection ?
+    sys_atomic_t              check_idle_conn;   // check if connection has been idle
+    sys_atomic_t              raw_closed_read;   // proton event seen
+    sys_atomic_t              raw_closed_write;  // proton event seen or write_close called
     qdr_delivery_t       *initial_delivery;
     qd_timer_t           *activate_timer;
+    qd_timer_t               *idle_timer;
     qd_tcp_adaptor_config_t  *config;         // config
     qd_server_t          *server;
     qd_tls_t                 *tls;
@@ -118,6 +121,7 @@ struct qdr_tcp_connection_t {
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
+    uint64_t              idle_snapshot;  // bytes_in + bytes_out at last idle check
 
     qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
 
@@ -127,10 +131,10 @@ struct qdr_tcp_connection_t {
     size_t                  outgoing_body_bytes;  // bytes received from current segment
     int                     outgoing_body_offset; // buffer offset into current segment
 
-    pn_raw_buffer_t         outgoing_buffs[WRITE_BUFFERS];
     int                     outgoing_buff_count;  // number of buffers with data
     int                     outgoing_buff_idx;    // first buffer with data
-    bool                    require_tls;     // Is TLS required on this connection ?
+    pn_raw_buffer_t         outgoing_buffs[WRITE_BUFFERS];
+
     DEQ_LINKS(qdr_tcp_connection_t);
 };
 
@@ -237,6 +241,17 @@ static void on_activate(void *context)
         conn->qdr_conn = 0;
         free_qdr_tcp_connection(conn);
     }
+}
+
+// This runs on a proactor timer thread. This thread may run in parallel with a proactor I/O thread that is handling the
+// raw connection. However this timer callback is only active when the raw connection is connected and is disabled when
+// the connection disconnects (see handle_connection_event). So it should be safe to access the connection's raw_conn.
+//
+static void on_idle_timer(void *context)
+{
+    qdr_tcp_connection_t *conn = (qdr_tcp_connection_t *) context;
+    SET_ATOMIC_FLAG(&conn->check_idle_conn);
+    pn_raw_connection_wake(conn->pn_raw_conn);
 }
 
 /**
@@ -574,9 +589,11 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
     free(tc->remote_address);
     free(tc->global_id);
     free(tc->alpn_protocol);
+    sys_atomic_destroy(&tc->check_idle_conn);
     sys_atomic_destroy(&tc->raw_closed_read);
     sys_atomic_destroy(&tc->raw_closed_write);
     qd_timer_free(tc->activate_timer);
+    qd_timer_free(tc->idle_timer);
     sys_mutex_free(&tc->activation_lock);
 
     // Free tls related stuff if need be.
@@ -988,6 +1005,12 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
         if (conn->ingress) {
             qdr_tcp_connection_ingress_accept(conn);
+            if (conn->idle_timer) {
+                qd_duration_t timeout_ms = conn->config->adaptor_config->idle_timeout * 1000;
+                assert(timeout_ms);
+                conn->idle_snapshot = conn->bytes_in + conn->bytes_out;
+                qd_timer_schedule(conn->idle_timer, timeout_ms);
+            }
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
                    "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED Listener ingress accepted to %s from %s (global_id=%s)",
                    conn->conn_id, conn->config->adaptor_config->host_port, conn->remote_address, conn->global_id);
@@ -1043,6 +1066,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
+        if (conn->idle_timer)
+            qd_timer_cancel(conn->idle_timer);
+
         pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
         if (!!cond) {
             const char *cname = pn_condition_get_name(cond);
@@ -1089,6 +1115,21 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_WAKE: {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_WAKE %s", conn->conn_id,
                qdr_tcp_connection_role_name(conn));
+        if (conn->idle_timer && CLEAR_ATOMIC_FLAG(&conn->check_idle_conn)) {
+            uint64_t new_snapshot = conn->bytes_in + conn->bytes_out;
+            if (new_snapshot == conn->idle_snapshot) {
+                // TODO(kgiusti): need vflow update!
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING,
+                       "[C%" PRIu64 "] idle TCP client detected, closing the connection", conn->conn_id);
+                pn_raw_connection_close(conn->pn_raw_conn);  // thread-safe call
+                break;
+            } else {
+                qd_duration_t timeout_ms = conn->config->adaptor_config->idle_timeout * 1000;
+                assert(timeout_ms);
+                conn->idle_snapshot = new_snapshot;
+                qd_timer_schedule(conn->idle_timer, timeout_ms);
+            }
+        }
         while (qdr_connection_process(conn->qdr_conn)) {}
         break;
     }
@@ -1209,9 +1250,14 @@ static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_
     assert(tcp_stats);
     assert(server);
 
+    if (tc->config->adaptor_config->idle_timeout) {
+        tc->idle_timer = qd_timer(tcp_adaptor->core->qd, on_idle_timer, tc);
+    }
+
     tc->conn_id         = qd_server_allocate_connection_id(server);
     tc->context.context = tc;
     tc->context.handler = &handle_connection_event;
+    sys_atomic_init(&tc->check_idle_conn, 0);
     sys_atomic_init(&tc->raw_closed_read, 0);
     sys_atomic_init(&tc->raw_closed_write, 0);
     sys_mutex_init(&tc->activation_lock);

@@ -70,6 +70,19 @@ qd_error_t qd_load_adaptor_config(qd_adaptor_config_t *config, qd_entity_t *enti
     if (config->backlog <= 0 || config->backlog > SOMAXCONN)
         config->backlog = SOMAXCONN;
 
+    // Currently idleTimeoutSeconds is only defined for tcpListeners. Since this function is used for all adaptor
+    // listener and connector configurations the call to get idleTimeoutSeconds will fail in those cases where the
+    // adaptor configuration is not a tcpListener. Ignore these failures. The schema will provide the default value.
+    //
+    long timeout = qd_entity_get_long(entity, "idleTimeoutSeconds");
+    if (timeout < 0) {
+        config->idle_timeout = 0;
+        qd_error_clear();
+    } else {
+        // TODO(kgiusti): enforce a minimum value to avoid high CPU load:
+        config->idle_timeout = timeout;
+    }
+
     int hplen = strlen(config->host) + strlen(config->port) + 2;
     config->host_port = malloc(hplen);
     snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
