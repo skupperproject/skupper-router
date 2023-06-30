@@ -19,7 +19,6 @@
 
 from .data import MessageHELLO
 from ..dispatch import LOG_DEBUG, LOG_CRITICAL
-from ..dispatch import LOG_DEBUG, LOG_CRITICAL
 
 
 class HelloProtocol:
