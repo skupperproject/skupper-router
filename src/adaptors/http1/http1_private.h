@@ -181,7 +181,6 @@ struct qdr_http1_connection_t {
 
     // flags
     //
-    bool trace;
     bool require_tls;
     bool closing;
     bool output_closed;

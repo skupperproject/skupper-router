@@ -371,7 +371,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
     // the message processing is expensive as this is done for every message received.
     // Do not bother if not tracing.
 
-    if (qd_log_enabled(LOG_MESSAGE, QD_LOG_TRACE)) {
+    if (qd_log_enabled(LOG_MESSAGE, QD_LOG_DEBUG)) {
         const qd_server_config_t *cf = qd_connection_config(conn);
         if (!cf) return;
         size_t repr_len = qd_message_repr_len();
@@ -382,7 +382,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
         if (msg_str) {
             const char *src = pn_terminus_get_address(pn_link_source(pn_link));
             const char *tgt = pn_terminus_get_address(pn_link_target(pn_link));
-            qd_log(LOG_MESSAGE, QD_LOG_TRACE, "[C%" PRIu64 "]: %s %s on link '%s' (%s -> %s)",
+            qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "[C%" PRIu64 "]: %s %s on link '%s' (%s -> %s)",
                    qd_connection_connection_id(conn), pn_link_is_sender(pn_link) ? "Sent" : "Received", msg_str,
                    pn_link_name(pn_link), src ? src : "", tgt ? tgt : "");
         }

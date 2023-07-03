@@ -491,7 +491,7 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     qdr_post_set_my_mobile_seq_CT(core, msync->mobile_seq);
 
     //
-    // Trace log the activity of this sequence update.
+    // Debug log the activity of this sequence update.
     //
     qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG,
            "New mobile sequence: mobile_seq=%" PRIu64 ", addrs_synced=%ld, fanout=%d", msync->mobile_seq, sync_count,
@@ -541,7 +541,7 @@ static void qcm_mobile_sync_on_mar_CT(qdrm_mobile_sync_t *msync, qd_parsed_field
                 qd_message_free(mau);
 
                 //
-                // Trace log the activity of this sequence update.
+                // Debug log the activity of this sequence update.
                 //
                 qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Sent MAU to requestor: mobile_seq=%" PRIu64,
                        msync->mobile_seq);
@@ -924,7 +924,7 @@ static void qcm_mobile_sync_on_router_advanced_CT(qdrm_mobile_sync_t *msync, qdr
     qd_message_free(mar);
 
     //
-    // Trace log the activity of this sequence update.
+    // Debug log the activity of this sequence update.
     //
     qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG, "Send MAR request to router %s, have_seq=%" PRIu64 ", fanout=%d",
            (const char *) qd_hash_key_by_handle(router->owning_addr->hash_handle) + 1, router->mobile_seq, fanout);

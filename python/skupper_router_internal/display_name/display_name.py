@@ -81,7 +81,7 @@ class DisplayNameService:
             self.reload_all()
 
     def query(self, profile_name, user_id):
-        self.log(dispatch.LOG_TRACE, "Received query for profile name %s, user id %s to DisplayNameService" %
+        self.log(dispatch.LOG_DEBUG, "Received query for profile name %s, user id %s to DisplayNameService" %
                  (profile_name, user_id))
         ssl_profile = self.profile_dict.get(profile_name)
         if ssl_profile:

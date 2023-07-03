@@ -966,7 +966,7 @@ class PolicyLocal:
             ruleset = self.rulesetdb[vhost]
 
             if groupname not in ruleset[PolicyKeys.KW_GROUPS]:
-                self._manager.log_trace(
+                self._manager.log_debug(
                     "lookup_settings fail for vhost '%s', user group '%s': "
                     "This vhost has no settings for the user group" % (vhost, groupname))
                 return False
@@ -998,7 +998,7 @@ class PolicyLocal:
                 stats.disconnect(facts.conn_name, facts.user, facts.host)
                 del self._connections[conn_id]
         except Exception as e:
-            self._manager.log_trace(
+            self._manager.log_debug(
                 "Policy internal error closing connection id %s. %s" % (conn_id, str(e)))
 
     def set_max_message_size(self, size: int) -> None:

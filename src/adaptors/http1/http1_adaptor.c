@@ -524,9 +524,8 @@ static void _core_conn_trace(void *context, qdr_connection_t *conn, bool trace)
 {
     qdr_http1_connection_t *hconn = (qdr_http1_connection_t*) qdr_connection_get_context(conn);
     if (hconn) {
-        hconn->trace = trace;
         if (trace)
-            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE, "[C%" PRIu64 "] HTTP/1.x trace enabled", hconn->conn_id);
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x debug enabled", hconn->conn_id);
     }
 }
 
@@ -637,7 +636,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
         }
 
         if (*input_octets) {
-            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] %" PRIu64 " bytes read from raw connection", conn_id, *input_octets);
         }
     }
@@ -666,7 +665,7 @@ void qdr_http1_do_raw_io(uint64_t                         conn_id,
             }
 
             if (out_octets > 0) {
-                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                        "[C%" PRIu64 "] %" PRId64 " bytes written to the raw connection", conn_id, out_octets);
             }
         }

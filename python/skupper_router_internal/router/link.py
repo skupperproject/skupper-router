@@ -18,7 +18,7 @@
 #
 
 from .data import MessageRA, MessageLSU, MessageLSR
-from ..dispatch import LOG_TRACE
+from ..dispatch import LOG_DEBUG
 
 
 class LinkStateEngine:
@@ -62,16 +62,16 @@ class LinkStateEngine:
         my_ls = self.node_tracker.link_state
         smsg = MessageLSU(None, self.id, my_ls.ls_seq, my_ls, self.container.instance)
         self.container.send('amqp:/_topo/%s/%s/qdrouter' % (msg.area, msg.id), smsg)
-        self.container.log_ls(LOG_TRACE, "SENT: %r" % smsg)
+        self.container.log_ls(LOG_DEBUG, "SENT: %r" % smsg)
 
     def send_lsr(self, _id):
         msg = MessageLSR(None, self.id)
         self.container.send('amqp:/_topo/0/%s/qdrouter' % _id, msg)
-        self.container.log_ls(LOG_TRACE, "SENT: %r to: %s" % (msg, _id))
+        self.container.log_ls(LOG_DEBUG, "SENT: %r to: %s" % (msg, _id))
 
     def send_ra(self, now):
         self.last_ra_time = now
         ls_seq = self.node_tracker.link_state.ls_seq
         msg = MessageRA(None, self.id, ls_seq, self.mobile_seq, self.container.instance)
         self.container.send('amqp:/_topo/0/all/qdrouter', msg)
-        self.container.log_ls(LOG_TRACE, "SENT: %r" % msg)
+        self.container.log_ls(LOG_DEBUG, "SENT: %r" % msg)

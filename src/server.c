@@ -107,7 +107,7 @@ void transport_tracer(pn_transport_t *transport, const char *message)
     qd_connection_t *ctx = (qd_connection_t*) pn_transport_get_context(transport);
     if (ctx) {
         // The PROTOCOL module is used exclusively for logging protocol related tracing. The protocol could be AMQP, HTTP, TCP etc.
-        qd_log(LOG_PROTOCOL, QD_LOG_TRACE, "[C%" PRIu64 "]:%s", ctx->connection_id, message);
+        qd_log(LOG_PROTOCOL, QD_LOG_DEBUG, "[C%" PRIu64 "]:%s", ctx->connection_id, message);
     }
 }
 
@@ -115,8 +115,8 @@ void connection_transport_tracer(pn_transport_t *transport, const char *message)
 {
     qd_connection_t *ctx = (qd_connection_t*) pn_transport_get_context(transport);
     if (ctx) {
-        // Unconditionally write the log at TRACE level to the log file.
-        qd_log_impl_v1(LOG_PROTOCOL, QD_LOG_TRACE, __FILE__, __LINE__, "[C%" PRIu64 "]:%s",
+        // Unconditionally write the log at DEBUG level to the log file.
+        qd_log_impl_v1(LOG_PROTOCOL, QD_LOG_DEBUG, __FILE__, __LINE__, "[C%" PRIu64 "]:%s",
                        ctx->connection_id, message);
     }
 }
@@ -641,7 +641,7 @@ static void on_accept(pn_event_t *e, qd_listener_t *listener)
         return;
     }
     ctx->listener = listener;
-    qd_log(LOG_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "]: Accepting incoming connection to '%s'",
+    qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "]: Accepting incoming connection to '%s'",
            ctx->connection_id, ctx->listener->config.host_port);
     /* Asynchronous accept, configure the transport on PN_CONNECTION_BOUND */
     pn_listener_accept(pn_listener, ctx->pn_conn);
@@ -705,7 +705,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
     // and also set the transport tracer callback.
     // Note here that if trace level logging is enabled on the DEFAULT module, all modules are logging at trace level too.
     //
-    if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_TRACE)) {
+    if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_DEBUG)) {
         pn_transport_trace(tport, PN_TRACE_FRM);
         pn_transport_set_tracer(tport, transport_tracer);
     }
@@ -728,7 +728,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
 
         // Set up SSL
         if (config->ssl_profile)  {
-            qd_log(LOG_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "] Configuring SSL on %s", ctx->connection_id,
+            qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Configuring SSL on %s", ctx->connection_id,
                    name);
             if (listener_setup_ssl(ctx, config, tport) != QD_ERROR_NONE) {
                 connect_fail(ctx, QD_AMQP_COND_INTERNAL_ERROR, "%s on %s", qd_error_message(), name);
@@ -851,7 +851,7 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
     }
 
     case PN_LISTENER_ACCEPT:
-        qd_log(LOG_SERVER, QD_LOG_TRACE, "Accepting connection on %s", host_port);
+        qd_log(LOG_SERVER, QD_LOG_DEBUG, "Accepting connection on %s", host_port);
         on_accept(e, li);
         break;
 
@@ -867,7 +867,7 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
                         exit(1);
                 }
             } else {
-                qd_log(LOG_SERVER, QD_LOG_TRACE, "Listener closed on %s", host_port);
+                qd_log(LOG_SERVER, QD_LOG_DEBUG, "Listener closed on %s", host_port);
             }
             pn_listener_set_context(li->pn_listener, 0);
             li->pn_listener = 0;
@@ -1192,7 +1192,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
     if (config->sasl_password)
         pn_connection_set_password(qd_conn->pn_conn, config->sasl_password);
 
-    qd_log(LOG_SERVER, QD_LOG_TRACE, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
+    qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
     /* Note: the transport is configured in the PN_CONNECTION_BOUND event */
     pn_proactor_connect(connector->server->proactor, qd_conn->pn_conn, host_port);
     // at this point the qd_conn may now be scheduled on another thread

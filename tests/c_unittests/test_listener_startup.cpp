@@ -112,7 +112,7 @@ TEST_CASE("Start AMQP listener with zero port" * doctest::skip(regex_is_broken()
         check_amqp_listener_startup_log_message(
             config,
             R"EOS(SERVER \(notice\) Listening on (127.0.0.1)|(::1):(\d\d+))EOS",
-            R"EOS(SERVER \(trace\) Listener closed on localhost:0)EOS"
+            R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
     }).join();
 }
@@ -129,7 +129,7 @@ TEST_CASE("Start AMQP listener with zero port and a name" * doctest::skip(regex_
         check_amqp_listener_startup_log_message(
             config,
             R"EOS(SERVER \(notice\) Listening on (127.0.0.1)|(::1):(\d\d+) \(pepa\))EOS",
-            R"EOS(SERVER \(trace\) Listener closed on localhost:0)EOS"
+            R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
     }).join();
 }

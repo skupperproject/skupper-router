@@ -126,7 +126,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     set_safe_ptr_qdr_connection_t(conn, &action->args.connection.conn);
     action->args.connection.connection_label = qdr_field(label);
     action->args.connection.container_id     = qdr_field(remote_container_id);
-    if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_TRACE)) {
+    if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_DEBUG)) {
         action->args.connection.enable_protocol_trace = true;
     }
     qdr_action_enqueue(core, action);

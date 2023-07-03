@@ -21,7 +21,7 @@
     }],
     ["log", {
 	"includeTimestamp": "true",
-	"enable": "trace+",
+	"enable": "debug+",
 	"module": "DEFAULT"
     }],
     ["policy", {

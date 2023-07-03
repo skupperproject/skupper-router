@@ -235,7 +235,7 @@ void *router_core_thread(void *arg)
         //
         if (bg_action) {
             if (bg_action->label)
-                qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, "Core background action '%s'%s", bg_action->label,
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Core background action '%s'%s", bg_action->label,
                        core->running ? "" : " (discard)");
             bg_action->action_handler(core, bg_action, !core->running);
             free_qdr_action_t(bg_action);
@@ -250,7 +250,7 @@ void *router_core_thread(void *arg)
         while (action) {
             DEQ_REMOVE_HEAD(action_list);
             if (action->label)
-                qd_log(LOG_ROUTER_CORE, QD_LOG_TRACE, "Core action '%s'%s", action->label,
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Core action '%s'%s", action->label,
                        core->running ? "" : " (discard)");
             action->action_handler(core, action, !core->running);
             free_qdr_action_t(action);

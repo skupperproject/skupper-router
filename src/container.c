@@ -682,12 +682,12 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                 if (qd_conn->policy_counted && qd_conn->policy_settings) {
                     if (pn_link_is_sender(pn_link)) {
                         qd_conn->n_receivers--;
-                        qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Closed receiver link %s. n_receivers: %d",
+                        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Closed receiver link %s. n_receivers: %d",
                                pn_link_name(pn_link), qd_conn->n_receivers);
                         assert (qd_conn->n_receivers >= 0);
                     } else {
                         qd_conn->n_senders--;
-                        qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Closed sender link %s. n_senders: %d",
+                        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Closed sender link %s. n_senders: %d",
                                pn_link_name(pn_link), qd_conn->n_senders);
                         assert (qd_conn->n_senders >= 0);
                     }
@@ -764,7 +764,7 @@ qd_container_t *qd_container(qd_dispatch_t *qd)
     DEQ_INIT(container->node_type_list);
 
     qd_server_set_container(qd, container);
-    qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Container Initialized");
+    qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Container Initialized");
     return container;
 }
 
@@ -819,7 +819,7 @@ int qd_container_register_node_type(qd_dispatch_t *qd, const qd_node_type_t *nt)
     qd_iterator_free(iter);
     if (result < 0)
         return result;
-    qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Node Type Registered - %s", nt->type_name);
+    qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node Type Registered - %s", nt->type_name);
 
     return 0;
 }
@@ -837,10 +837,10 @@ qd_node_t *qd_container_set_default_node_type(qd_dispatch_t        *qd,
 
     if (nt) {
         container->default_node = qd_container_create_node(qd, nt, 0, context, supported_dist, QD_LIFE_PERMANENT);
-        qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Node of type '%s' installed as default node", nt->type_name);
+        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node of type '%s' installed as default node", nt->type_name);
     } else {
         container->default_node = 0;
-        qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Default node removed");
+        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Default node removed");
     }
 
     return container->default_node;
@@ -886,7 +886,7 @@ qd_node_t *qd_container_create_node(qd_dispatch_t        *qd,
     }
 
     if (name)
-        qd_log(LOG_CONTAINER, QD_LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
+        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node of type '%s' created with name '%s'", nt->type_name, name);
 
     return node;
 }

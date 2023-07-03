@@ -365,7 +365,7 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
         if (!window_was_full && read_window_full(conn)) {
             conn->window_closed_count++;
             vflow_set_uint64(conn->vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window_closed_count);
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] TCP RX window CLOSED: bytes in=%" PRIu64 " unacked=%" PRIu64, conn->conn_id,
                    conn->bytes_in, conn->bytes_unacked);
         }
@@ -384,14 +384,14 @@ static int handle_incoming_raw_read(qdr_tcp_connection_t *conn, qd_buffer_list_t
  */
 static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
 {
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
            "[C%" PRIu64 "][L%" PRIu64 "] handle_incoming %s for %s connection. read_closed:%s, flow_enabled:%s",
            conn->conn_id, conn->incoming_link_id, msg, qdr_tcp_connection_role_name(conn),
            conn->raw_closed_read ? "T" : "F", conn->flow_enabled ? "T" : "F");
 
     if (conn->raw_read_shutdown) {
         // Drain all read buffers that may still be in the raw connection
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] handle_incoming %s for %s connection. drain read buffers", conn->conn_id,
                conn->incoming_link_id, msg, qdr_tcp_connection_role_name(conn));
         handle_incoming_raw_read(conn, 0);
@@ -420,7 +420,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
     int count = handle_incoming_raw_read(conn, &buffers);
     if (conn->require_tls && !qd_tls_is_secure(conn->tls)) {
         // We don't have a fully secure channel established, cannot send message yet, return.
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "] handle_incoming- connection requires tls but is not secure yet, returning",
                conn->conn_id);
         return 0;
@@ -517,7 +517,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
     if (count > 0) {
         bool ignore;
         qd_message_stream_data_append(qdr_delivery_message(conn->in_dlv_stream), &buffers, &ignore);
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE, DLV_FMT " Continuing %s message with %i bytes",
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Continuing %s message with %i bytes",
                DLV_ARGS(conn->in_dlv_stream), qdr_tcp_connection_role_name(conn), count);
         qdr_delivery_continue(tcp_adaptor->core, conn->in_dlv_stream, false);
 
@@ -793,7 +793,7 @@ static void handle_outgoing(qdr_tcp_connection_t *conn)
             // We don't have a fully secure channel established, cannot send data yet, return.
             // The body datas have arrived but they can only be sent when the handshake is complete
             // and the channel is secure.
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] handle_outgoing - connection requires tls but is not secure yet, returning",
                    conn->conn_id);
             return;
@@ -1018,7 +1018,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 qdr_tcp_create_server_side_connection(conn);
             }
             if (conn->require_tls && qd_tls_has_output(conn->tls)) {
-                qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                        "[C%" PRIu64 "] Initiating TLS handshake on egress connection", conn->conn_id);
                 encrypt_outgoing_tls(conn, 0, true);
                 // Grant read buffers so we can read the response sent to us by the server
@@ -2080,7 +2080,7 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
 
         if (window_was_full && !read_window_full(tc)) {
             // now that the window has opened (or has been disabled) resume reading
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_TRACE,
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] TCP RX window OPENED: bytes in=%" PRIu64 " unacked=%" PRIu64, tc->conn_id,
                    tc->bytes_in, tc->bytes_unacked);
             // Grant more buffers to proton for reading if read side is still open

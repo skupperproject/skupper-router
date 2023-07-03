@@ -47,18 +47,18 @@ class ManyLogFilesTest(TestCase):
             # We are sending three different module trace logs to three different
             # files and we will make sure that these files exist and these
             # files contain only logs pertinent to the module in question
-            ('log', {'module': 'SERVER', 'enable': 'trace+',
+            ('log', {'module': 'SERVER', 'enable': 'debug+',
                      'includeSource': 'true', 'outputFile': name + '-server.log'}),
-            ('log', {'module': 'ROUTER_CORE', 'enable': 'trace+',
+            ('log', {'module': 'ROUTER_CORE', 'enable': 'debug+',
                      'includeSource': 'true',
                      'outputFile': name + '-core.log'}),
-            ('log', {'module': 'PROTOCOL', 'enable': 'trace+',
+            ('log', {'module': 'PROTOCOL', 'enable': 'debug+',
                      'includeSource': 'true',
                      'outputFile': name + '-protocol.log'}),
 
             # try two modules to the same file.
             # Put the ROUTER_CORE and ROUTER module logs into the same log file
-            ('log', {'module': 'ROUTER', 'enable': 'trace+',
+            ('log', {'module': 'ROUTER', 'enable': 'debug+',
                      'includeSource': 'true',
                      'outputFile': name + '-core.log'}),
 
@@ -175,16 +175,11 @@ class LogModuleProtocolTest(TestCase):
         # Turn off trace logging using skmanage
         qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/DEFAULT")
 
-        # Turn on trace (not trace+) level logging for the PROTOCOL module. After doing
+        # Turn on trace (not debug+) level logging for the PROTOCOL module. After doing
         # this we will create a sender and a receiver and make sure that the PROTOCOL module
         # is emitting proton frame trace messages.
 
-        # Before DISPATCH-1558, the only way to turn on proton frame trace logging was to set
-        # enable to trace on the SERVER or the DEFAULT module. Turning on trace for the SERVER
-        # module would also spit out dispatch trace level messages from the SERVER module.
-        # DISPATCH-1558 adds the new PROTOCOL module which moves all protocol traces into
-        # that module.
-        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/PROTOCOL")
+        qd_manager.update("io.skupper.router.log", {"enable": "debug+"}, name="log/PROTOCOL")
 
         TEST_ADDR = "moduletest1"
         hello_world_1 = "Hello World_1!"
@@ -492,7 +487,7 @@ class LogLevelUpdateTest(TestCase):
 
         # STEP 4: Tuen trace logging back on again and make sure num_attaches = 4
         TEST_ADDR = "apachetest3"
-        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/DEFAULT")
+        qd_manager.update("io.skupper.router.log", {"enable": "debug+"}, name="log/DEFAULT")
         self.create_sender_receiver(TEST_ADDR, hello_world_3, blocking_connection)
 
         # STEP 3: Count the number of attaches for address TEST_ADDR, there should be 4
@@ -535,8 +530,8 @@ class LogLevelUpdateTest(TestCase):
         qd_manager = QdManager(self.address)
         # Set log level to info+ on the DEFAULT module
         qd_manager.update("io.skupper.router.log", {"enable": "info+"}, name="log/DEFAULT")
-        # Set log level to trace+ on the PROTOCOL module
-        qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/PROTOCOL")
+        # Set log level to debug+ on the PROTOCOL module
+        qd_manager.update("io.skupper.router.log", {"enable": "debug+"}, name="log/PROTOCOL")
         blocking_connection = BlockingConnection(self.address)
 
         self.create_sender_receiver(TEST_ADDR, hello_world_5,
@@ -593,7 +588,7 @@ class RouterCoreModuleLogTest(TestCase):
             ('address', {'prefix': 'closest', 'distribution': 'closest'}),
             ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-            ('log', {'module': 'ROUTER_CORE', 'enable': 'trace+',
+            ('log', {'module': 'ROUTER_CORE', 'enable': 'debug+',
                      'includeSource': 'true',
                      'outputFile': name + '-core.log'})
 

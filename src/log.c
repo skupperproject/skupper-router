@@ -77,11 +77,11 @@ ALLOC_DEFINE(qd_log_entry_t);
 DEQ_DECLARE(qd_log_entry_t, qd_log_list_t);
 static qd_log_list_t         entries = {0};
 
-typedef enum { DEFAULT, NONE, TRACE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, N_LEVELS } level_index_t;
-#define MIN_VALID_LEVEL_INDEX TRACE
+typedef enum { DEFAULT, NONE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, N_LEVELS } level_index_t;
+#define MIN_VALID_LEVEL_INDEX DEBUG
 #define MAX_VALID_LEVEL_INDEX CRITICAL
 #define N_LEVEL_INDICES       (MAX_VALID_LEVEL_INDEX - MIN_VALID_LEVEL_INDEX + 1)
-#define LEVEL_INDEX(LEVEL)    ((LEVEL) -TRACE)
+#define LEVEL_INDEX(LEVEL)    ((LEVEL) -DEBUG)
 
 static const char *SINK_STDOUT = "stdout";
 static const char *SINK_STDERR = "stderr";
@@ -132,7 +132,6 @@ typedef struct level_t {
 
 static level_t levels[] = {{"default", -1, -1, 0},
                            {"none", 0, 0, 0},
-                           LEVEL("trace", QD_LOG_TRACE, LOG_DEBUG), /* syslog has no trace level */
                            LEVEL("debug", QD_LOG_DEBUG, LOG_DEBUG),
                            LEVEL("info", QD_LOG_INFO, LOG_INFO),
                            LEVEL("notice", QD_LOG_NOTICE, LOG_NOTICE),
@@ -668,7 +667,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
                 src->mask = mask;
             }
 
-            if (log_enabled_lh(src, QD_LOG_TRACE)) {
+            if (log_enabled_lh(src, QD_LOG_DEBUG)) {
                 trace_enabled = true;
             }
         }
@@ -703,7 +702,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
         free(enable);
 
     //
-    // If trace logging is enabled, loop thru all connections in the router and call the pn_transport_set_tracer callback
+    // If debug logging is enabled, loop thru all connections in the router and call the pn_transport_set_tracer callback
     // so proton frame trace can be output as part of the router trace log.
     //
     if (trace_enabled) {
@@ -727,7 +726,6 @@ QD_EXPORT qd_error_t qd_entity_refresh_logStats(qd_entity_t* entity, void *impl)
     char identity_str[TEXT_MAX];
     snprintf(identity_str, TEXT_MAX - 1,"logStats/%s", log->module);
 
-    qd_entity_set_long(entity,   "traceCount",    log->severity_histogram[LEVEL_INDEX(TRACE)]);
     qd_entity_set_long(entity,   "debugCount",    log->severity_histogram[LEVEL_INDEX(DEBUG)]);
     qd_entity_set_long(entity,   "infoCount",     log->severity_histogram[LEVEL_INDEX(INFO)]);
     qd_entity_set_long(entity,   "noticeCount",   log->severity_histogram[LEVEL_INDEX(NOTICE)]);

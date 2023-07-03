@@ -384,7 +384,7 @@ class TopologyDispositionTests (TestCase):
         error = None
         if self.skip[name] :
             self.skipTest("Test skipped during development.")
-        st_key = "PROTOCOL (trace) [C"
+        st_key = "PROTOCOL (debug) [C"
         qc_key = "qd.conn-id\"="
         for router in [self.router_A, self.router_B, self.router_C, self.router_D]:
             with open(router.logfile_path, 'r') as router_log:
