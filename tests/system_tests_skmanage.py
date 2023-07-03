@@ -261,7 +261,6 @@ class SkmanageTest(TestCase):
                       'debugCount',
                       'errorCount',
                       'infoCount',
-                      'noticeCount',
                       'warningCount'
                       ]
         n_log_levels = len(log_levels)

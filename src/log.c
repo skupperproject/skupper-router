@@ -77,7 +77,7 @@ ALLOC_DEFINE(qd_log_entry_t);
 DEQ_DECLARE(qd_log_entry_t, qd_log_list_t);
 static qd_log_list_t         entries = {0};
 
-typedef enum { DEFAULT, NONE, DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, N_LEVELS } level_index_t;
+typedef enum { DEFAULT, NONE, DEBUG, INFO, WARNING, ERROR, CRITICAL, N_LEVELS } level_index_t;
 #define MIN_VALID_LEVEL_INDEX DEBUG
 #define MAX_VALID_LEVEL_INDEX CRITICAL
 #define N_LEVEL_INDICES       (MAX_VALID_LEVEL_INDEX - MIN_VALID_LEVEL_INDEX + 1)
@@ -134,7 +134,6 @@ static level_t levels[] = {{"default", -1, -1, 0},
                            {"none", 0, 0, 0},
                            LEVEL("debug", QD_LOG_DEBUG, LOG_DEBUG),
                            LEVEL("info", QD_LOG_INFO, LOG_INFO),
-                           LEVEL("notice", QD_LOG_NOTICE, LOG_NOTICE),
                            LEVEL("warning", QD_LOG_WARNING, LOG_WARNING),
                            LEVEL("error", QD_LOG_ERROR, LOG_ERR),
                            LEVEL("critical", QD_LOG_CRITICAL, LOG_CRIT)};
@@ -728,7 +727,6 @@ QD_EXPORT qd_error_t qd_entity_refresh_logStats(qd_entity_t* entity, void *impl)
 
     qd_entity_set_long(entity,   "debugCount",    log->severity_histogram[LEVEL_INDEX(DEBUG)]);
     qd_entity_set_long(entity,   "infoCount",     log->severity_histogram[LEVEL_INDEX(INFO)]);
-    qd_entity_set_long(entity,   "noticeCount",   log->severity_histogram[LEVEL_INDEX(NOTICE)]);
     qd_entity_set_long(entity,   "warningCount",  log->severity_histogram[LEVEL_INDEX(WARNING)]);
     qd_entity_set_long(entity,   "errorCount",    log->severity_histogram[LEVEL_INDEX(ERROR)]);
     qd_entity_set_long(entity,   "criticalCount", log->severity_histogram[LEVEL_INDEX(CRITICAL)]);

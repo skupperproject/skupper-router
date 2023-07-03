@@ -852,7 +852,6 @@ static void qd_python_setup(void)
 
         qd_register_constant(m, "LOG_DEBUG",    QD_LOG_DEBUG);
         qd_register_constant(m, "LOG_INFO",     QD_LOG_INFO);
-        qd_register_constant(m, "LOG_NOTICE",   QD_LOG_NOTICE);
         qd_register_constant(m, "LOG_WARNING",  QD_LOG_WARNING);
         qd_register_constant(m, "LOG_ERROR",    QD_LOG_ERROR);
         qd_register_constant(m, "LOG_CRITICAL", QD_LOG_CRITICAL);

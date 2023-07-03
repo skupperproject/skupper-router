@@ -839,12 +839,12 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
             pn_netaddr_str(na, str, sizeof(str));
             // "str" contains the host and port on which this listener is listening.
             if (li->config.name)
-                    qd_log(LOG_SERVER, QD_LOG_NOTICE, "Listening on %s (%s)", str, li->config.name);
+                    qd_log(LOG_SERVER, QD_LOG_INFO, "Listening on %s (%s)", str, li->config.name);
             else
-                    qd_log(LOG_SERVER, QD_LOG_NOTICE, "Listening on %s", str);
+                    qd_log(LOG_SERVER, QD_LOG_INFO, "Listening on %s", str);
         }
         else {
-            qd_log(LOG_SERVER, QD_LOG_NOTICE, "Listening on %s", host_port);
+            qd_log(LOG_SERVER, QD_LOG_INFO, "Listening on %s", host_port);
         }
 
         break;
@@ -1481,7 +1481,7 @@ void qd_server_run(qd_dispatch_t *qd)
     int i;
     assert(qd_server);
     assert(qd_server->container); // Server can't run without a container
-    qd_log(LOG_SERVER, QD_LOG_NOTICE, "Operational, %d Threads Running (process ID %ld)",
+    qd_log(LOG_SERVER, QD_LOG_INFO, "Operational, %d Threads Running (process ID %ld)",
            qd_server->thread_count, (long) getpid());  // Log message is matched in system_tests
 
     const uintmax_t ram_size = qd_platform_memory_size();
@@ -1491,7 +1491,7 @@ void qd_server_run(qd_dispatch_t *qd)
         const char *suffix_ram = 0;
         double vm = normalize_memory_size(vm_size, &suffix_vm);
         double ram = normalize_memory_size(ram_size, &suffix_ram);
-        qd_log(LOG_ROUTER, QD_LOG_NOTICE, "Process VmSize %.2f %s (%.2f %s available memory)", vm, suffix_vm,
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Process VmSize %.2f %s (%.2f %s available memory)", vm, suffix_vm,
                ram, suffix_ram);
     }
 
@@ -1512,7 +1512,7 @@ void qd_server_run(qd_dispatch_t *qd)
     }
     free(threads);
 
-    qd_log(LOG_ROUTER, QD_LOG_NOTICE, "Shut Down");
+    qd_log(LOG_ROUTER, QD_LOG_DEBUG, "Shut Down");
 }
 
 void qd_server_stop(qd_dispatch_t *qd)

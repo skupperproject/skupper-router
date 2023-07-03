@@ -987,7 +987,7 @@ class Qdrouterd(Process):
         This ensures that the router installs its signal handlers, avoiding
         a router failure with return code -15 upon premature SIGTERM (DISPATCH-1689)
 
-        e.g. 2022-03-03 19:08:13.608655 +0100 SERVER (notice) Operational, 4 Threads Running (process ID 2190110)
+        e.g. 2022-03-03 19:08:13.608655 +0100 SERVER (info) Operational, 4 Threads Running (process ID 2190110)
         """
         # system_tests_log_level_update filters SERVER module logs to a
         # separate file
@@ -997,7 +997,7 @@ class Qdrouterd(Process):
                 logfile_path = os.path.join(self.outdir, log.get('outputFile'))
                 break
 
-        self.wait_log_message(r'SERVER \(notice\) Operational, (\d+) Threads Running \(process ID (\d+)\)',
+        self.wait_log_message(r'SERVER \(info\) Operational, (\d+) Threads Running \(process ID (\d+)\)',
                               logfile_path=logfile_path)
 
     def wait_ready(self, **retry_kwargs):

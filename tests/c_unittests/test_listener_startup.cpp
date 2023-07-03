@@ -111,7 +111,7 @@ TEST_CASE("Start AMQP listener with zero port" * doctest::skip(regex_is_broken()
 
         check_amqp_listener_startup_log_message(
             config,
-            R"EOS(SERVER \(notice\) Listening on (127.0.0.1)|(::1):(\d\d+))EOS",
+            R"EOS(SERVER \(info\) Listening on (127.0.0.1)|(::1):(\d\d+))EOS",
             R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
     }).join();
@@ -128,7 +128,7 @@ TEST_CASE("Start AMQP listener with zero port and a name" * doctest::skip(regex_
 
         check_amqp_listener_startup_log_message(
             config,
-            R"EOS(SERVER \(notice\) Listening on (127.0.0.1)|(::1):(\d\d+) \(pepa\))EOS",
+            R"EOS(SERVER \(info\) Listening on (127.0.0.1)|(::1):(\d\d+) \(pepa\))EOS",
             R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
     }).join();
@@ -145,8 +145,8 @@ TEST_CASE("Start HTTP listener with zero port" * doctest::skip(regex_is_broken()
 
         check_http_listener_startup_log_message(
             config,
-            R"EOS(HTTP \(notice\) Listening for HTTP on localhost:(\d\d+))EOS",
-            R"EOS(HTTP \(notice\) Stopped listening for HTTP on localhost:0)EOS",
+            R"EOS(HTTP \(info\) Listening for HTTP on localhost:(\d\d+))EOS",
+            R"EOS(HTTP \(info\) Stopped listening for HTTP on localhost:0)EOS",
 
             R"EOS(HTTP \(error\) No HTTP support to listen on localhost:0)EOS"
         );
@@ -165,8 +165,8 @@ TEST_CASE("Start HTTP listener with zero port and a name" * doctest::skip(regex_
 
         check_http_listener_startup_log_message(
             config,
-            R"EOS(HTTP \(notice\) Listening for HTTP on localhost:(\d\d+))EOS",
-            R"EOS(HTTP \(notice\) Stopped listening for HTTP on localhost:0)EOS",
+            R"EOS(HTTP \(info\) Listening for HTTP on localhost:(\d\d+))EOS",
+            R"EOS(HTTP \(info\) Stopped listening for HTTP on localhost:0)EOS",
 
             R"EOS(HTTP \(error\) No HTTP support to listen on localhost:0)EOS"
         );
