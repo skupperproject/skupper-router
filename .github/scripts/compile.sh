@@ -144,7 +144,7 @@ do_build () {
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
     -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-    -DCMAKE_INSTALL_PREFIX=install
+    -DCMAKE_INSTALL_PREFIX=$PROTON_BUILD_DIR${suffix}/install
   cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
 
   # `cmake --install` Proton for the build image only as the router links it statically
