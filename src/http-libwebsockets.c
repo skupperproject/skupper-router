@@ -361,7 +361,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     info.ssl_cipher_list = CIPHER_LIST;
     info.options |= LWS_SERVER_OPTION_VALIDATE_UTF8;
     if (!is_ipv6_address(hs, strlen(config->host) == 0 ? 0 : config->host, config->port)) {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Disabling ipv6 on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_INFO, "Disabling ipv6 on %s", config->host_port);
         info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
     }
     if (config->ssl_profile) {
@@ -381,7 +381,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     info.finalize_arg = hl;
     hl->vhost = lws_create_vhost(hs->context, &info);
     if (!hl->vhost) {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Error listening for HTTP on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_INFO, "Error listening for HTTP on %s", config->host_port);
         goto error;
     }
 
@@ -394,12 +394,12 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
         const int resolved_port = lws_get_vhost_port(hl->vhost);
         assert(resolved_port != -1); // already checked the vhost is successfully started
         if (config->name)
-            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
+            qd_log(LOG_HTTP, QD_LOG_INFO, "Listening for HTTP on %s:%d (%s)", config->host, resolved_port,
                    config->name);
         else
-            qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s:%d", config->host, resolved_port);
+            qd_log(LOG_HTTP, QD_LOG_INFO, "Listening for HTTP on %s:%d", config->host, resolved_port);
     } else {
-        qd_log(LOG_HTTP, QD_LOG_NOTICE, "Listening for HTTP on %s", config->host_port);
+        qd_log(LOG_HTTP, QD_LOG_INFO, "Listening for HTTP on %s", config->host_port);
     }
     return;
 
@@ -413,7 +413,7 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
 
 static void listener_close(qd_lws_listener_t *hl, qd_http_server_t *hs) {
     qd_server_config_t *config = &hl->listener->config;
-    qd_log(LOG_HTTP, QD_LOG_NOTICE, "Stopped listening for HTTP on %s", config->host_port);
+    qd_log(LOG_HTTP, QD_LOG_INFO, "Stopped listening for HTTP on %s", config->host_port);
     lws_vhost_destroy(hl->vhost);
 }
 

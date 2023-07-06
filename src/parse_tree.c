@@ -184,7 +184,7 @@ static bool normalize_pattern(qd_parse_tree_type_t type, char *pattern)
     }
 
     if (original) {
-        qd_log(LOG_DEFAULT, QD_LOG_NOTICE, "configured pattern '%s' optimized and re-written to '%s'",
+        qd_log(LOG_DEFAULT, QD_LOG_DEBUG, "configured pattern '%s' optimized and re-written to '%s'",
                original, pattern);
         free(original);
     }

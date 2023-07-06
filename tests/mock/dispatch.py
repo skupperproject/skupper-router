@@ -20,14 +20,12 @@
 Mock implementation of the dispatch C extension module for use in unit tests.
 """
 
-LOG_TRACE    = 1
-LOG_DEBUG    = 2
-LOG_INFO     = 4
-LOG_NOTICE   = 8
-LOG_WARNING  = 16
-LOG_ERROR    = 32
-LOG_CRITICAL = 64
-LOG_STACK_LIMIT = 8
+LOG_DEBUG    = 1
+LOG_INFO     = 2
+LOG_WARNING  = 4
+LOG_ERROR    = 8
+LOG_CRITICAL = 16
+LOG_STACK_LIMIT = 5
 
 TREATMENT_MULTICAST_FLOOD  = 0
 TREATMENT_MULTICAST_ONCE   = 1
