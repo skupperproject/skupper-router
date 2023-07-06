@@ -906,6 +906,9 @@ jobs:
   container:
     name: Container image
     runs-on: ubuntu-latest
+    env:
+      ImageName: local/skupper-router:local
+
     steps:
 
       - uses: actions/checkout@v3
@@ -926,7 +929,7 @@ jobs:
 
       - name: Build Containerfile
         run: |
-          podman build -t local/skupper-router:local -f ./Containerfile .
+          podman build -t ${{ env.ImageName }} -f ./Containerfile .
 
       # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
       # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
@@ -947,10 +950,22 @@ jobs:
           cargo check
 #          cargo test -- --test-threads=1 --nocapture
         env:
-          QDROUTERD_IMAGE: local/skupper-router:local
+          QDROUTERD_IMAGE: ${{ env.ImageName }}
           CARGO_INCREMENTAL: 0
           RUST_LOG: info
           RUST_BACKTRACE: 1
+
+      # Trivy and Grype are the scanners that GitLab integrates with (at the time of writing)
+
+      - name: Run Trivy security scan on the image
+        # https://aquasecurity.github.io/trivy/v0.43/getting-started/installation/#use-container-image
+        run: |
+          podman run --rm --volume ${DOCKER_HOST}:/var/run/docker.sock -v $HOME/.cache:/root/.cache/ docker.io/aquasec/trivy:latest image ${{ env.ImageName }}
+
+      - name: Run Grype security scan on the image
+        # https://github.com/anchore/grype#getting-started
+        run: |
+          podman run --rm --volume ${DOCKER_HOST}:/var/run/docker.sock docker.io/anchore/grype:latest ${{ env.ImageName }}
 
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
