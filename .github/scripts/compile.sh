@@ -144,10 +144,12 @@ do_build () {
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
     -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-    -DCMAKE_INSTALL_PREFIX=/usr
+    -DCMAKE_INSTALL_PREFIX=$PROTON_BUILD_DIR${suffix}/install
   cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
 
-  DESTDIR="$PROTON_INSTALL_DIR${suffix}" cmake --install "$PROTON_BUILD_DIR${suffix}"
+  # `cmake --install` Proton for the build image only as the router links it statically
+  # Proton Python for the run image is installed later
+  cmake --install "$PROTON_BUILD_DIR${suffix}"
 
    if [ "$runtime_check" == "OFF" ]; then
      # This will install the proton python libraries in sys.path so the tests using
@@ -159,7 +161,7 @@ do_build () {
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DRUNTIME_CHECK="${runtime_check}" \
     -DProton_USE_STATIC_LIBS=ON \
-    -DProton_DIR="${PROTON_INSTALL_DIR}${suffix}/usr/lib64/cmake/Proton" \
+    -DProton_DIR="$PROTON_BUILD_DIR${suffix}/install/lib64/cmake/Proton" \
     ${BUILD_OPTS} \
     -DVERSION="${VERSION}" \
     -DCMAKE_INSTALL_PREFIX=/usr
