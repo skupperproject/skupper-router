@@ -1512,7 +1512,7 @@ void qd_server_run(qd_dispatch_t *qd)
     }
     free(threads);
 
-    qd_log(LOG_ROUTER, QD_LOG_DEBUG, "Shut Down");
+    qd_log(LOG_ROUTER, QD_LOG_INFO, "Shut Down");
 }
 
 void qd_server_stop(qd_dispatch_t *qd)
