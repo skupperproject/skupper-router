@@ -959,14 +959,18 @@ jobs:
       # Trivy and Grype are the scanners that GitLab integrates with (at the time of writing)
 
       - name: Run Trivy security scan on the image
+        if: ${{ ! cancelled() }}
         # https://aquasecurity.github.io/trivy/v0.43/getting-started/installation/#use-container-image
         run: |
-          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock -v $HOME/.cache:/root/.cache/ docker.io/aquasec/trivy:latest image ${{ env.ImageName }}
+          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock -v $HOME/.cache:/root/.cache/ docker.io/aquasec/trivy:latest \
+            image --scanners secret --exit-code=1 ${{ env.ImageName }}
 
       - name: Run Grype security scan on the image
+        if: ${{ ! cancelled() }}
         # https://github.com/anchore/grype#getting-started
         run: |
-          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock docker.io/anchore/grype:latest ${{ env.ImageName }}
+          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock docker.io/anchore/grype:latest \
+            --only-fixed --fail-on low ${{ env.ImageName }}
 
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
