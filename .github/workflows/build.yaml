@@ -949,7 +949,7 @@ jobs:
       - name: Compile and run .rs tests
         run: |
           cargo check
-#          cargo test -- --test-threads=1 --nocapture
+          cargo test -- --test-threads=1 --nocapture
         env:
           QDROUTERD_IMAGE: ${{ env.ImageName }}
           CARGO_INCREMENTAL: 0
