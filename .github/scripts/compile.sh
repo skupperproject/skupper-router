@@ -147,7 +147,7 @@ do_build () {
     -DCMAKE_INSTALL_PREFIX=install
   cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
 
-  # `cmake --install` Proton for the build image only
+  # `cmake --install` Proton for the build image only as the router links it statically
   # Proton Python for the run image is installed later
   cmake --install "$PROTON_BUILD_DIR${suffix}"
 
