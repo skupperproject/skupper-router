@@ -51,6 +51,8 @@
 //
 const uint32_t TCP_MAX_CAPACITY = 121635 * 6 * 2;  // 1,459,620
 
+static qd_duration_t half_closed_idle_timeout = 0;  // 0 = disabled
+
 ALLOC_DEFINE(qdr_tcp_stats_t);
 ALLOC_DEFINE(qd_tcp_listener_t);
 ALLOC_DEFINE(qd_tcp_connector_t);
@@ -91,12 +93,12 @@ struct qdr_tcp_connection_t {
     bool                  flow_enabled;
     bool                  is_egress_dispatcher_conn;
     bool                  connector_closed;//only used if egress_dispatcher=true
-    bool                  in_list;         // This connection is in the adaptor's connections list
-    sys_atomic_t          raw_closed_read;   // proton event seen
-    sys_atomic_t          raw_closed_write;  // proton event seen or write_close called
+    bool                      in_list;         // This connection is in the adaptor's connections list
     bool                  raw_read_shutdown; // stream closed
     bool                  read_eos_seen;
     bool                  window_disabled;   // true: ignore unacked byte window
+    sys_atomic_t              raw_closed_read;   // proton event seen
+    sys_atomic_t              raw_closed_write;  // proton event seen or write_close called
     qdr_delivery_t       *initial_delivery;
     qd_timer_t           *activate_timer;
     qd_tcp_adaptor_config_t  *config;         // config
@@ -118,6 +120,9 @@ struct qdr_tcp_connection_t {
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
+    uint64_t              half_closed_bytes;     // bytes_in+_out snapshot
+    sys_atomic_t          half_closed_expired;   // check for idle connection
+    qd_timer_t           *half_closed_timer;
 
     qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
 
@@ -125,10 +130,9 @@ struct qdr_tcp_connection_t {
     qd_message_stream_data_t *outgoing_stream_data; // current segment
     qd_message_stream_data_t *release_up_to;
     size_t                  outgoing_body_bytes;  // bytes received from current segment
-    int                     outgoing_body_offset; // buffer offset into current segment
-
-    pn_raw_buffer_t         outgoing_buffs[WRITE_BUFFERS];
+    int                       outgoing_body_offset;  // buffer offset into current segment
     int                     outgoing_buff_count;  // number of buffers with data
+    pn_raw_buffer_t           outgoing_buffs[WRITE_BUFFERS];
     int                     outgoing_buff_idx;    // first buffer with data
     bool                    require_tls;     // Is TLS required on this connection ?
     DEQ_LINKS(qdr_tcp_connection_t);
@@ -145,7 +149,7 @@ typedef struct qdr_tcp_adaptor_t {
     qd_tcp_listener_list_t    listeners;
     qd_tcp_connector_list_t   connectors;
     qdr_tcp_connection_list_t connections;
-    sys_mutex_t               listener_lock; // protect listeners list
+    sys_mutex_t               listener_lock;  // protect listeners list
 } qdr_tcp_adaptor_t;
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
@@ -164,6 +168,17 @@ static void qdr_process_app_properties(qdr_tcp_connection_t *tc, qd_message_t *m
 static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t *tc);
 static void handle_outgoing(qdr_tcp_connection_t *conn);
 static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t *unencrypted_buff, bool write_buffers);
+static void start_half_closed_monitoring(qdr_tcp_connection_t *conn);
+static void stop_half_closed_monitoring(qdr_tcp_connection_t *conn);
+static bool check_half_closed_timeout(qdr_tcp_connection_t *conn);
+
+
+// is the connection in half-closed state?
+//
+inline static bool tcp_conn_is_half_closed(qdr_tcp_connection_t *conn)
+{
+    return IS_ATOMIC_FLAG_SET(&conn->raw_closed_read) != IS_ATOMIC_FLAG_SET(&conn->raw_closed_write);
+}
 
 // is the incoming byte window full
 //
@@ -576,7 +591,9 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
     free(tc->alpn_protocol);
     sys_atomic_destroy(&tc->raw_closed_read);
     sys_atomic_destroy(&tc->raw_closed_write);
+    sys_atomic_destroy(&tc->half_closed_expired);
     qd_timer_free(tc->activate_timer);
+    qd_timer_free(tc->half_closed_timer);
     sys_mutex_free(&tc->activation_lock);
 
     // Free tls related stuff if need be.
@@ -1030,6 +1047,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_CLOSED_READ: {
         SET_ATOMIC_FLAG(&conn->raw_closed_read);
         handle_incoming(conn, "PNRC_CLOSED_READ");
+        if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_write)) {
+            start_half_closed_monitoring(conn);
+        }
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_READ %s",
                conn->conn_id, qdr_tcp_connection_role_name(conn));
         break;
@@ -1037,6 +1057,9 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
     case PN_RAW_CONNECTION_CLOSED_WRITE: {
         SET_ATOMIC_FLAG(&conn->raw_closed_write);
         int num_drained_write_buffers = qd_raw_connection_drain_write_buffers(conn->pn_raw_conn);
+        if (!IS_ATOMIC_FLAG_SET(&conn->raw_closed_read)) {
+            start_half_closed_monitoring(conn);
+        }
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "] PN_RAW_CONNECTION_CLOSED_WRITE %s, drained %i write buffers", conn->conn_id,
                qdr_tcp_connection_role_name(conn), num_drained_write_buffers);
@@ -1061,6 +1084,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
                "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED %s, drained_buffers=%i", conn->conn_id,
                qdr_tcp_connection_role_name(conn), drained_buffers);
+
+        stop_half_closed_monitoring(conn);
 
         LOCK(&conn->activation_lock);
         pn_raw_connection_set_context(conn->pn_raw_conn, 0);
@@ -1090,6 +1115,15 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] PN_RAW_CONNECTION_WAKE %s", conn->conn_id,
                qdr_tcp_connection_role_name(conn));
         while (qdr_connection_process(conn->qdr_conn)) {}
+        if (tcp_conn_is_half_closed(conn) && check_half_closed_timeout(conn)) {
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING, "[C%" PRIu64 "] Idle half-closed TCP connection detected, forcing close", conn->conn_id);
+            pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
+            if (!!cond) {
+                (void) pn_condition_set_name(cond, "connection:forced");
+                (void) pn_condition_set_description(cond, "connection closed due to half-closed idle timeout");
+            }
+            pn_raw_connection_close(conn->pn_raw_conn);
+        }
         break;
     }
     case PN_RAW_CONNECTION_DRAIN_BUFFERS: {
@@ -1214,6 +1248,7 @@ static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_
     tc->context.handler = &handle_connection_event;
     sys_atomic_init(&tc->raw_closed_read, 0);
     sys_atomic_init(&tc->raw_closed_write, 0);
+    sys_atomic_init(&tc->half_closed_expired, 0);
     sys_mutex_init(&tc->activation_lock);
     tc->is_egress_dispatcher_conn = is_egress_dispatcher_conn;
     tc->ingress = ingress;
@@ -2173,6 +2208,7 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
 {
     qd_adaptor_common_init();
     qdr_tcp_adaptor_t *adaptor = NEW(qdr_tcp_adaptor_t);
+    ZERO(adaptor);
     adaptor->core    = core;
     adaptor->adaptor = qdr_protocol_adaptor(core,
                                             "tcp",                // name
@@ -2196,6 +2232,21 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     DEQ_INIT(adaptor->connections);
     sys_mutex_init(&adaptor->listener_lock);
     *adaptor_context = adaptor;
+
+    // ISSUE-1152: Check if half-close idle timeout enabled via the environment. If the value is a positive integer, use
+    // it for the timeout value (in seconds).
+    //
+    char *half_close_enabled = getenv("SKUPPER_ROUTER_ENABLE_1152");
+    if (half_close_enabled) {
+        int timeout;
+        // This default is based on 2x the conventional maximum segment lifetime (2 minutes)
+        half_closed_idle_timeout = 240000;
+        if (sscanf(half_close_enabled, "%d", &timeout) == 1) {
+            if (timeout > 0) {
+                half_closed_idle_timeout = timeout * 1000;
+            }
+        }
+    }
 
     tcp_adaptor = adaptor;
 }
@@ -2512,4 +2563,54 @@ static void detach_links(qdr_tcp_connection_t *conn)
         qdr_link_detach(conn->outgoing_link, QD_LOST, 0);
         conn->outgoing_link = 0;
     }
+}
+
+// Half-closed idle timer handler. Note this callback may run in parallel with an I/O thread handling events for this
+// connection. It is safe to access the raw connection since this timer will be cancelled before the raw connection is
+// closed.
+//
+static void on_idle_timer(void *context)
+{
+    qdr_tcp_connection_t *conn = (qdr_tcp_connection_t *) context;
+    SET_ATOMIC_FLAG(&conn->half_closed_expired);
+    pn_raw_connection_wake(conn->pn_raw_conn);
+}
+
+// ISSUE-1152: the connection has entered half-closed state.
+//
+static void start_half_closed_monitoring(qdr_tcp_connection_t *conn)
+{
+    if (half_closed_idle_timeout) {
+        assert(tcp_conn_is_half_closed(conn));
+        assert(!conn->half_closed_timer);
+        conn->half_closed_bytes = conn->bytes_in + conn->bytes_out;
+        conn->half_closed_timer = qd_timer(tcp_adaptor->core->qd, on_idle_timer, conn);
+        qd_timer_schedule(conn->half_closed_timer, half_closed_idle_timeout);
+    }
+}
+
+static void stop_half_closed_monitoring(qdr_tcp_connection_t *conn)
+{
+    if (conn->half_closed_timer) {
+        qd_timer_cancel(conn->half_closed_timer);
+    }
+}
+
+static bool check_half_closed_timeout(qdr_tcp_connection_t *conn)
+{
+    bool is_idle = false;
+
+    if (CLEAR_ATOMIC_FLAG(&conn->half_closed_expired)) {
+        uint64_t bytes_now = conn->bytes_in + conn->bytes_out;
+        if (conn->half_closed_bytes == bytes_now) {
+            // no traffic passed during idle time
+            is_idle = true;
+        } else {
+            // not idle, try again later
+            conn->half_closed_bytes = bytes_now;
+            qd_timer_schedule(conn->half_closed_timer, half_closed_idle_timeout);
+        }
+    }
+
+    return is_idle;
 }
