@@ -186,8 +186,12 @@ do_build "_tsan" tsan
 tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
 DESTDIR="${SKUPPER_DIR}/staging/" cmake --install "${SKUPPER_BUILD_DIR}"
+# Remove router tests (enabled for PGO) since *.pem files trigger security warnings
+rm -rf ${SKUPPER_DIR}/staging/usr/lib/tests
+# Add sanitized router binaries
 cp "${SKUPPER_BUILD_DIR}_asan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_asan"
 cp "${SKUPPER_BUILD_DIR}_tsan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_tsan"
 cp --target-directory="${SKUPPER_DIR}/staging/" "${SKUPPER_DIR}/tests/tsan.supp" "${SKUPPER_BUILD_DIR}_asan/tests/lsan.supp"
+
 tar -z -C "${SKUPPER_DIR}/staging/" -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
 #endregion qpid-proton and skupper-router
