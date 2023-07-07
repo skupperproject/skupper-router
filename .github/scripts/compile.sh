@@ -187,7 +187,7 @@ tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
 DESTDIR="${SKUPPER_DIR}/staging/" cmake --install "${SKUPPER_BUILD_DIR}"
 # Remove router tests (enabled for PGO) since *.pem files trigger security warnings
-rm -rf ${SKUPPER_DIR}/staging/usr/lib/tests
+rm -rf ${SKUPPER_DIR}/staging/usr/lib/skupper-router/tests
 # Add sanitized router binaries
 cp "${SKUPPER_BUILD_DIR}_asan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_asan"
 cp "${SKUPPER_BUILD_DIR}_tsan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_tsan"
