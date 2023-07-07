@@ -968,7 +968,7 @@ jobs:
             docker.io/aquasec/trivy:latest \
               image \
               --scanners vuln,secret --ignore-unfixed --exit-code=1 \
-              --secret-config=${{github.workspace}}/.github/triy-secret.yaml \
+              --secret-config=${{github.workspace}}/.github/trivy-secret.yaml \
               ${{ env.ImageName }}
 
       - name: Run Grype security scan on the image
