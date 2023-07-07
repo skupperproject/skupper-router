@@ -964,7 +964,7 @@ jobs:
         run: |
           podman run --rm \
             -v ${PODMAN_SOCK}:/var/run/docker.sock \
-            -v ${{github.workspace}}:${{github.workspace}}
+            -v ${{github.workspace}}:${{github.workspace}} \
             docker.io/aquasec/trivy:latest \
               image \
               --scanners vuln,secret --ignore-unfixed --exit-code=1 \
