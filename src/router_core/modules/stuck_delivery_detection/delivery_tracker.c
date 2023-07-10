@@ -57,6 +57,8 @@ static void check_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t
         link->deliveries_stuck++;
         core->deliveries_stuck++;
         if (link->deliveries_stuck == 1)
+            // We would like to know if any deliveries are stuck, so we should keep this log
+            // statement at the QD_LOG_INFO level.
             qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
                    "[C%" PRIu64 "][L%" PRIu64
                    "] "
@@ -85,6 +87,9 @@ static void process_link_CT(qdr_core_t *core, qdr_link_t *link)
         (qdr_core_uptime_ticks(core) - link->zero_credit_time > stuck_age)) {
         link->reported_as_blocked = true;
         core->links_blocked++;
+
+        // We would like to know about links blocked with no credit.
+        // This log statement will be at QD_LOG_INFO level.
         qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
                "[C%" PRIu64 "][L%" PRIu64
                "] "
@@ -170,6 +175,7 @@ static void qdrc_delivery_tracker_init_CT(qdr_core_t *core, void **module_contex
     qdr_core_timer_schedule_CT(core, tracker->timer, timer_interval);
     *module_context = tracker;
 
+    // This is a one time init log message. This will be logged at the QD_LOG_INFO level.
     qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "Stuck delivery detection: Scan interval: %d seconds, Delivery age threshold: %d seconds", timer_interval,
            stuck_age);

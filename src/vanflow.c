@@ -1640,7 +1640,7 @@ static uint64_t _vflow_on_message(void                    *context,
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
         if (!!subject_iter) {
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
-                qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "FLUSH request received");
+                qd_log(LOG_FLOW_LOG, QD_LOG_DEBUG, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
             }
             qd_iterator_free(subject_iter);

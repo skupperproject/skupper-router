@@ -576,9 +576,10 @@ QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch
     return 0;
 }
 
-static void log_config(qd_server_config_t *c, const char *what)
+static void log_config(qd_server_config_t *c, const char *what, bool create)
 {
-    qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Configured %s: %s proto=%s, role=%s%s%s%s", what, c->host_port,
+    // Log creation/deletion of config objects at INFO level.
+    qd_log(LOG_CONN_MGR, QD_LOG_INFO, "%s %s: %s proto=%s, role=%s%s%s%s", create ? "Configured ": "Deleted ", what, c->host_port,
            c->socket_address_family ? c->socket_address_family : "any", c->role, c->http ? ", http" : "",
            c->ssl_profile ? ", sslProfile=" : "", c->ssl_profile ? c->ssl_profile : "");
 }
@@ -607,7 +608,7 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
     }
     DEQ_ITEM_INIT(li);
     DEQ_INSERT_TAIL(cm->listeners, li);
-    log_config(&li->config, "Listener");
+    log_config(&li->config, "Listener", true);
     return li;
 }
 
@@ -780,7 +781,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         ct->policy_vhost = qd_entity_opt_string(entity, "policyVhost", 0); CHECK();
         DEQ_ITEM_INIT(ct);
         DEQ_INSERT_TAIL(cm->connectors, ct);
-        log_config(&ct->config, "Connector");
+        log_config(&ct->config, "Connector", true);
 
         uint32_t connection_count = 0;
         //
@@ -992,6 +993,9 @@ QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *im
         else if (li->http) {
             qd_lws_listener_close(li->http);
         }
+
+        log_config(&li->config, "Listener", false);
+
         DEQ_REMOVE(qd->connection_manager->listeners, li);
         qd_listener_decref(li);
     }
@@ -1001,6 +1005,9 @@ QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *im
 QD_EXPORT void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl)
 {
     qd_config_ssl_profile_t *ssl_profile = (qd_config_ssl_profile_t*) impl;
+
+    qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Deleted SSL Profile with name %s ", ssl_profile->name);
+
     config_ssl_profile_free(qd->connection_manager, ssl_profile);
 }
 
@@ -1039,6 +1046,7 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
         if (ct->is_data_connector) {
             DEQ_REMOVE(qd->connection_manager->data_connectors, ct);
         } else {
+            log_config(&ct->config, "Connector", false);
             DEQ_REMOVE(qd->connection_manager->connectors, ct);
         }
 

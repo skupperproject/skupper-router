@@ -173,6 +173,7 @@ static void qcm_streaming_link_scrubber_init_CT(qdr_core_t *core, void **module_
     qdr_core_timer_schedule_CT(core, tracker->timer, timer_interval);
     *module_context = tracker;
 
+    // This is a one time init log message. This will be logged at the QD_LOG_INFO level.
     qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
            "Streaming link scrubber: Scan interval: %d seconds, max free pool: %d links", timer_interval,
            max_free_pool_size);

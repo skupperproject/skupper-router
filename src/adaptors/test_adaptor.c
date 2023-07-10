@@ -49,7 +49,7 @@ static void on_watch(void     *context,
                      uint32_t  remote_consumers,
                      uint32_t  local_producers)
 {
-    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO,
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_DEBUG,
            "on_watch(%ld): loc: %" PRIu32 " rem: %" PRIu32 " prod: %" PRIu32 "", (long) context, local_consumers,
            remote_consumers, local_producers);
 }
@@ -63,7 +63,7 @@ static void on_dynamic_watch(void     *context,
 {
     dynamic_watch_t *dw = (dynamic_watch_t*) context;
 
-    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO,
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_DEBUG,
            "On Dynamic Watch: %s loc: %" PRIu32 " rem: %" PRIu32 " prod: %" PRIu32, dw->address, local_consumers,
            remote_consumers, local_producers);
 
@@ -113,7 +113,7 @@ static void remove_dynamic_watch(dynamic_watch_t *dw)
 
 static void start_watch(const char *address)
 {
-    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO, "Start Watch: %s", address);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_DEBUG, "Start Watch: %s", address);
 
     dynamic_watch_t *dw = NEW(dynamic_watch_t);
     DEQ_ITEM_INIT(dw);
@@ -126,7 +126,7 @@ static void start_watch(const char *address)
 
 static void stop_watch(const char *address)
 {
-    qd_log(LOG_ADDRESS_WATCH, QD_LOG_INFO, "Stop Watch: %s", address);
+    qd_log(LOG_ADDRESS_WATCH, QD_LOG_DEBUG, "Stop Watch: %s", address);
 
     dynamic_watch_t *dw = DEQ_HEAD(dynamic_watches);
     while (!!dw) {

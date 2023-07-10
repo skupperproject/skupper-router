@@ -91,15 +91,7 @@ static void qdr_config_address_insert_column_CT(qdr_address_config_t *addr, int 
         break;
 
     case QDR_CONFIG_ADDRESS_DISTRIBUTION:
-        switch (addr->treatment) {
-        case QD_TREATMENT_MULTICAST_FLOOD:
-        case QD_TREATMENT_MULTICAST_ONCE:   text = "multicast"; break;
-        case QD_TREATMENT_ANYCAST_CLOSEST:  text = "closest";   break;
-        case QD_TREATMENT_ANYCAST_BALANCED: text = "balanced";  break;
-        default:
-            text = 0;
-        }
-
+        text = get_address_treatment_string(addr->treatment);
         if (text)
             qd_compose_insert_string(body, text);
         else
@@ -300,6 +292,7 @@ void qdra_config_address_delete_CT(qdr_core_t    *core,
             addr = qdr_address_config_find_by_name_CT(core, name);
 
         if (addr) {
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Deleted address with %s=%s and distribution=%s", addr->is_prefix ? "Prefix": "Pattern", addr->pattern, get_address_treatment_string(addr->treatment));
             qdr_core_remove_address_config(core, addr);
             query->status = QD_AMQP_NO_CONTENT;
         } else
@@ -440,7 +433,6 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         // since the current thread (core) is the only thread allowed to use
         // the parse tree
         //
-
         qd_error_t rc = qd_parse_tree_add_pattern_str(core->addr_parse_tree, pattern, addr);
         if (rc) {
             free_qdr_address_config_t(addr);
@@ -481,6 +473,7 @@ void qdra_config_address_create_CT(qdr_core_t         *core,
         }
 
         query->status = QD_AMQP_CREATED;
+        qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Created address with %s=%s and distribution=%s", addr->is_prefix ? "Prefix": "Pattern", addr->pattern, get_address_treatment_string(addr->treatment));
         break;
     }
 

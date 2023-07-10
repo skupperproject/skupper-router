@@ -143,7 +143,8 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             }
 
         case PN_LISTENER_ACCEPT:
-            qd_log(log_module, QD_LOG_INFO, "Listener %s: new incoming client connection to %s", li->name,
+            // Log incoming client connections at DEBUG level since these can flood the router logs.
+            qd_log(log_module, QD_LOG_DEBUG, "Listener %s: new incoming client connection to %s", li->name,
                    li->host_port);
 
             // block qd_adapter_listener_close() from returning during the accept call:

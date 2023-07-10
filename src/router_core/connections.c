@@ -136,7 +136,8 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
 
     pn_data_format(connection_info->connection_properties, props_str, &props_len);
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+    // High frequency log message, setting to QD_LOG_DEBUG
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "[C%" PRIu64
            "] Connection Opened: dir=%s host=%s encrypted=%s"
            " auth=%s user=%s container_id=%s props=%s",
@@ -1133,9 +1134,12 @@ static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_li
     free(link->strip_prefix);
 
     //
-    // Log the link closure
+    // Log the link closure.
+    // These log messages flood the router log since many of these
+    // links are attached and detached in an environment with high connection rates.
+    // Setting this log to QD_LOG_DEBUG.
     //
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "[C%" PRIu64 "][L%" PRIu64 "] %s: del=%" PRIu64 " presett=%" PRIu64 " psdrop=%" PRIu64 " acc=%" PRIu64
            " rej=%" PRIu64 " rel=%" PRIu64 " mod=%" PRIu64 " delay1=%" PRIu64 " delay10=%" PRIu64 " blocked=%s",
            conn->identity, link->identity, log_text, link->total_deliveries, link->presettled_deliveries,
@@ -1234,12 +1238,13 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     source_str[0] = '\0';
     target_str[0] = '\0';
 
-    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_INFO)) {
+    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_DEBUG)) {
         qdr_terminus_format(source, source_str, &source_len);
         qdr_terminus_format(target, target_str, &target_len);
     }
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+    // This floods the router log, setting it down to QD_LOG_DEBUG.
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "[C%" PRIu64 "][L%" PRIu64 "] Link attached: dir=%s source=%s target=%s", conn->identity, link->identity,
            dir == QD_INCOMING ? "in" : "out", source_str, target_str);
 
@@ -1821,7 +1826,8 @@ static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, boo
 
     qdrc_event_conn_raise(core, QDRC_EVENT_CONN_CLOSED, conn);
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "[C%" PRIu64 "] Connection Closed", conn->identity);
+    // High frequency log message, setting to QD_LOG_DEBUG level.
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "[C%" PRIu64 "] Connection Closed", conn->identity);
 
     DEQ_REMOVE(core->open_connections, conn);
     qdr_connection_free(conn);
@@ -2055,7 +2061,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
     // Grab the formatted terminus strings before we schedule any IO-thread processing that
     // might get ahead of us and free the terminus objects before we issue the log.
     //
-    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_INFO)) {
+    if (qd_log_enabled(LOG_ROUTER_CORE, QD_LOG_DEBUG)) {
         qdr_terminus_format(source, source_str, &source_len);
         qdr_terminus_format(target, target_str, &target_len);
     }
@@ -2145,7 +2151,8 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         }
     }
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+    // Setting this high frequency log message to QD_LOG_DEBUG.
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "[C%" PRIu64 "][L%" PRIu64 "] Link attached: dir=%s source=%s target=%s", conn->identity, link->identity,
            dir == QD_INCOMING ? "in" : "out", source_str, target_str);
 }

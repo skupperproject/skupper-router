@@ -288,7 +288,13 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
     // Find or create a connection identifier structure for this auto_link
     //
     if (container_field || connection_field) {
-        al->conn_id = qdr_route_declare_id_CT(core, qd_parse_raw(container_field), qd_parse_raw(connection_field));
+        qd_iterator_t *conn_iter = qd_parse_raw(connection_field);
+        qd_iterator_t *container_iter = qd_parse_raw(container_field);
+        if (conn_iter)
+            al->connection   = (char *) qd_iterator_copy(conn_iter);
+        if (container_iter)
+            al->container_id = (char *) qd_iterator_copy(container_iter);
+        al->conn_id = qdr_route_declare_id_CT(core, container_iter, conn_iter);
         DEQ_INSERT_TAIL_N(REF, al->conn_id->auto_link_refs, al);
 
         qdr_connection_ref_t * cref = DEQ_HEAD(al->conn_id->connection_refs);

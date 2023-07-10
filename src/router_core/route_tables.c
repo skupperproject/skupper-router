@@ -705,7 +705,7 @@ static void qdr_subscribe_CT(qdr_core_t *core, qdr_action_t *action, bool discar
         qdr_address_t *addr = 0;
 
         char *astring = (char*) qd_iterator_copy(address->iterator);
-        qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "In-process subscription %c/%s", aclass, astring);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "In-process subscription %c/%s", aclass, astring);
         free(astring);
 
         qd_iterator_annotate_prefix(address->iterator, aclass);
