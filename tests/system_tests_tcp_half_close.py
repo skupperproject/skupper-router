@@ -142,6 +142,9 @@ class TcpAdaptorIdleHalfClosedTest(TestCase):
                 finally:
                     server.close()
 
+        # verify the vanflow event was generated
+        self.router.wait_log_message("result=connection:forced reason=connection closed due to half-closed idle timeout")
+
 
 if __name__ == '__main__':
     unittest.main(main_module())
