@@ -120,8 +120,8 @@ struct qdr_tcp_connection_t {
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
-    uint64_t              half_closed_bytes;     // bytes_in+_out snapshot
-    sys_atomic_t          half_closed_expired;   // check for idle connection
+    uint64_t              half_closed_bytes;    // bytes_in+_out snapshot
+    sys_atomic_t          half_closed_expired;  // check for idle connection
     qd_timer_t           *half_closed_timer;
 
     qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
@@ -171,7 +171,6 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
 static void start_half_closed_monitoring(qdr_tcp_connection_t *conn);
 static void stop_half_closed_monitoring(qdr_tcp_connection_t *conn);
 static bool check_half_closed_timeout(qdr_tcp_connection_t *conn);
-
 
 // is the connection in half-closed state?
 //
@@ -1116,7 +1115,8 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                qdr_tcp_connection_role_name(conn));
         while (qdr_connection_process(conn->qdr_conn)) {}
         if (tcp_conn_is_half_closed(conn) && check_half_closed_timeout(conn)) {
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING, "[C%" PRIu64 "] Idle half-closed TCP connection detected, forcing close", conn->conn_id);
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING,
+                   "[C%" PRIu64 "] Idle half-closed TCP connection detected, forcing close", conn->conn_id);
             pn_condition_t *cond = pn_raw_connection_condition(conn->pn_raw_conn);
             if (!!cond) {
                 (void) pn_condition_set_name(cond, "connection:forced");
