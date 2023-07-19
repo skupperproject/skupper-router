@@ -28,12 +28,17 @@ from subprocess import PIPE
 from subprocess import STDOUT
 from typing import List, Optional
 
+from proton import Message
+from proton.handlers import MessagingHandler
+from proton.reactor import Container
+
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
 from system_test import QdManager
 from system_test import TIMEOUT
 from system_test import TestCase
+from system_test import TestTimeout
 from system_test import main_module
 from system_test import unittest
 from system_test import retry
@@ -2054,6 +2059,94 @@ class TcpDeleteConnectionTest(TestCase):
         # Keep retrying until the connection is gone from the connection table.
         retry_assertion(check_connection_deleted, delay=2)
         client_conn.close()
+
+
+class TcpInvalidEncodingTest(TestCase):
+    """
+    Ensure that the TCP adaptor can recover from receiving an improperly
+    formatted/wrong version AMQP encoded stream message.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpInvalidEncodingTest, cls).setUpClass()
+
+        config = [
+            ('router', {'mode': 'interior', 'id': 'TcpInvalidEncoding'}),
+            # Listener for handling router management requests.
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('tcpConnector', {'host': "localhost",
+                              'port': cls.tester.get_port(),
+                              'address': 'tcp-adaptor',
+                              'siteId': "mySite"}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        cls.router = cls.tester.qdrouterd('TcpInvalidEncoding',
+                                          Qdrouterd.Config(config), wait=True)
+        cls.address = cls.router.addresses[0]
+
+    def test_invalid_amqp_message(self):
+        """
+        Send an AMQP message addressed to the TCP service via the amqp
+        listener. Set values in the AMQP header which will conflict with what
+        is expected by the adaptor.  Verify the message is RELEASED and an an
+        error has been logged.
+        """
+        msg = Message()
+        msg.to = "tcp-adaptor"
+        msg.subject = "stuff"
+        msg.reply_to = "invalid/reply/to"
+        msg.content_type = "application/octet-stream"
+        test = SendAMQPMessage(msg, self.address, 'tcp-adaptor')
+        test.run()
+        self.assertIsNone(test.error)
+        self.router.wait_log_message(pattern=r"Misconfigured tcpConnector \(wrong version\)")
+
+
+class SendAMQPMessage(MessagingHandler):
+    def __init__(self, msg, address, destination):
+        super(SendAMQPMessage, self).__init__(auto_settle=False)
+        self.msg = msg
+        self.address = address
+        self.destination = destination
+        self.error = None
+        self.sent = False
+        self.timer = None
+        self.conn = None
+        self.sender = None
+
+    def done(self, error=None):
+        self.error = error
+        self.timer.cancel()
+        self.conn.close()
+
+    def timeout(self):
+        self.error = f"Timeout Expired: sent={self.sent}"
+        self.conn.close()
+
+    def on_start(self, event):
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.conn = event.container.connect(self.address)
+        self.sender = event.container.create_sender(self.conn, self.destination)
+
+    def on_sendable(self, event):
+        if not self.sent:
+            event.sender.send(self.msg)
+            self.sent = True
+
+    def on_released(self, event):
+        self.done()
+
+    def on_accepted(self, event):
+        self.done("Test Failed: message ACCEPTED (expected RELEASED)")
+
+    def on_rejected(self, event):
+        self.done("Test Failed: message REJECTED (expected RELEASED)")
+
+    def run(self):
+        Container(self).run()
 
 
 if __name__ == '__main__':

@@ -473,6 +473,13 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
                    conn->conn_id, conn->incoming_link_id, conn->reply_to);
         }
         //qd_compose_insert_null(props);                      // correlation-id
+
+        // ISSUE-1136 NOTE WELL: do not set the content-type field! The egress adaptor will use the fact that the content-type is
+        // not present to determine that the message body is a sequence of VBIN data. Future non-compatible changes to
+        // the message format will set the content-type field. Therefore this adaptor will RELEASE any AMQP messages
+        // that have a content-type specified since the format is incompatible. This will happen if the endpoints of the
+        // TCP stream (tcpConnector, tcpListener) are incompatible (misconfiguration).
+
         //qd_compose_insert_null(props);                      // content-type
         //qd_compose_insert_null(props);                      // content-encoding
         //qd_compose_insert_timestamp(props, 0);              // absolute-expiry-time
@@ -634,22 +641,13 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
         conn->in_dlv_stream = 0;
     }
     if (conn->out_dlv_stream) {
+        assert(!conn->initial_delivery);  // expect: moved initial_delivery to out_dlv_stream
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "][L%" PRIu64 "] handle_disconnected - close out_dlv_stream", conn->conn_id,
                conn->outgoing_link_id);
 
-        // Fun fact: the delivery pointed to by conn->initial_delivery is
-        // eventually moved to conn->out_dlv_stream.  I don't trust the code
-        // enough to be confident both pointers are not set at the same time
-        // and we risk calling remote_state_updated twice.
-        if (conn->initial_delivery == 0) {
-            // This is my best guess as to the proper outcome, so do not assume
-            // I know what I'm doing here:
-            qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream,
-                                              conn->read_eos_seen ? PN_ACCEPTED : PN_MODIFIED,
-                                              true, // settled
-                                              0, false);
-        }
+        // PN_ACCEPTED: since there is an out_dlv_stream TCP data was transferred
+        qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream, PN_ACCEPTED, true, 0, false);
         qdr_delivery_decref(tcp_adaptor->core, conn->out_dlv_stream, "tcp-adaptor.handle_disconnected - out_dlv_stream");
         conn->out_dlv_stream = 0;
     }
@@ -1961,8 +1959,10 @@ static void qdr_process_app_properties(qdr_tcp_connection_t *tc, qd_message_t *m
 
 static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t *delivery, bool settled)
 {
+    qd_message_t *msg = qdr_delivery_message(delivery);
+
     // @TODO(kgiusti): determine why this is necessary to prevent window full stall:
-    qd_message_Q2_holdoff_disable(qdr_delivery_message(delivery));
+    qd_message_Q2_holdoff_disable(msg);
     void* link_context = qdr_link_get_context(link);
     if (link_context) {
         qdr_tcp_connection_t* tc = (qdr_tcp_connection_t*) link_context;
@@ -1978,6 +1978,29 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                    " tcp_adaptor delivery arrived on egress dispatcher connection, initiating actual egress connection",
                    DLV_ARGS(delivery));
 
+            // Validate the message. Be sure at least the application-properties section is present since that is where
+            // the message originator has put the flow-id for this stream
+            //
+            qd_message_depth_status_t depth_ok = qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES);
+            if (depth_ok == QD_MESSAGE_DEPTH_INCOMPLETE) {
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                       DLV_FMT " tcp_adaptor egress message incomplete, waiting for more", DLV_ARGS(delivery));
+                return 0;  // retry later
+            }
+            assert(depth_ok == QD_MESSAGE_DEPTH_OK);  // otherwise bug in message encoding?
+
+            // ISSUE-1136: check if the message format is correct. For this adaptor the content-type field must be
+            // unset. See comment in handle_incoming().
+            //
+            qd_iterator_t *ctype = qd_message_field_iterator(msg, QD_FIELD_CONTENT_TYPE);
+            if (ctype) {
+                qd_iterator_free(ctype);
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, DLV_FMT " Misconfigured tcpConnector (wrong version)",
+                       DLV_ARGS(delivery));
+                qd_message_set_send_complete(msg);
+                return PN_RELEASED;  // allow it to be re-forwarded to a different adaptor
+            }
+
             if (qdr_tcp_create_egress_connection(tc->connector, delivery)) {
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                        DLV_FMT " tcp_adaptor delivery QD_DELIVERY_MOVED_TO_NEW_LINK", DLV_ARGS(delivery));
@@ -1990,7 +2013,8 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                        DLV_FMT
                        " Failed to create a new TCP connection to %s, cannot forward this delivery - releasing it",
                        DLV_ARGS(delivery), tc->config->adaptor_config->host_port);
-                return PN_RELEASED;
+                qd_message_set_send_complete(msg);
+                return PN_RELEASED;  // allow it to be re-forwarded to a different adaptor
             }
         } else if (!tc->out_dlv_stream) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
@@ -2000,10 +2024,9 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
             if (tc->ingress) {
                 vflow_latency_end(tc->vflow);
             } else {
-                //on egress, can only set up link for the reverse
-                //direction once we receive the first part of the
-                //message from client to server
-                qd_message_t *msg = qdr_delivery_message(delivery);
+                // on egress, can only set up link for the reverse
+                // direction once we receive the first part of the
+                // message from client to server
                 qd_iterator_t *f_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
                 qdr_tcp_connection_copy_global_id(tc, f_iter);
                 qd_iterator_free(f_iter);
@@ -2077,7 +2100,16 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                    DLV_FMT " qdr_tcp_delivery_update: delivery failed with outcome=0x%" PRIx64
                            ", closing raw connection",
                    DLV_ARGS(dlv), disp);
-            pn_raw_connection_close(tc->pn_raw_conn);
+            if (tc->pn_raw_conn) {
+                // set the raw connection condition info so it will appear in the vanflow logs
+                // when the connection disconnects
+                pn_condition_t *cond = pn_raw_connection_condition(tc->pn_raw_conn);
+                if (!!cond) {
+                    (void) pn_condition_set_name(cond, "delivery-failed");
+                    (void) pn_condition_set_description(cond, "destination unreachable");
+                }
+                pn_raw_connection_close(tc->pn_raw_conn);
+            }
             return;
         }
 
