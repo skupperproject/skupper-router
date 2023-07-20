@@ -89,8 +89,6 @@ BuildRequires: openssl
 # proton-c requirements
 BuildRequires: openssl-devel
 BuildRequires: cyrus-sasl-devel
-# python-qpid-proton requirements
-BuildRequires: swig
 
 # skupper-router sources
 Source0: packit-placeholder-value.tar.gz
