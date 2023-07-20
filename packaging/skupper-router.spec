@@ -52,7 +52,9 @@ License:       ASL 2.0
 URL:           https://skupper.io
 
 %{?fedora:Requires: python3 >= %{python_minimum_version}}
+%{?fedora:Requires: python3-cffi}
 %{?rhel:Requires: python39 >= %{python_minimum_version}}
+%{?rhel:Requires: python39-cffi}
 Requires: skupper-router-common == %{version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
