@@ -119,9 +119,13 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 %__cmake --build "%{__cmake_builddir}" %{?_smp_mflags} --verbose
 %__cmake --install "%{__cmake_builddir}"
 
+# for `import proton` when rendering `sktools --help` to manpages, and for running tests later
+# this will install all-in-one cpython .so module with proton inside
+%python3 -m pip install --target "%{buildroot}/usr/lib/skupper-router/python/" %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/python/dist/python-qpid-proton-*.tar.gz
+#%python3 -m pip install --target "%{buildroot}/usr/lib/skupper-router/python/" %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/python/dist/python_qpid_proton-*.whl
+export PYTHONPATH="%{buildroot}/usr/lib/skupper-router/python/"
+
 cd %{_builddir}/skupper-router-%{version}
-# for `import proton` when rendering sktools --help to manpages
-source %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/config.sh
 %cmake \
     -DVERSION="%{version}" \
     -DPython_EXECUTABLE=%{python3} \
@@ -131,8 +135,6 @@ source %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/c
 %cmake_build --target all --target man
 
 %install
-# this will install all-in-one cpython .so module with proton inside
-%python3 -m pip install --target "%{buildroot}/usr/lib/skupper-router/python/" %{_builddir}/qpid-proton-%{proton_vendored_version}/%{__cmake_builddir}/python/pkgs/python-qpid-proton-*.tar.gz
 cd %{_builddir}/skupper-router-%{version}
 %cmake_install
 
