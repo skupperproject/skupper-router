@@ -77,6 +77,8 @@ class RouterTest(TestCase):
                ('connector', {'name': 'connectorToA', 'role': 'inter-router', 'port': inter_router_port_A}),
                ('connector', {'name': 'connectorToB', 'role': 'inter-router', 'port': inter_router_port_B}),
                ('listener', {'role': 'edge', 'port': edge_port_C}))
+        router('INT.D', 'interior',
+               ('connector', {'name': 'connectorToA', 'role': 'inter-router', 'port': inter_router_port_A, 'cost' : 10}))
         router('EA1',   'edge',     ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_A}))
         router('EA2',   'edge',     ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_A}))
         router('EB1',   'edge',     ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_B}))
@@ -91,173 +93,192 @@ class RouterTest(TestCase):
         cls.routers[2].wait_router_connected('INT.A')
         cls.routers[2].wait_router_connected('INT.B')
 
+        cls.routers[0].wait_router_connected('INT.D')
+        cls.routers[3].wait_router_connected('INT.A')
+
         cls.inta = cls.routers[0].addresses[0]
         cls.intb = cls.routers[1].addresses[0]
         cls.intc = cls.routers[2].addresses[0]
-        cls.ea1  = cls.routers[3].addresses[0]
-        cls.ea2  = cls.routers[4].addresses[0]
-        cls.eb1  = cls.routers[5].addresses[0]
-        cls.eb2  = cls.routers[6].addresses[0]
-        cls.ec1  = cls.routers[7].addresses[0]
-        cls.ec2  = cls.routers[8].addresses[0]
+        cls.intd = cls.routers[3].addresses[0]
+        cls.ea1  = cls.routers[4].addresses[0]
+        cls.ea2  = cls.routers[5].addresses[0]
+        cls.eb1  = cls.routers[6].addresses[0]
+        cls.eb2  = cls.routers[7].addresses[0]
+        cls.ec1  = cls.routers[8].addresses[0]
+        cls.ec2  = cls.routers[9].addresses[0]
 
-    def test_01_baseline_released_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta], [], 'resrel.01', 1)
+    def test_010_baseline_released_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta], [], 'resrel.010', 1)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_02_baseline_accepted_balanced(self):
-        test = ResendReleasedTest(self.inta, [], [self.inta], 'resrel.02', 0)
+    def test_020_baseline_accepted_balanced(self):
+        test = ResendReleasedTest(self.inta, [], [self.inta], 'resrel.020', 0)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_03_all_released_same_router_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.inta], [], 'resrel.03', 3)
+    def test_030_all_released_same_router_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.inta], [], 'resrel.030', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_04_all_released_remote_edge_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea1], [], 'resrel.04', 3)
+    def test_040_all_released_remote_edge_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea1], [], 'resrel.040', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_05_all_released_remote_interior_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb], [], 'resrel.05', 3)
+    def test_050_all_released_remote_interior_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb], [], 'resrel.050', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_06_all_released_remote_interiors_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb, self.intc, self.intc], [], 'resrel.06', 5, 0, 2)
+    def test_060_all_released_remote_interiors_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb, self.intc, self.intc], [], 'resrel.060', 5, 0, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_07_all_released_interior_to_local_edges_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea2, self.ea2, self.ea2], [], 'resrel.07', 5, 2, 0)
+    def test_070_all_released_interior_to_local_edges_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea2, self.ea2, self.ea2], [], 'resrel.070', 5, 2, 0)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_08_all_released_interior_to_remote_edges_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.eb2, self.ec1, self.ec2], [], 'resrel.08', 5, 1, 2)
+    def test_080_all_released_interior_to_remote_edges_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.eb2, self.ec1, self.ec2], [], 'resrel.080', 5, 1, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_09_all_released_edge_to_local_interior_balanced(self):
-        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.inta], [], 'resrel.09', 3)
+    def test_090_all_released_edge_to_local_interior_balanced(self):
+        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.inta], [], 'resrel.090', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_10_all_released_edge_to_remote_interior_balanced(self):
-        test = ResendReleasedTest(self.ec1, [self.inta, self.inta, self.inta], [], 'resrel.10', 3)
+    def test_100_all_released_edge_to_remote_interior_balanced(self):
+        test = ResendReleasedTest(self.ec1, [self.inta, self.inta, self.inta], [], 'resrel.100', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_11_all_released_edge_to_remote_edge_balanced(self):
-        test = ResendReleasedTest(self.ec1, [self.ea1, self.ea1, self.ea1], [], 'resrel.11', 3)
+    def test_110_all_released_edge_to_remote_edge_balanced(self):
+        test = ResendReleasedTest(self.ec1, [self.ea1, self.ea1, self.ea1], [], 'resrel.110', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_12_all_released_many_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.intb, self.intc, self.intc, self.ea1, self.ea2], [], 'resrel.12', 8, 4, 2)
+    def test_120_all_released_many_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.intb, self.intc, self.intc, self.ea1, self.ea2], [], 'resrel.120', 8, 4, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_13_accept_same_interior_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.inta], 'resrel.13')
+    def test_130_accept_same_interior_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.inta], 'resrel.130')
         test.run()
         self.assertIsNone(test.error)
 
-    def test_14_accept_remote_interior_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.intb], 'resrel.14', 2, 2, 1)
+    def test_140_accept_remote_interior_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.intb], 'resrel.140', 2, 2, 1)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_15_accept_local_edge_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ea1], 'resrel.15', None, 3, 0)
+    def test_150_accept_local_edge_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ea1], 'resrel.150', None, 3, 0)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_16_accept_remote_edge_balanced(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ec1], 'resrel.16', 2, 2, 1)
+    def test_160_accept_remote_edge_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ec1], 'resrel.160', 2, 2, 1)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_17_baseline_released_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta], [], 'cl.resrel.17', 1)
+    def test_161_accept_many_high_cost_balanced(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.ea1, self.ea2, self.eb2, self.eb2], [self.intd], 'resrel.161', 7, 4, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_18_baseline_accepted_closest(self):
-        test = ResendReleasedTest(self.inta, [], [self.inta], 'cl.resrel.18', 0)
+    def test_170_baseline_released_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta], [], 'cl.resrel.170', 1)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_19_all_released_same_router_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.inta], [], 'cl.resrel.19', 3)
+    def test_180_baseline_accepted_closest(self):
+        test = ResendReleasedTest(self.inta, [], [self.inta], 'cl.resrel.180', 0)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_20_all_released_remote_edge_closest(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea1], [], 'cl.resrel.20', 3)
+    def test_190_all_released_same_router_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.inta], [], 'cl.resrel.190', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_21_all_released_remote_interior_closest(self):
-        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb], [], 'cl.resrel.21', 3)
+    def test_200_all_released_remote_edge_closest(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea1], [], 'cl.resrel.200', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_22_all_released_remote_interiors_closest(self):
-        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb, self.intc, self.intc], [], 'cl.resrel.22', 5, 0, 2)
+    def test_210_all_released_remote_interior_closest(self):
+        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb], [], 'cl.resrel.210', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_23_all_released_interior_to_local_edges_closest(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea2, self.ea2, self.ea2], [], 'cl.resrel.23', 5, 2, 0)
+    def test_220_all_released_remote_interiors_closest(self):
+        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb, self.intc, self.intc], [], 'cl.resrel.220', 5, 0, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_24_all_released_interior_to_remote_edges_closest(self):
-        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.eb2, self.ec1, self.ec2], [], 'cl.resrel.24', 5, 1, 2)
+    def test_221_all_released_multiple_costs_closest(self):
+        test = ResendReleasedTest(self.inta, [self.intb, self.intb, self.intb, self.intc, self.intd, self.intd], [], 'cl.resrel.221', 6, 0, 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_25_all_released_edge_to_local_interior_closest(self):
-        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.inta], [], 'cl.resrel.25', 3)
+    def test_230_all_released_interior_to_local_edges_closest(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.ea2, self.ea2, self.ea2], [], 'cl.resrel.230', 5, 2, 0)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_26_all_released_edge_to_remote_interior_closest(self):
-        test = ResendReleasedTest(self.ec1, [self.inta, self.inta, self.inta], [], 'cl.resrel.26', 3)
+    def test_240_all_released_interior_to_remote_edges_closest(self):
+        test = ResendReleasedTest(self.inta, [self.ea1, self.ea1, self.eb2, self.ec1, self.ec2], [], 'cl.resrel.240', 5, 1, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_27_all_released_edge_to_remote_edge_closest(self):
-        test = ResendReleasedTest(self.ec1, [self.ea1, self.ea1, self.ea1], [], 'cl.resrel.27', 3)
+    def test_250_all_released_edge_to_local_interior_closest(self):
+        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.inta], [], 'cl.resrel.250', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_28_all_released_many_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.intb, self.intc, self.intc, self.ea1, self.ea2], [], 'cl.resrel.28', 8, 4, 2)
+    def test_260_all_released_edge_to_remote_interior_closest(self):
+        test = ResendReleasedTest(self.ec1, [self.inta, self.inta, self.inta], [], 'cl.resrel.260', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_29_accept_same_interior_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.inta], 'cl.resrel.29')
+    def test_270_all_released_edge_to_remote_edge_closest(self):
+        test = ResendReleasedTest(self.ec1, [self.ea1, self.ea1, self.ea1], [], 'cl.resrel.270', 3)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_30_accept_remote_interior_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.intb], 'cl.resrel.30', 2, 2, 1)
+    def test_280_all_released_many_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.intb, self.intc, self.intc, self.ea1, self.ea2], [], 'cl.resrel.280', 8, 4, 2)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_31_accept_local_edge_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ea1], 'cl.resrel.31', None, 3, 0)
+    def test_290_accept_same_interior_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.inta], 'cl.resrel.290')
         test.run()
         self.assertIsNone(test.error)
 
-    def test_32_accept_remote_edge_closest(self):
-        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ec1], 'cl.resrel.32', 2, 2, 1)
+    def test_300_accept_remote_interior_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.intb], 'cl.resrel.300', 2, 2, 1)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_310_accept_local_edge_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ea1], 'cl.resrel.310', None, 3, 0)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_320_accept_remote_edge_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta], [self.ec1], 'cl.resrel.320', 2, 2, 1)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_321_accept_many_high_cost_closest(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.ea1, self.ea2, self.eb2, self.eb2], [self.intd], 'cl.resrel.321', 7, 4, 2)
         test.run()
         self.assertIsNone(test.error)
 
