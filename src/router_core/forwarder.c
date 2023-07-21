@@ -130,6 +130,11 @@ static int qdr_forward_message_null_CT(qdr_core_t      *core,
 
 static void qdr_forward_find_closest_remotes_CT(qdr_core_t *core, qdr_address_t *addr)
 {
+    //
+    // Note that this algorithm assumes that the core's router list is sorted by cost, least to most.
+    // Since the sorting work is done at router insert/delete, this algorithm is more efficient at forwarding
+    // time.
+    //
     qdr_node_t *rnode       = DEQ_HEAD(core->routers);
     int         lowest_cost = 0;
 
@@ -731,25 +736,36 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
         }
     }
 
+    if (!!in_delivery) {
+        in_delivery->chosen_link     = 0;
+        in_delivery->chosen_neighbor = -1;
+    }
+
     //
     // Forward to a locally attached subscriber.
     //
     qdr_link_ref_t *link_ref = DEQ_HEAD(addr->rlinks);
 
     //
-    // If this link results in edge-echo, skip to the next link in the list.
+    // If this link results in edge-echo or is invalidated, skip to the next link in the list.
     //
-    while (link_ref && qdr_forward_edge_echo_CT(in_delivery, link_ref->link))
+    while (link_ref && (qdr_forward_edge_echo_CT(in_delivery, link_ref->link) || qdr_invalidated_link_CT(in_delivery, link_ref->link))) {
         link_ref = DEQ_NEXT(link_ref);
+    }
 
     if (link_ref) {
         qdr_link_t *out_link = link_ref->link;
+        qdr_link_t *original_link = out_link;
 
         if (!receive_complete && out_link->conn->connection_info->streaming_links) {
             out_link = get_outgoing_streaming_link(core, out_link->conn);
         }
 
         if (out_link) {
+            if (!!in_delivery) {
+                in_delivery->chosen_link = original_link;
+            }
+
             qdr_delivery_t *out_delivery = qdr_forward_new_delivery_CT(core, in_delivery, out_link, msg);
             qdr_forward_deliver_CT(core, out_link, out_delivery);
 
@@ -783,37 +799,91 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
         qdr_forward_find_closest_remotes_CT(core, addr);
 
     //
+    // Get the mask bit associated with the ingress router for the message.
+    // This will be compared against the "valid_origin" masks for each
+    // candidate destination router.
+    //
+    int origin = 0;  // default to this router
+    qd_iterator_t *ingress_iter = in_delivery ? in_delivery->origin : 0;
+
+    if (ingress_iter) {
+        qd_iterator_reset_view(ingress_iter, ITER_VIEW_NODE_HASH);
+        qdr_address_t *origin_addr;
+        qd_hash_retrieve(core->addr_hash, ingress_iter, (void*) &origin_addr);
+        if (origin_addr && qd_bitmask_cardinality(origin_addr->rnodes) == 1)
+            qd_bitmask_first_set(origin_addr->rnodes, &origin);
+    }
+
+    //
+    // Find a non-invalidated neighbor to send this delivery to.
+    //
+    int start_bit       = addr->next_remote;
+    int chosen_conn_bit = -1;
+
+    //
+    // Start by trying all of the least-cost routers
+    //
+    if (addr->next_remote >= 0) {
+        do {
+            qdr_node_t *rnode = core->routers_by_mask_bit[addr->next_remote];
+            if (!!rnode) {
+                const int conn_bit = (rnode->next_hop) ? rnode->next_hop->conn_mask_bit : rnode->conn_mask_bit;
+                if ((!in_delivery || !in_delivery->invalidated_neighbors || qd_bitmask_value(in_delivery->invalidated_neighbors, conn_bit) == 0)
+                    && qd_bitmask_value(rnode->valid_origins, origin)) {
+                    chosen_conn_bit = conn_bit;
+                }
+            }
+
+            //
+            // Advance to the next router in the closest_remotes set
+            //
+            _qdbm_next(addr->closest_remotes, &addr->next_remote);
+            if (addr->next_remote == -1) {
+                qd_bitmask_first_set(addr->closest_remotes, &addr->next_remote);
+            }
+        } while (chosen_conn_bit < 0 && addr->next_remote != start_bit);
+    }
+
+    //
+    // If all of the least-cost routers are invalidated, try the ordered list of routers that match this address
+    //
+    if (chosen_conn_bit < 0) {
+        qdr_node_t *rnode = DEQ_HEAD(core->routers);
+        while (!!rnode) {
+            const int conn_bit = (rnode->next_hop) ? rnode->next_hop->conn_mask_bit : rnode->conn_mask_bit;
+            if (qd_bitmask_value(addr->rnodes, rnode->mask_bit) && (!in_delivery || !in_delivery->invalidated_neighbors || qd_bitmask_value(in_delivery->invalidated_neighbors, conn_bit) == 0)
+                && qd_bitmask_value(rnode->valid_origins, origin)) {
+                chosen_conn_bit = conn_bit;
+                break;
+            }
+            rnode = DEQ_NEXT(rnode);
+        }
+    }
+
+    //
     // Forward to remote routers with subscribers using the appropriate
     // link for the traffic class: control or data
     //
-    if (addr->next_remote >= 0) {
-        qdr_node_t *rnode = core->routers_by_mask_bit[addr->next_remote];
-        if (rnode) {
-            _qdbm_next(addr->closest_remotes, &addr->next_remote);
-            if (addr->next_remote == -1)
-                qd_bitmask_first_set(addr->closest_remotes, &addr->next_remote);
+    if (chosen_conn_bit >= 0) {
+        qdr_link_t *out_link;
+        if (control) {
+            out_link = peer_router_control_link(core, chosen_conn_bit);
+        } else if (!receive_complete) {
+            out_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[chosen_conn_bit]);
+        } else {
+            out_link = peer_router_data_link(core, chosen_conn_bit, qdr_forward_effective_priority(msg, addr));
+        }
 
-            // get the inter-router connection associated with path to rnode:
-            const int conn_bit = (rnode->next_hop) ? rnode->next_hop->conn_mask_bit : rnode->conn_mask_bit;
-            if (conn_bit >= 0) {
-                qdr_link_t *out_link;
-                if (control) {
-                    out_link = peer_router_control_link(core, conn_bit);
-                } else if (!receive_complete) {
-                    out_link = get_outgoing_streaming_link(core, core->rnode_conns_by_mask_bit[conn_bit]);
-                } else {
-                    out_link = peer_router_data_link(core, conn_bit, qdr_forward_effective_priority(msg, addr));
-                }
-
-                if (out_link) {
-                    qdr_delivery_t *out_delivery = qdr_forward_new_delivery_CT(core, in_delivery, out_link, msg);
-                    qdr_forward_deliver_CT(core, out_link, out_delivery);
-                    addr->deliveries_transit++;
-                    if (out_link->link_type == QD_LINK_ROUTER)
-                        core->deliveries_transit++;
-                    return 1;
-                }
+        if (out_link) {
+            if (!!in_delivery) {
+                in_delivery->chosen_neighbor = chosen_conn_bit;
             }
+            qdr_delivery_t *out_delivery = qdr_forward_new_delivery_CT(core, in_delivery, out_link, msg);
+            qdr_forward_deliver_CT(core, out_link, out_delivery);
+            addr->deliveries_transit++;
+            if (out_link->link_type == QD_LINK_ROUTER)
+                core->deliveries_transit++;
+            return 1;
         }
     }
 
