@@ -789,11 +789,6 @@ static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *
     }
 
     //
-    // Reset the payload references so the delivery content can be re-transmitted.
-    //
-    // TODO - maybe nothing needed here becaue there will be a new outbound delivery
-
-    //
     // Re-route the inbound delivery through the core link_deliver process
     //
     qdr_action_t *action = qdr_action(qdr_link_deliver_CT, "link_deliver_reforward");
