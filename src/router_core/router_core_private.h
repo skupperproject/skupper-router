@@ -479,6 +479,7 @@ struct qdr_link_t {
     bool                     streaming;         ///< True if this link can be reused for streaming msgs
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     terminus_survives_disconnect;
+    bool                     streaming_deliveries;  ///< If true, set the streaming bit in the router annotations for arriving deliveries
     bool                     no_route;          ///< True if this link is to not receive routed deliveries
     bool                     no_route_bound;    ///< Has the no_route link been bound ? Has the link's owning address been set for no_route links ?
     bool                     proxy;             ///< True if this link represents endpoints on a remote router (used on edge router only)
