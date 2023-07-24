@@ -760,6 +760,14 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
     dlv->via_edge = link->edge;
 
     //
+    // If the link has STREAMING_DELIVERIES capability, set the RA flag on the message.
+    //
+    if (link->streaming_deliveries) {
+        qd_message_t *msg = qdr_delivery_message(dlv);
+        qd_message_set_streaming_annotation(msg);
+    }
+
+    //
     // If this link has a core_endpoint, direct deliveries to that endpoint.
     //
     if (!!link->core_endpoint) {
