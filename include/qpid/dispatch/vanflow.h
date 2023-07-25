@@ -34,21 +34,29 @@ typedef struct vflow_record_t vflow_record_t;
  *   [FLOW --->]* FLOW ---> CONNECTOR ---> ROUTER ---> SITE
  */
 typedef enum vflow_record_type {
-    VFLOW_RECORD_SITE       = 0x00,  // A cloud site involved in a VAN
-    VFLOW_RECORD_ROUTER     = 0x01,  // A VAN router deployed in a site
-    VFLOW_RECORD_LINK       = 0x02,  // An inter-router link to a different router
-    VFLOW_RECORD_CONTROLLER = 0x03,  // A VAN controller
-    VFLOW_RECORD_LISTENER   = 0x04,  // An ingress listener for an application protocol
-    VFLOW_RECORD_CONNECTOR  = 0x05,  // An egress connector for an application protocol
-    VFLOW_RECORD_FLOW       = 0x06,  // An application flow between a ingress and an egress
-    VFLOW_RECORD_PROCESS    = 0x07,  // A running process/pod/container that uses application protocols
-    VFLOW_RECORD_IMAGE      = 0x08,  // A process-type or container image
-    VFLOW_RECORD_INGRESS    = 0x09,  // An access point for external access into the VAN
-    VFLOW_RECORD_EGRESS     = 0x0a,  // An entity from which external services are accessed from within the VAN
-    VFLOW_RECORD_COLLECTOR  = 0x0b,  // An event collector
+    // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
+    // control plane component!
+    VFLOW_RECORD_SITE          = 0x00,  // A cloud site involved in a VAN
+    VFLOW_RECORD_ROUTER        = 0x01,  // A VAN router deployed in a site
+    VFLOW_RECORD_LINK          = 0x02,  // An inter-router link to a different router
+    VFLOW_RECORD_CONTROLLER    = 0x03,  // A VAN controller
+    VFLOW_RECORD_LISTENER      = 0x04,  // An ingress listener for an application protocol
+    VFLOW_RECORD_CONNECTOR     = 0x05,  // An egress connector for an application protocol
+    VFLOW_RECORD_FLOW          = 0x06,  // An application flow between a ingress and an egress
+    VFLOW_RECORD_PROCESS       = 0x07,  // A running process/pod/container that uses application protocols
+    VFLOW_RECORD_IMAGE         = 0x08,  // A process-type or container image
+    VFLOW_RECORD_INGRESS       = 0x09,  // An access point for external access into the VAN
+    VFLOW_RECORD_EGRESS        = 0x0a,  // An entity from which external services are accessed from within the VAN
+    VFLOW_RECORD_COLLECTOR     = 0x0b,  // An event collector
+    VFLOW_RECORD_PROCESS_GROUP = 0x0c,  // A grouping of PROCESS
+    VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
+    VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
 } vflow_record_type_t;
 
+// clang-format off
 typedef enum vflow_attribute {
+    // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
+    // control plane component!
     VFLOW_ATTRIBUTE_RECORD_TYPE      = 0,   // uint
     VFLOW_ATTRIBUTE_IDENTITY         = 1,   // Reference (cannot be set by the user)
     VFLOW_ATTRIBUTE_PARENT           = 2,   // Reference (set during object creation only)
@@ -108,14 +116,29 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_IMAGE            = 45,  // Reference
     VFLOW_ATTRIBUTE_GROUP            = 46,  // Reference
     VFLOW_ATTRIBUTE_STREAM_ID        = 47,  // uint
+
+    VFLOW_ATTRIBUTE_LOG_SEVERITY     = 48,  // uint
+    VFLOW_ATTRIBUTE_LOG_TEXT         = 49,  // String
+    VFLOW_ATTRIBUTE_SOURCE_FILE      = 50,  // String
+    VFLOW_ATTRIBUTE_SOURCE_LINE      = 51,  // uint
 } vflow_attribute_t;
+// clang-format on
 
 #define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x00009ffa07800119
+#define VALID_UINT_ATTRS    0x00099ffa07800119
 #define VALID_COUNTER_ATTRS 0x0000035000800000
-#define VALID_STRING_ATTRS  0x00000005787ffe00
+#define VALID_STRING_ATTRS  0x00060005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
+typedef enum vflow_log_severity {
+    // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
+    // control plane component!
+    VFLOW_LOG_SEVERITY_DEBUG    = 0,  // debugging events
+    VFLOW_LOG_SEVERITY_INFO     = 1,  // normal operational events
+    VFLOW_LOG_SEVERITY_WARNING  = 2,  // recoverable or transient failure with minor or no loss of service
+    VFLOW_LOG_SEVERITY_ERROR    = 3,  // service affecting failure that requires intervention
+    VFLOW_LOG_SEVERITY_CRITICAL = 4   // catastrophic loss of routing service
+} vflow_log_severity_t;
 
 /**
  * vflow_start_record

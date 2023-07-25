@@ -136,13 +136,15 @@ typedef struct {
     sys_thread_t        *thread;
     char                *event_address_my;
     char                *event_address_my_flow;
+    char                *event_address_my_log;
     char                *command_address;
     bool                 sleeping;
     vflow_work_list_t    work_list;
     vflow_record_t      *local_router;
     char                *local_router_id;
     vflow_record_list_t  unflushed_flow_records[FLUSH_SLOT_COUNT];
-    vflow_record_list_t  unflushed_nonflow_records[FLUSH_SLOT_COUNT];
+    vflow_record_list_t  unflushed_log_records[FLUSH_SLOT_COUNT];
+    vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];  // not flow or log records
     vflow_rate_list_t    rate_trackers;
     int                  current_flush_slot;
     char                *site_id;
@@ -154,10 +156,12 @@ typedef struct {
     qdr_watch_handle_t   all_address_watch_handle;
     qdr_watch_handle_t   my_address_watch_handle;
     qdr_watch_handle_t   my_flow_address_watch_handle;
+    qdr_watch_handle_t   my_log_address_watch_handle;
     qdr_subscription_t  *command_subscription;
     bool                 all_address_usable;
     bool                 my_address_usable;
     bool                 my_flow_address_usable;
+    bool                 my_log_address_usable;
     qd_timer_t          *heartbeat_timer;
     qd_timer_t          *flush_timer;
     uint64_t             next_message_id;
@@ -300,10 +304,16 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
 
     if (record->flush_slot == -1) {
         record->flush_slot = state->current_flush_slot;
-        if (record->record_type == VFLOW_RECORD_FLOW) {
-            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
-        } else {
-            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_nonflow_records[state->current_flush_slot], record);
+        switch (record->record_type) {
+            case VFLOW_RECORD_FLOW:
+                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
+                break;
+            case VFLOW_RECORD_LOG:
+                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                break;
+            default:
+                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
+                break;
         }
     }
 }
@@ -334,18 +344,21 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     }
 
     //
-    // Record the creation timestamp in the record.
+    // Record the creation timestamp in the record.  Log records provide their own start timestamp
     //
-    vflow_work_t sub_work;
-    sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
-    sub_work.record    = record;
-    sub_work.value.int_val = work->timestamp;
-    _vflow_set_int_TH(&sub_work, false);
+    if (record->record_type != VFLOW_RECORD_LOG) {
+        vflow_work_t sub_work;
+        sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
+        sub_work.record    = record;
+        sub_work.value.int_val = work->timestamp;
+        _vflow_set_int_TH(&sub_work, false);
+    }
 
     //
     // Record the parent reference.
     //
     if (!!record->parent) {
+        vflow_work_t sub_work;
         sub_work.attribute = VFLOW_ATTRIBUTE_PARENT;
         sub_work.record    = record;
         sub_work.value.string_val = _vflow_id_to_new_string(&record->parent->identity);
@@ -381,13 +394,15 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     vflow_record_t *record = work->record;
 
     //
-    // Record the deletion timestamp in the record.
+    // Record the deletion timestamp in the record. Log records provide their own end timestamp
     //
-    vflow_work_t sub_work;
-    sub_work.attribute = VFLOW_ATTRIBUTE_END_TIME;
-    sub_work.record    = record;
-    sub_work.value.int_val = work->timestamp;
-    _vflow_set_int_TH(&sub_work, false);
+    if (record->record_type != VFLOW_RECORD_LOG) {
+        vflow_work_t sub_work;
+        sub_work.attribute = VFLOW_ATTRIBUTE_END_TIME;
+        sub_work.record    = record;
+        sub_work.value.int_val = work->timestamp;
+        _vflow_set_int_TH(&sub_work, false);
+    }
 
     //
     // Mark the record as ended to designate the lifecycle end
@@ -598,10 +613,16 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     // Remove the record from the unflushed list if needed
     //
     if (record->flush_slot >= 0) {
-        if (record->record_type == VFLOW_RECORD_FLOW) {
-            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
-        } else {
-            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_nonflow_records[record->flush_slot], record);
+        switch (record->record_type) {
+            case VFLOW_RECORD_FLOW:
+                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
+                break;
+            case VFLOW_RECORD_LOG:
+                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                break;
+            default:
+                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
+                break;
         }
         record->flush_slot = -1;
     }
@@ -643,22 +664,25 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     free_vflow_record_t(record);
 }
 
-
+// clang-format off
 static const char *_vflow_record_type_name(const vflow_record_t *record)
 {
     switch (record->record_type) {
-    case VFLOW_RECORD_SITE       : return "SITE";
-    case VFLOW_RECORD_ROUTER     : return "ROUTER";
-    case VFLOW_RECORD_LINK       : return "LINK";
-    case VFLOW_RECORD_CONTROLLER : return "CONTROLLER";
-    case VFLOW_RECORD_LISTENER   : return "LISTENER";
-    case VFLOW_RECORD_CONNECTOR  : return "CONNECTOR";
-    case VFLOW_RECORD_FLOW       : return "FLOW";
-    case VFLOW_RECORD_PROCESS    : return "PROCESS";
-    case VFLOW_RECORD_IMAGE      : return "IMAGE";
-    case VFLOW_RECORD_INGRESS    : return "INGRESS";
-    case VFLOW_RECORD_EGRESS     : return "EGRESS";
-    case VFLOW_RECORD_COLLECTOR  : return "COLLECTOR";
+    case VFLOW_RECORD_SITE          : return "SITE";
+    case VFLOW_RECORD_ROUTER        : return "ROUTER";
+    case VFLOW_RECORD_LINK          : return "LINK";
+    case VFLOW_RECORD_CONTROLLER    : return "CONTROLLER";
+    case VFLOW_RECORD_LISTENER      : return "LISTENER";
+    case VFLOW_RECORD_CONNECTOR     : return "CONNECTOR";
+    case VFLOW_RECORD_FLOW          : return "FLOW";
+    case VFLOW_RECORD_PROCESS       : return "PROCESS";
+    case VFLOW_RECORD_IMAGE         : return "IMAGE";
+    case VFLOW_RECORD_INGRESS       : return "INGRESS";
+    case VFLOW_RECORD_EGRESS        : return "EGRESS";
+    case VFLOW_RECORD_COLLECTOR     : return "COLLECTOR";
+    case VFLOW_RECORD_PROCESS_GROUP : return "PROCESS_GROUP";
+    case VFLOW_RECORD_HOST          : return "HOST";
+    case VFLOW_RECORD_LOG           : return "LOG";
     }
     return "UNKNOWN";
 }
@@ -715,10 +739,14 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_IMAGE            : return "image";
     case VFLOW_ATTRIBUTE_GROUP            : return "group";
     case VFLOW_ATTRIBUTE_STREAM_ID        : return "streamId";
+    case VFLOW_ATTRIBUTE_LOG_SEVERITY     : return "logSeverity";
+    case VFLOW_ATTRIBUTE_LOG_TEXT         : return "logText";
+    case VFLOW_ATTRIBUTE_SOURCE_FILE      : return "sourceFile";
+    case VFLOW_ATTRIBUTE_SOURCE_LINE      : return "sourceLine";
     }
     return "UNKNOWN";
 }
-
+// clang-format on
 
 /**
  * @brief Extract the value of a record identity from its serialized form in an iterator
@@ -779,7 +807,8 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
  *
  * @param core Pointer to the core module
  */
-static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_list_t *unflushed_records, bool nonflow)
+static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_list_t *unflushed_records,
+                                               const char *to_address)
 {
     if (DEQ_SIZE(*unflushed_records) == 0) {
         return;
@@ -798,11 +827,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_li
             qd_compose_start_list(field);
             qd_compose_insert_long(field, state->next_message_id++);
             qd_compose_insert_null(field);                             // user-id
-            if (nonflow) {                                             // to
-                qd_compose_insert_string(field, state->event_address_my);
-            } else {
-                qd_compose_insert_string(field, state->event_address_my_flow);
-            }
+            qd_compose_insert_string(field, to_address);               // to
             qd_compose_insert_string(field, "RECORD");                 // subject
             qd_compose_end_list(field);
 
@@ -861,11 +886,7 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_li
             //
             // Send the message to all of the bound receivers
             //
-            if (nonflow) {
-                qdr_send_to2(core, event, state->event_address_my, true, false);
-            } else {
-                qdr_send_to2(core, event, state->event_address_my_flow, true, false);
-            }
+            qdr_send_to2(core, event, to_address, true, false);
 
             //
             // Free up used resources
@@ -923,15 +944,23 @@ static void _vflow_flush_TH(qdr_core_t *core)
     // unflushed records and send them as events to the collector.
     //
     if (state->my_address_usable) {
-        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_nonflow_records[state->current_flush_slot], true);
+        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_records[state->current_flush_slot],
+                                           state->event_address_my);
     }
 
     if (state->my_flow_address_usable) {
-        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_flow_records[state->current_flush_slot], false);
+        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_flow_records[state->current_flush_slot],
+                                           state->event_address_my_flow);
     }
 
-    _vflow_clean_unflushed_TH(&state->unflushed_nonflow_records[state->current_flush_slot]);
+    if (state->my_log_address_usable) {
+        _vflow_emit_unflushed_as_events_TH(core, &state->unflushed_log_records[state->current_flush_slot],
+                                           state->event_address_my_log);
+    }
+
+    _vflow_clean_unflushed_TH(&state->unflushed_records[state->current_flush_slot]);
     _vflow_clean_unflushed_TH(&state->unflushed_flow_records[state->current_flush_slot]);
+    _vflow_clean_unflushed_TH(&state->unflushed_log_records[state->current_flush_slot]);
 }
 
 
@@ -1203,19 +1232,40 @@ static void _vflow_my_flow_address_status_TH(vflow_work_t *work, bool discard)
     bool now_usable = work->value.bool_val;
     if (now_usable && !state->my_flow_address_usable) {
         //
-        // Start sending log records
+        // Start sending flow records
         //
         qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for flow events detected.  Begin sending flow events.");
         state->my_flow_address_usable = true;
     } else if (!now_usable && state->my_flow_address_usable) {
         //
-        // Stop sending log records
+        // Stop sending flow records
         //
         qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for flow events ended.  Stop sending flow events.");
         state->my_flow_address_usable = false;
     }
 }
 
+static void _vflow_my_log_address_status_TH(vflow_work_t *work, bool discard)
+{
+    if (discard) {
+        return;
+    }
+
+    bool now_usable = work->value.bool_val;
+    if (now_usable && !state->my_log_address_usable) {
+        //
+        // Start sending log records
+        //
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for log events detected.  Begin sending log events.");
+        state->my_log_address_usable = true;
+    } else if (!now_usable && state->my_log_address_usable) {
+        //
+        // Stop sending log records
+        //
+        qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Event collection for log events ended.  Stop sending log events.");
+        state->my_log_address_usable = false;
+    }
+}
 
 //=====================================================================================
 // Module Thread
@@ -1351,6 +1401,16 @@ static void _vflow_on_my_flow_address_watch(void     *context,
     _vflow_post_work(work);
 }
 
+static void _vflow_on_my_log_address_watch(void    *context,
+                                           uint32_t local_consumers,
+                                           uint32_t in_proc_consumers,
+                                           uint32_t remote_consumers,
+                                           uint32_t local_producers)
+{
+    vflow_work_t *work   = _vflow_work(_vflow_my_log_address_status_TH);
+    work->value.bool_val = local_consumers > 0 || remote_consumers > 0;
+    _vflow_post_work(work);
+}
 
 static void _vflow_on_heartbeat(void *context)
 {
@@ -1583,16 +1643,25 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
         _vflow_strncat_id(state->event_address_my_flow, 70, &state->local_router->identity);
         strcat(state->event_address_my_flow, ".flows");
 
+        state->event_address_my_log = (char *) malloc(71);
+        strcpy(state->event_address_my_log, event_address_my_prefix);
+        _vflow_strncat_id(state->event_address_my_log, 70, &state->local_router->identity);
+        strcat(state->event_address_my_log, ".logs");
+
         state->command_address = (char*) malloc(71);
         strcpy(state->command_address, command_address_prefix);
         _vflow_strncat_id(state->command_address, 70, &state->local_router->identity);
 
+        // clang-format off
         state->all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
         state->my_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my,  'M',
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_address_watch, 0, core);
-        state->my_flow_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my_flow,  'M',
-                                                                 QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_flow_address_watch, 0, core);
+        state->my_flow_address_watch_handle = qdr_core_watch_address(core, state->event_address_my_flow,  'M',
+                                                                     QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_flow_address_watch, 0, core);
+        state->my_log_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my_log,  'M',
+                                                                     QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_log_address_watch, 0, core);
+        // clang-format on
 
         state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_message, core);
     }
@@ -1643,7 +1712,8 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 
     for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
         DEQ_INIT(state->unflushed_flow_records[slot]);
-        DEQ_INIT(state->unflushed_nonflow_records[slot]);
+        DEQ_INIT(state->unflushed_log_records[slot]);
+        DEQ_INIT(state->unflushed_records[slot]);
     }
 
     sys_mutex_init(&state->lock);
@@ -1661,6 +1731,9 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     state->heartbeat_timer = qd_timer(qdr_core_dispatch(core), _vflow_on_heartbeat, 0);
     state->flush_timer  = qd_timer(qdr_core_dispatch(core), _vflow_on_flush, 0);
     qd_timer_schedule(state->flush_timer, initial_flush_interval_msec);
+
+    // allow logging to publish vanflow events now
+    qd_log_enable_events();
 }
 
 
@@ -1672,6 +1745,9 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 static void _vflow_final(void *adaptor_context)
 {
     qdr_core_t *core = (qdr_core_t*) adaptor_context;
+
+    // prevent logging from publishing vanflow events
+    qd_log_disable_events();
 
     qd_timer_free(state->heartbeat_timer);
     state->heartbeat_timer = 0;
@@ -1706,6 +1782,7 @@ static void _vflow_final(void *adaptor_context)
     //
     free(state->event_address_my);
     free(state->event_address_my_flow);
+    free(state->event_address_my_log);
     free(state->command_address);
     free(state->local_router_id);
 
