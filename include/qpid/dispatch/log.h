@@ -30,9 +30,9 @@ typedef enum {
     QD_LOG_NONE     =0x00, ///< No logging
     QD_LOG_DEBUG    =0x01, ///< High volume messages, o(n) or more for n message transfers.
     QD_LOG_INFO     =0x02, ///< Debugging messages useful to developers.
-    QD_LOG_WARNING  =0x04, ///< Notice of important but non-error events.
-    QD_LOG_ERROR    =0x08, ///< Warning of event that may be a problem.
-    QD_LOG_CRITICAL =0x10, ///< Error, definitely a problem
+    QD_LOG_WARNING  =0x04, ///< Recoverable or transient failures, minor or no service loss
+    QD_LOG_ERROR    =0x08, ///< Service affecting failure, likely requires intervention
+    QD_LOG_CRITICAL =0x10, ///< Catastrophic router failure, service loss, requires intervention
 } qd_log_level_t;
 
 /** Logging modules */
@@ -117,5 +117,9 @@ void qd_vlog_impl(qd_log_module_t module, qd_log_level_t level, bool check_level
 int qd_log_max_len(void);
 
 void qd_format_string(char *buf, int buf_size, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+
+// used by vanflow to indicate it is ready to accept vanflow events for log messages
+void qd_log_enable_events(void);
+void qd_log_disable_events(void);
 
 #endif

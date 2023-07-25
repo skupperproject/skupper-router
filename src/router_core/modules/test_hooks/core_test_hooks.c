@@ -36,7 +36,8 @@ typedef enum {
     TEST_NODE_SINK,
     TEST_NODE_SOURCE,
     TEST_NODE_SOURCE_PS,
-    TEST_NODE_DISCARD
+    TEST_NODE_DISCARD,
+    TEST_NODE_LOG,  // trigger a log message
 } test_node_behavior_t;
 
 typedef struct test_module_t test_module_t;
@@ -74,12 +75,13 @@ struct test_module_t {
     test_node_t   *source_node;
     test_node_t   *source_ps_node;
     test_node_t   *discard_node;
+    test_node_t   *log_node;
     test_client_t *test_client;
 };
 
 
 static void endpoint_action(qdr_core_t *core, qdr_action_t *action, bool discard);
-
+static void _handle_log_request(qdr_core_t *core, qd_message_t *message);
 
 static void source_send(test_endpoint_t *ep, bool presettled)
 {
@@ -162,6 +164,7 @@ static void endpoint_action(qdr_core_t *core, qdr_action_t *action, bool discard
         break;
 
     case TEST_NODE_ECHO :
+    case TEST_NODE_LOG :
         break;
     }
 }
@@ -206,6 +209,14 @@ static void on_first_attach(void             *bind_context,
             qdrc_endpoint_flow_CT(node->core, endpoint, 1, false);
         } else {
             error = qdr_error("qd:forbidden", "Discard function only accepts incoming links");
+        }
+        break;
+
+    case TEST_NODE_LOG:
+        if (incoming) {
+            qdrc_endpoint_flow_CT(node->core, endpoint, 1, false);
+        } else {
+            error = qdr_error("qd:forbidden", "Test log function only accepts incoming links");
         }
         break;
     }
@@ -290,6 +301,7 @@ static void on_flow(void *link_context,
         break;
 
     case TEST_NODE_ECHO :
+    case TEST_NODE_LOG :
         break;
     }
 }
@@ -331,6 +343,11 @@ static void on_transfer(void           *link_context,
         qdrc_endpoint_settle_CT(ep->node->core, delivery, PN_REJECTED);
         qdrc_endpoint_flow_CT(ep->node->core, ep->ep, 1, false);
         break;
+
+    case TEST_NODE_LOG:
+        _handle_log_request(ep->node->core, message);
+        qdrc_endpoint_settle_CT(ep->node->core, delivery, PN_ACCEPTED);
+        qdrc_endpoint_flow_CT(ep->node->core, ep->ep, 1, false);
     }
 }
 
@@ -397,6 +414,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     char *source_address     = "io.skupper.router.router/test/source";
     char *source_ps_address  = "io.skupper.router.router/test/source_ps";
     char *discard_address    = "io.skupper.router.router/test/discard";
+    char *log_address        = "io.skupper.router.router/test/log";
 
     module->echo_node      = NEW(test_node_t);
     module->deny_node      = NEW(test_node_t);
@@ -404,6 +422,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->source_node    = NEW(test_node_t);
     module->source_ps_node = NEW(test_node_t);
     module->discard_node   = NEW(test_node_t);
+    module->log_node       = NEW(test_node_t);
 
     module->echo_node->core     = core;
     module->echo_node->module   = module;
@@ -453,6 +472,14 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     DEQ_INIT(module->discard_node->out_links);
     qdrc_endpoint_bind_mobile_address_CT(core, discard_address, &descriptor, module->discard_node);
 
+    module->log_node->core     = core;
+    module->log_node->module   = module;
+    module->log_node->behavior = TEST_NODE_LOG;
+    module->log_node->desc     = &descriptor;
+    DEQ_INIT(module->log_node->in_links);
+    DEQ_INIT(module->log_node->out_links);
+    qdrc_endpoint_bind_mobile_address_CT(core, log_address, &descriptor, module->log_node);
+
     return module;
 }
 
@@ -465,6 +492,7 @@ static void qdrc_test_hooks_core_endpoint_finalize(test_module_t *module)
     free(module->source_node);
     free(module->source_ps_node);
     free(module->discard_node);
+    free(module->log_node);
 }
 
 
@@ -661,6 +689,27 @@ static void qdrc_test_client_api_finalize(test_module_t *test_module)
     }
 }
 
+// TEST_NODE_LOG - Issue a log message.
+//
+static void _handle_log_request(qdr_core_t *core, qd_message_t *message)
+{
+    qd_log_level_t level = QD_LOG_DEBUG;
+    qd_iterator_t *s_itr = qd_message_field_iterator(message, QD_FIELD_SUBJECT);
+    if (s_itr) {
+        if (qd_iterator_equal(s_itr, (unsigned char *) "INFO")) {
+            level = QD_LOG_INFO;
+        } else if (qd_iterator_equal(s_itr, (unsigned char *) "WARNING")) {
+            level = QD_LOG_WARNING;
+        } else if (qd_iterator_equal(s_itr, (unsigned char *) "ERROR")) {
+            level = QD_LOG_ERROR;
+        } else if (qd_iterator_equal(s_itr, (unsigned char *) "CRITICAL")) {
+            level = QD_LOG_CRITICAL;
+        }
+        qd_iterator_free(s_itr);
+    }
+
+    qd_log(LOG_ROUTER, level, "This is a test log message.");
+}
 
 static bool qdrc_test_hooks_enable_CT(qdr_core_t *core)
 {

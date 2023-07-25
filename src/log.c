@@ -32,6 +32,7 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -138,6 +139,8 @@ static level_t levels[] = {{"default", -1, -1, 0},
                            LEVEL("error", QD_LOG_ERROR, LOG_ERR),
                            LEVEL("critical", QD_LOG_CRITICAL, LOG_CRIT)};
 
+static bool log_events_enabled;  // Ok to issue vanflow events (must hold log_source_lock)
+
 static const level_t invalid_level = {"invalid", -2, -2, 0};
 
 static char level_names[TEXT_MAX] = {0}; /* Set up in qd_log_initialize */
@@ -165,7 +168,7 @@ void qd_log_global_options(const char* _format, bool _utc) {
     utc = _utc;
 }
 
-void qd_log_formatted_time(struct timeval *time, char *buf, size_t buflen)
+void qd_log_formatted_time(const struct timeval *time, char *buf, size_t buflen)
 {
     time_t sec = time->tv_sec;
     struct tm *tm_time = utc ? gmtime(&sec) : localtime(&sec);
@@ -306,10 +309,11 @@ static bool default_bool(int value, int default_value) {
     return value == -1 ? default_value : value;
 }
 
-static void write_log(qd_log_source_t *log_source, qd_log_entry_t *entry)
+// Format and output the log message to the log_source. Expects the log_source_lock is held.
+//
+static void write_log_lh(qd_log_source_t *log_source, qd_log_entry_t *entry)
 {
     log_sink_t* sink = log_source->sink ? log_source->sink : default_log_source->sink;
-    if (!sink) return;
 
     char log_str[LOG_MAX];
     char *begin = log_str;
@@ -337,19 +341,54 @@ static void write_log(qd_log_source_t *log_source, qd_log_entry_t *entry)
 
     aprintf(&begin, end, "\n");
 
-    if (sink->file) {
-        if (fputs(log_str, sink->file) == EOF) {
-            char msg[TEXT_MAX];
-            snprintf(msg, sizeof(msg), "Cannot write log output to '%s'", sink->name);
-            perror(msg);
-            exit(1);
-        };
-        fflush(sink->file);
+    if (sink) {
+        if (sink->file) {
+            if (fputs(log_str, sink->file) == EOF) {
+                char msg[TEXT_MAX];
+                snprintf(msg, sizeof(msg), "Cannot write log output to '%s'", sink->name);
+                perror(msg);
+                exit(1);
+            };
+            fflush(sink->file);
+        }
+        if (sink->syslog) {
+            int syslog_level = level->syslog;
+            if (syslog_level != -1)
+                syslog(syslog_level, "%s", log_str);
+        }
     }
-    if (sink->syslog) {
-        int syslog_level = level->syslog;
-        if (syslog_level != -1)
-            syslog(syslog_level, "%s", log_str);
+
+    //
+    // Emit a vanflow record for "serious" log events. Ignore vanflow logs to prevent infinite loops.
+    //
+    if (log_events_enabled && level->bit >= QD_LOG_WARNING && strcmp("FLOW_LOG", entry->module) != 0) {
+        uint64_t severity;
+        switch (level->bit) {
+            // clang-format off
+            case QD_LOG_WARNING:  severity = VFLOW_LOG_SEVERITY_WARNING;  break;
+            case QD_LOG_ERROR:    severity = VFLOW_LOG_SEVERITY_ERROR;    break;
+            case QD_LOG_CRITICAL: severity = VFLOW_LOG_SEVERITY_CRITICAL; break;
+            default: assert(false); break;
+                // clang-format on
+        }
+
+        vflow_record_t *vrec = vflow_start_record(VFLOW_RECORD_LOG, 0);
+        assert(vrec);
+        // note: this clobbers the old value of log_str
+        snprintf(log_str, LOG_MAX, "LOG_%s: %s", entry->module, entry->text);
+        vflow_set_string(vrec, VFLOW_ATTRIBUTE_LOG_TEXT, log_str);
+        vflow_set_uint64(vrec, VFLOW_ATTRIBUTE_LOG_SEVERITY, severity);
+
+        const uint64_t epoch_timestamp = (uint64_t) entry->time.tv_usec
+            + (1000000UL * (uint64_t) entry->time.tv_sec);
+        vflow_set_uint64(vrec, VFLOW_ATTRIBUTE_START_TIME, epoch_timestamp);
+        vflow_set_uint64(vrec, VFLOW_ATTRIBUTE_END_TIME, epoch_timestamp);
+
+        if (entry->file) {
+            vflow_set_string(vrec, VFLOW_ATTRIBUTE_SOURCE_FILE, entry->file);
+            vflow_set_uint64(vrec, VFLOW_ATTRIBUTE_SOURCE_LINE, entry->line);
+        }
+        vflow_end_record(vrec);
     }
 }
 
@@ -467,7 +506,7 @@ void qd_vlog_impl(qd_log_module_t module,
     entry->line   = line;
     gettimeofday(&entry->time, NULL);
     vsnprintf(entry->text, TEXT_MAX, fmt, ap);
-    write_log(source, entry);
+    write_log_lh(source, entry);
     DEQ_INSERT_TAIL(entries, entry);
     if (DEQ_SIZE(entries) > LIST_MAX)
         qd_log_entry_free_lh(DEQ_HEAD(entries));
@@ -595,8 +634,8 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
 
         //
         // Obtain all attributes from the entity before obtaining the log_source_lock.
-        // We do this because functions like qd_entity_get_string and qd_entity_get_bool ultimately call qd_vlog_impl() which
-        // also holds the log_source_lock when calling write_log().
+        // We do this because functions like qd_entity_get_string and qd_entity_get_bool ultimately call qd_vlog_impl()
+        // which also holds the log_source_lock when calling write_log_lh().
         //
 
         if (qd_entity_has(entity, "outputFile")) {
@@ -624,7 +663,7 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
         }
 
         //
-        // Obtain the log_source_lock lock. This lock is also used when write_log() is called.
+        // Obtain the log_source_lock lock. This lock is also used when write_log_lh() is called.
         //
         sys_mutex_lock(&log_source_lock);
 
@@ -734,4 +773,20 @@ QD_EXPORT qd_error_t qd_entity_refresh_logStats(qd_entity_t* entity, void *impl)
     qd_entity_set_string(entity, "identity",      identity_str);
 
     return QD_ERROR_NONE;
+}
+
+// called by vanflow thread when initialization complete
+void qd_log_enable_events(void)
+{
+    sys_mutex_lock(&log_source_lock);
+    log_events_enabled = true;
+    sys_mutex_unlock(&log_source_lock);
+}
+
+// called by vanflow thread when shutting down
+void qd_log_disable_events(void)
+{
+    sys_mutex_lock(&log_source_lock);
+    log_events_enabled = false;
+    sys_mutex_unlock(&log_source_lock);
 }

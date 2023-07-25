@@ -140,16 +140,20 @@ class SkstatTest(SkstatTestBase):
         self.run_skstat(['--nodes', "--csv"], regex=r'No Router List')
 
     def test_address(self):
-        out = self.run_skstat(['--address'], regex=r'QDR.A')
+        # there are two calls to skstat in order ot verify regex is present
+        self.run_skstat(['--address'], regex=r'QDR.A')
         out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
-        self.assertEqual(len(parts), 16)
+        self.assertEqual(len(parts), 17,
+                         f"Expected 17 lines, got: {parts}")
 
     def test_address_csv(self):
-        out = self.run_skstat(['--address'], regex=r'QDR.A')
+        # there are two calls to skstat in order ot verify regex is present
+        self.run_skstat(['--address'], regex=r'QDR.A')
         out = self.run_skstat(['--address'], regex=r'\$management')
         parts = out.split("\n")
-        self.assertEqual(len(parts), 16)
+        self.assertEqual(len(parts), 17,
+                         f"Expected 17 lines, got: {parts}")
 
     def test_skstat_no_args(self):
         outs = self.run_skstat(args=None)
