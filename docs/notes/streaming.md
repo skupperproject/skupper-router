@@ -25,16 +25,16 @@ Streaming deliveries are used to solve these problems.  A streaming delivery occ
 # Technical Considerations
 
 ## Link allocation for streaming deliveries
-An AMQP _link_ represents an uninterrupted sequence of message content.  Messages cannot be interleaved over an AMQP link.  One messages must be completely transferred before the next messages can begin.
+An AMQP _link_ represents an uninterrupted sequence of message content.  Messages cannot be interleaved over an AMQP link.  One message must be completely transferred before the next message can begin.
 
-Because of the non-interleaved nature of links, concurrent streaming message deliveries must each be allocated to their own dedicated link.  Since link allocation is dependent on streaming state (non-streamed deliveries are sent over a commom inter-router data link), whether or not a delivery is streaming must be determined before that delivery can be forwarded onto an outbound link.
+Because of the non-interleaved nature of links, concurrent streaming message deliveries must each be allocated to their own dedicated link.  Since link allocation is dependent on streaming state (non-streamed deliveries are sent over a set of prioritized inter-router data links), whether or not a delivery is streaming must be determined before that delivery can be forwarded onto an outbound link.
 
 Connections with the `qd.streaming-links` capability can be used to carry concurrent streaming deliveries over links that are created specifically for a single stream.
 
 During the forwarding process when the best outgoing link is chosen for a particular delivery, if the delivery is streaming, a new parallel link will be created (or re-used from a pool) for that stream.  Refer to the `get_outgoing_streaming_link` function in forwarder.c
 
 ## Determining when a delivery must be streamed
-A number of conditions must be met in order for an incoming delivery, not yet forwarded, to be considered streaming:
+A number of conditions must be met in order for an incoming delivery that has not yet been forwarded to be considered streaming:
 
 * The message must not be receive-complete.  A completely received message that has not yet been forwarded will never be considered streaming.
 * An incoming receive-incomplete message will be treated as streaming if any of the following conditions are met:
@@ -52,7 +52,7 @@ A proposed change to the approach to streaming-flow-control is to remove the Q2 
 
 Challenges with this include the fact that an AMQP connection can only accommodate 65535 sessions (32767 with the Proton library).  This can be addressed by taking advantage of the inter-router connection trunking feature to use multiple connections for streaming deliveries.
 
-In this case, it may be advantageous for performance to configure the streaming connections to use throughput-oriented socket settings (TCP_QUICKACK) and to use TCP_NODELAY, a latency-oriented setting for the main connection used for control messages and non-streamed deliveries.
+In this case, it may be advantageous to configure the streaming connections to use throughput-oriented socket settings (TCP_QUICKACK) and to use TCP_NODELAY, a latency-oriented setting for the main connection used for control messages and non-streamed deliveries.
 
 # Controlling Streaming Behavior
 
@@ -69,6 +69,8 @@ from proton import symbol
 sender = container.create_sender(connection, address)
 sender.target.capabilities.put_object(symbol("qd.streaming-deliveries"))
 ```
+
+A normal receiver that wishes to receive streaming deliveries must indicate the `qd.streaming-links` capability for its AMQP connection.  It must also be prepared to accept incoming link-attaches for the streamed deliveries.
 
 ## As an in-process adaptor
 
