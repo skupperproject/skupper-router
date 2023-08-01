@@ -762,7 +762,7 @@ static void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool dis
     //
     // If the link has STREAMING_DELIVERIES capability, set the RA flag on the message.
     //
-    if (link->streaming_deliveries) {
+    if (IS_ATOMIC_FLAG_SET(&link->streaming_deliveries)) {
         qd_message_t *msg = qdr_delivery_message(dlv);
         qd_message_set_streaming_annotation(msg);
     }

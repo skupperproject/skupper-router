@@ -479,11 +479,11 @@ struct qdr_link_t {
     bool                     streaming;         ///< True if this link can be reused for streaming msgs
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     terminus_survives_disconnect;
-    bool                     streaming_deliveries;  ///< If true, set the streaming bit in the router annotations for arriving deliveries
     bool                     no_route;          ///< True if this link is to not receive routed deliveries
     bool                     no_route_bound;    ///< Has the no_route link been bound ? Has the link's owning address been set for no_route links ?
     bool                     proxy;             ///< True if this link represents endpoints on a remote router (used on edge router only)
     bool                     edge_reachable;    ///< The last reachability state sent to the edge (only for edge inlinks on an interior router)
+    sys_atomic_t             streaming_deliveries;  ///< If true, set the streaming bit in the router annotations for arriving deliveries
     char                    *strip_prefix;
     char                    *insert_prefix;
 
@@ -938,6 +938,7 @@ void qdr_action_background_enqueue(qdr_core_t *core, qdr_action_t *action);
 void qdr_link_issue_credit_CT(qdr_core_t *core, qdr_link_t *link, int credit, bool drain);
 void qdr_drain_inbound_undelivered_CT(qdr_core_t *core, qdr_link_t *link, qdr_address_t *addr);
 void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr);
+static inline bool qdr_link_is_streaming_deliveries(qdr_link_t *link) { return IS_ATOMIC_FLAG_SET(&link->streaming_deliveries); }
 
 /**
  * Returns true if the passed in address is a mobile address, false otherwise
