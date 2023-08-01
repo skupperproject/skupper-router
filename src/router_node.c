@@ -679,7 +679,7 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     // forwarding.
     //
     if (!receive_complete) {
-        if (qd_message_is_streaming(msg) || qd_message_is_Q2_blocked(msg) || rlink->streaming_deliveries) {
+        if (qd_message_is_streaming(msg) || qd_message_is_Q2_blocked(msg) || qdr_link_is_streaming_deliveries(rlink)) {
             qd_log(LOG_ROUTER, QD_LOG_DEBUG,
                    "[C%" PRIu64 "][L%" PRIu64 "] Incoming message classified as streaming. User:%s",
                    conn->connection_id, qd_link_link_id(link), conn->user_id);
