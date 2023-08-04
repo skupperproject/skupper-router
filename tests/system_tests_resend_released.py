@@ -17,10 +17,11 @@
 # under the License.
 #
 
-from proton import Message, symbol
+from proton import Message, symbol, Data
 from proton._events import Event
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
+from proton import Delivery
 
 from system_test import unittest
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, MgmtMsgProxy, TestTimeout, PollTimeout
@@ -46,7 +47,7 @@ class RouterTest(TestCase):
         def router(name, mode, connection1, connection2=None, extra=None, args=None):
             config = [
                 ('router', {'mode': mode, 'id': name}),
-                ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
+                ('listener', {'port': cls.tester.get_port()}),
                 ('address', {'prefix': 'cl', 'distribution': 'closest'}),
                 connection1
             ]
@@ -282,9 +283,19 @@ class RouterTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_400_baseline_released_balanced_stream(self):
+        test = ResendReleasedTest(self.inta, [self.inta], [], 'resrel.400', 1, 0, 0, True)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_410_baseline_accepted_balanced_stream(self):
+        test = ResendReleasedTest(self.inta, [], [self.inta], 'resrel.410', 0, 0, 0, True)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class ResendReleasedTest(MessagingHandler):
-    def __init__(self, sender_host, release_hosts, accept_hosts, addr, expected_releases=None, wait_local=0, wait_remote=0):
+    def __init__(self, sender_host, release_hosts, accept_hosts, addr, expected_releases=None, wait_local=0, wait_remote=0, streaming=False):
         super(ResendReleasedTest, self).__init__(auto_accept=False)
         self.sender_host       = sender_host
         self.release_hosts     = release_hosts
@@ -293,6 +304,7 @@ class ResendReleasedTest(MessagingHandler):
         self.wait_local        = wait_local
         self.wait_remote       = wait_remote
         self.expected_releases = expected_releases
+        self.streaming         = streaming
 
         self.sender_conn       = None
         self.sender            = None
@@ -300,6 +312,7 @@ class ResendReleasedTest(MessagingHandler):
         self.accept_conns      = []
         self.release_receivers = []
         self.accept_receivers  = []
+        self.stream_receivers  = []
         self.error             = None
         self.poll_timer        = None
         self.n_receivers       = 0
@@ -334,9 +347,9 @@ class ResendReleasedTest(MessagingHandler):
         self.sender_conn = event.container.connect(self.sender_host)
 
         for host in self.release_hosts:
-            self.release_conns.append(event.container.connect(host))
+            self.release_conns.append(event.container.connect(host, offered_capabilities=symbol("qd.streaming-links")))
         for host in self.accept_hosts:
-            self.accept_conns.append(event.container.connect(host))
+            self.accept_conns.append(event.container.connect(host, offered_capabilities=symbol("qd.streaming-links")))
 
         self.query_sender = event.container.create_sender(self.sender_conn, "$management")
         self.reply_receiver = event.container.create_receiver(self.sender_conn, None, dynamic=True)
@@ -349,17 +362,25 @@ class ResendReleasedTest(MessagingHandler):
                 self.release_receivers.append(event.container.create_receiver(conn, self.addr))
             for conn in self.accept_conns:
                 self.accept_receivers.append(event.container.create_receiver(conn, self.addr))
-        elif event.receiver != None:
+        elif self.sender == None and event.receiver != None:
             self.n_receivers += 1
-            if self.n_receivers == len(self.release_receivers) + len(self.accept_receivers) and self.sender == None:
+            if self.n_receivers == len(self.release_receivers) + len(self.accept_receivers):
                 if self.wait_local > 0 or self.wait_remote > 0:
                     self.query_stats()
                 else:
                     self.setup_sender(event)
+        elif self.sender != None and event.receiver != None:
+            self.stream_receivers.append(event.receiver)
 
     def on_sendable(self, event):
         if event.sender == self.sender and self.n_sent == 0:
-            self.sender.send(Message("Message %d" % self.n_sent))
+            if self.streaming:
+                msg = Message(body=None)
+                self.delivery = self.sender.delivery(self.sender.delivery_tag())
+                encoded = msg.encode()
+                self.sender.stream(encoded)
+            else:
+                self.sender.send(Message("Message %d" % self.n_sent))
             self.n_sent += 1
 
     def find_stats(self, response):
@@ -370,7 +391,31 @@ class ResendReleasedTest(MessagingHandler):
     
     def setup_sender(self, event):
         self.sender = event.container.create_sender(self.sender_conn, self.addr)
-        self.sender.target.capabilities.put_object(symbol("qd.resend-released"))
+        self.sender.target.capabilities.put_array(False, Data.SYMBOL)
+        self.sender.target.capabilities.enter()
+        self.sender.target.capabilities.put_symbol(symbol("qd.resend-released"))
+        self.sender.target.capabilities.put_symbol(symbol("qd.streaming-deliveries"))
+        self.sender.target.capabilities.exit()
+
+    def on_delivery(self, event):
+        if self.streaming:
+            if event.receiver in self.stream_receivers:
+                if event.connection in self.release_conns:
+                    self.release(event.delivery, False)
+                    self.n_released += 1
+                    if self.n_released > len(self.release_receivers):
+                        self.fail("released %d deliveries but there are only %d releasing receivers" % (self.n_released, len(self.release_receivers)))
+                else:
+                    event.delivery.update(Delivery.RECEIVED)
+                    stuff = event.link.recv(10000)
+                    if not event.delivery.partial:
+                        self.accept(event.delivery)
+                        event.link.advance()
+                        self.n_accepted += 1
+            elif event.sender == self.sender:
+                if event.delivery.remote_state == Delivery.RECEIVED:
+                    self.sender.stream(bytes("Second fragment", "ascii"))  # TODO: Stream enough to fill Q2
+                    self.sender.advance()
 
     def on_message(self, event):
         if event.receiver == self.reply_receiver:
@@ -382,12 +427,12 @@ class ResendReleasedTest(MessagingHandler):
             else:
                 #print("local=%d remote=%d" % (local, remote))
                 self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
-        elif event.receiver in self.release_receivers:
+        elif not self.streaming and event.receiver in self.release_receivers:
             self.release(event.delivery, False)
             self.n_released += 1
             if self.n_released > len(self.release_receivers):
                 self.fail("released %d deliveries but there are only %d releasing receivers" % (self.n_released, len(self.release_receivers)))
-        elif event.receiver in self.accept_receivers:
+        elif not self.streaming and event.receiver in self.accept_receivers:
             self.accept(event.delivery)
             self.n_accepted += 1
 
