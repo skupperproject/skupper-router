@@ -20,7 +20,6 @@
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
-from distutils.file_util import copy_file
 from os.path import join
 from os import environ
 
@@ -35,7 +34,7 @@ class BuildPy(build_py):
     def run(self):
         build_py.run(self)      # Run the standard build, copies source .py files into builddir
         for m in self.MODULES:
-            copy_file(join('${CMAKE_CURRENT_BINARY_DIR}', m), join(self.build_lib, m))
+            build_py.copy_file(self, join('${CMAKE_CURRENT_BINARY_DIR}', m), join(self.build_lib, m))
 
     def get_outputs(self, **kwargs):
         return build_py.get_outputs(self, **kwargs) + [join(self.build_lib, m) for m in self.MODULES]
