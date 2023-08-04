@@ -226,13 +226,32 @@ void qdr_terminus_add_capability(qdr_terminus_t *term, const char *capability)
 
 bool qdr_terminus_has_capability(qdr_terminus_t *term, const char *capability)
 {
-    pn_data_t *cap = term->capabilities;
+    size_t     cap_len = strlen(capability);
+    pn_data_t *cap     = term->capabilities;
     pn_data_rewind(cap);
     pn_data_next(cap);
-    if (cap && pn_data_type(cap) == PN_SYMBOL) {
+
+    if (!cap) {
+        return false;
+    }
+
+    if (pn_data_type(cap) == PN_SYMBOL) {
         pn_bytes_t sym = pn_data_get_symbol(cap);
-        if (sym.size == strlen(capability) && strcmp(sym.start, capability) == 0)
+        if (sym.size == cap_len && strncmp(sym.start, capability, cap_len) == 0) {
             return true;
+        }
+    } else if (pn_data_type(cap) == PN_ARRAY && pn_data_get_array_type(cap) == PN_SYMBOL) {
+        size_t count = pn_data_get_array(cap);
+        pn_data_enter(cap);
+        for (size_t i = 0; i < count; i++) {
+            pn_data_next(cap);
+            pn_bytes_t sym = pn_data_get_symbol(cap);
+            if (sym.size == cap_len && strncmp(sym.start, capability, cap_len) == 0) {
+                pn_data_exit(cap);
+                return true;
+            }
+        }
+        pn_data_exit(cap);
     }
 
     return false;
