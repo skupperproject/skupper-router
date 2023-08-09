@@ -49,12 +49,15 @@ static entity_event_t *entity_event(action_t action, const char *type, void *obj
 }
 
 static sys_mutex_t event_lock;
-static entity_event_list_t  event_list;
+static entity_event_list_t  event_list = DEQ_EMPTY;
 
 void qd_entity_cache_initialize(void)
 {
     sys_mutex_init(&event_lock);
-    DEQ_INIT(event_list);
+    // if this abort hits there is a bug where code is calling cache_add/cache_remove before calling this initialize
+    // function (yep, this actually happened - took me two days to root cause it):
+    if (!DEQ_IS_EMPTY(event_list))
+        abort();
 }
 
 void qd_entity_cache_free_entries(void)

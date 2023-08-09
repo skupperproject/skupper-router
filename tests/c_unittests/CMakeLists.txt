@@ -28,11 +28,6 @@ if(NOT dw_lib)
     add_compile_definitions("QD_SKIP_LIBDW_TESTS")
 endif()
 
-add_library(static_accessors_server_c SHARED
-        static_accessors_server_c.c)
-target_compile_options(static_accessors_server_c PRIVATE -fvisibility=hidden)
-target_link_libraries(static_accessors_server_c PRIVATE Proton::core Python::Python)
-
 add_executable(c_unittests
         qdr_stubbing_probe.cpp
         c_unittests_main.cpp
@@ -47,7 +42,7 @@ add_executable(c_unittests
         test_router_startup.cpp
         test_server.cpp
         test_terminus.cpp test_alloc_pool.cpp)
-target_link_libraries(c_unittests cpp-stub pthread skupper-router static_accessors_server_c ${bfd_lib})
+target_link_libraries(c_unittests cpp-stub pthread skupper-router ${bfd_lib})
 # http_common.h includes "delivery.h"
 target_include_directories(c_unittests PRIVATE ${CMAKE_SOURCE_DIR}/src/router_core)
 

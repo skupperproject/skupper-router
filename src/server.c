@@ -1485,7 +1485,6 @@ void qd_server_trace_all_connections(void)
     }
 }
 
-
 void qd_server_run(qd_dispatch_t *qd)
 {
     qd_server_t *qd_server = qd->server;

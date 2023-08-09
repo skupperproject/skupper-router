@@ -46,7 +46,6 @@
 
 const char *QD_ALLOCATOR_TYPE = "allocator";
 
-typedef struct qd_alloc_type_t          qd_alloc_type_t;
 typedef struct qd_alloc_item_t          qd_alloc_item_t;
 typedef struct qd_alloc_chunk_t         qd_alloc_chunk_t;
 typedef struct qd_alloc_linked_stack_t  qd_alloc_linked_stack_t;
@@ -70,17 +69,6 @@ struct qd_alloc_item_t {
 #ifdef QD_MEMORY_DEBUG
 DEQ_DECLARE(qd_alloc_item_t, qd_alloc_item_list_t);
 #endif
-
-struct qd_alloc_type_t {
-    DEQ_LINKS(qd_alloc_type_t);
-    qd_alloc_type_desc_t *desc;
-#ifdef QD_MEMORY_DEBUG
-    qd_alloc_item_list_t  allocated;
-#endif
-};
-
-DEQ_DECLARE(qd_alloc_type_t, qd_alloc_type_list_t);
-
 
 // Leak Suppressions
 // A list of items that are known to leak.
@@ -197,15 +185,12 @@ static inline void free_stack_chunks(qd_alloc_linked_stack_t *stack)
     }
 }
 
-static inline bool next_chunk_stack(qd_alloc_linked_stack_t *const stack)
+static inline void next_chunk_stack(qd_alloc_linked_stack_t * const stack)
 {
     assert(stack->top == CHUNK_SIZE);
     qd_alloc_chunk_t *top = stack->top_chunk->next;
     if (top == NULL) {
-        top = NEW(qd_alloc_chunk_t);
-        if (top == NULL) {
-            return false;
-        }
+        top                    = NEW(qd_alloc_chunk_t);
         stack->top_chunk->next = top;
         top->prev = stack->top_chunk;
         top->next = NULL;
@@ -213,23 +198,19 @@ static inline bool next_chunk_stack(qd_alloc_linked_stack_t *const stack)
     assert(top->prev == stack->top_chunk);
     assert(stack->top_chunk->next == top);
     stack->top_chunk = top;
-    stack->top = 0;
-    return true;
+    stack->top       = 0;
 }
 
-static inline bool push_stack(qd_alloc_linked_stack_t *stack, qd_alloc_item_t *item)
+static inline void push_stack(qd_alloc_linked_stack_t *stack, qd_alloc_item_t *item)
 {
     const uint32_t chunk_size = CHUNK_SIZE;
     if (stack->top == chunk_size) {
-        if (!next_chunk_stack(stack)) {
-            return false;
-        }
+        next_chunk_stack(stack);
     }
     assert(stack->top < chunk_size);
     stack->size++;
     stack->top_chunk->items[stack->top] = item;
     stack->top++;
-    return true;
 }
 
 static inline int unordered_move_stack(qd_alloc_linked_stack_t *from, qd_alloc_linked_stack_t *to, uint32_t length)
@@ -248,9 +229,7 @@ static inline int unordered_move_stack(qd_alloc_linked_stack_t *from, qd_alloc_l
         }
         to_copy = from->top < to_copy ? from->top : to_copy;
         if (to->top == chunk_size) {
-            if (!next_chunk_stack(to)) {
-                return length - remaining;
-            }
+            next_chunk_stack(to);
         }
         uint32_t remaining_to = chunk_size - to->top;
         to_copy = remaining_to < to_copy ? remaining_to : to_copy;
@@ -269,71 +248,30 @@ struct qd_alloc_pool_t {
     qd_alloc_linked_stack_t free_list;
 };
 
-qd_alloc_config_t qd_alloc_default_config_big   = {16,  32, -1};
-qd_alloc_config_t qd_alloc_default_config_small = {64, 128, -1};
-qd_alloc_config_t qd_alloc_default_config_asan  = { 1,   0,  0};
+const qd_alloc_config_t qd_alloc_default_config_big   = {16, 32, -1};
+const qd_alloc_config_t qd_alloc_default_config_small = {64, 128, -1};
+const qd_alloc_config_t qd_alloc_default_config_asan  = {1, 0, 0};
 #define BIG_THRESHOLD 2000
 
-static sys_mutex_t           init_lock;
-static qd_alloc_type_list_t  type_list;
+DEQ_DECLARE(qd_alloc_type_desc_t, qd_alloc_type_desc_list_t);
+static qd_alloc_type_desc_list_t desc_list  = DEQ_EMPTY;
 static char *debug_dump = 0;
 
-static void qd_alloc_init(qd_alloc_type_desc_t *desc)
-{
-    sys_mutex_lock(&init_lock);
-
-    if (!desc->global_pool) {
-        desc->total_size = desc->type_size;
-        if (desc->additional_size)
-            desc->total_size += *desc->additional_size;
-
-        if (desc->config == 0)
-            desc->config = desc->total_size > BIG_THRESHOLD ?
-                &qd_alloc_default_config_big : &qd_alloc_default_config_small;
-
-#if defined(QD_DISABLE_MEMORY_POOL)
-        desc->config = &qd_alloc_default_config_asan;
-#else
-        assert (desc->config->local_free_list_max >= desc->config->transfer_batch_size);
-#endif
-
-        desc->global_pool = NEW(qd_alloc_pool_t);
-        DEQ_ITEM_INIT(desc->global_pool);
-        init_stack(&desc->global_pool->free_list);
-        sys_mutex_init(&desc->lock);
-        DEQ_INIT(desc->tpool_list);
-        desc->stats = NEW(qd_alloc_stats_t);
-        ZERO(desc->stats);
-
-        qd_alloc_type_t *type_item = NEW(qd_alloc_type_t);
-        DEQ_ITEM_INIT(type_item);
-        type_item->desc = desc;
-        desc->debug = type_item;
 #ifdef QD_MEMORY_DEBUG
-        DEQ_INIT(type_item->allocated);
+// detect attempts to alloc prior to qd_alloc_initialize() or after qd_alloc_finalize()
+#include "qpid/dispatch/atomic.h"
+static atomic_bool alloc_pool_ready;
 #endif
-        DEQ_INSERT_TAIL(type_list, type_item);
-
-        desc->header  = PATTERN_FRONT;
-        desc->trailer = PATTERN_BACK;
-
-        qd_entity_cache_add(QD_ALLOCATOR_TYPE, type_item);
-    }
-
-    sys_mutex_unlock(&init_lock);
-}
-
 
 /* coverity[+alloc] */
 void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
 {
     int idx;
 
-    //
-    // If the descriptor is not initialized, set it up now.
-    //
-    if (desc->header != PATTERN_FRONT)
-        qd_alloc_init(desc);
+#ifdef QD_MEMORY_DEBUG
+    (void) alloc_pool_ready;
+    assert(alloc_pool_ready);
+#endif
 
     //
     // If this is the thread's first pass through here, allocate the
@@ -362,9 +300,9 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         item->desc   = desc;
         item->backtrace_size = backtrace(item->backtrace, STACK_DEPTH);
         gettimeofday(&item->timestamp, NULL);
-        qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
         sys_mutex_lock(&desc->lock);
-        DEQ_INSERT_TAIL(qtype->allocated, item);
+        qd_alloc_item_list_t *items = (qd_alloc_item_list_t *) desc->debug;
+        DEQ_INSERT_TAIL(*items, item);
         sys_mutex_unlock(&desc->lock);
         item->header = PATTERN_FRONT;
         const uint32_t pb = PATTERN_BACK;
@@ -386,8 +324,8 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         const int moved = unordered_move_stack(&desc->global_pool->free_list, &pool->free_list,
                                                desc->config->transfer_batch_size);
         assert(moved == desc->config->transfer_batch_size);
-        desc->stats->batches_rebalanced_to_threads++;
-        desc->stats->held_by_threads += moved;
+        desc->stats.batches_rebalanced_to_threads++;
+        desc->stats.held_by_threads += moved;
     } else {
         //
         // Allocate a full batch from the heap and put it on the thread list.
@@ -404,19 +342,16 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
                 ;
             ALLOC_CACHE_ALIGNED(size, item);
             if (item == 0)
-                break;
+                abort();
 #ifdef QD_MEMORY_DEBUG
             DEQ_ITEM_INIT(item);
 #endif
-            if (!push_stack(&pool->free_list, item)) {
-                FREE_CACHE_ALIGNED(item);
-                break;
-            }
+            push_stack(&pool->free_list, item);
             item->sequence = 0;
             ASAN_POISON_MEMORY_REGION(&item[1], desc->total_size);
-            desc->stats->held_by_threads++;
-            desc->stats->total_alloc_from_heap++;
         }
+        desc->stats.held_by_threads += desc->config->transfer_batch_size;
+        desc->stats.total_alloc_from_heap += desc->config->transfer_batch_size;
     }
     sys_mutex_unlock(&desc->lock);
 
@@ -427,9 +362,9 @@ void *qd_alloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool)
         item->desc = desc;
         item->backtrace_size = backtrace(item->backtrace, STACK_DEPTH);
         gettimeofday(&item->timestamp, NULL);
-        qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
         sys_mutex_lock(&desc->lock);
-        DEQ_INSERT_TAIL(qtype->allocated, item);
+        qd_alloc_item_list_t *items = (qd_alloc_item_list_t *) desc->debug;
+        DEQ_INSERT_TAIL(*items, item);
         sys_mutex_unlock(&desc->lock);
         item->header = PATTERN_FRONT;
         const uint32_t pb = PATTERN_BACK;
@@ -450,17 +385,16 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     qd_alloc_item_t *item = ((qd_alloc_item_t*) p) - 1;
 
 #ifdef QD_MEMORY_DEBUG
-    assert (desc->header  == PATTERN_FRONT);
-    assert (desc->trailer == PATTERN_BACK);
     assert (item->header  == PATTERN_FRONT);
     const uint32_t pb = PATTERN_BACK;
     (void)pb;  // prevent unused warning
-    assert (memcmp(p + desc->total_size, &pb, sizeof(pb)) == 0);
-    assert (item->desc == desc);  // Check for double-free
-    qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
+    assert(memcmp(p + desc->total_size, &pb, sizeof(pb)) == 0);
+    assert(item->desc == desc);  // Check for double-free
     sys_mutex_lock(&desc->lock);
-    DEQ_REMOVE(qtype->allocated, item);
+    qd_alloc_item_list_t *items = (qd_alloc_item_list_t *) desc->debug;
+    DEQ_REMOVE(*items, item);
     sys_mutex_unlock(&desc->lock);
+
     item->desc = 0;
     QD_MEMORY_FILL(p, QD_MEMORY_FREE, desc->total_size);
 #endif
@@ -482,9 +416,7 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     qd_alloc_pool_t *pool = *tpool;
 
     item->sequence++;
-    if (!push_stack(&pool->free_list, item)) {
-        FREE_CACHE_ALIGNED(item);
-    }
+    push_stack(&pool->free_list, item);
 
     if (DEQ_SIZE(pool->free_list) < desc->config->local_free_list_max)
         return;
@@ -497,8 +429,8 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
     const int moved = unordered_move_stack(&pool->free_list, &desc->global_pool->free_list,
                                            desc->config->transfer_batch_size);
     assert(moved == desc->config->transfer_batch_size);
-    desc->stats->batches_rebalanced_to_global++;
-    desc->stats->held_by_threads -= moved;
+    desc->stats.batches_rebalanced_to_global++;
+    desc->stats.held_by_threads -= moved;
     //
     // If there's a global_free_list size limit, remove items until the limit is
     // not exceeded.
@@ -507,7 +439,7 @@ void qd_dealloc(qd_alloc_type_desc_t *desc, qd_alloc_pool_t **tpool, char *p)
         while (DEQ_SIZE(desc->global_pool->free_list) > desc->config->global_free_list_max) {
             item = pop_stack(&desc->global_pool->free_list);
             FREE_CACHE_ALIGNED(item);
-            desc->stats->total_free_to_heap++;
+            desc->stats.total_free_to_heap++;
         }
     }
 
@@ -532,13 +464,52 @@ uint32_t qd_alloc_sequence(void *p)
     return item->sequence;
 }
 
-
 void qd_alloc_initialize(void)
 {
-    sys_mutex_init(&init_lock);
-    DEQ_INIT(type_list);
-}
+    for (qd_alloc_type_desc_t *desc = DEQ_HEAD(desc_list); desc; desc = DEQ_NEXT(desc)) {
+        // Compute the size of the type. This is done after all the desc have been created since the value of the
+        // additional_size attribute may be initialized prior to calling qd_alloc_initialize()
 
+        desc->total_size = desc->type_size;
+        if (desc->additional_size)
+            desc->total_size += *desc->additional_size;
+
+        if (desc->config == 0)
+            desc->config =
+                desc->total_size > BIG_THRESHOLD ? &qd_alloc_default_config_big : &qd_alloc_default_config_small;
+
+#if defined(QD_DISABLE_MEMORY_POOL)
+        desc->config = &qd_alloc_default_config_asan;
+#else
+        assert(desc->config->local_free_list_max >= desc->config->transfer_batch_size);
+#endif
+
+        desc->global_pool = NEW(qd_alloc_pool_t);
+        DEQ_ITEM_INIT(desc->global_pool);
+        init_stack(&desc->global_pool->free_list);
+        sys_mutex_init(&desc->lock);
+        DEQ_INIT(desc->tpool_list);
+        memset(&desc->stats, 0, sizeof(desc->stats));
+
+#ifdef QD_MEMORY_DEBUG
+        // maintain a list of allocated items for leak checking during
+        // qd_alloc_finalize
+        //
+        qd_alloc_item_list_t *items = NEW(qd_alloc_item_list_t);
+        DEQ_INIT(*items);
+        desc->debug = (void *) items;
+#endif
+
+        // now add the descriptor to the management entity database
+
+        qd_entity_cache_add(QD_ALLOCATOR_TYPE, desc);
+    }
+
+#ifdef QD_MEMORY_DEBUG
+    assert(alloc_pool_ready != true);
+    alloc_pool_ready = true;
+#endif
+}
 
 void qd_alloc_finalize(void)
 {
@@ -556,9 +527,8 @@ void qd_alloc_finalize(void)
     //       concerned about locking.
     //
 
-    qd_alloc_item_t *item;
-    qd_alloc_type_t *type_item = DEQ_HEAD(type_list);
 #ifdef QD_MEMORY_DEBUG
+    alloc_pool_ready      = false;
     const char *last_leak = 0;
 #endif
 
@@ -573,23 +543,21 @@ void qd_alloc_finalize(void)
     }
 #endif
 
-    while (type_item) {
-        qd_entity_cache_remove(QD_ALLOCATOR_TYPE, type_item);
-        qd_alloc_type_desc_t *desc = type_item->desc;
+    for (qd_alloc_type_desc_t *desc = DEQ_HEAD(desc_list); desc; desc = DEQ_NEXT(desc)) {
+        qd_entity_cache_remove(QD_ALLOCATOR_TYPE, desc);
 
         //
         // Reclaim the items on the global free pool
         //
-        item = pop_stack(&desc->global_pool->free_list);
+        qd_alloc_item_t *item = pop_stack(&desc->global_pool->free_list);
         while (item) {
             FREE_CACHE_ALIGNED(item);
-            desc->stats->total_free_to_heap++;
+            desc->stats.total_free_to_heap++;
             item = pop_stack(&desc->global_pool->free_list);
         }
         free_stack_chunks(&desc->global_pool->free_list);
         free(desc->global_pool);
         desc->global_pool = 0;
-        desc->header = 0;  // reset header, so we can initialize again later in qd_alloc (in subsequent test)
 
         //
         // Reclaim the items on thread pools
@@ -599,7 +567,7 @@ void qd_alloc_finalize(void)
             item = pop_stack(&tpool->free_list);
             while (item) {
                 FREE_CACHE_ALIGNED(item);
-                desc->stats->total_free_to_heap++;
+                desc->stats.total_free_to_heap++;
                 item = pop_stack(&tpool->free_list);
             }
             DEQ_REMOVE_HEAD(desc->tpool_list);
@@ -611,7 +579,7 @@ void qd_alloc_finalize(void)
         //
         // Check the stats for lost items
         //
-        if (dump_file && desc->stats->total_free_to_heap < desc->stats->total_alloc_from_heap) {
+        if (dump_file && desc->stats.total_free_to_heap < desc->stats.total_alloc_from_heap) {
             bool suppressed = false;
             for (int i = 0; leaking_types[i]; ++i) {
                 if (strcmp(desc->type_name, leaking_types[i]) == 0) {
@@ -620,20 +588,20 @@ void qd_alloc_finalize(void)
                 }
             }
             fprintf(dump_file,
-                    "alloc.c: Items of type '%s' remain allocated at shutdown: %"PRId64"%s\n",
+                    "alloc.c: Items of type '%s' remain allocated at shutdown: %" PRId64 "%s\n",
                     desc->type_name,
-                    desc->stats->total_alloc_from_heap - desc->stats->total_free_to_heap,
+                    desc->stats.total_alloc_from_heap - desc->stats.total_free_to_heap,
                     suppressed ? " (SUPPRESSED)" : "");
 
 #ifdef QD_MEMORY_DEBUG
-            qd_alloc_type_t *qtype = (qd_alloc_type_t*) desc->debug;
-            qd_alloc_item_t *item = DEQ_HEAD(qtype->allocated);
-            char buf[100];
+            qd_alloc_item_list_t *items = (qd_alloc_item_list_t *) desc->debug;
+            qd_alloc_item_t      *item  = DEQ_HEAD(*items);
             while (item) {
-                DEQ_REMOVE_HEAD(qtype->allocated);
+                DEQ_REMOVE_HEAD(*items);
                 char **strings = backtrace_symbols(item->backtrace, item->backtrace_size);
 
                 if (!suppressed) {
+                    char buf[100];
                     // DISPATCH-1795: avoid output noise by only printing
                     // backtraces for leaks that are not suppressed
                     qd_log_formatted_time(&item->timestamp, buf, 100);
@@ -652,7 +620,7 @@ void qd_alloc_finalize(void)
                 // malloc() of the object - not the last time it was allocated
                 // from the pool.
                 FREE_CACHE_ALIGNED(item);
-                item = DEQ_HEAD(qtype->allocated);
+                item = DEQ_HEAD(*items);
             }
 #endif
         }
@@ -660,16 +628,11 @@ void qd_alloc_finalize(void)
         //
         // Reclaim the descriptor components
         //
-        free(desc->stats);
         sys_mutex_free(&desc->lock);
-        desc->trailer = 0;
-
-        DEQ_REMOVE_HEAD(type_list);
-        free(type_item);
-        type_item = DEQ_HEAD(type_list);
+        free(desc->debug);
+        desc->debug = 0;
     }
 
-    sys_mutex_free(&init_lock);
     if (debug_dump) {
         fclose(dump_file);
         free(debug_dump);
@@ -688,22 +651,53 @@ void qd_alloc_finalize(void)
 
 QD_EXPORT qd_error_t qd_entity_refresh_allocator(qd_entity_t* entity, void *impl)
 {
-    qd_alloc_type_t *alloc_type = (qd_alloc_type_t*) impl;
-    if (qd_entity_set_string(entity, "typeName", alloc_type->desc->type_name) == 0 &&
-        qd_entity_set_long(entity, "typeSize", alloc_type->desc->total_size) == 0 &&
-        qd_entity_set_long(entity, "transferBatchSize", alloc_type->desc->config->transfer_batch_size) == 0 &&
-        qd_entity_set_long(entity, "localFreeListMax", alloc_type->desc->config->local_free_list_max) == 0 &&
-        qd_entity_set_long(entity, "globalFreeListMax", alloc_type->desc->config->global_free_list_max) == 0
-        && qd_entity_set_long(entity, "totalAllocFromHeap", alloc_type->desc->stats->total_alloc_from_heap) == 0 &&
-        qd_entity_set_long(entity, "totalFreeToHeap", alloc_type->desc->stats->total_free_to_heap) == 0 &&
-        qd_entity_set_long(entity, "heldByThreads", alloc_type->desc->stats->held_by_threads) == 0 &&
-        qd_entity_set_long(entity, "batchesRebalancedToThreads", alloc_type->desc->stats->batches_rebalanced_to_threads) == 0 &&
-        qd_entity_set_long(entity, "batchesRebalancedToGlobal", alloc_type->desc->stats->batches_rebalanced_to_global) == 0
-        )
+    qd_alloc_type_desc_t *desc = (qd_alloc_type_desc_t *) impl;
+
+    sys_mutex_lock(&desc->lock);
+
+    if (qd_entity_set_string(entity, "typeName", desc->type_name) == 0
+        && qd_entity_set_long(entity, "typeSize", desc->total_size) == 0
+        && qd_entity_set_long(entity, "transferBatchSize", desc->config->transfer_batch_size) == 0
+        && qd_entity_set_long(entity, "localFreeListMax", desc->config->local_free_list_max) == 0
+        && qd_entity_set_long(entity, "globalFreeListMax", desc->config->global_free_list_max) == 0
+        && qd_entity_set_long(entity, "totalAllocFromHeap", desc->stats.total_alloc_from_heap) == 0
+        && qd_entity_set_long(entity, "totalFreeToHeap", desc->stats.total_free_to_heap) == 0
+        && qd_entity_set_long(entity, "heldByThreads", desc->stats.held_by_threads) == 0
+        && qd_entity_set_long(entity, "batchesRebalancedToThreads", desc->stats.batches_rebalanced_to_threads) == 0
+        && qd_entity_set_long(entity, "batchesRebalancedToGlobal", desc->stats.batches_rebalanced_to_global) == 0) {
+        sys_mutex_unlock(&desc->lock);
         return QD_ERROR_NONE;
+    }
+    sys_mutex_unlock(&desc->lock);
     return qd_error_code();
+}
+
+qd_alloc_stats_t qd_alloc_desc_stats(qd_alloc_type_desc_t *desc)
+{
+    sys_mutex_lock(&desc->lock);
+    qd_alloc_stats_t stats = desc->stats;
+    sys_mutex_unlock(&desc->lock);
+
+    return stats;
 }
 
 void qd_alloc_debug_dump(const char *file) {
     debug_dump = file ? strdup(file) : 0;
+}
+
+// Type descriptor constructor.
+//
+// This function is a true constructor: it is called prior to main(). It is invoked for each type descriptor defined via
+// ALLOC_DEFINE*(). Since it is run prior to multi-threading, no locks need to be held.
+//
+void qd_alloc_desc_init(const char *name, qd_alloc_type_desc_t *desc, size_t size, const size_t *additional_size,
+                        const qd_alloc_config_t *config)
+{
+    ZERO(desc);
+    desc->type_name       = name;
+    desc->type_size       = size;
+    desc->additional_size = additional_size;
+    desc->config          = config;
+    DEQ_ITEM_INIT(desc);
+    DEQ_INSERT_TAIL(desc_list, desc);
 }

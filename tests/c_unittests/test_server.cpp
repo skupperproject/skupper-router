@@ -28,13 +28,13 @@
 using std::string_literals::operator""s;
 
 extern "C" {
-double testonly_normalize_memory_size(const uint64_t bytes, const char **suffix);
+double normalize_memory_size(const uint64_t bytes, const char **suffix);
 }
 
 static void test_normalize_memory_size(uint64_t bytes, double expected_value, const char *expected_suffix)
 {
     const char *suffix = NULL;
-    double value       = testonly_normalize_memory_size(bytes, &suffix);
+    double      value  = normalize_memory_size(bytes, &suffix);
     CHECK(value == expected_value);
     CHECK(suffix == std::string{expected_suffix});
 }

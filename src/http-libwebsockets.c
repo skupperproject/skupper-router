@@ -484,7 +484,7 @@ typedef struct metric_definition {
 
 typedef struct allocator_metric_definition {
     const char* name;
-    qd_alloc_stats_t *(*fn)(void);
+    qd_alloc_stats_t (*fn)(void);
 } allocator_metric_definition;
 
 static int stats_get_connections(qdr_global_stats_t *stats) { return stats->connections; }
@@ -509,42 +509,42 @@ static int stats_get_deliveries_stuck(qdr_global_stats_t *stats) { return stats-
 static int stats_get_links_blocked(qdr_global_stats_t *stats) { return stats->links_blocked; }
 static int stats_get_deliveries_redirected_to_fallback(qdr_global_stats_t *stats) { return stats->deliveries_redirected_to_fallback; }
 
-qd_alloc_stats_t *alloc_stats_qd_bitmask_t(void);
-qd_alloc_stats_t *alloc_stats_qd_buffer_t(void);
-qd_alloc_stats_t *alloc_stats_qd_composed_field_t(void);
-qd_alloc_stats_t *alloc_stats_qd_composite_t(void);
-qd_alloc_stats_t *alloc_stats_qd_connection_t(void);
-qd_alloc_stats_t *alloc_stats_qd_hash_handle_t(void);
-qd_alloc_stats_t *alloc_stats_qd_hash_item_t(void);
-qd_alloc_stats_t *alloc_stats_qd_iterator_t(void);
-qd_alloc_stats_t *alloc_stats_qd_link_ref_t(void);
-qd_alloc_stats_t *alloc_stats_qd_link_t(void);
-qd_alloc_stats_t *alloc_stats_qd_listener_t(void);
-qd_alloc_stats_t *alloc_stats_qd_log_entry_t(void);
-qd_alloc_stats_t *alloc_stats_qd_management_context_t(void);
-qd_alloc_stats_t *alloc_stats_qd_message_content_t(void);
-qd_alloc_stats_t *alloc_stats_qd_message_t(void);
-qd_alloc_stats_t *alloc_stats_qd_node_t(void);
-qd_alloc_stats_t *alloc_stats_qd_parse_node_t(void);
-qd_alloc_stats_t *alloc_stats_qd_parsed_field_t(void);
-qd_alloc_stats_t *alloc_stats_qd_timer_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_action_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_address_config_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_address_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_connection_info_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_connection_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_connection_work_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_core_timer_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_delivery_cleanup_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_delivery_ref_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_delivery_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_field_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_general_work_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_link_ref_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_link_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_link_work_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_query_t(void);
-qd_alloc_stats_t *alloc_stats_qdr_terminus_t(void);
+qd_alloc_stats_t alloc_stats_qd_bitmask_t(void);
+qd_alloc_stats_t alloc_stats_qd_buffer_t(void);
+qd_alloc_stats_t alloc_stats_qd_composed_field_t(void);
+qd_alloc_stats_t alloc_stats_qd_composite_t(void);
+qd_alloc_stats_t alloc_stats_qd_connection_t(void);
+qd_alloc_stats_t alloc_stats_qd_hash_handle_t(void);
+qd_alloc_stats_t alloc_stats_qd_hash_item_t(void);
+qd_alloc_stats_t alloc_stats_qd_iterator_t(void);
+qd_alloc_stats_t alloc_stats_qd_link_ref_t(void);
+qd_alloc_stats_t alloc_stats_qd_link_t(void);
+qd_alloc_stats_t alloc_stats_qd_listener_t(void);
+qd_alloc_stats_t alloc_stats_qd_log_entry_t(void);
+qd_alloc_stats_t alloc_stats_qd_management_context_t(void);
+qd_alloc_stats_t alloc_stats_qd_message_content_t(void);
+qd_alloc_stats_t alloc_stats_qd_message_t(void);
+qd_alloc_stats_t alloc_stats_qd_node_t(void);
+qd_alloc_stats_t alloc_stats_qd_parse_node_t(void);
+qd_alloc_stats_t alloc_stats_qd_parsed_field_t(void);
+qd_alloc_stats_t alloc_stats_qd_timer_t(void);
+qd_alloc_stats_t alloc_stats_qdr_action_t(void);
+qd_alloc_stats_t alloc_stats_qdr_address_config_t(void);
+qd_alloc_stats_t alloc_stats_qdr_address_t(void);
+qd_alloc_stats_t alloc_stats_qdr_connection_info_t(void);
+qd_alloc_stats_t alloc_stats_qdr_connection_t(void);
+qd_alloc_stats_t alloc_stats_qdr_connection_work_t(void);
+qd_alloc_stats_t alloc_stats_qdr_core_timer_t(void);
+qd_alloc_stats_t alloc_stats_qdr_delivery_cleanup_t(void);
+qd_alloc_stats_t alloc_stats_qdr_delivery_ref_t(void);
+qd_alloc_stats_t alloc_stats_qdr_delivery_t(void);
+qd_alloc_stats_t alloc_stats_qdr_field_t(void);
+qd_alloc_stats_t alloc_stats_qdr_general_work_t(void);
+qd_alloc_stats_t alloc_stats_qdr_link_ref_t(void);
+qd_alloc_stats_t alloc_stats_qdr_link_t(void);
+qd_alloc_stats_t alloc_stats_qdr_link_work_t(void);
+qd_alloc_stats_t alloc_stats_qdr_query_t(void);
+qd_alloc_stats_t alloc_stats_qdr_terminus_t(void);
 
 static struct metric_definition metrics[] = {
     {"qdr_connections_total", "gauge", stats_get_connections},
@@ -611,7 +611,7 @@ static struct allocator_metric_definition allocator_metrics[] = {
 };
 static size_t allocator_metrics_length = sizeof(allocator_metrics)/sizeof(allocator_metrics[0]);
 
-#define ALLOC_DATA(S, F) ((allocator_field) {#F, (S!=NULL? S->F: 0)})
+#define ALLOC_DATA(S, F) ((allocator_field){#F, S.F})
 
 typedef struct allocator_field {
     const char* name;
@@ -658,7 +658,7 @@ static bool write_metric(uint8_t **position, const uint8_t * const end, metric_d
 
 static bool write_allocator_metric(uint8_t **position, const uint8_t * const end, allocator_metric_definition* definition)
 {
-    qd_alloc_stats_t *allocator_stats = definition->fn();
+    qd_alloc_stats_t allocator_stats = definition->fn();
     if (!write_allocator_stats(position, end, definition->name, ALLOC_DATA(allocator_stats, total_alloc_from_heap))) return false;
     if (!write_allocator_stats(position, end, definition->name, ALLOC_DATA(allocator_stats, total_free_to_heap))) return false;
     if (!write_allocator_stats(position, end, definition->name, ALLOC_DATA(allocator_stats, held_by_threads))) return false;
