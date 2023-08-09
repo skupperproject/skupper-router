@@ -31,9 +31,9 @@ ALLOC_DEFINE_CONFIG(qd_buffer_t, sizeof(qd_buffer_t), &QD_BUFFER_SIZE, 0);
 /**
  * Set the initial buffer capacity to be allocated by future calls to qp_buffer.
  *
- * NOTICE:  This function is provided for testing purposes only.  It should not be invoked
- * in the production code.  If this function is called after the first buffer has been allocated,
- * the software WILL BE unstable and WILL crash.
+ * NOTICE: This function is provided for testing purposes only.  It should not be invoked in the production code. This
+ * function can only be called once. It must be called before calling qd_alloc_initialize() otherwise the software WILL
+ * BE unstable and WILL crash.
  */
 void qd_buffer_set_size_test_only(size_t size)
 {

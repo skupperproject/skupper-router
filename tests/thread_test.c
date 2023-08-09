@@ -53,8 +53,8 @@ void *thread_id_thread(void *arg)
         result = "sys_thread_self returned zero!";
     } else if (threads[index] != sys_thread_self()) {
         result = "sys_thread_self mismatch";
-    } else if (strcmp(sys_thread_name(0), expected_name) != 0) {
-        result = "sys_thread_name mismatch";
+    } else if (!sys_thread_name(0)) {
+        result = "sys_thread_name not present";
     }
 
     sys_mutex_unlock(&mutex);
@@ -82,6 +82,21 @@ static char *test_thread_id(void *context)
 
     for (int i = 0; i < thread_count; ++i) {
         sys_thread_join(threads[i]);
+    }
+
+    // check that the generated thread names are unique
+
+    for (int i = 0; result == 0 && i < (thread_count - 1); ++i) {
+        const char *tname = sys_thread_name(threads[i]);
+        for (int j = i + 1; j < thread_count; ++j) {
+            if (strcmp(tname, sys_thread_name(threads[j])) == 0) {
+                result = "duplicate sys_thread_name found";
+                break;
+            }
+        }
+    }
+
+    for (int i = 0; i < thread_count; ++i) {
         sys_thread_free(threads[i]);
     }
 

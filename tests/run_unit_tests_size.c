@@ -105,10 +105,10 @@ int main(int argc, char** argv)
             return 1;
     }
 
+    qd_buffer_set_size_test_only(buffer_size);
     qd_alloc_initialize();
     qd_log_initialize();
     qd_error_initialize();
-    qd_buffer_set_size_test_only(buffer_size);
 
     result += router_id_tests();
     qd_router_id_initialize("0", "UnitTestRouter");

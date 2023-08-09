@@ -156,13 +156,8 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
     // in the per-thread free-pools.  Since we will be dealing with large numbers here, the
     // number of buffers in free-pools will not be significant.
     //
-    // Note that there is a thread race on the access of this value.  There's no danger associated
-    // with getting a partial or corrupted value from time to time.
-    //
-    // Note also that the stats pointer may be NULL if no buffers have yet been allocated.
-    //
-    qd_alloc_stats_t *stats          = alloc_stats_qd_adaptor_buffer_t();
-    uint64_t          buffers_in_use = !!stats ? stats->held_by_threads : 0;
+    qd_alloc_stats_t stats          = alloc_stats_qd_adaptor_buffer_t();
+    uint64_t         buffers_in_use = stats.held_by_threads;
 
     //
     // Choose the grant-allocation tier based on the number of buffers in use.

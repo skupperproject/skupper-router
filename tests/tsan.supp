@@ -14,13 +14,6 @@ deadlock:push_event
 # DISPATCH-2070,
 race:qd_vlog_impl
 
-# DISPATCH-2122
-race:^qd_alloc$
-race:qd_alloc_init
-
-# DISPATCH-2123
-race:qd_entity_refresh_allocator
-
 # DISPATCH-2124
 race:qdr_link_flow
 
@@ -83,7 +76,8 @@ race:^__lws_logv$
 # ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
 race:^qd_entity_refresh_connector$
 
-# #1107 - Suppress warnings on benign race in accessing memory stats
+# ISSUE-1198: Suppress warnings on race in updating max_capacity
+# https://github.com/skupperproject/skupper-router/issues/1198
 race:^qd_raw_connection_grant_read_buffers$
 race:^grant_read_buffers_XSIDE_IO$
 
