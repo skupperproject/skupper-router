@@ -1953,6 +1953,14 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
     if (!pdlv)
         return 0;
 
+    if (qdr_delivery_is_abort_outbound(dlv)) {
+        pn_delivery_abort(pdlv);
+        pn_link_advance(plink);
+        qdr_node_disconnect_deliveries(router->router_core, qlink, dlv, pdlv);
+        pn_delivery_settle(pdlv);
+        return 0;
+    }
+
     bool q3_stalled = false;
 
     qd_message_t *msg_out = qdr_delivery_message(dlv);

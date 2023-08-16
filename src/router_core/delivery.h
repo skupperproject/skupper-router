@@ -73,6 +73,7 @@ struct qdr_delivery_t {
     bool                    via_edge;          /// True if this delivery arrived via an edge-connection.
     bool                    stuck;             /// True if this delivery was counted as stuck.
     bool                    reforwarded;       /// True if this delivery was released and re-forwarded.
+    bool                    abort_outbound;    /// A re-forwarded streaming delivery needs to be aborted outbound
 };
 
 ALLOC_DECLARE(qdr_delivery_t);
@@ -112,6 +113,8 @@ void qdr_delivery_set_disposition(qdr_delivery_t *delivery, uint64_t disposition
 
 void qdr_delivery_set_aborted(const qdr_delivery_t *delivery);
 bool qdr_delivery_is_aborted(const qdr_delivery_t *delivery);
+
+static inline bool qdr_delivery_is_abort_outbound(const qdr_delivery_t *delivery) { return delivery->abort_outbound; }
 
 qd_message_t *qdr_delivery_message(const qdr_delivery_t *delivery);
 qdr_link_t *qdr_delivery_link(const qdr_delivery_t *delivery);
@@ -188,6 +191,9 @@ void qdr_delivery_mcast_outbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_
                                            uint64_t new_disp, bool settled);
 // number of unsettled peer (outbound) deliveries for in_dlv
 int qdr_delivery_peer_count_CT(const qdr_delivery_t *in_dlv);
+
+// Return the number of outbound paths that have been invalidated due to releases
+int qdr_delivery_invalidated_path_count_CT(const qdr_delivery_t *dlv);
 
 
 #endif // __delivery_h__

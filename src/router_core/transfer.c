@@ -535,7 +535,7 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
 
     if (addr
         && addr == link->owning_addr
-        && qdr_addr_path_count_CT(addr) == 0) {
+        && qdr_addr_path_count_CT(addr) - qdr_delivery_invalidated_path_count_CT(dlv) == 0) {
         //
         // We are trying to forward a delivery on an address that has no outbound paths
         // AND the incoming link is targeted (not anonymous).
