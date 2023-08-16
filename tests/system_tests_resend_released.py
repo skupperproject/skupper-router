@@ -293,18 +293,35 @@ class RouterTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_420_accept_many_high_cost_balanced_stream(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.ea1, self.ea2, self.eb2, self.eb2], [self.intd], 'resrel.420', 7, 4, 2, True)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_430_accept_many_high_cost_closest_stream(self):
+        test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.ea1, self.ea2, self.eb2, self.eb2], [self.intd], 'cl.resrel.430', 7, 4, 2, True)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class ResendReleasedTest(MessagingHandler):
     def __init__(self, sender_host, release_hosts, accept_hosts, addr, expected_releases=None, wait_local=0, wait_remote=0, streaming=False):
         super(ResendReleasedTest, self).__init__(auto_accept=False)
-        self.sender_host       = sender_host
-        self.release_hosts     = release_hosts
-        self.accept_hosts      = accept_hosts
-        self.addr              = addr
-        self.wait_local        = wait_local
-        self.wait_remote       = wait_remote
-        self.expected_releases = expected_releases
-        self.streaming         = streaming
+        self.sender_host        = sender_host
+        self.release_hosts      = release_hosts
+        self.accept_hosts       = accept_hosts
+        self.addr               = addr
+        self.wait_local         = wait_local
+        self.wait_remote        = wait_remote
+        self.expected_releases  = expected_releases
+        self.streaming          = streaming
+        self.fragments_sent     = 0
+        self.fragments_received = 0
+        self.fragment_count     = 10  # 10 big_payloads exceeds Q2
+        if self.streaming:
+            self.big_payload = ""
+            for i in range(1500):
+                self.big_payload += "0123456789"
 
         self.sender_conn       = None
         self.sender            = None
@@ -407,15 +424,22 @@ class ResendReleasedTest(MessagingHandler):
                         self.fail("released %d deliveries but there are only %d releasing receivers" % (self.n_released, len(self.release_receivers)))
                 else:
                     event.delivery.update(Delivery.RECEIVED)
-                    stuff = event.link.recv(10000)
+                    stuff = event.link.recv(20000)
+                    self.fragments_received += 1
+                    if self.fragments_sent < self.fragment_count:
+                        self.sender.stream(bytes(self.big_payload, "ascii"))
+                        self.fragments_sent += 1
+                        if self.fragments_sent == self.fragment_count:
+                            self.sender.advance()
                     if not event.delivery.partial:
                         self.accept(event.delivery)
                         event.link.advance()
                         self.n_accepted += 1
             elif event.sender == self.sender:
                 if event.delivery.remote_state == Delivery.RECEIVED:
-                    self.sender.stream(bytes("Second fragment", "ascii"))  # TODO: Stream enough to fill Q2
-                    self.sender.advance()
+                    if self.fragments_sent == 0:
+                        self.sender.stream(bytes(self.big_payload, "ascii"))
+                        self.fragments_sent = 1
 
     def on_message(self, event):
         if event.receiver == self.reply_receiver:

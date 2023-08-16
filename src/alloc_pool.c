@@ -109,6 +109,7 @@ static const char *leaking_types[] = {
 
     "qd_parsed_field_t",   // DISPATCH-1701
     "qdr_delivery_ref_t",  // DISPATCH-1702
+    "qdr_link_ref_t",
 
 #if PN_VERSION_MAJOR == 0 && PN_VERSION_MINOR == 38
     // https://issues.apache.org/jira/browse/PROTON-2658

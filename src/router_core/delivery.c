@@ -517,6 +517,12 @@ int qdr_delivery_peer_count_CT(const qdr_delivery_t *dlv)
 }
 
 
+int qdr_delivery_invalidated_path_count_CT(const qdr_delivery_t *dlv)
+{
+    return !!dlv ? (DEQ_SIZE(dlv->invalidated_links) + (!!dlv->invalidated_neighbors ? qd_bitmask_cardinality(dlv->invalidated_neighbors) : 0)) : 0;
+}
+
+
 void qdr_delivery_link_peers_CT(qdr_delivery_t *in_dlv, qdr_delivery_t *out_dlv)
 {
     // If there is no delivery or a peer, we cannot link each other.
@@ -770,6 +776,14 @@ static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *
     //
     qdr_delivery_incref(peer, "qdr_delivery_anycast_reforward_CT - add to action list");
     qdr_delivery_unlink_peers_CT(core, dlv, peer);
+
+    //
+    // If this is a streaming message, abort the outbound delivery.
+    //
+    if (qd_message_is_streaming(qdr_delivery_message(dlv))) {
+        dlv->abort_outbound = true;
+        qdr_delivery_push_CT(core, dlv);
+    }
 
     //
     // If the inbound (peer) delivery was in a list (unsettled or settled), remove it and
