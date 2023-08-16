@@ -228,12 +228,13 @@ bool qdr_terminus_has_capability(qdr_terminus_t *term, const char *capability)
 {
     size_t     cap_len = strlen(capability);
     pn_data_t *cap     = term->capabilities;
-    pn_data_rewind(cap);
-    pn_data_next(cap);
 
     if (!cap) {
         return false;
     }
+
+    pn_data_rewind(cap);
+    pn_data_next(cap);
 
     if (pn_data_type(cap) == PN_SYMBOL) {
         pn_bytes_t sym = pn_data_get_symbol(cap);
