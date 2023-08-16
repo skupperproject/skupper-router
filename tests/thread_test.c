@@ -25,12 +25,12 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #define thread_count 10
-static sys_thread_t *threads[thread_count] = {0};
-
+static sys_thread_t *threads[thread_count];
 static sys_mutex_t   mutex;
 static sys_cond_t    cond;
 
@@ -43,10 +43,7 @@ void *thread_id_thread(void *arg)
     intptr_t index = (intptr_t) arg;
     assert(index < thread_count);
 
-    char expected_name[16];
-    snprintf(expected_name, 16, "wrkr_%hu", (unsigned short) index);
-
-    sys_mutex_lock(&mutex);
+    sys_mutex_lock(&mutex);  // block until all threads have been created
 
     // check if self corresponds to my index in threads[]
     if (!sys_thread_self()) {
@@ -62,8 +59,9 @@ void *thread_id_thread(void *arg)
     return 0;
 }
 
-
-// ensure sys_thread_self is correct
+// Ensure:
+// - sys_thread_self is correct
+// - proactor thread names are unique across multiple thread instances
 //
 static char *test_thread_id(void *context)
 {
@@ -101,7 +99,7 @@ static char *test_thread_id(void *context)
     }
 
     if (result)
-        return result;
+        goto exit;
 
     //
     // test calling sys_thread_self() from the main context.  This context
@@ -110,15 +108,17 @@ static char *test_thread_id(void *context)
     sys_thread_t *main_id = sys_thread_self();
     if (!main_id) {
         result = "sys_thread_self() returned 0 for main thread";
-    } else {
-        for (int i = 0; i < thread_count; ++i) {
-            if (threads[i] == main_id) {   // must be unique!
-                result = "main thread sys_thread_self() not unique!";
-                break;
-            }
+        goto exit;
+    }
+
+    for (int i = 0; i < thread_count; ++i) {
+        if (threads[i] == main_id) {  // must be unique!
+            result = "main thread sys_thread_self() not unique!";
+            goto exit;
         }
     }
 
+exit:
     sys_mutex_free(&mutex);
     return result;
 }
