@@ -24,6 +24,7 @@
 #include "config.h"
 #include "entity.h"
 #include "entity_cache.h"
+#include "http.h"
 #include "qd_asan_interface.h"
 
 #include "qpid/dispatch/alloc.h"
@@ -500,9 +501,17 @@ void qd_alloc_initialize(void)
         desc->debug = (void *) items;
 #endif
 
+        // cycle the lock to flush the initialized desc before handing it off to other threads (avoids a spurious tsan
+        // error)
+
+        sys_mutex_lock(&desc->lock);
+        sys_mutex_unlock(&desc->lock);
+
         // now add the descriptor to the management entity database
+        // and telemetry metrics
 
         qd_entity_cache_add(QD_ALLOCATOR_TYPE, desc);
+        qd_http_add_alloc_metric(desc->type_name, desc);
     }
 
 #ifdef QD_MEMORY_DEBUG
@@ -545,6 +554,7 @@ void qd_alloc_finalize(void)
 
     for (qd_alloc_type_desc_t *desc = DEQ_HEAD(desc_list); desc; desc = DEQ_NEXT(desc)) {
         qd_entity_cache_remove(QD_ALLOCATOR_TYPE, desc);
+        qd_http_remove_alloc_metric(desc->type_name);
 
         //
         // Reclaim the items on the global free pool
@@ -672,13 +682,19 @@ QD_EXPORT qd_error_t qd_entity_refresh_allocator(qd_entity_t* entity, void *impl
     return qd_error_code();
 }
 
-qd_alloc_stats_t qd_alloc_desc_stats(qd_alloc_type_desc_t *desc)
+qd_alloc_stats_t qd_alloc_desc_stats(const qd_alloc_type_desc_t *desc)
 {
-    sys_mutex_lock(&desc->lock);
+    sys_mutex_t *lock = (sys_mutex_t *) &desc->lock;  // cast away const
+    sys_mutex_lock(lock);
     qd_alloc_stats_t stats = desc->stats;
-    sys_mutex_unlock(&desc->lock);
+    sys_mutex_unlock(lock);
 
     return stats;
+}
+
+size_t qd_alloc_type_size(const qd_alloc_type_desc_t *desc)
+{
+    return desc->total_size;
 }
 
 void qd_alloc_debug_dump(const char *file) {

@@ -20,15 +20,19 @@ import errno
 import os
 import threading
 import ssl
-from subprocess import PIPE, STDOUT
 
 from urllib.request import urlopen, build_opener, HTTPSHandler
 from urllib.error import HTTPError, URLError
 
 import skupper_router_site
-from system_test import TIMEOUT, Process, QdManager, retry
+from system_test import Process, QdManager, retry
 from system_test import TestCase, Qdrouterd, main_module, DIR
 from system_test import unittest
+
+#
+# Note: these tests exercise the management interface accessed via HTTP. These
+# tests have nothing to do with the HTTP adaptors!
+#
 
 
 class RouterTestHttp(TestCase):
@@ -60,18 +64,6 @@ class RouterTestHttp(TestCase):
         context.load_verify_locations(cls.ssl_file('ca-certificate.pem'))
         opener = build_opener(HTTPSHandler(context=context))
         return opener.open(url).read().decode('utf-8')
-
-    def run_skmanage(self, cmd, input=None, expect=Process.EXIT_OK, address=None):
-        p = self.popen(
-            ['skmanage'] + cmd.split(' ') + ['--bus', address or self.address(), '--indent=-1', '--timeout', str(TIMEOUT)],
-            stdin=PIPE, stdout=PIPE, stderr=STDOUT, expect=expect,
-            universal_newlines=True)
-        out = p.communicate(input)[0]
-        try:
-            p.teardown()
-        except Exception as e:
-            raise Exception(out if out else str(e))
-        return out
 
     def assert_get(self, url):
         self.assertEqual('HTTP test\n', self.get("%s/system_tests_http.txt" % url))
@@ -202,26 +194,62 @@ class RouterTestHttp(TestCase):
         self.assertRaises(URLError, urlopen, "https://localhost:%d/nosuch" % r.ports[0])
 
     def test_http_metrics(self):
+        """ Verify the prometheus metrics provided by the router """
+        metrics_ports = [self.get_port(), self.get_port()]
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.METRICS'}),
-            ('listener', {'port': self.get_port(), 'http': 'yes'}),
-            ('listener', {'port': self.get_port(), 'httpRootDir': os.path.dirname(__file__)}),
+            ('listener', {'role': 'normal', 'port': self.get_port()}),
+            ('listener', {'port': metrics_ports[0], 'http': 'yes'}),
+            ('listener', {'port': metrics_ports[1], 'httpRootDir': os.path.dirname(__file__)}),
         ])
         r = self.qdrouterd('metrics-test-router', config)
 
-        def test(port):
-            result = urlopen("http://localhost:%d/metrics" % port, cafile=self.ssl_file('ca-certificate.pem'))
-            self.assertEqual(200, result.getcode())
-            data = result.read().decode('utf-8')
-            assert 'connections' in data
-            assert 'deliveries_ingress' in data
-            assert 'deliveries_delayed_1sec' in data
-            assert 'deliveries_delayed_10sec' in data
-            assert 'deliveries_redirected_to_fallback' in data
+        # generate a list of all metric names expected to be provided via HTTP:
+
+        stat_names = ["qdr_connections_total", "qdr_links_total",
+                      "qdr_addresses_total", "qdr_routers_total",
+                      "qdr_auto_links_total",
+                      "qdr_presettled_deliveries_total",
+                      "qdr_dropped_presettled_deliveries_total",
+                      "qdr_accepted_deliveries_total",
+                      "qdr_released_deliveries_total",
+                      "qdr_rejected_deliveries_total",
+                      "qdr_modified_deliveries_total",
+                      "qdr_deliveries_ingress_total",
+                      "qdr_deliveries_egress_total",
+                      "qdr_deliveries_transit_total",
+                      "qdr_deliveries_ingress_route_container_total",
+                      "qdr_deliveries_egress_route_container_total",
+                      "qdr_deliveries_delayed_1sec_total",
+                      "qdr_deliveries_delayed_10sec_total",
+                      "qdr_deliveries_stuck_total",
+                      "qdr_links_blocked_total",
+                      "qdr_deliveries_redirected_to_fallback_total"]
+        for stat in r.management.query(type="io.skupper.router.allocator").get_dicts():
+            stat_names.append(stat['typeName'])
+
+        def _test(stat_names, port):
+            # sanity check that all expected stats are reported
+            resp = urlopen(f"http://localhost:{port}/metrics", cafile=self.ssl_file('ca-certificate.pem'))
+            self.assertEqual(200, resp.getcode())
+            metrics = [x for x in resp.read().decode('utf-8').splitlines() if not x.startswith("#")]
+
+            # Verify that all expected stats are reported by the metrics URL
+
+            for name in stat_names:
+                found = False
+                for metric in metrics:
+                    # remove the counter and strip the allocator name suffix
+                    # (if present)
+                    mname = metric.strip().split()[0].split(':')[0]
+                    if mname == name:
+                        found = True
+                        break
+                self.assertTrue(found, f"Did not find {name} in returned metrics!")
 
         # Sequential calls on multiple ports
-        for port in r.ports:
-            test(port)
+        for port in metrics_ports:
+            _test(stat_names, port)
 
         # Concurrent calls on multiple ports
         class TestThread(threading.Thread):
@@ -232,10 +260,11 @@ class RouterTestHttp(TestCase):
 
             def run(self):
                 try:
-                    test(self.port)
+                    _test(stat_names, self.port)
                 except Exception as e:
                     self.ex = e
-        threads = [TestThread(p) for p in r.ports + r.ports]
+
+        threads = [TestThread(p) for p in metrics_ports * 4]
         for t in threads:
             t.join()
         for t in threads:
