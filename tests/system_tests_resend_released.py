@@ -298,16 +298,27 @@ class RouterTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_421_accept_many_high_cost_balanced_stream_from_edge(self):
+        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.intb, self.ea2, self.ea2, self.eb2, self.eb2], [self.intd], 'resrel.421', 7, 3, 2, True, query_host=self.inta)
+        test.run()
+        self.assertIsNone(test.error)
+
     def test_430_accept_many_high_cost_closest_stream(self):
         test = ResendReleasedTest(self.inta, [self.inta, self.inta, self.intb, self.ea1, self.ea2, self.eb2, self.eb2], [self.intd], 'cl.resrel.430', 7, 4, 2, True)
         test.run()
         self.assertIsNone(test.error)
 
+    def test_431_accept_many_high_cost_closest_stream_from_edge(self):
+        test = ResendReleasedTest(self.ea1, [self.inta, self.inta, self.intb, self.ea2, self.ea2, self.eb2, self.eb2], [self.intd], 'cl.resrel.431', 7, 3, 2, True, query_host=self.inta)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class ResendReleasedTest(MessagingHandler):
-    def __init__(self, sender_host, release_hosts, accept_hosts, addr, expected_releases=None, wait_local=0, wait_remote=0, streaming=False):
+    def __init__(self, sender_host, release_hosts, accept_hosts, addr, expected_releases=None, wait_local=0, wait_remote=0, streaming=False, query_host=None):
         super(ResendReleasedTest, self).__init__(auto_accept=False)
         self.sender_host        = sender_host
+        self.query_host         = query_host or sender_host
         self.release_hosts      = release_hosts
         self.accept_hosts       = accept_hosts
         self.addr               = addr
@@ -323,6 +334,7 @@ class ResendReleasedTest(MessagingHandler):
             for i in range(1500):
                 self.big_payload += "0123456789"
 
+        self.query_conn        = None
         self.sender_conn       = None
         self.sender            = None
         self.release_conns     = []
@@ -339,6 +351,7 @@ class ResendReleasedTest(MessagingHandler):
 
     def timeout(self):
         self.error = "Timeout Expired - n_receivers=%d, n_released=%d, n_accepted=%d, n_sent=%d" % (self.n_receivers, self.n_released, self.n_accepted, self.n_sent)
+        self.query_conn.close()
         self.sender_conn.close()
         for conn in self.release_conns:
             conn.close()
@@ -349,6 +362,7 @@ class ResendReleasedTest(MessagingHandler):
 
     def fail(self, error):
         self.error = error
+        self.query_conn.close()
         self.sender_conn.close()
         for conn in self.release_conns:
             conn.close()
@@ -361,6 +375,7 @@ class ResendReleasedTest(MessagingHandler):
     def on_start(self, event):
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
         self.proxy = None
+        self.query_conn  = event.container.connect(self.query_host)
         self.sender_conn = event.container.connect(self.sender_host)
 
         for host in self.release_hosts:
@@ -368,8 +383,8 @@ class ResendReleasedTest(MessagingHandler):
         for host in self.accept_hosts:
             self.accept_conns.append(event.container.connect(host, offered_capabilities=symbol("qd.streaming-links")))
 
-        self.query_sender = event.container.create_sender(self.sender_conn, "$management")
-        self.reply_receiver = event.container.create_receiver(self.sender_conn, None, dynamic=True)
+        self.query_sender = event.container.create_sender(self.query_conn, "$management")
+        self.reply_receiver = event.container.create_receiver(self.query_conn, None, dynamic=True)
 
     def on_link_opened(self, event):
         if event.receiver == self.reply_receiver:
