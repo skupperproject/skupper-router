@@ -1511,7 +1511,7 @@ static qd_tcp_adaptor_config_t *qd_tcp_adaptor_config(void)
 
 static void log_tcp_adaptor_config(qd_tcp_adaptor_config_t *c, const char *what)
 {
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Configured %s for %s, %s:%s", what, c->adaptor_config->address,
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Configured %s (legacy encap) for %s, %s:%s", what, c->adaptor_config->address,
            c->adaptor_config->host, c->adaptor_config->port);
 }
 
@@ -1559,7 +1559,7 @@ static qd_error_t qd_load_tcp_adaptor_config(qd_tcp_adaptor_config_t *config, qd
 
 
 // Note well: called from the management thread
-QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+qd_tcp_listener_t *qd_dispatch_configure_tcp_listener_legacy(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_tcp_listener_t *li = qd_tcp_listener(qd->server);
     if (qd_load_tcp_adaptor_config(li->config, entity) != QD_ERROR_NONE) {
@@ -1606,9 +1606,8 @@ QD_EXPORT qd_tcp_listener_t *qd_dispatch_configure_tcp_listener(qd_dispatch_t *q
 
 
 // Note: this runs on the management thread
-QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+void qd_dispatch_delete_tcp_listener_legacy(qd_dispatch_t *qd, qd_tcp_listener_t *li)
 {
-    qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
     if (li) {
 
         sys_mutex_lock(&tcp_adaptor->listener_lock);
@@ -1625,10 +1624,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
     }
 }
 
-QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+qd_error_t qd_entity_refresh_tcpListener_legacy(qd_entity_t* entity, qd_tcp_listener_t *listener)
 {
-    qd_tcp_listener_t *listener = (qd_tcp_listener_t*)impl;
-
     LOCK(&listener->tcp_stats->stats_lock);
     uint64_t bi = listener->tcp_stats->bytes_in;
     uint64_t bo = listener->tcp_stats->bytes_out;
@@ -1683,7 +1680,7 @@ static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
 }
 
 
-QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+qd_tcp_connector_t *qd_dispatch_configure_tcp_connector_legacy(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_tcp_connector_t *c = qd_tcp_connector(qd->server);
     if (qd_load_tcp_adaptor_config(c->config, entity) != QD_ERROR_NONE) {
@@ -1721,9 +1718,8 @@ QD_EXPORT qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t 
     return c;
 }
 
-QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+void qd_dispatch_delete_tcp_connector_legacy(qd_dispatch_t *qd, qd_tcp_connector_t *ct)
 {
-    qd_tcp_connector_t *ct = (qd_tcp_connector_t*) impl;
     if (ct) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Deleted TcpConnector for %s, %s:%s",
                ct->config->adaptor_config->address, ct->config->adaptor_config->host, ct->config->adaptor_config->port);
@@ -1737,10 +1733,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
     }
 }
 
-QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+qd_error_t qd_entity_refresh_tcpConnector_legacy(qd_entity_t* entity, qd_tcp_connector_t *connector)
 {
-    qd_tcp_connector_t *connector = (qd_tcp_connector_t*)impl;
-
     LOCK(&connector->tcp_stats->stats_lock);
     uint64_t bi = connector->tcp_stats->bytes_in;
     uint64_t bo = connector->tcp_stats->bytes_out;

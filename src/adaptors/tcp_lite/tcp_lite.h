@@ -146,4 +146,13 @@ typedef struct tcplite_connection_t {
     bool                        outbound_body_complete;
 } tcplite_connection_t;
 
+
+tcplite_listener_t *qd_dispatch_configure_tcp_listener_lite(qd_dispatch_t *qd, qd_entity_t *entity);
+void                qd_dispatch_delete_tcp_listener_lite(qd_dispatch_t *qd, tcplite_listener_t *li);
+qd_error_t          qd_entity_refresh_tcpListener_lite(qd_entity_t* entity, tcplite_listener_t *LSIDE_LINK_SETUP);
+
+tcplite_connector_t *qd_dispatch_configure_tcp_connector_lite(qd_dispatch_t *qd, qd_entity_t *entity);
+void                 qd_dispatch_delete_tcp_connector_lite(qd_dispatch_t *qd, tcplite_connector_t *co);
+qd_error_t           qd_entity_refresh_tcpConnector_lite(qd_entity_t* entity, tcplite_connector_t *co);
+
 #endif

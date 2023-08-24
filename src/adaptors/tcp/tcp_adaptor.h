@@ -107,4 +107,13 @@ void qdra_tcp_connection_get_CT(qdr_core_t          *core,
 #define QDR_TCP_CONNECTION_COLUMN_COUNT 10
 extern const char *qdr_tcp_connection_columns[QDR_TCP_CONNECTION_COLUMN_COUNT + 1];
 
+qd_tcp_listener_t *qd_dispatch_configure_tcp_listener_legacy(qd_dispatch_t *qd, qd_entity_t *entity);
+void               qd_dispatch_delete_tcp_listener_legacy(qd_dispatch_t *qd, qd_tcp_listener_t *impl);
+qd_error_t         qd_entity_refresh_tcpListener_legacy(qd_entity_t* entity, qd_tcp_listener_t *impl);
+
+qd_tcp_connector_t *qd_dispatch_configure_tcp_connector_legacy(qd_dispatch_t *qd, qd_entity_t *entity);
+void                qd_dispatch_delete_tcp_connector_legacy(qd_dispatch_t *qd, qd_tcp_connector_t *impl);
+qd_error_t          qd_entity_refresh_tcpConnector_legacy(qd_entity_t* entity, qd_tcp_connector_t *impl);
+
+
 #endif

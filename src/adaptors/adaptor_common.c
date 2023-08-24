@@ -18,6 +18,8 @@
  */
 #include "adaptor_common.h"
 #include "adaptor_buffer.h"
+#include "tcp_lite/tcp_lite.h"
+#include "tcp/tcp_adaptor.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/connection_manager.h"
@@ -303,3 +305,138 @@ void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_
         vflow_set_string(vflow, VFLOW_ATTRIBUTE_SOURCE_PORT, remote_port);
     }
 }
+
+
+typedef enum {
+    ENCAP_LEGACY,
+    ENCAP_LITE
+} encapsulation_t;
+
+typedef struct {
+    encapsulation_t encap;
+    union {
+        tcplite_listener_t *lite_listener;
+        qd_tcp_listener_t  *legacy_listener;
+        void               *generic;
+    } ptr;
+} tcp_listener_t;
+
+typedef struct {
+    encapsulation_t encap;
+    union {
+        tcplite_connector_t *lite_connector;
+        qd_tcp_connector_t  *legacy_connector;
+        void                *generic;
+    } ptr;
+} tcp_connector_t;
+
+
+QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    tcp_listener_t *li = NEW(tcp_listener_t);
+
+    if (strcmp(qd_entity_opt_string(entity, "encapsulation", ""), "lite") == 0) {
+        li->encap = ENCAP_LITE;
+        li->ptr.lite_listener = qd_dispatch_configure_tcp_listener_lite(qd, entity);
+    } else {
+        li->encap = ENCAP_LEGACY;
+        li->ptr.legacy_listener = qd_dispatch_configure_tcp_listener_legacy(qd, entity);
+    }
+
+    if (li->ptr.generic == 0) {
+        free(li);
+        li = 0;
+    }
+
+    return li;
+}
+
+
+QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+{
+    tcp_listener_t *li = (tcp_listener_t*) impl;
+
+    switch (li->encap) {
+    case ENCAP_LEGACY:
+        qd_dispatch_delete_tcp_listener_legacy(qd, li->ptr.legacy_listener);
+        break;
+
+    case ENCAP_LITE:
+        qd_dispatch_delete_tcp_listener_lite(qd, li->ptr.lite_listener);
+        break;
+    }
+
+    free(li);
+}
+
+
+QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+{
+    tcp_listener_t *li = (tcp_listener_t*) impl;
+
+    switch (li->encap) {
+    case ENCAP_LEGACY:
+        return qd_entity_refresh_tcpListener_legacy(entity, li->ptr.legacy_listener);
+
+    case ENCAP_LITE:
+        return qd_entity_refresh_tcpListener_lite(entity, li->ptr.lite_listener);
+    }
+
+    return QD_ERROR_NOT_FOUND;
+}
+
+
+QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    tcp_connector_t *co = NEW(tcp_connector_t);
+
+    if (strcmp(qd_entity_opt_string(entity, "encapsulation", ""), "lite") == 0) {
+        co->encap = ENCAP_LITE;
+        co->ptr.lite_connector = qd_dispatch_configure_tcp_connector_lite(qd, entity);
+    } else {
+        co->encap = ENCAP_LEGACY;
+        co->ptr.legacy_connector = qd_dispatch_configure_tcp_connector_legacy(qd, entity);
+    }
+
+    if (co->ptr.generic == 0) {
+        free(co);
+        co = 0;
+    }
+
+    return co;
+}
+
+
+QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+{
+    tcp_connector_t *co = (tcp_connector_t*) impl;
+
+    switch (co->encap) {
+    case ENCAP_LEGACY:
+        qd_dispatch_delete_tcp_connector_legacy(qd, co->ptr.legacy_connector);
+        break;
+
+    case ENCAP_LITE:
+        qd_dispatch_delete_tcp_connector_lite(qd, co->ptr.lite_connector);
+        break;
+    }
+
+    free(co);
+}
+
+
+QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+{
+    tcp_connector_t *co = (tcp_connector_t*) impl;
+
+    switch (co->encap) {
+    case ENCAP_LEGACY:
+        return qd_entity_refresh_tcpConnector_legacy(entity, co->ptr.legacy_connector);
+
+    case ENCAP_LITE:
+        return qd_entity_refresh_tcpConnector_lite(entity, co->ptr.lite_connector);
+    }
+
+    return QD_ERROR_NOT_FOUND;
+}
+
