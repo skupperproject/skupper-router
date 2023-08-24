@@ -1581,9 +1581,9 @@ static void CORE_connection_trace(void *context, qdr_connection_t *conn, bool tr
 //=================================================================================
 #define TCP_NUM_ALPN_PROTOCOLS 2
 // const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
-const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"http/1.1", "h2"};
+static const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"http/1.1", "h2"};
 
-QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+tcplite_listener_t *qd_dispatch_configure_tcp_listener_lite(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     SET_THREAD_UNKNOWN;
     tcplite_listener_t *li = new_tcplite_listener_t();
@@ -1609,7 +1609,7 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
     }
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
-            "Configured TcpListener for %s, %s:%s",
+            "Configured TcpListener (lite encap) for %s, %s:%s",
             li->adaptor_config->address, li->adaptor_config->host, li->adaptor_config->port);
 
     li->activate_timer = qd_timer(tcplite_context->qd, on_core_activate_TIMER_IO, li);
@@ -1626,10 +1626,9 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
 }
 
 
-QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+void qd_dispatch_delete_tcp_listener_lite(qd_dispatch_t *qd, tcplite_listener_t *li)
 {
     SET_THREAD_UNKNOWN;
-    tcplite_listener_t *li = (tcplite_listener_t*) impl;
     if (li) {
         li->closing = true;
 
@@ -1657,10 +1656,9 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 }
 
 
-QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+qd_error_t qd_entity_refresh_tcpListener_lite(qd_entity_t* entity, tcplite_listener_t *li)
 {
     SET_THREAD_UNKNOWN;
-    tcplite_listener_t *li = (tcplite_listener_t*) impl;
     uint64_t co = 0;
     uint64_t cc = 0;
     qd_listener_oper_status_t os = QD_LISTENER_OPER_DOWN;
@@ -1686,7 +1684,7 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
 }
 
 
-QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+tcplite_connector_t *qd_dispatch_configure_tcp_connector_lite(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     SET_THREAD_UNKNOWN;
     tcplite_connector_t *cr = new_tcplite_connector_t();
@@ -1714,7 +1712,7 @@ QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity
     sys_mutex_init(&cr->lock);
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
-            "Configured TcpConnector for %s, %s:%s",
+            "Configured TcpConnector (lite encap) for %s, %s:%s",
             cr->adaptor_config->address, cr->adaptor_config->host, cr->adaptor_config->port);
 
     DEQ_INSERT_TAIL(tcplite_context->connectors, cr);
@@ -1725,10 +1723,9 @@ QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity
 }
 
 
-QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+void qd_dispatch_delete_tcp_connector_lite(qd_dispatch_t *qd, tcplite_connector_t *cr)
 {
     SET_THREAD_UNKNOWN;
-    tcplite_connector_t *cr = (tcplite_connector_t*) impl;
     if (cr) {
         cr->closing = true;
 
@@ -1750,10 +1747,9 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
 }
 
 
-QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+qd_error_t qd_entity_refresh_tcpConnector_lite(qd_entity_t* entity, tcplite_connector_t *cr)
 {
     SET_THREAD_UNKNOWN;
-    tcplite_connector_t *cr = (tcplite_connector_t*) impl;
 
     sys_mutex_lock(&cr->lock);
     uint64_t co = cr->connections_opened;
@@ -1840,12 +1836,12 @@ static void ADAPTOR_final(void *adaptor_context)
 
     while (DEQ_HEAD(tcplite_context->connectors)) {
         tcplite_connector_t *cr   = DEQ_HEAD(tcplite_context->connectors);
-        qd_dispatch_delete_tcp_connector(tcplite_context->qd, cr);
+        qd_dispatch_delete_tcp_connector_lite(tcplite_context->qd, cr);
     }
 
     while (DEQ_HEAD(tcplite_context->listeners)) {
         tcplite_listener_t *li   = DEQ_HEAD(tcplite_context->listeners);
-        qd_dispatch_delete_tcp_listener(tcplite_context->qd, li);
+        qd_dispatch_delete_tcp_listener_lite(tcplite_context->qd, li);
     }
 
     qdr_protocol_adaptor_free(tcplite_context->core, tcplite_context->pa);
