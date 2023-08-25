@@ -334,8 +334,9 @@ typedef struct {
 QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     tcp_listener_t *li = NEW(tcp_listener_t);
+    char *encap = qd_entity_opt_string(entity, "encapsulation", "");
 
-    if (strcmp(qd_entity_opt_string(entity, "encapsulation", ""), "lite") == 0) {
+    if (strcmp(encap, "lite") == 0) {
         li->encap = ENCAP_LITE;
         li->ptr.lite_listener = qd_dispatch_configure_tcp_listener_lite(qd, entity);
     } else {
@@ -343,6 +344,7 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
         li->ptr.legacy_listener = qd_dispatch_configure_tcp_listener_legacy(qd, entity);
     }
 
+    free(encap);
     if (li->ptr.generic == 0) {
         free(li);
         li = 0;
@@ -389,8 +391,9 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
 QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     tcp_connector_t *co = NEW(tcp_connector_t);
+    char *encap = qd_entity_opt_string(entity, "encapsulation", "");
 
-    if (strcmp(qd_entity_opt_string(entity, "encapsulation", ""), "lite") == 0) {
+    if (strcmp(encap, "lite") == 0) {
         co->encap = ENCAP_LITE;
         co->ptr.lite_connector = qd_dispatch_configure_tcp_connector_lite(qd, entity);
     } else {
@@ -398,6 +401,7 @@ QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity
         co->ptr.legacy_connector = qd_dispatch_configure_tcp_connector_legacy(qd, entity);
     }
 
+    free(encap);
     if (co->ptr.generic == 0) {
         free(co);
         co = 0;
