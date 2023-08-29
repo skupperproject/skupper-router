@@ -275,13 +275,11 @@ static void drain_read_buffers_XSIDE_IO(pn_raw_connection_t *raw_conn)
     ASSERT_RAW_IO;
     pn_raw_buffer_t  raw_buffers[RAW_BUFFER_BATCH_SIZE];
     size_t           count;
-    size_t           drained = 0;
 
     while ((count = pn_raw_connection_take_read_buffers(raw_conn, raw_buffers, RAW_BUFFER_BATCH_SIZE))) {
         for (size_t i = 0; i < count; i++) {
             qd_buffer_t *buf = (qd_buffer_t*) raw_buffers[i].context;
             qd_buffer_free(buf);
-            drained++;
         }
     }
 }
@@ -292,7 +290,6 @@ static void drain_write_buffers_XSIDE_IO(pn_raw_connection_t *raw_conn)
     ASSERT_RAW_IO;
     pn_raw_buffer_t  raw_buffers[RAW_BUFFER_BATCH_SIZE];
     size_t           count;
-    size_t           drained = 0;
 
     while ((count = pn_raw_connection_take_written_buffers(raw_conn, raw_buffers, RAW_BUFFER_BATCH_SIZE))) {
         for (size_t i = 0; i < count; i++) {
@@ -300,7 +297,6 @@ static void drain_write_buffers_XSIDE_IO(pn_raw_connection_t *raw_conn)
             if (!!buf) {
                 qd_buffer_free(buf);
             }
-            drained++;
         }
     }
 }
