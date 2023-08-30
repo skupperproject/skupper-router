@@ -285,14 +285,14 @@ class TcpAdaptorBase(TestCase):
     echo_server_NS_CONN_STALL = None
 
     @classmethod
-    def setUpClass(cls, test_ssl=False):
+    def setUpClass(cls, test_ssl=False, encap="legacy"):
         """Start a router"""
         super(TcpAdaptorBase, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
-        def router(name, mode, connection, extra=None, ssl=False):
+        def router(name, mode, connection, extra=None, ssl=False, encapsulation="legacy"):
             """
             Launch a router through the system_test framework.
             For each router:
@@ -304,8 +304,10 @@ class TcpAdaptorBase(TestCase):
             :param name: router name
             :param mode: router mode: interior or edge
             :param connection: list of router-level connection/listener tuples
+            :param encapsulation: do we use the tcp legacy or the tcp_lite adaptor.
             :param extra: yet more configuation tuples. unused for now
             :param ssl: use an sslProfile on the connectors and listeners.
+
             :return:
             """
             tcp_listener_ssl_profile_name = 'tcp-listener-ssl-profile'
@@ -314,18 +316,21 @@ class TcpAdaptorBase(TestCase):
                                   'port': cls.nodest_listener_ports[name],
                                   'address': 'nodest',
                                   'sslProfile': tcp_listener_ssl_profile_name,
+                                  'encapsulation': encapsulation,
                                   'siteId': cls.site}
 
                 listener_props_balanced = {'host': "localhost",
                                            'port': cls.balanced_listener_ports[name],
                                            'address': 'ES_ALL',
                                            'sslProfile': tcp_listener_ssl_profile_name,
+                                           'encapsulation': encapsulation,
                                            'siteId': cls.site}
 
                 connector_props_direct = {'host': "localhost",
                                           'port': cls.tcp_server_listener_ports[name],
                                           'address': 'ES_' + name,
                                           'sslProfile': 'tcp-connector-ssl-profile',
+                                          'encapsulation': encapsulation,
                                           'siteId': cls.site}
 
                 connector_props_balanced = {'name': "balanced",
@@ -333,27 +338,32 @@ class TcpAdaptorBase(TestCase):
                                             'port': cls.tcp_server_listener_ports[name],
                                             'address': 'ES_ALL',
                                             'sslProfile': 'tcp-connector-ssl-profile',
+                                            'encapsulation': encapsulation,
                                             'siteId': cls.site}
             else:
                 listener_props = {'host': "0.0.0.0",
                                   'port': cls.nodest_listener_ports[name],
                                   'address': 'nodest',
+                                  'encapsulation': encapsulation,
                                   'siteId': cls.site}
 
                 listener_props_balanced = {'host': "0.0.0.0",
                                            'port': cls.balanced_listener_ports[name],
                                            'address': 'ES_ALL',
+                                           'encapsulation': encapsulation,
                                            'siteId': cls.site}
 
                 connector_props_direct = {'host': "127.0.0.1",
                                           'port': cls.tcp_server_listener_ports[name],
                                           'address': 'ES_' + name,
+                                          'encapsulation': encapsulation,
                                           'siteId': cls.site}
 
                 connector_props_balanced = {'name': "balanced",
                                             'host': "127.0.0.1",
                                             'port': cls.tcp_server_listener_ports[name],
                                             'address': 'ES_ALL',
+                                            'encapsulation': encapsulation,
                                             'siteId': cls.site}
             if mode == "interior":
                 router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4'}
@@ -385,6 +395,7 @@ class TcpAdaptorBase(TestCase):
                 listener = {'host': "localhost",
                             'port': cls.tcp_client_listener_ports[name][rtr],
                             'address': 'ES_' + rtr,
+                            'encapsulation': encapsulation,
                             'siteId': cls.site}
                 if ssl:
                     listener['sslProfile'] = tcp_listener_ssl_profile_name
@@ -400,7 +411,7 @@ class TcpAdaptorBase(TestCase):
 
         cls.routers = []
         cls.test_ssl = test_ssl
-
+        cls.encapsulation = encap
         # define logging levels. Set the following two flags to True
         # if you want to see copious logging from the echo client and echo server
         ###################################################################
@@ -480,7 +491,7 @@ class TcpAdaptorBase(TestCase):
         int_a_config = [('listener', {'role': 'inter-router', 'port': inter_router_port_AB}),
                         ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port}),
                         ('tcpListener', {'host': "0.0.0.0", 'port': cls.INTA_conn_stall_listener_port,
-                                         'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})]
+                                         'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation, 'siteId': cls.site})]
 
         if cls.test_ssl:
             # This listener will be used to test the authenticatePeer functionality.
@@ -490,41 +501,51 @@ class TcpAdaptorBase(TestCase):
                                   'sslProfile': 'tcp-listener-ssl-profile',
                                   'authenticatePeer': 'yes',
                                   'address': 'ES_INTA',
+                                  'encapsulation': cls.encapsulation,
                                   'siteId': cls.site}))
 
         # Launch the routers using the sea of router ports
         cls.logger.log("TCP_TEST Launching interior routers")
-        router('INTA', 'interior', int_a_config, ssl=cls.test_ssl)
+        router('INTA', 'interior', int_a_config, ssl=cls.test_ssl, encapsulation=cls.encapsulation)
         inter_router_port_BC = cls.tester.get_port()
         cls.INTB_edge_port = cls.tester.get_port()
         router('INTB', 'interior',
                [('connector', {'role': 'inter-router', 'port': inter_router_port_AB}),
                 ('listener', {'role': 'inter-router', 'port': inter_router_port_BC}),
-                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
+                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
 
         cls.INTC_edge_port = cls.tester.get_port()
         router('INTC', 'interior',
                [('connector', {'role': 'inter-router', 'port': inter_router_port_BC}),
-                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
+                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
 
         cls.logger.log("TCP_TEST Launching edge routers")
         router('EA1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
         router('EA2', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
         router('EB1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
         router('EB2', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
         router('EC1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl,
+               encapsulation=cls.encapsulation)
         cls.EC2_conn_stall_listener_port = cls.tester.get_port()
         router('EC2', 'edge',
                [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port}),
                 ('tcpConnector', {'host': "127.0.0.1", 'port': cls.EC2_conn_stall_connector_port,
-                                  'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site}),
+                                  'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation,
+                                  'siteId': cls.site}),
                 ('tcpListener', {'host': "0.0.0.0", 'port': cls.EC2_conn_stall_listener_port,
-                                 'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})], ssl=cls.test_ssl)
+                                 'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})],
+               ssl=cls.test_ssl, encapsulation=cls.encapsulation)
 
         cls.INTA = cls.routers[0]
         cls.INTB = cls.routers[1]
@@ -1310,7 +1331,9 @@ class CommonTcpTests:
             # egress_dispatcher connection opens and should never close
             if ncat_available():
                 # See the comments in test_20_tcp_connect_disconnect()
-                self.assertIn(output["connectionsOpened"], (output["connectionsClosed"] + 1, output["connectionsClosed"] + 2))
+                self.assertIn(output["connectionsOpened"], (output["connectionsClosed"],
+                                                            output["connectionsClosed"] + 1,
+                                                            output["connectionsClosed"] + 2))
             assert output["bytesIn"] == output["bytesOut"]
         self.logger.log(tname + " SUCCESS")
 
@@ -1319,6 +1342,11 @@ class TcpAdaptor(TcpAdaptorBase, CommonTcpTests):
     @classmethod
     def setUpClass(cls):
         super(TcpAdaptor, cls).setUpClass(test_ssl=False)
+
+class TcpAdaptorLite(TcpAdaptorBase, CommonTcpTests):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorLite, cls).setUpClass(test_ssl=False, encap="lite")
 
 
 class TcpAdaptorStuckDeliveryTest(TestCase):
