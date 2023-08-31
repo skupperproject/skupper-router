@@ -646,8 +646,12 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
                "[C%" PRIu64 "][L%" PRIu64 "] handle_disconnected - close out_dlv_stream", conn->conn_id,
                conn->outgoing_link_id);
 
-        // PN_ACCEPTED: since there is an out_dlv_stream TCP data was transferred
-        qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream, PN_ACCEPTED, true, 0, false);
+        // PN_ACCEPTED if clean eos occurs, PN_MODIFIED for error like TLS failure so the upstream remote is updated
+        // correctly:
+        qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream,
+                                          conn->read_eos_seen ? PN_ACCEPTED : PN_MODIFIED,
+                                          true, // settled
+                                          0, false);
         qdr_delivery_decref(tcp_adaptor->core, conn->out_dlv_stream, "tcp-adaptor.handle_disconnected - out_dlv_stream");
         conn->out_dlv_stream = 0;
     }
