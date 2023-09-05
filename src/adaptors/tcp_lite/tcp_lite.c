@@ -1512,6 +1512,7 @@ static uint64_t CORE_deliver_outbound(void *context, qdr_link_t *link, qdr_deliv
 
     if (common->context_type == TL_CONNECTOR) {
         handle_first_outbound_delivery_CSIDE((tcplite_connector_t*) common, link, delivery);
+        return QD_DELIVERY_MOVED_TO_NEW_LINK;
     } else if (common->context_type == TL_CONNECTION) {
         tcplite_connection_t *conn = (tcplite_connection_t*) common;
         if (conn->listener_side) {
