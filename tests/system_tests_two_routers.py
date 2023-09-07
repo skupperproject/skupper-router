@@ -1617,9 +1617,6 @@ class StreamingLinkScrubberTest(TestCase):
                                'port': inter_router_port})])
         cls.RouterB = cls.routers[-1]
         cls.RouterB.listener = cls.RouterB.addresses[0]
-
-
-
         cls.RouterA.wait_router_connected('RouterB')
         cls.RouterB.wait_router_connected('RouterA')
 

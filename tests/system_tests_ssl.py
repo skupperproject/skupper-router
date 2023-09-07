@@ -580,6 +580,7 @@ class RouterTestSslInterRouter(RouterTestSslBase):
             self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
             self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
 
+        router = None
         for version, router in self.routers_any.items():
             router.wait_router_connected("QDR.A")
             conns = retry(lambda mgmt=router.management: _get_ssl_conns(mgmt))
@@ -781,7 +782,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
         router_nodes = self.get_router_nodes()
         self.assertTrue(router_nodes)
         node = "QDR.B"
-        self.assertNotIn(node, router_nodes, msg=("%s should not be connected" % node))
+        self.assertNotIn(node, router_nodes, msg="%s should not be connected" % node)
 
 
 class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterTestSslBase):
@@ -916,7 +917,7 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
         router_nodes = self.get_router_nodes()
         self.assertTrue(router_nodes)
         node = "QDR.B"
-        self.assertNotIn(node, router_nodes, msg=("%s should not be connected" % node))
+        self.assertNotIn(node, router_nodes, msg="%s should not be connected" % node)
 
 
 if __name__ == '__main__':

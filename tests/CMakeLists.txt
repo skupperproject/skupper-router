@@ -192,50 +192,20 @@ endforeach()
 # Place .coveragerc where coverage.py will find it when running system_tests
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.coveragerc ${CMAKE_CURRENT_BINARY_DIR}/.coveragerc COPYONLY)
 
-# Location of tox.ini determines the testroot directory for Pytest
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tox.ini.in ${CMAKE_CURRENT_BINARY_DIR}/tox.ini)
-# Use tox to run the flake8 python linter tool on all the python
-# sources. Highly recommended if you're hacking the python code.
-# Unfortunately this can only be done for versions of tox >= 1.9.0
-# since that version allows us to skip the install step (we have
-# no modules thus no setup.py)
-#
-find_program(TOX_EXE "tox")
-if (TOX_EXE)
-  # the "skip_install" feature showed up in version 1.9.0 tox,
-  # which is used by our tox.ini script:
-  set(TOX_MIN_VERSION 1.9.0)
-  execute_process(COMMAND "${TOX_EXE}" "--version"
-                  RESULT_VARIABLE TOX_STATUS
-                  OUTPUT_VARIABLE TOX_VERSION)
-  if (TOX_STATUS EQUAL 0)
-    string(STRIP "${TOX_VERSION}" TOX_VERSION)
-    string(REGEX MATCH "^[0-9]+[.][0-9]+[.][0-9]+" TOX_VERSION "${TOX_VERSION}")
-    if (TOX_VERSION STRLESS TOX_MIN_VERSION)
-      message( STATUS "tox version ${TOX_VERSION} < required version ${TOX_MIN_VERSION} - skipping python-checker")
-    else (TOX_VERSION STRLESS TOX_MIN_VERSION)
-      add_test (NAME python-checker
-                COMMAND ${TOX_EXE}
-                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-      # Once we move to tox >= v1.7.2 we can remove the next
-      # line.  See tox.ini file for details
-      set_tests_properties(python-checker
-                           PROPERTIES
-                           PASS_REGULAR_EXPRESSION "commands succeeded"
-                           FAIL_REGULAR_EXPRESSION "commands failed")
-    endif (TOX_VERSION STRLESS TOX_MIN_VERSION)
-  else (TOX_STATUS EQUAL 0)
-    message(STATUS "Cannot determine tox version - skipping python-checker")
-  endif (TOX_STATUS EQUAL 0)
+# Location of setup.cfg determines the testroot directory for Pytest
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.cfg.in ${CMAKE_CURRENT_BINARY_DIR}/setup.cfg)
 
-else (TOX_EXE)
-  message(STATUS "Could NOT find 'tox' tool - unable to validate python code")
-endif ()
+#This python-checker shell script uses three tools - mypy, flake8 and pylint to validate python code
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/python-checker.sh.in ${CMAKE_CURRENT_BINARY_DIR}/python-checker.sh)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/pylintrc ${CMAKE_CURRENT_BINARY_DIR}/pylintrc COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/pytest.ini ${CMAKE_CURRENT_BINARY_DIR}/pytest.ini COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/mypy.ini.in ${CMAKE_CURRENT_BINARY_DIR}/mypy.ini)
 
-
-
-
-
+find_program (BASH_PROGRAM bash)
+add_test (NAME python-checker 
+          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+          COMMAND ${BASH_PROGRAM} ${CMAKE_CURRENT_BINARY_DIR}/python-checker.sh)
+          
 # Additional files to install for running system tests.
 # NOTE: Don't install run.py. A system test of a dispatch installation should pick everything
 # up from standard install locations.

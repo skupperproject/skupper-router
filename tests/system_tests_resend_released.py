@@ -18,7 +18,6 @@
 #
 
 from proton import Message, symbol, Data
-from proton._events import Event
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Delivery
@@ -394,14 +393,14 @@ class ResendReleasedTest(MessagingHandler):
                 self.release_receivers.append(event.container.create_receiver(conn, self.addr))
             for conn in self.accept_conns:
                 self.accept_receivers.append(event.container.create_receiver(conn, self.addr))
-        elif self.sender == None and event.receiver != None:
+        elif self.sender is None and event.receiver is not None:
             self.n_receivers += 1
             if self.n_receivers == len(self.release_receivers) + len(self.accept_receivers):
                 if self.wait_local > 0 or self.wait_remote > 0:
                     self.query_stats()
                 else:
                     self.setup_sender(event)
-        elif self.sender != None and event.receiver != None:
+        elif self.sender is not None and event.receiver is not None:
             self.stream_receivers.append(event.receiver)
 
     def on_sendable(self, event):
@@ -419,8 +418,8 @@ class ResendReleasedTest(MessagingHandler):
         for record in response.results:
             if record.name == 'M' + self.addr:
                 return (record.subscriberCount, record.remoteCount)
-        return (0,0)
-    
+        return (0, 0)
+
     def setup_sender(self, event):
         self.sender = event.container.create_sender(self.sender_conn, self.addr)
         self.sender.target.capabilities.put_array(False, Data.SYMBOL)
@@ -484,7 +483,7 @@ class ResendReleasedTest(MessagingHandler):
             self.fail("delivery released when there were available acceptors")
         elif len(self.release_receivers) != self.n_released:
             self.fail("delivery released after %d releases, had %d releasors" % (self.n_released, len(self.release_receivers)))
-        elif self.expected_releases != None and self.n_released != self.expected_releases:
+        elif self.expected_releases is not None and self.n_released != self.expected_releases:
             self.fail("delivery released: expected %d released, but got %d" % (self.expected_releases, self.n_released))
         else:
             self.fail(None)
@@ -494,7 +493,7 @@ class ResendReleasedTest(MessagingHandler):
             return
         if self.n_accepted != 1:
             self.fail("delivery accepted after %d acceptances.  Expected 1" % self.n_accepted)
-        elif self.expected_releases != None and self.n_released != self.expected_releases:
+        elif self.expected_releases is not None and self.n_released != self.expected_releases:
             self.fail("delivery accepted: expected %d released, but got %d" % (self.expected_releases, self.n_released))
         else:
             self.fail(None)

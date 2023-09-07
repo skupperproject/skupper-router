@@ -19,13 +19,13 @@
 import os
 from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl
 from system_tests_ssl import RouterTestSslBase
-from system_tests_http2 import skip_nginx_test
 from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available, \
     CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
     SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT
 from http1_tests import wait_tcp_listeners_up
-from TCP_echo_server import TcpEchoServer
 from system_tests_http2 import get_address, get_digest, image_file
+from system_tests_http2 import skip_nginx_test
+from TCP_echo_server import TcpEchoServer
 
 
 class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
