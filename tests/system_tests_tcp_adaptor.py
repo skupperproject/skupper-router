@@ -544,7 +544,8 @@ class TcpAdaptorBase(TestCase):
                                   'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation,
                                   'siteId': cls.site}),
                 ('tcpListener', {'host': "0.0.0.0", 'port': cls.EC2_conn_stall_listener_port,
-                                 'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})],
+                                 'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation,
+                                 'siteId': cls.site})],
                ssl=cls.test_ssl, encapsulation=cls.encapsulation)
 
         cls.INTA = cls.routers[0]
