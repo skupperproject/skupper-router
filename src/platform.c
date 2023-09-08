@@ -26,10 +26,17 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
+#if QD_HAVE_GETRLIMIT
 #include <sys/resource.h>
+#endif
 
 static uintmax_t computed_memory_size = 0;
 
+// Return the total amount of RAM memory available for use by the router.
+//
+// The heuristic involves detecting the amount of physical memory on the platform then checking for any other memory
+// limits that may be placed on the process.
+//
 uintmax_t qd_platform_memory_size(void)
 {
     if (computed_memory_size > 0) {
@@ -37,7 +44,9 @@ uintmax_t qd_platform_memory_size(void)
     }
 
     bool found = false;
-    uintmax_t rlimit = UINTMAX_MAX;
+    uintmax_t mlimit = UINTMAX_MAX;  // physical memory limit
+    uintmax_t rlimit = UINTMAX_MAX;  // resource limit (rlimit)
+    uintmax_t climit = UINTMAX_MAX;  // cgroups max memory limit
 
 #if QD_HAVE_GETRLIMIT
     {
@@ -61,7 +70,6 @@ uintmax_t qd_platform_memory_size(void)
     // available "fast" memory.
 
     // @TODO(kgiusti) this is linux-specific (see man proc)
-    uintmax_t mlimit = UINTMAX_MAX;
     FILE *minfo_fp = fopen("/proc/meminfo", "r");
     if (minfo_fp) {
         size_t buflen = 0;
@@ -78,34 +86,44 @@ uintmax_t qd_platform_memory_size(void)
         fclose(minfo_fp);
     }
 
-    // and if the router is running within a container check the cgroups memory
-    // controller. Hard and soft memory limits can be set.
+    // Check the cgroups memory controller.
 
-    uintmax_t climit = UINTMAX_MAX;
     {
-        uintmax_t soft = UINTMAX_MAX;
-        uintmax_t hard = UINTMAX_MAX;
-        bool c_set = false;
+        uintmax_t max = 0;
 
-        FILE *cg_fp = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+        // There are two versions of cgroups: v1 and v2. Check for v2 first
+
+        FILE *cg_fp = fopen("/sys/fs/cgroup/memory.max", "r");
         if (cg_fp) {
-            if (fscanf(cg_fp, "%"SCNuMAX, &hard) == 1) {
-                c_set = true;
+            // memory.max may be set to the string "max", which means no limit has been set. "max" will cause fscanf() to
+            // return 0 and we'll ignore the setting
+            if (fscanf(cg_fp, "%"SCNuMAX, &max) == 1 && max != 0) {
+                climit = max;
+                found = true;
             }
             fclose(cg_fp);
-        }
 
-        cg_fp = fopen("/sys/fs/cgroup/memory/memory.soft_limit_in_bytes", "r");
-        if (cg_fp) {
-            if (fscanf(cg_fp, "%"SCNuMAX, &soft) == 1) {
-                c_set = true;
+        } else {  // check for v1 cgroups configuration
+
+            // v1 allows both soft and hard limits
+
+            FILE *cg_fp = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+            if (cg_fp) {
+                if (fscanf(cg_fp, "%"SCNuMAX, &max) == 1 && max != 0) {
+                    climit = max;
+                    found = true;
+                }
+                fclose(cg_fp);
             }
-            fclose(cg_fp);
-        }
 
-        if (c_set) {
-            climit = MIN(soft, hard);
-            found = true;
+            cg_fp = fopen("/sys/fs/cgroup/memory/memory.soft_limit_in_bytes", "r");
+            if (cg_fp) {
+                if (fscanf(cg_fp, "%"SCNuMAX, &max) == 1 && max != 0) {
+                    climit = MIN(climit, max);
+                    found = true;
+                }
+                fclose(cg_fp);
+            }
         }
     }
 
