@@ -1660,8 +1660,8 @@ qd_error_t qd_entity_refresh_tcpListener_lite(qd_entity_t* entity, tcplite_liste
     qd_listener_oper_status_t os = QD_LISTENER_OPER_DOWN;
 
     if (!!li->adaptor_listener) {
-        sys_mutex_lock(&li->lock);
         os = qd_adaptor_listener_oper_status(li->adaptor_listener);
+        sys_mutex_lock(&li->lock);
         co = li->connections_opened;
         cc = li->connections_closed;
         sys_mutex_unlock(&li->lock);
