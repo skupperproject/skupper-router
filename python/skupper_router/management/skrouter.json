@@ -599,6 +599,10 @@
                     "graph": true,
                     "description": "The current amount of system memory in use by the router process in bytes (RSS: Resident Set Size). This is the portion of the process memory space that currently resides in RAM. This value is set to Null if the platform does not provide access to the process resident memory size."
                 },
+                "connectionCounters": {
+                    "type": "map",
+                    "description": "A map keyed by network protocol name with a value of the count of active service connections using that protocol at this router node. Currently defined key values are: amqp, http1, http2, and tcp"
+                },
                 "dataConnectionCount": {
                     "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers",
                     "type": "string",

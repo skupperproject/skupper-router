@@ -1,5 +1,5 @@
-#ifndef qdr_agent_router
-#define qdr_agent_router 1
+#ifndef __protocols_h__
+#define __protocols_h__ 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -19,14 +19,19 @@
  * under the License.
  */
 
-#include "router_core_private.h"
+#include "qpid/dispatch/enum.h"
 
-#define QDR_ROUTER_COLUMN_COUNT  34
+// Network protocols supported by the router
+//
+typedef enum {
+    QD_PROTOCOL_TCP,
+    QD_PROTOCOL_AMQP,
+    QD_PROTOCOL_HTTP1,
+    QD_PROTOCOL_HTTP2,
+    QD_PROTOCOL_TOTAL // must be last
+} qd_protocol_t;
 
-extern const char *qdr_router_columns[QDR_ROUTER_COLUMN_COUNT + 1];
-
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-
+// Defines qd_protocol_name(qd_protocol_t)
+//
+ENUM_DECLARE(qd_protocol);
 #endif

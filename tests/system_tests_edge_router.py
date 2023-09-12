@@ -1302,7 +1302,7 @@ class RouterTest(TestCase):
                                address=self.routers[0].addresses[0])
         self.assertEqual(outs.count("Router Links"), 2)
         self.assertEqual(outs.count("Router Addresses"), 2)
-        self.assertEqual(outs.count("Connections"), 12)
+        self.assertEqual(outs.count("Total Connections"), 2)
         self.assertEqual(outs.count("Router Statistics"), 2)
         self.assertEqual(outs.count("Memory Pools"), 2)
 

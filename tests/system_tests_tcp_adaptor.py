@@ -26,7 +26,7 @@ import time
 import traceback
 from subprocess import PIPE
 from subprocess import STDOUT
-from typing import List, Optional
+from typing import List, Optional, Mapping
 
 from proton import Message
 from proton.handlers import MessagingHandler
@@ -45,8 +45,9 @@ from system_test import main_module
 from system_test import unittest
 from system_test import retry
 from system_test import CONNECTION_TYPE, TCP_CONNECTOR_TYPE, TCP_LISTENER_TYPE
-from system_test import ROUTER_LINK_TYPE
+from system_test import ROUTER_LINK_TYPE, ROUTER_TYPE
 from system_test import retry_assertion
+from system_test import retry_exception
 from system_tests_ssl import RouterTestSslBase
 from http1_tests import wait_tcp_listeners_up
 
@@ -86,7 +87,6 @@ CLIENT_PRIVATE_KEY_NO_PASS = RouterTestSslBase.ssl_file('client-private-key-no-p
 BAD_CA_CERT = RouterTestSslBase.ssl_file('bad-ca-certificate.pem')
 CLIENT_PRIVATE_KEY_PASSWORD = 'client-password'
 CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
-
 
 # This code takes a wild guess how long an echo server must stall receiving
 # input data before it fills the adaptor's flow control window in the host
@@ -2281,6 +2281,120 @@ class SendAMQPMessage(MessagingHandler):
 
     def run(self):
         Container(self).run()
+
+
+class TcpAdaptorConnCounter(TestCase):
+    """
+    Validate the TCP service connection counter
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorConnCounter, cls).setUpClass()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'TCPConnCounter'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('TCPConnCounter', config)
+
+    def _get_conn_counters(self) -> Mapping[str, int]:
+        attributes = ["connectionCounters"]
+        rc = self.router.management.query(type=ROUTER_TYPE,
+                                          attribute_names=attributes)
+        self.assertIsNotNone(rc, "unexpected query failure")
+        self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")
+        counters = rc.get_dicts()[0].get("connectionCounters")
+        self.assertIsNotNone(counters, "expected a counter map to be returned")
+        return counters
+
+    def _run_test(self, encaps, idle_ct, active_ct):
+        # idle_ct: expected connection count when tcp configured, but prior to
+        # connections active
+        # activ_ct: expected connection count when 1 client and 1 server
+        # connected
+        mgmt = self.router.management
+
+        # verify the counters start at zero (not including amqp)
+
+        counters = self._get_conn_counters()
+        for proto in ["tcp", "http1", "http2"]:
+            counter = counters.get(proto)
+            self.assertIsNotNone(counter, f"Missing expected protocol counter {proto}!")
+            self.assertEqual(0, counter, "counters must be zero on startup")
+
+        # Bring up a server and client, check the counter
+
+        connector_port = self.get_port()
+        listener_port = self.get_port()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", connector_port))
+            listener.setblocking(True)
+            listener.listen(10)
+
+            mgmt.create(type=TCP_LISTENER_TYPE,
+                        name="ClientListener",
+                        attributes={'address': 'closest/tcpService',
+                                    'port': listener_port,
+                                    'encapsulation': encaps})
+            mgmt.create(type=TCP_CONNECTOR_TYPE,
+                        name="ServerConnector",
+                        attributes={'address': 'closest/tcpService',
+                                    'host': "localhost",
+                                    'port': connector_port,
+                                    'encapsulation': encaps})
+
+            wait_tcp_listeners_up(self.router.addresses[0],
+                                  l_filter={'name': 'ClientListener'})
+
+            # expect that simply configuring the tcp listener/connector will
+            # instantiate the "dispatcher" connection:
+
+            errmsg = "Expected idle count failed!"
+            errmsg += "\nIf you fixed the phantom tcp-lite connection counter"
+            errmsg += " please update this test with the new counter values!"
+            self.assertTrue(retry(lambda:
+                                  self._get_conn_counters().get("tcp") == idle_ct),
+                            errmsg)
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client, lp=listener_port:
+                                cs.connect(("localhost", lp)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                server, _ = listener.accept()
+                try:
+                    self.assertTrue(retry(lambda:
+                                          self._get_conn_counters().get("tcp") ==
+                                          active_ct),
+                                    f"Expected {active_ct} got {self._get_conn_counters()}!")
+                finally:
+                    server.shutdown(socket.SHUT_RDWR)
+                    server.close()
+                client.shutdown(socket.SHUT_RDWR)  # context manager calls close
+
+        mgmt.delete(type=TCP_CONNECTOR_TYPE, name="ServerConnector")
+        mgmt.delete(type=TCP_LISTENER_TYPE, name="ClientListener")
+
+        # expect tcp counter to return to zero once config is cleaned up
+
+        self.assertTrue(retry(lambda:
+                              self._get_conn_counters().get("tcp") == 0),
+                        f"Expected 0 tcp conns, got {self._get_conn_counters()}")
+
+    def test_01_check_counter(self):
+        """ Create and destroy TCP network connections, verify the connection
+        counter is correct.
+        """
+        for encaps, idle_ct, active_ct in [('legacy', 1, 3), ('lite', 2, 4)]:
+            self._run_test(encaps, idle_ct, active_ct)
 
 
 if __name__ == '__main__':

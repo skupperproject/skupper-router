@@ -24,6 +24,7 @@
 #include "http1_private.h"
 
 #include "qpid/dispatch/protocol_adaptor.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <proton/listener.h>
 #include <proton/netaddr.h>
@@ -375,6 +376,7 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             0,   // bind context
                                             0);  // bind token
     qdr_connection_set_context(hconn->qdr_conn, hconn);
+    qd_connection_counter_inc(QD_PROTOCOL_HTTP1);
     hconn->oper_status = QD_CONN_OPER_UP;
 
     qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP connection to client created",
@@ -744,6 +746,7 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
         if (hconn->qdr_conn) {
             qdr_connection_set_context(hconn->qdr_conn, 0);
             qdr_connection_closed(hconn->qdr_conn);
+            qd_connection_counter_dec(QD_PROTOCOL_HTTP1);
             hconn->qdr_conn = 0;
         }
 

@@ -27,6 +27,7 @@
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <proton/codec.h>
 #include <proton/condition.h>
@@ -250,6 +251,7 @@ static void on_activate(void *context)
         detach_links(conn);
         qdr_connection_set_context(conn->qdr_conn, 0);
         qdr_connection_closed(conn->qdr_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
         conn->qdr_conn = 0;
         free_qdr_tcp_connection(conn);
     }
@@ -667,6 +669,7 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
     if (conn->qdr_conn) {
         qdr_connection_set_context(conn->qdr_conn, 0);
         qdr_connection_closed(conn->qdr_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
         conn->qdr_conn = 0;
     }
 
@@ -928,6 +931,7 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                    0);              // bind_token
     tc->qdr_conn = conn;
     qdr_connection_set_context(conn, tc);
+    qd_connection_counter_inc(QD_PROTOCOL_TCP);
 
     qdr_terminus_t *dynamic_source = qdr_terminus(0);
     qdr_terminus_set_dynamic(dynamic_source);
@@ -1357,6 +1361,7 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
                                                    0);              // bind_token
     tc->qdr_conn = conn;
     qdr_connection_set_context(conn, tc);
+    qd_connection_counter_inc(QD_PROTOCOL_TCP);
 
     qdr_terminus_t *source = qdr_terminus(0);
     qdr_terminus_set_address(source, tc->config->adaptor_config->address);

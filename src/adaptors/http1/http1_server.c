@@ -19,6 +19,7 @@
 
 #include "adaptors/adaptor_tls.h"
 #include "http1_private.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <proton/proactor.h>
 
@@ -224,6 +225,7 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
                                             info,
                                             0,      // bind context
                                             0);     // bind token
+    qd_connection_counter_inc(QD_PROTOCOL_HTTP1);
 
     // wait for the raw connection to come up before creating the in and out links
 
@@ -2020,6 +2022,7 @@ void qdr_http1_server_core_conn_close(qdr_http1_adaptor_t *adaptor,
     hconn->oper_status = QD_CONN_OPER_DOWN;
     _teardown_server_links(hconn);
     qdr_connection_closed(qdr_conn);
+    qd_connection_counter_dec(QD_PROTOCOL_HTTP1);
     qdr_http1_close_connection(hconn, 0);
 
     // it is expected that this callback is the final callback before returning

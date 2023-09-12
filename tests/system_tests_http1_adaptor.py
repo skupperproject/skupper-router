@@ -31,6 +31,7 @@ from http.client import HTTPSConnection
 from ssl import SSLContext, PROTOCOL_TLS_CLIENT, PROTOCOL_TLS_SERVER
 from ssl import CERT_REQUIRED, SSLSocket
 from time import sleep, time
+from typing import Mapping
 from email.parser import BytesParser
 
 from proton import Message
@@ -39,7 +40,7 @@ from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
 from system_test import openssl_available, is_pattern_present
-from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE
+from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE, ROUTER_TYPE
 from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_LINK_TYPE
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
@@ -3201,6 +3202,100 @@ class Http1AdaptorClientBackpressure(TestCase):
                     self.router.wait_log_message(pattern)
             finally:
                 server.close()
+
+
+class Http1AdaptorConnCounter(TestCase):
+    """
+    Validate the HTTP1 service connection counter
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http1AdaptorConnCounter, cls).setUpClass()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP1ConnCounter'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('HTTP1ConnCounter', config)
+
+    def _get_conn_counters(self) -> Mapping[str, int]:
+        attributes = ["connectionCounters"]
+        rc = self.router.management.query(type=ROUTER_TYPE,
+                                          attribute_names=attributes)
+        self.assertIsNotNone(rc, "unexpected query failure")
+        self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")
+        counters = rc.get_dicts()[0].get("connectionCounters")
+        self.assertIsNotNone(counters, "expected a counter map to be returned")
+        return counters
+
+    def test_01_check_counter(self):
+        """ Create and destroy HTTP1 network connections, verify the connection
+        counter is correct.
+        """
+        mgmt = self.router.management
+
+        # verify the counters start at zero (not including amqp)
+        counters = self._get_conn_counters()
+        for proto in ["tcp", "http1", "http2"]:
+            counter = counters.get(proto)
+            self.assertIsNotNone(counter, f"Missing expected protocol counter {proto}!")
+            self.assertEqual(0, counter, "counters must be zero on startup")
+
+        # Bring up a server and client, check the counter
+
+        connector_port = self.get_port()
+        listener_port = self.get_port()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", connector_port))
+            listener.setblocking(True)
+            listener.listen(10)
+
+            mgmt.create(type=HTTP_LISTENER_TYPE,
+                        name="ClientListener",
+                        attributes={'address': 'closest/http1Service',
+                                    'port': listener_port,
+                                    'protocolVersion': 'HTTP1'})
+            mgmt.create(type=HTTP_CONNECTOR_TYPE,
+                        name="ServerConnector",
+                        attributes={'address': 'closest/http1Service',
+                                    'port': connector_port,
+                                    'protocolVersion': 'HTTP1'})
+
+            server, _ = listener.accept()
+            try:
+                wait_http_listeners_up(self.router.addresses[0],
+                                       l_filter={'name': 'ClientListener'})
+
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                    client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    retry_exception(lambda cs=client, lp=listener_port:
+                                    cs.connect(("localhost", lp)),
+                                    delay=0.25,
+                                    exception=ConnectionRefusedError)
+
+                    # verify that there are now two HTTP/1 connections:
+
+                    self.assertTrue(retry(lambda:
+                                          self._get_conn_counters().get("http1") == 2),
+                                    "Expected 2 active HTTP connections")
+            finally:
+                server.close()
+
+        mgmt.delete(type=HTTP_CONNECTOR_TYPE, name="ServerConnector")
+        mgmt.delete(type=HTTP_LISTENER_TYPE, name="ClientListener")
+
+        # expect http/1 counter to return to zero
+
+        self.assertTrue(retry(lambda:
+                              self._get_conn_counters().get("http1") == 0),
+                        "Expected no active HTTP connections")
 
 
 if __name__ == '__main__':

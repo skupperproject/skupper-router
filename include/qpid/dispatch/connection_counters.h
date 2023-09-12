@@ -1,5 +1,5 @@
-#ifndef qdr_agent_router
-#define qdr_agent_router 1
+#ifndef __connection_counters_h__
+#define __connection_counters_h__ 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -19,14 +19,25 @@
  * under the License.
  */
 
-#include "router_core_private.h"
+/**@file
+ * System-wide counters for tracking open connections per protocol type.
+ */
 
-#define QDR_ROUTER_COLUMN_COUNT  34
+#include "qpid/dispatch/protocols.h"
 
-extern const char *qdr_router_columns[QDR_ROUTER_COLUMN_COUNT + 1];
+#include <stdint.h>
 
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+// Increment the connection counter for the 'proto' protocol
+//
+void qd_connection_counter_inc(qd_protocol_t proto);
+
+// Decrement the connection counter for the 'proto' protocol
+//
+void qd_connection_counter_dec(qd_protocol_t proto);
+
+// Fetch the current value of the connection counter for 'proto'
+//
+uint64_t qd_connection_count(qd_protocol_t proto);
+
 
 #endif

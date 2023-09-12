@@ -18,6 +18,7 @@
 #
 import errno
 import os
+import re
 import threading
 import ssl
 
@@ -219,7 +220,11 @@ class RouterTestHttp(TestCase):
                       "qdr_deliveries_delayed_1sec_total",
                       "qdr_deliveries_delayed_10sec_total",
                       "qdr_deliveries_stuck_total",
-                      "qdr_links_blocked_total"]
+                      "qdr_links_blocked_total",
+                      "qdr_tcp_service_connections",
+                      "qdr_amqp_service_connections",
+                      "qdr_http1_service_connections",
+                      "qdr_http2_service_connections"]
         for stat in r.management.query(type=ALLOCATOR_TYPE).get_dicts():
             stat_names.append(stat['typeName'])
 
@@ -228,6 +233,14 @@ class RouterTestHttp(TestCase):
             resp = urlopen(f"http://localhost:{port}/metrics", cafile=self.ssl_file('ca-certificate.pem'))
             self.assertEqual(200, resp.getcode())
             metrics = [x for x in resp.read().decode('utf-8').splitlines() if not x.startswith("#")]
+
+            # Verify that all metric names are valid prometheus names that
+            # must match the regex [a-zA-Z_:][a-zA-Z0-9_:]*
+            for metric in metrics:
+                # remove trailing counter
+                mname = metric.strip().split()[0]
+                match = re.fullmatch(r'([a-zA-Z_:])([a-zA-Z0-9_:])*', mname)
+                self.assertIsNotNone(match, f"Metric {mname} has invalid name syntax")
 
             # Verify that all expected stats are reported by the metrics URL
 

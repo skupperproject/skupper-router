@@ -1,5 +1,3 @@
-#ifndef qdr_agent_router
-#define qdr_agent_router 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -19,14 +17,29 @@
  * under the License.
  */
 
-#include "router_core_private.h"
+#include "qpid/dispatch/connection_counters.h"
+#include "qpid/dispatch/atomic.h"
 
-#define QDR_ROUTER_COLUMN_COUNT  34
+atomic_uint_fast64_t qd_connection_counters[QD_PROTOCOL_TOTAL];
 
-extern const char *qdr_router_columns[QDR_ROUTER_COLUMN_COUNT + 1];
+void qd_connection_counter_inc(qd_protocol_t proto)
+{
+    assert(proto < QD_PROTOCOL_TOTAL);
+    atomic_fetch_add_explicit(&qd_connection_counters[proto], 1, memory_order_relaxed);
+}
 
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qd_connection_counter_dec(qd_protocol_t proto)
+{
+    assert(proto < QD_PROTOCOL_TOTAL);
+    uint64_t old = atomic_fetch_sub_explicit(&qd_connection_counters[proto], 1, memory_order_relaxed);
+    (void) old;
+    assert(old != 0);  // underflow!
+}
 
-#endif
+uint64_t qd_connection_count(qd_protocol_t proto)
+{
+    assert(proto < QD_PROTOCOL_TOTAL);
+    return (uint64_t) atomic_load_explicit(&qd_connection_counters[proto], memory_order_relaxed);
+}
+
+

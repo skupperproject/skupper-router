@@ -29,6 +29,7 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <proton/connection_driver.h>
 #include <proton/object.h>
@@ -613,6 +614,43 @@ static size_t _write_metric(uint8_t **start, size_t available, const char *name,
     return rc1 + rc2;
 }
 
+// Write all the per-protocol connection counters. Return the total octets written (not including null terminator) or
+// zero on error.
+//
+// On successful return (*start) will be advanced to the terminating null byte.
+//
+static size_t _write_conn_counter_metrics(uint8_t **start, size_t available)
+{
+    char name_buffer[MAX_METRIC_NAME_LEN + 1];
+    const size_t save = available;
+
+    for (int proto = 0; proto < QD_PROTOCOL_TOTAL; ++proto) {
+        const char *proto_name = qd_protocol_name(proto);
+        assert(proto_name);
+        int ct = snprintf(name_buffer, sizeof(name_buffer), "qdr_%s_service_connections", proto_name);
+        if (ct < 0 || ct >= sizeof(name_buffer)) {  // overrun!
+            assert(false);  // you need to increase the output_buffer size!
+            return 0;
+        }
+
+        // Prometheus restricts metric names to the following character set: [a-zA-Z_:]. Protocol names may include
+        // other characters, like 'http/1'. Convert any illegal characters to '_'
+
+        for (char *ptr = name_buffer; *ptr; ++ptr) {
+            if (!isalnum(*ptr) && *ptr != '_' && *ptr != ':')
+                *ptr = '_';
+        }
+
+        size_t rc = _write_metric(start, available, name_buffer, "gauge", qd_connection_count(proto));
+        if (rc == 0) {
+            return 0;  // error writing, close the connection
+        }
+        available -= rc;
+    }
+
+    return save - available;
+}
+
 // Write all the router global metrics to the output buffer. Return the total octets written (not including null
 // terminator) or zero on error.
 //
@@ -742,7 +780,8 @@ static size_t _generate_metrics_response(stats_request_state_t *state, uint8_t *
 {
     if (_write_global_metrics(state, start, end - *start) == 0
         || _write_allocator_metrics(start, end - *start) == 0
-        || _write_memory_metrics(start, end - *start) == 0) {
+        || _write_memory_metrics(start, end - *start) == 0
+        || _write_conn_counter_metrics(start, end - *start) == 0) {
         // error, close the connection
         return 0;
     }
@@ -776,8 +815,10 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
             // alloc_pool metrics (+ 1 for qdr_alloc_pool_bytes):
             + (DEQ_SIZE(allocator_metrics) * PER_METRIC_BUF_SIZE * PER_ALLOC_METRIC_COUNT)
             + PER_METRIC_BUF_SIZE
-            // qdr_router_vmsize_bytes and qdr_router_rss_bytes
+            // qdr_router_vmsize_bytes and qdr_router_rss_bytes:
             + (2 * PER_METRIC_BUF_SIZE)
+            // connection counters by protocol:
+            + (QD_PROTOCOL_TOTAL * PER_METRIC_BUF_SIZE)
             // 1 terminating null
             + 1;
         stats->state = new_stats_request_state(buf_size);

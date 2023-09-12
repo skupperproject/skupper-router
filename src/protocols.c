@@ -1,5 +1,3 @@
-#ifndef qdr_agent_router
-#define qdr_agent_router 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -19,14 +17,17 @@
  * under the License.
  */
 
-#include "router_core_private.h"
+#include "qpid/dispatch/protocols.h"
 
-#define QDR_ROUTER_COLUMN_COUNT  34
+#include <stddef.h>
 
-extern const char *qdr_router_columns[QDR_ROUTER_COLUMN_COUNT + 1];
+// Note: names must match the order of the corresponding enum entries in qd_protocol_t, and any changes here require
+// updating the connectionCounters router entity attribute in skrouter.json.
+//
+static const char *_names[QD_PROTOCOL_TOTAL] = {
+    "tcp", "amqp", "http1", "http2"
+};
 
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-
-#endif
+// defines function qd_protocol_name(qd_protocol_t)
+//
+ENUM_DEFINE(qd_protocol, _names);

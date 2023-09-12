@@ -93,12 +93,13 @@ class SkstatTest(SkstatTestBase):
         out = self.run_skstat(['--general', '--csv'],
                               regex=r'(?s)Router Statistics.*Mode","Standalone')
 
-        self.assertIn('"Connections","1"', out)
+        self.assertIn('"Total Connections","1"', out)
         self.assertIn('"Worker Threads","1"', out)
         self.assertIn('"Nodes","0"', out)
         self.assertIn('"Auto Links","0"', out)
         self.assertIn('"Router Id","QDR.A"', out)
         self.assertIn('"Mode","standalone"', out)
+        self.assertIn('"AMQP Service Connections","1"', out)
         self.assertEqual(out.count("QDR.A"), 2)
 
     def test_connections(self):
@@ -693,13 +694,14 @@ class SkstatLinkPriorityTest(SkstatTestBase):
     def _test_all_entities(self, command):
         out = self.run_skstat(command)
 
-        self.assertTrue(out.count('UTC') == 1)
-        self.assertTrue(out.count('Router Links') == 1)
-        self.assertTrue(out.count('Router Addresses') == 1)
-        self.assertTrue(out.count('Connections') == 6)
-        self.assertTrue(out.count('AutoLinks') == 2)
-        self.assertTrue(out.count('Router Statistics') == 1)
-        self.assertTrue(out.count('Memory Pools') == 1)
+        self.assertEqual(1, out.count('UTC'))
+        self.assertEqual(1, out.count('Router Links'))
+        self.assertEqual(1, out.count('Router Addresses'))
+        self.assertEqual(1, out.count('Total Connections'))
+        self.assertEqual(2, out.count('AutoLinks'))
+        self.assertEqual(1, out.count('Router Statistics'))
+        self.assertEqual(1, out.count('Memory Pools'))
+        self.assertEqual(1, out.count('AMQP Service Connections'))
 
     def test_all_entities(self):
         self._test_all_entities(['--all-entities'])
@@ -710,13 +712,14 @@ class SkstatLinkPriorityTest(SkstatTestBase):
     def _test_all_entities_all_routers(self, command):
         out = self.run_skstat(command)
 
-        self.assertTrue(out.count('UTC') == 1)
-        self.assertTrue(out.count('Router Links') == 2)
-        self.assertTrue(out.count('Router Addresses') == 2)
-        self.assertTrue(out.count('Connections') == 12)
-        self.assertTrue(out.count('AutoLinks') == 4)
-        self.assertTrue(out.count('Router Statistics') == 2)
-        self.assertTrue(out.count('Memory Pools') == 2)
+        self.assertEqual(1, out.count('UTC'))
+        self.assertEqual(2, out.count('Router Links'))
+        self.assertEqual(2, out.count('Router Addresses'))
+        self.assertEqual(2, out.count('Total Connections'))
+        self.assertEqual(4, out.count('AutoLinks'))
+        self.assertEqual(2, out.count('Router Statistics'))
+        self.assertEqual(2, out.count('Memory Pools'))
+        self.assertEqual(2, out.count('AMQP Service Connections'))
 
     def test_all_entities_all_routers(self):
         self._test_all_entities_all_routers(['--all-entities', '--all-routers'])

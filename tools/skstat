@@ -340,7 +340,7 @@ class BusManager:
         rows.append(('Links',         PlainNum(router.linkCount)))
         rows.append(('Nodes',         PlainNum(router.nodeCount)))
         rows.append(('Addresses',     PlainNum(router.addrCount)))
-        rows.append(('Connections',   PlainNum(router.connectionCount)))
+        rows.append(('Total Connections',   PlainNum(router.connectionCount)))
 
         # Overall delivery related counts.
         # These overall statistics were introduced in 1.1 version.
@@ -367,6 +367,13 @@ class BusManager:
             rows.append(('Transit Count', PlainNum(router.deliveriesTransit)))
             rows.append(('Deliveries from Route Container', PlainNum(router.deliveriesIngressRouteContainer)))
             rows.append(('Deliveries to Route Container', PlainNum(router.deliveriesEgressRouteContainer)))
+        except:
+            pass
+
+        # per-protocol user connection counts
+        try:
+            for proto, count in router.connectionCounters.items():
+                rows.append((f"{proto.upper()} Service Connections", PlainNum(count)))
         except:
             pass
 
