@@ -277,7 +277,7 @@ class LogEntity(EntityAdapter):
         # This is for backward compatibility, we will remove this after a few releases.
         if attributes and attributes.get("enable") and "trace" in attributes.get("enable"):
             enabled = attributes.get("enable")
-            attributes["enable"] = enabled.replace("trace", "debug" )
+            attributes["enable"] = enabled.replace("trace", "debug")
         # Special defaults for DEFAULT module.
         if attributes.get("module") == "DEFAULT":
             defaults = dict(enable="info+", includeTimestamp=True, includeSource=False, outputFile="stderr")

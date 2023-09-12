@@ -19,7 +19,6 @@ tests/policy-1/policy-*.json
 .metadata
 .settings
 .history/
-.tox
 .vscode
 
 

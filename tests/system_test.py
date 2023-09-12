@@ -1054,7 +1054,7 @@ class Qdrouterd(Process):
                     for conn in out.results:
                         if role == conn[role_index] and conn[dir_index] == "in":
                             edges_num += 1
-                            if meshes != None:
+                            if meshes is not None:
                                 meshid = conn[meshid_index]
                                 if meshid not in mesh_list:
                                     mesh_list.append(meshid)

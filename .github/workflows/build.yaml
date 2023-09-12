@@ -135,7 +135,7 @@ jobs:
           architecture: x64
 
       - name: Install Python build dependencies
-        run: python -m pip install setuptools wheel tox cffi
+        run: python -m pip install setuptools wheel cffi
 
       - name: Install Linux build dependencies
         run: |
@@ -526,7 +526,7 @@ jobs:
         run: dnf install -y util-linux-core python3-devel python3-pip
 
       - name: Install Python build dependencies
-        run: python3 -m pip install setuptools wheel tox cffi
+        run: python3 -m pip install setuptools wheel cffi
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
@@ -732,16 +732,13 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y python3-qpid-proton libpython3-dev ninja-build libwebsockets-dev libnghttp2-dev nginx
+          sudo apt update; sudo apt install -y flake8 mypy pylint python3-qpid-proton libpython3-dev ninja-build libwebsockets-dev libnghttp2-dev nginx
 
       - name: Install qpid-proton
         run: |
           cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TLS=ON
           cmake --build qpid-proton
           sudo cmake --install qpid-proton
-
-      - name: Install python-checker test dependencies
-        run: python3 -m pip install tox
 
       - uses: actions/checkout@v3
 
@@ -835,7 +832,7 @@ jobs:
           dnf debuginfo-install -y python3
 
       - name: Install Python build dependencies
-        run: python3 -m pip install setuptools wheel tox cffi
+        run: python3 -m pip install setuptools wheel cffi
 
       - name: Install Python runtime/test dependencies
         run: python3 -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt

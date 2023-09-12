@@ -274,7 +274,7 @@ def opts_ssl_domain(opts, mode=SSLDomain.MODE_CLIENT):
     """
 
     url = opts_url(opts)
-    if not url.scheme == "amqps":
+    if url.scheme != "amqps":
         return None
 
     certificate, key, trustfile, password, password_file, ssl_disable_peer_name_verify = opts.ssl_certificate,\

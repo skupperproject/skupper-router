@@ -89,7 +89,7 @@ def extract_ips(response, name):
     if js.get("items"):
         for pod in js['items']:
             # Filter non router pods
-            if('application' in pod['metadata']['labels'] and
+            if ('application' in pod['metadata']['labels'] and
                pod['metadata']['labels']['application'] == name):
                 if 'podIP' not in pod['status']:
                     print("Waiting for IP address...")

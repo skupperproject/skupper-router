@@ -98,7 +98,7 @@ class PanicHandlerTest(TestCase):
 
         regex = re.compile(r"^!!! libunwind not present: backtrace unavailable !!!$",
                            re.MULTILINE)
-        if (regex.search(crash_dump) is None):
+        if regex.search(crash_dump) is None:
             # libunwind present, expect at least one stack frame:
             regex = re.compile(r"^\[(\d+)\] IP: ", re.MULTILINE)
             self.assertRegex(crash_dump, regex, "No stack frames found!!!")

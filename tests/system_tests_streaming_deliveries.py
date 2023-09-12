@@ -18,7 +18,6 @@
 #
 
 from proton import Message, symbol
-from proton._events import Event
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
@@ -148,7 +147,7 @@ class RouterTest(TestCase):
         self.assertIsNone(test.error)
 
 
-class StreamSender(object):
+class StreamSender:
     def __init__(self, container, host_tuple, addr):
         self.container    = container
         self.host         = host_tuple[0]
@@ -185,7 +184,7 @@ class StreamSender(object):
         for record in response.results:
             if record.name == 'M' + self.addr:
                 return (record.subscriberCount, record.remoteCount)
-        return (0,0)
+        return (0, 0)
 
     def query_stats(self):
         if self.proxy:
@@ -325,7 +324,7 @@ class InterleavedStreamsTest(MessagingHandler):
                 self.n_sent_fragments += 1
             else:
                 if was_complete:
-                    if (self.n_received_streams == len(self.stream_senders)):
+                    if self.n_received_streams == len(self.stream_senders):
                         self.fail(None)
                 else:
                     self.fail("Expected end of stream after sent fragment count")

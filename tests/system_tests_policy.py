@@ -932,7 +932,7 @@ class PolicyLinkNamePatternTest(TestCase):
         try:
             qdm_out = self.run_skmanage('update --type=vhost --name=vhost/$default --stdin', input=self.default_patterns())
         except Exception as e:
-            self.assertTrue(False, msg=('Error running skmanage %s' % str(e)))
+            self.assertTrue(False, msg='Error running skmanage %s' % str(e))
         self.assertNotIn("PolicyError", qdm_out)
 
         # attempt an create that should be rejected
@@ -1050,7 +1050,7 @@ class PolicyHostamePatternTest(TestCase):
         try:
             qdm_out = self.run_skmanage('create --type=vhost --name=#.#.0.0 --stdin', input=self.disallowed_hostname())
         except Exception as e:
-            self.assertIn("pattern conflicts", str(e), msg=('Error running skmanage %s' % str(e)))
+            self.assertIn("pattern conflicts", str(e), msg='Error running skmanage %s' % str(e))
         self.assertNotIn("222222", qdm_out)
 
 

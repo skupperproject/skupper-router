@@ -20,7 +20,6 @@
 import os
 import sys
 import socket
-import time
 import unittest
 from subprocess import PIPE
 from time import sleep
@@ -28,7 +27,7 @@ from time import sleep
 import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
-from system_test import curl_available, nginx_available, TIMEOUT, skip_test_in_ci, Http2Server
+from system_test import curl_available, nginx_available, TIMEOUT, Http2Server
 from system_test import get_digest
 
 h2hyper_installed = True
@@ -182,8 +181,8 @@ class CommonHttp2Tests:
 #    @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
 #    @unittest.skipIf(skip_test_in_ci('QPID_SYSTEM_TEST_SKIP_HTTP2_LARGE_IMAGE_UPLOAD_TEST'), skip_reason)
 #    def test_post_upload_large_image_jpg(self):
-        # curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
-        # http://127.0.0.1:9000/upload --http2-prior-knowledge
+#        #curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
+#         http://127.0.0.1:9000/upload --http2-prior-knowledge
 #        address = self.get_address() + "/upload"
 #        _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST', '-H',
 #                                                                       'Content-Type: multipart/form-data',

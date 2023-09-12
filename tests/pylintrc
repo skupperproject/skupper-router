@@ -1,0 +1,95 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+[MASTER]
+
+# Add files or directories to the blacklist. They should be base names, not paths.
+ignore=.git
+
+[MESSAGES CONTROL]
+
+disable =
+    access-member-before-definition,
+    arguments-differ,
+    arguments-renamed,
+    attribute-defined-outside-init,
+    bad-super-call,
+    bare-except,
+    broad-except,
+    broad-exception-raised,
+    consider-iterating-dictionary,
+    consider-using-dict-comprehension,
+    consider-using-dict-items,
+    consider-using-enumerate,
+    consider-using-f-string,
+    consider-using-generator,
+    consider-using-with,
+    deprecated-module,
+    duplicate-code,
+    empty-docstring,
+    fatal,
+    fixme,
+    function-redefined,
+    global-statement,
+    import-error,
+    import-outside-toplevel,
+    inconsistent-return-statements,
+    invalid-name,
+    line-too-long,
+    method-hidden,
+    missing-docstring,
+    missing-function-docstring,
+    missing-module-docstring,
+    multiple-statements,
+    no-else-break,
+    no-else-raise,
+    no-else-return,
+    no-member,
+    no-name-in-module,
+    parse-error,
+    protected-access,
+    raise-missing-from,
+    redefined-builtin,
+    redefined-outer-name,
+    redundant-unittest-assert,
+    singleton-comparison,
+    super-init-not-called,
+    super-with-arguments,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-many-lines,
+    too-many-locals,
+    too-many-nested-blocks,
+    too-many-public-methods,
+    too-many-return-statements,
+    too-many-statements,
+    unnecessary-pass,
+    unspecified-encoding,
+    unsubscriptable-object,
+    unnecessary-comprehension,
+    unused-argument,
+    unused-variable,
+    use-dict-literal,
+    use-list-literal,
+    useless-else-on-loop,
+    useless-super-delegation,
+    using-constant-test,
+    wrong-import-position,

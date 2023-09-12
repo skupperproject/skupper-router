@@ -1344,6 +1344,7 @@ class TcpAdaptor(TcpAdaptorBase, CommonTcpTests):
     def setUpClass(cls):
         super(TcpAdaptor, cls).setUpClass(test_ssl=False)
 
+
 class TcpAdaptorLite(TcpAdaptorBase, CommonTcpTests):
     @classmethod
     def setUpClass(cls):
