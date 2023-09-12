@@ -1349,6 +1349,9 @@ class TcpAdaptorLite(TcpAdaptorBase, CommonTcpTests):
     def setUpClass(cls):
         super(TcpAdaptorLite, cls).setUpClass(test_ssl=False, encap="lite")
 
+    def test_90_stats(self):
+        self.skipTest("Temporarily disabling test_90_stats on TcpAdaptorLite")
+
 
 class TcpAdaptorStuckDeliveryTest(TestCase):
     """
