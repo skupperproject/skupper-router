@@ -97,13 +97,13 @@ jobs:
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: 'skupper-router'
 
@@ -475,13 +475,13 @@ jobs:
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: 'skupper-router'
 
@@ -718,7 +718,7 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.protonRepository }}
           ref: ${{ env.protonBranch }}
@@ -740,7 +740,7 @@ jobs:
           cmake --build qpid-proton
           sudo cmake --install qpid-proton
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Create Build and Install directories
         run: mkdir -p "${DispatchBuildDir}" "{InstallPrefix}"
@@ -809,13 +809,13 @@ jobs:
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: 'skupper-router'
 
@@ -873,7 +873,7 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # https://podman.io/docs/installation#ubuntu
       - name: Upgrade Podman
@@ -976,7 +976,7 @@ jobs:
           dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y epel-release
           dnf install --setopt=tsflags=nodocs --setopt=install_weak_deps=False -y git packit
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Take ownership of the checkout directory (Git CVE-2022-24765)
         run: chown --recursive --reference=/ .
@@ -1026,7 +1026,7 @@ jobs:
     name: RAT Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/cache@v3
         with:
           path: ~/.m2/repository
