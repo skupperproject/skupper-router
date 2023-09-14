@@ -1,0 +1,53 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Respin a skupper-router image for a released tag
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A version (git tag) that has already been released'
+        required: true
+jobs:
+  build:
+    name: Build and publish skupper-router image for a released tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
+        run:  |
+          echo "CONTAINER_TAG=${{github.event.inputs.tag}}" >> $GITHUB_ENV
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{github.event.inputs.tag}}
+      - name: Build and publish skupper-router image
+        run: |
+          export PROJECT_TAG="${CONTAINER_TAG}"
+          export VERSION="${CONTAINER_TAG}"
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          # Only accepts tag if build_number is higher than one
+          [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
+          # Verify if build number is unique, otherwise fail
+          curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
+            jq .tags | grep -E '^\[\]$' || \
+            { echo Unable to get a unique build number ; exit 1 ; }
+          ./.github/scripts/image.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
