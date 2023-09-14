@@ -62,6 +62,7 @@ disable =
     no-else-return,
     no-member,
     no-name-in-module,
+    no-self-use,
     parse-error,
     protected-access,
     raise-missing-from,
