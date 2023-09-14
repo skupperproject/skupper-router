@@ -17,7 +17,7 @@
 # under the License.
 #
 
-set -xo pipefail
+set -exo pipefail
 echo ----Starting flake8 checks----
 flake8 --verbose --count --show-source ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/skupper_router_site.py  ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
 echo ----Starting pylint checks----
