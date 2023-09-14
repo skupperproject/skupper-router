@@ -92,8 +92,18 @@ CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
 # router on all the various CI systems out there.
 CONN_STALL_DELAY_SECONDS = 1.0
 
-# local timeout in seconds to wait for one echo client to finish
-echo_timeout = 30
+
+def check_runners(dup_runners):
+    finished_runners = []
+    for dup_runner in dup_runners:
+        # Gather only the clients that have already finished running.
+        # Once the echo client receives all bytes from the echo server, keep_running is set
+        # to False by the echo client.
+        if not dup_runner.e_client.keep_running:
+            finished_runners.append(dup_runner)
+    for finished_runner in finished_runners:
+        dup_runners.remove(finished_runner)
+    return len(dup_runners) == 0
 
 
 def ncat_available():
@@ -763,8 +773,8 @@ class CommonTcpTests:
         self.logger.log("TCP_TEST %s Start do_tcp_echo_n_routers" % (test_name))
         result = None
         runners = []
+        dup_runners = []
         client_num = 0
-        start_time = time.time()
 
         try:
             # Launch the runners
@@ -782,17 +792,16 @@ class CommonTcpTests:
                                                   client, server, size, count,
                                                   self.print_logs_client,
                                                   test_ssl=test_ssl)
+                        dup_runners.append(runner)
                         runners.append(runner)
                         client_num += 1
 
+            # check if every echo runner has completed and allow TIMEOUT
+            # seconds for the operation to complete.
+            retry(lambda: check_runners(dup_runners))
+
             # Loop until timeout, error, or completion
             while result is None:
-                # Check for timeout
-                time.sleep(0.1)
-                elapsed = time.time() - start_time
-                if elapsed > echo_timeout:
-                    result = "TCP_TEST TIMEOUT - local wait time exceeded"
-                    break
                 # Make sure servers are still up
                 for rtr in TcpAdaptor.router_order:
                     es = TcpAdaptor.echo_servers[rtr]
@@ -830,7 +839,6 @@ class CommonTcpTests:
                                             (test_name, runner.name))
                             runner.client_final = True
                 if complete and result is None:
-                    self.logger.log(("TCP_TEST %s SUCCESS " + over_tls) % test_name)
                     break
 
             # Wait/join all the runners
@@ -839,6 +847,8 @@ class CommonTcpTests:
 
             if result is not None:
                 self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
+            else:
+                self.logger.log(("TCP_TEST %s SUCCESS " + over_tls) % test_name)
 
         except Exception as exc:
             result = "TCP_TEST %s failed. Exception: %s" % \
@@ -864,6 +874,7 @@ class CommonTcpTests:
         self.logger.log("TCP_TEST %s Start do_tcp_echo_singleton" % test_name)
         result = None
         runners = []
+        dup_runners = []
         client_num = 0
         start_time = time.time()
 
@@ -876,17 +887,14 @@ class CommonTcpTests:
                                       client.name, server.name, size, count,
                                       self.print_logs_client,
                                       port_override=echo_port)
+            dup_runners.append(runner)
             runners.append(runner)
             client_num += 1
 
+            retry(lambda: check_runners(dup_runners))
+
             # Loop until timeout, error, or completion
             while result is None:
-                # Check for timeout
-                time.sleep(0.1)
-                elapsed = time.time() - start_time
-                if elapsed > echo_timeout:
-                    result = "TCP_TEST TIMEOUT - local wait time exceeded"
-                    break
                 # Make sure servers are still up
                 for rtr in TcpAdaptor.router_order:
                     es = TcpAdaptor.echo_servers[rtr]
@@ -966,10 +974,10 @@ class CommonTcpTests:
         :param count number of connections to be established
         :return: None if success else error message for ctest
         """
-        self.logger.log("TCP_TEST %s Start do_tcp_balance_test (ingress: %s connections: %d)" % (test_name, client, count))
+        self.logger.log("TCP_TEST %s do_tcp_balance_test (ingress: %s connections: %d)" % (test_name, client, count))
         result = None
         runners = []
-        start_time = time.time()
+        dup_runners = []
 
         # Collect a baseline of the connection counts for the balanced connectors
         baseline = self.all_balanced_connector_stats()
@@ -979,25 +987,26 @@ class CommonTcpTests:
             listener_port = self.balanced_listener_ports[client]
             for client_num in range(count):
                 over_tls = ' over TLS' if test_ssl else ''
-                log_msg = "TCP_TEST" +  over_tls + " %s Running client %d %s" % (test_name, client_num, client)
+                log_msg = "TCP_TEST " +  over_tls + " %s Running client %d connecting to router %s, port=%d" % \
+                          (test_name, client_num + 1, client, listener_port)
                 self.logger.log(log_msg)
-                runner = EchoClientRunner(test_name, client_num,
+                runner = EchoClientRunner(test_name, client_num + 1,
                                           self.logger,
-                                          None, None, 100, 1,   # client, server, size, count
-                                          self.print_logs_client,
+                                          None,
+                                          None,
+                                          3,
+                                          1,
+                                          print_client_logs=False,
                                           port_override=listener_port,
                                           test_ssl=test_ssl,
                                           delay_close=True)
+                dup_runners.append(runner)
                 runners.append(runner)
+
+            retry(lambda: check_runners(dup_runners))
 
             # Loop until timeout, error, or completion
             while result is None:
-                # Check for timeout
-                time.sleep(0.1)
-                elapsed = time.time() - start_time
-                if elapsed > echo_timeout:
-                    result = "TCP_TEST TIMEOUT - local wait time exceeded"
-                    break
                 # Make sure servers are still up
                 for rtr in TcpAdaptor.router_order:
                     es = TcpAdaptor.echo_servers[rtr]
@@ -1286,7 +1295,7 @@ class CommonTcpTests:
 
     # connection balancing
     def test_80_balancing(self):
-        tname = "test_80 connection balancing"
+        tname = "test_80_balancing connections"
         self.logger.log(tname + " START")
         iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
         for p in iterations:
