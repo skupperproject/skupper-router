@@ -25,7 +25,7 @@ from system_tests_ssl import RouterTestSslBase
 
 from proton import VERSION, SASL
 from system_tests_sasl_plain import RouterTestPlainSaslCommon
-from system_tests_http2 import skip_test, skip_nginx_test, skip_h2_test, image_file, get_digest, get_address
+from system_tests_http2 import skip_test, skip_nginx_test, image_file, get_digest, get_address
 from system_tests_http2 import Http2TestTwoRouter, Http2TestBase, CommonHttp2Tests
 
 
