@@ -22,7 +22,7 @@ from concurrent import futures
 import grpc
 from system_tests_ssl import RouterTestSslBase
 
-from friendship_pb2 import Person, CreateResult, PersonEmail, CommonFriendsResult, FriendshipResponse
+from friendship_pb2 import CreateResult, CommonFriendsResult, FriendshipResponse
 from friendship_pb2_grpc import FriendshipServicer, add_FriendshipServicer_to_server
 
 

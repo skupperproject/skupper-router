@@ -82,13 +82,13 @@ class ManagementTest(system_test.TestCase):
         conf1 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'router1'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal'}),
-            ('connector', {'port': conf0.sections('listener')[1]['port'], 'role':'inter-router'}),
+            ('connector', {'port': conf0.sections('listener')[1]['port'], 'role': 'inter-router'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'inter-router'})
         ])
         conf2 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'router2'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal'}),
-            ('connector', {'port': conf1.sections('listener')[1]['port'], 'role':'inter-router'})
+            ('connector', {'port': conf1.sections('listener')[1]['port'], 'role': 'inter-router'})
         ])
         cls._routers = [cls.tester.qdrouterd(config=c, wait=False) for c in [conf0, conf1, conf2]]
 
