@@ -64,7 +64,6 @@ def relativize_urls(sarif, basedir):
             item['uri'] = posixpath.relpath(item['uri'], start=basedir)
 
 
-
 def fill_in_missing_pysicalLocations(sarif):
     """GitHub SARIF importer requires physicalLocation to be present, otherwise
     the following error is raised.
