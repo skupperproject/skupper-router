@@ -63,6 +63,8 @@ under the License
   ** Create a test image using the "Run Workflow" dropdown in the "Manual skupper-router image build"
      page from the Actions tab in github. Make sure the "Push :latest tag?" checkbox is unchecked while creating this test re-spin.
   ** Once the test image is created, use it in skupper-ci and make sure all CI tests pass.
-* Once the skupper CI tests are successful, go to the *https://github.com/skupperproject/skupper-router/actions/workflows/release.yml[Release skupper-router]*
-  action page and find the workflow run for the respective tag
-* Open the correct workflow run for the tag to be updated and click "Re-run all jobs"
+* Once the skupper CI tests are successful, go to the *https://github.com/skupperproject/skupper-router/actions/workflows/release-respin.yml[Respin a skupper-router image for a released tag]*
+  action page and click the `Run workflow` dropdown.
+* In the `Use workflow from` field, choose `main`.
+* In the field that says: `A version (git tag) that has already been released`, enter the github tag to respin (i.e.: 2.4.2).
+* Then click button `Run workflow`.
