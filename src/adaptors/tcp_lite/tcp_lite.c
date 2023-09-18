@@ -33,6 +33,8 @@
 
 #include "tcp_lite.h"
 
+#include <stdatomic.h>
+
 //
 // Function suffixes in this module:
 //
@@ -510,9 +512,11 @@ static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t
     // Since we can't query Proton for the maximum read-buffer capacity, we will infer it from
     // calls to pn_raw_connection_read_buffers_capacity.
     //
-    static size_t max_capacity = 0;
-    if (capacity > max_capacity) {
-        max_capacity = capacity;
+    static atomic_size_t max_capacity;
+    size_t current_mc = atomic_load(&max_capacity);
+    while (capacity > current_mc) {
+        if (atomic_compare_exchange_weak(&max_capacity, &current_mc, capacity))
+            break;
     }
 
     //
@@ -539,7 +543,9 @@ static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t
     //
     // Determine how many buffers are already granted.  This will always be a non-negative value.
     //
-    size_t already_granted = max_capacity - capacity;
+    current_mc = atomic_load(&max_capacity);
+    assert(current_mc >= capacity);
+    size_t already_granted = current_mc - capacity;
 
     //
     // If we desire to grant additional buffers, calculate the number to grant now.

@@ -76,12 +76,6 @@ race:^__lws_logv$
 # ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
 race:^qd_entity_refresh_connector$
 
-# ISSUE-1198: Suppress warnings on race in updating max_capacity
-# https://github.com/skupperproject/skupper-router/issues/1198
-race:^qd_raw_connection_grant_read_buffers$
-race:^grant_read_buffers_XSIDE_IO$
-
-
 #
 # External libraries
 #
