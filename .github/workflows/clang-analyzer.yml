@@ -86,7 +86,7 @@ jobs:
         CodeChecker parse --print-steps --export html --output report_html ./reports || true
 
     - name: Upload rendered HTML
-      uses: actions/upload-pages-artifact@v1
+      uses: actions/upload-pages-artifact@v2
       with:
         path: report_html/
 
