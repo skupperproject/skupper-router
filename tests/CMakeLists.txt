@@ -187,6 +187,7 @@ foreach(py_test_module
   string(CONFIGURE "${PYTHON_TEST_COMMAND}" CONFIGURED_PYTHON_TEST_COMMAND)
 
   add_test(${py_test_module} ${TEST_WRAP} ${CONFIGURED_PYTHON_TEST_COMMAND})
+  set_tests_properties(${py_test_module} PROPERTIES TIMEOUT 1200)
   list(APPEND SYSTEM_TEST_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${py_test_module}.py)
 endforeach()
 
