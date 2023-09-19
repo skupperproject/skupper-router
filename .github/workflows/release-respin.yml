@@ -24,6 +24,11 @@ on:
       tag:
         description: 'A version (git tag) that has already been released'
         required: true
+      canPushLatestTag:
+        description: 'Push :latest tag?'
+        required: true
+        type: boolean
+        default: false
 jobs:
   build:
     name: Build and publish skupper-router image for a released tag
@@ -44,6 +49,13 @@ jobs:
           [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
           # Verify if build number is unique, otherwise fail
+          CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
+          if [ "${CAN_PUSH_LATEST}" == "true" ]; then
+            echo 'release-respin.yml setting PUSH_LATEST=true, will push :latest tag'
+            export PUSH_LATEST=true
+          else
+            echo 'release-respin.yml not setting PUSH_LATEST, will not push :latest tag'
+          fi
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
             jq .tags | grep -E '^\[\]$' || \
             { echo Unable to get a unique build number ; exit 1 ; }
