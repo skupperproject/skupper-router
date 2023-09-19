@@ -141,10 +141,14 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
+          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx git
 
       - name: Zero ccache stats
         run: ccache -z
+
+      - name: Run a patch command to patch qpid-proton
+        if: ${{ matrix.protonGitRef == '0.39.0'}}
+        run: cp ${{github.workspace}}/skupper-router/patches/proton/PROTON-2764-2763-2748.patch ${{github.workspace}}/qpid-proton; cd ${{github.workspace}}/qpid-proton; git apply --ignore-space-change --ignore-whitespace PROTON-2764-2763-2748.patch; cd ${{github.workspace}}
 
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
@@ -485,7 +489,6 @@ jobs:
           repository: ${{ env.protonRepository }}
           ref: ${{ matrix.protonGitRef }}
           path: 'qpid-proton'
-
       - uses: actions/checkout@v4
         with:
           path: 'skupper-router'
@@ -515,7 +518,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          dnf install -y elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan libunwind-devel
+          dnf install -y elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan libunwind-devel git
 
       - name: Install Linux build dependencies (Fedora)
         if: ${{ matrix.container == 'fedora' }}
@@ -532,6 +535,10 @@ jobs:
 
       - name: Install Python build dependencies
         run: python3 -m pip install setuptools wheel cffi
+
+      - name: Run a patch command to patch qpid-proton
+        if: ${{ matrix.protonGitRef == '0.39.0'}}
+        run: cp ${{github.workspace}}/skupper-router/patches/proton/PROTON-2764-2763-2748.patch ${{github.workspace}}/qpid-proton; cd ${{github.workspace}}/qpid-proton; git apply --ignore-space-change --ignore-whitespace PROTON-2764-2763-2748.patch; cd ${{github.workspace}}
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files

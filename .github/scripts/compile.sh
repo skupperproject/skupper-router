@@ -124,7 +124,7 @@ do_patch () {
     fi
 }
 
-do_patch "patches/proton" "${PROTON_DIR}"
+do_patch "${SKUPPER_DIR}/patches/proton/" "${PROTON_DIR}"
 
 # This is required to install the python packages that the system tests use.
 python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
