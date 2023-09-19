@@ -38,7 +38,7 @@ from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
-from system_test import openssl_available
+from system_test import openssl_available, is_pattern_present
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -2676,9 +2676,15 @@ class Http1TLSConnectorErrorTests(TestCase):
                 server.settimeout(TIMEOUT)
                 server.bind(("localhost", server_port))
                 server.listen(1)
-                self.assertRaises(OSError, server.accept)
 
-            router.wait_log_message(pattern=r"TLS connection failed")
+                # ISSUE-1204: occasionally the accept fails before the TLS handshake
+                # even runs, which fails the test since the log message will not be
+                # issued in that case. Retry until handshake fails
+                def _try_handshake(self):
+                    self.assertRaises(OSError, server.accept)
+                    with open(router.logfile_path, 'rt') as out_file:
+                        return is_pattern_present(out_file, r"TLS connection failed")
+                self.assertTrue(retry(lambda: _try_handshake(self)))
 
             # Ensure router can still connect given the proper TLS config.
 
