@@ -44,10 +44,10 @@ jobs:
 
     steps:
     - name: Checkout router repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Checkout Proton repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: apache/qpid-proton
         ref: main
