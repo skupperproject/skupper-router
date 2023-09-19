@@ -67,4 +67,5 @@ under the License
   action page and click the `Run workflow` dropdown.
 * In the `Use workflow from` field, choose `main`.
 * In the field that says: `A version (git tag) that has already been released`, enter the github tag to respin (i.e.: 2.4.2).
+* Check the 'Push :latest tag?' checkbox if you want the :latest tag to be pushed.
 * Then click button `Run workflow`.
