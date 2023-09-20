@@ -90,6 +90,13 @@ bool qdr_delivery_receive_complete(const qdr_delivery_t *delivery)
     return qd_message_receive_complete(delivery->msg);
 }
 
+bool qdr_delivery_is_unicast_cutthrough(const qdr_delivery_t *delivery)
+{
+    if (!delivery)
+        return false;
+    return qd_message_is_unicast_cutthrough(delivery->msg);
+}
+
 
 // set the local disposition (to be send to remote endpoint)
 void qdr_delivery_set_disposition(qdr_delivery_t *delivery, uint64_t disposition)

@@ -99,6 +99,7 @@ static inline uint32_t next_delivery_id(void)
 
 
 bool qdr_delivery_receive_complete(const qdr_delivery_t *delivery);
+bool qdr_delivery_is_unicast_cutthrough(const qdr_delivery_t *delivery);
 bool qdr_delivery_send_complete(const qdr_delivery_t *delivery);
 bool qdr_delivery_oversize(const qdr_delivery_t *delivery);
 
