@@ -1520,6 +1520,9 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             # ts.wait()
             # self.assertEqual(1, ts.rejected);
 
+        # wait for the test server to close
+        wait_http_listeners_down(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+
         # verify router is still sane:
         http1_ping(self.http_server_port, self.http_listener_port)
 
