@@ -31,6 +31,7 @@
 
 #include <inttypes.h>
 #include <sys/socket.h>
+#include <stdatomic.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
 
@@ -143,11 +144,13 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 
     //
     // Since we can't query Proton for the maximum read-buffer capacity, we will infer it from
-    // calls to pn_raw_connection_read_buffers_capacity.
+    // calls to pn_raw_connection_read_buffers_capacity and track the largest value returned.
     //
-    static size_t max_capacity = 0;
-    if (capacity > max_capacity) {
-        max_capacity = capacity;
+    static atomic_size_t max_capacity;  // global
+    size_t current_mc = atomic_load(&max_capacity);
+    while (capacity > current_mc) {
+        if (atomic_compare_exchange_weak(&max_capacity, &current_mc, capacity))
+            break;
     }
 
     //
@@ -173,9 +176,11 @@ int qd_raw_connection_grant_read_buffers(pn_raw_connection_t *pn_raw_conn)
 
     //
     // Determine how many of the desired buffers are already granted.  This will always be a
-    // non-negative value.
+    // non-negative value since max_capacity will always be >= capacity
     //
-    size_t already_granted = max_capacity - capacity;
+    current_mc = atomic_load(&max_capacity);
+    assert(current_mc >= capacity);
+    size_t already_granted = current_mc - capacity;
 
     //
     // If we desire to grant additional buffers, calculate the number to grant now.
