@@ -526,10 +526,13 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
         if (qd_iterator_equal(admin_status_iter, (unsigned char*) QDR_CONNECTION_ADMIN_STATUS_DELETED)) {
             // This connection has been force-closed.  There are certain types of connections that cannot be
             // force-closed by management because they are essential for the correct operation of the router
-            if (conn->role != QDR_ROLE_INTER_ROUTER
-                && conn->role != QDR_ROLE_EDGE_CONNECTION
-                // ISSUE-1225: cannot delete tcp dispatch connections
-                && (!conn->connection_info->host || strcmp(conn->connection_info->host, "egress-dispatch"))) {
+            // like inter-router or edge uplink.
+            if (conn->control_flags & QDR_CONN_FLAG_NO_MGMT_DELETE) {
+                query->status = QD_AMQP_FORBIDDEN;
+                query->status.description = "You are not allowed to perform this operation.";
+                qd_compose_start_map(query->body);
+                qd_compose_end_map(query->body);
+            } else {
                 qdr_close_connection_CT(core, conn);
                 qd_log(LOG_AGENT,
                        QD_LOG_INFO,
@@ -539,17 +542,6 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
                 query->status = QD_AMQP_OK;
                 qdr_manage_write_connection_map_CT(core, conn, query->body, qdr_connection_columns);
             }
-            else {
-                //
-                // You are trying to delete an inter-router connection and that is always forbidden, no matter what
-                // policy rights you have.
-                //
-                query->status = QD_AMQP_FORBIDDEN;
-                query->status.description = "You are not allowed to perform this operation.";
-                qd_compose_start_map(query->body);
-                qd_compose_end_map(query->body);
-            }
-
         }
         else if (qd_iterator_equal(admin_status_iter, (unsigned char*) QDR_CONNECTION_ADMIN_STATUS_ENABLED)) {
             query->status = QD_AMQP_OK;

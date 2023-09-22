@@ -2784,11 +2784,10 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                    ingress_http_conn->conn_id,
                                                    0,
                                                    0,
-                                                   false,
-                                                   false,
                                                    250,
                                                    0,
                                                    info,
+                                                   0,
                                                    0,
                                                    0);
 
@@ -3112,11 +3111,10 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
                                                        egress_http_conn->conn_id,
                                                        0,
                                                        0,
-                                                       false,
-                                                       false,
                                                        250,
                                                        0,
                                                        info,
+                                                       0,
                                                        0,
                                                        0);
     egress_http_conn->qdr_conn = conn;

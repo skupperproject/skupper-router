@@ -673,10 +673,9 @@ struct qdr_connection_t {
     uint8_t                     next_pri;  // for incoming inter-router data links
     qdr_connection_role_t       role;
     int                         inter_router_cost;
+    qdr_connection_flags_t      control_flags;
     qdr_conn_identifier_t      *conn_id;
     qdr_conn_identifier_t      *alt_conn_id;
-    bool                        strip_annotations_in;
-    bool                        strip_annotations_out;
     int                         link_capacity;
     int                         mask_bit;  ///< set only if inter-router connection
     qdr_connection_work_list_t  work_list;
@@ -690,14 +689,14 @@ struct qdr_connection_t {
     qdr_error_t                *error;
     uint32_t                    conn_uptime; // Timestamp which can be used to calculate the number of seconds this connection has been up and running.
     uint32_t                    last_delivery_time; // Timestamp which can be used to calculate the number of seconds since the last delivery arrived on this connection.
-    bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
-    bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
     qdr_link_list_t             streaming_link_pool;   ///< pool of links available for streaming messages
     const qd_policy_spec_t     *policy_spec;
     qdr_connection_list_t       connection_group;      ///< List of associated connection group members
     qdr_connection_t           *group_cursor;          ///< Pointer to the next group member to use for traffic allocation
     qdr_edge_peer_t            *edge_peer;             ///< Edge routers only - Mesh-peer that this connection links to
     char                        edge_mesh_id[QD_DISCRIMINATOR_BYTES]; ///< Interior, edge-role only - Identity of the connected mesh
+    bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
+    bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
 };
 
 void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);

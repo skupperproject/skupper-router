@@ -315,6 +315,14 @@ typedef enum {
 
 typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *token);
 
+//
+// qdr_connection_t control flags: boolean settings that enable various connection operations
+//
+typedef unsigned int qdr_connection_flags_t;
+#define QDR_CONN_FLAG_STRIP_ANNO_IN  0x01U  // strip annotation header on inbound messages
+#define QDR_CONN_FLAG_STRIP_ANNO_OUT 0x02U  // strip annotation header on outbound messages
+#define QDR_CONN_FLAG_NO_MGMT_DELETE 0x04U  // do not allow deletion via management command
+
 /**
  * qdr_connection_opened
  *
@@ -328,9 +336,8 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param cost If the role is inter_router, this is the configured cost for the connection.
  * @param management_id - A unique identifier that is used in management and logging operations.
  * @param label Optional label provided in the connection's configuration.
- * @param strip_annotations_in True if configured to remove annotations on inbound messages.
- * @param strip_annotations_out True if configured to remove annotations on outbound messages.
  * @param link_capacity The capacity, in deliveries, for links in this connection.
+ * @param control_flags See QDR_CONN_FLAGS_xxx
  * @return Pointer to a connection object that can be used to refer to this connection over its lifetime.
  */
 qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
@@ -341,13 +348,12 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
                                         uint64_t                       management_id,
                                         const char                    *label,
                                         const char                    *remote_container_id,
-                                        bool                           strip_annotations_in,
-                                        bool                           strip_annotations_out,
                                         int                            link_capacity,
                                         const qd_policy_spec_t        *policy_spec,
                                         qdr_connection_info_t         *connection_info,
                                         qdr_connection_bind_context_t  context_binder,
-                                        void                          *bind_token);
+                                        void                          *bind_token,
+                                        qdr_connection_flags_t         control_flags);
 
 /**
  * qdr_connection_closed

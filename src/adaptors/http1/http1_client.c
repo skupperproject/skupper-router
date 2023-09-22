@@ -367,13 +367,12 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             hconn->conn_id,
                                             0,                    // label
                                             0,                    // remote container id
-                                            false,                // strip annotations in
-                                            false,                // strip annotations out
                                             REQUEST_BACKLOG_MAX,  // incoming link capacity
                                             0,                    // policy_spec
                                             info,
                                             0,   // bind context
-                                            0);  // bind token
+                                            0,   // bind token
+                                            0);  // control flags
     qdr_connection_set_context(hconn->qdr_conn, hconn);
     hconn->oper_status = QD_CONN_OPER_UP;
 

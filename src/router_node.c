@@ -1539,6 +1539,12 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
     qdr_connection_info_set_group_correlator(connection_info, conn->group_correlator);
 
+    qdr_connection_flags_t cflags = 0;
+    if (conn->strip_annotations_in)  cflags |= QDR_CONN_FLAG_STRIP_ANNO_IN;
+    if (conn->strip_annotations_out) cflags |= QDR_CONN_FLAG_STRIP_ANNO_OUT;
+    if (role == QDR_ROLE_INTER_ROUTER || role == QDR_ROLE_EDGE_CONNECTION)
+        cflags |= QDR_CONN_FLAG_NO_MGMT_DELETE;
+
     qdr_connection_opened(router->router_core,
                           amqp_direct_adaptor,
                           inbound,
@@ -1547,13 +1553,12 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           connection_id,
                           name,
                           pn_connection_remote_container(pn_conn),
-                          conn->strip_annotations_in,
-                          conn->strip_annotations_out,
                           link_capacity,
                           !!conn->policy_settings ? &conn->policy_settings->spec : 0,
                           connection_info,
                           bind_connection_context,
-                          conn);
+                          conn,
+                          cflags);
 
     if (conn->connector) {
         char conn_msg[300];

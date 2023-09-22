@@ -893,22 +893,22 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
     // So, we need to call pn_data_free(tcp_conn_properties).
     //
     pn_data_t *tcp_conn_properties = qdr_tcp_conn_properties();
-    qdr_connection_info_t *info                = qdr_connection_info(tc->require_tls,      // is_encrypted,
-                                                                     false,                // is_authenticated,
-                                                                     true,                 // opened,
-                                                                     "",                   // *sasl_mechanisms,
-                                                                     QD_INCOMING,          // dir,
-                                                                     tc->remote_address,   // *host,
-                                                                     "",                   // *ssl_proto,
-                                                                     "",                   // *ssl_cipher,
-                                                                     "",                   // *user,
-                                                                     "TcpAdaptor",         // *container,
-                                                                     tcp_conn_properties,  // *connection_properties,
-                                                                     0,                    // ssl_ssf,
-                                                                     false,                // ssl,
-                                                                     "",                   // peer router version,
-                                                                     false,                // streaming links
-                                                                     false);               // connection trunking
+    qdr_connection_info_t *info    = qdr_connection_info(tc->require_tls,      // is_encrypted,
+                                                         false,                // is_authenticated,
+                                                         true,                 // opened,
+                                                         "",                   // *sasl_mechanisms,
+                                                         QD_INCOMING,          // dir,
+                                                         tc->remote_address,   // *host,
+                                                         "",                   // *ssl_proto,
+                                                         "",                   // *ssl_cipher,
+                                                         "",                   // *user,
+                                                         "TcpAdaptor",         // *container,
+                                                         tcp_conn_properties,  // *connection_properties,
+                                                         0,                    // ssl_ssf,
+                                                         false,                // ssl,
+                                                         "",                   // peer router version,
+                                                         false,                // streaming links
+                                                         false);               // connection trunking
     pn_data_free(tcp_conn_properties);
 
     qdr_connection_t *conn = qdr_connection_opened(tcp_adaptor->core,
@@ -919,13 +919,12 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                    tc->conn_id,     // management_id
                                                    0,               // label
                                                    0,               // remote_container_id
-                                                   false,           // strip_annotations_in
-                                                   false,           // strip_annotations_out
                                                    250,             // link_capacity
                                                    0,               // policy_spec
                                                    info,            // connection_info
                                                    0,               // context_binder
-                                                   0);              // bind_token
+                                                   0,               // bind_token
+                                                   0);              // control flags
     tc->qdr_conn = conn;
     qdr_connection_set_context(conn, tc);
 
@@ -1313,7 +1312,15 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
  */
 static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
 {
-    const char *host = tc->is_egress_dispatcher_conn ? "egress-dispatch" : tc->config->adaptor_config->host_port;
+    const char *host = 0;
+    qdr_connection_flags_t cflags = 0;
+
+    if (tc->is_egress_dispatcher_conn) {
+        host = "egress-dispatch";
+        cflags = QDR_CONN_FLAG_NO_MGMT_DELETE;
+    } else {
+        host = tc->config->adaptor_config->host_port;
+    }
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] Opening server-side core connection %s", tc->conn_id,
            host);
 
@@ -1348,13 +1355,12 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
                                                    tc->conn_id,     // management_id
                                                    0,               // label
                                                    0,               // remote_container_id
-                                                   false,           // strip_annotations_in
-                                                   false,           // strip_annotations_out
                                                    250,             // link_capacity
                                                    0,               // policy_spec
                                                    info,            // connection_info
                                                    0,               // context_binder
-                                                   0);              // bind_token
+                                                   0,               // bind_token
+                                                   cflags);         // control flags
     tc->qdr_conn = conn;
     qdr_connection_set_context(conn, tc);
 

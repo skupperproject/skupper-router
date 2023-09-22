@@ -85,13 +85,13 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
                                         uint64_t                      management_id,
                                         const char                   *label,
                                         const char                   *remote_container_id,
-                                        bool                          strip_annotations_in,
-                                        bool                          strip_annotations_out,
                                         int                           link_capacity,
                                         const qd_policy_spec_t       *policy_spec,
                                         qdr_connection_info_t        *connection_info,
                                         qdr_connection_bind_context_t context_binder,
-                                        void                         *bind_token)
+                                        void                         *bind_token,
+                                        qdr_connection_flags_t        control_flags
+    )
 {
     qdr_action_t     *action = qdr_action(qdr_connection_opened_CT, "connection_opened");
     qdr_connection_t *conn   = new_qdr_connection_t();
@@ -105,13 +105,12 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     conn->incoming              = incoming;
     conn->role                  = role;
     conn->inter_router_cost     = cost;
-    conn->strip_annotations_in  = strip_annotations_in;
-    conn->strip_annotations_out = strip_annotations_out;
     conn->policy_spec           = policy_spec;
     conn->link_capacity         = link_capacity;
     conn->mask_bit              = -1;
     conn->admin_status          = QD_CONN_ADMIN_ENABLED;
     conn->oper_status           = QD_CONN_OPER_UP;
+    conn->control_flags         = control_flags;
     DEQ_INIT(conn->links);
     DEQ_INIT(conn->work_list);
     DEQ_INIT(conn->streaming_link_pool);
@@ -672,8 +671,8 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
     link->no_route = no_route;
     link->priority = QDR_DEFAULT_PRIORITY;
 
-    link->strip_annotations_in  = conn->strip_annotations_in;
-    link->strip_annotations_out = conn->strip_annotations_out;
+    link->strip_annotations_in  = !!(conn->control_flags & QDR_CONN_FLAG_STRIP_ANNO_IN);
+    link->strip_annotations_out = !!(conn->control_flags & QDR_CONN_FLAG_STRIP_ANNO_OUT);
 
     //
     // Adjust the delivery's identity
@@ -1210,8 +1209,8 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     link->zero_credit_time = link->core_ticks;
     link->priority       = priority;
 
-    link->strip_annotations_in  = conn->strip_annotations_in;
-    link->strip_annotations_out = conn->strip_annotations_out;
+    link->strip_annotations_in  = !!(conn->control_flags & QDR_CONN_FLAG_STRIP_ANNO_IN);
+    link->strip_annotations_out = !!(conn->control_flags & QDR_CONN_FLAG_STRIP_ANNO_OUT);
 
     qdr_link_setup_histogram(conn, dir, link);
 

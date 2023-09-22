@@ -187,13 +187,12 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                  conn_id,         // management_id
                                  0,               // label
                                  0,               // remote_container_id
-                                 false,           // strip_annotations_in
-                                 false,           // strip_annotations_out
                                  5,               // link_capacity
                                  0,               // policy_spec
                                  info,            // connection_info
                                  0,               // context_binder
-                                 0);              // bind_token
+                                 0,               // bind_token
+                                 0);              // control flags
 
     return conn;
 }
