@@ -29,11 +29,13 @@ from proton.reactor import Container
 from proton.utils import BlockingConnection
 
 from skupper_router.management.client import Node
+from skupper_router.management.error import ForbiddenStatus
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, MgmtMsgProxy, TestTimeout
 from system_test import QdManager
 from system_test import unittest
 from system_test import Process
+from system_test import CONNECTION_TYPE
 from test_broker import FakeBroker
 
 from message_tests import DynamicAddressTest, MobileAddressAnonymousTest, MobileAddressTest
@@ -1498,6 +1500,25 @@ class RouterTest(TestCase):
                 eb2_conn_found = True
 
         self.assertTrue(int_a_inter_router_conn_found and eb1_conn_found and eb2_conn_found)
+
+    def test_74_ensure_no_admin_delete(self):
+        """
+        This test tries to delete edge uplink connections but that operation
+        is forbidden
+        """
+        int_a = self.routers[0]
+        ea_1 = self.routers[2]
+
+        for r in (int_a, ea_1):
+            conns = [d for d in
+                     r.management.query(type=CONNECTION_TYPE).get_dicts() if
+                     d['role'] == 'edge']
+            self.assertNotEqual(0, len(conns), f"Expected at least one connection: {conns}")
+            for conn in conns:
+                with self.assertRaises(ForbiddenStatus):
+                    r.management.update(attributes={'adminStatus': 'deleted'},
+                                        type=CONNECTION_TYPE,
+                                        identity=conn['identity'])
 
 
 class ConnectivityTest(MessagingHandler):

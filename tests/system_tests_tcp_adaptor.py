@@ -32,6 +32,8 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
+from skupper_router.management.error import ForbiddenStatus
+
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
@@ -1732,6 +1734,17 @@ class TcpAdaptorManagementTest(TestCase):
             self.assertEqual(10, c_stats['bytesOut'])
             self.assertEqual(2, c_stats['connectionsOpened'])
             self.assertEqual(1, c_stats['connectionsClosed'])
+
+            # Attempt to delete the special tcp-dispatcher pseudo connection.
+            # Doing so is forbidden so expect this to fail
+
+            conns = [d for d in mgmt.query(type=CONNECTION_TYPE).get_dicts()
+                     if d['host'] == 'egress-dispatch']
+            for conn in conns:
+                with self.assertRaises(ForbiddenStatus):
+                    mgmt.update(attributes={'adminStatus': 'deleted'},
+                                type=CONNECTION_TYPE,
+                                identity=conn['identity'])
 
             # splendid!  Not delete all the things
 
