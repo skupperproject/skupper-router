@@ -537,7 +537,6 @@ static uint64_t stats_get_connections(const qdr_global_stats_t *stats) { return 
 static uint64_t stats_get_links(const qdr_global_stats_t *stats) { return stats->links; }
 static uint64_t stats_get_addrs(const qdr_global_stats_t *stats) { return stats->addrs; }
 static uint64_t stats_get_routers(const qdr_global_stats_t *stats) { return stats->routers; }
-static uint64_t stats_get_auto_links(const qdr_global_stats_t *stats) { return stats->auto_links; }
 static uint64_t stats_get_presettled_deliveries(const qdr_global_stats_t *stats) { return stats->presettled_deliveries; }
 static uint64_t stats_get_dropped_presettled_deliveries(const qdr_global_stats_t *stats) { return stats->dropped_presettled_deliveries; }
 static uint64_t stats_get_accepted_deliveries(const qdr_global_stats_t *stats) { return stats->accepted_deliveries; }
@@ -547,20 +546,16 @@ static uint64_t stats_get_modified_deliveries(const qdr_global_stats_t *stats) {
 static uint64_t stats_get_deliveries_ingress(const qdr_global_stats_t *stats) { return stats->deliveries_ingress; }
 static uint64_t stats_get_deliveries_egress(const qdr_global_stats_t *stats) { return stats->deliveries_egress; }
 static uint64_t stats_get_deliveries_transit(const qdr_global_stats_t *stats) { return stats->deliveries_transit; }
-static uint64_t stats_get_deliveries_ingress_route_container(const qdr_global_stats_t *stats) { return stats->deliveries_ingress_route_container; }
-static uint64_t stats_get_deliveries_egress_route_container(const qdr_global_stats_t *stats) { return stats->deliveries_egress_route_container; }
 static uint64_t stats_get_deliveries_delayed_1sec(const qdr_global_stats_t *stats) { return stats->deliveries_delayed_1sec; }
 static uint64_t stats_get_deliveries_delayed_10sec(const qdr_global_stats_t *stats) { return stats->deliveries_delayed_10sec; }
 static uint64_t stats_get_deliveries_stuck(const qdr_global_stats_t *stats) { return stats->deliveries_stuck; }
 static uint64_t stats_get_links_blocked(const qdr_global_stats_t *stats) { return stats->links_blocked; }
-static uint64_t stats_get_deliveries_redirected_to_fallback(const qdr_global_stats_t *stats) { return stats->deliveries_redirected_to_fallback; }
 
 static const struct metric_definition metrics[] = {
     {"qdr_connections_total", "gauge", stats_get_connections},
     {"qdr_links_total", "gauge", stats_get_links},
     {"qdr_addresses_total", "gauge", stats_get_addrs},
     {"qdr_routers_total", "gauge", stats_get_routers},
-    {"qdr_auto_links_total", "gauge", stats_get_auto_links},
     {"qdr_presettled_deliveries_total", "counter", stats_get_presettled_deliveries},
     {"qdr_dropped_presettled_deliveries_total", "counter", stats_get_dropped_presettled_deliveries},
     {"qdr_accepted_deliveries_total", "counter", stats_get_accepted_deliveries},
@@ -570,13 +565,10 @@ static const struct metric_definition metrics[] = {
     {"qdr_deliveries_ingress_total", "counter", stats_get_deliveries_ingress},
     {"qdr_deliveries_egress_total", "counter", stats_get_deliveries_egress},
     {"qdr_deliveries_transit_total", "counter", stats_get_deliveries_transit},
-    {"qdr_deliveries_ingress_route_container_total", "counter", stats_get_deliveries_ingress_route_container},
-    {"qdr_deliveries_egress_route_container_total", "counter", stats_get_deliveries_egress_route_container},
     {"qdr_deliveries_delayed_1sec_total", "counter", stats_get_deliveries_delayed_1sec},
     {"qdr_deliveries_delayed_10sec_total", "counter", stats_get_deliveries_delayed_10sec},
     {"qdr_deliveries_stuck_total", "gauge", stats_get_deliveries_stuck},
     {"qdr_links_blocked_total", "gauge", stats_get_links_blocked},
-    {"qdr_deliveries_redirected_to_fallback_total", "counter", stats_get_deliveries_redirected_to_fallback}
 };
 static const size_t metrics_length = sizeof(metrics)/sizeof(metrics[0]);
 
@@ -684,26 +676,26 @@ static size_t _write_allocator_metrics(uint8_t **start, size_t available)
 
         pool_total_bytes += total_bytes;
 
-        size_t rc = _write_allocator_metric(start, available, metric->name, "total_allocated", total_allocated);
+        size_t rc = _write_allocator_metric(start, available, metric->name, "allocated", total_allocated);
         if (rc == 0) return 0;
         available -= rc;
 
-        rc = _write_allocator_metric(start, available, metric->name, "total_in_use", total_in_use);
+        rc = _write_allocator_metric(start, available, metric->name, "in_use", total_in_use);
         if (rc == 0) return 0;
         available -= rc;
 
-        rc = _write_allocator_metric(start, available, metric->name, "total_in_cache", total_in_cache);
+        rc = _write_allocator_metric(start, available, metric->name, "cached", total_in_cache);
         if (rc == 0) return 0;
         available -= rc;
 
-        rc = _write_allocator_metric(start, available, metric->name, "total_bytes", total_bytes);
+        rc = _write_allocator_metric(start, available, metric->name, "bytes", total_bytes);
         if (rc == 0) return 0;
         available -= rc;
 
         metric = DEQ_NEXT(metric);
     }
 
-    size_t rc = _write_metric(start, available, "alloc_pool_total_bytes", "gauge", pool_total_bytes);
+    size_t rc = _write_metric(start, available, "qdr_alloc_pool_bytes", "gauge", pool_total_bytes);
     if (rc == 0) return 0;
     available -= rc;
 

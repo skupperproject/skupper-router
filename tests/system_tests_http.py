@@ -208,7 +208,6 @@ class RouterTestHttp(TestCase):
 
         stat_names = ["qdr_connections_total", "qdr_links_total",
                       "qdr_addresses_total", "qdr_routers_total",
-                      "qdr_auto_links_total",
                       "qdr_presettled_deliveries_total",
                       "qdr_dropped_presettled_deliveries_total",
                       "qdr_accepted_deliveries_total",
@@ -218,13 +217,10 @@ class RouterTestHttp(TestCase):
                       "qdr_deliveries_ingress_total",
                       "qdr_deliveries_egress_total",
                       "qdr_deliveries_transit_total",
-                      "qdr_deliveries_ingress_route_container_total",
-                      "qdr_deliveries_egress_route_container_total",
                       "qdr_deliveries_delayed_1sec_total",
                       "qdr_deliveries_delayed_10sec_total",
                       "qdr_deliveries_stuck_total",
-                      "qdr_links_blocked_total",
-                      "qdr_deliveries_redirected_to_fallback_total"]
+                      "qdr_links_blocked_total"]
         for stat in r.management.query(type="io.skupper.router.allocator").get_dicts():
             stat_names.append(stat['typeName'])
 
