@@ -353,7 +353,7 @@ class RouterTest(TestCase):
                     'test_73':  0
                     }
 
-    def test_01_connectivity_INTA_EA1(self):
+    def test_01_1_connectivity_INTA_EA1(self):
         if self.skip['test_01'] :
             self.skipTest("Test skipped during development.")
 
@@ -362,6 +362,31 @@ class RouterTest(TestCase):
                                 'EA1')
         test.run()
         self.assertIsNone(test.error)
+
+    def test_01_2_ensure_no_admin_delete(self):
+        """
+        This test tries to delete edge uplink connections but that operation
+        is forbidden. This test runs immediately after the INTA/EA1
+        connectivity test to ensure both routers are operational. Futher tests
+        of the INTA/EA1 path follow to ensure the delete attempt did not change
+        the routers state.
+        """
+        if self.skip['test_01'] :
+            self.skipTest("Test skipped during development.")
+
+        mgmt_a = self.routers[0].management
+        mgmt_ea1 = self.routers[2].management
+
+        for mgmt in (mgmt_a, mgmt_ea1):
+            conns = [d for d in
+                     mgmt.query(type=CONNECTION_TYPE).get_dicts() if
+                     d['role'] == 'edge']
+            self.assertNotEqual(0, len(conns), f"Expected at least one connection: {conns}")
+            for conn in conns:
+                with self.assertRaises(ForbiddenStatus):
+                    mgmt.update(attributes={'adminStatus': 'deleted'},
+                                type=CONNECTION_TYPE,
+                                identity=conn['identity'])
 
     def test_02_connectivity_INTA_EA2(self):
         if self.skip['test_02'] :
@@ -1500,25 +1525,6 @@ class RouterTest(TestCase):
                 eb2_conn_found = True
 
         self.assertTrue(int_a_inter_router_conn_found and eb1_conn_found and eb2_conn_found)
-
-    def test_74_ensure_no_admin_delete(self):
-        """
-        This test tries to delete edge uplink connections but that operation
-        is forbidden
-        """
-        int_a = self.routers[0]
-        ea_1 = self.routers[2]
-
-        for r in (int_a, ea_1):
-            conns = [d for d in
-                     r.management.query(type=CONNECTION_TYPE).get_dicts() if
-                     d['role'] == 'edge']
-            self.assertNotEqual(0, len(conns), f"Expected at least one connection: {conns}")
-            for conn in conns:
-                with self.assertRaises(ForbiddenStatus):
-                    r.management.update(attributes={'adminStatus': 'deleted'},
-                                        type=CONNECTION_TYPE,
-                                        identity=conn['identity'])
 
 
 class ConnectivityTest(MessagingHandler):
