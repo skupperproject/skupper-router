@@ -524,9 +524,12 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
         qd_iterator_t *admin_status_iter = qd_parse_raw(admin_state);
 
         if (qd_iterator_equal(admin_status_iter, (unsigned char*) QDR_CONNECTION_ADMIN_STATUS_DELETED)) {
-            // This connection has been force-closed.
-            // Inter-router and edge connections may not be force-closed
-            if (conn->role != QDR_ROLE_INTER_ROUTER && conn->role != QDR_ROLE_EDGE_CONNECTION) {
+            // This connection has been force-closed.  There are certain types of connections that cannot be
+            // force-closed by management because they are essential for the correct operation of the router
+            if (conn->role != QDR_ROLE_INTER_ROUTER
+                && conn->role != QDR_ROLE_EDGE_CONNECTION
+                // ISSUE-1225: cannot delete tcp dispatch connections
+                && (!conn->connection_info->host || strcmp(conn->connection_info->host, "egress-dispatch"))) {
                 qdr_close_connection_CT(core, conn);
                 qd_log(LOG_AGENT,
                        QD_LOG_INFO,
