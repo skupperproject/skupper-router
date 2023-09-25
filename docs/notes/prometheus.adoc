@@ -1,0 +1,111 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+= Monitoring Router Metrics Via Prometheus
+
+The router can be configured to enable metrics scraping via
+Prometheus. Metrics are provided via an HTTP service running in the
+router. A snapshot of the metrics can be obtained by issuing an HTTP
+GET request to the service for the */metrics* URL path.
+
+== Configuration
+
+Prometheus support is disabled by default. To enable metrics access an
+HTTP service must be configured on the router. This is done by
+specifying an *io.skupper.router.listener* entry in the router
+configuration (or via in-band management). The listener entry must
+provide:
+
+* The host IP address/name
+* The TCP port number
+* The _http_ attribute set to True
+
+For example, the following listener entry enables an HTTP server
+listening on localhost port 22967.
+
+  listener {
+    port: 22976
+    http: True
+    host: localhost
+    saslMechanisms: ANONYMOUS
+    idleTimeoutSeconds: 120
+    authenticatePeer: no
+    role: normal
+  }
+
+The Prometheus server must also be configured to scrape the
+router. This requires adding a job in the Prometheus server's
+*scrape-config* configuration for the router. An example job
+configuration for the above example listener could be:
+
+  scrape_configs:
+    - job_name: skupper-router
+      metrics_path: /metrics
+      static_configs:
+        - targets:
+            - localhost:22976
+
+== Metrics
+
+The metrics provided by the router are intended for use by developers
+to aid fault monitoring and debugging. Therefore the metrics content
+may change between releases as features are added or removed.
+
+=== Heap Allocation Metrics
+
+A subset of the router metrics are concerned with the router's heap
+memory utilization. The router uses a cache to manage instances of
+data objects that have been allocated from the heap. This cache avoids
+the overhead of allocating and freeing frequently used data objects
+from the system's heap.
+
+See alloc_pool.c for implementation details.
+
+The cache is a pool of data objects that have been allocated from the
+heap for use by the router. Each data type has its own dedicated
+cache. When the router needs an instance of said data type it will
+first attempt to claim an object from the cache. If the cache is
+empty, the router will instead allocate a batch of data objects from
+the system heap. It will reserve one data object instance from the
+batch for immediate use and place the remaining into the cache. When
+the router no longer needs a particular instance of a data object it
+will be placed back into the cache and can be re-used at a later time.
+
+Given this implementation, a particular instance of a data object may
+be either:
+
+* in the cache (in standby - available for use when needed)
+* or currently in use by the router.
+
+Each data type will have a set of 4 metrics associated with it:
+
+* allocated: total number of objects that are currently allocated from the heap
+* in_use: total objects currently being used by the router
+* cached: total objects in the cache
+* memory_use_bytes: the sum of all memory allocated from the heap for the given data type
+
+These metrics adhere to the following relationships:
+
+* allocated = in_use + cached
+* memory_use_bytes = (sizeof(<type>) * allocated)
+
+
+
+
+

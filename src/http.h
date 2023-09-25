@@ -45,4 +45,9 @@ qd_lws_listener_t *qd_http_server_listen(qd_http_server_t *s, struct qd_listener
  */
 void qd_lws_listener_close(qd_lws_listener_t *hl);
 
+/* register/deregister alloc_pool metrics (thread safe) */
+struct qd_alloc_type_desc_t;
+void qd_http_add_alloc_metric(const char *name, const struct qd_alloc_type_desc_t *desc);
+void qd_http_remove_alloc_metric(const char *name);
+
 #endif // QD_HTTP_H

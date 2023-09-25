@@ -122,7 +122,7 @@ static inline void *qd_alloc_deref_safe_ptr(const qd_alloc_safe_ptr_t *sp)
  */
 void qd_alloc_desc_init(const char *name, qd_alloc_type_desc_t *desc, size_t size, const size_t *additional_size,
                         const qd_alloc_config_t *config);
-qd_alloc_stats_t qd_alloc_desc_stats(qd_alloc_type_desc_t *desc);
+qd_alloc_stats_t qd_alloc_desc_stats(const qd_alloc_type_desc_t *desc);  // thread safe
 // clang-format off
 #define ALLOC_DEFINE_CONFIG(T,S,A,C)                                    \
     qd_alloc_type_desc_t __desc_##T  __attribute__((aligned(64)));      \
@@ -152,5 +152,5 @@ qd_alloc_stats_t qd_alloc_desc_stats(qd_alloc_type_desc_t *desc);
 void qd_alloc_initialize(void);
 void qd_alloc_debug_dump(const char *file);
 void qd_alloc_finalize(void);
-
+size_t qd_alloc_type_size(const qd_alloc_type_desc_t *desc);  // thread safe
 #endif
