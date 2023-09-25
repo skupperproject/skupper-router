@@ -998,9 +998,10 @@ static void handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qdr_li
     // The raw connection establishment must be the last thing done in this function.
     // After this call, a separate IO thread may immediately be invoked in the context
     // of the new connection to handle raw connection events.
+    // ISSUE-1202 - Set the conn->raw_opened flag before calling pn_proactor_raw_connect()
     //
-    pn_proactor_raw_connect(tcplite_context->proactor, conn->raw_conn, cr->adaptor_config->host_port);
     SET_ATOMIC_FLAG(&conn->raw_opened);
+    pn_proactor_raw_connect(tcplite_context->proactor, conn->raw_conn, cr->adaptor_config->host_port);
 }
 
 
