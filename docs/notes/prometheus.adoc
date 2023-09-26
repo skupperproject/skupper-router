@@ -98,12 +98,12 @@ Each data type will have a set of 4 metrics associated with it:
 * allocated: total number of objects that are currently allocated from the heap
 * in_use: total objects currently being used by the router
 * cached: total objects in the cache
-* memory_use_bytes: the sum of all memory allocated from the heap for the given data type
+* bytes: the sum of all memory allocated from the heap for the given data type
 
 These metrics adhere to the following relationships:
 
 * allocated = in_use + cached
-* memory_use_bytes = (sizeof(<type>) * allocated)
+* bytes = (sizeof(<type>) * allocated)
 
 
 
