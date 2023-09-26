@@ -28,7 +28,7 @@ from proton.reactor import Container
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
 from system_test import unittest
 from system_test import QdManager
-from system_test import retry_assertion
+from system_test import retry_assertion, CONFIG_AUTOLINK_TYPE, ROUTER_TYPE
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
 
@@ -115,12 +115,10 @@ class NameCollisionTest(TestCase):
     def test_name_collision(self):
         args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "direction": "in"}
         # Add autoLink with the same name as the one already present.
-        al_long_type = 'io.skupper.router.router.config.autoLink'
-        addr_long_type = 'io.skupper.router.router.config.address'
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            mgmt.create(al_long_type, args)
+            mgmt.create(CONFIG_AUTOLINK_TYPE, args)
         except Exception as e:
             if "BadRequestStatus: Name conflicts with an existing entity" in str(e):
                 test_pass = True
@@ -217,8 +215,7 @@ class AutoLinkRetryTest(TestCase):
         return self.routers[1].addresses[0]
 
     def check_auto_link(self):
-        long_type = 'io.skupper.router.router.config.autoLink'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + CONFIG_AUTOLINK_TYPE
         output = json.loads(self.run_skmanage(query_command))
 
         if output[0].get('operStatus') == "active":
@@ -256,8 +253,7 @@ class AutoLinkRetryTest(TestCase):
 
     def test_auto_link_reattach(self):
         def check_autolink_status():
-            long_type = 'io.skupper.router.router.config.autoLink'
-            query_command = 'QUERY --type=' + long_type
+            query_command = 'QUERY --type=' + CONFIG_AUTOLINK_TYPE
             output = json.loads(self.run_skmanage(query_command))
 
             # Since the distribution of the autoLinked address 'examples'
@@ -367,8 +363,7 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
-        long_type = 'io.skupper.router.router'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + ROUTER_TYPE
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
         self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 0)
@@ -740,7 +735,7 @@ class ManageAutolinksTest(MessagingHandler):
         if self.n_created < self.count:
             while self.n_created < self.count and self.agent.credit > 0:
                 props = {'operation': 'CREATE',
-                         'type': 'io.skupper.router.router.config.autoLink',
+                         'type': CONFIG_AUTOLINK_TYPE,
                          'name': 'AL.%d' % self.n_created}
                 body  = {'direction': 'out',
                          'containerId': 'container.new',
@@ -751,7 +746,7 @@ class ManageAutolinksTest(MessagingHandler):
         elif self.n_attached == self.count and self.n_deleted < self.count:
             while self.n_deleted < self.count and self.agent.credit > 0:
                 props = {'operation': 'DELETE',
-                         'type': 'io.skupper.router.router.config.autoLink',
+                         'type': CONFIG_AUTOLINK_TYPE,
                          'name': 'AL.%d' % self.n_deleted}
                 body  = {}
                 msg = Message(properties=props, body=body, reply_to=self.reply_to)

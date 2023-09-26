@@ -32,7 +32,9 @@ from proton import Connection
 from proton import Link
 from proton import Message
 from proton import Delivery
-from system_test import AsyncTestSender, AsyncTestReceiver, TestCase, Qdrouterd, main_module, TIMEOUT, TestTimeout, unittest
+from system_test import AsyncTestSender, AsyncTestReceiver, TestCase
+from system_test import Qdrouterd, main_module, TIMEOUT, TestTimeout, unittest
+from system_test import ALLOCATOR_TYPE, ROUTER_ADDRESS_TYPE
 
 
 MAX_FRAME = 1023
@@ -183,8 +185,7 @@ class MulticastLinearTest(TestCase):
 
         d = dict()
         mgmt = router.management
-        atype = 'io.skupper.router.allocator'
-        q = mgmt.query(type=atype).get_dicts()
+        q = mgmt.query(type=ALLOCATOR_TYPE).get_dicts()
         for name in stats:
             d[name] = next(a for a in q if a['typeName'] == name)
         return d
@@ -621,8 +622,7 @@ class MulticastBase(MessagingHandler, metaclass=abc.ABCMeta):
             clean = True
             for cfg in self.config:
                 mgmt = cfg['router'].management
-                atype = 'io.skupper.router.router.address'
-                addrs = mgmt.query(type=atype).get_dicts()
+                addrs = mgmt.query(type=ROUTER_ADDRESS_TYPE).get_dicts()
                 if any(self.topic in a['name'] for a in addrs):
                     clean = False
                     break

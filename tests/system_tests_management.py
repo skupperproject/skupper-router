@@ -37,22 +37,14 @@ from skupper_router_internal.compat import BINARY
 import system_test
 from system_test import Qdrouterd, Process
 from system_test import unittest
-
-PREFIX = 'io.skupper.router.'
-MANAGEMENT = PREFIX + 'management'
-CONFIGURATION = PREFIX + 'configurationEntity'
-OPERATIONAL = PREFIX + 'operationalEntity'
-LISTENER = PREFIX + 'listener'
-CONNECTOR = PREFIX + 'connector'
-DUMMY = PREFIX + 'dummy'
-ROUTER = PREFIX + 'router'
-LINK = ROUTER + '.link'
-ADDRESS = ROUTER + '.address'
-NODE = ROUTER + '.node'
-CONFIG_ADDRESS = ROUTER + '.config.address'
+from system_test import MANAGEMENT_TYPE, CONFIG_ENTITY_TYPE, OPER_ENTITY_TYPE
+from system_test import AMQP_LISTENER_TYPE, AMQP_CONNECTOR_TYPE, DUMMY_TYPE
+from system_test import ROUTER_TYPE, ROUTER_LINK_TYPE, ROUTER_ADDRESS_TYPE
+from system_test import ROUTER_NODE_TYPE, CONFIG_ADDRESS_TYPE
 
 
 def short_name(name):
+    PREFIX = 'io.skupper.router.'
     if name.startswith(PREFIX):
         return name[len(PREFIX):]
     return name
@@ -133,28 +125,28 @@ class ManagementTest(system_test.TestCase):
 
     def test_metadata(self):
         """Query with type only"""
-        response = self.node.query(type=ROUTER)
+        response = self.node.query(type=ROUTER_TYPE)
         for attr in ['type', 'metadata']:
             self.assertIn(attr, response.attribute_names)
         self.assertEqual(response.get_entities()[0]['metadata'], 'selftest;solo')
 
     def test_query_type(self):
         """Query with type only"""
-        response = self.node.query(type=LISTENER)
+        response = self.node.query(type=AMQP_LISTENER_TYPE)
         for attr in ['type', 'name', 'identity', 'host', 'port']:
             self.assertIn(attr, response.attribute_names)
         for r in response.get_dicts():
             self.assertEqual(len(response.attribute_names), len(r))
-            self.assertEqual(r['type'], LISTENER)
+            self.assertEqual(r['type'], AMQP_LISTENER_TYPE)
         self.assertTrue(
             {'l0', 'l1', 'l2'} <= set(r['name'] for r in response.get_entities()))
 
     def test_query_type_attributes(self):
         """Query with type and attribute names"""
         attribute_names = ['type', 'name', 'port']
-        response = self.node.query(type=LISTENER, attribute_names=attribute_names)
+        response = self.node.query(type=AMQP_LISTENER_TYPE, attribute_names=attribute_names)
         self.assertEqual(attribute_names, response.attribute_names)
-        expect = [[LISTENER, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
+        expect = [[AMQP_LISTENER_TYPE, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
         for r in expect:  # We might have extras in results due to create tests
             self.assertIn(r, response.results)
             self.assertIn(dict(zip(attribute_names, r)), response.get_dicts())
@@ -164,7 +156,7 @@ class ManagementTest(system_test.TestCase):
         attribute_names = ['type', 'name', 'port']
         response = self.node.query(attribute_names=attribute_names)
         self.assertEqual(attribute_names, response.attribute_names)
-        expect = [[LISTENER, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
+        expect = [[AMQP_LISTENER_TYPE, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
         for r in expect:  # We might have extras in results due to create tests
             self.assertIn(r, response.results)
         for name in ['router/' + self.router.name, 'log/DEFAULT']:
@@ -192,18 +184,18 @@ class ManagementTest(system_test.TestCase):
         port = self.get_port()
         # Note qdrouter schema defines port as string not int, since it can be a service name.
         attributes = {'name': 'foo', 'port': str(port), 'role': 'normal', 'saslMechanisms': 'ANONYMOUS', 'authenticatePeer': False}
-        entity = self.assert_create_ok(LISTENER, 'foo', attributes)
+        entity = self.assert_create_ok(AMQP_LISTENER_TYPE, 'foo', attributes)
         self.assertEqual(entity['name'], 'foo')
         self.assertEqual(entity['host'], '')
 
         # Connect via the new listener
         node3 = self.cleanup(Node.connect(Url(port=port)))
-        router = node3.query(type=ROUTER).get_entities()
+        router = node3.query(type=ROUTER_TYPE).get_entities()
         self.assertEqual(self.router.name, router[0]['id'])
 
         # Delete the listener
         entity.delete()
-        response = self.node.query(type=LISTENER, attribute_names=['name'])
+        response = self.node.query(type=AMQP_LISTENER_TYPE, attribute_names=['name'])
         for l in response.get_dicts():
             self.assertNotEqual(l['name'], 'foo')
 
@@ -278,45 +270,45 @@ class ManagementTest(system_test.TestCase):
                           dict(identity="BOGUS", enable="default"))
 
     def test_create_config_address(self):
-        self.assert_create_ok(CONFIG_ADDRESS, 'myConfigAddr', dict(prefix='prefixA'))
-        self.assert_read_ok(CONFIG_ADDRESS, 'myConfigAddr',
+        self.assert_create_ok(CONFIG_ADDRESS_TYPE, 'myConfigAddr', dict(prefix='prefixA'))
+        self.assert_read_ok(CONFIG_ADDRESS_TYPE, 'myConfigAddr',
                             dict(prefix='prefixA', pattern=None))
         simple_send_receive_test = SimpleSndRecv(self.router.addresses[0], '/prefixA/other')
         simple_send_receive_test.run()
         self.assertTrue(simple_send_receive_test.message_received)
 
-        self.node.delete(CONFIG_ADDRESS, name='myConfigAddr')
+        self.node.delete(CONFIG_ADDRESS_TYPE, name='myConfigAddr')
         self.assertRaises(NotFoundStatus, self.node.read,
-                          type=CONFIG_ADDRESS, name='myConfigAddr')
+                          type=CONFIG_ADDRESS_TYPE, name='myConfigAddr')
 
     def test_create_config_address_pattern(self):
-        self.assert_create_ok(CONFIG_ADDRESS, 'patternAddr', dict(pattern='a.*.b'))
-        self.assert_read_ok(CONFIG_ADDRESS, 'patternAddr',
+        self.assert_create_ok(CONFIG_ADDRESS_TYPE, 'patternAddr', dict(pattern='a.*.b'))
+        self.assert_read_ok(CONFIG_ADDRESS_TYPE, 'patternAddr',
                             dict(prefix=None, pattern='a.*.b'))
         simple_send_receive_test = SimpleSndRecv(self.router.addresses[0], '/a.HITHERE.b')
         simple_send_receive_test.run()
         self.assertTrue(simple_send_receive_test.message_received)
 
-        self.node.delete(CONFIG_ADDRESS, name='patternAddr')
+        self.node.delete(CONFIG_ADDRESS_TYPE, name='patternAddr')
         self.assertRaises(NotFoundStatus, self.node.read,
-                          type=CONFIG_ADDRESS, name='patternAddr')
+                          type=CONFIG_ADDRESS_TYPE, name='patternAddr')
 
     def test_dummy(self):
         """Test all operations on the dummy test entity"""
-        entity = self.node.read(type=LISTENER, name='l0')
+        entity = self.node.read(type=AMQP_LISTENER_TYPE, name='l0')
         self.assertEqual('l0', entity.name)
         self.assertEqual(str(self.router.ports[0]), entity.port)
 
         entity = self.node.read(
-            type=LISTENER, identity='listener/0.0.0.0:%s:l1' % self.router.ports[1])
+            type=AMQP_LISTENER_TYPE, identity='listener/0.0.0.0:%s:l1' % self.router.ports[1])
         self.assertEqual('l1', entity.name)
         self.assertEqual(str(self.router.ports[1]), entity.port)
 
         # Bad type
-        self.assertRaises(BadRequestStatus, self.node.read, type=CONNECTOR, name='l0')
+        self.assertRaises(BadRequestStatus, self.node.read, type=AMQP_CONNECTOR_TYPE, name='l0')
 
         # Unknown entity
-        self.assertRaises(NotFoundStatus, self.node.read, type=LISTENER, name='nosuch')
+        self.assertRaises(NotFoundStatus, self.node.read, type=AMQP_LISTENER_TYPE, name='nosuch')
 
         # Update is not allowed by the schema
         self.assertRaises(NotImplementedStatus, entity.update)
@@ -325,29 +317,29 @@ class ManagementTest(system_test.TestCase):
         self.assertRaises(NotImplementedStatus, entity.call, 'nosuchop', foo="bar")
 
         # Dummy entity supports all CRUD operations
-        dummy = self.node.create({'arg1': 'START'}, type=DUMMY, name='MyDummy', )
-        self.assertEqual(dummy.type, DUMMY)
+        dummy = self.node.create({'arg1': 'START'}, type=DUMMY_TYPE, name='MyDummy', )
+        self.assertEqual(dummy.type, DUMMY_TYPE)
         self.assertEqual(dummy.name, 'MyDummy')
         self.assertEqual(dummy.arg1, 'START')
         identity = dummy.identity
         self.assertEqual(
-            dict(type=DUMMY, identity=identity, name='MyDummy', arg1='START'),
+            dict(type=DUMMY_TYPE, identity=identity, name='MyDummy', arg1='START'),
             dummy.attributes)
 
         dummy.attributes['num1'] = 42
         dummy.arg1 = 'one'
         self.assertEqual(
-            dict(type=DUMMY, identity=identity, name='MyDummy', arg1='one', num1=42),
+            dict(type=DUMMY_TYPE, identity=identity, name='MyDummy', arg1='one', num1=42),
             dummy.attributes)
         dummy.update()
 
         dummy.attributes.update(dict(arg1='x', num1=0))
         dummy.read()
         self.assertEqual(
-            dict(type=DUMMY, name='MyDummy', identity=identity, arg1='one', num1=42),
+            dict(type=DUMMY_TYPE, name='MyDummy', identity=identity, arg1='one', num1=42),
             dummy.attributes)
 
-        dummy2 = self.node.read(type=DUMMY, name='MyDummy')
+        dummy2 = self.node.read(type=DUMMY_TYPE, name='MyDummy')
         self.assertEqual(dummy.attributes, dummy2.attributes)
 
         integers = [0, 1, 42, (2**63) - 1, -1, -42, -(2**63)]
@@ -355,7 +347,7 @@ class ManagementTest(system_test.TestCase):
         for data in test_data:
             try:
                 self.assertEqual(
-                    {'operation': 'callme', 'type': DUMMY, 'identity': identity, 'data': data},
+                    {'operation': 'callme', 'type': DUMMY_TYPE, 'identity': identity, 'data': data},
                     dummy.call('callme', data=data))
             except TypeError as exc:
                 raise TypeError("data=%r: %s" % (data, exc))
@@ -364,11 +356,11 @@ class ManagementTest(system_test.TestCase):
         self.assertRaises(BadRequestStatus, dummy.update)
 
         dummy.delete()
-        self.assertRaises(NotFoundStatus, self.node.read, type=DUMMY, name='MyDummy')
+        self.assertRaises(NotFoundStatus, self.node.read, type=DUMMY_TYPE, name='MyDummy')
 
     def test_link(self):
         """Verify we can find our own reply-to address in links"""
-        response = self.node.query(type=LINK)
+        response = self.node.query(type=ROUTER_LINK_TYPE)
         path = self.node.reply_to.split('/')[-1]
         mylink = [l for l in response.get_dicts()
                   if l['owningAddr'] and l['owningAddr'].endswith(path)]
@@ -382,16 +374,16 @@ class ManagementTest(system_test.TestCase):
     def test_router(self):
         """Verify router counts match entity counts"""
         entities = self.node.query().get_entities()
-        routers = [e for e in entities if e.type == ROUTER]
+        routers = [e for e in entities if e.type == ROUTER_TYPE]
         self.assertEqual(1, len(routers))
         router = routers[0]
-        self.assertEqual(router.linkCount, len([e for e in entities if e.type == LINK]))
-        self.assertEqual(router.addrCount, len([e for e in entities if e.type == ADDRESS]))
+        self.assertEqual(router.linkCount, len([e for e in entities if e.type == ROUTER_LINK_TYPE]))
+        self.assertEqual(router.addrCount, len([e for e in entities if e.type == ROUTER_ADDRESS_TYPE]))
 
     def test_router_node(self):
         """Test node entity in a trio of linked routers"""
         nodes = [self.cleanup(Node.connect(Url(r.addresses[0]))) for r in self.routers]
-        rnode_lists = [n.query(type=NODE).get_dicts() for n in nodes]
+        rnode_lists = [n.query(type=ROUTER_NODE_TYPE).get_dicts() for n in nodes]
 
         def check(attrs):
             name = attrs['id']
@@ -411,7 +403,7 @@ class ManagementTest(system_test.TestCase):
         entities = list(chain(
             *[n.query(attribute_names=['type', 'identity', 'name']).iter_entities() for n in nodes]))
         for e in entities:
-            if e.type == MANAGEMENT:
+            if e.type == MANAGEMENT_TYPE:
                 self.assertEqual(e.identity, "self")
             else:
                 if e.type == 'io.skupper.router.connection':
@@ -432,30 +424,30 @@ class ManagementTest(system_test.TestCase):
         remote = self.cleanup(Node.connect(remote_url))
         router_id = remotes[0].split("/")[3]
         assert router_id in ['router0', 'router1', 'router2']
-        self.assertEqual([router_id], [r.id for r in remote.query(type=ROUTER).get_entities()])
+        self.assertEqual([router_id], [r.id for r in remote.query(type=ROUTER_TYPE).get_entities()])
 
     def test_get_types(self):
         types = self.node.get_types()
-        self.assertIn(CONFIGURATION, types[LISTENER])
-        self.assertIn(OPERATIONAL, types[LINK])
+        self.assertIn(CONFIG_ENTITY_TYPE, types[AMQP_LISTENER_TYPE])
+        self.assertIn(OPER_ENTITY_TYPE, types[ROUTER_LINK_TYPE])
 
     def test_get_operations(self):
-        result = self.node.get_operations(type=DUMMY)
-        self.assertEqual({DUMMY: ["CREATE", "READ", "UPDATE", "DELETE", "CALLME"]}, result)
+        result = self.node.get_operations(type=DUMMY_TYPE)
+        self.assertEqual({DUMMY_TYPE: ["CREATE", "READ", "UPDATE", "DELETE", "CALLME"]}, result)
         result = self.node.get_operations()
-        for type in LISTENER, LINK:
+        for type in AMQP_LISTENER_TYPE, ROUTER_LINK_TYPE:
             self.assertIn(type, result)
-        self.assertEqual(["UPDATE", "READ"], result[LINK])
+        self.assertEqual(["UPDATE", "READ"], result[ROUTER_LINK_TYPE])
 
     def test_get_attributes(self):
-        result = self.node.get_attributes(type=DUMMY)
+        result = self.node.get_attributes(type=DUMMY_TYPE)
         self.assertEqual({'arg1', 'arg2', 'num1', 'num2', 'name', 'identity', 'type'},
-                         set(result[DUMMY]))
+                         set(result[DUMMY_TYPE]))
         result = self.node.get_attributes()
-        for type in LISTENER, LINK:
+        for type in AMQP_LISTENER_TYPE, ROUTER_LINK_TYPE:
             self.assertIn(type, result)
         for a in ['linkType', 'linkDir', 'owningAddr']:
-            self.assertIn(a, result[LINK])
+            self.assertIn(a, result[ROUTER_LINK_TYPE])
 
     def test_standalone_no_inter_router(self):
         """Verify that we do not allow inter-router connectors or listeners in standalone mode"""
@@ -463,11 +455,11 @@ class ManagementTest(system_test.TestCase):
         attrs = dict(role="inter-router", saslMechanisms="ANONYMOUS")
         self.assertRaises(
             BadRequestStatus,
-            self.node.create, dict(attrs, type=LISTENER, name="bad1", port=str(self.get_port())))
+            self.node.create, dict(attrs, type=AMQP_LISTENER_TYPE, name="bad1", port=str(self.get_port())))
 
         self.assertRaises(
             BadRequestStatus,
-            self.node.create, dict(attrs, type=CONNECTOR, name="bad2", port=str(self.get_port())))
+            self.node.create, dict(attrs, type=AMQP_CONNECTOR_TYPE, name="bad2", port=str(self.get_port())))
 
         conf = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'all_by_myself1'}),

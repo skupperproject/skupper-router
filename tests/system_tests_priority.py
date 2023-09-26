@@ -25,6 +25,8 @@ from proton.reactor import Container
 from skupper_router_internal.compat import UNICODE
 
 from system_test import TestCase, Qdrouterd, main_module, unittest
+from system_test import ROUTER_LINK_TYPE
+
 
 # ------------------------------------------------
 # Helper classes for all tests.
@@ -56,7 +58,7 @@ class ManagementMessageHelper:
     def make_router_link_query(self) :
         props = {'count':      '100',
                  'operation':  'QUERY',
-                 'entityType': 'io.skupper.router.router.link',
+                 'entityType': ROUTER_LINK_TYPE,
                  'name':       'self',
                  'type':       'org.amqp.management'
                  }

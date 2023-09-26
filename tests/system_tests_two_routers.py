@@ -35,7 +35,8 @@ from system_test import TestCase, Process, Qdrouterd, main_module, TIMEOUT, Test
 from system_test import AsyncTestReceiver, retry
 from system_test import AsyncTestSender
 from system_test import get_inter_router_links
-from system_test import unittest
+from system_test import unittest, ROUTER_TYPE, CONNECTION_TYPE
+from system_test import ROUTER_ADDRESS_TYPE, AMQP_CONNECTOR_TYPE
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
@@ -116,7 +117,7 @@ class TwoRouterTest(TestCase):
         self.assertIsNone(test.error)
 
         local_node = Node.connect(self.routers[0].addresses[0], timeout=TIMEOUT)
-        outs = local_node.query(type='io.skupper.router.router')
+        outs = local_node.query(type=ROUTER_TYPE)
 
         # deliveriesTransit must most surely be greater than num_msgs
         pos = outs.attribute_names.index("deliveriesTransit")
@@ -426,7 +427,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
             request = Message()
             request.address = "amqp:/_local/$management"
             request.properties = {
-                'type': 'io.skupper.router.connection',
+                'type': CONNECTION_TYPE,
                 'operation': 'QUERY'}
             request.reply_to = self.mgmt_receiver.remote_source.address
             self.mgmt_sender.send(request)
@@ -435,7 +436,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
     def poll_timeout(self):
         request = Message()
         request.address = "amqp:/_local/$management"
-        request.properties = {'type': 'io.skupper.router.connection',
+        request.properties = {'type': CONNECTION_TYPE,
                               'operation': 'QUERY'}
         request.reply_to = self.mgmt_receiver_2.remote_source.address
         self.mgmt_sender.send(request)
@@ -458,7 +459,7 @@ class DeleteConnectionWithReceiver(MessagingHandler):
                             request.address = "amqp:/_local/$management"
                             request.properties = {
                                 'identity': identity,
-                                'type': 'io.skupper.router.connection',
+                                'type': CONNECTION_TYPE,
                                 'operation': 'UPDATE'
                             }
                             request.body = {
@@ -1077,7 +1078,7 @@ class CustomTimeout:
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address1, timeout=TIMEOUT)
 
-        res = local_node.query('io.skupper.router.router.address')
+        res = local_node.query(ROUTER_ADDRESS_TYPE)
         name = res.attribute_names.index('name')
         found = False
         for results in res.results:
@@ -1439,7 +1440,7 @@ class TwoRouterConnection(TestCase):
         return False
 
     def check_connections(self):
-        res = self.local_node.query(type='io.skupper.router.connection')
+        res = self.local_node.query(type=CONNECTION_TYPE)
         results = res.results
 
         # If DISPATCH-1093 was not fixed, there would be an additional
@@ -1462,17 +1463,15 @@ class TwoRouterConnection(TestCase):
         self.local_node = Node.connect(self.routers[0].addresses[0],
                                        timeout=TIMEOUT)
 
-        res = self.local_node.query(type='io.skupper.router.connection')
+        res = self.local_node.query(type=CONNECTION_TYPE)
         results = res.results
         self.assertEqual(1, len(results))
 
-        long_type = 'io.skupper.router.connector'
-
-        create_command = 'CREATE --type=' + long_type + ' --name=foo' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_1)
+        create_command = 'CREATE --type=' + AMQP_CONNECTOR_TYPE + ' --name=foo' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_1)
 
         self.run_skmanage(create_command)
 
-        create_command = 'CREATE --type=' + long_type + ' --name=bar' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_2)
+        create_command = 'CREATE --type=' + AMQP_CONNECTOR_TYPE + ' --name=bar' + ' host=0.0.0.0 port=' + str(TwoRouterConnection.B_normal_port_2)
 
         self.run_skmanage(create_command)
 

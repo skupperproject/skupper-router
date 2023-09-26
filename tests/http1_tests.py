@@ -34,6 +34,8 @@ from skupper_router.management.client import Node
 from system_test import TestCase, TIMEOUT, Logger, Qdrouterd, unittest
 from system_test import curl_available, run_curl, retry
 from system_test import retry_exception
+from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE
+from system_test import TCP_LISTENER_TYPE
 
 
 CURL_VERSION = (7, 47, 0)   # minimum required
@@ -525,8 +527,7 @@ def wait_http_listeners_up(mgmt_address: str,
     Wait until the configured HTTP listener sockets have come up. Optionally
     filter the set of configured listeners using attribute names and values
     """
-    LISTENER_TYPE = 'io.skupper.router.httpListener'
-    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+    return _wait_adaptor_listeners_oper_status(HTTP_LISTENER_TYPE, mgmt_address,
                                                'up', l_filter, timeout)
 
 
@@ -538,8 +539,7 @@ def wait_http_listeners_down(mgmt_address: str,
     deactivated. Optionally filter the set of configured listeners using
     attribute names and values
     """
-    LISTENER_TYPE = 'io.skupper.router.httpListener'
-    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+    return _wait_adaptor_listeners_oper_status(HTTP_LISTENER_TYPE, mgmt_address,
                                                'down', l_filter, timeout)
 
 
@@ -550,8 +550,7 @@ def wait_tcp_listeners_up(mgmt_address: str,
     Wait until the configured TCP listener sockets have come up. Optionally
     filter the set of configured listeners using attribute names and values
     """
-    LISTENER_TYPE = 'io.skupper.router.tcpListener'
-    return _wait_adaptor_listeners_oper_status(LISTENER_TYPE, mgmt_address,
+    return _wait_adaptor_listeners_oper_status(TCP_LISTENER_TYPE, mgmt_address,
                                                'up', l_filter, timeout)
 
 
@@ -1832,8 +1831,6 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
     """
     Test client connecting to adaptor listeners in various scenarios
     """
-    LISTENER_TYPE = 'io.skupper.router.httpListener'
-    CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
     PROTOCOL_VERSION = "HTTP1"
 
     @classmethod
@@ -1934,14 +1931,14 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
         attributes = {'address': van_address,
                       'port': listener_port,
                       'protocolVersion': self.PROTOCOL_VERSION}
-        l_mgmt.create(type=self.LISTENER_TYPE,
+        l_mgmt.create(type=HTTP_LISTENER_TYPE,
                       name=listener_name,
                       attributes=attributes)
 
         # since there is no connector present, the operational state must be
         # down and connection attempts must be refused
 
-        listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
+        listener = l_mgmt.read(type=HTTP_LISTENER_TYPE, name=listener_name)
         self.assertEqual('down', listener['operStatus'])
 
         self.assertRaises(ConnectionRefusedError, self.client_connect, listener_port)
@@ -1954,7 +1951,7 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
                           'host': '127.0.0.1',
                           'port': connector_port,
                           'protocolVersion': self.PROTOCOL_VERSION}
-            c_mgmt.create(type=self.CONNECTOR_TYPE,
+            c_mgmt.create(type=HTTP_CONNECTOR_TYPE,
                           name=connector_name,
                           attributes=attributes)
 
@@ -1967,7 +1964,7 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
 
             # expect the listener socket to come up
 
-            self.assertTrue(retry(lambda: l_mgmt.read(type=self.LISTENER_TYPE,
+            self.assertTrue(retry(lambda: l_mgmt.read(type=HTTP_LISTENER_TYPE,
                                                       name=listener_name)['operStatus'] == 'up'))
 
             # ensure clients can connect successfully. There may be a delay
@@ -1980,10 +1977,10 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
 
         # Teardown the connector, expect listener admin state to go down
 
-        c_mgmt.delete(type=self.CONNECTOR_TYPE, name=connector_name)
+        c_mgmt.delete(type=HTTP_CONNECTOR_TYPE, name=connector_name)
         l_router.wait_address_unsubscribed(van_address)
 
-        self.assertTrue(retry(lambda: l_mgmt.read(type=self.LISTENER_TYPE,
+        self.assertTrue(retry(lambda: l_mgmt.read(type=HTTP_LISTENER_TYPE,
                                                   name=listener_name)['operStatus']
                               == 'down'))
 
@@ -1992,7 +1989,7 @@ class HttpAdaptorListenerConnectTestBase(TestCase):
             return self.client_connect(listener_port) != True
         self.assertRaises(ConnectionRefusedError, retry, _func)
 
-        l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
+        l_mgmt.delete(type=HTTP_LISTENER_TYPE, name=listener_name)
 
 
 class HttpTlsBadConfigTestsBase(TestCase):

@@ -30,9 +30,11 @@ from skupper_router_internal.management.qdrouter import QdSchema
 
 from system_test import unittest, retry_assertion
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
-from system_test import QdManager
-
-DUMMY = "io.skupper.router.dummy"
+from system_test import QdManager, DUMMY_TYPE, SSL_PROFILE_TYPE, LOG_STATS_TYPE
+from system_test import CONFIG_ADDRESS_TYPE, ROUTER_ADDRESS_TYPE
+from system_test import AMQP_LISTENER_TYPE, LOG_TYPE, ROUTER_TYPE
+from system_test import CONFIG_ENTITY_TYPE, ENTITY_TYPE, CONFIG_AUTOLINK_TYPE
+from system_test import AMQP_CONNECTOR_TYPE, ROUTER_LINK_TYPE, CONNECTION_TYPE
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
@@ -119,7 +121,7 @@ class SkmanageTest(TestCase):
             actual = json.loads(self.run_skmanage(cmd))
             self.assert_entity_equal(expect, actual, copy=copy)
 
-        expect = {'arg1': 'foo', 'type': DUMMY, 'name': 'mydummy2'}
+        expect = {'arg1': 'foo', 'type': DUMMY_TYPE, 'name': 'mydummy2'}
         # create with type, name in attributes
         check('create arg1=foo type=dummy name=mydummy2', expect, copy=['identity'], attributes=json.dumps(expect))
         # create with type, name as arguments
@@ -147,10 +149,10 @@ class SkmanageTest(TestCase):
             actual = json.loads(self.run_skmanage(cmd + " --stdin", input=input))
             self.assert_entities_equal(expect_list, actual, copy=copy)
 
-        expect = {'type': DUMMY, 'name': 'mydummyx', 'arg1': 'foo'}
+        expect = {'type': DUMMY_TYPE, 'name': 'mydummyx', 'arg1': 'foo'}
         check('create', expect, json.dumps(expect), copy=['identity'])
 
-        expect_list = [{'type': DUMMY, 'name': 'mydummyx%s' % i} for i in range(3)]
+        expect_list = [{'type': DUMMY_TYPE, 'name': 'mydummyx%s' % i} for i in range(3)]
         check_list('create', expect_list, json.dumps(expect_list), copy=['identity'])
 
         expect['arg1'] = 'bar'
@@ -165,7 +167,13 @@ class SkmanageTest(TestCase):
     def test_query(self):
 
         def long_type(name):
-            return 'io.skupper.router.' + name
+            long_names = {'listener': AMQP_LISTENER_TYPE,
+                          'log': LOG_TYPE,
+                          'router': ROUTER_TYPE,
+                          'router.link': ROUTER_LINK_TYPE,
+                          'connection': CONNECTION_TYPE,
+                          'router.address': ROUTER_ADDRESS_TYPE}
+            return long_names[name]
 
         types = ['listener', 'log', 'router']
         long_types = [long_type(name) for name in types]
@@ -175,7 +183,7 @@ class SkmanageTest(TestCase):
         for t in long_types:
             self.assertIn(t, qall_types)
 
-        qlistener = json.loads(self.run_skmanage('query --type=listener'))
+        qlistener = json.loads(self.run_skmanage(f'query --type={AMQP_LISTENER_TYPE}'))
         self.assertEqual([long_type('listener')] * 4, [e['type'] for e in qlistener])
         self.assertEqual(self.router_1.ports[0], int(qlistener[0]['port']))
 
@@ -217,31 +225,31 @@ class SkmanageTest(TestCase):
     def test_get_operations(self):
         out = json.loads(self.run_skmanage("get-operations"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
-        self.assertEqual(out['io.skupper.router.sslProfile'], ['CREATE', 'DELETE', 'READ'])
+        self.assertEqual(out[SSL_PROFILE_TYPE], ['CREATE', 'DELETE', 'READ'])
 
     def test_get_types_with_ssl_profile_type(self):
-        out = json.loads(self.run_skmanage("get-types --type=io.skupper.router.sslProfile"))
-        self.assertEqual(out['io.skupper.router.sslProfile'], ['io.skupper.router.configurationEntity', 'io.skupper.router.entity'])
+        out = json.loads(self.run_skmanage(f"get-types --type={SSL_PROFILE_TYPE}"))
+        self.assertEqual(out[SSL_PROFILE_TYPE], [CONFIG_ENTITY_TYPE, ENTITY_TYPE])
 
     def test_get_ssl_profile_type_attributes(self):
-        out = json.loads(self.run_skmanage('get-attributes --type=io.skupper.router.sslProfile'))
+        out = json.loads(self.run_skmanage(f'get-attributes --type={SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['io.skupper.router.sslProfile']), 11)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 11)
 
     def test_get_ssl_profile_attributes(self):
-        out = json.loads(self.run_skmanage('get-attributes io.skupper.router.sslProfile'))
+        out = json.loads(self.run_skmanage(f'get-attributes {SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['io.skupper.router.sslProfile']), 11)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 11)
 
     def test_get_ssl_profile_type_operations(self):
-        out = json.loads(self.run_skmanage('get-operations --type=io.skupper.router.sslProfile'))
+        out = json.loads(self.run_skmanage(f'get-operations --type={SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['io.skupper.router.sslProfile']), 3)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 3)
 
     def test_get_ssl_profile_operations(self):
-        out = json.loads(self.run_skmanage('get-operations io.skupper.router.sslProfile'))
+        out = json.loads(self.run_skmanage(f'get-operations {SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out['io.skupper.router.sslProfile']), 3)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 3)
 
     def test_get_log(self):
         logs = json.loads(self.run_skmanage("get-log limit=20"))
@@ -252,7 +260,7 @@ class SkmanageTest(TestCase):
         self.assertTrue(found)
 
     def test_get_logstats(self):
-        query_command = 'QUERY --type=logStats'
+        query_command = f'QUERY --type={LOG_STATS_TYPE}'
         logs = json.loads(self.run_skmanage(query_command))
         # Each value returned by the above query should be
         # a log, and each log should contain an entry for each
@@ -284,14 +292,14 @@ class SkmanageTest(TestCase):
         exception = False
         try:
             # Try to not set 'output'
-            json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT outputFile="))
+            json.loads(self.run_skmanage(f"UPDATE --type {LOG_TYPE} --name log/DEFAULT outputFile="))
         except Exception as e:
             exception = True
             self.assertIn("InternalServerErrorStatus: CError: Configuration: Failed to open log file ''", str(e))
         self.assertTrue(exception)
 
         # Set a valid 'output'
-        output = json.loads(self.run_skmanage("UPDATE --type io.skupper.router.log --name log/DEFAULT "
+        output = json.loads(self.run_skmanage(f"UPDATE --type {LOG_TYPE} --name log/DEFAULT "
                                               "enable=debug+ outputFile=A.log"))
         self.assertEqual("A.log", output['outputFile'])
         self.assertEqual("debug+", output['enable'])
@@ -304,8 +312,7 @@ class SkmanageTest(TestCase):
         return ret_entity
 
     def test_check_address_name(self):
-        long_type = 'io.skupper.router.router.config.address'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + CONFIG_ADDRESS_TYPE
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 2)
         self.assertEqual(output[0]['name'], "test-address")
@@ -318,22 +325,19 @@ class SkmanageTest(TestCase):
         self.assertNotIn('prefix', output[1])
 
     def test_create_address(self):
-        long_type = 'io.skupper.router.router.config.address'
-        create_command = 'CREATE --type=' + long_type + ' pattern="a.b.#"'
+        create_command = f'CREATE --type={CONFIG_ADDRESS_TYPE} pattern="a.b.#"'
         output = json.loads(self.run_skmanage(create_command))
         self.assertEqual(output['pattern'], '"a.b.#"')
 
     def test_check_auto_link_name(self):
-        long_type = 'io.skupper.router.router.config.autoLink'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={CONFIG_AUTOLINK_TYPE}'
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['name'], "test-auto-link")
         self.assertEqual(output[0]['direction'], "out")
         self.assertEqual(output[0]['addr'], "mnop")
 
     def test_specify_container_id_connection_auto_link(self):
-        long_type = 'io.skupper.router.router.config.autoLink'
-        create_command = 'CREATE --type=' + long_type + ' address=abc containerId=id1 connection=conn1 direction=out'
+        create_command = f'CREATE --type={CONFIG_AUTOLINK_TYPE} address=abc containerId=id1 connection=conn1 direction=out'
         output = self.run_skmanage(create_command, expect=Process.EXIT_FAIL)
         self.assertIn("Both connection and containerId cannot be specified", output)
 
@@ -343,19 +347,18 @@ class SkmanageTest(TestCase):
         It then adds back the connector and make sure that there is at least one inter-router connection.
         The test name starts with a yyy so that it runs towards the end.
         """
-        long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={AMQP_CONNECTOR_TYPE}'
         output = json.loads(self.run_skmanage(query_command))
         name = output[0]['name']
 
         # Delete an existing connector
-        delete_command = 'DELETE --type=' + long_type + ' --name=' + name
+        delete_command = 'DELETE --type=' + AMQP_CONNECTOR_TYPE + ' --name=' + name
         self.run_skmanage(delete_command)
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output, [])
 
         def query_inter_router_connector(check_inter_router_present=False):
-            outs = json.loads(self.run_skmanage('query --type=connection'))
+            outs = json.loads(self.run_skmanage(f'query --type={CONNECTION_TYPE}'))
             inter_router_present = False
             for out in outs:
                 if check_inter_router_present:
@@ -371,7 +374,7 @@ class SkmanageTest(TestCase):
         retry_assertion(query_inter_router_connector, delay=2)
 
         # Create back the connector with role="inter-router"
-        self.create(long_type, name, str(SkmanageTest.inter_router_port), role="inter-router")
+        self.create(AMQP_CONNECTOR_TYPE, name, str(SkmanageTest.inter_router_port), role="inter-router")
         outputs = json.loads(self.run_skmanage(query_command))
         created = False
         for output in outputs:
@@ -390,31 +393,30 @@ class SkmanageTest(TestCase):
     def test_zzz_add_connector(self):
         port = self.get_port()
         # dont provide role and make sure that role is defaulted to 'normal'
-        command = "CREATE --type=connector --name=eaconn1 port=" + str(port) + " host=0.0.0.0"
+        command = f"CREATE --type={AMQP_CONNECTOR_TYPE} --name=eaconn1 port=" + str(port) + " host=0.0.0.0"
         output = json.loads(self.run_skmanage(command))
         self.assertEqual("normal", output['role'])
         # provide the same connector name (eaconn1), expect duplicate value failure
         self.assertRaises(Exception, self.run_skmanage,
-                          "CREATE --type=connector --name=eaconn1 port=12345 host=0.0.0.0")
+                          f"CREATE --type={AMQP_CONNECTOR_TYPE} --name=eaconn1 port=12345 host=0.0.0.0")
         port = self.get_port()
         # provide role as 'normal' and make sure that it is preserved
-        command = "CREATE --type=connector --name=eaconn2 port=" + str(port) + " host=0.0.0.0 role=normal"
+        command = f"CREATE --type={AMQP_CONNECTOR_TYPE} --name=eaconn2 port=" + str(port) + " host=0.0.0.0 role=normal"
         output = json.loads(self.run_skmanage(command))
         self.assertEqual("normal", output['role'])
 
     def test_zzz_create_delete_listener(self):
-        long_type = 'io.skupper.router.listener'
         name = 'ealistener'
 
         listener_port = self.get_port()
 
-        listener = self.create(long_type, name, str(listener_port))
-        self.assertEqual(listener['type'], long_type)
+        listener = self.create(AMQP_LISTENER_TYPE, name, str(listener_port))
+        self.assertEqual(listener['type'], AMQP_LISTENER_TYPE)
         self.assertEqual(listener['name'], name)
 
         exception_occurred = False
 
-        delete_command = 'DELETE --type=' + long_type + ' --name=' + name
+        delete_command = 'DELETE --type=' + AMQP_LISTENER_TYPE + ' --name=' + name
         self.run_skmanage(delete_command)
 
         exception_occurred = False
@@ -429,12 +431,12 @@ class SkmanageTest(TestCase):
 
     def test_create_delete_ssl_profile(self):
         ssl_profile_name = 'ssl-profile-test'
-        ssl_create_command = 'CREATE --type=sslProfile certFile=' + self.ssl_file('server-certificate.pem') + \
+        ssl_create_command = f'CREATE --type={SSL_PROFILE_TYPE} certFile=' + self.ssl_file('server-certificate.pem') + \
             ' privateKeyFile=' + self.ssl_file('server-private-key.pem') + ' password=server-password' + \
             ' name=' + ssl_profile_name + ' caCertFile=' + self.ssl_file('ca-certificate.pem')
         output = json.loads(self.run_skmanage(ssl_create_command))
         self.assertEqual(output['name'], ssl_profile_name)
-        self.run_skmanage('DELETE --type=sslProfile --name=' +
+        self.run_skmanage(f'DELETE --type={SSL_PROFILE_TYPE} --name=' +
                           ssl_profile_name)
 
     def test_delete_connection(self):
@@ -445,7 +447,7 @@ class SkmanageTest(TestCase):
         :return:
         """
         connection = BlockingConnection(self.address(), properties=CONNECTION_PROPERTIES_UNICODE_STRING)
-        query_command = 'QUERY --type=connection'
+        query_command = f'QUERY --type={CONNECTION_TYPE}'
         outputs = json.loads(self.run_skmanage(query_command))
         identity = None
         passed = False
@@ -471,12 +473,11 @@ class SkmanageTest(TestCase):
                   ('*/mars/*/#', 'multicast'),
                   ('*.mercury', 'closest'),
                   ('*/#/pluto', 'multicast')]
-        long_type = 'io.skupper.router.router.config.address'
 
         # add patterns:
         pcount = 0
         for p in config:
-            query_command = 'CREATE --type=' + long_type + \
+            query_command = 'CREATE --type=' + CONFIG_ADDRESS_TYPE + \
                 ' pattern=' + p[0] + \
                 ' distribution=' + p[1] + \
                 ' name=Pattern' + str(pcount)
@@ -484,7 +485,7 @@ class SkmanageTest(TestCase):
             pcount += 1
 
         # verify correctly added:
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + CONFIG_ADDRESS_TYPE
         output = json.loads(self.run_skmanage(query_command))
         total = len(output)
 
@@ -501,13 +502,13 @@ class SkmanageTest(TestCase):
         # delete
         pcount = 0
         for p in config:
-            query_command = 'DELETE --type=' + long_type + \
+            query_command = 'DELETE --type=' + CONFIG_ADDRESS_TYPE + \
                 ' --name=Pattern' + str(pcount)
             self.run_skmanage(query_command)
             pcount += 1
 
         # verify deleted:
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + CONFIG_ADDRESS_TYPE
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), total - len(config))
         for o in output:
@@ -536,7 +537,7 @@ class SkmanageTest(TestCase):
         # Try fetching all 10,000 addresses
         # This skmanage query command would fail without the fix
         # for DISPATCH-974
-        query_command = 'QUERY --type=io.skupper.router.router.address'
+        query_command = f'QUERY --type={ROUTER_ADDRESS_TYPE}'
         for i in range(3):
             sender_addresses = 0
             receiver_addresses = 0
@@ -586,9 +587,8 @@ class SkmanageTest(TestCase):
         self.assertEqual(in_links, COUNT)
 
     def test_worker_threads(self):
-        long_type = 'io.skupper.router.router'
         qd_manager = QdManager(address=self.address())
-        output = qd_manager.query('io.skupper.router.router')
+        output = qd_manager.query(ROUTER_TYPE)
         self.assertEqual(output[0]['workerThreads'], 4)
 
     def test_check_memory_usage(self):
@@ -596,8 +596,7 @@ class SkmanageTest(TestCase):
         Verify that the process memory usage is present. Non-Linux platforms
         may return zero, so accept that as a valid value.
         """
-        long_type = 'io.skupper.router.router'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={ROUTER_TYPE}'
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 1)
         mem = output[0].get('memoryUsage')
@@ -615,7 +614,7 @@ class SkmanageTest(TestCase):
         """Verify skmanage can securely connect via SSL"""
         ssl_address = "amqps://localhost:%s" % self.secure_port
         ssl_user_address = "amqps://localhost:%s" % self.secure_user_port
-        query = 'QUERY --type io.skupper.router.router'
+        query = f'QUERY --type {ROUTER_TYPE}'
 
         # this should fail: no trustfile
         with self.assertRaises(RuntimeError,
@@ -666,8 +665,7 @@ class SkmanageTest(TestCase):
 
     def test_listener_connector_cost(self):
         # Try creating a connector and listener with negative cost
-        connector_long_type = 'io.skupper.router.connector'
-        create_command = 'CREATE --type=' + connector_long_type + ' port=' +  \
+        create_command = 'CREATE --type=' + AMQP_CONNECTOR_TYPE + ' port=' +  \
                          str(self.get_port()) + ' cost=-1 role=normal'
         error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is " \
                        "1 and maximum value is 2147483647"
@@ -679,8 +677,7 @@ class SkmanageTest(TestCase):
                 passed = True
         self.assertTrue(passed)
 
-        listener_long_type = 'io.skupper.router.listener'
-        create_command = 'CREATE --type=' + listener_long_type + ' port=' +  \
+        create_command = 'CREATE --type=' + AMQP_LISTENER_TYPE + ' port=' +  \
                          str(self.get_port()) + ' cost=-1 role=normal'
         error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is " \
                        "1 and maximum value is 2147483647"
@@ -693,7 +690,7 @@ class SkmanageTest(TestCase):
         self.assertTrue(passed)
 
         # Try creating a connector and listener with cost past the int range.
-        create_command = 'CREATE --type=' + connector_long_type + ' port=' +  \
+        create_command = 'CREATE --type=' + AMQP_CONNECTOR_TYPE + ' port=' +  \
                          str(self.get_port()) + ' cost=2147483648 role=normal'
         error_string = "Configuration: Invalid cost (2147483648) specified. Minimum value for cost is " \
                        "1 and maximum value is 2147483647"
@@ -705,7 +702,7 @@ class SkmanageTest(TestCase):
                 passed = True
         self.assertTrue(passed)
 
-        create_command = 'CREATE --type=' + listener_long_type + ' port=' +  \
+        create_command = 'CREATE --type=' + AMQP_LISTENER_TYPE + ' port=' +  \
                          str(self.get_port()) + ' cost=2147483648 role=normal'
         passed = False
         try:

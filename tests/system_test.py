@@ -74,11 +74,31 @@ script_file = "expandvars.py"
 
 # Optional modules
 MISSING_MODULES = []
-HTTP_LISTENER_TYPE = 'io.skupper.router.httpListener'
-TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
-HTTP_CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
-TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
+
+# Management entity type names
+ALLOCATOR_TYPE = 'io.skupper.router.allocator'
+AMQP_CONNECTOR_TYPE = 'io.skupper.router.connector'
+AMQP_LISTENER_TYPE = 'io.skupper.router.listener'
+CONFIG_ADDRESS_TYPE = 'io.skupper.router.router.config.address'
+CONFIG_AUTOLINK_TYPE = 'io.skupper.router.router.config.autoLink'
+CONFIG_ENTITY_TYPE = 'io.skupper.router.configurationEntity'
 CONNECTION_TYPE = 'io.skupper.router.connection'
+DUMMY_TYPE = 'io.skupper.router.dummy'
+ENTITY_TYPE = 'io.skupper.router.entity'
+HTTP_CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
+HTTP_LISTENER_TYPE = 'io.skupper.router.httpListener'
+HTTP_REQ_INFO_TYPE = 'io.skupper.router.httpRequestInfo'
+LOG_STATS_TYPE = 'io.skupper.router.logStats'
+LOG_TYPE = 'io.skupper.router.log'
+MANAGEMENT_TYPE = 'io.skupper.router.management'
+OPER_ENTITY_TYPE = 'io.skupper.router.operationalEntity'
+ROUTER_ADDRESS_TYPE = 'io.skupper.router.router.address'
+ROUTER_LINK_TYPE = 'io.skupper.router.router.link'
+ROUTER_NODE_TYPE = 'io.skupper.router.router.node'
+ROUTER_TYPE = 'io.skupper.router.router'
+SSL_PROFILE_TYPE = 'io.skupper.router.sslProfile'
+TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
+TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
 
 try:
     import qpidtoollibs  # pylint: disable=unused-import
@@ -901,7 +921,7 @@ class Qdrouterd(Process):
         Otherwise return None"""
         try:
             ret_val = False
-            response = self.management.query(type="io.skupper.router.connection")
+            response = self.management.query(type=CONNECTION_TYPE)
             index_host = response.attribute_names.index('host')
             for result in response.results:
                 outs = '%s:%s' % (host, port)
@@ -925,7 +945,7 @@ class Qdrouterd(Process):
             # Need to rationalize addresses in management attributes.
             # endswith check is because of M/L/R prefixes
             addrs = self.management.query(
-                type='io.skupper.router.router.address',
+                type=ROUTER_ADDRESS_TYPE,
                 attribute_names=['name', 'subscriberCount', 'remoteCount']).get_entities()
 
             addrs = [a for a in addrs if a['name'].endswith(address)]
@@ -939,7 +959,7 @@ class Qdrouterd(Process):
         """
         Block until address has no subscribers
         """
-        a_type = 'io.skupper.router.router.address'
+        a_type = ROUTER_ADDRESS_TYPE
 
         def check():
             addrs = self.management.query(a_type).get_dicts()
@@ -1023,7 +1043,7 @@ class Qdrouterd(Process):
         # Meantime the following actually tests send-thru to the router.
         try:
             with Node.connect(self.addresses[0], router_id) as node:
-                return node.query('io.skupper.router.router')
+                return node.query(ROUTER_TYPE)
         except (proton.ConnectionException, proton.Timeout,
                 NotFoundStatus, proton.utils.LinkDetached,
                 proton.utils.SendException) as exc:
@@ -1044,7 +1064,7 @@ class Qdrouterd(Process):
             node = None
             try:
                 node = Node.connect(self.addresses[0], timeout=1)
-                out = retry_exception(lambda: node.query('io.skupper.router.connection'), delay=1)
+                out = retry_exception(lambda: node.query(CONNECTION_TYPE), delay=1)
                 if out:
                     role_index = out.attribute_names.index("role")
                     dir_index = out.attribute_names.index("dir")
@@ -1078,7 +1098,7 @@ class Qdrouterd(Process):
             node = None
             try:
                 node = Node.connect(self.addresses[0], timeout=1)
-                out = retry_exception(lambda: node.query('io.skupper.router.connection'))
+                out = retry_exception(lambda: node.query(CONNECTION_TYPE))
                 if out:
                     role_index = out.attribute_names.index("role")
                     dir_index = out.attribute_names.index("dir")
@@ -1782,32 +1802,32 @@ class MgmtMsgProxy:
         return self._Response(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def query_router(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_connections(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.connection'}
+        ap = {'operation': 'QUERY', 'type': CONNECTION_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_links(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.link'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_LINK_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_addresses(self):
         ap = {'operation': 'QUERY',
-              'type': 'io.skupper.router.router.address'}
+              'type': ROUTER_ADDRESS_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def create_connector(self, name, **kwargs):
         ap = {'operation': 'CREATE',
-              'type': 'io.skupper.router.connector',
+              'type': AMQP_CONNECTOR_TYPE,
               'name': name}
         return Message(properties=ap, reply_to=self.reply_addr,
                        body=kwargs)
 
     def delete_connector(self, name):
         ap = {'operation': 'DELETE',
-              'type': 'io.skupper.router.connector',
+              'type': AMQP_CONNECTOR_TYPE,
               'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
@@ -1844,7 +1864,7 @@ def get_link_info(name, address):
     Query the router at address for the status and statistics of the named link
     """
     qdm = QdManager(address=address)
-    rc = qdm.query('io.skupper.router.router.link')
+    rc = qdm.query(ROUTER_LINK_TYPE)
     for item in rc:
         if item.get('name') == name:
             return item
@@ -1853,7 +1873,7 @@ def get_link_info(name, address):
 
 def has_mobile_dest_in_address_table(address, dest):
     qdm = QdManager(address=address)
-    rc = qdm.query('io.skupper.router.router.address')
+    rc = qdm.query(ROUTER_ADDRESS_TYPE)
     has_dest = False
     for item in rc:
         if dest in item.get("name"):
@@ -1870,11 +1890,11 @@ def get_inter_router_links(address):
     inter_router_links = []
     inter_router_data_ids = []
     qdm = QdManager(address=address)
-    conns = qdm.query('io.skupper.router.connection')
+    conns = qdm.query(CONNECTION_TYPE)
     for item in conns:
         if item.get("role") == "inter-router-data":
             inter_router_data_ids.append(item.get("identity"))
-    rc = qdm.query('io.skupper.router.router.link')
+    rc = qdm.query(ROUTER_LINK_TYPE)
     for item in rc:
         if item.get("linkType") == "inter-router" or item.get("connectionId") in inter_router_data_ids:
             inter_router_links.append(item)

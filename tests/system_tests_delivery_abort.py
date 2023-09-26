@@ -24,6 +24,7 @@ from proton.reactor import Container
 from skupper_router_internal.compat import BINARY
 
 from system_test import Logger, TestCase, Qdrouterd, main_module, unittest, TIMEOUT, TestTimeout
+from system_test import ROUTER_ADDRESS_TYPE
 
 
 class RouterTest(TestCase):
@@ -121,11 +122,11 @@ class RouterProxy:
         return Entity(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def read_address(self, name):
-        ap = {'operation': 'READ', 'type': 'io.skupper.router.router.address', 'name': name}
+        ap = {'operation': 'READ', 'type': ROUTER_ADDRESS_TYPE, 'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_addresses(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.address'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_ADDRESS_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
 

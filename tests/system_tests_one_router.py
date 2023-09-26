@@ -30,7 +30,12 @@ from proton.reactor import Container, AtMostOnce, AtLeastOnce
 
 from skupper_router.management.client import Node
 
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR, Process, unittest, QdManager, TestTimeout
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR
+from system_test import Process, unittest, QdManager, TestTimeout
+from system_test import AMQP_CONNECTOR_TYPE, AMQP_LISTENER_TYPE
+from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE, ROUTER_LINK_TYPE
+from system_test import ROUTER_TYPE
+
 from system_tests_ssl import RouterTestSslBase as SSL_TEST
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
@@ -60,7 +65,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.connector",
+            out = mgmt.create(AMQP_CONNECTOR_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router"})
@@ -79,7 +84,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.listener",
+            out = mgmt.create(AMQP_LISTENER_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "edge",
@@ -99,7 +104,7 @@ class StandaloneRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.listener",
+            out = mgmt.create(AMQP_LISTENER_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router",
@@ -132,7 +137,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.connector",
+            out = mgmt.create(AMQP_CONNECTOR_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router"})
@@ -151,7 +156,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.listener",
+            out = mgmt.create(AMQP_LISTENER_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "edge",
@@ -171,7 +176,7 @@ class EdgeRouterQdManageTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0])
         test_pass = False
         try:
-            out = mgmt.create("io.skupper.router.listener",
+            out = mgmt.create(AMQP_LISTENER_TYPE,
                               {"host": "0.0.0.0",
                                "port": "77777",
                                "role": "inter-router",
@@ -849,7 +854,7 @@ class OneRouterTest(TestCase):
 
         node = Node.connect(self.router.addresses[0])
 
-        results = node.query(type='io.skupper.router.connection', attribute_names=['properties']).results
+        results = node.query(type=CONNECTION_TYPE, attribute_names=['properties']).results
 
         found = False
         for result in results:
@@ -872,7 +877,7 @@ class OneRouterTest(TestCase):
 
         node = Node.connect(self.router.addresses[0])
 
-        results = node.query(type='io.skupper.router.connection', attribute_names=['properties']).results
+        results = node.query(type=CONNECTION_TYPE, attribute_names=['properties']).results
 
         found = False
         for result in results:
@@ -902,7 +907,7 @@ class OneRouterTest(TestCase):
 
     def test_43_dropped_presettled_receiver_stops(self):
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        res = local_node.query('io.skupper.router.router')
+        res = local_node.query(ROUTER_TYPE)
         presettled_dropped_count_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count = res.results[0][presettled_dropped_count_index]
         test = DroppedPresettledTest(self.address, 200, presettled_dropped_count)
@@ -1027,15 +1032,15 @@ class RouterProxy:
         return Entity(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def read_address(self, name):
-        ap = {'operation': 'READ', 'type': 'io.skupper.router.router.address', 'name': name}
+        ap = {'operation': 'READ', 'type': ROUTER_ADDRESS_TYPE, 'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_addresses(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.address'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_ADDRESS_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_links(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.link'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_LINK_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
 
@@ -1412,7 +1417,7 @@ class ManagementGetOperationsTest(MessagingHandler):
     def on_message(self, event):
         if event.receiver == self.receiver:
             if event.message.properties['statusCode'] == 200:
-                if 'io.skupper.router.router' in event.message.body.keys():
+                if ROUTER_TYPE in event.message.body.keys():
                     if len(event.message.body.keys()) > 2:
                         self.bail(None)
                     else:
@@ -1502,7 +1507,7 @@ class CustomTimeout:
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address, timeout=TIMEOUT)
 
-        res = local_node.query('io.skupper.router.router.address')
+        res = local_node.query(ROUTER_ADDRESS_TYPE)
         name = res.attribute_names.index('name')
         found = False
         for results in res.results:
@@ -1661,7 +1666,7 @@ class SendPresettledAfterReceiverCloses:
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query('io.skupper.router.router.link')
+        res = local_node.query(ROUTER_LINK_TYPE)
         owning_addr_index = res.attribute_names.index('owningAddr')
         has_address = False
         for out in res.results:
@@ -1693,7 +1698,7 @@ class PresettledCustomTimeout:
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query('io.skupper.router.router')
+        res = local_node.query(ROUTER_TYPE)
         presettled_deliveries_dropped_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count =  res.results[0][presettled_deliveries_dropped_index]
 
@@ -2612,7 +2617,7 @@ class UptimeLastDlvChecker:
 
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address, timeout=TIMEOUT)
-        result = local_node.query('io.skupper.router.connection')
+        result = local_node.query(CONNECTION_TYPE)
         container_id_index = result.attribute_names.index('container')
         uptime_seconds_index = result.attribute_names.index('uptimeSeconds')
         last_dlv_seconds_index = result.attribute_names.index('lastDlvSeconds')
@@ -2778,7 +2783,7 @@ class ReleasedVsModifiedTest(MessagingHandler):
 
     def get_modified_deliveries(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type='io.skupper.router.router')
+        outs = local_node.query(type=ROUTER_TYPE)
         pos = outs.attribute_names.index("modifiedDeliveries")
         results = outs.results[0]
         n_modified_deliveries = results[pos]
@@ -2902,7 +2907,7 @@ class BatchedSettlementTest(MessagingHandler):
     def check_if_done(self):
         if self.n_settled == self.count:
             local_node = Node.connect(self.address, timeout=TIMEOUT)
-            outs = local_node.query(type='io.skupper.router.router')
+            outs = local_node.query(type=ROUTER_TYPE)
             pos = outs.attribute_names.index("acceptedDeliveries")
             results = outs.results[0]
             if results[pos] >= self.count:
@@ -2962,7 +2967,7 @@ class RejectDispositionTest(MessagingHandler):
 
     def count_rejects(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type='io.skupper.router.router')
+        outs = local_node.query(type=ROUTER_TYPE)
         pos = outs.attribute_names.index("rejectedDeliveries")
         results = outs.results[0]
         return results[pos]
@@ -3206,8 +3211,7 @@ class Q2HoldoffDropTest(MessagingHandler):
         clean = False
         while not clean:
             clean = True
-            atype = 'io.skupper.router.router.address'
-            addrs = self.router.management.query(type=atype).get_dicts()
+            addrs = self.router.management.query(type=ROUTER_ADDRESS_TYPE).get_dicts()
             if any("dispatch-1330" in a['name'] for a in addrs):
                 clean = False
                 break
