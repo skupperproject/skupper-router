@@ -626,6 +626,7 @@ struct qdr_address_config_t {
 DEQ_DECLARE(qdr_address_config_t, qdr_address_config_list_t);
 void qdr_core_remove_address_config(qdr_core_t *core, qdr_address_config_t *addr);
 bool qdr_is_addr_treatment_multicast(qdr_address_t *addr);
+const char *get_address_treatment_string(qd_address_treatment_t  treatment);
 
 //
 // Connection Information
@@ -742,6 +743,8 @@ struct qdr_auto_link_t {
     qdr_auto_link_state_t  state;
     qdr_core_timer_t      *retry_timer; // If the auto link attach fails or gets disconnected, this timer retries the attach.
     char                  *last_error;
+    char                  *connection;
+    char                  *container_id;
     qd_hash_handle_t      *hash_handle;
 };
 

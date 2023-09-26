@@ -349,6 +349,8 @@ void qdra_config_auto_link_delete_CT(qdr_core_t    *core,
             al = qdr_auto_link_config_find_by_name_CT(core, name);
 
         if (al) {
+            const char *address = (char*) qd_hash_key_by_handle(al->addr->hash_handle);
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Deleted autolink with address=%s, direction=%s and %s=%s", address, al->dir==QD_INCOMING ? "in":"out", al->connection ? "connection": "containerId", al->connection? al->connection: al->container_id);
             qdr_route_del_auto_link_CT(core, al);
             query->status = QD_AMQP_NO_CONTENT;
         } else
@@ -487,7 +489,8 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
                 qdr_config_auto_link_insert_column_CT(al, col, query->body, true);
             qd_compose_end_map(query->body);
         }
-
+        const char *address = (char*) qd_hash_key_by_handle(al->addr->hash_handle);
+        qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Configured autolink with address=%s, direction=%s and %s=%s", address, dir==QD_INCOMING ? "in":"out", al->connection ? "connection": "containerId", al->connection? al->connection: al->container_id);
         query->status = QD_AMQP_CREATED;
         break;
     }

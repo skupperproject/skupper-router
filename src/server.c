@@ -756,6 +756,8 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
         sys_mutex_unlock(&ctx->server->lock);
 
+        // This log statement is kept at INFO level because this shows the inter-router
+        // connections and that is useful when debugging router issues.
         qd_log(LOG_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Accepted connection to %s from %s",
                ctx->connection_id, name, ctx->rhost_port);
     } else if (ctx->connector) { /* Establishing an outgoing connection */

@@ -95,7 +95,10 @@ static void _on_first_attach(void            *bind_context,
     qdrc_endpoint_second_attach_CT(_server_state.core, endpoint, remote_source, remote_target);
     qdrc_endpoint_flow_CT(_server_state.core, endpoint, CREDIT_WINDOW, false);
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+    // Could this many of these log messages be emitted with each attaching client ?
+    // Setting this log message to QD_LOG_DEBUG for now. May set it back to QD_LOG_INFO
+    // after code is reviewed.
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
            "[C%" PRIu64 "] Client attached to heartbeat server (container=%s, endpoint=%p)", epr->conn_id,
            epr->container_id, (void *) endpoint);
 }
@@ -107,7 +110,9 @@ static void _on_cleanup(void *link_context)
 {
     endpoint_ref_t *epr = (endpoint_ref_t*) link_context;
     if (epr != 0) {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+        // Setting this log message to QD_LOG_DEBUG for now. May set it back to QD_LOG_INFO
+        // after code is reviewed.
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                "[C%" PRIu64 "] Client detached from heartbeat server (container=%s, endpoint=%p)", epr->conn_id,
                epr->container_id, (void *) epr->endpoint);
         DEQ_REMOVE(_server_state.endpoints, epr);

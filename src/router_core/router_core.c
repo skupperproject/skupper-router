@@ -612,6 +612,22 @@ bool qdr_is_addr_treatment_multicast(qdr_address_t *addr)
     return false;
 }
 
+
+const char *get_address_treatment_string(qd_address_treatment_t  treatment)
+{
+    const char *text = 0;
+    switch (treatment) {
+    case QD_TREATMENT_MULTICAST_FLOOD:
+    case QD_TREATMENT_MULTICAST_ONCE:   text = "multicast"; break;
+    case QD_TREATMENT_ANYCAST_CLOSEST:  text = "closest";   break;
+    case QD_TREATMENT_ANYCAST_BALANCED: text = "balanced";  break;
+    default:
+        text = 0;
+    }
+    return text;
+}
+
+
 void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al)
 {
     if (al->conn_id) {
@@ -625,6 +641,8 @@ void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al)
 
     free(al->name);
     free(al->external_addr);
+    free(al->container_id);
+    free(al->connection);
     if (al->last_error)
         free(al->last_error);
     qd_hash_handle_free(al->hash_handle);

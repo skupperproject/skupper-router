@@ -695,7 +695,7 @@ static int read_message_body(qdr_tcp_connection_t *conn, qd_message_t *msg, pn_r
             case QD_MESSAGE_STREAM_DATA_NO_MORE:
             case QD_MESSAGE_STREAM_DATA_ABORTED:
                 // treat aborted like end-of-stream since both require closing the connection.
-                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] EOS", conn->conn_id);
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] EOS", conn->conn_id);
                     conn->read_eos_seen = true;
                     break;
             case QD_MESSAGE_STREAM_DATA_INVALID:
@@ -1012,7 +1012,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_set_vflow_netaddr_string(conn->vflow, conn->pn_raw_conn, conn->ingress);
         if (conn->ingress) {
             qdr_tcp_connection_ingress_accept(conn);
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED Listener ingress accepted to %s from %s (global_id=%s)",
                    conn->conn_id, conn->config->adaptor_config->host_port, conn->remote_address, conn->global_id);
             if (conn->require_tls) {
@@ -1035,7 +1035,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         } else {
             conn->remote_address = qd_raw_conn_get_address(conn->pn_raw_conn);
             conn->opened_time = qdr_core_uptime_ticks(tcp_adaptor->core);
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] PN_RAW_CONNECTION_CONNECTED Connector egress connected to %s", conn->conn_id,
                    conn->remote_address);
             if (!!conn->initial_delivery) {
@@ -1088,7 +1088,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         // If somehow the PN_RAW_CONNECTION_CLOSED_WRITE and the PN_RAW_CONNECTION_CLOSED_READ events did not come by,
         // we will drain the buffers here just as a backup.
         int drained_buffers = qd_raw_connection_drain_read_write_buffers(conn->pn_raw_conn);
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "] PN_RAW_CONNECTION_DISCONNECTED %s, drained_buffers=%i", conn->conn_id,
                qdr_tcp_connection_role_name(conn), drained_buffers);
 
@@ -1314,7 +1314,7 @@ static void qdr_tcp_connection_ingress(qd_adaptor_listener_t *ali,
 static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
 {
     const char *host = tc->is_egress_dispatcher_conn ? "egress-dispatch" : tc->config->adaptor_config->host_port;
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] Opening server-side core connection %s", tc->conn_id,
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] Opening server-side core connection %s", tc->conn_id,
            host);
 
     //
@@ -1455,7 +1455,7 @@ static bool qdr_tcp_create_egress_connection(qd_tcp_connector_t *connector, qdr_
     vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY);
     vflow_set_trace(tc->vflow, msg);
 
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
            "[C%" PRIu64 "] qdr_tcp_connection_egress call pn_proactor_raw_connect(). Egress connecting to: %s",
            tc->conn_id, tc->config->adaptor_config->host_port);
 

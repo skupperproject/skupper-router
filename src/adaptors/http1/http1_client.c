@@ -703,7 +703,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
             } else {
                 char *conn_addr = qd_raw_conn_get_address(hconn->raw_conn);
                 if (conn_addr) {
-                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO,
+                    // Log incoming client connections at DEBUG level since these can flood the router logs.
+                    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                            "[C%" PRIu64 "] HTTP/1.x client connection established from %s", hconn->conn_id, conn_addr);
                     free(conn_addr);
                 }
@@ -713,7 +714,8 @@ static void _handle_connection_events(pn_event_t *e, qd_server_t *qd_server, voi
             break;
         }
     case PN_RAW_CONNECTION_DISCONNECTED: {
-        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "[C%" PRIu64 "] HTTP/1.x client disconnected",
+        // Log client disconnects at DEBUG level since these can flood the router logs.
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.x client disconnected",
                hconn->conn_id);
         // Obtain the name and condition information from the pn_condition_t and set it on the vanflow.
         qd_set_condition_on_vflow(hconn->raw_conn, hconn->vflow);

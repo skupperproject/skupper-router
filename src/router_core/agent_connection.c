@@ -531,6 +531,7 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
                 // ISSUE-1225: cannot delete tcp dispatch connections
                 && (!conn->connection_info->host || strcmp(conn->connection_info->host, "egress-dispatch"))) {
                 qdr_close_connection_CT(core, conn);
+                // This log message shows a connection is being deleted via a management request.
                 qd_log(LOG_AGENT,
                        QD_LOG_INFO,
                        "[C%" PRIu64 "] Connection force-closed by request from connection [C%" PRIu64 "]",
