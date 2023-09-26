@@ -103,6 +103,7 @@ def check_runners(dup_runners):
             finished_runners.append(dup_runner)
     for finished_runner in finished_runners:
         dup_runners.remove(finished_runner)
+    print("len(dup_runners)=", len(dup_runners))
     return len(dup_runners) == 0
 
 
