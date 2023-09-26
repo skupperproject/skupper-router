@@ -102,6 +102,7 @@ def check_runners(dup_runners):
         # to False by the echo client.
         if not dup_runner.e_client.keep_running:
             finished_runners.append(dup_runner)
+    print("len(finished_runners)=", len(finished_runners))
     for finished_runner in finished_runners:
         dup_runners.remove(finished_runner)
     print("len(dup_runners)=", len(dup_runners))
@@ -1062,9 +1063,9 @@ class CommonTcpTests:
                     if diff == 0:
                         fail = True
                 if fail:
-                    result = "At least one server did not receive a connection: origin=%s counts=%r" % (client, diffs)
+                    result = "At least one server did not receive a connection: origin=%s: counts=%s" % (client, diffs)
                 else:
-                    self.logger.log("TCP_TEST %s counts: %s" % (client, diffs))
+                    self.logger.log("TCP_TEST origin=%s: counts=%s" % (client, diffs))
 
             if result is not None:
                 self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
