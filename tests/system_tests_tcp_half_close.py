@@ -23,6 +23,7 @@ import time
 
 from system_test import Qdrouterd, TIMEOUT, TestCase, unittest
 from system_test import main_module, retry_exception, retry
+from system_test import CONNECTION_TYPE
 
 
 class TcpAdaptorIdleHalfClosedTest(TestCase):
@@ -64,7 +65,6 @@ class TcpAdaptorIdleHalfClosedTest(TestCase):
         """
         Return the number of currently active TCP connections
         """
-        CONNECTION_TYPE = 'io.skupper.router.connection'
         mgmt = self.router.management
         conns = mgmt.query(type=CONNECTION_TYPE, attribute_names=['protocol',
                                                                   'container',

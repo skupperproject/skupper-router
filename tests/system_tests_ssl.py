@@ -31,7 +31,7 @@ from proton.utils import BlockingConnection
 
 from skupper_router.management.client import Node
 from system_test import TIMEOUT, TestCase, main_module, Qdrouterd, DIR
-from system_test import unittest, retry
+from system_test import unittest, retry, CONNECTION_TYPE, ROUTER_NODE_TYPE
 
 
 def protocol_name(proto):
@@ -213,8 +213,6 @@ class RouterTestSslClient(RouterTestSslBase):
         ATTR_NAMES = ['ssl', 'sslProto', 'sasl', 'isAuthenticated',
                       'isEncrypted', 'user']
 
-        CONN_TYPE = 'io.skupper.router.connection'
-
         # Management address to connect using the given TLS protocol
         url = Url("amqps://0.0.0.0:%d/$management" % listener_port)
 
@@ -250,7 +248,7 @@ class RouterTestSslClient(RouterTestSslBase):
         # router!
 
         def _get_tls_conn():
-            conns = mgmt.query(type=CONN_TYPE,
+            conns = mgmt.query(type=CONNECTION_TYPE,
                                attribute_names=ATTR_NAMES).get_entities()
             ssl_conns = [c for c in conns if c['ssl']]
             if ssl_conns:
@@ -267,7 +265,7 @@ class RouterTestSslClient(RouterTestSslBase):
         # not interfere with other tests
 
         def _wait_conn_gone():
-            conns = mgmt.query(type=CONN_TYPE,
+            conns = mgmt.query(type=CONNECTION_TYPE,
                                attribute_names=ATTR_NAMES).get_entities()
             if len([c for c in conns if c['ssl']]) == 0:
                 return True
@@ -535,7 +533,7 @@ class RouterTestSslInterRouter(RouterTestSslBase):
 
         url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
         node = Node.connect(url)
-        response = node.query(type="io.skupper.router.router.node", attribute_names=["id"])
+        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
         router_nodes = []
         for resp in response.get_dicts():
             router_nodes.append(resp['id'])
@@ -556,7 +554,7 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         def _get_ssl_conns(mgmt):
             # query all inter-router connections, wait until all expected
             # connections have come up
-            conns = mgmt.query(type='io.skupper.router.connection',
+            conns = mgmt.query(type=CONNECTION_TYPE,
                                attribute_names=['role',
                                                 'ssl',
                                                 'sslProto',
@@ -728,7 +726,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
 
         url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
         node = Node.connect(url)
-        response = node.query(type="io.skupper.router.router.node", attribute_names=["id"])
+        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
         router_nodes = []
         for resp in response.get_dicts():
             router_nodes.append(resp['id'])
@@ -881,7 +879,7 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
 
         url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
         node = Node.connect(url)
-        response = node.query(type="io.skupper.router.router.node", attribute_names=["id"])
+        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
         router_nodes = []
         for resp in response.get_dicts():
             router_nodes.append(resp['id'])

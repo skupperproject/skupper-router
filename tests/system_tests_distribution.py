@@ -24,7 +24,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container, LinkOption
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, TestTimeout
-from system_test import unittest, Logger
+from system_test import unittest, Logger, ROUTER_ADDRESS_TYPE
 
 
 # ------------------------------------------------
@@ -63,11 +63,11 @@ class AddressChecker:
         return AddressCheckResponse(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def make_address_query(self, name):
-        ap = {'operation': 'READ', 'type': 'io.skupper.router.router.address', 'name': name}
+        ap = {'operation': 'READ', 'type': ROUTER_ADDRESS_TYPE, 'name': name}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def make_addresses_query(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.router.address'}
+        ap = {'operation': 'QUERY', 'type': ROUTER_ADDRESS_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
 

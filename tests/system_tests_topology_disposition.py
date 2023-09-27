@@ -29,6 +29,7 @@ from proton.reactor import Container
 from skupper_router_internal.compat import UNICODE
 
 from system_test import TestCase, Qdrouterd, main_module, Logger, TIMEOUT
+from system_test import CONNECTION_TYPE, AMQP_CONNECTOR_TYPE, ROUTER_LINK_TYPE
 
 
 # ================================================
@@ -67,23 +68,23 @@ class ManagementMessageHelper:
         self.reply_addr = reply_addr
 
     def make_connection_query(self):
-        ap = {'operation': 'QUERY', 'type': 'io.skupper.router.connection'}
+        ap = {'operation': 'QUERY', 'type': CONNECTION_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def make_connector_query(self, connector_name) :
-        props = {'operation': 'READ', 'type': 'io.skupper.router.connector', 'name' : connector_name}
+        props = {'operation': 'READ', 'type': AMQP_CONNECTOR_TYPE, 'name' : connector_name}
         msg = Message(properties=props, reply_to=self.reply_addr)
         return msg
 
     def make_connector_delete_command(self, connector_name) :
-        props = {'operation': 'DELETE', 'type': 'io.skupper.router.connector', 'name' : connector_name}
+        props = {'operation': 'DELETE', 'type': AMQP_CONNECTOR_TYPE, 'name' : connector_name}
         msg = Message(properties=props, reply_to=self.reply_addr)
         return msg
 
     def make_router_link_query(self) :
         props = {'count':      '100',
                  'operation':  'QUERY',
-                 'entityType': 'io.skupper.router.router.link',
+                 'entityType': ROUTER_LINK_TYPE,
                  'name':       'self',
                  'type':       'org.amqp.management'
                  }

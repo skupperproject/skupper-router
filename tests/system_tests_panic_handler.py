@@ -23,7 +23,7 @@ import os
 import re
 
 from system_test import TestCase, unittest, main_module, Process
-from system_test import retry, Qdrouterd, QdManager
+from system_test import retry, Qdrouterd, QdManager, HTTP_LISTENER_TYPE
 
 
 @unittest.skipIf(os.environ.get("QPID_RUNTIME_CHECK", None) != "OFF",
@@ -63,7 +63,7 @@ class PanicHandlerTest(TestCase):
         mgmt = QdManager(address=self.router.addresses[0], timeout=1)
         # this call will crash the router
         try:
-            mgmt.create('io.skupper.router.httpListener',
+            mgmt.create(HTTP_LISTENER_TYPE,
                         {'address': 'closest/panic',
                          'port': self.tester.get_port(),
                          'protocolVersion': 'HTTP1',

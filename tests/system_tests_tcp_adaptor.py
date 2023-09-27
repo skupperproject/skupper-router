@@ -44,7 +44,8 @@ from system_test import TestTimeout
 from system_test import main_module
 from system_test import unittest
 from system_test import retry
-from system_test import CONNECTION_TYPE
+from system_test import CONNECTION_TYPE, TCP_CONNECTOR_TYPE, TCP_LISTENER_TYPE
+from system_test import ROUTER_LINK_TYPE
 from system_test import retry_assertion
 from system_tests_ssl import RouterTestSslBase
 from http1_tests import wait_tcp_listeners_up
@@ -694,12 +695,11 @@ class TcpAdaptorBase(TestCase):
 
         cls.logger.log("TCP_TEST waiting for all tcpListeners to activate...")
 
-        LISTENER_TYPE = 'io.skupper.router.tcpListener'
         for rtr in cls.routers:
             mgmt = rtr.management
             listeners_ready = False
             while not listeners_ready:
-                listeners = mgmt.query(type=LISTENER_TYPE,
+                listeners = mgmt.query(type=TCP_LISTENER_TYPE,
                                        attribute_names=["operStatus", "name",
                                                         "address"]).get_dicts()
                 listeners_ready = True
@@ -1546,11 +1546,10 @@ class TcpAdaptorManagementTest(TestCase):
         cls.e_router.wait_ready()
 
     def _query_links_by_addr(self, router_mgmt, owning_addr):
-        oid = 'io.skupper.router.router.link'
         attrs = ['owningAddr', 'linkDir']
 
         links = []
-        rc = router_mgmt.query(type=oid, attribute_names=attrs).results
+        rc = router_mgmt.query(type=ROUTER_LINK_TYPE, attribute_names=attrs).results
         for link in rc:
             if link[0] is not None and link[0].endswith(owning_addr):
                 links.append(link)
@@ -1562,33 +1561,30 @@ class TcpAdaptorManagementTest(TestCase):
         Create and delete TCP connectors and listeners. Ensure that the service
         address is properly removed on the interior router.
         """
-        LISTENER_TYPE = 'io.skupper.router.tcpListener'
-        CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
-
         mgmt = self.e_router.management
         van_address = self.test_name + "/test_01_mgmt"
 
         # When starting out, there should be no tcpListeners or tcpConnectors.
-        self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
-        self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=TCP_CONNECTOR_TYPE).results))
 
         connector_name = "ServerConnector"
         listener_name = "ClientListener"
 
-        mgmt.create(type=LISTENER_TYPE,
+        mgmt.create(type=TCP_LISTENER_TYPE,
                     name=listener_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_listener_port,
                                 'host': '127.0.0.1'})
-        mgmt.create(type=CONNECTOR_TYPE,
+        mgmt.create(type=TCP_CONNECTOR_TYPE,
                     name=connector_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_server_port,
                                 'host': '127.0.0.1'})
 
         # verify the entities have been created and tcp traffic works
-        self.assertEqual(1, len(mgmt.query(type=LISTENER_TYPE).results))
-        self.assertEqual(1, len(mgmt.query(type=CONNECTOR_TYPE).results))
+        self.assertEqual(1, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
+        self.assertEqual(1, len(mgmt.query(type=TCP_CONNECTOR_TYPE).results))
 
         # now verify that the interior router sees the service address
         # and two proxy links are created: one outgoing for the connector and
@@ -1604,12 +1600,12 @@ class TcpAdaptorManagementTest(TestCase):
             time.sleep(0.25)
 
         # Delete the connector and listener
-        out = mgmt.delete(type=CONNECTOR_TYPE, name=connector_name)  # pylint: disable=assignment-from-no-return
+        out = mgmt.delete(type=TCP_CONNECTOR_TYPE, name=connector_name)  # pylint: disable=assignment-from-no-return
         self.assertIsNone(out)
-        self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
-        out = mgmt.delete(type=LISTENER_TYPE, name=listener_name)  # pylint: disable=assignment-from-no-return
+        self.assertEqual(0, len(mgmt.query(type=TCP_CONNECTOR_TYPE).results))
+        out = mgmt.delete(type=TCP_LISTENER_TYPE, name=listener_name)  # pylint: disable=assignment-from-no-return
         self.assertIsNone(out)
-        self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
 
         # verify the service address and proxy links are no longer active on
         # the interior router
@@ -1634,27 +1630,24 @@ class TcpAdaptorManagementTest(TestCase):
         """
         Verify that deleting then re-creating listeners and connectors works
         """
-        LISTENER_TYPE = 'io.skupper.router.tcpListener'
-        CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
-
         mgmt = self.e_router.management
         van_address = self.test_name + "/test_02_mgmt_recreate"
 
         # When starting out, there should be no tcpListeners or tcpConnectors.
-        self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
-        self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
+        self.assertEqual(0, len(mgmt.query(type=TCP_CONNECTOR_TYPE).results))
 
         connector_name = "ServerConnector"
         listener_name = "ClientListener"
 
         for i in range(2):
 
-            mgmt.create(type=LISTENER_TYPE,
+            mgmt.create(type=TCP_LISTENER_TYPE,
                         name=listener_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_listener_port,
                                     'host': '127.0.0.1'})
-            mgmt.create(type=CONNECTOR_TYPE,
+            mgmt.create(type=TCP_CONNECTOR_TYPE,
                         name=connector_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_server_port,
@@ -1663,7 +1656,7 @@ class TcpAdaptorManagementTest(TestCase):
             # wait until the listener has initialized
 
             def _wait_for_listener_up():
-                li = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+                li = mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
                 if li['operStatus'] == 'up':
                     return True
                 return False
@@ -1671,13 +1664,13 @@ class TcpAdaptorManagementTest(TestCase):
 
             # verify initial statistics
 
-            l_stats = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+            l_stats = mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
             self.assertEqual(0, l_stats['bytesIn'])
             self.assertEqual(0, l_stats['bytesOut'])
             self.assertEqual(0, l_stats['connectionsOpened'])
             self.assertEqual(0, l_stats['connectionsClosed'])
 
-            c_stats = mgmt.read(type=CONNECTOR_TYPE, name=connector_name)
+            c_stats = mgmt.read(type=TCP_CONNECTOR_TYPE, name=connector_name)
             self.assertEqual(0, c_stats['bytesIn'])
             self.assertEqual(0, c_stats['bytesOut'])
             self.assertEqual(1, c_stats['connectionsOpened'])  # dispatcher
@@ -1692,7 +1685,7 @@ class TcpAdaptorManagementTest(TestCase):
                 server.listen(1)
 
                 self.assertTrue(retry(lambda:
-                                      mgmt.read(type=LISTENER_TYPE,
+                                      mgmt.read(type=TCP_LISTENER_TYPE,
                                                 name=listener_name)['operStatus']
                                       == 'up'))
 
@@ -1722,10 +1715,10 @@ class TcpAdaptorManagementTest(TestCase):
             # Wait until the test clients have closed
 
             def _wait_for_close():
-                if 0 == mgmt.read(type=LISTENER_TYPE,
+                if 0 == mgmt.read(type=TCP_LISTENER_TYPE,
                                   name=listener_name)['connectionsClosed']:
                     return False
-                if 0 == mgmt.read(type=CONNECTOR_TYPE,
+                if 0 == mgmt.read(type=TCP_CONNECTOR_TYPE,
                                   name=connector_name)['connectionsClosed']:
                     return False
                 return True
@@ -1733,13 +1726,13 @@ class TcpAdaptorManagementTest(TestCase):
 
             # Verify updated statistics.
 
-            l_stats = mgmt.read(type=LISTENER_TYPE, name=listener_name)
+            l_stats = mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
             self.assertEqual(10, l_stats['bytesIn'])
             self.assertEqual(4, l_stats['bytesOut'])
             self.assertEqual(1, l_stats['connectionsOpened'])
             self.assertEqual(1, l_stats['connectionsClosed'])
 
-            c_stats = mgmt.read(type=CONNECTOR_TYPE, name=connector_name)
+            c_stats = mgmt.read(type=TCP_CONNECTOR_TYPE, name=connector_name)
             self.assertEqual(4, c_stats['bytesIn'])
             self.assertEqual(10, c_stats['bytesOut'])
             self.assertEqual(2, c_stats['connectionsOpened'])
@@ -1758,11 +1751,11 @@ class TcpAdaptorManagementTest(TestCase):
 
             # splendid!  Not delete all the things
 
-            mgmt.delete(type=LISTENER_TYPE, name=listener_name)
-            self.assertEqual(0, len(mgmt.query(type=LISTENER_TYPE).results))
+            mgmt.delete(type=TCP_LISTENER_TYPE, name=listener_name)
+            self.assertEqual(0, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
 
-            mgmt.delete(type=CONNECTOR_TYPE, name=connector_name)
-            self.assertEqual(0, len(mgmt.query(type=CONNECTOR_TYPE).results))
+            mgmt.delete(type=TCP_CONNECTOR_TYPE, name=connector_name)
+            self.assertEqual(0, len(mgmt.query(type=TCP_CONNECTOR_TYPE).results))
 
             # attempting to connect should fail once the listener socket has
             # been closed
@@ -1781,9 +1774,6 @@ class TcpAdaptorListenerConnectTest(TestCase):
     """
     Test client connecting to TcpListeners in various scenarios
     """
-    LISTENER_TYPE = 'io.skupper.router.tcpListener'
-    CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
-
     @classmethod
     def setUpClass(cls):
         super(TcpAdaptorListenerConnectTest, cls).setUpClass()
@@ -1853,13 +1843,13 @@ class TcpAdaptorListenerConnectTest(TestCase):
         connector_port = self.tester.get_port()
 
         a_mgmt = self.INTA.management
-        a_mgmt.create(type=self.LISTENER_TYPE,
+        a_mgmt.create(type=TCP_LISTENER_TYPE,
                       name="ClientListener01",
                       attributes={'address': van_address,
                                   'port': listener_port})
 
         b_mgmt = self.INTB.management
-        b_mgmt.create(type=self.CONNECTOR_TYPE,
+        b_mgmt.create(type=TCP_CONNECTOR_TYPE,
                       name="ServerConnector01",
                       attributes={'address': van_address,
                                   'host': '127.0.0.1',
@@ -1873,7 +1863,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
         # connect to.
 
         while True:
-            listener = a_mgmt.read(type=self.LISTENER_TYPE,
+            listener = a_mgmt.read(type=TCP_LISTENER_TYPE,
                                    name='ClientListener01')
             if listener['operStatus'] != 'up':
                 time.sleep(0.1)
@@ -1906,8 +1896,8 @@ class TcpAdaptorListenerConnectTest(TestCase):
                     # Yay we did not hang!  Test passed
                     break
 
-        a_mgmt.delete(type=self.LISTENER_TYPE, name="ClientListener01")
-        b_mgmt.delete(type=self.CONNECTOR_TYPE, name="ServerConnector01")
+        a_mgmt.delete(type=TCP_LISTENER_TYPE, name="ClientListener01")
+        b_mgmt.delete(type=TCP_CONNECTOR_TYPE, name="ServerConnector01")
 
         self.INTA.wait_address_unsubscribed(van_address)
 
@@ -1926,7 +1916,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
         connector_port = self.tester.get_port()
 
         l_mgmt = l_router.management
-        l_mgmt.create(type=self.LISTENER_TYPE,
+        l_mgmt.create(type=TCP_LISTENER_TYPE,
                       name=listener_name,
                       attributes={'address': van_address,
                                   'port': listener_port})
@@ -1934,7 +1924,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
         # since there is no connector present, the operational state must be
         # down and connection attempts must be refused
 
-        listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
+        listener = l_mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
         self.assertEqual('down', listener['operStatus'])
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
@@ -1952,7 +1942,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
             server.bind(("", connector_port))
             server.listen(1)
 
-            c_mgmt.create(type=self.CONNECTOR_TYPE,
+            c_mgmt.create(type=TCP_CONNECTOR_TYPE,
                           name=connector_name,
                           attributes={'address': van_address,
                                       'host': '127.0.0.1',
@@ -1968,7 +1958,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
             # expect the listener socket to come up
 
             while True:
-                listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
+                listener = l_mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
                 if listener['operStatus'] != 'up':
                     time.sleep(0.1)
                     continue
@@ -1994,11 +1984,11 @@ class TcpAdaptorListenerConnectTest(TestCase):
         # Teardown the connector, expect listener admin state to go down
         # and connections be refused
 
-        c_mgmt.delete(type=self.CONNECTOR_TYPE, name=connector_name)
+        c_mgmt.delete(type=TCP_CONNECTOR_TYPE, name=connector_name)
         l_router.wait_address_unsubscribed(van_address)
 
         while True:
-            listener = l_mgmt.read(type=self.LISTENER_TYPE, name=listener_name)
+            listener = l_mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
             if listener['operStatus'] != 'down':
                 time.sleep(0.1)
                 continue
@@ -2015,7 +2005,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
                     # Test successful
                     break
 
-        l_mgmt.delete(type=self.LISTENER_TYPE, name=listener_name)
+        l_mgmt.delete(type=TCP_LISTENER_TYPE, name=listener_name)
 
     def test_02_listener_interior(self):
         """
@@ -2092,7 +2082,7 @@ class TcpDeleteConnectionTest(TestCase):
         client_conn.connect(('127.0.0.1', self.good_listener_port))
         qd_manager = QdManager(self.address)
         conn_id = None
-        results = qd_manager.query("io.skupper.router.connection")
+        results = qd_manager.query(CONNECTION_TYPE)
         for result in results:
             conn_direction = result['dir']
             # Find the id of the tcp connection we want to delete.
@@ -2104,7 +2094,7 @@ class TcpDeleteConnectionTest(TestCase):
         self.assertIsNotNone(conn_id, "Expected connection id to be not None")
 
         def check_connection_deleted():
-            outs = qd_manager.query("io.skupper.router.connection")
+            outs = qd_manager.query(CONNECTION_TYPE)
             is_conn_present = False
             for out in outs:
                 if out['identity'] == conn_id:

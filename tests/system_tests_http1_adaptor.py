@@ -39,6 +39,8 @@ from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
 from system_test import openssl_available, is_pattern_present
+from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE
+from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_LINK_TYPE
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -120,10 +122,6 @@ class Http1AdaptorManagementTest(TestCase):
     def setUpClass(cls):
         super(Http1AdaptorManagementTest, cls).setUpClass()
 
-        cls.LISTENER_TYPE = 'io.skupper.router.httpListener'
-        cls.CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
-        cls.CONNECTION_TYPE = 'io.skupper.router.connection'
-
         cls.interior_edge_port = cls.tester.get_port()
         cls.interior_mgmt_port = cls.tester.get_port()
         cls.edge_mgmt_port = cls.tester.get_port()
@@ -166,16 +164,16 @@ class Http1AdaptorManagementTest(TestCase):
         adaptor properly notifies the interior of the subscribers/producers.
         """
         e_mgmt = self.e_router.management
-        self.assertEqual(0, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
-        self.assertEqual(0, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_LISTENER_TYPE).results))
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
-        e_mgmt.create(type=self.CONNECTOR_TYPE,
+        e_mgmt.create(type=HTTP_CONNECTOR_TYPE,
                       name="ServerConnector",
                       attributes={'address': 'closest/http1Service',
                                   'port': self.http_server_port,
                                   'protocolVersion': 'HTTP1'})
 
-        e_mgmt.create(type=self.LISTENER_TYPE,
+        e_mgmt.create(type=HTTP_LISTENER_TYPE,
                       name="ClientListener",
                       attributes={'address': 'closest/http1Service',
                                   'port': self.http_listener_port,
@@ -183,8 +181,8 @@ class Http1AdaptorManagementTest(TestCase):
 
         # verify the entities have been created and http traffic works
 
-        self.assertEqual(1, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
-        self.assertEqual(1, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        self.assertEqual(1, len(e_mgmt.query(type=HTTP_LISTENER_TYPE).results))
+        self.assertEqual(1, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
         http1_ping(sport=self.http_server_port, cport=self.http_listener_port)
 
@@ -195,15 +193,15 @@ class Http1AdaptorManagementTest(TestCase):
         # delete the connector and listener; wait for the associated connection
         # to be removed
         #
-        e_mgmt.delete(type=self.CONNECTOR_TYPE, name="ServerConnector")
-        self.assertEqual(0, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
-        e_mgmt.delete(type=self.LISTENER_TYPE, name="ClientListener")
-        self.assertEqual(0, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
+        e_mgmt.delete(type=HTTP_CONNECTOR_TYPE, name="ServerConnector")
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
+        e_mgmt.delete(type=HTTP_LISTENER_TYPE, name="ClientListener")
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_LISTENER_TYPE).results))
 
         # will hit test timeout on failure:
         while True:
             hconns = 0
-            obj = e_mgmt.query(type=self.CONNECTION_TYPE,
+            obj = e_mgmt.query(type=CONNECTION_TYPE,
                                attribute_names=["protocol"])
             for item in obj.get_dicts():
                 if "http/1.x" in item["protocol"]:
@@ -240,45 +238,45 @@ class Http1AdaptorManagementTest(TestCase):
         #
         # re-create the connector and listener; verify it works
         #
-        e_mgmt.create(type=self.CONNECTOR_TYPE,
+        e_mgmt.create(type=HTTP_CONNECTOR_TYPE,
                       name="ServerConnector",
                       attributes={'address': 'closest/http1Service',
                                   'port': self.http_server_port,
                                   'protocolVersion': 'HTTP1'})
 
-        e_mgmt.create(type=self.LISTENER_TYPE,
+        e_mgmt.create(type=HTTP_LISTENER_TYPE,
                       name="ClientListener",
                       attributes={'address': 'closest/http1Service',
                                   'port': self.http_listener_port,
                                   'protocolVersion': 'HTTP1'})
 
-        self.assertEqual(1, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
-        self.assertEqual(1, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        self.assertEqual(1, len(e_mgmt.query(type=HTTP_LISTENER_TYPE).results))
+        self.assertEqual(1, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
         http1_ping(sport=self.http_server_port, cport=self.http_listener_port)
 
         self.i_router.wait_address("closest/http1Service", subscribers=1)
 
-        e_mgmt.delete(type=self.CONNECTOR_TYPE, name="ServerConnector")
-        self.assertEqual(0, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
-        e_mgmt.delete(type=self.LISTENER_TYPE, name="ClientListener")
-        self.assertEqual(0, len(e_mgmt.query(type=self.LISTENER_TYPE).results))
+        e_mgmt.delete(type=HTTP_CONNECTOR_TYPE, name="ServerConnector")
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
+        e_mgmt.delete(type=HTTP_LISTENER_TYPE, name="ClientListener")
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_LISTENER_TYPE).results))
 
     def test_01_delete_active_connector(self):
         """Delete an HTTP1 connector that is currently connected to a server.
         Verify the connection is dropped.
         """
         e_mgmt = self.e_router.management
-        self.assertEqual(0, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
-        e_mgmt.create(type=self.CONNECTOR_TYPE,
+        e_mgmt.create(type=HTTP_CONNECTOR_TYPE,
                       name="ServerConnector",
                       attributes={'address': 'closest/http1Service',
                                   'port': self.http_server_port,
                                   'protocolVersion': 'HTTP1'})
 
         # verify the connector has been created and attach a dummy server
-        self.assertEqual(1, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        self.assertEqual(1, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -295,8 +293,8 @@ class Http1AdaptorManagementTest(TestCase):
         self.i_router.wait_address("closest/http1Service", subscribers=1)
 
         # delete the connector
-        e_mgmt.delete(type=self.CONNECTOR_TYPE, name="ServerConnector")
-        self.assertEqual(0, len(e_mgmt.query(type=self.CONNECTOR_TYPE).results))
+        e_mgmt.delete(type=HTTP_CONNECTOR_TYPE, name="ServerConnector")
+        self.assertEqual(0, len(e_mgmt.query(type=HTTP_CONNECTOR_TYPE).results))
 
         # expect socket to close
         while True:
@@ -428,7 +426,7 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         client.close()
 
         qd_manager = QdManager(address=self.INT_A.listener)
-        stats = qd_manager.query('io.skupper.router.httpRequestInfo')
+        stats = qd_manager.query(HTTP_REQ_INFO_TYPE)
         self.assertEqual(len(stats), 2)
         for s in stats:
             self.assertEqual(s.get('requests'), 10)
@@ -625,7 +623,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         # Return the total count of outgoing undelivered deliveries to
         # service_address
         count = 0
-        links = mgmt.query('io.skupper.router.router.link')
+        links = mgmt.query(ROUTER_LINK_TYPE)
         for link in filter(lambda link:
                            link['linkName'] == 'http1.server.out' and
                            link['owningAddr'].endswith(service_address), links):
@@ -637,7 +635,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         # Return the total count of outgoing unsettled deliveries to
         # service_address
         count = 0
-        links = mgmt.query('io.skupper.router.router.link')
+        links = mgmt.query(ROUTER_LINK_TYPE)
         for link in filter(lambda link:
                            link['linkName'] == 'http1.server.out' and
                            link['owningAddr'].endswith(service_address), links):
@@ -648,7 +646,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
     def _client_in_link_count(mgmt, service_address):
         # get the total number of active HTTP1 client in-links for the given
         # service address
-        links = mgmt.query('io.skupper.router.router.link')
+        links = mgmt.query(ROUTER_LINK_TYPE)
         count = len(list(filter(lambda link:
                                 link['linkName'] == 'http1.client.in' and
                                 link['owningAddr'].endswith(service_address),

@@ -21,7 +21,7 @@ from time import sleep
 import os
 from subprocess import PIPE, Popen
 from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT, retry_assertion
-from system_test import unittest, QdManager, Process
+from system_test import unittest, QdManager, Process, CONNECTION_TYPE
 from skupper_router.management.client import Node
 from proton import SASL
 
@@ -139,9 +139,8 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_sasl_fail(self):
         passed = False
-        long_type = 'io.skupper.router.connection'
         qd_manager = QdManager(address=self.routers[1].addresses[0])
-        connections = qd_manager.query(long_type)
+        connections = qd_manager.query(CONNECTION_TYPE)
         for connection in connections:
             if connection['role'] == 'inter-router':
                 passed = True
@@ -234,10 +233,9 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_sasl_fail(self):
         passed = False
-        long_type = 'io.skupper.router.connection'
 
         qd_manager = QdManager(address=self.routers[1].addresses[0])
-        connections = qd_manager.query(long_type)
+        connections = qd_manager.query(CONNECTION_TYPE)
 
         for connection in connections:
             if connection['role'] == 'inter-router':
@@ -517,7 +515,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
         """
         local_node = Node.connect(self.routers[0].addresses[1], timeout=TIMEOUT)
-        results = local_node.query(type='io.skupper.router.connection').get_entities()
+        results = local_node.query(type=CONNECTION_TYPE).get_entities()
 
         # sslProto should be TLSv1.x
         self.assertIn('TLSv1', results[0].sslProto)
@@ -612,7 +610,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
         due to setting 'verifyHostname': 'yes'
         """
         local_node = Node.connect(self.routers[1].addresses[0], timeout=TIMEOUT)
-        results = local_node.query(type='io.skupper.router.connection').get_entities()
+        results = local_node.query(type=CONNECTION_TYPE).get_entities()
 
         # There should be only two connections.
         # There will be no inter-router connection
@@ -727,7 +725,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         """
         local_node = Node.connect(self.routers[1].addresses[0], timeout=TIMEOUT)
 
-        results = local_node.query(type='io.skupper.router.connection').get_entities()
+        results = local_node.query(type=CONNECTION_TYPE).get_entities()
 
         self.common_asserts(results)
 
@@ -738,13 +736,13 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         """
         local_node = self.routers[1].management
 
-        connections = local_node.query(type='io.skupper.router.connection').get_entities()
+        connections = local_node.query(type=CONNECTION_TYPE).get_entities()
         self.assertIn("QDR.X", [c.container for c in connections])  # We can find the connection before
         local_node.delete(type='connector', name='connectorToX')
         local_node.delete(type='sslProfile', name='client-ssl-profile')
 
         def check_connections():
-            conns = local_node.query(type='io.skupper.router.connection').get_entities()
+            conns = local_node.query(type=CONNECTION_TYPE).get_entities()
             is_qdr_x = "QDR.X" in [c.container for c in conns]
             self.assertFalse(is_qdr_x)  # Should not be present now
 
@@ -772,7 +770,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                            'saslUsername': 'test@domain.com',
                            'saslPassword': 'password'})
         self.routers[1].wait_connectors()
-        results = local_node.query(type='io.skupper.router.connection').get_entities()
+        results = local_node.query(type=CONNECTION_TYPE).get_entities()
 
         self.common_asserts(results)
 

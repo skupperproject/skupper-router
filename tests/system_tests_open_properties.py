@@ -24,6 +24,7 @@ from proton.reactor import Container
 from test_broker import FakeBroker
 from system_test import TestCase, unittest, main_module, Qdrouterd
 from system_test import retry, TIMEOUT, wait_port, QdManager, Process
+from system_test import CONNECTION_TYPE
 
 
 def strip_default_options(options):
@@ -476,7 +477,7 @@ class OpenPropertiesEdgeRouterTest(TestCase):
         cls.RouterA.wait_ready()
         mgmt = cls.RouterA.management
         while True:
-            results = mgmt.query(type='io.skupper.router.connection',
+            results = mgmt.query(type=CONNECTION_TYPE,
                                  attribute_names=['container']).get_dicts()
             if any(c['container'] == 'RouterB' for c in results):
                 break

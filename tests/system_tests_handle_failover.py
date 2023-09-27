@@ -25,7 +25,7 @@ from subprocess import PIPE, STDOUT
 from threading import Timer
 
 from system_test import TestCase, Qdrouterd, Process, TIMEOUT
-from system_test import main_module
+from system_test import main_module, AMQP_CONNECTOR_TYPE
 from system_test import unittest
 
 
@@ -134,8 +134,7 @@ class FailoverTest(TestCase):
         followed by the two items sent by the Router B (stored in cls.failover_list)
         The 'failoverUrls' is comma separated.
         """
-        long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + AMQP_CONNECTOR_TYPE
         output = json.loads(self.run_skmanage(query_command))
         expected = "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) + ", " + FailoverTest.failover_list
 
@@ -148,8 +147,7 @@ class FailoverTest(TestCase):
                 self.attempts += 1
 
     def check_C_connector(self):
-        long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + AMQP_CONNECTOR_TYPE
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         expected = FailoverTest.backup_url  + ", " + "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) \
@@ -203,8 +201,7 @@ class FailoverTest(TestCase):
 
     def check_B_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
-        long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + AMQP_CONNECTOR_TYPE
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router
@@ -256,8 +253,7 @@ class FailoverTest(TestCase):
 
     def check_A_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
-        long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = 'QUERY --type=' + AMQP_CONNECTOR_TYPE
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router

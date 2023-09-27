@@ -27,7 +27,7 @@ from urllib.error import HTTPError, URLError
 import skupper_router_site
 from system_test import Process, QdManager, retry
 from system_test import TestCase, Qdrouterd, main_module, DIR
-from system_test import unittest
+from system_test import unittest, AMQP_LISTENER_TYPE, ALLOCATOR_TYPE
 
 #
 # Note: these tests exercise the management interface accessed via HTTP. These
@@ -129,7 +129,6 @@ class RouterTestHttp(TestCase):
         # are working.
 
         # Delete the listener on port http_delete_listen_port_1
-        long_type = 'io.skupper.router.listener'
         mgmt = QdManager(address=address())
 
         if self.skip_delete_http_listener_test:
@@ -137,13 +136,13 @@ class RouterTestHttp(TestCase):
             # Try deleting it and make sure you get an exception.
             exception_raised = False
             try:
-                mgmt.delete(long_type, name=name)
+                mgmt.delete(AMQP_LISTENER_TYPE, name=name)
             except Exception as e:
                 if "BadRequestStatus: HTTP listeners cannot be deleted" in str(e):
                     exception_raised = True
             self.assertTrue(exception_raised)
         else:
-            mgmt.delete(long_type, name=name)
+            mgmt.delete(AMQP_LISTENER_TYPE, name=name)
 
             # Once again try to perform a GET request. Now since the listener
             # is gone, the GET will fail.
@@ -221,7 +220,7 @@ class RouterTestHttp(TestCase):
                       "qdr_deliveries_delayed_10sec_total",
                       "qdr_deliveries_stuck_total",
                       "qdr_links_blocked_total"]
-        for stat in r.management.query(type="io.skupper.router.allocator").get_dicts():
+        for stat in r.management.query(type=ALLOCATOR_TYPE).get_dicts():
             stat_names.append(stat['typeName'])
 
         def _test(stat_names, port):
@@ -359,9 +358,8 @@ class RouterTestHttp(TestCase):
 
         if not self.skip_delete_http_listener_test:
             # Delete the listener with name 'delete-me'
-            long_type = 'io.skupper.router.listener'
             mgmt = QdManager(address=address())
-            mgmt.delete(long_type, name=name)
+            mgmt.delete(AMQP_LISTENER_TYPE, name=name)
 
             # Make sure that the listener got deleted.
             ret_val = retry(lambda: self.is_get_request_failing("https://localhost:%s/system_tests_http.txt" % r.ports[3], use_get_cert=True), timeout=10, delay=2)
