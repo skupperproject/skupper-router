@@ -337,7 +337,7 @@ def wait_message(pattern, file_path=None, **retry_kwargs):
     assert retry(lambda: pathlib.Path(file_path).is_file(), **retry_kwargs), \
         f"Outfile {file_path} does not exist or is not a file"
     with open(file_path, 'rt') as out_file:
-        assert retry(lambda: is_pattern_present(out_file, pattern), **retry_kwargs),\
+        assert retry(lambda: is_pattern_present(out_file, pattern), **retry_kwargs), \
             f"'{pattern}' not present in out file {file_path}"
 
 
