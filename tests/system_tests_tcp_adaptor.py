@@ -105,7 +105,6 @@ def check_runners(dup_runners):
     print("len(finished_runners)=", len(finished_runners))
     for finished_runner in finished_runners:
         dup_runners.remove(finished_runner)
-    print("len(dup_runners)=", len(dup_runners))
     return len(dup_runners) == 0
 
 
@@ -333,13 +332,59 @@ class TcpAdaptorBase(TestCase):
                                   'sslProfile': tcp_listener_ssl_profile_name,
                                   'encapsulation': encapsulation,
                                   'siteId': cls.site}
+                listener_props_balanced_1 = {'host': "localhost",
+                                             'port': cls.balanced_listener_ports[name][0],
+                                             'address': 'ES_ALL_1',
+                                             'sslProfile': tcp_listener_ssl_profile_name,
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_2 = {'host': "localhost",
+                                             'port': cls.balanced_listener_ports[name][1],
+                                             'address': 'ES_ALL_2',
+                                             'sslProfile': tcp_listener_ssl_profile_name,
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_3 = {'host': "localhost",
+                                             'port': cls.balanced_listener_ports[name][2],
+                                             'address': 'ES_ALL_3',
+                                             'sslProfile': tcp_listener_ssl_profile_name,
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_4 = {'host': "localhost",
+                                             'port': cls.balanced_listener_ports[name][3],
+                                             'address': 'ES_ALL_4',
+                                             'sslProfile': tcp_listener_ssl_profile_name,
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
 
-                listener_props_balanced = {'host': "localhost",
-                                           'port': cls.balanced_listener_ports[name],
-                                           'address': 'ES_ALL',
-                                           'sslProfile': tcp_listener_ssl_profile_name,
-                                           'encapsulation': encapsulation,
-                                           'siteId': cls.site}
+                connector_props_balanced_1 = {'name': "balanced-ES_ALL_1",
+                                              'host': "localhost",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_1',
+                                              'sslProfile': 'tcp-connector-ssl-profile',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_2 = {'name': "balanced-ES_ALL_2",
+                                              'host': "localhost",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_2',
+                                              'sslProfile': 'tcp-connector-ssl-profile',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_3 = {'name': "balanced-ES_ALL_3",
+                                              'host': "localhost",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_3',
+                                              'sslProfile': 'tcp-connector-ssl-profile',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_4 = {'name': "balanced-ES_ALL_4",
+                                              'host': "localhost",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_4',
+                                              'sslProfile': 'tcp-connector-ssl-profile',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
 
                 connector_props_direct = {'host': "localhost",
                                           'port': cls.tcp_server_listener_ports[name],
@@ -348,13 +393,6 @@ class TcpAdaptorBase(TestCase):
                                           'encapsulation': encapsulation,
                                           'siteId': cls.site}
 
-                connector_props_balanced = {'name': "balanced",
-                                            'host': "localhost",
-                                            'port': cls.tcp_server_listener_ports[name],
-                                            'address': 'ES_ALL',
-                                            'sslProfile': 'tcp-connector-ssl-profile',
-                                            'encapsulation': encapsulation,
-                                            'siteId': cls.site}
             else:
                 listener_props = {'host': "0.0.0.0",
                                   'port': cls.nodest_listener_ports[name],
@@ -362,24 +400,57 @@ class TcpAdaptorBase(TestCase):
                                   'encapsulation': encapsulation,
                                   'siteId': cls.site}
 
-                listener_props_balanced = {'host': "0.0.0.0",
-                                           'port': cls.balanced_listener_ports[name],
-                                           'address': 'ES_ALL',
-                                           'encapsulation': encapsulation,
-                                           'siteId': cls.site}
+                listener_props_balanced_1 = {'host': "0.0.0.0",
+                                             'port': cls.balanced_listener_ports[name][0],
+                                             'address': 'ES_ALL_1',
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_2 = {'host': "0.0.0.0",
+                                             'port': cls.balanced_listener_ports[name][1],
+                                             'address': 'ES_ALL_2',
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_3 = {'host': "0.0.0.0",
+                                             'port': cls.balanced_listener_ports[name][2],
+                                             'address': 'ES_ALL_3',
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+                listener_props_balanced_4 = {'host': "0.0.0.0",
+                                             'port': cls.balanced_listener_ports[name][3],
+                                             'address': 'ES_ALL_4',
+                                             'encapsulation': encapsulation,
+                                             'siteId': cls.site}
+
+                connector_props_balanced_1 = {'name': "balanced-ES_ALL_1",
+                                              'host': "127.0.0.1",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_1',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_2 = {'name': "balancedES_ALL_2",
+                                              'host': "127.0.0.1",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_2',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_3 = {'name': "balanced-ES_ALL_3",
+                                              'host': "127.0.0.1",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_3',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
+                connector_props_balanced_4 = {'name': "balanced-ES_ALL_4",
+                                              'host': "127.0.0.1",
+                                              'port': cls.tcp_server_listener_ports[name],
+                                              'address': 'ES_ALL_4',
+                                              'encapsulation': encapsulation,
+                                              'siteId': cls.site}
 
                 connector_props_direct = {'host': "127.0.0.1",
                                           'port': cls.tcp_server_listener_ports[name],
                                           'address': 'ES_' + name,
                                           'encapsulation': encapsulation,
                                           'siteId': cls.site}
-
-                connector_props_balanced = {'name': "balanced",
-                                            'host': "127.0.0.1",
-                                            'port': cls.tcp_server_listener_ports[name],
-                                            'address': 'ES_ALL',
-                                            'encapsulation': encapsulation,
-                                            'siteId': cls.site}
             if mode == "interior":
                 router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4'}
             else:
@@ -398,13 +469,23 @@ class TcpAdaptorBase(TestCase):
                                 'privateKeyFile': CLIENT_PRIVATE_KEY,
                                 'password': CLIENT_PRIVATE_KEY_PASSWORD}),
                 ('tcpListener', listener_props),
-                ('tcpListener', listener_props_balanced),
-                ('tcpConnector', connector_props_direct),
-                ('tcpConnector', connector_props_balanced)
+
+                ('tcpListener', listener_props_balanced_1),
+                ('tcpListener', listener_props_balanced_2),
+                ('tcpListener', listener_props_balanced_3),
+                ('tcpListener', listener_props_balanced_4),
+
+                ('tcpConnector', connector_props_balanced_1),
+                ('tcpConnector', connector_props_balanced_2),
+                ('tcpConnector', connector_props_balanced_3),
+                ('tcpConnector', connector_props_balanced_4),
+
+                ('tcpConnector', connector_props_direct)
             ]
 
             if connection:
                 config.extend(connection)
+
             listeners = []
             for rtr in cls.router_order:
                 listener = {'host': "localhost",
@@ -495,7 +576,11 @@ class TcpAdaptorBase(TestCase):
                 tl_ports[tcp_listener] = cls.tester.get_port()
             cls.tcp_client_listener_ports[rtr] = tl_ports
             cls.nodest_listener_ports[rtr] = cls.tester.get_port()
-            cls.balanced_listener_ports[rtr] = cls.tester.get_port()
+
+            cls.balanced_ports = []
+            for i in range(4):
+                cls.balanced_ports.append(cls.tester.get_port())
+            cls.balanced_listener_ports[rtr] = cls.balanced_ports
 
         inter_router_port_AB = cls.tester.get_port()
         cls.authenticate_peer_port = cls.tester.get_port()
@@ -951,7 +1036,7 @@ class CommonTcpTests:
 
         return result
 
-    def all_balanced_connector_stats(self):
+    def all_balanced_connector_stats(self, iter_num):
         """
         Query each router for the connection counts for the balanced connector.
         Return an array of integers with the router stats.
@@ -961,11 +1046,11 @@ class CommonTcpTests:
         for router in self.router_dict.keys():
             outputs = json.loads(self.run_skmanage(query_command, router=router))
             for output in outputs:
-                if output['address'] == "ES_ALL":
+                if output['address'] == "ES_ALL_" + str(iter_num + 1):
                     counts.append(output["connectionsOpened"])
         return counts
 
-    def do_tcp_balance_test(self, test_name, client, count, test_ssl=False):
+    def do_tcp_balance_test(self, test_name, client, count, iter_num, test_ssl=False):
         """
         Launch 'count' connections from a single location.
         Wait for stability (all connections established)
@@ -982,11 +1067,11 @@ class CommonTcpTests:
         dup_runners = []
 
         # Collect a baseline of the connection counts for the balanced connectors
-        baseline = self.all_balanced_connector_stats()
+        baseline = self.all_balanced_connector_stats(iter_num)
 
         try:
             # Launch the runners
-            listener_port = self.balanced_listener_ports[client]
+            listener_port = self.balanced_listener_ports[client][iter_num]
             for client_num in range(count):
                 over_tls = ' over TLS' if test_ssl else ''
                 log_msg = "TCP_TEST " +  over_tls + " %s Running client %d connecting to router %s, port=%d" % \
@@ -1054,7 +1139,7 @@ class CommonTcpTests:
 
             # Verify that all balanced connectors saw at least one new connection
             if result is None:
-                metrics = self.all_balanced_connector_stats()
+                metrics = self.all_balanced_connector_stats(iter_num)
                 diffs = {}
                 fail = False
                 for i in range(len(metrics)):
@@ -1300,8 +1385,10 @@ class CommonTcpTests:
         tname = "test_80_balancing connections"
         self.logger.log(tname + " START")
         iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
+        iter_num = 0
         for p in iterations:
-            result = self.do_tcp_balance_test(tname, p[0], p[1], test_ssl=self.test_ssl)
+            result = self.do_tcp_balance_test(tname, p[0], p[1], iter_num, test_ssl=self.test_ssl)
+            iter_num = iter_num + 1
             self.assertIsNone(result)
         self.logger.log(tname + " SUCCESS")
 
@@ -1324,7 +1411,7 @@ class CommonTcpTests:
                 # it is allowed to have zero connectionsOpened
                 if output['address'] != 'ES_INTA' and output['address'] != 'ES_BAD_CONNECTOR_CERT_INTA' \
                         and output['address'] != 'ES_GOOD_CONNECTOR_CERT_INTA' \
-                        and output['address'] != 'ES_ALL':
+                        and 'ES_ALL' not in output['address']:
                     assert output["connectionsOpened"] > 0
                 assert output["bytesIn"] == output["bytesOut"]
 
