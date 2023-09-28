@@ -772,6 +772,9 @@ static char *_vflow_unserialize_identity(qd_parsed_field_t *field)
  */
 static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
 {
+    qd_log_level_t log_level = record->record_type == VFLOW_RECORD_FLOW ? QD_LOG_DEBUG : QD_LOG_INFO;
+    if (!qd_log_enabled(LOG_FLOW_LOG, log_level))
+        return;
 #define LINE_MAX 1000
     char line[LINE_MAX + 1];
 
@@ -798,7 +801,7 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
     }
 
     record->never_logged = false;
-    qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "%s", line);
+    qd_log(LOG_FLOW_LOG, log_level, "%s", line);
 }
 
 
