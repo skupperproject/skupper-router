@@ -54,6 +54,8 @@ jobs:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
     env:
+      CC: 'gcc-12'
+      CXX: 'g++-12'
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
@@ -211,6 +213,8 @@ jobs:
         shard: [1, 2]
         shards: [2]
     env:
+      CC: 'gcc-12'
+      CXX: 'g++-12'
       BuildType: ${{matrix.buildType}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
