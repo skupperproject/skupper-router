@@ -585,7 +585,7 @@ static void _do_send(test_client_t *tc)
         assert(rc == 0);
         ++tc->counter;
         --tc->credit;
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "client test message sent id=%" PRIi64 " c=%d", tc->counter - 1,
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "client test message sent id=%li credit=%i", tc->counter - 1,
                tc->credit);
     }
 }
