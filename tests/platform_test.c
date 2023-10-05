@@ -27,12 +27,21 @@
 
 #include <stdio.h>
 
-// simple sanity check that qd_platform_memory_size() returns a meaningful value
+// Simple sanity check that the various platform memory metrics return a meaningful values.
 //
 static char *test_memory_size(void *context)
 {
+    // NOTE WELL: these functions may not work on non-linux platforms. If these tests fail please consider providing a
+    // patch to update the failing function to work properly on your platform.
+
     if (qd_platform_memory_size() == 0) {
-        return "ERROR: qd_platform_memory_size() cannot detect memory size";
+        return "ERROR: qd_platform_memory_size() cannot detect memory size (NEED PORTING?)";
+    }
+    if (qd_router_virtual_memory_usage() == 0) {
+        return "ERROR: qd_router_virtual_memory_usage() cannot detect VmSize (NEED PORTING?)";
+    }
+    if (qd_router_rss_memory_usage() == 0) {
+        return "ERROR: qd_router_rss_memory_usage() cannot detect RSS (NEED PORTING?)";
     }
     return 0;
 }

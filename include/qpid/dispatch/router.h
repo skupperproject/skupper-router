@@ -138,8 +138,11 @@ const char* qd_address_logstr(qd_address_t* address);
 /** Retrieve the proper forwarder for a given semantic */
 qd_router_forwarder_t *qd_router_get_forwarder(qd_address_treatment_t t);
 
-/** Retrieve the routers current memory usage (in bytes) */
-uint64_t qd_router_memory_usage(void);
+/** Retrieve the routers current use of virtual memory (in bytes). Thread safe */
+uint64_t qd_router_virtual_memory_usage(void);
+
+/** Retrieve the routers current use of Resident memory (in bytes). Thread safe */
+uint64_t qd_router_rss_memory_usage(void);
 
 /** Return true if the router is running in a test mode with various debug/test hooks enabled. This mode can only be
  * enabled by passing the '-T' command line option to the router on startup. It should not be used in production.

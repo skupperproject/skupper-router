@@ -592,7 +592,12 @@
                 "memoryUsage": {
                     "type": "integer",
                     "graph": true,
-                    "description": "The current amount of memory in use by the router process in bytes.  This includes memory provisioned for stack, data, and code (VmSize).  This value is set to Null if the platform does not provide access to the process memory size."
+                    "description": "The current amount of virtual memory (VmSize) in use by the router process in bytes. This includes memory provisioned for stack, data, and code.  This value is set to Null if the platform does not provide access to the process virtual memory size."
+                },
+                "residentMemoryUsage": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The current amount of system memory in use by the router process in bytes (RSS: Resident Set Size). This is the portion of the process memory space that currently resides in RAM. This value is set to Null if the platform does not provide access to the process resident memory size."
                 },
                 "dataConnectionCount": {
                     "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers",
