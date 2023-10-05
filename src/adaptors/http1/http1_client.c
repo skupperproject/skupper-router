@@ -620,7 +620,7 @@ static int _do_tls_io(qdr_http1_connection_t *hconn)
                 qd_adaptor_buffers_copy_to_qd_buffers(&in_abufs, &qbuf_list);
 
                 qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
-                       "[C%" PRIu64 "] pushing %zu received bytes into codec (%zu buffers)", hconn->conn_id, octets,
+                       "[C%" PRIu64 "] pushing %"PRIu64" received bytes into codec (%zu buffers)", hconn->conn_id, octets,
                        DEQ_SIZE(qbuf_list));
 
                 error = h1_codec_connection_rx_data(hconn->http_conn, &qbuf_list, octets);

@@ -494,7 +494,7 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     // Debug log the activity of this sequence update.
     //
     qd_log(LOG_ROUTER_MA, QD_LOG_DEBUG,
-           "New mobile sequence: mobile_seq=%" PRIu64 ", addrs_synced=%ld, fanout=%d", msync->mobile_seq, sync_count,
+           "New mobile sequence: mobile_seq=%" PRIu64 ", addrs_synced=%zu, fanout=%i", msync->mobile_seq, sync_count,
            fanout);
 }
 
