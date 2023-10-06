@@ -1497,15 +1497,17 @@ void qd_server_run(qd_dispatch_t *qd)
            qd_server->thread_count, (long) getpid());  // Log message is matched in system_tests
 
     const uintmax_t ram_size = qd_platform_memory_size();
-    const uint64_t  vm_size = qd_router_memory_usage();
-    if (ram_size && vm_size) {
-        const char *suffix_vm = 0;
-        const char *suffix_ram = 0;
-        double vm = normalize_memory_size(vm_size, &suffix_vm);
-        double ram = normalize_memory_size(ram_size, &suffix_ram);
-        qd_log(LOG_ROUTER, QD_LOG_INFO, "Process VmSize %.2f %s (%.2f %s available memory)", vm, suffix_vm,
-               ram, suffix_ram);
-    }
+    const uint64_t  vm_size  = qd_router_virtual_memory_usage();
+    const uint64_t  rss_size = qd_router_rss_memory_usage();
+    const char *suffix_vm  = 0;
+    const char *suffix_rss = 0;
+    const char *suffix_ram = 0;
+    double vm  = normalize_memory_size(vm_size, &suffix_vm);
+    double rss = normalize_memory_size(rss_size, &suffix_rss);
+    double ram = normalize_memory_size(ram_size, &suffix_ram);
+    qd_log(LOG_ROUTER, QD_LOG_INFO,
+           "Process VmSize %.2f %s RSS %.2f %s (%.2f %s available memory)",
+           vm, suffix_vm, rss, suffix_rss, ram, suffix_ram);
 
 #ifndef NDEBUG
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Running in DEBUG Mode");

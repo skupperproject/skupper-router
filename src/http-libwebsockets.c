@@ -702,6 +702,37 @@ static size_t _write_allocator_metrics(uint8_t **start, size_t available)
     return save - available;
 }
 
+// Write the router process memory use metrics to the output buffer. Return the total octets written (not including null
+// terminator) or zero on error.
+//
+// On successful return (*start) will be advanced to the terminating null byte.
+//
+static size_t _write_memory_metrics(uint8_t **start, size_t available)
+{
+    const size_t save = available;
+    uint64_t   vmsize = qd_router_virtual_memory_usage();
+    uint64_t      rss = qd_router_rss_memory_usage();
+    size_t         rc = 0;
+
+    if (vmsize > 0) {  // 0 means not available
+        rc = _write_metric(start, available, "qdr_router_vmsize_bytes", "gauge", vmsize);
+        if (rc == 0) {
+            return 0;
+        }
+        available -= rc;
+    }
+
+    if (rss > 0) {
+        rc = _write_metric(start, available, "qdr_router_rss_bytes", "gauge", rss);
+        if (rc == 0) {
+            return 0;
+        }
+        available -= rc;
+    }
+
+    return save - available;
+}
+
 // Gather the current metrics and write them to the output buffer. Return the total bytes written to the buffer (not
 // including null terminator) or zero on error.
 //
@@ -710,7 +741,8 @@ static size_t _write_allocator_metrics(uint8_t **start, size_t available)
 static size_t _generate_metrics_response(stats_request_state_t *state, uint8_t **start, const uint8_t * const end)
 {
     if (_write_global_metrics(state, start, end - *start) == 0
-        || _write_allocator_metrics(start, end - *start) == 0) {
+        || _write_allocator_metrics(start, end - *start) == 0
+        || _write_memory_metrics(start, end - *start) == 0) {
         // error, close the connection
         return 0;
     }
@@ -741,9 +773,11 @@ static int callback_metrics(struct lws *wsi, enum lws_callback_reasons reason,
         size_t buf_size = HTTP_HEADER_LEN
             // router global metrics:
             + (metrics_length * PER_METRIC_BUF_SIZE)
-            // alloc_pool metrics (+ 1 for alloc_pool_total_bytes):
+            // alloc_pool metrics (+ 1 for qdr_alloc_pool_bytes):
             + (DEQ_SIZE(allocator_metrics) * PER_METRIC_BUF_SIZE * PER_ALLOC_METRIC_COUNT)
             + PER_METRIC_BUF_SIZE
+            // qdr_router_vmsize_bytes and qdr_router_rss_bytes
+            + (2 * PER_METRIC_BUF_SIZE)
             // 1 terminating null
             + 1;
         stats->state = new_stats_request_state(buf_size);

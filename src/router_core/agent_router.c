@@ -56,6 +56,7 @@
 #define QDR_ROUTER_UPTIME_SECONDS                      29
 #define QDR_ROUTER_MEMORY_USAGE                        30
 #define QDR_ROUTER_WORKER_THREADS                      31
+#define QDR_ROUTER_RSS_USAGE                           32
 
 const char *qdr_router_columns[] =
     {"name",
@@ -90,6 +91,7 @@ const char *qdr_router_columns[] =
      "uptimeSeconds",
      "memoryUsage",
      "workerThreads",
+     "residentMemoryUsage",
      0};
 
 
@@ -240,7 +242,15 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         break;
 
     case QDR_ROUTER_MEMORY_USAGE: {
-        uint64_t size = qd_router_memory_usage();
+        uint64_t size = qd_router_virtual_memory_usage();
+        if (size)
+            qd_compose_insert_ulong(body, size);
+        else  // memory usage not available
+            qd_compose_insert_null(body);
+    } break;
+
+    case QDR_ROUTER_RSS_USAGE: {
+        uint64_t size = qd_router_rss_memory_usage();
         if (size)
             qd_compose_insert_ulong(body, size);
         else  // memory usage not available

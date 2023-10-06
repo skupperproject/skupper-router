@@ -157,3 +157,43 @@ double normalize_memory_size(const uint64_t bytes, const char **suffix)
     return value;
 }
 
+// Parse the /proc/self/status file for the line matching sscanf_pattern and return the corresponding metric.
+// Linux-specific. Thread safe.
+//
+static uint64_t _parse_proc_memory_metric(const char *sscanf_pattern)
+{
+    FILE *fp = fopen("/proc/self/status", "r");
+    if (!fp) {
+        // possible - if not on linux
+        return 0;
+    }
+
+    // the format of the /proc/self/status file is documented in the linux man
+    // pages (man proc)
+
+    size_t   buflen = 0;
+    char    *buffer = 0;
+    uint64_t metric = 0;
+
+    while (getline(&buffer, &buflen, fp) != -1) {
+        if (sscanf(buffer, sscanf_pattern, &metric) == 1) {
+            break;  // matched
+        }
+    }
+    free(buffer);
+    fclose(fp);
+
+    return metric;
+}
+
+uint64_t qd_router_virtual_memory_usage(void)
+{
+    // VmSize is in kB
+    return _parse_proc_memory_metric("VmSize: %" SCNu64) * 1024;
+}
+
+uint64_t qd_router_rss_memory_usage(void)
+{
+    // VmRSS is in kB
+    return _parse_proc_memory_metric("VmRSS: %" SCNu64) * 1024;
+}

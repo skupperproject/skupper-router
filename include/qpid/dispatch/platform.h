@@ -45,4 +45,21 @@ uintmax_t qd_platform_memory_size(void);
  */
 double normalize_memory_size(const uint64_t bytes, const char **suffix);
 
+/**
+ * Return the total amount of virtual memory currently occupied by the router process.  This includes data, stack, and
+ * code memory.  On systems supporting virtual memory this value may be larger than the physical RAM available on the
+ * platform.  Thread safe.
+ *
+ * Return 0 if the memory usage cannot be determined.
+ */
+uint64_t qd_router_virtual_memory_usage(void);
+
+/**
+ * Return the total amount of resident memory currently occupied by the router process. This is the portion of the
+ * router's virtual memory that is currently in RAM. Thread safe.
+ *
+ * Return 0 if the memory usage cannot be determined.
+ */
+uint64_t qd_router_rss_memory_usage(void);
+
 #endif

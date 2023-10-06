@@ -324,9 +324,15 @@ class BusManager:
             pass
 
         try:
-            if router.memoryUsage > 0:
+            if router.memoryUsage is not None:
                 rows.append(('VmSize', NumKMG(router.memoryUsage,
                                               base=1024)))
+        except Exception:
+            pass
+        try:
+            if router.residentMemoryUsage is not None:
+                rows.append(('RSS', NumKMG(router.residentMemoryUsage,
+                                           base=1024)))
         except Exception:
             pass
         rows.append(('Area',          router.area))
@@ -692,26 +698,29 @@ class BusManager:
 
         # attempt to get the qdrouterd process memory usage
         # this may not be present on all platforms
-        rows = []
+        router = self.query('io.skupper.router.router')[0]
         try:
-            objects = self.query('io.skupper.router.router', ['memoryUsage'])
-            mem = objects[0].memoryUsage
-        except Exception:
-            mem = None
+            vm_size = router.memoryUsage
+        except AttributeError:
+            vm_size = None
+        try:
+            rss_size = router.residentMemoryUsage
+        except AttributeError:
+            rss_size = None
 
-        if mem is not None:
-            hdr_format = Header.KiMiGi
-            rows.append(mem)
-        else:
-            hdr_format = Header.NONE
-            rows.append("-")
+        headers = []
+        values = []
+        if vm_size is not None:
+            headers.append(Header("VmSize", Header.KiMiGi))
+            values.append(vm_size)
 
-        rows.append(pooled_total)
+        if rss_size is not None:
+            headers.append(Header("RSS", Header.KiMiGi))
+            values.append(rss_size)
 
-        disp.formattedTable("\nMemory Summary",
-                            [Header("VmSize", hdr_format),
-                             Header("Pooled", Header.KiMiGi)],
-                            [rows])
+        headers.append(Header("Pooled", Header.KiMiGi))
+        values.append(pooled_total)
+        disp.formattedTable("\nMemory Summary", headers, [values])
 
     def displayPolicy(self, show_date_id=True):
         disp = Display(prefix="  ", bodyFormat=self.bodyFormat)
