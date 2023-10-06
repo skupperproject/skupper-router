@@ -27,6 +27,7 @@
 #include <qpid/dispatch/log.h>
 #include <qpid/dispatch/cutthrough_utils.h>
 #include <qpid/dispatch/platform.h>
+#include <qpid/dispatch/connection_counters.h>
 #include <proton/proactor.h>
 #include <proton/raw_connection.h>
 #include <proton/listener.h>
@@ -194,7 +195,7 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                  info,            // connection_info
                                  0,               // context_binder
                                  0);              // bind_token
-
+    qd_connection_counter_inc(QD_PROTOCOL_TCP);
     return conn;
 }
 
@@ -457,6 +458,7 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 
     if (!!conn->common.core_conn) {
         qdr_connection_closed(conn->common.core_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
     }
 
     if (!!conn->common.vflow) {
@@ -1634,6 +1636,7 @@ void qd_dispatch_delete_tcp_listener_lite(qd_dispatch_t *qd, tcplite_listener_t 
         if (!tcplite_context->adaptor_finalizing) {
             if (!!li->common.core_conn) {
                 qdr_connection_closed(li->common.core_conn);
+                qd_connection_counter_dec(QD_PROTOCOL_TCP);
             }
 
             if (!!li->adaptor_listener) {
@@ -1730,6 +1733,7 @@ void qd_dispatch_delete_tcp_connector_lite(qd_dispatch_t *qd, tcplite_connector_
 
         if (!tcplite_context->adaptor_finalizing) {
             qdr_connection_closed(cr->common.core_conn);
+            qd_connection_counter_dec(QD_PROTOCOL_TCP);
         } else {
             tcplite_connection_t *conn = DEQ_HEAD(cr->connections);
             if (!!conn) {

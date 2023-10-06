@@ -18,8 +18,9 @@
  */
 
 #include "agent_router.h"
-
 #include "config.h"
+#include "qpid/dispatch/protocols.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <inttypes.h>
 
@@ -57,6 +58,7 @@
 #define QDR_ROUTER_MEMORY_USAGE                        30
 #define QDR_ROUTER_WORKER_THREADS                      31
 #define QDR_ROUTER_RSS_USAGE                           32
+#define QDR_ROUTER_CONNECTION_COUNTERS                 33
 
 const char *qdr_router_columns[] =
     {"name",
@@ -92,6 +94,7 @@ const char *qdr_router_columns[] =
      "memoryUsage",
      "workerThreads",
      "residentMemoryUsage",
+     "connectionCounters",
      0};
 
 
@@ -256,6 +259,16 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         else  // memory usage not available
             qd_compose_insert_null(body);
     } break;
+
+    case QDR_ROUTER_CONNECTION_COUNTERS: {
+        qd_compose_start_map(body);
+        for (qd_protocol_t proto = 0; proto < QD_PROTOCOL_TOTAL; ++proto) {
+            qd_compose_insert_string(body, qd_protocol_name(proto));
+            qd_compose_insert_ulong(body, qd_connection_count(proto));
+        }
+        qd_compose_end_map(body);
+        break;
+    }
 
     default:
         qd_compose_insert_null(body);

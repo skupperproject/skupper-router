@@ -23,6 +23,7 @@
 #include "qpid/dispatch/message.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -394,6 +395,7 @@ static void qdr_ref_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
 
 static void qdr_ref_conn_close(void *context, qdr_connection_t *conn, qdr_error_t *error)
 {
+    qd_connection_counter_dec(QD_PROTOCOL_TCP);
 }
 
 
@@ -438,6 +440,7 @@ static void on_startup(void *context)
                                           info,             // connection_info
                                           0,                // context_binder
                                           0);               // bind_token
+    qd_connection_counter_inc(QD_PROTOCOL_TCP);
 
     uint64_t link_id;
 

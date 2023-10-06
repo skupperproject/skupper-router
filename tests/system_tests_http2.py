@@ -23,6 +23,7 @@ import socket
 import unittest
 from subprocess import PIPE
 from time import sleep
+from typing import Mapping
 
 import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
@@ -30,8 +31,8 @@ from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, nginx_available, TIMEOUT, Http2Server
 from system_test import get_digest, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
 from system_test import HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE
-from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE
-
+from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_TYPE
+from system_test import retry, retry_exception
 
 h2hyper_installed = True
 try:
@@ -1197,3 +1198,100 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
         Test tcpListener socket lifecycle edge to edge
         """
         self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
+
+
+class Http2AdaptorConnCounter(TestCase):
+    """
+    Validate the HTTP/2 service connection counter
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(Http2AdaptorConnCounter, cls).setUpClass()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'HTTP2ConnCounter'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('HTTP1ConnCounter', config)
+
+    def _get_conn_counters(self) -> Mapping[str, int]:
+        attributes = ["connectionCounters"]
+        rc = self.router.management.query(type=ROUTER_TYPE,
+                                          attribute_names=attributes)
+        self.assertIsNotNone(rc, "unexpected query failure")
+        self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")
+        counters = rc.get_dicts()[0].get("connectionCounters")
+        self.assertIsNotNone(counters, "expected a counter map to be returned")
+        return counters
+
+    def test_01_check_counter(self):
+        """ Create and destroy HTTP/2 network connections, verify the connection
+        counter is correct.
+        """
+        mgmt = self.router.management
+
+        # verify the counter starts at zero
+
+        counters = self._get_conn_counters()
+        for proto in ["tcp", "http1", "http2"]:
+            counter = counters.get(proto)
+            self.assertIsNotNone(counter, f"Missing expected protocol counter {proto}!")
+            self.assertEqual(0, counter, "counters must be zero on startup")
+
+        # Bring up a server and client, check the counter
+
+        connector_port = self.get_port()
+        listener_port = self.get_port()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", connector_port))
+            listener.setblocking(True)
+            listener.listen(10)
+
+            mgmt.create(type=HTTP_LISTENER_TYPE,
+                        name="ClientListener",
+                        attributes={'address': 'closest/http2Service',
+                                    'port': listener_port,
+                                    'protocolVersion': 'HTTP2'})
+            mgmt.create(type=HTTP_CONNECTOR_TYPE,
+                        name="ServerConnector",
+                        attributes={'address': 'closest/http2Service',
+                                    'port': connector_port,
+                                    'protocolVersion': 'HTTP2'})
+            wait_http_listeners_up(self.router.addresses[0],
+                                   l_filter={'name': 'ClientListener'})
+
+            self.assertTrue(retry(lambda:
+                                  self._get_conn_counters().get("http2") == 1),
+                            "Expected 1 HTTP/2 dispatch connection")
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client, lp=listener_port:
+                                cs.connect(("localhost", lp)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                server, _ = listener.accept()
+                try:
+                    # Note: not sure why only two not three, but it checks out
+                    # against skstat -c:
+                    self.assertTrue(retry(lambda:
+                                          self._get_conn_counters().get("http2") == 2),
+                                    "Expected active conn count failed!")
+                finally:
+                    server.close()
+
+        mgmt.delete(type=HTTP_CONNECTOR_TYPE, name="ServerConnector")
+        mgmt.delete(type=HTTP_LISTENER_TYPE, name="ClientListener")
+
+        # expect counter to return to zero
+
+        self.assertTrue(retry(lambda:
+                              self._get_conn_counters().get("http2") == 0),
+                        "Expected no active HTTP/2 connections")

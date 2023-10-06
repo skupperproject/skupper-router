@@ -74,7 +74,7 @@ class DefaultDistributionTest(TestCase):
 
     def test_general(self):
         out = self.run_skstat(['--general'], r'(?s)Router Statistics.*Mode\s*Standalone')
-        self.assertIn("Connections                      1", out)
+        self.assertIn("Total Connections                1", out)
         self.assertIn("Nodes                            0", out)
         self.assertIn("Auto Links                       0", out)
         self.assertIn("Router Id                        QDR", out)

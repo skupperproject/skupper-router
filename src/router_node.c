@@ -27,6 +27,8 @@
 #include <qpid/dispatch/protocol_adaptor.h>
 #include <qpid/dispatch/proton_utils.h>
 #include <qpid/dispatch/cutthrough_utils.h>
+#include <qpid/dispatch/protocols.h>
+#include <qpid/dispatch/connection_counters.h>
 
 #include <proton/sasl.h>
 
@@ -1554,6 +1556,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           connection_info,
                           bind_connection_context,
                           conn);
+    if (role == QDR_ROLE_NORMAL) {
+        // These counters track the number of 'user' connections, not infrastructure connections
+        qd_connection_counter_inc(QD_PROTOCOL_AMQP);
+    }
 
     if (conn->connector) {
         char conn_msg[300];
@@ -1739,6 +1745,9 @@ static int AMQP_closed_handler(void *type_context, qd_connection_t *conn, void *
         qdr_connection_set_context(qdrc, 0);
         sys_mutex_unlock(qd_server_get_activation_lock(router->qd->server));
 
+        if (qdrc->role == QDR_ROLE_NORMAL) {
+            qd_connection_counter_dec(QD_PROTOCOL_AMQP);
+        }
         qdr_connection_closed(qdrc);
         qd_connection_set_context(conn, 0);
     }

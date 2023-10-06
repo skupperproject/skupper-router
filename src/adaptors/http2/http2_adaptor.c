@@ -25,6 +25,7 @@
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/protocol_adaptor.h"
+#include "qpid/dispatch/connection_counters.h"
 
 #include <proton/condition.h>
 #include <proton/listener.h>
@@ -2795,6 +2796,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
     ingress_http_conn->qdr_conn = conn;
     qdr_connection_set_context(conn, ingress_http_conn);
     ingress_http_conn->connection_established = true;
+    qd_connection_counter_inc(QD_PROTOCOL_HTTP2);
     qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
            "[C%" PRIu64 "] qdr_http_connection_ingress_accept, qdr_connection_t object created ",
            ingress_http_conn->conn_id);
@@ -2880,6 +2882,7 @@ static void close_connections(qdr_http2_connection_t* conn)
     qdr_connection_set_context(conn->qdr_conn, 0);
     if (conn->qdr_conn) {
         qdr_connection_closed(conn->qdr_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_HTTP2);
         conn->qdr_conn = 0;
     }
     qdr_action_t *action = qdr_action(qdr_del_http2_connection_CT, "delete_http2_connection");
@@ -2970,6 +2973,7 @@ static void egress_conn_timer_handler(void *context)
         //
         sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
         qdr_connection_closed(conn->qdr_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_HTTP2);
         free_qdr_http2_connection(conn, false);
         return;
     }
@@ -3123,6 +3127,7 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
     connector->ctx = conn;
 
     qdr_connection_set_context(conn, egress_http_conn);
+    qd_connection_counter_inc(QD_PROTOCOL_HTTP2);
     create_dummy_link_on_egress_conn(egress_http_conn);
     return egress_http_conn;
 }
