@@ -268,6 +268,7 @@ static void TL_setup_connector(tcplite_connector_t *cr)
     vflow_add_rate(cr->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, VFLOW_ATTRIBUTE_FLOW_RATE_L4);
 
     cr->out_link = qdr_link_first_attach(cr->common.core_conn, QD_OUTGOING, source, 0, "tcp.connector.out", 0, false, 0, &cr->link_id);
+    qdr_link_set_user_streaming(cr->out_link);
     qdr_link_set_context(cr->out_link, cr);
     qdr_link_flow(tcplite_context->core, cr->out_link, 5, false);
 }
@@ -963,7 +964,6 @@ static void handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qdr_li
     conn->listener_side     = false;
     conn->state             = CSIDE_RAW_CONNECTION_OPENING;
     conn->outbound_delivery = delivery;
-    conn->outbound_link     = link;
     conn->outbound_stream   = qdr_delivery_message(delivery);
 
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, cr->common.vflow);
