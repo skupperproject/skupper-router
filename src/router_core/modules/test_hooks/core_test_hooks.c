@@ -29,6 +29,9 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
 
 typedef enum {
     TEST_NODE_ECHO,
@@ -37,7 +40,8 @@ typedef enum {
     TEST_NODE_SOURCE,
     TEST_NODE_SOURCE_PS,
     TEST_NODE_DISCARD,
-    TEST_NODE_LOG,  // trigger a log message
+    TEST_NODE_LOG,    // trigger a log message
+    TEST_NODE_CRASH,  // force the router to crash
 } test_node_behavior_t;
 
 typedef struct test_module_t test_module_t;
@@ -76,12 +80,14 @@ struct test_module_t {
     test_node_t   *source_ps_node;
     test_node_t   *discard_node;
     test_node_t   *log_node;
+    test_node_t   *crash_node;
     test_client_t *test_client;
 };
 
 
 static void endpoint_action(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void _handle_log_request(qdr_core_t *core, qd_message_t *message);
+static void _handle_crash_request(qdr_core_t *core, qd_message_t *message);
 
 static void source_send(test_endpoint_t *ep, bool presettled)
 {
@@ -165,6 +171,7 @@ static void endpoint_action(qdr_core_t *core, qdr_action_t *action, bool discard
 
     case TEST_NODE_ECHO :
     case TEST_NODE_LOG :
+    case TEST_NODE_CRASH :
         break;
     }
 }
@@ -217,6 +224,14 @@ static void on_first_attach(void             *bind_context,
             qdrc_endpoint_flow_CT(node->core, endpoint, 1, false);
         } else {
             error = qdr_error("qd:forbidden", "Test log function only accepts incoming links");
+        }
+        break;
+
+    case TEST_NODE_CRASH:
+        if (incoming) {
+            qdrc_endpoint_flow_CT(node->core, endpoint, 1, false);
+        } else {
+            error = qdr_error("qd:forbidden", "Test crash function only accepts incoming links");
         }
         break;
     }
@@ -302,6 +317,7 @@ static void on_flow(void *link_context,
 
     case TEST_NODE_ECHO :
     case TEST_NODE_LOG :
+    case TEST_NODE_CRASH :
         break;
     }
 }
@@ -348,6 +364,13 @@ static void on_transfer(void           *link_context,
         _handle_log_request(ep->node->core, message);
         qdrc_endpoint_settle_CT(ep->node->core, delivery, PN_ACCEPTED);
         qdrc_endpoint_flow_CT(ep->node->core, ep->ep, 1, false);
+        break;
+
+    case TEST_NODE_CRASH:
+        _handle_crash_request(ep->node->core, message);  // not expected to return
+        qdrc_endpoint_settle_CT(ep->node->core, delivery, PN_ACCEPTED);
+        qdrc_endpoint_flow_CT(ep->node->core, ep->ep, 1, false);
+        break;
     }
 }
 
@@ -415,6 +438,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     char *source_ps_address  = "io.skupper.router.router/test/source_ps";
     char *discard_address    = "io.skupper.router.router/test/discard";
     char *log_address        = "io.skupper.router.router/test/log";
+    char *crash_address      = "io.skupper.router.router/test/crash";
 
     module->echo_node      = NEW(test_node_t);
     module->deny_node      = NEW(test_node_t);
@@ -423,6 +447,7 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     module->source_ps_node = NEW(test_node_t);
     module->discard_node   = NEW(test_node_t);
     module->log_node       = NEW(test_node_t);
+    module->crash_node     = NEW(test_node_t);
 
     module->echo_node->core     = core;
     module->echo_node->module   = module;
@@ -480,6 +505,14 @@ static test_module_t *qdrc_test_hooks_core_endpoint_setup(qdr_core_t *core, test
     DEQ_INIT(module->log_node->out_links);
     qdrc_endpoint_bind_mobile_address_CT(core, log_address, &descriptor, module->log_node);
 
+    module->crash_node->core     = core;
+    module->crash_node->module   = module;
+    module->crash_node->behavior = TEST_NODE_CRASH;
+    module->crash_node->desc     = &descriptor;
+    DEQ_INIT(module->crash_node->in_links);
+    DEQ_INIT(module->crash_node->out_links);
+    qdrc_endpoint_bind_mobile_address_CT(core, crash_address, &descriptor, module->crash_node);
+
     return module;
 }
 
@@ -493,6 +526,7 @@ static void qdrc_test_hooks_core_endpoint_finalize(test_module_t *module)
     free(module->source_ps_node);
     free(module->discard_node);
     free(module->log_node);
+    free(module->crash_node);
 }
 
 
@@ -709,6 +743,45 @@ static void _handle_log_request(qdr_core_t *core, qd_message_t *message)
     }
 
     qd_log(LOG_ROUTER, level, "This is a test log message.");
+}
+
+// TEST_NODE_CRASH - Force the router to crash. This is for testing the panic handler (see panic.c)
+//
+static void _handle_crash_request(qdr_core_t *core, qd_message_t *message)
+{
+    // Test hooks are only enabled in CI. If anyone is crazy enough to enable them in production they get the keep the
+    // pieces. Dump a log just in case someone reports this as a bug:
+    qd_log(LOG_ROUTER, QD_LOG_CRITICAL, "Forced Router CRASH via Test Hooks");
+    sleep(2);
+    qd_iterator_t *s_itr = qd_message_field_iterator(message, QD_FIELD_SUBJECT);
+    if (s_itr) {
+        if (qd_iterator_equal(s_itr, (unsigned char *) "ABORT")) {
+            abort();
+        } else if (qd_iterator_equal(s_itr, (unsigned char *) "SEGV")) {
+            volatile int *badptr = (int *) 0xBEEFFACE;
+            *badptr = 42;  // this is expected to cause the router to crash!
+        } else if (qd_iterator_equal(s_itr, (unsigned char *) "HEAP")) {
+            // keep overwriting the heap until we crash
+            while (true) {
+                // tell the code analyzer that it should mind its own business...
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+#pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
+#pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
+                // NOLINTBEGIN
+                volatile unsigned long *ptr = (unsigned long *) qd_malloc(sizeof(unsigned long));
+                for (int k = 0; k < 2 * 1024 * 1024; k++)
+                    *ptr++ = ~0UL;
+                // NOLINTEND
+#pragma GCC diagnostic pop
+                sched_yield();  // let other threads try to malloc...
+            }
+        }
+        qd_iterator_free(s_itr);
+    }
+
 }
 
 static bool qdrc_test_hooks_enable_CT(qdr_core_t *core)

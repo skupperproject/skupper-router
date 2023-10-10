@@ -76,7 +76,7 @@ jobs:
       run: |
         sudo pip3 install codechecker
         # disable IPO to make compilation faster
-        cmake -S . -B build -DBUILD_TESTING=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        cmake -S . -B build -DBUILD_TESTING=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_WARNING_ERROR=OFF
         # perform build so that generated sources get generated
         cmake --build build
         CodeChecker analyze build/compile_commands.json -o ./reports
