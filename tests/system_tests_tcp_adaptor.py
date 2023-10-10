@@ -2239,7 +2239,7 @@ class TcpDeleteConnectionTest(TestCase):
 class TcpLegacyInvalidEncodingTest(TestCase):
     """
     Ensure that the TCP adaptor can recover from receiving an improperly
-    formatted/wrong version AMQP encoded stream message.
+    formatted AMQP encoded stream message.
     """
     @classmethod
     def setUpClass(cls):
@@ -2386,8 +2386,9 @@ class InvalidClientSendRequest(MessagingHandler):
 
 class InvalidServerSendReply(MessagingHandler):
     """
-    Simulate a TCP adaptor reply message that is invalid. Expect the client
-    (egress) to ignore the message and set its disposition to dispo.
+    Simulate via AMQP a TCP client/server flow and have the fake server send
+    "msg" as the TCP adaptor reply message to the client. Expect the client to
+    set the reply messages disposition to "dispo".
     """
     def __init__(self, msg, server_address, listener_address, service_address, dispo):
         super(InvalidServerSendReply, self).__init__(auto_settle=False)
@@ -2411,7 +2412,8 @@ class InvalidServerSendReply(MessagingHandler):
         self.request_dlv = None
         self.dlv_drain_timer = None
 
-        # fake tcp client, just sends a request message
+        # fake tcp client, just opens an AMQP connection to the TCP
+        # listener. This initiates the ingress streaming request message.
         self.listener_address = listener_address
         self.client_conn = None
         self.client_sent = False
@@ -2431,13 +2433,17 @@ class InvalidServerSendReply(MessagingHandler):
         self.done(error=f"Timeout Expired: sent={self.sent}")
 
     def on_start(self, event):
+        # Create an AMQP receiver for the service address. This will simulate a
+        # fake server and activate the TCP adaptor listener port
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
         self.server_conn = event.container.connect(self.server_address)
         self.server_receiver = event.container.create_receiver(self.server_conn,
                                                                self.service_address)
 
     def on_timer_task(self, event):
-        # at this point we expect the reply-to header to have arrived
+        # At this point we expect the reply-to header to have arrived. Use the
+        # reply-to address to send the 'msg' parameter to the client as the
+        # response streaming message.
         try:
             data = self.server_receiver.recv(self.request_dlv.pending)
             #print(f"len={len(xxx)}\nBODY=[{xxx}]", flush=True)
@@ -2451,6 +2457,9 @@ class InvalidServerSendReply(MessagingHandler):
         self.request_dlv.settle()
 
     def on_delivery(self, event):
+        # We've received the start of the client request message. In order to
+        # set up a reply-to link wait until the message's reply-to field has
+        # arrived.
         if event.receiver == self.server_receiver:
             if self.request_dlv is None and event.delivery.readable:
                 # sleep a bit to allow all the header data to arrive on the
@@ -2462,9 +2471,11 @@ class InvalidServerSendReply(MessagingHandler):
         if event.receiver == self.server_receiver:
             # "server" ready to take requests, fire up the "client". All we
             # need is to connect since that will activate the tcp adaptor
+            # client-side due to the AMQP @open handshake.
             self.client_conn = event.container.connect(self.listener_address)
 
     def on_sendable(self, event):
+        # Have the fake server send 'msg' to the reply-to of the fake client
         if event.sender == self.server_sender:
             if not self.server_sent:
                 # send the invalid reply
@@ -2686,6 +2697,88 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
                          f"Expected delay counter to be zero, got {counters}")
         self.assertEqual(0, counters[1] - baseline[1],
                          f"Expected delay counter to be zero, got {counters}")
+
+
+class TcpMisconfiguredLegacyLiteEncapsTest(TestCase):
+    """
+    Ensure that the TCP adaptor can detect misconfiguration of the
+    encapsulation setting by creating a tcpListener and tcpConnector pair that
+    use different encaps.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpMisconfiguredLegacyLiteEncapsTest, cls).setUpClass()
+
+        config = [
+            ('router', {'mode': 'interior', 'id': 'TcpMisconfiguredEncaps'}),
+            # Listener for handling router management requests.
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        cls.router = cls.tester.qdrouterd('TcpInvalidEncoding',
+                                          Qdrouterd.Config(config), wait=True)
+        cls.address = cls.router.addresses[0]
+
+    def _test(self, ingress_encaps, egress_encaps):
+        ingress_port = self.tester.get_port()
+        egress_port = self.tester.get_port()
+        mgmt = self.router.qd_manager
+
+        mgmt.create(TCP_CONNECTOR_TYPE,
+                    {"name": "EncapsConnector",
+                     "address": "EncapsTest",
+                     "host": "localhost",
+                     "port": egress_port,
+                     "encapsulation": egress_encaps})
+        mgmt.create(TCP_LISTENER_TYPE,
+                    {"name": "EncapsListener",
+                     "address": "EncapsTest",
+                     "port": ingress_port,
+                     "encapsulation": ingress_encaps})
+        wait_tcp_listeners_up(self.address)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.settimeout(TIMEOUT)
+            server.bind(("", egress_port))
+            server.listen(1)
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
+                client_conn.settimeout(TIMEOUT)
+                while True:
+                    try:
+                        client_conn.connect(('127.0.0.1', ingress_port))
+                        break
+                    except ConnectionRefusedError:
+                        # There may be a delay between the operStatus going up and
+                        # the actual listener socket availability, so allow that:
+                        time.sleep(0.1)
+                        continue
+
+                # send data to kick off the flow, but expect connection to fail
+                # in recv (either close or reset)
+
+                client_conn.sendall(b' test ')
+                try:
+                    data = client_conn.recv(4096)
+                except ConnectionResetError:
+                    data = b''
+
+                self.assertEqual(b'', data, "expected recv to fail")
+
+        mgmt.delete(TCP_CONNECTOR_TYPE, name="EncapsConnector")
+        mgmt.delete(TCP_LISTENER_TYPE, name="EncapsListener")
+
+    def test_01_encaps_mismatch(self):
+        """
+        Attempt to configure incompatible TCP encapsulation on each side of the
+        TCP path
+        """
+        self._test(ingress_encaps="legacy", egress_encaps="lite")
+        self._test(ingress_encaps="lite", egress_encaps="legacy")
 
 
 if __name__ == '__main__':

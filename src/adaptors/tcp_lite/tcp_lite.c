@@ -92,6 +92,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
 static void connection_run_LSIDE_IO(tcplite_connection_t *conn);
 static void connection_run_CSIDE_IO(tcplite_connection_t *conn);
 static void connection_run_XSIDE_IO(tcplite_connection_t *conn);
+static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv);
 
 
 //=================================================================================
@@ -917,14 +918,29 @@ static void extract_metadata_from_stream_CSIDE(tcplite_connection_t *conn)
     }
 }
 
-
-static void handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qdr_link_t *link, qdr_delivery_t *delivery)
+// Handle delivery of outbound message to the client.
+//
+// @return 0 on success, otherwise a terminal outcome indicating that the message cannot be delivered.
+//
+static uint64_t handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qdr_link_t *link, qdr_delivery_t *delivery)
 {
     ASSERT_RAW_IO;
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] handle_outbound_delivery_LSIDE_IO - receive_complete=%s",
            conn->common.conn_id, qd_message_receive_complete(conn->outbound_stream) ? "true" : "false");
 
     if (!conn->outbound_delivery) {
+        // newly arrived delivery: validate it
+        //
+        uint64_t dispo = validate_outbound_message(delivery);
+        if (dispo != PN_RECEIVED) {
+            // PN_RELEASED: since this message was delivered to this listener's unique reply-to, it cannot be
+            // redelivered to another consumer. PN_RELEASED means incompatible encapsulation so this is a
+            // misconfiguration. Reject the delivery.
+            if (dispo == PN_RELEASED)
+                dispo = PN_REJECTED;
+            return dispo;
+        }
+
         qdr_delivery_incref(delivery, "handle_outbound_delivery_LSIDE_IO");
         conn->outbound_delivery = delivery;
         conn->outbound_stream   = qdr_delivery_message(delivery);
@@ -942,17 +958,27 @@ static void handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qdr_li
     }
 
     connection_run_LSIDE_IO(conn);
+    return 0;
 }
 
 
 /**
  * Handle the first indication of a new outbound delivery on CSIDE.  This is where the raw connection to the
  * external service is established.  This function executes in an IO thread not associated with a raw connection.
+ *
+ * @return disposition. MOVED_TO_NEW_LINK on success, 0 if more message needed, else error outcome
  */
-static void handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qdr_link_t *link, qdr_delivery_t *delivery)
+static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qdr_link_t *link, qdr_delivery_t *delivery)
 {
     ASSERT_TIMER_IO;
     assert(!qdr_delivery_get_context(delivery));
+
+    // Verify the message properties have arrived and are valid
+    //
+    uint64_t dispo = validate_outbound_message(delivery);
+    if (dispo != PN_RECEIVED) {
+        return dispo;
+    }
 
     tcplite_connection_t *conn = new_tcplite_connection_t();
     ZERO(conn);
@@ -1009,6 +1035,8 @@ static void handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qdr_li
     //
     SET_ATOMIC_FLAG(&conn->raw_opened);
     pn_proactor_raw_connect(tcplite_context->proactor, conn->raw_conn, cr->adaptor_config->host_port);
+
+    return QD_DELIVERY_MOVED_TO_NEW_LINK;
 }
 
 
@@ -1288,6 +1316,46 @@ static void connection_run_XSIDE_IO(tcplite_connection_t *conn)
     }
 }
 
+// Validate the outbound message associated with out_dlv
+//
+// @return a disposition value indicating the validity of the message:
+// 0: message headers incomplete, wait for more data to arrive
+// PN_REJECTED: corrupt headers, cannot be re-delivered
+// PN_RELEASED: headers ok, incompatible body format: deliver elsewhere
+// PN_RECEIVED: headers & body ok
+//
+static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv)
+{
+    qd_message_t *msg = qdr_delivery_message(out_dlv);
+    qd_message_depth_status_t depth_ok = qd_message_check_depth(msg, QD_DEPTH_PROPERTIES);
+    if (depth_ok == QD_MESSAGE_DEPTH_INCOMPLETE) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+               DLV_FMT " tcp_adaptor egress message incomplete, waiting for more", DLV_ARGS(out_dlv));
+        return 0;  // retry later
+    }
+    if (depth_ok != QD_MESSAGE_DEPTH_OK) {  // otherwise bug? corrupted message encoding?
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Malformed TCP message - discarding!", DLV_ARGS(out_dlv));
+        qd_message_set_send_complete(msg);
+        return PN_REJECTED;
+    }
+
+    // ISSUE-1136: ensure the message body is using the proper encapsulation.
+    //
+    bool encaps_ok = false;
+    qd_iterator_t *encaps = qd_message_field_iterator(msg, QD_FIELD_CONTENT_TYPE);
+    if (encaps) {
+        encaps_ok = qd_iterator_equal(encaps, (unsigned char *) QD_CONTENT_TYPE_APP_OCTETS);
+        qd_iterator_free(encaps);
+    }
+    if (!encaps_ok) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, DLV_FMT " Misconfigured TCP adaptor (wrong encapsulation)",
+               DLV_ARGS(out_dlv));
+        qd_message_set_send_complete(msg);
+        return PN_RELEASED;  // allow it to be re-forwarded to a different adaptor
+    }
+    return PN_RECEIVED;
+}
+
 
 //=================================================================================
 // Handlers for events from the Raw Connections
@@ -1513,12 +1581,11 @@ static uint64_t CORE_deliver_outbound(void *context, qdr_link_t *link, qdr_deliv
     }
 
     if (common->context_type == TL_CONNECTOR) {
-        handle_first_outbound_delivery_CSIDE((tcplite_connector_t*) common, link, delivery);
-        return QD_DELIVERY_MOVED_TO_NEW_LINK;
+        return handle_first_outbound_delivery_CSIDE((tcplite_connector_t*) common, link, delivery);
     } else if (common->context_type == TL_CONNECTION) {
         tcplite_connection_t *conn = (tcplite_connection_t*) common;
         if (conn->listener_side) {
-            handle_outbound_delivery_LSIDE_IO(conn, link, delivery);
+            return handle_outbound_delivery_LSIDE_IO(conn, link, delivery);
         } else {
             handle_outbound_delivery_CSIDE(conn, link, delivery, settled);
         }
