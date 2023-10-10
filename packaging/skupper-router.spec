@@ -44,7 +44,7 @@
 %global libunwind_minimum_version 1.3.1
 
 Name:          skupper-router
-Version:       2.x.y
+Version:       0.0.0
 Release:       1%{?dist}
 Summary:       The skrouterd router daemon for Skupper.io
 License:       ASL 2.0
@@ -65,6 +65,7 @@ BuildRequires: cmake
 # skupper-router requirements
 BuildRequires: python3-devel
 BuildRequires: python3-setuptools
+BuildRequires: python3-pip
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
 BuildRequires: libunwind-devel >= %{libunwind_minimum_version}

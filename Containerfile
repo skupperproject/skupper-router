@@ -39,7 +39,7 @@ ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/ar
 ENV LIBUNWIND_SOURCE_URL=${LIBUNWIND_SOURCE_URL:-https://github.com/libunwind/libunwind/archive/refs/tags/${LIBUNWIND_VERSION}.tar.gz}
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
-ARG VERSION=UNKNOWN
+ARG VERSION=0.0.0
 ENV VERSION=$VERSION
 RUN .github/scripts/compile.sh
 RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image && tar zxpf /libunwind-image.tar.gz --one-top-level=/image

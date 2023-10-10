@@ -128,6 +128,7 @@ else()
 endif()
 
 if(NOT DEFINED VERSION)
+   message(STATUS "VERSION is not provided")
    # Version was not provided. First check to see if git is available
    find_package(Git)
    if(Git_FOUND)
@@ -137,6 +138,7 @@ if(NOT DEFINED VERSION)
       execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
                       OUTPUT_VARIABLE BRANCH_NAME
                       OUTPUT_STRIP_TRAILING_WHITESPACE)
+      message(STATUS "BRANCH_NAME is ${BRANCH_NAME}")
                       
       if (BRANCH_NAME STREQUAL "HEAD")
         # You are perhaps on a detached tag or commit
@@ -150,36 +152,40 @@ if(NOT DEFINED VERSION)
         # GIT_RESULT will contain the result of last child process. It will be zero if successful.
         if (GIT_RESULT EQUAL 0)
             # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
-            set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
+            if (${DEFAULT_VERSION} MATCHES "^[0-9]+.[0-9]+.[0-9]+.*")
+            	set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
+            else()
+                set(QPID_DISPATCH_VERSION "0.0.0")
+            endif()
          else()
-            # The git command failed, set QPID_DISPATCH_VERSION to "UNKNOWN" 
-            set(QPID_DISPATCH_VERSION "UNKNOWN")
+            # The git command failed, set QPID_DISPATCH_VERSION to "0.0.0" 
+            set(QPID_DISPATCH_VERSION "0.0.0")
          endif(GIT_RESULT EQUAL 0)
       else(BRANCH_NAME STREQUAL "HEAD")
-          # If the BRANCH_NAME is not HEAD, get the commit sha of the latest commit and
-          # set that as the version.
+          # If the BRANCH_NAME is not HEAD (means you are on a branch, get the commit sha of the latest commit and
+          # set the version as 0.0.0+<latest-commit-sha>-branch name. This is PEP 440 compliant.
           # For example, if you are on the main branch and the most recent commit is 68df4e1346b9238ef8f71b9ae0dcdd49eec73c9a,
-          # the router version will print as 68df4e1346b9238ef8f71b9ae0dcdd49eec73c9a(main)
+          # the router version will print as 0.0.0+68df4e1346b9238ef8f71b9ae0dcdd49eec73c9a-main
           execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
                           OUTPUT_VARIABLE COMMIT_SHA
                           OUTPUT_STRIP_TRAILING_WHITESPACE)
           message(STATUS "COMMIT_SHA is ${COMMIT_SHA}")
-          set(QPID_DISPATCH_VERSION "${COMMIT_SHA}(${BRANCH_NAME})")      
+          set(QPID_DISPATCH_VERSION "0.0.0+${COMMIT_SHA}-${BRANCH_NAME}")      
       endif(BRANCH_NAME STREQUAL "HEAD")
    else(Git_FOUND)
-       # Git executable was not available, we will not be able to determine the version, just set it to "UNKNOWN"
-       set(QPID_DISPATCH_VERSION "UNKNOWN")
+       # Git executable was not available, we will not be able to determine the version, just set it to "0.0.0"
+       set(QPID_DISPATCH_VERSION "0.0.0")
    endif(Git_FOUND)
    
 else(NOT DEFINED VERSION)
-
+   message(STATUS "VERSION is already provided")
    # What if VERSION is defined but someone passed in an empty value for VERSION? Deal with that case here.
    if (VERSION STREQUAL "")
-      set(QPID_DISPATCH_VERSION "UNKNOWN")
+      set(QPID_DISPATCH_VERSION "0.0.0")
    else()
       string(STRIP ${VERSION} VERSION)
       if (VERSION STREQUAL "")
-          set(QPID_DISPATCH_VERSION "UNKNOWN")
+          set(QPID_DISPATCH_VERSION "0.0.0")
       else()
           set(QPID_DISPATCH_VERSION ${VERSION})
       endif()

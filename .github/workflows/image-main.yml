@@ -49,8 +49,8 @@ jobs:
 
       - run: |
           # build and publish the main image
-          # Use {GITHUB_SHA::8} for shorter SHA
-          export VERSION="${GITHUB_SHA}"
+          # The version on main will be 0.0.0+<commit-sha>-main
+          export VERSION="0.0.0+${GITHUB_SHA}-main"
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
