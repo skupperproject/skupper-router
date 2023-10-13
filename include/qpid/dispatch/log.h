@@ -113,8 +113,8 @@ void qd_vlog_impl(qd_log_module_t module, qd_log_level_t level, bool check_level
             qd_vlog_impl(module, level, true, __FILE__, __LINE__, fmt, ap); \
     } while (0)
 
-/** Maximum length for a log message */
-int qd_log_max_len(void);
+/** Maximum length for a log message (including null terminator byte!) */
+#define QD_LOG_TEXT_MAX 2048  // note: keep this small to allow stack-based buffers
 
 void qd_format_string(char *buf, int buf_size, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 

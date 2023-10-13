@@ -26,10 +26,13 @@
 #include "entity_cache.h"
 #include "http.h"
 #include "qd_asan_interface.h"
+#include "aprintf.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/log.h"
+#include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/platform.h"
 
 #include "proton/version.h"
 
@@ -697,6 +700,23 @@ size_t qd_alloc_type_size(const qd_alloc_type_desc_t *desc)
     return desc->total_size;
 }
 
+uint64_t qd_alloc_memory_usage(void)
+{
+#ifdef QD_MEMORY_DEBUG
+    assert(alloc_pool_ready);  // need to call qd_alloc_initialize first!
+#endif
+
+    uint64_t total = 0;
+    for (qd_alloc_type_desc_t *desc = DEQ_HEAD(desc_list); desc; desc = DEQ_NEXT(desc)) {
+        sys_mutex_lock(&desc->lock);
+        if (desc->stats.total_alloc_from_heap) {
+            total += desc->stats.total_alloc_from_heap - desc->stats.total_free_to_heap;
+        }
+        sys_mutex_unlock(&desc->lock);
+    }
+    return total;
+}
+
 void qd_alloc_debug_dump(const char *file) {
     debug_dump = file ? strdup(file) : 0;
 }
@@ -717,3 +737,106 @@ void qd_alloc_desc_init(const char *name, qd_alloc_type_desc_t *desc, size_t siz
     DEQ_ITEM_INIT(desc);
     DEQ_INSERT_TAIL(desc_list, desc);
 }
+
+// "Gut feel": 15 minute interval should prevent too must noise in the logs
+static qd_duration_t monitor_interval = 15 * 60 * 1000;
+static qd_timer_t *monitor_timer;
+
+// timer callback to dump memory metrics to the log
+//
+static void on_monitor_timer(void *context)
+{
+    ASSERT_PROACTOR_MODE(SYS_THREAD_PROACTOR_MODE_TIMER);
+
+    char log_msg[QD_LOG_TEXT_MAX];
+    char *begin = &log_msg[0];
+    char *end = &log_msg[QD_LOG_TEXT_MAX];  // past buffer ok see aprintf.h
+    const char *suffix = 0;
+
+    double msize = normalize_memory_size(qd_platform_memory_size(), &suffix);
+    int rc = aprintf(&begin, end, "ram:%.2f%s ", msize, suffix);
+    assert(rc == 0);
+
+    msize = normalize_memory_size(qd_router_virtual_memory_usage(), &suffix);
+    rc = aprintf(&begin, end, "vm:%.2f%s ", msize, suffix);
+    assert(rc == 0);
+
+    msize = normalize_memory_size(qd_router_rss_memory_usage(), &suffix);
+    rc = aprintf(&begin, end, "rss:%.2f%s ", msize, suffix);
+    assert(rc == 0);
+
+    msize = normalize_memory_size(qd_alloc_memory_usage(), &suffix);
+    rc = aprintf(&begin, end, "pool:%.2f%s ", msize, suffix);
+    assert(rc == 0);
+
+    const qd_alloc_type_desc_t *desc = DEQ_HEAD(desc_list);
+    while (desc) {
+        qd_alloc_stats_t stats = qd_alloc_desc_stats(desc);
+
+#ifdef NDEBUG
+        // For debug builds report all for verification purposes (and test the log buffer overflow path!)
+        if (stats.total_alloc_from_heap == 0) {  // ignore unused items
+            desc = DEQ_NEXT(desc);
+            continue;
+        }
+#endif
+        // log format: series of space separated item entries. Each entry has the format:
+        // "<type-name>:<# in use by threads>:<# in global freepool>"
+        uint64_t total = stats.total_alloc_from_heap - stats.total_free_to_heap;
+        char *saved_begin = begin;
+        rc = aprintf(&begin, end, "%s:%" PRIu64 ":%" PRIu64" ",
+                     desc->type_name, stats.held_by_threads, total - stats.held_by_threads);
+        if (rc < 0) // error?
+            break;
+        if (rc) {  // overflowed
+            // Log what we have and reset the buffer. Unfortunately aprintf() will write the partial data to log_msg
+            // then move begin to the end. Trim the partial data by terminating log_msg at the end of the previous
+            // write.
+            *saved_begin = 0;
+            assert(log_msg[0] != 0);
+            qd_log(LOG_ROUTER, QD_LOG_INFO, "%s", log_msg);
+            begin = &log_msg[0];
+            end = &log_msg[QD_LOG_TEXT_MAX];
+            *begin = 0;
+            continue;  // retry
+        }
+        desc = DEQ_NEXT(desc);
+    }
+
+    if (log_msg[0]) {
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "%s", log_msg);
+    }
+
+    qd_timer_schedule(monitor_timer, monitor_interval);
+}
+
+void qd_alloc_start_monitor(struct qd_dispatch_t *qd)
+{
+#ifdef QD_MEMORY_DEBUG
+    assert(alloc_pool_ready);  // need to call qd_alloc_initialize first!
+#endif
+
+    // Check for override
+    const char *interval_str = getenv("SKUPPER_ROUTER_ALLOC_MONITOR_SECS");
+    if (interval_str) {
+        unsigned int interval = 0;
+        int rc = sscanf(interval_str, "%u", &interval);
+        if (rc == 1) {
+            monitor_interval = 1000 * (qd_duration_t) interval;
+            qd_log(LOG_ROUTER, QD_LOG_DEBUG, "alloc_pool monitor interval overridden to %lu msecs",
+                   (unsigned long) monitor_interval);
+        }
+    }
+
+    if (monitor_interval) {
+        monitor_timer = qd_timer(qd, on_monitor_timer, 0);
+        qd_timer_schedule(monitor_timer, monitor_interval);
+    }
+}
+
+void qd_alloc_stop_monitor(void)
+{
+    if (monitor_timer)
+        qd_timer_free(monitor_timer);
+}
+

@@ -1512,6 +1512,9 @@ void qd_server_run(qd_dispatch_t *qd)
 #ifndef NDEBUG
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Running in DEBUG Mode");
 #endif
+
+    qd_alloc_start_monitor(qd);  // enable periodic alloc pool usage loggin
+
     const int n = qd_server->thread_count;
     sys_thread_t **threads = (sys_thread_t **)qd_calloc(n, sizeof(sys_thread_t*));
     for (i = 0; i < n; i++) {
@@ -1523,6 +1526,8 @@ void qd_server_run(qd_dispatch_t *qd)
         sys_thread_free(threads[i]);
     }
     free(threads);
+
+    qd_alloc_stop_monitor();
 
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Shut Down");
 }

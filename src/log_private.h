@@ -27,6 +27,4 @@ void qd_log_initialize(void);
 void qd_log_global_options(const char* format, bool utc);
 void qd_log_finalize(void);
 void qd_log_formatted_time(const struct timeval *time, char *buf, size_t buflen);
-
-#define QD_LOG_TEXT_MAX 2048
 #endif

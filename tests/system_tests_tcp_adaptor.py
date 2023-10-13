@@ -20,6 +20,7 @@
 import io
 import json
 import os
+import re
 import socket
 import subprocess
 import time
@@ -504,6 +505,9 @@ class TcpAdaptorBase(TestCase):
 
             config = Qdrouterd.Config(config)
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
+
+        # monitor router memory usage:
+        os.environ["SKUPPER_ROUTER_ALLOC_MONITOR_SECS"] = "1"
 
         cls.routers = []
         cls.test_ssl = test_ssl
@@ -1437,6 +1441,43 @@ class CommonTcpTests:
                                                             output["connectionsClosed"] + 2))
             assert output["bytesIn"] == output["bytesOut"]
         self.logger.log(tname + " SUCCESS")
+
+    @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
+    def test_100_memory_metrics(self):
+        """
+        Take advantage of the long running TCP test to verify that alloc_pool
+        metrics have been correctly written to the logs
+        """
+        mem_re = re.compile(r' ram:[0-9]+\.[0-9]+[BKMGTi]+ vm:[0-9]+\.[0-9]+[BKMGTi]+ rss:[0-9]+\.[0-9]+[BKMGTi]+ pool:[0-9]+\.[0-9]+[BKMGTi]+')
+        action_re = re.compile(r' qdr_action_t:[0-9]+:[0-9]+')
+        for router in self.routers:
+            last_mem_match = None  # match the start of the alloc log line
+            last_action_match = None  # match the qdr_action_t entry in the log line
+            with open(router.logfile_path, 'rt') as log_file:
+                for line in log_file:
+                    m = mem_re.search(line)
+                    if m:
+                        last_mem_match = m
+                    m = action_re.search(line)
+                    if m:
+                        last_action_match = m
+            self.assertIsNotNone(last_mem_match, "failed to find alloc_pool output!")
+            self.assertIsNotNone(last_action_match, "failed to find qdr_action_t entry!")
+
+            # Sanity check that metrics are present:
+
+            # match = 'ram:62.49GiB vm:20.00TiB rss:58.88MiB pool:3.70KiB'
+            mems = last_mem_match.group().strip().split()
+            for mem in mems:
+                name, value = mem.split(':')
+                self.assertIn(name, ["ram", "vm", "rss", "pool"])
+                self.assertTrue(int(value.split('.')[0]) > 0,
+                                f"Expected nonzero {name} counter!")
+            # match = ' qdr_action_t:192:0'
+            name, in_use, in_free = last_action_match.group().strip().split(':')
+            self.assertEqual(name, "qdr_action_t", f"Name mismatch {name}")
+            self.assertTrue(int(in_use) + int(in_free) > 0,
+                            f"zero alloced? {in_use} {in_free}")
 
 
 class TcpAdaptor(TcpAdaptorBase, CommonTcpTests):

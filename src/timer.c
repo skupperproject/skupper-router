@@ -152,8 +152,7 @@ static void timer_decref_LH(qd_timer_t *timer)
 qd_timer_t *qd_timer(qd_dispatch_t *qd, qd_timer_cb_t cb, void* context)
 {
     qd_timer_t *timer = new_qd_timer_t();
-    if (!timer)
-        return 0;
+    assert(timer);
 
     sys_cond_t cond;
     sys_cond_init(&cond);
