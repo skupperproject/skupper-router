@@ -288,6 +288,8 @@ void usage(char **argv) {
 
 int main(int argc, char **argv)
 {
+    char *buf                 = malloc(42);
+    buf[6]                    = '7';
     argv0 = argv[0];
     const char *config_path   = DEFAULT_CONFIG_PATH;
     const char *python_pkgdir = DEFAULT_DISPATCH_PYTHON_DIR;
