@@ -118,6 +118,7 @@ typedef struct tcplite_connection_t {
     tcplite_common_t            common;
     DEQ_LINKS(tcplite_connection_t);
     pn_raw_connection_t        *raw_conn;
+    sys_mutex_t                 activation_lock;
     sys_atomic_t                core_activation;
     sys_atomic_t                raw_opened;
     qd_timer_t                 *close_timer;
