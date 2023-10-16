@@ -26,7 +26,7 @@ import time
 import traceback
 from subprocess import PIPE
 from subprocess import STDOUT
-from typing import List, Optional, Mapping
+from typing import List, Optional, Mapping, Tuple
 
 from proton import Message
 from proton.handlers import MessagingHandler
@@ -2395,6 +2395,96 @@ class TcpAdaptorConnCounter(TestCase):
         """
         for encaps, idle_ct, active_ct in [('legacy', 1, 3), ('lite', 2, 4)]:
             self._run_test(encaps, idle_ct, active_ct)
+
+
+class TcpAdaptorNoDelayedDelivery(TestCase):
+    """
+    Ensure long lived TCP sessions are not counted as delayed deliveries
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorNoDelayedDelivery, cls).setUpClass()
+
+        cls.listener_port = cls.tester.get_port()
+        cls.connector_port = cls.tester.get_port()
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'TCPNoDelay'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_port,
+                             'address': "no/delay"}),
+            ('tcpConnector', {'host': "127.0.0.1",
+                              'port': cls.connector_port,
+                              'address': "no/delay"}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('TCPNoDelay', config)
+
+    def _get_delayed_counters(self) -> Tuple[int, int]:
+        attributes = ["deliveriesDelayed1Sec", "deliveriesDelayed10Sec"]
+        rc = self.router.management.query(type=ROUTER_TYPE,
+                                          attribute_names=attributes)
+        self.assertIsNotNone(rc, "unexpected query failure")
+        result = rc.get_dicts()[0]
+        counters = (result.get("deliveriesDelayed1Sec"),
+                    result.get("deliveriesDelayed10Sec"))
+        for ctr in counters:
+            self.assertIsNotNone(ctr, "expected a counter to be returned")
+        return counters
+
+    def test_01_check_delayed_deliveries(self):
+        # idle_ct: expected connection count when tcp configured, but prior to
+        # connections active
+        # activ_ct: expected connection count when 1 client and 1 server
+        # connected
+        mgmt = self.router.management
+
+        # Get a baseline for the counters
+        baseline = self._get_delayed_counters()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("", self.connector_port))
+            listener.setblocking(True)
+            listener.listen(10)
+
+            wait_tcp_listeners_up(self.router.addresses[0])
+
+            # create a long-lived TCP stream:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                retry_exception(lambda cs=client, lp=self.listener_port:
+                                cs.connect(("localhost", lp)),
+                                delay=0.25,
+                                exception=ConnectionRefusedError)
+                server, _ = listener.accept()
+                try:
+                    client.sendall(b'123')
+                    data = b''
+                    while data != b'123':
+                        data += server.recv(1024)
+                    # now sleep for enough time to trigger the 1 second delayed
+                    # delivery counter:
+                    time.sleep(2)
+                finally:
+                    server.shutdown(socket.SHUT_RDWR)
+                    server.close()
+
+                # Wait for the client connection to drop. The delivery will be
+                # released and all delivery counters will be updated
+                while True:
+                    if client.recv(1024) == b'':
+                        break
+
+        counters = self._get_delayed_counters()
+        self.assertEqual(0, counters[0] - baseline[0],
+                         f"Expected delay counter to be zero, got {counters}")
+        self.assertEqual(0, counters[1] - baseline[1],
+                         f"Expected delay counter to be zero, got {counters}")
 
 
 if __name__ == '__main__':

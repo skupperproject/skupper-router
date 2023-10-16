@@ -401,15 +401,19 @@ void qdr_delivery_increment_counters_CT(qdr_core_t *core, qdr_delivery_t *delive
                DLV_ARGS(delivery), delivery->presettled ? "pre-settled" : "", pn_disposition_type_name(outcome),
                outcome);
 
-        uint32_t delay = qdr_core_uptime_ticks(core) - delivery->ingress_time;
-        if (delay > 10) {
-            link->deliveries_delayed_10sec++;
-            if (link->link_direction ==  QD_INCOMING)
-                core->deliveries_delayed_10sec++;
-        } else if (delay > 1) {
-            link->deliveries_delayed_1sec++;
-            if (link->link_direction ==  QD_INCOMING)
-                core->deliveries_delayed_1sec++;
+        // Count delayed deliveries. Avoid counting streaming messages as delayed as they may be long lived (ISSUE-1171)
+        qd_message_t *msg = qdr_delivery_message(delivery);
+        if (msg && !qd_message_is_streaming(msg)) {
+            uint32_t delay = qdr_core_uptime_ticks(core) - delivery->ingress_time;
+            if (delay > 10) {
+                link->deliveries_delayed_10sec++;
+                if (link->link_direction ==  QD_INCOMING)
+                    core->deliveries_delayed_10sec++;
+            } else if (delay > 1) {
+                link->deliveries_delayed_1sec++;
+                if (link->link_direction ==  QD_INCOMING)
+                    core->deliveries_delayed_1sec++;
+            }
         }
 
         //
