@@ -1862,6 +1862,7 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
 {
     const size_t q3_upper = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
 
+    *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
     while (!*q3_stalled && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0) {
         uint32_t use_slot = sys_atomic_get(&content->uct_consume_slot);
 
