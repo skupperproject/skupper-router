@@ -59,9 +59,6 @@ async fn test_skrouterd_sanity() -> Result<(), Box<dyn std::error::Error>> {
         &docker, skupper_router_image, "skrouterd_sanity",
         Config {
             host_config: Some(hostconfig.clone()),
-            env: Some(vec![
-                format!("QDROUTERD_DEBUG={}", "asan").as_str(),
-            ]),
             ..Default::default()
         }).await;
 

@@ -136,7 +136,6 @@ async fn test_h2spec() {
         Config {
             host_config: Some(hostconfig.clone()),
             env: Some(vec![
-                format!("QDROUTERD_DEBUG={}", "asan").as_str(),
                 format!("QDROUTERD_CONF={}", ROUTER_CONFIG).as_str(),
             ]),
             ..Default::default()

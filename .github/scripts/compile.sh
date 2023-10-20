@@ -126,74 +126,44 @@ do_patch () {
 
 do_patch "patches/proton" "${PROTON_DIR}"
 
-do_build () {
-  local suffix=${1}
-  local runtime_check=${2}
-
-  if [ "$runtime_check" == "OFF" ]; then
-     # Turn on PGO only when we are not doing asan or tsan
-     BUILD_OPTS="-DENABLE_PROFILE_GUIDED_OPTIMIZATION=ON"
-  else
-     BUILD_OPTS="-DBUILD_TESTING=OFF"
-  fi
-
-  cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}${suffix}" \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DRUNTIME_CHECK="${runtime_check}" \
-    -DENABLE_LINKTIME_OPTIMIZATION=ON \
-    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
-    -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
-    -DCMAKE_INSTALL_PREFIX=$PROTON_BUILD_DIR${suffix}/install
-  cmake --build "${PROTON_BUILD_DIR}${suffix}" --verbose
-
-  # `cmake --install` Proton for the build image only as the router links it statically
-  # Proton Python for the run image is installed later
-  cmake --install "$PROTON_BUILD_DIR${suffix}"
-
-   if [ "$runtime_check" == "OFF" ]; then
-     # This will install the proton python libraries in sys.path so the tests using
-     # proton can be run successfully.
-     python3 -m pip install "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
-   fi
-
-  cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}${suffix}" \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DRUNTIME_CHECK="${runtime_check}" \
-    -DProton_USE_STATIC_LIBS=ON \
-    -DProton_DIR="$PROTON_BUILD_DIR${suffix}/install/lib64/cmake/Proton" \
-    ${BUILD_OPTS} \
-    -DVERSION="${VERSION}" \
-    -DCMAKE_INSTALL_PREFIX=/usr
-  cmake --build "${SKUPPER_BUILD_DIR}${suffix}" --verbose
-}
-
 # This is required to install the python packages that the system tests use.
 python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
 
-# Do a regular build without asan or tsan.
-do_build "" OFF
+cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_LINKTIME_OPTIMIZATION=ON \
+  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+  -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_STATIC_LIBS=ON -DBUILD_BINDINGS=python \
+  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+  -DCMAKE_INSTALL_PREFIX=${PROTON_BUILD_DIR}/install
+
+cmake --build "${PROTON_BUILD_DIR}" --verbose
+
+# `cmake --install` Proton for the build image only as the router links it statically
+# Proton Python for the run image is installed later
+cmake --install "$PROTON_BUILD_DIR"
+
+# This will install the proton python libraries in sys.path so the tests using
+# proton can be run successfully.
+python3 -m pip install "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+
+cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DProton_USE_STATIC_LIBS=ON \
+  -DProton_DIR="${PROTON_BUILD_DIR}/install/lib64/cmake/Proton" \
+  -DENABLE_PROFILE_GUIDED_OPTIMIZATION=ON \
+  -DVERSION="${VERSION}" \
+  -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build "${SKUPPER_BUILD_DIR}" --verbose
 
 # Install Proton Python
 python3 -m pip install --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
-
-# Then perform sanitized builds of Proton and the Router.
-# talking to annobin is not straightforward, https://bugzilla.redhat.com/show_bug.cgi?id=1536569
-common_sanitizer_flags="-Wp,-U_FORTIFY_SOURCE -fplugin=annobin -fplugin-arg-annobin-no-active-checks"
-export CFLAGS="${CFLAGS} ${common_sanitizer_flags}"
-export CXXFLAGS="${CXXFLAGS} ${common_sanitizer_flags}"
-do_build "_asan" asan
-do_build "_tsan" tsan
 
 tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
 DESTDIR="${SKUPPER_DIR}/staging/" cmake --install "${SKUPPER_BUILD_DIR}"
 # Remove router tests (enabled for PGO) since *.pem files trigger security warnings
 rm -rf ${SKUPPER_DIR}/staging/usr/lib/skupper-router/tests
-# Add sanitized router binaries
-cp "${SKUPPER_BUILD_DIR}_asan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_asan"
-cp "${SKUPPER_BUILD_DIR}_tsan/router/skrouterd" "${SKUPPER_DIR}/staging/usr/sbin/skrouterd_tsan"
-cp --target-directory="${SKUPPER_DIR}/staging/" "${SKUPPER_DIR}/tests/tsan.supp" "${SKUPPER_BUILD_DIR}_asan/tests/lsan.supp"
 
-tar -z -C "${SKUPPER_DIR}/staging/" -cf /skupper-router-image.tar.gz usr etc lsan.supp tsan.supp
+tar -z -C "${SKUPPER_DIR}/staging/" -cf /skupper-router-image.tar.gz usr etc
 #endregion qpid-proton and skupper-router
