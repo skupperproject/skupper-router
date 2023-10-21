@@ -98,6 +98,7 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 # PROTON-2473: -Wno-error=deprecated-declarations for DH_new, DH_...
 %__cmake . -B "%{__cmake_builddir}" \
     -DCMAKE_C_FLAGS="$CFLAGS -Wno-error=deprecated-declarations" \
+    -DBUILD_TOOLS=OFF \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_TESTING=OFF \
     -DBUILD_BINDINGS=OFF \
