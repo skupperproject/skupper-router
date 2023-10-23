@@ -64,11 +64,13 @@ static void activate_connection(qd_message_activation_t *activation, qd_directio
 
     case QD_ACTIVATION_TCP: {
         tcplite_connection_t *conn = safe_deref_tcplite_connection_t(activation->safeptr);
-        sys_mutex_lock(&conn->activation_lock);
-        if (!!conn && IS_ATOMIC_FLAG_SET(&conn->raw_opened)) {
-            pn_raw_connection_wake(conn->raw_conn);
+        if (!!conn) {
+            sys_mutex_lock(&conn->activation_lock);
+            if (IS_ATOMIC_FLAG_SET(&conn->raw_opened)) {
+                pn_raw_connection_wake(conn->raw_conn);
+            }
+            sys_mutex_unlock(&conn->activation_lock);
         }
-        sys_mutex_unlock(&conn->activation_lock);
         break;
     }
     }
