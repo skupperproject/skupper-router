@@ -25,7 +25,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     cyrus-sasl-devel openssl-devel libuuid-devel \
     python3-devel python3-pip \
     libnghttp2-devel \
-    wget tar patch findutils git libasan libubsan libtsan \
+    wget tar patch findutils git \
     libtool \
  && microdnf clean all -y
 
@@ -46,13 +46,11 @@ RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupp
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-# gdb and sanitizers are part of final image as they can be used as debug options for Skupper
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
     python3 \
     libnghttp2 \
-    gdb libasan libubsan libtsan \
     gettext hostname iputils \
     shadow-utils \
  && microdnf clean all
@@ -70,11 +68,6 @@ COPY ./scripts/* /home/skrouterd/bin/
 ARG version=latest
 ENV VERSION=${version}
 ENV QDROUTERD_HOME=/home/skrouterd
-
-ENV ASAN_OPTIONS="disable_coredump=0 detect_odr_violation=0 strict_string_checks=1 detect_stack_use_after_return=1 check_initialization_order=1 strict_init_order=1 detect_invalid_pointer_pairs=2"
-ENV LSAN_OPTIONS="disable_coredump=0 suppressions=/lsan.supp"
-ENV TSAN_OPTIONS="disable_coredump=0 history_size=4 second_deadlock_stack=1 suppressions=/tsan.supp"
-ENV UBSAN_OPTIONS="disable_coredump=0 print_stacktrace=1 print_summary=1"
 
 EXPOSE 5672 55672 5671
 CMD ["/home/skrouterd/bin/launch.sh"]

@@ -30,17 +30,4 @@ if [ -f $CONFIG_FILE ]; then
     ARGS="-c $CONFIG_FILE"
 fi
 
-if [[ $QDROUTERD_DEBUG = "gdb" ]]; then
-    exec gdb -batch -ex "run" -ex "bt" --args skrouterd $ARGS
-elif [[ $QDROUTERD_DEBUG = "asan" ]]; then
-    # NOTE: keep environment in sync with that in run.py.in
-    export MALLOC_CHECK_=3
-    export MALLOC_PERTURB_=153
-    export PYTHONMALLOC=malloc_debug
-    export PYTHONDEVMODE=1
-    exec skrouterd_asan $ARGS
-elif [[ $QDROUTERD_DEBUG = "tsan" ]]; then
-    exec skrouterd_tsan $ARGS
-else
-    exec skrouterd $ARGS
-fi
+exec skrouterd $ARGS
