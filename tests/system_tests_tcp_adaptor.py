@@ -2231,8 +2231,10 @@ class TcpLegacyInvalidEncodingTest(TestCase):
 
     def test_invalid_egress_client_request_encaps(self):
         """
-        Simulate an invalid message arriving at the egress connector. Verify
-        the message is RELEASED and an error has been logged.
+        Simulate an message with an incompatible ecapsulation sent by a client
+        that arrives at the egress connector. Verify that the egress connector
+        RELEASED the message and an error has been logged. The message should
+        be released so it can be delivered to another (compatible) connector.
         """
 
         # send a request message with an incompatible encapsulation
@@ -2249,8 +2251,11 @@ class TcpLegacyInvalidEncodingTest(TestCase):
 
     def test_invalid_ingress_server_reply_encaps(self):
         """
-        Simulate an invalid reply message arriving at the ingress listener. Verify
-        the message is RELEASED and an error has been logged.
+        Simulate an invalid reply message arriving at the ingress
+        listener. Verify the message is REJECTED and an error has been
+        logged. The message is rejected because the link is a reply-to stream
+        with a unique address for the client - it cannot be redelivered to
+        another client.
         """
 
         # send a reply message with an incompatible encapsulation
@@ -2268,8 +2273,11 @@ class TcpLegacyInvalidEncodingTest(TestCase):
 
     def test_invalid_ingress_server_reply_body(self):
         """
-        Simulate an invalid reply message arriving at the ingress listener. Verify
-        the message is RELEASED and an error has been logged.
+        Simulate a reply message arriving at the ingress listener that has an
+        invalid body structure. The client should close the connection and set
+        the outcome to ACCEPTED. The reason REJECTED is not used is because
+        data may already have been sent to the TCP client and it is too late to
+        reject the message.
         """
 
         # send a reply message with an incompatible body format
@@ -2287,6 +2295,11 @@ class TcpLegacyInvalidEncodingTest(TestCase):
 
 
 class InvalidClientSendRequest(MessagingHandler):
+    """
+    Builds a legacy TCP adaptor client request message with an incompatible
+    encapsulation format. Expect the TCP adaptor connector to release the
+    message so it can be re-delivered to another (compatible) connector.
+    """
     def __init__(self, msg, address, destination):
         super(InvalidClientSendRequest, self).__init__(auto_settle=False)
         self.msg = msg
@@ -2331,6 +2344,10 @@ class InvalidClientSendRequest(MessagingHandler):
 
 
 class InvalidServerSendReply(MessagingHandler):
+    """
+    Simulate a TCP adaptor reply message that is invalid. Expect the client
+    (egress) to ignore the message and set its disposition to dispo.
+    """
     def __init__(self, msg, server_address, listener_address, service_address, dispo):
         super(InvalidServerSendReply, self).__init__(auto_settle=False)
         self.msg = msg
@@ -2353,7 +2370,7 @@ class InvalidServerSendReply(MessagingHandler):
         self.request_dlv = None
         self.dlv_drain_timer = None
 
-        # fack tcp client, just sends a request message
+        # fake tcp client, just sends a request message
         self.listener_address = listener_address
         self.client_conn = None
         self.client_sent = False
