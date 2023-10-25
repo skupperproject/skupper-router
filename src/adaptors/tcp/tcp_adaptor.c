@@ -702,8 +702,10 @@ static int read_message_body(qdr_tcp_connection_t *conn, qd_message_t *msg, pn_r
                     conn->read_eos_seen = true;
                     break;
             case QD_MESSAGE_STREAM_DATA_INVALID:
+                // Corrupted message, treat like EOS since there is no way to undo what has already been sent
                     qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR,
-                           "[C%" PRIu64 "] Invalid body data for streaming message", conn->conn_id);
+                           "[C%" PRIu64 "] Invalid body data for streaming message, closing connection", conn->conn_id);
+                    conn->read_eos_seen = true;
                     break;
             default:
                 break;
@@ -1996,7 +1998,11 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
                        DLV_FMT " tcp_adaptor egress message incomplete, waiting for more", DLV_ARGS(delivery));
                 return 0;  // retry later
             }
-            assert(depth_ok == QD_MESSAGE_DEPTH_OK);  // otherwise bug in message encoding?
+            if (depth_ok != QD_MESSAGE_DEPTH_OK) {  // otherwise bug? corrupted message encoding?
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Malformed TCP message - discarding!", DLV_ARGS(delivery));
+                qd_message_set_send_complete(msg);
+                return PN_REJECTED;
+            }
 
             // ISSUE-1136: check if the message format is correct. For this adaptor the content-type field must be
             // unset. See comment in handle_incoming().
@@ -2004,7 +2010,7 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
             qd_iterator_t *ctype = qd_message_field_iterator(msg, QD_FIELD_CONTENT_TYPE);
             if (ctype) {
                 qd_iterator_free(ctype);
-                qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, DLV_FMT " Misconfigured tcpConnector (wrong version)",
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, DLV_FMT " Misconfigured tcpConnector (wrong encapsulation)",
                        DLV_ARGS(delivery));
                 qd_message_set_send_complete(msg);
                 return PN_RELEASED;  // allow it to be re-forwarded to a different adaptor
@@ -2028,6 +2034,50 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
         } else if (!tc->out_dlv_stream) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    DLV_FMT " tcp_adaptor delivery arrived on non-egress dispatcher connection", DLV_ARGS(delivery));
+
+            if (tc->ingress) {
+                // Egress (connector-side) outgoing messages are validated when they arrive on the dispatcher link (see
+                // above). Ingress (client-side) outbound reply messages do not arrive on the dispatch link so these
+                // messages need to be validated here.
+
+                qd_message_depth_status_t depth_ok = qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES);
+                if (depth_ok == QD_MESSAGE_DEPTH_INCOMPLETE) {
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                           DLV_FMT " tcp_adaptor reply message incomplete, waiting for more", DLV_ARGS(delivery));
+                    return 0;  // retry later
+                }
+                if (depth_ok != QD_MESSAGE_DEPTH_OK) {  // otherwise bug? corrupted message encoding?
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_WARNING, DLV_FMT " Malformed TCP message - discarding!", DLV_ARGS(delivery));
+                    qd_message_set_send_complete(msg);
+                    return PN_REJECTED;
+                }
+
+                // ISSUE-1136: check if the message format is correct. For this adaptor the content-type field must be
+                // unset. See comment in handle_incoming().
+                //
+                qd_iterator_t *ctype = qd_message_field_iterator(msg, QD_FIELD_CONTENT_TYPE);
+                if (ctype) {
+                    qd_iterator_free(ctype);
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, DLV_FMT " Misconfigured tcpListener (wrong outgoing encapsulation)",
+                           DLV_ARGS(delivery));
+                    qd_message_set_send_complete(msg);
+
+                    // What to do? This is a reply message, so it cannot be re-delivered to another service.
+
+                    if (tc->pn_raw_conn) {
+                        // set the raw connection condition info so it will appear in the vanflow logs
+                        // when the connection disconnects
+                        pn_condition_t *cond = pn_raw_connection_condition(tc->pn_raw_conn);
+                        if (!!cond) {
+                            (void) pn_condition_set_name(cond, "delivery-failed");
+                            (void) pn_condition_set_description(cond, "invalid message encapsulation");
+                        }
+                        pn_raw_connection_close(tc->pn_raw_conn);
+                    }
+                    return PN_REJECTED;
+                }
+            }
+
             tc->out_dlv_stream = delivery;
             qdr_delivery_incref(delivery, "tcp_adaptor - new out_dlv_stream");
             if (tc->ingress) {
@@ -2115,7 +2165,7 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                 pn_condition_t *cond = pn_raw_connection_condition(tc->pn_raw_conn);
                 if (!!cond) {
                     (void) pn_condition_set_name(cond, "delivery-failed");
-                    (void) pn_condition_set_description(cond, "destination unreachable");
+                    (void) pn_condition_set_description(cond, (disp == PN_REJECTED) ? "invalid/corrupt message" : "destination unreachable");
                 }
                 pn_raw_connection_close(tc->pn_raw_conn);
             }
