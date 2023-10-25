@@ -166,22 +166,30 @@ static void print(const char *str)
     fsync(STDERR_FILENO);
 }
 
-// print a register as a hex string
-// async signal safe
+// Convert an unsigned value into a hex string and print it. Async signal safe. If trim then discard leading zeros.
 //
-static void print_reg(uintptr_t reg)
+static void print_hex_trim(uintptr_t value, bool trim)
 {
-    int            i   = sizeof(reg) * 2;
+    int            i   = sizeof(value) * 2;
     unsigned char *ptr = &buffer[BUFFER_SIZE - 1];
 
     *ptr = 0;
     while (i--) {
-        uint8_t nybble = reg & 0x0F;
+        uint8_t nybble = value & 0x0F;
 
         *--ptr = nybble > 9 ? (nybble - 10) + 'a' : nybble + '0';
-        reg >>= 4;
+        value >>= 4;
+        if (value == 0 && trim)
+            break;
     }
     print((char *) ptr);
+}
+
+// Print a register in hex. No leading '0x' added.
+//
+static void print_reg(uintptr_t reg)
+{
+    print_hex_trim(reg, false);
 }
 
 // print a base-ten unsigned integer
@@ -204,6 +212,13 @@ static void print_uint(uintptr_t num)
 }
 
 #ifdef HAVE_LIBUNWIND
+
+// Print an address offset, stripping leading zeros
+//
+static void print_offset(uintptr_t offset)
+{
+    print_hex_trim(offset, true);
+}
 
 // given an address find it's mapping and offset
 // async signal safe
@@ -320,11 +335,25 @@ static void print_stack_frame(int index, unw_cursor_t *cursor)
     print("] IP: 0x");
     print_reg(ip);
 
+    // Cannot reliably invoke unw_get_proc_name() from a signal handler due to a bug:
+    // https://github.com/libunwind/libunwind/issues/123
+    // v1.8.0 hasn't been released yet but I'm assuming it will contain the fix
+    //
+    if (UNW_VERSION_MAJOR > 1 || (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR >= 8)) {
+        unw_word_t off = 0;
+        if (unw_get_proc_name(cursor, (char *) buffer, BUFFER_SIZE, &off) == 0) {
+            print(":");
+            print((char *) buffer);
+            print("+0x");
+            print_offset((uintptr_t) off);
+        }
+    }
+
     if (get_offset((uintptr_t) ip, &offset, &path)) {
         print(" (");
         print(path);
-        print(" + 0x");
-        print_reg(offset);
+        print("+0x");
+        print_offset(offset);
         print(")");
     }
     print("\n");

@@ -269,16 +269,6 @@ static void _handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_
 //
 qd_http_listener_t *qd_http1_configure_listener(qd_http_listener_t *li, qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    if (qd_router_test_hooks_enabled()) {
-        // Check for test command to trigger core dump functionality. This is only used in CI.
-        // See ISSUE-1083
-        if (strcmp(li->config->adaptor_config->host, "$FORCE$CRASH$SEGV$") == 0) {
-            volatile int *badptr = (int *) 0xBEEFFACE;
-
-            *badptr = 42;  // this is expected to cause the router to crash!
-        }
-    }
-
     if (li->config->adaptor_config->ssl_profile_name) {
         li->tls_domain = qd_tls_domain(li->config->adaptor_config, qd, LOG_HTTP_ADAPTOR, http1_alpn_protocols,
                                        HTTP1_NUM_ALPN_PROTOCOLS, true);

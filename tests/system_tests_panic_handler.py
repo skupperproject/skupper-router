@@ -23,61 +23,47 @@ import os
 import re
 
 from system_test import TestCase, unittest, main_module, Process
-from system_test import retry, Qdrouterd, QdManager, HTTP_LISTENER_TYPE
+from system_test import retry, Qdrouterd, AsyncTestSender
+
+from proton import Message
 
 
 @unittest.skipIf(os.environ.get("QPID_RUNTIME_CHECK", None) != "OFF",
                  "Skipping panic test: RUNTIME_CHECK enabled")
 class PanicHandlerTest(TestCase):
     """
-    Force the router to crash and verify the panic handler ran
+    Force the router to crash and verify the panic handler produces a dump to
+    stdout.
     """
-
     @classmethod
     def setUpClass(cls):
         super(PanicHandlerTest, cls).setUpClass()
 
+    def _start_router(self, name):
+        # create and start a router
         config = [
-            ('router', {'mode': 'interior', 'id': "PanicRouter"}),
+            ('router', {'mode': 'standalone', 'id': name}),
             ('listener', {'role': 'normal',
-                          'port': cls.tester.get_port()}),
+                          'port': self.tester.get_port()}),
             ('address', {'prefix': 'closest', 'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]
 
-        # turn off python debug for this test to prevent it from dumping stuff
-        # to output
+        # turn off python and heap debug for this router so we can crash it
         os.environ.pop("PYTHONMALLOC", None)
         os.environ.pop("PYTHONDEVMODE", None)
+        os.environ.pop("MALLOC_CHECK_", None)
+
         config = Qdrouterd.Config(config)
-        cls.router = cls.tester.qdrouterd("PanicRouter", config, wait=True,
-                                          cl_args=["-T"], expect=Process.EXIT_FAIL)
+        router = self.tester.qdrouterd(name, config, wait=True,
+                                       cl_args=["-T"], expect=Process.EXIT_FAIL)
+        router.wait_startup_message()
+        return router
 
-    def test_01_panic_handler(self):
-        """
-        Crash the router and verify the panic handler writes the crash to
-        stderr
-        """
-        self.router.wait_startup_message()
-
-        mgmt = QdManager(address=self.router.addresses[0], timeout=1)
-        # this call will crash the router
-        try:
-            mgmt.create(HTTP_LISTENER_TYPE,
-                        {'address': 'closest/panic',
-                         'port': self.tester.get_port(),
-                         'protocolVersion': 'HTTP1',
-                         'host': '$FORCE$CRASH$SEGV$'})
-            self.assertTrue(False, 'mgmt.create() should have crashed')
-        except Exception as exc:
-            pass  # expected - the router just crashed
-
-        self.assertTrue(retry(lambda: self.router.poll() is not None))
-
+    def _validate_panic(self, router):
         # do some simple validation on the generated panic output:
-
         crash_dump = ""
-        with open(self.router.outfile_path, 'r') as fd:
+        with open(router.outfile_path, 'r') as fd:
             crash_dump = fd.read()
 
         regex = re.compile(r"^\*\*\* SKUPPER-ROUTER FATAL ERROR \*\*\*", re.MULTILINE)
@@ -106,6 +92,51 @@ class PanicHandlerTest(TestCase):
         regex = re.compile(r"^\*\*\* END \*\*\*$", re.MULTILINE)
         match = regex.search(crash_dump)
         self.assertIsNotNone(match, "failed to dump end line")
+
+    def test_01_abort_handling(self):
+        """
+        Crash the router via having it call abort() and verify the panic
+        handler output
+        """
+        router = self._start_router("AbortRouter")
+        ts = AsyncTestSender(router.addresses[0],
+                             "io.skupper.router.router/test/crash",
+                             message=Message(subject="ABORT"),
+                             presettle=True)
+        ts.wait()
+
+        self.assertTrue(retry(lambda: router.poll() is not None))
+        self._validate_panic(router)
+
+    def test_02_segv_handling(self):
+        """
+        Crash the router via having it attempt to write to invalid memory and
+        verify the panic handler output
+        """
+        router = self._start_router("HeapRouter")
+        ts = AsyncTestSender(router.addresses[0],
+                             "io.skupper.router.router/test/crash",
+                             message=Message(subject="SEGV"),
+                             presettle=True)
+        ts.wait()
+
+        self.assertTrue(retry(lambda: router.poll() is not None))
+        self._validate_panic(router)
+
+    def test_03_heap_handling(self):
+        """
+        Crash the router via having it attempt to overwrite heap memory and
+        verify the panic handler output
+        """
+        router = self._start_router("SegvRouter")
+        ts = AsyncTestSender(router.addresses[0],
+                             "io.skupper.router.router/test/crash",
+                             message=Message(subject="HEAP"),
+                             presettle=True)
+        ts.wait()
+
+        self.assertTrue(retry(lambda: router.poll() is not None))
+        self._validate_panic(router)
 
 
 if __name__ == '__main__':
