@@ -664,13 +664,12 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 {
     qd_connector_t *connector = (qd_connector_t*) impl;
 
-    int conn_index = connector->conn_index;
-
     int i = 1;
     int num_items = 0;
 
     sys_mutex_lock(&connector->lock);
 
+    int conn_index = connector->conn_index;
     qd_failover_item_list_t   conn_info_list = connector->conn_info_list;
 
     int conn_info_len = DEQ_SIZE(conn_info_list);
