@@ -453,7 +453,7 @@ class TcpAdaptorBase(TestCase):
                                           'encapsulation': encapsulation,
                                           'siteId': cls.site}
             if mode == "interior":
-                router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4'}
+                router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4', "helloMaxAgeSeconds": '10'}
             else:
                 router_dict = {'mode': mode, 'id': name}
             config = [
