@@ -100,11 +100,6 @@ typedef void (*buffer_process_t) (void *context, const unsigned char *base, int 
 
 void qd_message_initialize(void) {}
 
-int qd_message_repr_len(void)
-{
-    return qd_log_max_len();
-}
-
 /**
  * Quote non-printable characters suitable for log messages. Output in buffer.
  */

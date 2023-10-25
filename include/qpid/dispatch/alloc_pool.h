@@ -153,4 +153,9 @@ void qd_alloc_initialize(void);
 void qd_alloc_debug_dump(const char *file);
 void qd_alloc_finalize(void);
 size_t qd_alloc_type_size(const qd_alloc_type_desc_t *desc);  // thread safe
+
+// control the periodic logging of alloc pool utilization
+typedef struct qd_dispatch_t qd_dispatch_t;
+void qd_alloc_start_monitor(qd_dispatch_t *qd);
+void qd_alloc_stop_monitor(void);
 #endif

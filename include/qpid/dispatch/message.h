@@ -482,12 +482,12 @@ int qd_message_stream_data_footer_append(qd_message_t *message, qd_buffer_list_t
 int qd_message_stream_data_append(qd_message_t *msg, qd_buffer_list_t *data, bool *q2_blocked);
 
 
-/** Put string representation of a message suitable for logging in buffer.
+/** Put string representation of a message suitable for logging in buffer. Note that log message text is limited to
+ * QD_LOG_TEXT_MAX bytes which includes the terminating null byte.
+ *
  * @return buffer
  */
 char* qd_message_repr(qd_message_t *msg, char* buffer, size_t len, qd_log_bits log_message);
-/** Recommended buffer length for qd_message_repr */
-int qd_message_repr_len(void);
 
 qd_log_source_t *qd_message_log_source(void);
 
