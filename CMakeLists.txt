@@ -152,7 +152,7 @@ if(NOT DEFINED VERSION)
         # GIT_RESULT will contain the result of last child process. It will be zero if successful.
         if (GIT_RESULT EQUAL 0)
             # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
-            if (${DEFAULT_VERSION} MATCHES "^[0-9]+.[0-9]+.[0-9]+.*")
+            if (${DEFAULT_VERSION} MATCHES "^[0-9]+\.[0-9]+\.[0-9]+.*")
             	set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
             else()
                 set(QPID_DISPATCH_VERSION "0.0.0")
