@@ -73,9 +73,6 @@ race:^_lws_log$
 race:^_lws_logv$
 race:^__lws_logv$
 
-# ISSUE-537 - Suppress the race in qd_entity_refresh_connector for now.
-race:^qd_entity_refresh_connector$
-
 #
 # External libraries
 #

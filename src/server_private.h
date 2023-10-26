@@ -115,6 +115,8 @@ DEQ_DECLARE(qd_listener_t, qd_listener_list_t);
  * Connector objects represent the desire to create and maintain an outgoing transport connection.
  */
 struct qd_connector_t {
+    DEQ_LINKS(qd_connector_t);
+
     /* Referenced by connection_manager and pn_connection_t */
     sys_atomic_t              ref_count;
     qd_server_t              *server;
@@ -125,7 +127,6 @@ struct qd_connector_t {
     /* Connector state and ctx can be modified by I/O or management threads. */
     sys_mutex_t               lock;
     cxtr_state_t              state;
-    char                     *conn_msg;
     qd_connection_t          *qd_conn;
 
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
@@ -139,7 +140,9 @@ struct qd_connector_t {
     bool is_data_connector;
     char group_correlator[QD_DISCRIMINATOR_SIZE];
 
-    DEQ_LINKS(qd_connector_t);
+    /* holds proton transport error condition text on connection failure */
+#define QD_CXTR_CONN_MSG_BUF_SIZE 300
+    char conn_msg[QD_CXTR_CONN_MSG_BUF_SIZE];
 };
 
 DEQ_DECLARE(qd_connector_t, qd_connector_list_t);

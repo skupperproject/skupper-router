@@ -98,7 +98,7 @@ char *COMPONENT_SEPARATOR = ";";
 static const int BACKLOG = 50;  /* Listening backlog */
 
 static bool setup_ssl_sasl_and_open(qd_connection_t *ctx); // true if ssl, sasl, and open succeeded
-static qd_failover_item_t *qd_connector_get_conn_info(qd_connector_t *ct);
+static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct);
 
 /**
  * This function is set as the pn_transport->tracer and is invoked when proton tries to write the log message to pn_transport->tracer
@@ -979,10 +979,10 @@ static void startup_timer_handler(void *context)
     qd_connection_invoke_deferred(ctx, timeout_on_handshake, context);
 }
 
-static void qd_increment_conn_index(qd_connection_t *ctx)
+static void qd_increment_conn_index_lh(qd_connection_t *ctx)
 {
     if (ctx->connector) {
-        qd_failover_item_t *item = qd_connector_get_conn_info(ctx->connector);
+        qd_failover_item_t *item = qd_connector_get_conn_info_lh(ctx->connector);
 
         if (item->retries == 1) {
             ctx->connector->conn_index += 1;
@@ -1044,10 +1044,12 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
         if (ctx && !ctx->opened) {
             ctx->opened = true;
             if (ctx->connector) {
+                sys_mutex_lock(&ctx->connector->lock);
                 ctx->connector->delay = 2000;  // Delay re-connect in case there is a recurring error
-                qd_failover_item_t *item = qd_connector_get_conn_info(ctx->connector);
+                qd_failover_item_t *item = qd_connector_get_conn_info_lh(ctx->connector);
                 if (item)
                     item->retries = 0;
+                sys_mutex_unlock(&ctx->connector->lock);
             }
         }
         break;
@@ -1061,22 +1063,26 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
             pn_transport_t *transport = pn_event_transport(e);
             pn_condition_t* condition = transport ? pn_transport_condition(transport) : NULL;
             if (ctx && ctx->connector) { /* Outgoing connection */
-                qd_increment_conn_index(ctx);
                 const qd_server_config_t *config = &ctx->connector->config;
+                char conn_msg[QD_CXTR_CONN_MSG_BUF_SIZE];  // avoid holding connector lock when logging
+
+                sys_mutex_lock(&ctx->connector->lock);
+                qd_increment_conn_index_lh(ctx);
                 // note: will transition back to STATE_CONNECTING when ctx is freed (pn_connection_free)
                 ctx->connector->state = CXTR_STATE_FAILED;
-                char conn_msg[300];
-                if (condition  && pn_condition_is_set(condition)) {
-                    qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection to %s failed: %s %s", ctx->connection_id, config->host_port,
-                            pn_condition_get_name(condition), pn_condition_get_description(condition));
-                    strcpy(ctx->connector->conn_msg, conn_msg);
-
-                    qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
+                if (condition && pn_condition_is_set(condition)) {
+                    qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed: %s %s",
+                                     ctx->connection_id, config->host_port, pn_condition_get_name(condition),
+                                     pn_condition_get_description(condition));
                 } else {
-                    qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection to %s failed", ctx->connection_id, config->host_port);
-                    strcpy(ctx->connector->conn_msg, conn_msg);
-                    qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
+                    qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed",
+                                     ctx->connection_id, config->host_port);
                 }
+                strncpy(ctx->connector->conn_msg, conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE);
+                sys_mutex_unlock(&ctx->connector->lock);
+
+                qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
+
             } else if (ctx && ctx->listener) { /* Incoming connection */
                 if (condition && pn_condition_is_set(condition)) {
                     qd_log(LOG_SERVER, QD_LOG_ERROR,
@@ -1166,7 +1172,7 @@ static void *thread_run(void *arg)
 }
 
 
-static qd_failover_item_t *qd_connector_get_conn_info(qd_connector_t *ct) {
+static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) {
 
     qd_failover_item_t *item = DEQ_HEAD(ct->conn_info_list);
 
@@ -1179,7 +1185,7 @@ static qd_failover_item_t *qd_connector_get_conn_info(qd_connector_t *ct) {
 }
 
 
-/* Timer callback to try/retry connection open */
+/* Timer callback to try/retry connection open, connector->lock held */
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
 {
     // connection until pn_proactor_connect is called below
@@ -1204,7 +1210,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection)
     // hostname in the open frame.
     //
 
-    qd_failover_item_t *item = qd_connector_get_conn_info(connector);
+    qd_failover_item_t *item = qd_connector_get_conn_info_lh(connector);
 
     char *current_host = item->host;
     char *host_port = item->host_port;
@@ -1717,10 +1723,6 @@ qd_connector_t *qd_server_connector(qd_server_t *server)
     connector->timer = qd_timer(server->qd, try_open_cb, connector);
     if (!connector->timer)
         goto error;
-    connector->conn_msg = (char*) malloc(300);
-    if (!connector->conn_msg)
-        goto error;
-    memset(connector->conn_msg, 0, 300);
 
     connector->server     = server;
     connector->conn_index = 1;
@@ -1780,7 +1782,6 @@ void qd_connector_decref(qd_connector_t* connector)
             item = DEQ_HEAD(connector->conn_info_list);
         }
         if (connector->policy_vhost) free(connector->policy_vhost);
-        free(connector->conn_msg);
         free_qd_connector_t(connector);
     }
 }

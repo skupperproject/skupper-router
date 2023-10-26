@@ -1560,13 +1560,11 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     }
 
     if (conn->connector) {
-        char conn_msg[300];
-        qd_format_string(conn_msg, 300, "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s"
-                " auth=%s user=%s container_id=%s",
-                connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
-                        authenticated ? mech : "no", (char*) user, container);
         sys_mutex_lock(&conn->connector->lock);
-        strcpy(conn->connector->conn_msg, conn_msg);
+        qd_format_string(conn->connector->conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE,
+                         "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s auth=%s user=%s container_id=%s",
+                         connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
+                         authenticated ? mech : "no", (char*) user, container);
         sys_mutex_unlock(&conn->connector->lock);
     }
 }
