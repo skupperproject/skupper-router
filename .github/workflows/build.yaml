@@ -997,6 +997,10 @@ jobs:
           packit srpm
           rpmbuild --rebuild skupper-router*.src.rpm --nocheck --define '_rpmdir /tmp/skupper-rpms' --define 'debug_package %{nil}'
 
+      - name: List package content
+        run: |
+          rpm -qlp /tmp/skupper-rpms/*/*.rpm
+
       - name: Install built packages
         run: |
           dnf install -y /tmp/skupper-rpms/*/*.rpm
