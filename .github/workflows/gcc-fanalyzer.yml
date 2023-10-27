@@ -71,7 +71,7 @@ jobs:
 
     - name: Install Proton
       run: |
-        cmake -S qpid-proton -B qpid-proton/build -GNinja -DBUILD_BINDINGS=c -DBUILD_TLS=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+        cmake -S qpid-proton -B qpid-proton/build -GNinja -DBUILD_BINDINGS=c -DBUILD_TLS=ON -DBUILD_TOOLS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
         cmake --build qpid-proton/build
         cmake --install qpid-proton/build
 
