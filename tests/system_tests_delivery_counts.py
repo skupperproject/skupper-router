@@ -980,7 +980,6 @@ class OneRouterLinkCountersTest(TestCase):
                 self.poll_timer_started = True
                 self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
 
-
     def verify_released(self, large_message=False):
         """
         Verify the link released count by releasing all received messages
