@@ -875,6 +875,9 @@ class OneRouterLinkCountersTest(TestCase):
             self.receiver = None
             self.max_attempts = 10
             self.num_attempts = 0
+            self.poll_timer_started = False
+            self.n_accepted = 0
+            self.n_released = 0
 
         def timeout(self):
             self._cleanup()
@@ -935,7 +938,9 @@ class OneRouterLinkCountersTest(TestCase):
                                                         name="Tx_Test01")
 
         def on_sendable(self, event):
-            while self.sent < self.count:
+            # Don't send all messages in one single loop.
+            # on_sendable is called only when there is credit, so send a message when there is credit.
+            if self.sent < self.count:
                 if self.large_message:
                     dlv = self.sender.send(Message(body=LARGE_PAYLOAD))
                 else:
@@ -944,6 +949,11 @@ class OneRouterLinkCountersTest(TestCase):
                     dlv.settle()
                 self.sent += 1
 
+                # Start up a poll timer once all the deliveries have been sent/received.
+                if self.received == self.rx_limit and self.sent == self.count and not self.poll_timer_started and self.outcome is None:
+                    self.poll_timer_started = True
+                    self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
+
         def on_message(self, event):
             self.received += 1
             if self.outcome:
@@ -951,11 +961,25 @@ class OneRouterLinkCountersTest(TestCase):
                 event.delivery.settle()
 
             # Start up a poll timer once all the deliveries have been sent/received.
-            if self.received == self.rx_limit and self.sent ==  self.count:
+            if self.received == self.rx_limit and self.sent ==  self.count and not self.poll_timer_started and self.outcome is None:
+                self.poll_timer_started = True
                 self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
 
         def run(self):
             Container(self).run()
+
+        def on_accepted(self, event):
+            self.n_accepted += 1
+            if self.received == self.rx_limit and self.n_accepted == self.received and not self.poll_timer_started:
+                self.poll_timer_started = True
+                self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
+
+        def on_released(self, event):
+            self.n_released += 1
+            if self.received == self.rx_limit and self.n_released == self.count and not self.poll_timer_started:
+                self.poll_timer_started = True
+                self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
+
 
     def verify_released(self, large_message=False):
         """
