@@ -151,11 +151,14 @@ if(NOT DEFINED VERSION)
         # You might sometimes get a fatal error when running the above command (when this is not a git repo).
         # GIT_RESULT will contain the result of last child process. It will be zero if successful.
         if (GIT_RESULT EQUAL 0)
+            message(STATUS "DEFAULT_VERSION is ${DEFAULT_VERSION}")
             # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
             if (${DEFAULT_VERSION} MATCHES "^[0-9]+\.[0-9]+\.[0-9]+.*")
+                message(STATUS "Setting VERSION as ${DEFAULT_VERSION}")
             	set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
             else()
                 set(QPID_DISPATCH_VERSION "0.0.0")
+                message(STATUS "Setting VERSION as ${QPID_DISPATCH_VERSION}")
             endif()
          else()
             # The git command failed, set QPID_DISPATCH_VERSION to "0.0.0" 
