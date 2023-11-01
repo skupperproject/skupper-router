@@ -626,9 +626,9 @@ class Qdrouterd(Process):
         """
 
         DEFAULTS = {
-            'listener': {'host': '0.0.0.0', 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120',
+            'listener': {'host': '0.0.0.0', 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '240',
                          'authenticatePeer': 'no', 'role': 'normal'},
-            'connector': {'host': '127.0.0.1', 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120'},
+            'connector': {'host': '127.0.0.1', 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '240'},
             'router': {'mode': 'standalone', 'id': 'QDR'}
         }
 
