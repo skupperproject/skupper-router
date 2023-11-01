@@ -507,7 +507,9 @@ class TcpAdaptorBase(TestCase):
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
 
         # monitor router memory usage:
-        os.environ["SKUPPER_ROUTER_ALLOC_MONITOR_SECS"] = "10"
+        if not test_ssl:
+            # temporarily disabled to help debug ISSUE-1276
+            os.environ["SKUPPER_ROUTER_ALLOC_MONITOR_SECS"] = "10"
 
         cls.routers = []
         cls.test_ssl = test_ssl
@@ -1448,6 +1450,10 @@ class CommonTcpTests:
         Take advantage of the long running TCP test to verify that alloc_pool
         metrics have been correctly written to the logs
         """
+        if self.test_ssl:
+            # temporarily disabled to help debug ISSUE-1276
+            self.skipTest("Disabled until ISSUE-1276 resolved")
+
         def _poll_logs(router, regex_mem, regex_action):
             last_mem_match = None  # match the start of the alloc log line
             last_action_match = None  # match the qdr_action_t entry in the log line
