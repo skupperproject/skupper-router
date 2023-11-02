@@ -141,29 +141,7 @@ if(NOT DEFINED VERSION)
       message(STATUS "BRANCH_NAME is ${BRANCH_NAME}")
                       
       if (BRANCH_NAME STREQUAL "HEAD")
-        # You are perhaps on a detached tag or commit
-        # Get the tag name and use it as the version
-        execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty=-modified --always
-              OUTPUT_VARIABLE DEFAULT_VERSION
-              RESULT_VARIABLE GIT_RESULT
-              OUTPUT_STRIP_TRAILING_WHITESPACE)
-                
-        # You might sometimes get a fatal error when running the above command (when this is not a git repo).
-        # GIT_RESULT will contain the result of last child process. It will be zero if successful.
-        if (GIT_RESULT EQUAL 0)
-            message(STATUS "DEFAULT_VERSION is ${DEFAULT_VERSION}")
-            # Git succeeded, we will use the DEFAULT_VERSION as the QPID_DISPATCH_VERSION
-            if (${DEFAULT_VERSION} MATCHES "^[0-9]+\.[0-9]+\.[0-9]+.*")
-                message(STATUS "Setting VERSION as ${DEFAULT_VERSION}")
-            	set(QPID_DISPATCH_VERSION ${DEFAULT_VERSION})
-            else()
-                set(QPID_DISPATCH_VERSION "0.0.0")
-                message(STATUS "Setting VERSION as ${QPID_DISPATCH_VERSION}")
-            endif()
-         else()
-            # The git command failed, set QPID_DISPATCH_VERSION to "0.0.0" 
             set(QPID_DISPATCH_VERSION "0.0.0")
-         endif(GIT_RESULT EQUAL 0)
       else(BRANCH_NAME STREQUAL "HEAD")
           # If the BRANCH_NAME is not HEAD (means you are on a branch, get the commit sha of the latest commit and
           # set the version as 0.0.0+<latest-commit-sha>-branch name. This is PEP 440 compliant.
