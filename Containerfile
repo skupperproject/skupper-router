@@ -31,7 +31,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
 
 WORKDIR /build
 COPY . .
-ENV PROTON_VERSION=main
+ENV PROTON_VERSION=0.39.0
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.2
 ENV LIBUNWIND_VERSION=v1.6.2
