@@ -676,7 +676,7 @@
                     "create": true
                 },
                 "port": {
-                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (notice) Listening on <host>:<assigned-port> (<listener-name>)'",
+                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (info) Listening on <host>:<assigned-port> (<listener-name>)'",
                     "type": "string",
                     "default": "amqp",
                     "create": true
@@ -1008,7 +1008,7 @@
                     "create": true
                 },
                 "port": {
-                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (notice) Listening on <host>:<assigned-port> (<listener-name>)'",
+                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (info) Listening on <host>:<assigned-port> (<listener-name>)'",
                     "type": "string",
                     "create": true
                 },
@@ -1217,7 +1217,7 @@
                     "required": false
                 },
                 "port": {
-                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (notice) Listening on <host>:<assigned-port> (<listener-name>)'",
+                    "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (info) Listening on <host>:<assigned-port> (<listener-name>)'",
                     "type": "string",
                     "create": true
                 },
@@ -1373,7 +1373,7 @@
                 },
                 "enable": {
                     "type": "string",
-                    "description": "Levels are: debug, info, notice, warning, error, critical. The enable string is a comma-separated list of levels. A level may have a trailing '\\+' to enable that level and above. For example 'debug,warning+' means enable debug, warning, error and critical. The value 'none' means disable logging for the module.",
+                    "description": "Levels are: debug, info, warning, error, critical. The enable string is a comma-separated list of levels. A level may have a trailing '\\+' to enable that level and above. For example 'debug,warning+' means enable debug, warning, error and critical. The value 'none' means disable logging for the module.",
                     "update": true
                 },
                 "includeTimestamp": {
