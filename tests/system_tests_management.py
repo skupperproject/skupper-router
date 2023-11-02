@@ -40,7 +40,7 @@ from system_test import unittest
 from system_test import MANAGEMENT_TYPE, CONFIG_ENTITY_TYPE, OPER_ENTITY_TYPE
 from system_test import AMQP_LISTENER_TYPE, AMQP_CONNECTOR_TYPE, DUMMY_TYPE
 from system_test import ROUTER_TYPE, ROUTER_LINK_TYPE, ROUTER_ADDRESS_TYPE
-from system_test import ROUTER_NODE_TYPE, CONFIG_ADDRESS_TYPE
+from system_test import ROUTER_NODE_TYPE, CONFIG_ADDRESS_TYPE, LOG_TYPE, CONNECTION_TYPE
 
 
 def short_name(name):
@@ -212,7 +212,7 @@ class ManagementTest(system_test.TestCase):
                           'outputFile': 'logrouter.log',
                           'includeSource': True,
                           'includeTimestamp': True,
-                          'type': 'io.skupper.router.log'})
+                          'type': LOG_TYPE})
 
         def check_log(log, error=True, debug=False):
             """Cause an error and check for expected error and debug logs"""
@@ -368,7 +368,7 @@ class ManagementTest(system_test.TestCase):
 
     def test_connection(self):
         """Verify there is at least one connection"""
-        response = self.node.query(type='io.skupper.router.connection')
+        response = self.node.query(type=CONNECTION_TYPE)
         self.assertTrue(response.results)
 
     def test_router(self):
@@ -389,7 +389,7 @@ class ManagementTest(system_test.TestCase):
             name = attrs['id']
             self.assertEqual(attrs['identity'], 'router.node/%s' % name)
             self.assertEqual(attrs['name'], 'router.node/%s' % name)
-            self.assertEqual(attrs['type'], 'io.skupper.router.router.node')
+            self.assertEqual(attrs['type'], ROUTER_NODE_TYPE)
             self.assertEqual(attrs['address'], 'amqp:/_topo/0/%s' % name)
             return name
 
@@ -406,7 +406,7 @@ class ManagementTest(system_test.TestCase):
             if e.type == MANAGEMENT_TYPE:
                 self.assertEqual(e.identity, "self")
             else:
-                if e.type == 'io.skupper.router.connection':
+                if e.type == CONNECTION_TYPE:
                     # This will make sure that the identity of the connection object is always numeric
                     self.assertRegex(str(e.identity), "[1-9]+", e)
                 else:
