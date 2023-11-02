@@ -150,8 +150,22 @@ if(NOT DEFINED VERSION)
           execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
                           OUTPUT_VARIABLE COMMIT_SHA
                           OUTPUT_STRIP_TRAILING_WHITESPACE)
-          message(STATUS "COMMIT_SHA is ${COMMIT_SHA}")
-          set(QPID_DISPATCH_VERSION "0.0.0+${COMMIT_SHA}-${BRANCH_NAME}")      
+         # You might sometimes get a fatal error when running the above command (when this is not a git repo).
+         # GIT_RESULT will contain the result of last child process. It will be zero if successful.
+         if (GIT_RESULT EQUAL 0)
+	         message(STATUS "COMMIT_SHA is ${COMMIT_SHA}")
+	         if (${COMMIT_SHA} STREQUAL "")
+	             set(QPID_DISPATCH_VERSION "0.0.0")
+	         else()
+	             if(${BRANCH_NAME} STREQUAL "")
+	                 set(QPID_DISPATCH_VERSION "0.0.0+${COMMIT_SHA}")
+	             else()
+	                 set(QPID_DISPATCH_VERSION "0.0.0+${COMMIT_SHA}-${BRANCH_NAME}")
+	             endif()
+	         endif()
+	    else()
+	        set(QPID_DISPATCH_VERSION "0.0.0")
+	    endif()
       endif(BRANCH_NAME STREQUAL "HEAD")
    else(Git_FOUND)
        # Git executable was not available, we will not be able to determine the version, just set it to "0.0.0"
