@@ -117,11 +117,6 @@ skmanage query --type=log
 skmanage update name=log/DEFAULT enable=debug+
 --------------------------------------------------------------
 
-.Enable trace log messages only for the MESSAGE module, and direct MESSAGE logs to the file _test.log_:
---------------------------------------------------------------
-skmanage update name=log/MESSAGE enable=trace output=test.log
---------------------------------------------------------------
-
 .Set MESSAGE logging back to the default:
 ------------------------------------------------
 skmanage update name=log/MESSAGE enable=default
