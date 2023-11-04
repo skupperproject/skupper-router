@@ -34,11 +34,15 @@ PointerAlignment: Right
 SpaceAroundPointerQualifiers: Both
 BreakBeforeBinaryOperators: NonAssignment
 SpaceAfterCStyleCast: true
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AlignConsecutiveMacros: true
+AlignConsecutiveAssignments: AcrossComments
+AlignConsecutiveDeclarations: AcrossComments
+AlignConsecutiveMacros: AcrossComments
 KeepEmptyLinesAtTheStartOfBlocks: false
 ExperimentalAutoDetectBinPacking: true
+AlignTrailingComments:
+  Kind: Leave
+SeparateDefinitionBlocks: Leave
+MaxEmptyLinesToKeep: 3
 
 IncludeCategories:
   # python-related headers must go first
