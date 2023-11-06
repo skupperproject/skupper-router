@@ -74,7 +74,7 @@ from io import StringIO
 
 from ctypes import c_void_p, py_object, c_long
 
-from skupper_router._skupper_router_site import SKIP_DELETE_HTTP_LISTENER
+import skupper_router_site
 from skupper_router.management.entity import camelcase
 from skupper_router.management.error import ManagementError, OK, CREATED, NO_CONTENT, STATUS_TEXT, \
     BadRequestStatus, InternalServerErrorStatus, NotImplementedStatus, NotFoundStatus
@@ -424,7 +424,7 @@ class ListenerEntity(ConnectionBaseEntity):
         return super(ListenerEntity, self).__str__().replace("Entity(", "ListenerEntity(")
 
     def _delete(self):
-        if self.http and SKIP_DELETE_HTTP_LISTENER:
+        if self.http and skupper_router_site.SKIP_DELETE_HTTP_LISTENER:
             raise BadRequestStatus("HTTP listeners cannot be deleted")
         self._qd.qd_connection_manager_delete_listener(self._dispatch, self._implementations[0].key)
 

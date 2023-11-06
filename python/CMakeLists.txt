@@ -20,29 +20,15 @@
 # Private python modules, not in standard python site dir.
 install(DIRECTORY skupper_router_internal DESTINATION ${QPID_DISPATCH_HOME}/python)
 
-# Copy the public python modules into a build/python/src folder.
-# We do this because, pip install, by default, will look into a src folder
-# and automatically figure out python packaging and installs the files
-# in the appropriate location.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in
+               ${CMAKE_CURRENT_BINARY_DIR}/setup.py)
 
-add_custom_target(NAME ALL
-                  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_CURRENT_BINARY_DIR}/src/skupper_router
-                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py ${CMAKE_CURRENT_BINARY_DIR}/src/skupper_router)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/skupper_router_site.py.in
+               ${CMAKE_CURRENT_BINARY_DIR}/skupper_router_site.py)
 
-configure_file(${CMAKE_SOURCE_DIR}/python/skupper_router/_skupper_router_site.py.in
-               ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py)
+# Install script for public python modules
+install(CODE "execute_process(COMMAND ${Python_EXECUTABLE} setup.py -v install --single-version-externally-managed --record=/dev/null --prefix=${CMAKE_INSTALL_PREFIX} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})")
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/pyproject.toml.in
-               ${CMAKE_CURRENT_BINARY_DIR}/pyproject.toml)
-
-# Use pip install to install the public python modules.
-# --compile option compiles Python source files to bytecode
-install(CODE
-        "execute_process( \
-        COMMAND ${Python_EXECUTABLE} -m pip install ${CMAKE_CURRENT_BINARY_DIR} --ignore-installed --verbose --compile --prefix=\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX} \
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} \
-        COMMAND_ECHO STDOUT \
-        COMMAND_ERROR_IS_FATAL ANY)")
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/skupper_router/management/skrouter.json
   ${CMAKE_CURRENT_SOURCE_DIR}/skupper_router/management/skrouter.json.readme.txt

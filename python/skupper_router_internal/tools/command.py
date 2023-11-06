@@ -24,7 +24,7 @@ import sys
 import argparse
 import os
 
-from skupper_router._skupper_router_site import VERSION
+from skupper_router_site import VERSION
 from proton import SSLDomain, Url
 
 

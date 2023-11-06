@@ -19,9 +19,9 @@
 
 set -exo pipefail
 echo ----Starting flake8 checks----
-flake8 --verbose --count --show-source ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/_skupper_router_site.py  ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
+flake8 --verbose --count --show-source ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/skupper_router_site.py  ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
 echo ----Starting pylint checks----
-pylint --jobs 4 --rcfile ${CMAKE_BINARY_DIR}/tests/pylintrc --ignore friendship_server.py,friendship_pb2.py,friendship_pb2_grpc.py ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/_skupper_router_site.py  ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
+pylint --jobs 4 --rcfile ${CMAKE_BINARY_DIR}/tests/pylintrc --ignore friendship_server.py,friendship_pb2.py,friendship_pb2_grpc.py ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/skupper_router_site.py  ${CMAKE_SOURCE_DIR}/tools/skstat ${CMAKE_SOURCE_DIR}/tools/skmanage
 echo ----Starting mypy checks----
-#mypy --verbose --config-file ${CMAKE_BINARY_DIR}/tests/mypy.ini ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/_skupper_router_site.py
+#mypy --verbose --config-file ${CMAKE_BINARY_DIR}/tests/mypy.ini ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_SOURCE_DIR}/python/skupper_router_internal ${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tools ${CMAKE_SOURCE_DIR}/scripts ${CMAKE_BINARY_DIR}/python/skupper_router_site.py
 

@@ -41,8 +41,8 @@ run.py --sh                                # Print a shell script to set the run
 
 
 extra_paths = [
-    "${CMAKE_BINARY_DIR}/python/src",
     "${CMAKE_SOURCE_DIR}/python",
+    "${CMAKE_BINARY_DIR}/python",
     "${CMAKE_SOURCE_DIR}/tests"
 ]
 

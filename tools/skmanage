@@ -24,8 +24,8 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 
-from skupper_router._skupper_router_site import populate_pythonpath
-populate_pythonpath()
+import skupper_router_site
+skupper_router_site.populate_pythonpath()
 
 from skupper_router.management.client import Node
 from skupper_router_internal.tools.command import (UsageError, _skmanage_parser, check_args,

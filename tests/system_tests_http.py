@@ -25,7 +25,7 @@ import ssl
 from urllib.request import urlopen, build_opener, HTTPSHandler
 from urllib.error import HTTPError, URLError
 
-from skupper_router._skupper_router_site import SKIP_DELETE_HTTP_LISTENER
+import skupper_router_site
 from system_test import Process, QdManager, retry
 from system_test import TestCase, Qdrouterd, main_module, DIR
 from system_test import unittest, AMQP_LISTENER_TYPE, ALLOCATOR_TYPE
@@ -46,7 +46,7 @@ class RouterTestHttp(TestCase):
     def setUpClass(cls):
         super(RouterTestHttp, cls).setUpClass()
         # DISPATCH-1513, DISPATCH-2299: Http listener delete was broken in LWS v4 until v4.2.0
-        cls.skip_delete_http_listener_test = SKIP_DELETE_HTTP_LISTENER
+        cls.skip_delete_http_listener_test = skupper_router_site.SKIP_DELETE_HTTP_LISTENER
 
     @classmethod
     def get(cls, url, use_ca=True):
