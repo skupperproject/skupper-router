@@ -41,7 +41,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/packages/ DESTINATION ${CMAKE_CURRENT_BINA
 # --compile option compiles Python source files to bytecode
 install(CODE
         "execute_process( \
-        COMMAND ${Python_EXECUTABLE} -m pip install ${CMAKE_CURRENT_BINARY_DIR}  --no-build-isolation --no-deps --no-index --disable-pip-version-check --find-links ${CMAKE_CURRENT_BINARY_DIR}/packages --verbose --compile --prefix=\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX} \
+        COMMAND ${Python_EXECUTABLE} -m pip install ${CMAKE_CURRENT_BINARY_DIR} --no-deps --no-index --disable-pip-version-check --find-links ${CMAKE_CURRENT_BINARY_DIR}/packages --verbose --compile --prefix=\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX} \
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} \
         COMMAND_ECHO STDOUT \
         COMMAND_ERROR_IS_FATAL ANY)")
