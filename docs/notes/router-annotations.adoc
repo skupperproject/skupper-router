@@ -43,9 +43,8 @@ next hop router.
 * A destination address.  This optional field overrides the value of
 the *to* field in the message properties section.
 
-* A flag that indicates that the message is classified as
-a *streaming message*. This provides a hint to the downstream router
-to avoid unnecessary buffering of the message before forwarding it.
+* A set of flags that control various aspects of the message
+transfer. See the description below for more detail.
 
 * The identifier for the ingress-mesh.  This is added by the ingress
 router for the message when that router is an edge router in an edge-mesh.
@@ -103,11 +102,14 @@ The definition of this custom section follows:
     <field name="ingress-mesh" type="str8-utf8" mandatory="false"/>
  </type>
 
-* The flags field is used for passing boolean flags.  The least
-significant bit (bit 0; hex 0x01) is used for the streaming flag.  All
-other bits are reserved and initialized to zero. An interior router
-must ignore these unreserved flags and pass them to the next hop
-without modifying them.
+* The flags field is used for passing boolean flags. Undefined bits
+  are reserved and must be forwarded to the next hop without
+  modification.  The following bits are defined:
+** bit 0 (hex 0x01) is used to indicate the message is streaming. This provides a hint to
+   the downstream router to avoid unnecessary buffering of the message before forwarding it.
+** bit 1 (hex 0x02) is used to indicate the transfer supports resend-release. See the
+   corresponding document for more details.
+** bit 2 (hex 0x04) is used to indicate Q2 backpressure should be disabled for this message.
 
 * Entries on the trace list are restricted to the *str8-utf8*
 type. Note that the trace list will always be present however it may

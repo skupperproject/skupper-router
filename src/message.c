@@ -1274,6 +1274,22 @@ bool qd_message_is_resend_released(const qd_message_t *msg)
 }
 
 
+void qd_message_set_Q2_disabled_annotation(qd_message_t *msg)
+{
+    qd_message_pvt_t *msg_pvt = (qd_message_pvt_t*) msg;
+    if (!(msg_pvt->ra_flags & MSG_FLAG_DISABLE_Q2)) {
+        msg_pvt->ra_flags |= MSG_FLAG_DISABLE_Q2;
+        qd_message_Q2_holdoff_disable(msg);
+    }
+}
+
+
+bool qd_message_is_Q2_disabled_annotation(const qd_message_t *msg) {
+    const qd_message_pvt_t *msg_pvt = (const qd_message_pvt_t*) msg;
+    return !!(msg_pvt->ra_flags & MSG_FLAG_DISABLE_Q2);
+}
+
+
 void qd_message_disable_router_annotations(qd_message_t *msg)
 {
     qd_message_content_t *content = ((qd_message_pvt_t *)msg)->content;

@@ -878,6 +878,13 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
         return next_delivery;
     }
 
+    //
+    // Before the message is delivered check if Q2 has been disabled by the upstream router.
+    //
+    if (qd_message_is_Q2_disabled_annotation(msg)) {
+        qd_message_Q2_holdoff_disable(msg);
+    }
+
     if (anonymous_link) {
         qd_iterator_t *addr_iter = 0;
 
