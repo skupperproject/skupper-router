@@ -39,18 +39,36 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-// maximum amount of bytes to read from TCP client before backpressure
-// activates.  Note that the actual number of read bytes may exceed this value
-// by READ_BUFFERS * BUFFER_SIZE since we fetch up to READ_BUFFERs worth of
-// buffers when calling pn_raw_connection_take_read_buffers()
+// Flow Control
 //
-// Assumptions: 1 Gbps, 1msec latency across a router, 3 hop router path
-//   Effective GigEthernet throughput is 116MB/sec, or ~121635 bytes/msec.
-//   For 3 hops routers with ~1msec latency gives a 6msec round trip
-//   time. Ideally the window would be 1/2 full at most before the ACK
-//   arrives:
+// TCP_MAX_CAPACITY is the maximum number of bytes to read from an incoming TCP connection before backpressure
+// activates. Once backpressure is active this adaptor will no longer grant READ buffers to the ingress raw connection.
 //
-const uint32_t TCP_MAX_CAPACITY = 121635 * 6 * 2;  // 1,459,620
+// Backpressure remains in affect until the outstanding received data is written to the egress TCP connection (the
+// terminal consumer).  The egress TCP adaptor generates a PN_RECEIVED disposition to indicate data has been written out
+// the TCP connection (ACKed). The total number of bytes written to the consumer is sent with the disposition update in
+// the section_offset field (section number is ignored).
+//
+// When the PN_RECEIVED disposition arrives at the ingress adaptor it determines the total outstanding octets by
+// subtracting written bytes (from the disposition section_offset) from the total number of bytes read from the raw
+// connection. If the difference is less than TCP_MAX_CAPACITY backpressure is deactivated and reading resumes from the
+// raw connection. Otherwise backpressure remains in effect until further PN_RECEIVED disposition updates arrive.
+//
+// The TCP_ACK_WINDOW is used To limit the frequency that PN_RECEIVED updates are generated. The egress adaptor keeps a
+// count of the number of bytes written since the last PN_RECEIVED update was generated. A new PN_RECEIVED update is
+// generated only after that count exceeds TCP_ACK_WINDOW.
+//
+// The value used for TCP_MAX_CAPACITY is based on the following assumptions:
+//
+// 1) the TCP producer is limited to GigEthernet throughput (1 Gbps).
+// 2) Assume approximately 1msec latency to across a router
+// 3) The message travels through a 3 hop router path to the consumer
+//
+// Effective GigEthernet throughput is 116MB/sec, or ~121635 bytes/msec.  For 3 hops routers with ~1msec latency gives a
+// 6msec round trip time. Ideally the window would be 1/2 full at most before the ACK arrives:
+//
+const uint64_t TCP_MAX_CAPACITY = 121635 * 6 * 2;  // 1,459,620
+const uint64_t TCP_ACK_WINDOW = (TCP_MAX_CAPACITY / 4);
 
 static qd_duration_t half_closed_idle_timeout = 0;  // 0 = disabled
 
@@ -116,8 +134,12 @@ struct qdr_tcp_connection_t {
     uint64_t encrypted_bytes_out;  // If this is a TLS connection, the total encrypted bytes sent on this connection,
                                    // zero otherwise
 
-    uint64_t              bytes_unacked;  // not yet acked by outgoing tcp adaptor
+    // bytes_unacked (read side): the count of bytes read that have yet to be acked by adaptor
+    uint64_t              bytes_unacked;
+    // bytes_since_last_ack (write side): the count of bytes since last PN_RECEIVED update was sent
+    uint64_t              bytes_since_last_ack;
     uint64_t              window_closed_count;
+
     uint64_t              opened_time;
     uint64_t              last_in_time;
     uint64_t              last_out_time;
@@ -989,6 +1011,7 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
 
     if (unencrypted_buff) {
         conn->bytes_out += bytes_out;
+        conn->bytes_since_last_ack += bytes_out;
         qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
         LOCK(&tcp_stats->stats_lock);
         tcp_stats->bytes_out += bytes_out;
@@ -1186,11 +1209,14 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             conn->last_out_time = qdr_core_uptime_ticks(tcp_adaptor->core);
             if (!conn->require_tls) {
                 conn->bytes_out += written;
+                conn->bytes_since_last_ack += written;
                 qdr_tcp_stats_t *tcp_stats = get_tcp_stats(conn);
                 LOCK(&tcp_stats->stats_lock);
                 tcp_stats->bytes_out += written;
                 UNLOCK(&tcp_stats->stats_lock);
             } else {
+                // note: conn->bytes_out has already been updated when the unencrypted data is passed to TLS. See
+                // encrypt_outgoing_tls
                 conn->encrypted_bytes_out += written;
             }
             // Tell the upstream to open its receive window.  Note: this update
@@ -1199,10 +1225,11 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
             // do not need to use the section_number (no section numbers in a
             // TCP stream!) and use section_offset only.
             //
-            if (conn->out_dlv_stream) {
+            if (conn->out_dlv_stream && (conn->bytes_since_last_ack >= TCP_ACK_WINDOW)) {
                 qd_delivery_state_t *dstate = qd_delivery_state();
                 dstate->section_number      = 0;
                 dstate->section_offset      = conn->bytes_out;
+                conn->bytes_since_last_ack  = 0;
                 qdr_delivery_remote_state_updated(tcp_adaptor->core, conn->out_dlv_stream, PN_RECEIVED,
                                                   false,  // settled
                                                   dstate, false);
@@ -2183,10 +2210,8 @@ static void qdr_tcp_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t
                 uint64_t ignore;
                 qd_delivery_state_t *dstate = qdr_delivery_take_local_delivery_state(dlv, &ignore);
 
-                if (!dstate) {
-                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR,
-                           "[C%" PRIu64 "] BAD PN_RECEIVED - missing delivery-state!!", tc->conn_id);
-                } else {
+                // resend released will generate a PN_RECEIVED with section_offset == 0, ignore it
+                if (dstate && dstate->section_offset > 0) {
                     // note: the PN_RECEIVED is generated by the remote TCP
                     // adaptor, for simplicity we ignore the section_number since
                     // all we really need is a byte offset:
