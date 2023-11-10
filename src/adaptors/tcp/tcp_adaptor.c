@@ -451,6 +451,7 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         qd_message_t *msg = qd_message();
 
         qd_message_set_streaming_annotation(msg);
+        qd_message_set_Q2_disabled_annotation(msg);
 
         qd_composed_field_t *props = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
         qd_compose_start_list(props);
@@ -1972,8 +1973,6 @@ static uint64_t qdr_tcp_deliver(void *context, qdr_link_t *link, qdr_delivery_t 
 {
     qd_message_t *msg = qdr_delivery_message(delivery);
 
-    // @TODO(kgiusti): determine why this is necessary to prevent window full stall:
-    qd_message_Q2_holdoff_disable(msg);
     void* link_context = qdr_link_get_context(link);
     if (link_context) {
         qdr_tcp_connection_t* tc = (qdr_tcp_connection_t*) link_context;

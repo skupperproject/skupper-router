@@ -2438,7 +2438,6 @@ class InvalidServerSendReply(MessagingHandler):
         # listener. This initiates the ingress streaming request message.
         self.listener_address = listener_address
         self.client_conn = None
-        self.client_sent = False
 
     def done(self, error=None):
         self.error = error
@@ -2452,7 +2451,7 @@ class InvalidServerSendReply(MessagingHandler):
 
     def timeout(self):
         self.timer = None
-        self.done(error=f"Timeout Expired: sent={self.sent}")
+        self.done(error=f"Timeout Expired: server_sent={self.server_sent}")
 
     def on_start(self, event):
         # Create an AMQP receiver for the service address. This will simulate a
