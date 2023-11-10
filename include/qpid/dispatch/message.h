@@ -220,6 +220,32 @@ void qd_message_set_resend_released_annotation(qd_message_t *msg, bool value);
 bool qd_message_is_resend_released(const qd_message_t *msg);
 
 /**
+ * Mark this message so Q2 will be disabled on this router and all downstream routers.
+ *
+ * This annotation can be used to disable Q2 backpressure along the entire path this message travels through the router
+ * network. It should only be used if there is some other form of flow-control in effect, such as the TCP adaptor
+ * windowing algorithm.
+ *
+ * This function will invoke qd_message_Q2_holdoff_disable() on the message to disable Q2 backpressure on the current
+ * router. Note that this may invoke the Q2 unblock handler if the message is currently blocked by Q2.
+ *
+ * @param msg Pointer to a message.
+ */
+void qd_message_set_Q2_disabled_annotation(qd_message_t *msg);
+
+/**
+ * Returns true if the "disable Q2" flag is set in the message annotation section. See
+ * qd_message_set_Q2_disabled_annotation()
+ *
+ * It is expected that the caller will use this function to check if an incoming message needs to have Q2 backpressure
+ * disabled. If true the caller should invoke qd_message_Q2_holdoff_disable() on the given message prior to forwarding
+ * it.
+ *
+ * @param msg Pointer to a message.
+ */
+bool qd_message_is_Q2_disabled_annotation(const qd_message_t *msg);
+
+/**
  * Prevent the router from doing any transformations to the message annotations
  * section of the message.
  *

@@ -325,6 +325,24 @@ class RouterAnnotationsTest(TestCase):
         expected = ["0/RouterA", "0/RouterB", "0/RouterC"]
         self.assertEqual(expected, ra.trace)
 
+    def test_08_q2_disabled_flag(self):
+        """Verify that the Q2 Disabled flag is forwarded across all routers"""
+        _name = "test_08_q2_disabled_flag"
+        ra = RouterAnnotationsSection(flags=0x04)  # 0x04 == Q2_DISABLED
+        msg = InterRouterMessage(router_annotations=ra, body=_name)
+        msg.address = f"closest/{_name}"
+        # anonymous sender:
+        test = MessageAnnotations(msg,
+                                  self.EdgeA.addresses[0],
+                                  self.EdgeC.addresses[0],
+                                  msg.address,
+                                  None)
+        test.run()
+        self.assertIsNone(test.error)
+        self.assertEqual(_name, test.recv_msg.body)
+        ra = test.recv_msg.router_annotations
+        self.assertEqual(0x04, ra.flags, f"Expected ra_flags=0x04 got {ra.flags}")
+
 
 class InvalidMessageAnnotations(MessagingHandler):
     """Simple client for sending invalid router annotations"""

@@ -189,6 +189,7 @@ ALLOC_DECLARE(qd_message_content_t);
 #define MSG_CONTENT(m)     (((qd_message_pvt_t*) m)->content)
 #define MSG_FLAG_STREAMING       0x01u
 #define MSG_FLAG_RESEND_RELEASED 0x02u
+#define MSG_FLAG_DISABLE_Q2      0x04u
 
 /** Initialize logging */
 void qd_message_initialize(void);
