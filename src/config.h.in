@@ -22,4 +22,5 @@
 #define QPID_DISPATCH_VERSION "${QPID_DISPATCH_VERSION}"
 #define QPID_DISPATCH_HTTP_ROOT_DIR "${QPID_DISPATCH_HTML_DIR}"
 #cmakedefine01 QD_HAVE_GETRLIMIT
+#cmakedefine01 QD_HAVE_GETRANDOM
 #endif // __src_config_h_in__
