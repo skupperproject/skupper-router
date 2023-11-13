@@ -41,6 +41,7 @@
 #include <dlfcn.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include <sys/random.h>
 
 /**
  * Private Function Prototypes
@@ -89,11 +90,24 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     _test_hooks = test_hooks;
 
     //
-    // Seed the random number generator
+    // Seed the random number generator. The router does not need crypto-grade randomness so a Pseudo-RNG is acceptable.
     //
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    srandom((unsigned int)time.tv_sec + ((unsigned int)time.tv_usec << 11));
+    unsigned int seed = 0;
+#if QD_HAVE_GETRANDOM
+    while (getrandom(&seed, sizeof(seed), 0) == -1 && errno == EINTR) {
+        // EINTR will occur only if a signal arrives while blocking for
+        // the entropy pool to initialize. Non-fatal, try again.
+    }
+#endif
+    if (seed == 0) {  // getrandom() not supported
+        struct timespec tspec;
+        clock_gettime(CLOCK_MONOTONIC, &tspec);
+        // rotate lower (more random) bits to make them more significant
+        unsigned int timestamp = (unsigned int) (tspec.tv_sec + tspec.tv_nsec);
+        timestamp = (timestamp<<11) | (timestamp>>(sizeof(timestamp) * CHAR_BIT - 11));
+        seed = (unsigned int)(getpid() ^ timestamp);
+    }
+    srandom(seed);
 
     qd = NEW(qd_dispatch_t);
     ZERO(qd);
