@@ -186,6 +186,7 @@ target_link_libraries(skupper-router PUBLIC ${qpid_dispatch_LIBRARIES})
 
 # check for various function availability
 check_symbol_exists(getrlimit sys/resource.h QD_HAVE_GETRLIMIT)
+check_symbol_exists(getrandom sys/random.h QD_HAVE_GETRANDOM)
 
 # https://stackoverflow.com/questions/54771452/expanding-a-variable-cmakedefine-and-generator-expression-in-template-file
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in" CONFIG_H_IN)
