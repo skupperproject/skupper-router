@@ -882,6 +882,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # https://podman.io/docs/installation#ubuntu
+      # https://software.opensuse.org/download/package?package=podman&project=devel:kubic:libcontainers:unstable
       - name: Upgrade Podman
         run: |
           sudo mkdir -p /etc/apt/keyrings
