@@ -808,6 +808,7 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(tcplite_connection_t *co
 
     conn->inbound_stream = qd_message();
     qd_message_set_streaming_annotation(conn->inbound_stream);
+    qd_message_set_Q2_disabled_annotation(conn->inbound_stream);
 
     qd_message_compose_2(conn->inbound_stream, message, false);
     qd_compose_free(message);
@@ -874,6 +875,7 @@ static void compose_and_send_server_stream_CSIDE_IO(tcplite_connection_t *conn)
 
     conn->inbound_stream = qd_message();
     qd_message_set_streaming_annotation(conn->inbound_stream);
+    qd_message_set_Q2_disabled_annotation(conn->inbound_stream);
 
     qd_message_compose_2(conn->inbound_stream, message, false);
     qd_compose_free(message);
