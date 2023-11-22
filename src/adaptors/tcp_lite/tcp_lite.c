@@ -84,6 +84,31 @@ static uint64_t buffer_threshold_50;
 static uint64_t buffer_threshold_75;
 static uint64_t buffer_threshold_85;
 
+// Window Flow Control
+//
+// This adaptor uses a simple window with acknowledge algorithm to enforce backpressure on the TCP sender. The ingress
+// adaptor will only permit up to TCP_MAX_CAPACITY_BYTES bytes received before backpressuring the sender by no longer
+// granting empty receive buffers to the raw connection. The egress adapter will send its count of total bytes written
+// out the raw connection every TCP_ACK_THRESHOLD_BYTES written bytes. The egress sends this update via a PN_RECEIVED
+// frame, setting the section_offset field to the total number of bytes written out the raw connection. When the
+// PN_RECEIVED update is received at the ingress adaptor it will update the window size by subtracting the
+// section_offset from its total received bytes counter. If the result of the subtraction is less than TCP_MAX_CAPACITY
+// then backpressure is relieved and empty receive buffers are given to the raw connection.
+//
+// TCP_MAX_CAPACITY_BYTES: this is set to 2x the maximum number of bytes a cut through message can buffer. This makes
+// the window large enough to max out a message at each end of the TCP flow.
+//
+#define TCP_FULL_MSG_BYTES      (QD_BUFFER_DEFAULT_SIZE * UCT_SLOT_COUNT * UCT_SLOT_BUF_LIMIT)
+#define TCP_MAX_CAPACITY_BYTES  (TCP_FULL_MSG_BYTES * UINT64_C(2))
+#define TCP_ACK_THRESHOLD_BYTES TCP_FULL_MSG_BYTES
+
+// is the incoming byte window full?
+//
+inline static bool window_full(const tcplite_connection_t *conn)
+{
+    return !conn->window.disabled && (conn->inbound_octets - conn->window.last_update) >= TCP_MAX_CAPACITY_BYTES;
+}
+
 
 //
 // Forward References
@@ -507,6 +532,13 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t capacity)
 {
     ASSERT_RAW_IO;
+
+    //
+    // Cannot grant read buffers if the connection is currently blocked due to window flow control
+    //
+    if (window_full(conn)) {
+        return;
+    }
 
     //
     // Define the allocation tiers.  The tier values are the number of read buffers to be granted
@@ -1080,12 +1112,19 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         //
         // Produce available read buffers into the inbound stream
         //
+        bool was_blocked = window_full(conn);
         bool blocked;
         uint64_t octet_count = produce_read_buffers_XSIDE_IO(conn, conn->inbound_stream, &blocked);
         conn->inbound_octets += octet_count;
 
         if (octet_count > 0) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw read: Produced %"PRIu64" octets into stream", conn->common.conn_id, conn->listener_side ? 'L' : 'C', octet_count);
+            if (!was_blocked && window_full(conn)) {
+                conn->window.closed_count += 1;
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
+                       DLV_ARGS(conn->inbound_delivery), conn->inbound_octets,
+                       (conn->inbound_octets - conn->window.last_update));
+            }
         }
 
         //
@@ -1140,6 +1179,7 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         if (!conn->outbound_body_complete) {
             uint64_t body_octets = consume_message_body_XSIDE_IO(conn, conn->outbound_stream);
             conn->outbound_octets += body_octets;
+            conn->window.pending_ack += body_octets;
             if (body_octets > 0) {
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw write: Consumed %"PRIu64" octets from stream (body-field)", conn->common.conn_id, conn->listener_side ? 'L' : 'C', body_octets);
             }
@@ -1151,7 +1191,7 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         if (conn->outbound_body_complete) {
             uint64_t octets = consume_write_buffers_XSIDE_IO(conn, conn->outbound_stream);
             conn->outbound_octets += octets;
-
+            conn->window.pending_ack += octets;
             if (octets > 0) {
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw write: Consumed %"PRIu64" octets from stream", conn->common.conn_id, conn->listener_side ? 'L' : 'C', octets);
             }
@@ -1181,6 +1221,21 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
             qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_ACCEPTED, true, 0, true); // accepted, settled, ref_given
             conn->outbound_delivery = 0;
             conn->outbound_stream   = 0;
+        } else {
+            //
+            // More to send. Check if enough octets have been written to open up the window
+            //
+            if (conn->window.pending_ack >= TCP_ACK_THRESHOLD_BYTES) {
+                qd_delivery_state_t *dstate = qd_delivery_state();
+                dstate->section_number = 0;
+                dstate->section_offset = conn->outbound_octets;
+                qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_RECEIVED,
+                                                  false, dstate, false);  // received, !settled, !ref_given
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                       DLV_FMT " PN_RECEIVED sent with section_offset=%" PRIu64 " pending=%" PRIu64,
+                       DLV_ARGS(conn->outbound_delivery), conn->outbound_octets, conn->window.pending_ack);
+                conn->window.pending_ack = 0;
+            }
         }
     }
 
@@ -1619,8 +1674,8 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
         } else if (dlv == conn->inbound_delivery) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Inbound delivery update - disposition: %s", DLV_ARGS(dlv), pn_disposition_type_name(disp));
             conn->inbound_disposition = disp;
-            need_wake = true;
-            if (qd_delivery_state_is_terminal(disp) && disp != PN_ACCEPTED) {
+            const bool final_outcome = qd_delivery_state_is_terminal(disp);
+            if (final_outcome && disp != PN_ACCEPTED) {
                 // The delivery failed - this is unrecoverable.
                 if (!!conn->raw_conn) {
                     // set the raw connection condition info so it will appear in the vanflow logs
@@ -1633,7 +1688,45 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
                     pn_raw_connection_close(conn->raw_conn);
                     // clean stuff up when DISCONNECT event arrives
                 }
+            } else {
+                //
+                // handle flow control window updates
+                //
+                const bool window_was_full = window_full(conn);
+                if (disp == PN_RECEIVED) {
+                    //
+                    // The egress adaptor for TCP flow has sent us its count of sent bytes
+                    //
+                    uint64_t ignore;
+                    qd_delivery_state_t *dstate = qdr_delivery_take_local_delivery_state(dlv, &ignore);
+
+                    // Resend released will generate a PN_RECEIVED with section_offset == 0, ignore it.  Ensure updates
+                    // arrive in order, which may be possible if cut-through for disposition updates is implemented.
+                    if (dstate && dstate->section_offset > 0
+                        && (int64_t)(dstate->section_offset - conn->window.last_update) > 0) {
+                        //vflow_set_uint64(tc->vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, tc->bytes_unacked);
+                        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                               DLV_FMT " PN_RECEIVED inbound_bytes=%" PRIu64 ", was_unacked=%" PRIu64 ", rcv_offset=%" PRIu64 " now_unacked=%" PRIu64,
+                               DLV_ARGS(dlv), conn->inbound_octets,
+                               (conn->inbound_octets - conn->window.last_update),
+                               dstate->section_offset,
+                               (conn->inbound_octets - dstate->section_offset));
+                        conn->window.last_update = dstate->section_offset;
+                        qd_delivery_state_free(dstate);
+                    }
+                }
+                // the window needs to be disabled when the remote settles or sets the final outcome because once that
+                // occurs the remote will no longer send PN_RECEIVED updates necessary to open the window.
+                conn->window.disabled = conn->window.disabled || settled || final_outcome;
+                if (window_was_full && !window_full(conn)) {
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                           DLV_FMT " TCP RX window %s: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
+                           DLV_ARGS(dlv),
+                           conn->window.disabled ? "DISABLED" : "OPENED",
+                           conn->inbound_octets, (conn->inbound_octets - conn->window.last_update));
+                }
             }
+            need_wake = !window_full(conn);
         }
 
         if (need_wake) {
