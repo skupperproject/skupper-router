@@ -1538,7 +1538,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
         ssize_t      rc;
         qd_buffer_t *buf;
         bool         produced_data = false;
-        int          limit = 16;
+        int          limit = UCT_SLOT_BUF_LIMIT;
 
         assert(DEQ_SIZE(content->uct_slots[use_slot]) == 0);
 

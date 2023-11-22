@@ -140,6 +140,12 @@ typedef struct tcplite_connection_t {
     qd_handler_context_t        context;
     tcplite_connection_state_t  state;
     qdpo_transport_handle_t    *observer_handle;
+    struct {
+        uint64_t                last_update;  // ingress: last byte count value received in PN_RECEIVED
+        uint64_t                pending_ack;  // egress: bytes sent since last PN_RECEIVED generated
+        uint64_t                closed_count; // ingress: total count of window closures
+        bool                    disabled;     // window flow control disabled, no backpressure allowed
+    } window;
     bool                        listener_side;
     bool                        inbound_credit;
     bool                        inbound_first_octet;

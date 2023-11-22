@@ -681,6 +681,7 @@ bool qd_message_oversize(const qd_message_t *msg);
 
 #define UCT_SLOT_COUNT       8
 #define UCT_RESUME_THRESHOLD 4
+#define UCT_SLOT_BUF_LIMIT   16  // per slot maximum qd_buffer_t list length
 
 /**
  * Transition this message to unicast/cut-through operation.  This action cannot be reversed for a message.
