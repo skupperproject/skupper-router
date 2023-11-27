@@ -27,8 +27,6 @@ dist: focal
 # the test matrix
 arch:
   - arm64
-  - ppc64le
-  - s390x
 env:
   global:
     - PROTON_VERSION=main
@@ -41,7 +39,6 @@ jobs:
   fast_finish: true
   allow_failures:
     - arch: arm64
-    - arch: ppc64le
   exclude:
     - arch: s390x
       env: RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
