@@ -62,8 +62,8 @@ macro (help2txt program)
 endmacro ()
 
 help2txt (${CMAKE_BINARY_DIR}/router/skrouterd)
-help2txt (${tools}/skmanage)
-help2txt (${tools}/skstat)
+help2txt (${CMAKE_BINARY_DIR}/skmanage)
+help2txt (${CMAKE_BINARY_DIR}/skstat)
 
 add_custom_target (doc_gen DEPENDS ${generated_txt})
 

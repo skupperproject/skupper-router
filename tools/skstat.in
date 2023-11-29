@@ -19,9 +19,31 @@
 # under the License.
 #
 
+import os
 import sys
 from datetime import datetime
 from time import ctime, strftime, gmtime
+
+extra_paths = [
+    "${CMAKE_INSTALL_PREFIX}/lib/skupper-router/python/"
+]
+
+
+def getpath(env):
+    """Return a path environment variable split into a list"""
+    path = os.environ.get(env)
+    if path:
+        return path.split(os.pathsep)
+    return []
+
+
+sys.path = extra_paths + sys.path
+python_path = extra_paths + getpath("PYTHONPATH")
+
+env_vars = {
+    'PYTHONPATH': os.pathsep.join(python_path),
+}
+os.environ.update(env_vars)
 
 from skupper_router._skupper_router_site import populate_pythonpath
 populate_pythonpath()

@@ -17,32 +17,18 @@
 # under the License.
 #
 
-# Private python modules, not in standard python site dir.
-install(DIRECTORY skupper_router_internal DESTINATION ${QPID_DISPATCH_HOME}/python)
-
-# Copy the public python modules into a build/python/src folder.
-# We do this because, pip install, by default, will look into a src folder
-# and automatically figure out python packaging and installs the files
-# in the appropriate location.
-
-add_custom_target(NAME ALL
-                  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_CURRENT_BINARY_DIR}/src/skupper_router
-                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py ${CMAKE_CURRENT_BINARY_DIR}/src/skupper_router)
-
 configure_file(${CMAKE_SOURCE_DIR}/python/skupper_router/_skupper_router_site.py.in
                ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/pyproject.toml.in
-               ${CMAKE_CURRENT_BINARY_DIR}/pyproject.toml)
+add_custom_target(NAME ALL
+                  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/python/skupper_router ${CMAKE_CURRENT_BINARY_DIR}/skupper_router
+                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py ${CMAKE_CURRENT_BINARY_DIR}/skupper_router)
 
-# Use pip install to install the public python modules.
-# --compile option compiles Python source files to bytecode
-install(CODE
-        "execute_process( \
-        COMMAND ${Python_EXECUTABLE} -m pip install ${CMAKE_CURRENT_BINARY_DIR} --ignore-installed --verbose --compile --prefix=\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX} \
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} \
-        COMMAND_ECHO STDOUT \
-        COMMAND_ERROR_IS_FATAL ANY)")
+install(DIRECTORY skupper_router_internal DESTINATION ${QPID_DISPATCH_HOME}/python)
+install(DIRECTORY skupper_router DESTINATION ${QPID_DISPATCH_HOME}/python)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/_skupper_router_site.py
+        DESTINATION ${QPID_DISPATCH_HOME}/python/skupper_router/)
+
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/skupper_router/management/skrouter.json
   ${CMAKE_CURRENT_SOURCE_DIR}/skupper_router/management/skrouter.json.readme.txt
