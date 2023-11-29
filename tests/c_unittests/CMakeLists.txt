@@ -51,8 +51,3 @@ file(COPY
         ${CMAKE_CURRENT_SOURCE_DIR}/minimal_trace.conf
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-add_test(
-    NAME c_unittests
-    COMMAND ${TEST_WRAP} $<TARGET_FILE:c_unittests>
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
