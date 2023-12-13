@@ -131,7 +131,7 @@ jobs:
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
       - name: Setup python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
           architecture: x64
@@ -246,7 +246,7 @@ jobs:
           name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
 
       - name: Setup python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
           architecture: x64
@@ -730,7 +730,7 @@ jobs:
           path: 'qpid-proton'
 
       - name: Setup python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
           architecture: x64
