@@ -716,10 +716,18 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     # requests and having the server start reading the
                     # incomplete request first (before the abort signal arrives
                     # to cancel the request).
-                    self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index:
-                                          self._server_get_undelivered_out(mg, "testServer11")
-                                          + self._server_get_unsettled_out(mg, "testServer11")
-                                          == dc))
+                    retry(lambda mg=EA2_mgmt, dc=index:
+                          self._server_get_undelivered_out(mg, "testServer11")
+                          + self._server_get_unsettled_out(mg, "testServer11")
+                          == dc,
+                          timeout=TIMEOUT / 2.0)
+                    self.assertEqual(index,
+                                     self._server_get_undelivered_out(EA2_mgmt, "testServer11")
+                                     + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
+                                     "dc=%s undel=%s unset=%s"
+                                     % (index,
+                                        self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
+                                        self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
 
                     # Send an incomplete request. When the client closes this
                     # should cause the client-facing router to abort the
@@ -732,10 +740,18 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # the server. The arrival order is not guaranteed! The test will
             # validate that responses are sent to the proper client
 
-            self.assertTrue(retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
-                                  self._server_get_undelivered_out(mg, "testServer11")
-                                  + self._server_get_unsettled_out(mg, "testServer11")
-                                  == dc))
+            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
+                  self._server_get_undelivered_out(mg, "testServer11")
+                  + self._server_get_unsettled_out(mg, "testServer11")
+                  == dc,
+                  timeout=TIMEOUT / 2.0)
+            self.assertEqual(CLIENT_COUNT,
+                             self._server_get_undelivered_out(EA2_mgmt, "testServer11")
+                             + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
+                             "dc=%s undel=%s unset=%s"
+                             % (CLIENT_COUNT,
+                                self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
+                                self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
 
             # Now destroy the incomplete clients. Wait until the socket has
             # actually closed at the ingress router:
@@ -746,8 +762,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                 clients[index] = None
 
             # wait for the killed client connections to the router drop
-            self.assertTrue(retry(lambda mg=EA1_mgmt:
-                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - len(KILL_INDEX)))
+            retry(lambda mg=EA1_mgmt:
+                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - len(KILL_INDEX),
+                  timeout=TIMEOUT / 2.0)
+            self.assertEqual(CLIENT_COUNT - len(KILL_INDEX),
+                             self._client_in_link_count(EA1_mgmt,
+                                                        'testServer11'))
             sleep(1.0)  # hack: ensure the abort signal has propagated to the server
 
             # Since the cancelled request has yet to be written to the server
@@ -844,10 +864,16 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     # request to arrive at the server in order to prevent the
                     # following requests from arriving first
                     client.sendall(truncated_req)
-                    self.assertTrue(retry(lambda mg=EA2_mgmt, dc=1:
-                                          self._server_get_undelivered_out(mg, "testServer11")
-                                          + self._server_get_unsettled_out(mg, "testServer11")
-                                          == dc))
+                    retry(lambda mg=EA2_mgmt, dc=1:
+                          self._server_get_undelivered_out(mg, "testServer11")
+                          + self._server_get_unsettled_out(mg, "testServer11")
+                          == dc,
+                          timeout=TIMEOUT / 2.0)
+                    self.assertEqual(1, self._server_get_undelivered_out(EA2_mgmt, "testServer11")
+                                     + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
+                                     "dc=1 undel=%s unset=%s"
+                                     % (self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
+                                        self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
                 else:
                     client.sendall(request % index)
 
@@ -855,10 +881,18 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # the server. The arrival order is not guaranteed! The test will
             # validate that responses are sent to the proper client
 
-            self.assertTrue(retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
-                                  self._server_get_undelivered_out(mg, "testServer11")
-                                  + self._server_get_unsettled_out(mg, "testServer11")
-                                  == dc))
+            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
+                  self._server_get_undelivered_out(mg, "testServer11")
+                  + self._server_get_unsettled_out(mg, "testServer11")
+                  == dc,
+                  timeout=TIMEOUT / 2.0)
+            self.assertEqual(CLIENT_COUNT,
+                             self._server_get_undelivered_out(EA2_mgmt, "testServer11")
+                             + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
+                             "dc=%s undel=%s unset=%s"
+                             % (CLIENT_COUNT,
+                                self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
+                                self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
 
             # Have the server start processing the incomplete request
 
@@ -872,8 +906,10 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             clients[0].shutdown(socket.SHUT_RDWR)
             clients[0].close()
             clients[0] = None
-            self.assertTrue(retry(lambda mg=EA1_mgmt:
-                                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1))
+            retry(lambda mg=EA1_mgmt:
+                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1,
+                  timeout=TIMEOUT / 2.0)
+            self.assertEqual(CLIENT_COUNT - 1, self._client_in_link_count(EA1_mgmt, 'testServer11'))
 
             # attempting to read the rest of the request should result in the
             # server socket closing
@@ -968,10 +1004,18 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                 # the next request. Otherwise if all requests are sent at once
                 # they can arrive out of order. That will cause the test to
                 # fail since it services each client in order of transmission
-                self.assertTrue(retry(lambda mg=EA2_mgmt, dc=index + 1:
-                                      self._server_get_undelivered_out(mg, "testServer11")
-                                      + self._server_get_unsettled_out(mg, "testServer11")
-                                      == dc))
+                retry(lambda mg=EA2_mgmt, dc=index + 1:
+                      self._server_get_undelivered_out(mg, "testServer11")
+                      + self._server_get_unsettled_out(mg, "testServer11")
+                      == dc,
+                      timeout=TIMEOUT / 2.0)
+                self.assertEqual(index + 1,
+                                 self._server_get_undelivered_out(EA2_mgmt, "testServer11")
+                                 + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
+                                 "dc=%s undel=%s unset=%s"
+                                 % (index + 1,
+                                    self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
+                                    self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
 
                 # Now close the write side of the client socket:
                 client.shutdown(socket.SHUT_WR)
