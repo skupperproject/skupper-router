@@ -353,6 +353,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
@@ -362,6 +363,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
@@ -371,6 +373,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: 0.39.0
             shard: 1
@@ -380,6 +383,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: 0.39.0
             shard: 2
