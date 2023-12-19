@@ -47,9 +47,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04 ]
-        buildType: [ Debug ]
-        runtimeCheck: [ asan ]
+        os: [ubuntu-22.04]
+        buildType: [Debug]
+        runtimeCheck: [asan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
@@ -79,6 +79,7 @@ jobs:
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
         -DSANITIZE_PYTHON=OFF
         -DBUILD_BENCHMARKS=ON
+
       CCACHE_BASEDIR: ${{github.workspace}}
       CCACHE_DIR: ${{github.workspace}}/.ccache
       CCACHE_COMPRESS: 'true'
@@ -93,6 +94,7 @@ jobs:
           _jobIdentifierRaw="${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
           jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
           echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
+
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
@@ -115,6 +117,7 @@ jobs:
         run: |
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
           file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}")
+
       - uses: actions/cache@v3
         env:
           cache-name: cache-ccache
@@ -123,6 +126,7 @@ jobs:
           key: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
           restore-keys: |
             ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}
+
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
@@ -138,6 +142,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
+
       - name: Zero ccache stats
         run: ccache -z
 
@@ -149,6 +154,7 @@ jobs:
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-GNinja" \
             ${ProtonCMakeExtraArgs}
+
       - name: qpid-proton cmake build/install
         run: cmake --build "${ProtonBuildDir}" --config ${BuildType} -t install --parallel 6
 
@@ -164,6 +170,7 @@ jobs:
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             "-GNinja" \
             ${RouterCMakeExtraArgs}
+
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} -t install --parallel 6
 
@@ -183,6 +190,7 @@ jobs:
             skupper-router \
             install \
             qpid-proton/build/python
+
       - name: Upload archive
         uses: actions/upload-artifact@v3
         with:
@@ -192,18 +200,18 @@ jobs:
   test:
     name: 'Test (${{matrix.os}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})'
     runs-on: ${{ matrix.os }}
-    needs: [ compile ]
+    needs: [compile]
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04 ]
-        buildType: [ Debug ]
-        runtimeCheck: [ asan ]
+        os: [ubuntu-22.04]
+        buildType: [Debug]
+        runtimeCheck: [asan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
-        shard: [ 1, 2 ]
-        shards: [ 2 ]
+        shard: [1, 2]
+        shards: [2]
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -227,6 +235,7 @@ jobs:
           _jobIdentifierRaw="${{matrix.os}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.protonGitRef}}"
           jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
           echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
+
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
@@ -245,6 +254,7 @@ jobs:
       - name: Install Linux runtime/test dependencies
         run: |
           sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets16 libbenchmark1 pixz curl ncat gdb elfutils findutils file python3-dbg
+
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
 
@@ -259,11 +269,14 @@ jobs:
         run: |
           sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
+
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
+
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
         run: |
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
+
       - name: Upload test results
         uses: actions/upload-artifact@v3
         if: ${{ ! cancelled() }}
@@ -283,6 +296,7 @@ jobs:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             ${{env.RouterBuildDir}}/tests
+
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v3
         if: failure()
@@ -290,19 +304,20 @@ jobs:
           name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
+
   compile_and_test:
     name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.runtimeCheck}}, ${{matrix.cc}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04 ]
-        container: [ 'fedora' ]
-        containerTag: [ '37' ]
-        cc: [ gcc ]
-        cxx: [ g++ ]
-        buildType: [ RelWithDebInfo ]
-        runtimeCheck: [ asan, tsan ]
+        os: [ubuntu-22.04]
+        container: ['fedora']
+        containerTag: ['37']
+        cc: [gcc]
+        cxx: [g++]
+        buildType: [RelWithDebInfo]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
@@ -445,6 +460,7 @@ jobs:
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DPython_EXECUTABLE=/usr/bin/python3
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
+
       CCACHE_BASEDIR: ${{github.workspace}}
       CCACHE_DIR: ${{github.workspace}}/.ccache
       CCACHE_COMPRESS: 'true'
@@ -463,6 +479,7 @@ jobs:
           _jobIdentifierRaw="${{matrix.os}}_${{matrix.container}}_${{matrix.buildType}}_${{matrix.runtimeCheck}}_${{matrix.cc}}_${{matrix.protonGitRef}}"
           jobIdentifier=$(echo -n "${_jobIdentifierRaw}" | sed -e 's/[ \t:\/\\"<>|*?]/-/g' -e 's/--*/-/g')
           echo "JOB_IDENTIFIER=${jobIdentifier}" >> $GITHUB_ENV
+
       - name: Show environment (Linux)
         if: ${{ always() && runner.os == 'Linux' }}
         run: env -0 | sort -z | tr '\0' '\n'
@@ -482,17 +499,20 @@ jobs:
         run: |
           dnf -y install epel-release 'dnf-command(config-manager)'
           dnf config-manager --set-enabled powertools
+
       - name: Enable additional package repositories for CentOS 9
         if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream9' }}
         run: |
           dnf -y install epel-release 'dnf-command(config-manager)'
           dnf config-manager --set-enabled crb
+
       # also sets LD_LIBRARY_PATH to find libclang_rt.asan-x86_64.so for asan'd proton
       - name: Install Linux compiler (clang)
         if: ${{ matrix.cc == 'clang' }}
         run: |
           dnf install -y clang compiler-rt llvm
           echo "LD_LIBRARY_PATH=$(dirname $(clang --print-file-name libclang_rt.asan-x86_64.so))" >> $GITHUB_ENV
+
       - name: Install Linux compiler (gcc)
         if: ${{ matrix.cc == 'gcc' }}
         run: dnf install -y gcc gcc-c++
@@ -500,6 +520,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           dnf install -y elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan libunwind-devel
+
       - name: Install Linux build dependencies (Fedora)
         if: ${{ matrix.container == 'fedora' }}
         run: dnf install -y python3-devel python3-pip
@@ -524,6 +545,7 @@ jobs:
         run: |
           string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
           file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}")
+
       - uses: actions/cache@v3
         env:
           cache-name: cache-ccache
@@ -532,6 +554,7 @@ jobs:
           key: ${{ github.workflow }}-${{ matrix.container }}-${{ matrix.containerTag }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
           restore-keys: |
             ${{ github.workflow }}-${{ matrix.container }}-${{ matrix.containerTag }}-${{ matrix.runtimeCheck }}-${{ matrix.protonGitRef }}-${{ env.cache-name }}
+
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "{InstallPrefix}"
 
@@ -545,6 +568,7 @@ jobs:
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             ${ProtonCMakeExtraArgs}
+
       - name: qpid-proton cmake build/install
         run: cmake --build "${ProtonBuildDir}" --config ${BuildType} --target install --parallel 6
 
@@ -572,6 +596,7 @@ jobs:
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='${CoverageOpts};-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             ${RouterCMakeExtraArgs} -DQD_ENABLE_ASSERTIONS=${RouterCMakeAsserts} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython:-ON}
+
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
 
@@ -593,6 +618,7 @@ jobs:
           dnf install -y nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
           command -v curl || dnf install -y curl
           dnf debuginfo-install -y python3
+
       - name: install qpid-proton python wheel
         run: python3 -m pip install $(find ${ProtonBuildDir}/python/ -name 'python_qpid_proton*.whl')
 
@@ -601,18 +627,21 @@ jobs:
         run: |
           echo "coredump.%e.%p" > /proc/sys/kernel/core_pattern
           ulimit -c unlimited
-
+          
           threads=12
           if [[ "${{ matrix.runtimeCheck }}" == "tsan" ]]; then
             threads=6
           fi
+
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
+
       - name: Process C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         working-directory: ${{env.RouterBuildDir}}
         run: |
           dnf install -y lcov
           cmake --build . --target coverage
+
       # https://github.com/codecov/codecov-action
       - name: Upload C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
@@ -647,6 +676,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
+
       - name: Dump dmesg (on failure)
         if: ${{ failure() }}
         run: dmesg
@@ -670,6 +700,7 @@ jobs:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             ${{env.RouterBuildDir}}/tests
+
       - name: Upload core files (if any)
         uses: actions/upload-artifact@v3
         if: failure()
@@ -710,11 +741,13 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt update; sudo apt install -y flake8 mypy pylint python3-qpid-proton libpython3-dev ninja-build libwebsockets-dev libnghttp2-dev nginx
+
       - name: Install qpid-proton
         run: |
           cmake -S qpid-proton -B qpid-proton -GNinja -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TLS=ON
           cmake --build qpid-proton
           sudo cmake --install qpid-proton
+
       - uses: actions/checkout@v4
 
       - name: Create Build and Install directories
@@ -726,6 +759,7 @@ jobs:
           cmake "${{github.workspace}}" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             ${DispatchCMakeExtraArgs}
+
       - name: CTest -R python-checker
         working-directory: ${{env.DispatchBuildDir}}
         run: ctest -VV -R python-checker
@@ -736,10 +770,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-20.04 ]
-        container: [ 'fedora' ]
-        containerTag: [ '37' ]
-        buildType: [ RelWithDebInfo ]
+        os: [ubuntu-20.04]
+        container: ['fedora']
+        containerTag: ['37']
+        buildType: [RelWithDebInfo]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
     container:
@@ -797,6 +831,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           dnf install -y gcc gcc-c++ elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache
+
       - name: Install Linux build dependencies (Python)
         run: dnf install -y python3-devel python3-pip
 
@@ -804,6 +839,7 @@ jobs:
         run: |
           dnf install -y curl nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
           dnf debuginfo-install -y python3
+
       - name: Install Python build dependencies
         run: python3 -m pip install setuptools wheel cffi
 
@@ -834,6 +870,7 @@ jobs:
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
             "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             ${RouterCMakeExtraArgs} -DSANITIZE_PYTHON=${RouterCMakeSanitizePython:-ON}
+
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
 
@@ -847,7 +884,6 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # https://podman.io/docs/installation
       - name: Install brew
         run: |
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
