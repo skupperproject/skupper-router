@@ -334,11 +334,17 @@ install(FILES etc/skrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/skupper-rout
 install(FILES etc/sasl2/skrouterd.conf DESTINATION ${SYSCONF_INSTALL_DIR}/sasl2)
 install(FILES share/index.html DESTINATION ${QPID_DISPATCH_HTML_DIR})
 
+configure_file(${CMAKE_SOURCE_DIR}/tools/skstat.in
+               ${CMAKE_CURRENT_BINARY_DIR}/skstat)
+
+configure_file(${CMAKE_SOURCE_DIR}/tools/skmanage.in
+               ${CMAKE_CURRENT_BINARY_DIR}/skmanage)
+
 
 # Tools
 install(PROGRAMS
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/skstat
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/skmanage
+    ${CMAKE_CURRENT_BINARY_DIR}/skstat
+    ${CMAKE_CURRENT_BINARY_DIR}/skmanage
     DESTINATION bin)
 
 # Doc files

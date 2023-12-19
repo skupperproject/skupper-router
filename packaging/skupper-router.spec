@@ -126,11 +126,10 @@ cd %{_builddir}/skupper-router-%{version}
 
 %files
 /usr/sbin/skrouterd
+/usr/lib/skupper-router/python/skupper_router/
 
 %config /etc/skupper-router/skrouterd.conf
 %config /etc/sasl2/skrouterd.conf
-
-%{python3_sitelib}/
 
 /usr/share/man/man5/skrouterd.conf.5.gz
 /usr/share/man/man8/skrouterd.8.gz

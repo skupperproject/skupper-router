@@ -41,7 +41,7 @@ run.py --sh                                # Print a shell script to set the run
 
 
 extra_paths = [
-    "${CMAKE_BINARY_DIR}/python/src",
+    "${CMAKE_BINARY_DIR}/python",
     "${CMAKE_SOURCE_DIR}/python",
     "${CMAKE_SOURCE_DIR}/tests"
 ]
@@ -63,7 +63,6 @@ def getpath(env):
 
 sys.path = dedup(extra_paths + sys.path)
 python_path = dedup(extra_paths + getpath("PYTHONPATH"))
-
 # runner program (e.g. valgrind) and args used to run qdrouterd
 qdrouterd_runner = "${QDROUTERD_RUNNER}"
 
