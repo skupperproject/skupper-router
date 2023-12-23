@@ -31,6 +31,7 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/dispatch.h"
+#include "qpid/dispatch/internal/annotations.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
 
@@ -368,7 +369,7 @@ static void write_log_lh(qd_log_source_t *log_source, qd_log_entry_t *entry)
             case QD_LOG_WARNING:  severity = VFLOW_LOG_SEVERITY_WARNING;  break;
             case QD_LOG_ERROR:    severity = VFLOW_LOG_SEVERITY_ERROR;    break;
             case QD_LOG_CRITICAL: severity = VFLOW_LOG_SEVERITY_CRITICAL; break;
-            default: assert(false); break;
+            default: qd_assume_unreachable(); break;
                 // clang-format on
         }
 
