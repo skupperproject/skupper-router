@@ -40,7 +40,13 @@ typedef atomic_uint sys_atomic_t;
 
 static inline void sys_atomic_init(sys_atomic_t *ref, uint32_t value)
 {
+#ifdef __cplusplus
+    // atomic_init is deprecated in C++20
+    // use the equivalent definition from https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p0883r2.pdf
+    atomic_store_explicit(ref, value, std::memory_order_relaxed);
+#else
     atomic_init(ref, value);
+#endif
 }
 
 static inline uint32_t sys_atomic_add(sys_atomic_t *ref, uint32_t value)
