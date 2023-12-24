@@ -46,7 +46,7 @@ bool check_stubbing_works()
     }
     {
         Stub stub;
-        stub.set(abs, +[](int) -> int { return 24; });
+        stub.set( static_cast<int (*)(int)>(abs), +[](int) -> int { return 24; });
         if (probe(0) != 24) {
             return false;
         }
