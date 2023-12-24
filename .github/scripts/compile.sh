@@ -22,8 +22,31 @@
 # https://sipb.mit.edu/doc/safe-shell
 set -Eefuxo pipefail
 
-BUILD_FLAGS="$(rpmbuild --undefine _annotated_build --eval '%set_build_flags')"
-eval "${BUILD_FLAGS}"
+if [[ -n "${TARGETPLATFORM:-}" && -n "${BUILDPLATFORM:-}" && "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ]]; then
+  CROSSCOMPILING=true
+else
+  CROSSCOMPILING=false
+fi
+
+if [[ "${CROSSCOMPILING}" == true ]]; then
+  ENABLE_PROFILE_GUIDED_OPTIMIZATION=OFF
+
+  microdnf install -y tar xz
+  curl -L https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz | tar -xJ --directory=/usr/local/bin --strip-components=1
+
+  # create compiler tools startup scripts, with llvm- prefix so that CMake finds it
+  echo -e '#!/bin/bash\nzig ar "$@"' > /usr/local/bin/llvm-ar
+  echo -e '#!/bin/bash\nzig ranlib "$@"' > /usr/local/bin/llvm-ranlib
+  chmod +x /usr/local/bin/llvm-ar /usr/local/bin/llvm-ranlib
+
+  export CC='zig cc -target aarch64-linux-gnu.2.34 --sysroot / -isystem /usr/include -L/usr/lib64 -isystem /usr/local/include -L/usr/local/lib64'
+  export CXX='zig c++ -target aarch64-linux-gnu.2.34 --sysroot / -isystem /usr/include -L/usr/lib64 -isystem /usr/local/include -L/usr/local/lib64'
+else
+  ENABLE_PROFILE_GUIDED_OPTIMIZATION=ON
+
+  BUILD_FLAGS="$(rpmbuild --undefine _annotated_build --eval '%set_build_flags')"
+  eval "${BUILD_FLAGS}"
+fi
 
 if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
   # If no REMOTE_SOURCES_DIR present in env, we use $(pwd) as working dir
@@ -106,7 +129,7 @@ tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
 pushd "${LIBUNWIND_DIR}"
 autoreconf -i
 ./configure
-make install
+make install -j "$(nproc)"
 DESTDIR="${LIBUNWIND_INSTALL_DIR}" make install
 tar -z -C "${LIBUNWIND_INSTALL_DIR}" -cf /libunwind-image.tar.gz usr
 popd
@@ -126,8 +149,10 @@ do_patch () {
 
 do_patch "patches/proton" "${PROTON_DIR}"
 
-# This is required to install the python packages that the system tests use.
-python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
+if [[ "${ENABLE_PROFILE_GUIDED_OPTIMIZATION}" == true ]]; then
+  # This is required to install the python packages that the system tests use.
+  python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
+fi
 
 cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -137,7 +162,7 @@ cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}" \
   -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
   -DCMAKE_INSTALL_PREFIX=${PROTON_BUILD_DIR}/install
 
-cmake --build "${PROTON_BUILD_DIR}" --verbose
+cmake --build "${PROTON_BUILD_DIR}" --parallel "$(nproc)" --verbose
 
 # `cmake --install` Proton for the build image only as the router links it statically
 # Proton Python for the run image is installed later
@@ -151,10 +176,11 @@ cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DProton_USE_STATIC_LIBS=ON \
   -DProton_DIR="${PROTON_BUILD_DIR}/install/lib64/cmake/Proton" \
-  -DENABLE_PROFILE_GUIDED_OPTIMIZATION=ON \
+  -DENABLE_PROFILE_GUIDED_OPTIMIZATION=${ENABLE_PROFILE_GUIDED_OPTIMIZATION} \
+  -DBUILD_TESTING=OFF \
   -DVERSION="${VERSION}" \
   -DCMAKE_INSTALL_PREFIX=/usr
-cmake --build "${SKUPPER_BUILD_DIR}" --verbose
+cmake --build "${SKUPPER_BUILD_DIR}" --parallel "$(nproc)" --verbose
 
 # Install Proton Python
 python3 -m pip install --disable-pip-version-check --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
