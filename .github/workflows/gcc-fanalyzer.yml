@@ -98,7 +98,7 @@ jobs:
         DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
       working-directory: ${{github.workspace}}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: current.sarif
         path: current.sarif

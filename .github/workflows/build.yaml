@@ -192,7 +192,7 @@ jobs:
             qpid-proton/build/python
 
       - name: Upload archive
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
           path: /tmp/archive.tar.xz
@@ -278,7 +278,7 @@ jobs:
           find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
@@ -290,7 +290,7 @@ jobs:
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
@@ -298,7 +298,7 @@ jobs:
             ${{env.RouterBuildDir}}/tests
 
       - name: Upload core files (if any)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
@@ -682,7 +682,7 @@ jobs:
         run: dmesg
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ ! cancelled() }}
         with:
           name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
@@ -694,7 +694,7 @@ jobs:
         run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
 
       - name: Upload log files (if any tests failed)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
@@ -702,7 +702,7 @@ jobs:
             ${{env.RouterBuildDir}}/tests
 
       - name: Upload core files (if any)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
