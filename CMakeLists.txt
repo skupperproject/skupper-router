@@ -60,7 +60,8 @@ set(C_WARNING_GNU -Wall -Wextra -Wpedantic -pedantic-errors
         -Wno-empty-body -Wno-unused-parameter  -Wno-missing-field-initializers -Wno-sign-compare -Wno-type-limits)
 set(C_WARNING_Clang -Wall -Wextra -Wpedantic
         -Wstrict-prototypes -Wold-style-definition
-        -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token)
+        -Wno-unused-parameter -Wno-missing-field-initializers -Wno-sign-compare -Wno-language-extension-token
+        -Wno-gnu-statement-expression-from-macro-expansion)
 
 # Set default build type. Must use FORCE because project() sets default to ""
 if (NOT CMAKE_BUILD_TYPE)
