@@ -1012,17 +1012,6 @@ class BusManager:
 
         return has_nodes, all_nodes
 
-    def has_nodes(self):
-        all_nodes = self.node.get_mgmt_nodes()
-        has_nodes = True
-        if all_nodes:
-            if len(all_nodes) < 2:
-                has_nodes = False
-        else:
-            has_nodes = False
-
-        return has_nodes, all_nodes
-
     def display(self):
         has_nodes, nodes = self.has_nodes()
         if self.opts.all_routers and has_nodes:
