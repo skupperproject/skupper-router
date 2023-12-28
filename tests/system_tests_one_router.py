@@ -610,7 +610,7 @@ class RouterConfigTest(TestCase):
         # a short timeout is OK since the router has exited the outfile is
         # completely written!
 
-        err = r"Router start-up failed: Python: .* KeyError: \('address'"
+        err = r"Router start-up failed: Python: .* KeyError: \(?'address'"
         for index in [10, 11, 14, 15, 16, 17]:
             self.routers[index].wait_log_message(err, timeout=1.0)
 
