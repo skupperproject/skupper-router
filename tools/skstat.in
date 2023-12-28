@@ -1015,7 +1015,7 @@ class BusManager:
     def display(self):
         has_nodes, nodes = self.has_nodes()
         if self.opts.all_routers and has_nodes:
-            print(str(datetime.utcnow()) + " UTC")
+            print(str(datetime.now(timezone.utc)) + " UTC")
             for node in nodes:
                 self.node.set_client(node[6:])
                 parts = node.split("/")
