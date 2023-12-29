@@ -67,6 +67,6 @@ addons:
       - gdb
 
 script:
-  - sudo prlimit --pid=$$ --core=unlimited  # sudo version of `ulimit -c unlimited`
+  - sudo prlimit --pid=$$ --core=unlimited || true  # sudo version of `ulimit -c unlimited`
   - scripts/travisci_build.sh
-  - find -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
+  - find -type f -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
