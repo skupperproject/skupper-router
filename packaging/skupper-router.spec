@@ -38,6 +38,7 @@
 %global proton_vendored_version 0.39.0
 %define proton_install_prefix %{_builddir}/qpid-proton-%{proton_vendored_version}/install
 
+%global python_minimum_version 3.9.0
 %global proton_minimum_version 0.37.0
 %global libwebsockets_minimum_version 3.0.1
 %global libnghttp2_minimum_version 1.33.0
@@ -63,9 +64,11 @@ BuildRequires: gcc-c++
 BuildRequires: cmake
 
 # skupper-router requirements
-BuildRequires: python3-devel
+BuildRequires: python3-devel >= %{python_minimum_version}
 BuildRequires: python3-setuptools
+BuildRequires: python3-wheel
 BuildRequires: python3-pip
+BuildRequires: python3-rpm-macros
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
 BuildRequires: libunwind-devel >= %{libunwind_minimum_version}
@@ -75,6 +78,10 @@ BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
 # check ctest
 BuildRequires: cyrus-sasl-plain
 BuildRequires: openssl
+# check python linters
+BuildRequires: python3-flake8
+BuildRequires: pylint
+BuildRequires: python3-mypy
 
 # proton-c requirements
 BuildRequires: openssl-devel
@@ -100,6 +107,7 @@ cd %{_builddir}/qpid-proton-%{proton_vendored_version}
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_TESTING=OFF \
     -DBUILD_BINDINGS=OFF \
+    -DPython_EXECUTABLE=%{python3} \
     -DBUILD_TLS=ON -DSSL_IMPL=openssl \
     -DBUILD_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
@@ -119,6 +127,9 @@ cd %{_builddir}/skupper-router-%{version}
 %install
 cd %{_builddir}/skupper-router-%{version}
 %cmake_install
+
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/Python/#py3_shebang_fix
+%py3_shebang_fix %{buildroot}/%{_bindir}/skmanage %{buildroot}/%{_bindir}/skstat
 
 %check
 cd %{_builddir}/skupper-router-%{version}

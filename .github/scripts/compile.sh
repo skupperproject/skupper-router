@@ -157,7 +157,7 @@ cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}" \
 cmake --build "${SKUPPER_BUILD_DIR}" --verbose
 
 # Install Proton Python
-python3 -m pip install --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+python3 -m pip install --disable-pip-version-check --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
 
 tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
