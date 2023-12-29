@@ -42,8 +42,7 @@ websockets>=9.1
 psutil
 
 # For running the python-checker tests
-hacking==4.1.0
-# hacking 4.1.0 requires flake8<3.9.0 and >=3.8.0
-flake8==3.8.4
-pylint==2.13.9
-mypy==0.950
+hacking==6.1.0
+flake8==6.1.0
+pylint==3.0.3
+mypy==1.8.0
