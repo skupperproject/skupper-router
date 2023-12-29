@@ -36,9 +36,12 @@ echo '==='
 echo 'Install additional prerequisites'
 echo '==='
 
+
 if [[ ${TRAVIS_CPU_ARCH} == "arm64" ]]; then
-  sudo apt-get install -y clang-12 llvm-12-dev
-  export CC=clang-12 CXX=clang++-12
+  # https://apt.llvm.org/
+  echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main" | sudo tee /etc/apt/sources.list.d/clang.list
+  sudo apt-get install -y clang-17 llvm-17-dev
+  export CC=clang-17 CXX=clang++-17
 fi
 
 # Update pip, it may prevent issues later
