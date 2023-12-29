@@ -19,12 +19,14 @@
 
 # https://docs.codecov.com/docs/codecov-yaml
 
+coverage:
+  precision: 1  # our coverage is nondeterministic, this suppresses random fluctuations on the order of 0.0x pct
 comment:
     layout: "header, diff, flags, components"  # show component info in the PR comment
 component_management:
     individual_components:
         - component_id: unittests
-          name: calculator
+          name: unittests
           flag_regexes:
               - ".*unittests"
         - component_id: systemtests
