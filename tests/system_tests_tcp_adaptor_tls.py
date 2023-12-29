@@ -72,8 +72,8 @@ class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
             # So, assertRaises cannot be used.
             expected_error = "Ncat: Input/output error"
             actual_error = str(e)
-            self.assertIn(expected_error, actual_error, f"Expected error message not found. "
-                                                        f"Expected {expected_error} but got {actual_error}")
+            self.assertIn(expected_error, actual_error, (f"Expected error message not found. "
+                                                         f"Expected {expected_error} but got {actual_error}"))
 
         # Look for a log line that proves the peer did not return a certificate.
         self.INTA.wait_log_message("peer did not return a certificate")
@@ -579,8 +579,8 @@ class TcpTlsGoodListenerBadClient(TestCase):
             error_found = False
             if expected_error1 in actual_error or expected_error2 in actual_error:
                 error_found = True
-            self.assertTrue(error_found, f"Expected error message not found. "
-                                         f"Expected {expected_error1} or  {expected_error2} but got {actual_error}")
+            self.assertTrue(error_found, (f"Expected error message not found. "
+                                          f"Expected {expected_error1} or  {expected_error2} but got {actual_error}"))
 
         # Look for a log line that says "certificate unknown"
         self.router.wait_log_message("certificate unknown|unknown ca")
@@ -616,8 +616,8 @@ class TcpTlsGoodListenerBadClient(TestCase):
             error_found = False
             if expected_error1 in actual_error or expected_error2 in actual_error:
                 error_found = True
-            self.assertTrue(error_found, f"Expected error message not found. "
-                                         f"Expected {expected_error1} or  {expected_error2} but got {actual_error}")
+            self.assertTrue(error_found, (f"Expected error message not found. "
+                                          f"Expected {expected_error1} or  {expected_error2} but got {actual_error}"))
 
         self.router.wait_log_message("certificate verify failed")
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
