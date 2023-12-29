@@ -35,7 +35,8 @@ pytest-timeout
 grpcio; platform_machine != 's390x' and platform_machine != 'ppc64le'
 h2
 protobuf
-hypercorn<0.14.0
+# Issue #704: http2 tests were getting stuck with hypercorn 0.14.0
+hypercorn>=0.15.0
 quart
 selectors
 websockets>=9.1
