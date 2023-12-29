@@ -21,7 +21,7 @@
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from time import ctime, strftime, gmtime
 
 extra_paths = [
@@ -137,7 +137,7 @@ class BusManager:
             print(router.id)
 
     def display_datetime_router_id(self):
-        print(str(datetime.utcnow()) + " UTC")
+        print(str(datetime.now(timezone.utc)) + " UTC")
         self.displayRouterId()
         print("")
 
@@ -975,7 +975,7 @@ class BusManager:
     def show_all(self, show_summary=True):
         if show_summary:
             # print the datetime and router id
-            print(str(datetime.utcnow())  + " UTC")
+            print(str(datetime.now(timezone.utc)) + " UTC")
             self.displayRouterId()
             print("")
 
@@ -1000,17 +1000,6 @@ class BusManager:
         # print("")
         self.displayVhoststats(show_date_id=False)
         print("")
-
-    def has_nodes(self):
-        all_nodes = self.node.get_mgmt_nodes()
-        has_nodes = True
-        if all_nodes:
-            if len(all_nodes) < 2:
-                has_nodes = False
-        else:
-            has_nodes = False
-
-        return has_nodes, all_nodes
 
     def has_nodes(self):
         all_nodes = self.node.get_mgmt_nodes()
