@@ -32,8 +32,8 @@ env:
     - PROTON_VERSION=main
     - BUILD_TYPE=RelWithDebInfo
   jobs:
-    - RUNTIME_CHECK=asan QD_ENABLE_ASSERTIONS=ON
-    - RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
+    - COMPILER=gcc RUNTIME_CHECK=asan QD_ENABLE_ASSERTIONS=ON
+    - COMPILER=gcc RUNTIME_CHECK=tsan QD_ENABLE_ASSERTIONS=OFF
 
 jobs:
   fast_finish: true
@@ -53,7 +53,6 @@ addons:
       - libsasl2-dev
       - libssl-dev
       - sasl2-bin
-      - swig
       # Dispatch requirements
       - libnghttp2-dev
       - libwebsockets-dev
@@ -68,6 +67,6 @@ addons:
       - gdb
 
 script:
-  - ulimit -c unlimited
+  - sudo prlimit --pid=$$ --core=unlimited || true  # sudo version of `ulimit -c unlimited`
   - scripts/travisci_build.sh
-  - find -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
+  - find -type f -name 'core' -exec ${TRAVIS_BUILD_DIR}/scripts/gha_analyze_coredump.sh {} \;
