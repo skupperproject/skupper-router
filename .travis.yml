@@ -53,7 +53,6 @@ addons:
       - libsasl2-dev
       - libssl-dev
       - sasl2-bin
-      - swig
       # Dispatch requirements
       - libnghttp2-dev
       - libwebsockets-dev

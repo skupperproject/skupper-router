@@ -72,7 +72,7 @@ pushd qpid-proton/build
   cmake --build . --target install -- -j $NPROC
 popd
 
-source qpid-proton/build/config.sh
+python3 -m pip install --user "$(find "qpid-proton/build/python/" -name 'python_qpid_proton*.whl')"
 
 echo '==='
 echo "Build skupper-router and run tests"
