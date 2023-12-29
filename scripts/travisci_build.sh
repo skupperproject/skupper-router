@@ -37,7 +37,7 @@ echo 'Install additional prerequisites'
 echo '==='
 
 
-if [[ ${TRAVIS_CPU_ARCH} == "arm64" ]]; then
+if [[ ${COMPILER} == "clang" ]]; then
   # https://apt.llvm.org/
   echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main" | sudo tee /etc/apt/sources.list.d/clang.list
   wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
