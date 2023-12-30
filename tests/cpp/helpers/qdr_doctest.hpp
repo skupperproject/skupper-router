@@ -24,6 +24,6 @@
 // https://github.com/onqtam/doctest/blob/master/doc/markdown/configuration.md
 #define DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 
-#include "doctest.h"
+#include "../doctest/doctest.h"
 
 #endif  // QDR_DOCTEST

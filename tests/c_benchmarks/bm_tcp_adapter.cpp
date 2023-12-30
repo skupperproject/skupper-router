@@ -19,7 +19,7 @@
  *
  */
 
-#include "../c_unittests/helpers.hpp"
+#include "../cpp/helpers/helpers.hpp"
 #include "SocketException.hpp"
 #include "TCPSocket.hpp"
 #include "echo_server.hpp"

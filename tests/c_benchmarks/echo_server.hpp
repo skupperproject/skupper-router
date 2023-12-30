@@ -22,7 +22,7 @@
 #ifndef QPID_DISPATCH_ECHO_SERVER_HPP
 #define QPID_DISPATCH_ECHO_SERVER_HPP
 
-#include "../c_unittests/helpers.hpp"
+#include "../cpp/helpers/helpers.hpp"
 #include "SocketException.hpp"
 #include "TCPServerSocket.hpp"
 

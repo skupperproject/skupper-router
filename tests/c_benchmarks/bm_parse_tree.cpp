@@ -19,7 +19,7 @@
  *
  */
 
-#include "../c_unittests/helpers.hpp"
+#include "../cpp/helpers/helpers.hpp"
 
 #include <benchmark/benchmark.h>
 

@@ -29,7 +29,7 @@ find_package(benchmark REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_STANDARD_FLAGS} ${SANITIZE_FLAGS} -Wno-pedantic -Wno-unused-function")
 
 add_executable(c-benchmarks
-        ../c_unittests/helpers.cpp
+        ../cpp/helpers/helpers.cpp
         c_benchmarks_main.cpp
         bm_router_initialization.cpp
         bm_parse_tree.cpp
