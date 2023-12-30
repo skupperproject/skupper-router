@@ -21,6 +21,10 @@
 
 coverage:
   precision: 1  # our coverage is nondeterministic, this suppresses random fluctuations on the order of 0.0x pct
+  status:
+    project:
+      default:
+        informational: true
 comment:
     layout: "header, diff, flags, components"  # show component info in the PR comment
 component_management:
