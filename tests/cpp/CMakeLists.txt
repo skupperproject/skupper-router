@@ -17,8 +17,6 @@
 ## under the License.
 ##
 
-set (CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-
 add_subdirectory(cpp-stub)
 
 include_directories(helpers)
