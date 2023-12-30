@@ -156,7 +156,7 @@ qd_log_module_t get_log_module_from_module_name(char *module_name)
     return -1;
 }
 
-static void qd_log_entry_free_lh(qd_log_entry_t *entry)
+static void qd_log_entry_free_lh(qd_log_entry_t *entry) TA_REQ(log_source_lock)
 {
     DEQ_REMOVE(entries, entry);
     free(entry->file);
@@ -461,7 +461,7 @@ bool qd_log_enabled(qd_log_module_t module, qd_log_level_t level)
     return level & mask;
 }
 
-bool log_enabled_lh(qd_log_source_t *source, qd_log_level_t level)
+bool log_enabled_lh(qd_log_source_t *source, qd_log_level_t level) TA_REQ(log_source_lock)
 {
     if (!source)
         return false;

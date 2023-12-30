@@ -979,7 +979,7 @@ static void startup_timer_handler(void *context)
     qd_connection_invoke_deferred(ctx, timeout_on_handshake, context);
 }
 
-static void qd_increment_conn_index_lh(qd_connection_t *ctx)
+static void qd_increment_conn_index_lh(qd_connection_t *ctx) TA_REQ(ctx->connector->lock)
 {
     if (ctx->connector) {
         qd_failover_item_t *item = qd_connector_get_conn_info_lh(ctx->connector);
@@ -1172,8 +1172,8 @@ static void *thread_run(void *arg)
 }
 
 
-static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) {
-
+static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_REQ(ct->lock)
+{
     qd_failover_item_t *item = DEQ_HEAD(ct->conn_info_list);
 
     if (DEQ_SIZE(ct->conn_info_list) > 1) {
