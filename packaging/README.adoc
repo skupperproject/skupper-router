@@ -19,22 +19,39 @@ under the License
 
 = Packaging
 
-== rpm
+== rpm with Packit
+
+Install Packit CLI tool from https://packit.dev/docs/cli/#installation
+
+[source,shell script]
+----
+packit srpm
+rpmbuild --rebuild <path to generated srpm>
+----
 
 The `packit` tool edits the `packaging/skupper-router.srpm` file.
 There is probably some rhyme and reason to what it does, but so far it is beyond the ken of this paragraph's author.
-When building, beware of committing the changes it introduces.
+When building, beware of accidentally committing the changes it introduces.
+
+Packit can initiate a local RPM build.
 
 https://copr.fedorainfracloud.org/[COPR] builds can be initiated with `packit` CLI, or using the following script in COPR Web UI.
 
-=== Packit CLI
+=== Packit CLI (local build)
+
+[source, shell script]
+----
+packit build
+----
+
+=== Packit CLI (remote build in copr)
 
 NOTE: If the Packit CLI procedure fails with ERROR, try the COPR Web UI
 
-Refer to docs for [packit build in-copr](https://packit.dev/docs/cli/build/copr/) command.
+Refer to docs for https://packit.dev/docs/cli/build/copr/[packit build in-copr] command.
 
 1. Create `~/.config/copr` as instructed.
-2. Authenticate with `fkinit` [according to instructions](https://fedoraproject.org/wiki/Infrastructure/Kerberos#How_to_use_kerberos_auth_with_Fedora_Infrastructure)
+2. Authenticate with `fkinit` https://fedoraproject.org/wiki/Infrastructure/Kerberos#How_to_use_kerberos_auth_with_Fedora_Infrastructure[according to instructions].
 
 Now, initiate the build
 
@@ -58,14 +75,4 @@ set -Exeuo pipefail
 git clone --branch main https://github.com/skupperproject/skupper-router.git
 cd skupper-router
 packit prepare-sources
-----
-
-== Packit
-
-Install Packit CLI tool from https://packit.dev/docs/cli/#installation
-
-[source,shell script]
-----
-packit srpm
-rpmbuild --rebuild <path to generated srpm>
 ----
