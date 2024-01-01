@@ -57,7 +57,9 @@ Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
 Requires: cyrus-sasl-gssapi
+%ifnarch aarch64
 Requires: libunwind >= %{libunwind_minimum_version}
+%endif
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
@@ -122,8 +124,7 @@ cd %{_builddir}/skupper-router-%{version}
     -DPython_EXECUTABLE=%{python3} \
     -DProton_USE_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton \
-    -DQDROUTERD_RUNNER="gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit \$_exitcode' --batch --args"
+    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton %{?aarch64:-DCMAKE_DISABLE_FIND_PACKAGE_libunwind=ON}
 %cmake_build --target all --target man
 
 %install
