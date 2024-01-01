@@ -62,6 +62,7 @@ Requires: libunwind >= %{libunwind_minimum_version}
 BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: cmake
+BuildRequires: gdb
 
 # skupper-router requirements
 BuildRequires: python3-devel >= %{python_minimum_version}
@@ -121,7 +122,8 @@ cd %{_builddir}/skupper-router-%{version}
     -DPython_EXECUTABLE=%{python3} \
     -DProton_USE_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton
+    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton \
+    -DQDROUTERD_RUNNER="gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit \$_exitcode' --batch --args"
 %cmake_build --target all --target man
 
 %install
@@ -136,7 +138,7 @@ cd %{_builddir}/skupper-router-%{version}
 # Python 3.12 considers emtpy test suite a failure, and the following suites skip all tests due to missing reqs:
 #  test_stopping_broker_while_websocket_is_connected_does_not_crash (system_tests_websockets.WebsocketsConsoleTest.test_stopping_broker_while_websocket_is_connected_does_not_crash) ... skipped 'python test requirement package `websockets` is missing'
 #  test_grpc_01_unary (system_tests_grpc.GrpcServiceMethodsTest.test_grpc_01_unary) ... skipped 'grpcio is needed to run grpc tests'
-%ctest --exclude-regex '^(system_tests_grpc|system_tests_websockets)$'
+%ctest -R cpp_unit
 
 %files
 /usr/sbin/skrouterd
