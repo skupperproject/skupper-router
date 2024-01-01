@@ -138,7 +138,8 @@ cd %{_builddir}/skupper-router-%{version}
 # Python 3.12 considers emtpy test suite a failure, and the following suites skip all tests due to missing reqs:
 #  test_stopping_broker_while_websocket_is_connected_does_not_crash (system_tests_websockets.WebsocketsConsoleTest.test_stopping_broker_while_websocket_is_connected_does_not_crash) ... skipped 'python test requirement package `websockets` is missing'
 #  test_grpc_01_unary (system_tests_grpc.GrpcServiceMethodsTest.test_grpc_01_unary) ... skipped 'grpcio is needed to run grpc tests'
-%ctest -R cpp_unit
+# -R cpp_unit
+gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit \$_exitcode' --batch --args ./tests/cpp/cpp_unit/cpp_unit
 
 %files
 /usr/sbin/skrouterd
