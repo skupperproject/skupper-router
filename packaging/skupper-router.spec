@@ -74,7 +74,6 @@ BuildRequires: python3-pip
 BuildRequires: python3-rpm-macros
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
-BuildRequires: libunwind-devel >= %{libunwind_minimum_version}
 # man pages --help
 BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
@@ -94,6 +93,7 @@ BuildRequires: cyrus-sasl-devel
 Source0: packit-placeholder-value.tar.gz
 # vendored qpid-proton
 Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
+Source2: https://github.com/libunwind/libunwind/releases/download/v1.8.0-rc1/libunwind-1.8.0-rc1.tar.gz
 
 %description
 A lightweight message router, written in C and built on Qpid Proton, that provides flexible and scalable interconnect backend for Skupper.io Level 7 Virtual Application Network.
@@ -101,9 +101,15 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %prep
 %setup -T -b 0 -q -n skupper-router
 %setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
+%setup -q -D -b 2 -n libunwind-1.8.0-rc1.tar.gz
 
 %build
 %set_build_flags
+
+cd %{_builddir}/libunwind-1.8.0-rc1.tar.gz
+./configure
+make install
+
 cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 %__cmake . -B "%{__cmake_builddir}" \
     -DBUILD_TOOLS=OFF \
@@ -124,7 +130,7 @@ cd %{_builddir}/skupper-router-%{version}
     -DPython_EXECUTABLE=%{python3} \
     -DProton_USE_STATIC_LIBS=ON \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton %{?aarch64:-DCMAKE_DISABLE_FIND_PACKAGE_libunwind=ON}
+    -DProton_DIR=%{proton_install_prefix}/lib64/cmake/Proton
 %cmake_build --target all --target man
 
 %install
