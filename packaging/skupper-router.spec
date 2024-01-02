@@ -101,7 +101,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %prep
 %setup -T -b 0 -q -n skupper-router
 %setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
-%setup -q -D -b 2 -n libunwind-1.8.0-rc1.tar.gz
+%setup -q -D -b 2 -n libunwind-1.8.0-rc1
 
 %build
 %set_build_flags
