@@ -93,7 +93,6 @@ BuildRequires: cyrus-sasl-devel
 Source0: packit-placeholder-value.tar.gz
 # vendored qpid-proton
 Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
-#Source2: https://github.com/libunwind/libunwind/releases/download/v1.8.0-rc1/libunwind-1.8.0-rc1.tar.gz
 Source2: https://github.com/libunwind/libunwind/releases/download/v1.7.2/libunwind-1.7.2.tar.gz
 
 %description
@@ -102,7 +101,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %prep
 %setup -T -b 0 -q -n skupper-router
 %setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
-%setup -q -D -b 2 -n libunwind-1.8.0-rc1
+%setup -q -D -b 2 -n libunwind-1.7.2
 
 %build
 %set_build_flags
