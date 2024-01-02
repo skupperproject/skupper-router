@@ -21,24 +21,25 @@
 
 #include "qpid/dispatch/alloc_pool.h"
 
+#include "aprintf.h"
 #include "config.h"
 #include "entity.h"
 #include "entity_cache.h"
 #include "http.h"
 #include "qd_asan_interface.h"
-#include "aprintf.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/log.h"
-#include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/platform.h"
+#include "qpid/dispatch/timer.h"
 
 #include "proton/version.h"
 
 #include <inttypes.h>
 #include <memory.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #ifdef QD_MEMORY_DEBUG
 #include "log_private.h"
