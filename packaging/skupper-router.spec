@@ -107,7 +107,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %set_build_flags
 
 cd %{_builddir}/libunwind-1.8.0-rc1
-./configure
+./configure --prefix=%{_builddir}/libunwind-install
 make install
 
 cd %{_builddir}/qpid-proton-%{proton_vendored_version}
@@ -146,7 +146,8 @@ cd %{_builddir}/skupper-router-%{version}
 #  test_stopping_broker_while_websocket_is_connected_does_not_crash (system_tests_websockets.WebsocketsConsoleTest.test_stopping_broker_while_websocket_is_connected_does_not_crash) ... skipped 'python test requirement package `websockets` is missing'
 #  test_grpc_01_unary (system_tests_grpc.GrpcServiceMethodsTest.test_grpc_01_unary) ... skipped 'grpcio is needed to run grpc tests'
 # -R cpp_unit
-gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit $_exitcode' --batch --args %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
+#gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit $_exitcode' --batch --args %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
+LD_PRELOAD={_builddir}/libunwind-install/lib/libunwind.so %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
 
 %files
 /usr/sbin/skrouterd
