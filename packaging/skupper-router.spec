@@ -147,7 +147,7 @@ cd %{_builddir}/skupper-router-%{version}
 #  test_grpc_01_unary (system_tests_grpc.GrpcServiceMethodsTest.test_grpc_01_unary) ... skipped 'grpcio is needed to run grpc tests'
 # -R cpp_unit
 #gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit $_exitcode' --batch --args %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
-LD_PRELOAD={_builddir}/libunwind-install/lib/libunwind.so %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
+LD_PRELOAD=%{_builddir}/libunwind-install/lib/libunwind.so %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
 
 %files
 /usr/sbin/skrouterd
