@@ -106,7 +106,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %build
 %set_build_flags
 
-cd %{_builddir}/libunwind-1.8.0-rc1.tar.gz
+cd %{_builddir}/libunwind-1.8.0-rc1
 ./configure
 make install
 
