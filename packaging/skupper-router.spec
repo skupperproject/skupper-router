@@ -108,7 +108,7 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %set_build_flags
 
 cd %{_builddir}/libunwind-1.7.2
-./configure --prefix=%{_builddir}/libunwind-1.7.2 CFLAGS="-mno-outline-atomics"
+./configure --prefix=%{_builddir}/libunwind-install CFLAGS="-latomic" LDFLAGS="-latomic"
 make install
 
 cd %{_builddir}/qpid-proton-%{proton_vendored_version}
