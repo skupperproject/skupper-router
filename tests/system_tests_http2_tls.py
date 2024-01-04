@@ -55,7 +55,8 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name = "http2-tls-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -134,7 +135,8 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
                                                       'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
                                                       'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
                                                       'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
-                                                  })
+                                                  },
+                                                  abort=True)
         inter_router_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'
         cls.http_listener_props = {'port': cls.tester.get_port(),
@@ -286,7 +288,8 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
                                                       'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
                                                       'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
                                                       'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
-                                                  })
+                                                  },
+                                                  abort=True)
         config_qdra = Qdrouterd.Config([
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
@@ -385,7 +388,8 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_TLS': "no",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name = "http2-tls-auth-peer-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -488,7 +492,8 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                                                       'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
                                                       'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
                                                       'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
-                                                  })
+                                                  },
+                                                  abort=True)
         inter_router_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'
         cls.tcp_listener_props = {'port': cls.tester.get_port(),
