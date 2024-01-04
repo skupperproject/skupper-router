@@ -1167,7 +1167,7 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
         status, out, err = system_test.run_curl(local_args, timeout=TIMEOUT)
         if status == 0:
             return True
-        if "Connection refused" in err:
+        if err in ("Connection refused", "Failed to connect"):
             raise ConnectionRefusedError(err)
         raise Exception(f"CURL ERROR {status}: {out} {err}")
 
