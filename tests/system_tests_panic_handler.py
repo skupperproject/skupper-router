@@ -42,7 +42,8 @@ class PanicHandlerTest(TestCase):
     def _start_router(self, name):
         # create and start a router
         config = [
-            ('router', {'mode': 'standalone', 'id': name}),
+            ('router', {'mode': 'standalone', 'id': name,
+                        'workerThreads': 8}),
             ('listener', {'role': 'normal',
                           'port': self.tester.get_port()}),
             ('address', {'prefix': 'closest', 'distribution': 'closest'}),
@@ -103,7 +104,10 @@ class PanicHandlerTest(TestCase):
                              "io.skupper.router.router/test/crash",
                              message=Message(subject="ABORT"),
                              presettle=True)
-        ts.wait()
+        try:
+            ts.wait()
+        except AsyncTestSender.TestSenderException:
+            pass
 
         self.assertTrue(retry(lambda: router.poll() is not None))
         self._validate_panic(router)
@@ -113,12 +117,15 @@ class PanicHandlerTest(TestCase):
         Crash the router via having it attempt to write to invalid memory and
         verify the panic handler output
         """
-        router = self._start_router("HeapRouter")
+        router = self._start_router("SegvRouter")
         ts = AsyncTestSender(router.addresses[0],
                              "io.skupper.router.router/test/crash",
                              message=Message(subject="SEGV"),
                              presettle=True)
-        ts.wait()
+        try:
+            ts.wait()
+        except AsyncTestSender.TestSenderException:
+            pass
 
         self.assertTrue(retry(lambda: router.poll() is not None))
         self._validate_panic(router)
@@ -128,12 +135,15 @@ class PanicHandlerTest(TestCase):
         Crash the router via having it attempt to overwrite heap memory and
         verify the panic handler output
         """
-        router = self._start_router("SegvRouter")
+        router = self._start_router("HeapRouter")
         ts = AsyncTestSender(router.addresses[0],
                              "io.skupper.router.router/test/crash",
                              message=Message(subject="HEAP"),
                              presettle=True)
-        ts.wait()
+        try:
+            ts.wait()
+        except AsyncTestSender.TestSenderException:
+            pass
 
         self.assertTrue(retry(lambda: router.poll() is not None))
         self._validate_panic(router)
