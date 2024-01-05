@@ -90,7 +90,7 @@ BuildRequires: cyrus-sasl-devel
 # skupper-router sources
 Source0: packit-placeholder-value.tar.gz
 # vendored qpid-proton
-Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
+Source1: https://downloads.apache.org/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
 
 %description
 A lightweight message router, written in C and built on Qpid Proton, that provides flexible and scalable interconnect backend for Skupper.io Level 7 Virtual Application Network.
