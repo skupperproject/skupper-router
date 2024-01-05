@@ -47,7 +47,7 @@
 
 const char *QD_LOG_STATS_TYPE = "logStats";
 
-static qd_log_source_t      *default_log_source=0;
+static qd_log_source_t *default_log_source = 0;
 
 int qd_log_max_len(void)
 {
@@ -156,7 +156,7 @@ qd_log_module_t get_log_module_from_module_name(char *module_name)
     return -1;
 }
 
-static void qd_log_entry_free_lh(qd_log_entry_t *entry)
+static void qd_log_entry_free_lh(qd_log_entry_t *entry) TA_REQ(log_source_lock)
 {
     DEQ_REMOVE(entries, entry);
     free(entry->file);
@@ -178,14 +178,16 @@ void qd_log_formatted_time(const struct timeval *time, char *buf, size_t buflen)
     snprintf(buf, buflen, fmt, time->tv_usec);
 }
 
-static log_sink_t* find_log_sink_lh(const char* name) {
+static log_sink_t *find_log_sink_lh(const char *name) TA_REQ(log_source_lock)
+{
     log_sink_t* sink = DEQ_HEAD(sink_list);
     DEQ_FIND(sink, strcmp(sink->name, name) == 0);
     return sink;
 }
 
 // Must hold the log_source_lock
-static void log_sink_free_lh(log_sink_t* sink) {
+static void log_sink_free_lh(log_sink_t *sink) TA_REQ(log_source_lock)
+{
     if (!sink) return;
     assert(sink->ref_count);
 
@@ -200,7 +202,8 @@ static void log_sink_free_lh(log_sink_t* sink) {
     }
 }
 
-static log_sink_t* log_sink_lh(const char* name) {
+static log_sink_t *log_sink_lh(const char *name) TA_REQ(log_source_lock)
+{
     log_sink_t* sink = find_log_sink_lh(name);
     if (sink) {
         sys_atomic_inc(&sink->ref_count);
@@ -312,7 +315,7 @@ static bool default_bool(int value, int default_value) {
 
 // Format and output the log message to the log_source. Expects the log_source_lock is held.
 //
-static void write_log_lh(qd_log_source_t *log_source, qd_log_entry_t *entry)
+static void write_log_lh(qd_log_source_t *log_source, qd_log_entry_t *entry) TA_REQ(log_source_lock)
 {
     log_sink_t* sink = log_source->sink ? log_source->sink : default_log_source->sink;
 
@@ -394,7 +397,8 @@ static void write_log_lh(qd_log_source_t *log_source, qd_log_entry_t *entry)
 }
 
 /// Reset the log source to the default state
-static void qd_log_source_defaults(qd_log_source_t *log_source) {
+static void qd_log_source_defaults(qd_log_source_t *log_source) TA_REQ(log_source_lock)
+{
     log_source->mask = -1;
     log_source->includeTimestamp = -1;
     log_source->includeSource = -1;
@@ -403,7 +407,7 @@ static void qd_log_source_defaults(qd_log_source_t *log_source) {
 }
 
 /// Caller must hold the log_source_lock
-static qd_log_source_t *qd_log_source_lh(qd_log_module_t module)
+static qd_log_source_t *qd_log_source_lh(qd_log_module_t module) TA_REQ(log_source_lock)
 {
     qd_log_source_t *log_source = log_sources[module];
 
@@ -438,7 +442,7 @@ qd_log_source_t *qd_log_source_reset(qd_log_module_t module)
     return src;
 }
 
-static void qd_log_source_free_lh(qd_log_module_t module)
+static void qd_log_source_free_lh(qd_log_module_t module) TA_REQ(log_source_lock)
 {
     qd_log_source_t *src = log_sources[module];
     if (src) {
@@ -457,7 +461,7 @@ bool qd_log_enabled(qd_log_module_t module, qd_log_level_t level)
     return level & mask;
 }
 
-bool log_enabled_lh(qd_log_source_t *source, qd_log_level_t level)
+bool log_enabled_lh(qd_log_source_t *source, qd_log_level_t level) TA_REQ(log_source_lock)
 {
     if (!source)
         return false;
@@ -570,7 +574,7 @@ QD_EXPORT PyObject *qd_log_recent_py(long limit) {
     return NULL;
 }
 
-void qd_log_initialize(void)
+void qd_log_initialize(void) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     DEQ_INIT(entries);
     DEQ_INIT(sink_list);
@@ -590,8 +594,8 @@ void qd_log_initialize(void)
     default_log_source->sink = log_sink_lh(SINK_STDERR);
 }
 
-
-void qd_log_finalize(void) {
+void qd_log_finalize(void) TA_NO_THREAD_SAFETY_ANALYSIS
+{
     for (int i = 0; i < NUM_LOG_SOURCES; i++)
         qd_log_source_free_lh(i);
     while (DEQ_HEAD(entries))

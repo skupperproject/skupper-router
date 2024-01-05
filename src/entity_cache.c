@@ -87,7 +87,8 @@ void qd_entity_cache_remove(const char *type, void *object) { push_event(REMOVE,
 // Locks the entity cache so entities can be updated safely (prevent entities from being deleted.)
 // Do not process any entities if return error code != 0
 // Must call qd_entity_refresh_end when done, regardless of error code.
-QD_EXPORT qd_error_t qd_entity_refresh_begin(PyObject *list) {
+QD_EXPORT qd_error_t qd_entity_refresh_begin(PyObject *list) TA_ACQ(event_lock)
+{
     qd_error_clear();
     sys_mutex_lock(&event_lock);
     entity_event_t *event = DEQ_HEAD(event_list);
@@ -104,7 +105,7 @@ QD_EXPORT qd_error_t qd_entity_refresh_begin(PyObject *list) {
     return qd_error_code();
 }
 
-QD_EXPORT void qd_entity_refresh_end(void)
+QD_EXPORT void qd_entity_refresh_end(void) TA_REL(event_lock)
 {
     sys_mutex_unlock(&event_lock);
 }

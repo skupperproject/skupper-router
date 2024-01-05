@@ -20,19 +20,20 @@
 #include "qpid/dispatch/message.h"
 
 #include "aprintf.h"
+#include "buffer_field_api.h"
 #include "compose_private.h"
 #include "connection_manager_private.h"
 #include "message_private.h"
 #include "policy.h"
-#include "buffer_field_api.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/error.h"
+#include "qpid/dispatch/internal/thread_annotations.h"
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
-#include "qpid/dispatch/discriminator.h"
 
 #include <proton/object.h>
 
@@ -647,7 +648,7 @@ static qd_section_status_t message_section_check_LH(qd_message_content_t *conten
                                                     const unsigned char  *expected_tags,
                                                     qd_field_location_t  *location,
                                                     bool                  dup_ok,
-                                                    bool                  protect_buffer)
+                                                    bool                  protect_buffer) TA_REQ(content->lock)
 {
     // Note well: do NOT modify the input buffer and cursor values if there is
     // no match! We need to preserve the original cursor/buffer positions when
@@ -2108,7 +2109,7 @@ static qd_message_depth_status_t message_check_depth_LH(qd_message_content_t *co
                                                         const unsigned char  *expected_tags,
                                                         qd_field_location_t  *location,
                                                         bool                  optional,
-                                                        bool                  protect_buffer)
+                                                        bool                  protect_buffer) TA_REQ(content->lock)
 {
 #define LONG  10
 #define SHORT 3
@@ -2145,7 +2146,7 @@ static qd_message_depth_status_t message_check_depth_LH(qd_message_content_t *co
 }
 
 
-static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *content, qd_message_depth_t depth)
+static qd_message_depth_status_t qd_message_check_LH(qd_message_content_t *content, qd_message_depth_t depth) TA_REQ(content->lock)
 {
     qd_error_clear();
 
@@ -2619,8 +2620,11 @@ qd_message_t *qd_message_compose(qd_composed_field_t *f1,
     // initialize the Q2 flag. Note that we do not need to hold the content
     // lock when we make this call since no other threads are able to access
     // the new message until this function returns.
+#pragma GCC diagnostic push
+    TA_SUPPRESS;
     if (_Q2_holdoff_should_block_LH(content))
         content->q2_input_holdoff = true;
+#pragma GCC diagnostic pop
 
     return msg;
 }
@@ -2690,7 +2694,7 @@ static void find_last_buffer_LH(qd_field_location_t *location, unsigned char **c
 }
 
 
-void trim_stream_data_headers_LH(qd_message_stream_data_t *stream_data, bool remove_vbin_header)
+void trim_stream_data_headers_LH(qd_message_stream_data_t *stream_data, bool remove_vbin_header) //TA_REQ(stream_data->owning_message->content->lock)
 {
     const qd_field_location_t *location = &stream_data->section;
     qd_buffer_t               *buffer   = location->buffer;
@@ -3011,8 +3015,10 @@ qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *in_msg
         stream_data->owning_message = msg;
         stream_data->section        = location;
         stream_data->first_buffer   = start_buffer;
+        // TODO
         find_last_buffer_LH(&stream_data->section, &msg->body_cursor, &msg->body_buffer);
         stream_data->last_buffer    = msg->body_buffer;
+        // TODO
         trim_stream_data_headers_LH(stream_data, !is_footer);
         DEQ_INSERT_TAIL(msg->stream_data_list, stream_data);
         *out_stream_data = stream_data;
@@ -3093,7 +3099,7 @@ void qd_message_Q2_holdoff_disable(qd_message_t *msg)
 }
 
 
-bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content)
+bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content) TA_REQ(content->lock)
 {
     const size_t buff_ct = DEQ_SIZE(content->buffers);
     assert(buff_ct >= content->protected_buffers);
@@ -3101,7 +3107,7 @@ bool _Q2_holdoff_should_block_LH(const qd_message_content_t *content)
 }
 
 
-bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content)
+bool _Q2_holdoff_should_unblock_LH(const qd_message_content_t *content) TA_REQ(content->lock)
 {
     const size_t buff_ct = DEQ_SIZE(content->buffers);
     assert(buff_ct >= content->protected_buffers);

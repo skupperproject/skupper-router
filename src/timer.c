@@ -98,7 +98,7 @@ sys_mutex_t *qd_timer_lock(void)
 //=========================================================================
 
 // returns true if timer removed from scheduled list
-static bool timer_cancel_LH(qd_timer_t *timer)
+static bool timer_cancel_LH(qd_timer_t *timer) TA_REQ(lock)
 {
     if (timer->state == QD_TIMER_STATE_SCHEDULED) {
         if (timer->next)
@@ -112,7 +112,7 @@ static bool timer_cancel_LH(qd_timer_t *timer)
 
 
 /* Adjust timer's time_base and delays for the current time. */
-static void timer_adjust_now_LH(void)
+static void timer_adjust_now_LH(void) TA_REQ(lock)
 {
     qd_timestamp_t now = qd_timer_now();
     if (time_base != 0 && now > time_base) {
@@ -132,7 +132,7 @@ static void timer_adjust_now_LH(void)
 }
 
 
-static void timer_decref_LH(qd_timer_t *timer)
+static void timer_decref_LH(qd_timer_t *timer) TA_REQ(lock)
 {
     assert(sys_atomic_get(&timer->ref_count) > 0);
     if (sys_atomic_dec(&timer->ref_count) == 1) {
