@@ -924,7 +924,7 @@ jobs:
       - name: Build Containerfile
         run: |
           export BUILDAH_FORMAT=docker
-          podman buildx --platform=${{ matrix.platform }} -t ${{ env.ImageName }} -f ./Containerfile .
+          podman buildx build --platform=${{ matrix.platform }} -t ${{ env.ImageName }} -f ./Containerfile .
 
       # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
       # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
