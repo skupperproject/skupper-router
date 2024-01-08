@@ -210,7 +210,7 @@ find_package(libwebsockets 4.0.1 REQUIRED)
 ## Optional dependencies
 ##
 
-find_library(dw_lib dw DOC "libdw used to symbolize QD_MEMORY_DEBUG backtraces")
+find_library(dw_lib dwxxx DOC "libdw used to symbolize QD_MEMORY_DEBUG backtraces")
 find_package(libunwind)
 
 # google benchmark tests are disabled by default

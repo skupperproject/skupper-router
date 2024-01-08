@@ -57,11 +57,14 @@ Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
 Requires: cyrus-sasl-gssapi
+%ifnarch aarch64
 Requires: libunwind >= %{libunwind_minimum_version}
+%endif
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: cmake
+BuildRequires: gdb
 
 # skupper-router requirements
 BuildRequires: python3-devel >= %{python_minimum_version}
@@ -71,7 +74,6 @@ BuildRequires: python3-pip
 BuildRequires: python3-rpm-macros
 BuildRequires: libwebsockets-devel >= %{libwebsockets_minimum_version}
 BuildRequires: libnghttp2-devel >= %{libnghttp2_minimum_version}
-BuildRequires: libunwind-devel >= %{libunwind_minimum_version}
 # man pages --help
 BuildRequires: asciidoc
 BuildRequires: python3-qpid-proton >= %{proton_minimum_version}
@@ -91,6 +93,7 @@ BuildRequires: cyrus-sasl-devel
 Source0: packit-placeholder-value.tar.gz
 # vendored qpid-proton
 Source1: https://www.apache.org/dist/qpid/proton/%{proton_vendored_version}/qpid-proton-%{proton_vendored_version}.tar.gz
+Source2: https://github.com/libunwind/libunwind/releases/download/v1.7.2/libunwind-1.7.2.tar.gz
 
 %description
 A lightweight message router, written in C and built on Qpid Proton, that provides flexible and scalable interconnect backend for Skupper.io Level 7 Virtual Application Network.
@@ -98,9 +101,15 @@ A lightweight message router, written in C and built on Qpid Proton, that provid
 %prep
 %setup -T -b 0 -q -n skupper-router
 %setup -q -D -b 1 -n qpid-proton-%{proton_vendored_version}
+%setup -q -D -b 2 -n libunwind-1.7.2
 
 %build
 %set_build_flags
+
+cd %{_builddir}/libunwind-1.7.2
+./configure --prefix=%{_builddir}/libunwind-install CFLAGS="-O2" LDFLAGS="-latomic"
+make install
+
 cd %{_builddir}/qpid-proton-%{proton_vendored_version}
 %__cmake . -B "%{__cmake_builddir}" \
     -DBUILD_TOOLS=OFF \
@@ -136,7 +145,9 @@ cd %{_builddir}/skupper-router-%{version}
 # Python 3.12 considers emtpy test suite a failure, and the following suites skip all tests due to missing reqs:
 #  test_stopping_broker_while_websocket_is_connected_does_not_crash (system_tests_websockets.WebsocketsConsoleTest.test_stopping_broker_while_websocket_is_connected_does_not_crash) ... skipped 'python test requirement package `websockets` is missing'
 #  test_grpc_01_unary (system_tests_grpc.GrpcServiceMethodsTest.test_grpc_01_unary) ... skipped 'grpcio is needed to run grpc tests'
-%ctest --exclude-regex '^(system_tests_grpc|system_tests_websockets)$'
+# -R cpp_unit
+#gdb -quiet -iex 'set pagination off' -iex 'set debuginfod enabled on' -ex run -ex 'thread apply all bt' -ex 'quit $_exitcode' --batch --args %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
+LD_PRELOAD=%{_builddir}/libunwind-install/lib/libunwind.so %{__cmake_builddir}/tests/cpp/cpp_unit/cpp_unit
 
 %files
 /usr/sbin/skrouterd
