@@ -433,7 +433,7 @@ class Process(subprocess.Popen):
             # running. This is cool if expected is Process.RUNNING - we'll
             # check that below
             if self.abort_process:
-                self.send_signal(signal.SIGABRT)
+                self.send_signal(signal.SIGKILL)
                 self.returncode = 0
             else:
                 self.terminate()  # send SIGTERM
