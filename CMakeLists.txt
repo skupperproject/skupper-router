@@ -307,15 +307,15 @@ endif()
 # Set up extra coverage analysis options for gcc and clang
 if (CMAKE_BUILD_TYPE MATCHES "Coverage")
  if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
-   set (CMAKE_C_FLAGS_COVERAGE "-g -O2 -DNDEBUG --coverage -fprofile-update=atomic")
-   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O2  --coverage -fprofile-update=atomic")
+   set (CMAKE_C_FLAGS_COVERAGE "-g -O2 -DNDEBUG --coverage")
+   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O2  --coverage")
  else(ENABLE_PROFILE_GUIDED_OPTIMIZATION)
-   set (CMAKE_C_FLAGS_COVERAGE "-g -O0 --coverage -fprofile-update=atomic")
-   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O0 --coverage -fprofile-update=atomic")
+   set (CMAKE_C_FLAGS_COVERAGE "-g -O0 --coverage")
+   set (CMAKE_CXX_FLAGS_COVERAGE "-g -O0 --coverage")
  endif(ENABLE_PROFILE_GUIDED_OPTIMIZATION)
- set (CMAKE_EXE_LINKER_FLAGS_COVERAGE "--coverage -fprofile-update=atomic")
- set (CMAKE_MODULE_LINKER_FLAGS_COVERAGE "--coverage -fprofile-update=atomic")
- set (CMAKE_SHARED_LINKER_FLAGS_COVERAGE "--coverage -fprofile-update=atomic")
+ set (CMAKE_EXE_LINKER_FLAGS_COVERAGE "--coverage")
+ set (CMAKE_MODULE_LINKER_FLAGS_COVERAGE "--coverage")
+ set (CMAKE_SHARED_LINKER_FLAGS_COVERAGE "--coverage")
 
  mark_as_advanced(
    CMAKE_C_FLAGS_COVERAGE
