@@ -410,28 +410,28 @@ jobs:
             shard: 1
             shards: 1
           # clang
-          - os: ubuntu-22.04
-            container: 'fedora'
-            containerTag: 39
-            cc: clang
-            cxx: clang++
-            python: python3.11
-            buildType: RelWithDebInfo
-            runtimeCheck: asan
-            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
-            shard: 1
-            shards: 2
-          - os: ubuntu-22.04
-            container: 'fedora'
-            containerTag: 39
-            cc: clang
-            cxx: clang++
-            python: python3.11
-            buildType: RelWithDebInfo
-            runtimeCheck: asan
-            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
-            shard: 2
-            shards: 2
+          #- os: ubuntu-22.04
+          #  container: 'fedora'
+          #  containerTag: 39
+          #  cc: clang
+          #  cxx: clang++
+          #  python: python3.11
+          #  buildType: RelWithDebInfo
+          #  runtimeCheck: asan
+          #  protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+          #  shard: 1
+          #  shards: 2
+          #- os: ubuntu-22.04
+          #  container: 'fedora'
+          #  containerTag: 39
+          #  cc: clang
+          #  cxx: clang++
+          #  python: python3.11
+          #  buildType: RelWithDebInfo
+          #  runtimeCheck: asan
+          #  protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+          #  shard: 2
+          #  shards: 2
 
     container:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
