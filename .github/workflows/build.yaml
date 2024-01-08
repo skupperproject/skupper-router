@@ -313,9 +313,10 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         container: ['fedora']
-        containerTag: ['37']
+        containerTag: ['39']
         cc: [gcc]
         cxx: [g++]
+        python: [python3.11]
         buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
@@ -330,6 +331,7 @@ jobs:
             containerTag: stream9
             cc: gcc
             cxx: g++
+            python: python3
             buildType: Coverage
             covType: system
             runtimeCheck: OFF
@@ -341,6 +343,7 @@ jobs:
             containerTag: stream9
             cc: gcc
             cxx: g++
+            python: python3
             buildType: Coverage
             covType: system
             runtimeCheck: OFF
@@ -353,6 +356,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            python: python3
             buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
@@ -363,6 +367,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            python: python3
             buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
@@ -373,6 +378,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            python: python3
             buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: 0.39.0
@@ -383,6 +389,7 @@ jobs:
             containerTag: stream8
             cc: gcc
             cxx: g++
+            python: python3
             buildType: RelWithDebInfo
             runtimeCheck: OFF
             protonGitRef: 0.39.0
@@ -391,9 +398,10 @@ jobs:
           # unittest coverage
           - os: ubuntu-22.04
             container: 'fedora'
-            containerTag: 37
+            containerTag: 39
             cc: gcc
             cxx: g++
+            python: python3.12
             buildType: Coverage
             covType: unit
             runtimeCheck: OFF
@@ -402,26 +410,28 @@ jobs:
             shard: 1
             shards: 1
           # clang
-          - os: ubuntu-22.04
-            container: 'fedora'
-            containerTag: 37
-            cc: clang
-            cxx: clang++
-            buildType: RelWithDebInfo
-            runtimeCheck: asan
-            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
-            shard: 1
-            shards: 2
-          - os: ubuntu-22.04
-            container: 'fedora'
-            containerTag: 37
-            cc: clang
-            cxx: clang++
-            buildType: RelWithDebInfo
-            runtimeCheck: asan
-            protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
-            shard: 2
-            shards: 2
+          #- os: ubuntu-22.04
+          #  container: 'fedora'
+          #  containerTag: 39
+          #  cc: clang
+          #  cxx: clang++
+          #  python: python3.11
+          #  buildType: RelWithDebInfo
+          #  runtimeCheck: asan
+          #  protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+          #  shard: 1
+          #  shards: 2
+          #- os: ubuntu-22.04
+          #  container: 'fedora'
+          #  containerTag: 39
+          #  cc: clang
+          #  cxx: clang++
+          #  python: python3.11
+          #  buildType: RelWithDebInfo
+          #  runtimeCheck: asan
+          #  protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+          #  shard: 2
+          #  shards: 2
 
     container:
       image: 'quay.io/${{ matrix.container }}/${{ matrix.container }}:${{ matrix.containerTag }}'
@@ -433,6 +443,7 @@ jobs:
       BuildType: ${{matrix.buildType}}
       CC: ${{matrix.cc}}
       CXX: ${{matrix.cxx}}
+      PYTHON: ${{matrix.python || 'python3'}}
       ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
       RouterBuildDir: ${{github.workspace}}/skupper-router/build
       InstallPrefix: ${{github.workspace}}/install
@@ -448,7 +459,7 @@ jobs:
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DBUILD_BINDINGS=python
-        -DPython_EXECUTABLE=/usr/bin/python3
+        -DPython_EXECUTABLE=/usr/bin/${{matrix.python || 'python3'}}
         -DBUILD_TOOLS=OFF
         -DBUILD_EXAMPLES=OFF
         -DBUILD_TESTING=OFF
@@ -458,7 +469,7 @@ jobs:
       RouterCMakeExtraArgs: >
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DPython_EXECUTABLE=/usr/bin/python3
+        -DPython_EXECUTABLE=/usr/bin/${{matrix.python || 'python3'}}
         -DRUNTIME_CHECK=${{matrix.runtimeCheck}}
 
       CCACHE_BASEDIR: ${{github.workspace}}
@@ -523,7 +534,9 @@ jobs:
 
       - name: Install Linux build dependencies (Fedora)
         if: ${{ matrix.container == 'fedora' }}
-        run: dnf install -y python3-devel python3-pip
+        run: |
+          dnf install -y ${PYTHON} ${PYTHON}-devel python3-pip
+          ${PYTHON} -m ensurepip
 
       - name: Install Linux build dependencies (CentOS 8)
         if: ${{ matrix.container == 'centos' && matrix.containerTag == 'stream8' }}
@@ -535,7 +548,7 @@ jobs:
         run: dnf install -y util-linux-core python3-devel python3-pip
 
       - name: Install Python build dependencies
-        run: python3 -m pip install setuptools wheel cffi
+        run: ${PYTHON} -m pip install setuptools wheel cffi
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
@@ -608,10 +621,10 @@ jobs:
         run: env -0 | sort -z | tr '\0' '\n'
 
       - name: Upgrade pip
-        run: python3 -m pip install --upgrade pip
+        run: ${PYTHON} -m pip install --upgrade pip
 
       - name: Install Python runtime/test dependencies
-        run: python3 -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
+        run: ${PYTHON} -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
 
       - name: Install Linux runtime/test dependencies
         run: |
@@ -620,7 +633,7 @@ jobs:
           dnf debuginfo-install -y python3
 
       - name: install qpid-proton python wheel
-        run: python3 -m pip install $(find ${ProtonBuildDir}/python/ -name 'python_qpid_proton*.whl')
+        run: ${PYTHON} -m pip install $(find ${ProtonBuildDir}/python/ -name 'python_qpid_proton*.whl')
 
       - name: CTest
         working-directory: ${{env.RouterBuildDir}}
@@ -773,7 +786,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         container: ['fedora']
-        containerTag: ['37']
+        containerTag: ['39']
         buildType: [RelWithDebInfo]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}

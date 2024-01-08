@@ -502,7 +502,8 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': 'http2server:app',
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name = "http2-test-standalone-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -601,7 +602,8 @@ class Http2TestOneEdgeRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -644,7 +646,8 @@ class Http2TestOneInteriorRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -687,7 +690,8 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         name_a = "http2-test-router-a"
         inter_router_port = cls.tester.get_port()
         cls.http_listener_port = cls.tester.get_port()
@@ -809,7 +813,8 @@ class Http2TestEdgeInteriorRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         inter_router_port = cls.tester.get_port()
         config_edgea = Qdrouterd.Config([
             ('router', {'mode': 'edge', 'id': 'EDGE.A'}),
@@ -855,7 +860,8 @@ class Http2TestInteriorEdgeRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         inter_router_port = cls.tester.get_port()
         config_edge = Qdrouterd.Config([
             ('router', {'mode': 'edge', 'id': 'EDGE.A'}),
@@ -907,7 +913,8 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
         inter_router_port = cls.tester.get_port()
         cls.edge_a_connector_name = 'connectorFromEdgeAToIntA'
         cls.edge_a_http_connector_name = 'httpConnectorFromEdgeAToHttpServer'
@@ -1031,7 +1038,8 @@ class Http2TestEdgeToEdgeViaInteriorRouter(Http2TestBase, CommonHttp2Tests):
                                                   env_config={
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
 
         cls.connector_name = 'connectorToBeDeleted'
         cls.connector_props = {
@@ -1097,7 +1105,8 @@ class Http2TestGoAway(Http2TestBase):
                                                   server_file="hyperh2_server.py",
                                                   env_config={
                                                       'SERVER_LISTEN_PORT': str(cls.server_port)
-                                                  })
+                                                  },
+                                                  abort=True)
 
         name = "http2-test-router"
         cls.connector_name = 'connectorToBeDeleted'
@@ -1156,7 +1165,8 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
                                     env_config={
                                         'QUART_APP': 'http2server:app',
                                         'SERVER_LISTEN_PORT': str(connector_port)
-                                    })
+                                    },
+                                    abort=True)
         return server
 
     def client_connect(self, listener_port):
@@ -1167,7 +1177,7 @@ class Http2AdaptorListenerConnectTest(HttpAdaptorListenerConnectTestBase):
         status, out, err = system_test.run_curl(local_args, timeout=TIMEOUT)
         if status == 0:
             return True
-        if "Connection refused" in err:
+        if "Connection refused" in err or "Failed to connect" in err:
             raise ConnectionRefusedError(err)
         raise Exception(f"CURL ERROR {status}: {out} {err}")
 

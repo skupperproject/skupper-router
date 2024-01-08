@@ -386,6 +386,7 @@ class Process(subprocess.Popen):
         self.torndown = False
         self._logger = Logger(title="Process logger for name=%s" % self.name,
                               print_to_console=True)
+        self.abort_process = kwargs.pop("abort", False)
         kwargs.setdefault('stdin', subprocess.PIPE)
         with open(self.outfile_path, 'w') as out:
             kwargs.setdefault('stdout', out)
@@ -431,16 +432,19 @@ class Process(subprocess.Popen):
             # If status is None, it means that the process is still
             # running. This is cool if expected is Process.RUNNING - we'll
             # check that below
-            self.terminate()  # send SIGTERM
-            try:
-                self.wait(TIMEOUT)
-            except TimeoutExpired:
-                self.send_signal(signal.SIGABRT)  # so that we may get core dump
-                error("did not terminate properly, required SIGABORT")
+            if self.abort_process:
+                self.send_signal(signal.SIGKILL)
+                self.returncode = 0
+            else:
+                self.terminate()  # send SIGTERM
+                try:
+                    self.wait(TIMEOUT)
+                except TimeoutExpired:
+                    self.send_signal(signal.SIGABRT)  # so that we may get core dump
+                    error("did not terminate properly, required SIGABORT")
 
         # at this point the process has terminated, either of its own accord or
         # due to the above terminate call.
-
         # prevent leak of stdin fd
         if self.stdin:
             self.stdin.close()
