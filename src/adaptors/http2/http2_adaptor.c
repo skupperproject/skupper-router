@@ -3210,6 +3210,9 @@ static void encrypt_outgoing_tls(qdr_http2_connection_t *conn, qd_adaptor_buffer
 static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
     qdr_http2_connection_t *conn = (qdr_http2_connection_t *) context;
+
+    if (!conn) return;
+
     CHECK_PROACTOR_RAW_CONNECTION(conn->pn_raw_conn);
 
     switch (pn_event_type(e)) {
