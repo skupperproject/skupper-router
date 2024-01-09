@@ -130,7 +130,7 @@ static qdrc_endpoint_desc_t _endpoint_handlers =
 };
 
 
-static void on_timer(qdr_core_t *core, void *context)
+static void on_timer(qdr_core_t *core, void *context) TA_REQ(core_thread_capability)
 {
     qdr_core_timer_schedule_CT(core, _server_state.timer, 2);
     endpoint_ref_t *epr = DEQ_HEAD(_server_state.endpoints);
@@ -146,13 +146,13 @@ static void on_timer(qdr_core_t *core, void *context)
 }
 
 
-static bool _heartbeat_server_enable_CT(qdr_core_t *core)
+static bool _heartbeat_server_enable_CT(qdr_core_t *core) TA_REQ(core_thread_capability)
 {
     return true;
 }
 
 
-static void _heartbeat_server_init_CT(qdr_core_t *core, void **module_context)
+static void _heartbeat_server_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     _server_state.core = core;
 

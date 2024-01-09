@@ -24,15 +24,15 @@
 ALLOC_DEFINE(qdr_delivery_t);
 
 
-static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_delete_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_delivery_continue_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *delivery);
+static void qdr_update_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_delete_delivery_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_delivery_continue_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability);
 static void qdr_delivery_anycast_propagate_CT(qdr_core_t *core, qdr_delivery_t *dlv,
-                                              qdr_delivery_t *peer, bool settled);
-static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer);
+                                              qdr_delivery_t *peer, bool settled) TA_REQ(core_thread_capability);
+static void qdr_delivery_anycast_reforward_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer) TA_REQ(core_thread_capability);
 static bool qdr_delivery_set_remote_delivery_state_CT(qdr_delivery_t *dlv, uint64_t dispo,
-                                                      qd_delivery_state_t *dstate);
+                                                      qd_delivery_state_t *dstate) TA_REQ(core_thread_capability);
 
 
 void qdr_delivery_set_context(qdr_delivery_t *delivery, void *context)
@@ -447,7 +447,7 @@ void qdr_delivery_increment_counters_CT(qdr_core_t *core, qdr_delivery_t *delive
 }
 
 
-static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *delivery)
+static void qdr_delete_delivery_internal_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability)
 {
     assert(sys_atomic_get(&delivery->ref_count) == 0);
 
@@ -1000,7 +1000,7 @@ void qdr_delivery_mcast_inbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_d
 // return: true if in_dlv has been settled
 //
 static bool qdr_delivery_mcast_outbound_settled_CT(qdr_core_t *core, qdr_delivery_t *in_dlv,
-                                                   qdr_delivery_t *out_dlv, bool *moved)
+                                                   qdr_delivery_t *out_dlv, bool *moved) TA_REQ(core_thread_capability)
 {
     bool push = false;
     *moved = false;
@@ -1051,7 +1051,7 @@ static bool qdr_delivery_mcast_outbound_settled_CT(qdr_core_t *core, qdr_deliver
 // returns true if dlv disposition has been updated
 //
 static bool qdr_delivery_mcast_outbound_disposition_CT(qdr_core_t *core, qdr_delivery_t *in_dlv,
-                                                       qdr_delivery_t *out_dlv, uint64_t new_disp)
+                                                       qdr_delivery_t *out_dlv, uint64_t new_disp) TA_REQ(core_thread_capability)
 {
     // The AMQP 1.0 spec does not define a way to propagate disposition
     // back to the sender in the case of unsettled multicast.  In the

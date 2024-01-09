@@ -21,20 +21,20 @@
 
 #include "router_core_private.h"
 
-void qdra_config_address_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_config_address_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_config_address_create_CT(qdr_core_t *core, qd_iterator_t *name, qdr_query_t *query, qd_parsed_field_t *in_body);
-void qdra_config_address_update_CT(qdr_core_t *core, qdr_query_t *query, qd_parsed_field_t *in_body);
+void qdra_config_address_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset) TA_REQ(core_thread_capability);
+void qdra_config_address_get_next_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
+void qdra_config_address_create_CT(qdr_core_t *core, qd_iterator_t *name, qdr_query_t *query, qd_parsed_field_t *in_body) TA_REQ(core_thread_capability);
+void qdra_config_address_update_CT(qdr_core_t *core, qdr_query_t *query, qd_parsed_field_t *in_body) TA_REQ(core_thread_capability);
 void qdra_config_address_delete_CT(qdr_core_t *core, qdr_query_t *query, qd_iterator_t *name,
-                                qd_iterator_t *identity);
+                                qd_iterator_t *identity) TA_REQ(core_thread_capability);
 void qdra_config_address_get_CT(qdr_core_t    *core,
                                 qd_iterator_t *name,
                                 qd_iterator_t *identity,
                                 qdr_query_t   *query,
-                                const char    *qdr_config_address_columns[]);
+                                const char    *qdr_config_address_columns[]) TA_REQ(core_thread_capability);
 char *qdra_config_address_validate_pattern_CT(qd_parsed_field_t *pattern_field,
                                               bool is_prefix,
-                                              const char **error);
+                                              const char **error) TA_REQ(core_thread_capability);
 #define QDR_CONFIG_ADDRESS_COLUMN_COUNT 7
 
 extern const char *qdr_config_address_columns[QDR_CONFIG_ADDRESS_COLUMN_COUNT + 1];

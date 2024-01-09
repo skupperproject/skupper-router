@@ -120,10 +120,10 @@ static void qd_get_next_pn_data(pn_data_t **data, const char **d, int *d1)
                 break;
         }
     }
-    }
+}
 
 
-static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *conn, int col, qd_composed_field_t *body, bool as_map)
+static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *conn, int col, qd_composed_field_t *body, bool as_map) TA_REQ(core_thread_capability)
 {
     char id_str[100];
     const char *text = 0;
@@ -174,7 +174,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_SASL_MECHANISMS:
-        if (conn->connection_info->sasl_mechanisms) 
+        if (conn->connection_info->sasl_mechanisms)
             qd_compose_insert_string(body, conn->connection_info->sasl_mechanisms);
 	else
 	    qd_compose_insert_null(body);
@@ -319,7 +319,7 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
 }
 
 
-static void qdr_agent_write_connection_CT(qdr_core_t *core, qdr_query_t *query,  qdr_connection_t *conn)
+static void qdr_agent_write_connection_CT(qdr_core_t *core, qdr_query_t *query,  qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qd_composed_field_t *body = query->body;
 
@@ -427,7 +427,7 @@ void qdra_connection_get_next_CT(qdr_core_t *core, qdr_query_t *query)
 static void qdr_manage_write_connection_map_CT(qdr_core_t          *core,
                                                qdr_connection_t    *conn,
                                                qd_composed_field_t *body,
-                                               const char          *qdr_connection_columns[])
+                                               const char          *qdr_connection_columns[]) TA_REQ(core_thread_capability)
 {
     qd_compose_start_map(body);
 
@@ -451,7 +451,7 @@ static qdr_connection_t *_find_conn_CT(qdr_core_t *core, uint64_t conn_id)
 }
 
 
-static qdr_connection_t *qdr_connection_find_by_identity_CT(qdr_core_t *core, qd_iterator_t *identity)
+static qdr_connection_t *qdr_connection_find_by_identity_CT(qdr_core_t *core, qd_iterator_t *identity) TA_REQ(core_thread_capability)
 {
     if (!identity)
         return 0;
@@ -518,7 +518,10 @@ static void qdra_connection_set_bad_request(qdr_query_t *query)
 }
 
 
-static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *query, qdr_connection_t *conn, qd_parsed_field_t *admin_state)
+static void qdra_connection_update_set_status(qdr_core_t        *core,
+                                              qdr_query_t       *query,
+                                              qdr_connection_t  *conn,
+                                              qd_parsed_field_t *admin_state) TA_REQ(core_thread_capability)
 {
     if (conn) {
         qd_iterator_t *admin_status_iter = qd_parse_raw(admin_state);

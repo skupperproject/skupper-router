@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
-void qdr_process_tick_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+void qdr_process_tick_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
 
 
 static int results[5];
@@ -33,7 +33,7 @@ static void callback(qdr_core_t *unused, void *context) {
 }
 
 
-static char* test_core_timer(void *context)
+static char *test_core_timer(void *context) TA_REQ(core_thread_capability)
 {
     qdr_core_t *core = NEW(qdr_core_t);
     ZERO(core);
@@ -177,7 +177,7 @@ static char* test_core_timer(void *context)
 }
 
 
-int core_timer_tests(void)
+int core_timer_tests(void) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     int result = 0;
     char *test_group = "core_timer_tests";

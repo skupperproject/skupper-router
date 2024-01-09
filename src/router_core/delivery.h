@@ -155,30 +155,30 @@ qdr_delivery_t *qdr_delivery_continue(qdr_core_t *core, qdr_delivery_t *delivery
 
 
 /* update settlement and/or disposition and schedule I/O processing */
-void qdr_delivery_release_CT(qdr_core_t *core, qdr_delivery_t *delivery);
-void qdr_delivery_reject_CT(qdr_core_t *core, qdr_delivery_t *delivery, qdr_error_t *error);
-void qdr_delivery_failed_CT(qdr_core_t *core, qdr_delivery_t *delivery);
-bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *delivery);
+void qdr_delivery_release_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability);
+void qdr_delivery_reject_CT(qdr_core_t *core, qdr_delivery_t *delivery, qdr_error_t *error) TA_REQ(core_thread_capability);
+void qdr_delivery_failed_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability);
+bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability);
 
 /* add dlv to links list of updated deliveries and schedule I/O thread processing */
-void qdr_delivery_push_CT(qdr_core_t *core, qdr_delivery_t *dlv);
+void qdr_delivery_push_CT(qdr_core_t *core, qdr_delivery_t *dlv) TA_REQ(core_thread_capability);
 
 /* optimized decref for core thread */
-void qdr_delivery_decref_CT(qdr_core_t *core, qdr_delivery_t *delivery, const char *label);
+void qdr_delivery_decref_CT(qdr_core_t *core, qdr_delivery_t *delivery, const char *label) TA_REQ(core_thread_capability);
 
 /* peer delivery list management*/
-void qdr_delivery_link_peers_CT(qdr_delivery_t *in_dlv, qdr_delivery_t *out_dlv);
-void qdr_delivery_unlink_peers_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer);
+void qdr_delivery_link_peers_CT(qdr_delivery_t *in_dlv, qdr_delivery_t *out_dlv) TA_REQ(core_thread_capability);
+void qdr_delivery_unlink_peers_CT(qdr_core_t *core, qdr_delivery_t *dlv, qdr_delivery_t *peer) TA_REQ(core_thread_capability);
 
 /* peer iterator - warning: not reentrant! */
-qdr_delivery_t *qdr_delivery_first_peer_CT(qdr_delivery_t *dlv);
-qdr_delivery_t *qdr_delivery_next_peer_CT(qdr_delivery_t *dlv);
+qdr_delivery_t *qdr_delivery_first_peer_CT(qdr_delivery_t *dlv) TA_REQ(core_thread_capability);
+qdr_delivery_t *qdr_delivery_next_peer_CT(qdr_delivery_t *dlv) TA_REQ(core_thread_capability);
 
 /* schedules all peer deliveries with work for I/O processing */
-void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bool more);
+void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bool more) TA_REQ(core_thread_capability);
 
 /* update the links counters with respect to its delivery */
-void qdr_delivery_increment_counters_CT(qdr_core_t *core, qdr_delivery_t *delivery);
+void qdr_delivery_increment_counters_CT(qdr_core_t *core, qdr_delivery_t *delivery) TA_REQ(core_thread_capability);
 
 /**
  * multicast delivery state and settlement management
@@ -186,16 +186,16 @@ void qdr_delivery_increment_counters_CT(qdr_core_t *core, qdr_delivery_t *delive
 
 // remote updated disposition/settlement for incoming delivery
 void qdr_delivery_mcast_inbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_dlv,
-                                          uint64_t new_disp, bool settled);
+                                          uint64_t new_disp, bool settled) TA_REQ(core_thread_capability);
 // remote update disposition/settlement for outgoing delivery
 void qdr_delivery_mcast_outbound_update_CT(qdr_core_t *core, qdr_delivery_t *in_dlv,
                                            qdr_delivery_t *out_peer,
-                                           uint64_t new_disp, bool settled);
+                                           uint64_t new_disp, bool settled) TA_REQ(core_thread_capability);
 // number of unsettled peer (outbound) deliveries for in_dlv
-int qdr_delivery_peer_count_CT(const qdr_delivery_t *in_dlv);
+int qdr_delivery_peer_count_CT(const qdr_delivery_t *in_dlv) TA_REQ(core_thread_capability);
 
 // Return the number of outbound paths that have been invalidated due to releases
-int qdr_delivery_invalidated_path_count_CT(const qdr_delivery_t *dlv);
+int qdr_delivery_invalidated_path_count_CT(const qdr_delivery_t *dlv) TA_REQ(core_thread_capability);
 
 
 #endif // __delivery_h__

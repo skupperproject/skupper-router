@@ -45,7 +45,7 @@ const uint64_t QD_DELIVERY_MOVED_TO_NEW_LINK = 999999999;
 
 static void qdr_general_handler(void *context);
 
-static void qdr_core_setup_init(qdr_core_t *core)
+static void qdr_core_setup_init(qdr_core_t *core) TA_REQ(core_thread_capability)
 {
     //
     // Check the environment variable to see if we should disable the fix for issue #867.
@@ -72,7 +72,7 @@ static void qdr_core_setup_init(qdr_core_t *core)
     qdr_adaptors_init(core);
 }
 
-qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id)
+qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id) TA_NO_THREAD_SAFETY_ANALYSIS
 {
     qdr_core_t *core = NEW(qdr_core_t);
     ZERO(core);
@@ -1078,7 +1078,7 @@ static void qdr_post_global_stats_response(qdr_core_t *core, qdr_general_work_t 
     work->stats_handler(work->context, discard);
 }
 
-static void qdr_global_stats_request_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_global_stats_request_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability)
 {
     if (!discard) {
         qdr_global_stats_t *stats = action->args.stats_request.stats;

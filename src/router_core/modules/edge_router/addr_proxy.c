@@ -95,7 +95,7 @@ static qdr_terminus_t *qdr_terminus_normal(const char *addr)
 }
 
 
-static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr)
+static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdr_link_t *edge_inlink = safe_deref_qdr_link_t(addr->edge_inlink_sp);
     if (edge_inlink == 0) {
@@ -111,7 +111,7 @@ static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t
 }
 
 
-static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_inlink_sp);
     if (link) {
@@ -122,7 +122,7 @@ static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 }
 
 
-static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr)
+static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdr_link_t *edge_outlink = safe_deref_qdr_link_t(addr->edge_outlink_sp);
     if (edge_outlink == 0 && DEQ_SIZE(addr->subscriptions) == 0) {
@@ -142,7 +142,7 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
 }
 
 
-static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_outlink_sp);
     if (link) {
@@ -154,6 +154,7 @@ static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 
 
 static void proxy_addr_on_inter_edge_connection(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr, qdr_connection_t *conn)
+    TA_REQ(core_thread_capability)
 {
     const char     *key  = (const char*) qd_hash_key_by_handle(addr->hash_handle);
     qdr_terminus_t *term = qdr_terminus_normal(key + 1);
@@ -167,6 +168,7 @@ static void proxy_addr_on_inter_edge_connection(qcm_edge_addr_proxy_t *ap, qdr_a
 
 
 static void proxy_addr_on_all_inter_edge_connections(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+    TA_REQ(core_thread_capability)
 {
     qdr_edge_peer_t *edge_peer = DEQ_HEAD(ap->core->edge_peers);
     while (!!edge_peer) {
@@ -176,7 +178,7 @@ static void proxy_addr_on_all_inter_edge_connections(qcm_edge_addr_proxy_t *ap, 
 }
 
 
-static void remove_proxies_for_addr(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
+static void remove_proxies_for_addr(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);
     while (!!ref) {
@@ -192,6 +194,7 @@ static void remove_proxies_for_addr(qcm_edge_addr_proxy_t *ap, qdr_address_t *ad
 
 
 static void on_inter_edge_connection_opened(qcm_edge_addr_proxy_t *ap, qdr_connection_t *conn)
+    TA_REQ(core_thread_capability)
 {
     qdr_address_t *addr = DEQ_HEAD(ap->core->addrs);
     while (!!addr) {
@@ -254,7 +257,7 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
 }
 
 
-static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *conn)
+static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) context;
 
@@ -368,7 +371,7 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
 }
 
 
-static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr)
+static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) context;
 
@@ -460,7 +463,7 @@ static void on_second_attach(void           *link_context,
 
 static void on_transfer(void           *link_context,
                         qdr_delivery_t *dlv,
-                        qd_message_t   *msg)
+                        qd_message_t   *msg) TA_REQ(core_thread_capability)
 {
     qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) link_context;
     uint64_t dispo = PN_ACCEPTED;
@@ -536,7 +539,7 @@ static void on_cleanup(void *link_context)
 }
 
 
-qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
+qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core) TA_REQ(core_thread_capability)
 {
     qcm_edge_addr_proxy_t *ap = NEW(qcm_edge_addr_proxy_t);
 

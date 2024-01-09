@@ -136,7 +136,7 @@ static void qdr_route_log_CT(qdr_core_t *core, const char *text, const char *nam
 }
 
 
-static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr_connection_t *conn)
+static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     const char *key;
 
@@ -176,8 +176,8 @@ static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr
 /**
  * Attempts re-establishing auto links across the related connections/containers
  */
-static void qdr_route_attempt_auto_link_CT(qdr_core_t      *core,
-                                    void *context)
+static void qdr_route_attempt_auto_link_CT(qdr_core_t *core,
+                                           void *context) TA_REQ(core_thread_capability)
 {
     qdr_auto_link_t *al = (qdr_auto_link_t *)context;
     qdr_connection_ref_t * cref = DEQ_HEAD(al->conn_id->connection_refs);
@@ -189,7 +189,7 @@ static void qdr_route_attempt_auto_link_CT(qdr_core_t      *core,
 }
 
 
-static void qdr_auto_link_deactivate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr_connection_t *conn)
+static void qdr_auto_link_deactivate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qdr_route_log_CT(core, "Auto Link Deactivated", al->name, al->identity, conn);
 
@@ -352,7 +352,7 @@ void qdr_route_del_auto_link_CT(qdr_core_t *core, qdr_auto_link_t *al)
     qdr_core_delete_auto_link(core, al);
 }
 
-static void activate_route_connection(qdr_core_t *core, qdr_connection_t *conn, qdr_conn_identifier_t *cid)
+static void activate_route_connection(qdr_core_t *core, qdr_connection_t *conn, qdr_conn_identifier_t *cid) TA_REQ(core_thread_capability)
 {
     //
     // Activate all auto-links associated with this remote container.
@@ -364,7 +364,7 @@ static void activate_route_connection(qdr_core_t *core, qdr_connection_t *conn, 
     }
 }
 
-static void deactivate_route_connection(qdr_core_t *core, qdr_connection_t *conn, qdr_conn_identifier_t *cid)
+static void deactivate_route_connection(qdr_core_t *core, qdr_connection_t *conn, qdr_conn_identifier_t *cid) TA_REQ(core_thread_capability)
 {
         //
         // Deactivate all auto-links associated with this remote container.

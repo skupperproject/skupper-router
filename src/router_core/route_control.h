@@ -27,18 +27,18 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
                                             qd_direction_t       dir,
                                             qd_parsed_field_t   *container_field,
                                             qd_parsed_field_t   *connection_field,
-                                            qd_parsed_field_t   *external_addr);
+                                            qd_parsed_field_t   *external_addr) TA_REQ(core_thread_capability);
 
-void qdr_route_del_auto_link_CT(qdr_core_t *core, qdr_auto_link_t *auto_link);
+void qdr_route_del_auto_link_CT(qdr_core_t *core, qdr_auto_link_t *auto_link) TA_REQ(core_thread_capability);
 
 void qdr_route_connection_opened_CT(qdr_core_t       *core,
                                     qdr_connection_t *conn,
                                     qdr_field_t      *container_field,
-                                    qdr_field_t      *connection_field);
+                                    qdr_field_t      *connection_field) TA_REQ(core_thread_capability);
 
-void qdr_route_connection_closed_CT(qdr_core_t *core, qdr_connection_t *conn);
+void qdr_route_connection_closed_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability);
 
-void qdr_route_check_id_for_deletion_CT(qdr_core_t *core, qdr_conn_identifier_t *cid);
+void qdr_route_check_id_for_deletion_CT(qdr_core_t *core, qdr_conn_identifier_t *cid) TA_REQ(core_thread_capability);
 
 /**
  * Actions to be performed when an auto link detaches.
@@ -48,13 +48,13 @@ void qdr_route_check_id_for_deletion_CT(qdr_core_t *core, qdr_conn_identifier_t 
  * @param core Pointer to the core object returned by qd_core()
  * @param link qdr_link_t reference. The attach on this link for an auto link was rejected.
  */
-void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link);
+void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link) TA_REQ(core_thread_capability);
 
 /**
  * Performs actions that need to be taken when an auto link is closed.
  * For example, if a timer was setup to reconnect the autolink, it needs to be canceled.
  * @param link qdr_link_t reference.
  */
-void qdr_route_auto_link_closed_CT(qdr_core_t *core, qdr_link_t *link);
+void qdr_route_auto_link_closed_CT(qdr_core_t *core, qdr_link_t *link) TA_REQ(core_thread_capability);
 
 #endif

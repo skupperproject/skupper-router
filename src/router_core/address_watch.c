@@ -35,9 +35,9 @@ ALLOC_DEFINE(qdr_address_watch_t);
 
 static void qdr_watch_invoker(qdr_core_t *core, qdr_general_work_t *work, bool discard);
 static void qdr_watch_cancel_invoker(qdr_core_t *core, qdr_general_work_t *work, bool discard);
-static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_core_unwatch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch);
+static void qdr_core_watch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_core_unwatch_address_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_address_watch_free_CT(qdr_core_t *core, qdr_address_watch_t *watch) TA_REQ(core_thread_capability);
 
 //==================================================================================
 // Core Interface Functions

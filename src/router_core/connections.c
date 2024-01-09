@@ -31,13 +31,13 @@
 #include <stdio.h>
 #include <strings.h>
 
-static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_detach_sent_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_link_detach_sent_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
 static void qdr_link_detach_sent(qdr_link_t *link);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
@@ -312,6 +312,7 @@ void qdr_close_connection_CT(qdr_core_t *core, qdr_connection_t  *conn)
 
 
 static void qdr_core_close_connection_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+    TA_REQ(core_thread_capability)
 {
     qdr_connection_t  *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
 
@@ -1044,6 +1045,7 @@ static void qdr_link_abort_undelivered_CT(qdr_core_t *core, qdr_link_t *link)
 
 
 static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, const char *log_text)
+    TA_REQ(core_thread_capability)
 {
     //
     // Remove the link from the overall list of links and possibly the streaming
@@ -1159,6 +1161,7 @@ static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_li
 
 
 static void qdr_link_cleanup_protected_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, const char *label)
+    TA_REQ(core_thread_capability)
 {
     bool do_cleanup = false;
 
@@ -1852,6 +1855,7 @@ static void qdr_attach_link_control_CT(qdr_core_t *core, qdr_connection_t *conn,
 
 
 static void qdr_detach_link_control_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link)
+    TA_REQ(core_thread_capability)
 {
     if (conn->role == QDR_ROLE_INTER_ROUTER) {
         qdr_del_link_ref(&core->hello_addr->rlinks, link, QDR_LINK_LIST_CLASS_ADDRESS);
@@ -1895,7 +1899,8 @@ static void qdr_detach_link_data_CT(qdr_core_t *core, qdr_connection_t *conn, qd
 }
 
 
-static void qdr_attach_link_downlink_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, qdr_terminus_t *source)
+static void qdr_attach_link_downlink_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link,
+                                        qdr_terminus_t *source) TA_REQ(core_thread_capability)
 {
     qdr_address_t *addr;
     qd_iterator_t *iter = qd_iterator_dup(qdr_terminus_get_address(source));
@@ -1916,7 +1921,7 @@ static void qdr_attach_link_downlink_CT(qdr_core_t *core, qdr_connection_t *conn
 
 
 // move dlv to new link.
-static void qdr_link_process_initial_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv)
+static void qdr_link_process_initial_delivery_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv) TA_REQ(core_thread_capability)
 {
     //
     // Remove the delivery from its current link if needed

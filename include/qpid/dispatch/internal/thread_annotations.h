@@ -84,3 +84,7 @@
 #define TA_RET_CAP(x)                THREAD_ANNOTATION(lock_returned(x))
 #define TA_SCOPED_CAP                THREAD_ANNOTATION(scoped_lockable)
 #define TA_NO_THREAD_SAFETY_ANALYSIS THREAD_ANNOTATION(no_thread_safety_analysis)
+
+typedef void const * const core_thread_capability_t TA_CAP("core_thread");
+
+extern core_thread_capability_t core_thread_capability;

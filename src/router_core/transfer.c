@@ -28,8 +28,8 @@
 // Internal Functions
 //==================================================================================
 
-static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_send_to_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
+static void qdr_send_to_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
 
 
 //==================================================================================
@@ -417,7 +417,7 @@ void qdr_send_to2(qdr_core_t *core, qd_message_t *msg, const char *addr, bool ex
 //==================================================================================
 
 
-static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability)
 {
     qdr_link_t *link = safe_deref_qdr_link_t(action->args.connection.link);
 
@@ -525,6 +525,7 @@ static long qdr_addr_path_count_CT(qdr_address_t *addr)
 
 
 static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv, qdr_address_t *addr, bool more)
+    TA_REQ(core_thread_capability)
 {
     qdr_link_t *dlv_link = qdr_delivery_link(dlv);
 
@@ -729,7 +730,7 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
 }
 
 
-void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability)
 {
     if (discard)
         return;
@@ -1007,7 +1008,7 @@ void qdr_drain_inbound_undelivered_CT(qdr_core_t *core, qdr_link_t *link, qdr_ad
  * Also, check the inlinks to see if there are undelivered messages.  If so, drain them to
  * the forwarder.
  */
-void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr)
+void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability)
 {
     if (qdr_addr_path_count_CT(addr) == 1) {
         qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);

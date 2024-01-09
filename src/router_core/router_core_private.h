@@ -603,13 +603,13 @@ struct qdr_address_t {
 
 DEQ_DECLARE(qdr_address_t, qdr_address_list_t);
 
-qdr_address_t *qdr_address_CT(qdr_core_t *core, qd_address_treatment_t treatment, qdr_address_config_t *config);
-qdr_address_t *qdr_add_local_address_CT(qdr_core_t *core, char aclass, const char *addr, qd_address_treatment_t treatment);
-qdr_address_t *qdr_add_mobile_address_CT(qdr_core_t *core, const char* prefix, const char *addr, qd_address_treatment_t treatment, bool edge);
-void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr);
+qdr_address_t *qdr_address_CT(qdr_core_t *core, qd_address_treatment_t treatment, qdr_address_config_t *config) TA_REQ(core_thread_capability);
+qdr_address_t *qdr_add_local_address_CT(qdr_core_t *core, char aclass, const char *addr, qd_address_treatment_t treatment) TA_REQ(core_thread_capability);
+qdr_address_t *qdr_add_mobile_address_CT(qdr_core_t *core, const char *prefix, const char *addr, qd_address_treatment_t treatment, bool edge) TA_REQ(core_thread_capability);
+void qdr_core_remove_address(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability);
 void qdr_core_edge_mesh_id_changed_CT(qdr_core_t *core, qdr_connection_t *conn);
-void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
-void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link);
+void qdr_core_bind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link) TA_REQ(core_thread_capability);
+void qdr_core_unbind_address_link_CT(qdr_core_t *core, qdr_address_t *addr, qdr_link_t *link) TA_REQ(core_thread_capability);
 
 struct qdr_address_config_t {
     DEQ_LINKS(qdr_address_config_t);
@@ -701,7 +701,7 @@ struct qdr_connection_t {
     char                        edge_mesh_id[QD_DISCRIMINATOR_BYTES]; ///< Interior, edge-role only - Identity of the connected mesh
 };
 
-void qdr_core_delete_auto_link (qdr_core_t *core,  qdr_auto_link_t *al);
+void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al) TA_REQ(core_thread_capability);
 
 // Core timer related field/data structures
 typedef void (*qdr_timer_cb_t)(qdr_core_t *core, void* context);
@@ -933,59 +933,59 @@ void *router_core_thread(void *arg);
 uint64_t qdr_identifier(qdr_core_t* core);
 uint64_t qdr_management_agent_on_message(void *context, qd_message_t *msg, int link_id, int cost,
                                          uint64_t in_conn_id, const qd_policy_spec_t *policy_spec, qdr_error_t **error);
-void  qdr_route_table_setup_CT(qdr_core_t *core);
+void qdr_route_table_setup_CT(qdr_core_t *core) TA_REQ(core_thread_capability);
 qdr_agent_t *qdr_agent(qdr_core_t *core);
 void qdr_agent_setup_subscriptions(qdr_agent_t *agent, qdr_core_t *core);
 void qdr_agent_free(qdr_agent_t *agent);
-void  qdr_forwarder_setup_CT(qdr_core_t *core);
+void qdr_forwarder_setup_CT(qdr_core_t *core) TA_REQ(core_thread_capability);
 qdr_action_t *qdr_action(qdr_action_handler_t action_handler, const char *label);
 void qdr_action_enqueue(qdr_core_t *core, qdr_action_t *action);
 void qdr_action_background_enqueue(qdr_core_t *core, qdr_action_t *action);
-void qdr_link_issue_credit_CT(qdr_core_t *core, qdr_link_t *link, int credit, bool drain);
-void qdr_drain_inbound_undelivered_CT(qdr_core_t *core, qdr_link_t *link, qdr_address_t *addr);
-void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr);
+void qdr_link_issue_credit_CT(qdr_core_t *core, qdr_link_t *link, int credit, bool drain) TA_REQ(core_thread_capability);
+void qdr_drain_inbound_undelivered_CT(qdr_core_t *core, qdr_link_t *link, qdr_address_t *addr) TA_REQ(core_thread_capability);
+void qdr_addr_start_inlinks_CT(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability) TA_REQ(core_thread_capability);
 static inline bool qdr_link_is_streaming_deliveries(qdr_link_t *link) { return IS_ATOMIC_FLAG_SET(&link->streaming_deliveries); }
 
 /**
  * Returns true if the passed in address is a mobile address, false otherwise
  * If the first character of the address_key (obtained using its hash_handle) is M, the address is mobile.
  */
-bool qdr_address_is_mobile_CT(qdr_address_t *addr);
+bool qdr_address_is_mobile_CT(qdr_address_t *addr) TA_REQ(core_thread_capability);
 
-void qdr_forward_on_message_CT(qdr_core_t *core, qdr_subscription_t *sub, qdr_link_t *link, qd_message_t *msg, qdr_delivery_t *in_dlv);
-void qdr_in_process_send_to_CT(qdr_core_t *core, qd_iterator_t *address, qd_message_t *msg, bool exclude_inprocess, bool control);
-void qdr_agent_enqueue_response_CT(qdr_core_t *core, qdr_query_t *query);
+void qdr_forward_on_message_CT(qdr_core_t *core, qdr_subscription_t *sub, qdr_link_t *link, qd_message_t *msg, qdr_delivery_t *in_dlv) TA_REQ(core_thread_capability);
+void qdr_in_process_send_to_CT(qdr_core_t *core, qd_iterator_t *address, qd_message_t *msg, bool exclude_inprocess, bool control) TA_REQ(core_thread_capability);
+void qdr_agent_enqueue_response_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
 
-void qdr_post_set_mobile_seq_CT(qdr_core_t *core, int router_maskbit, uint64_t mobile_seq);
-void qdr_post_set_my_mobile_seq_CT(qdr_core_t *core, uint64_t mobile_seq);
-void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit);
+void qdr_post_set_mobile_seq_CT(qdr_core_t *core, int router_maskbit, uint64_t mobile_seq) TA_REQ(core_thread_capability);
+void qdr_post_set_my_mobile_seq_CT(qdr_core_t *core, uint64_t mobile_seq) TA_REQ(core_thread_capability);
+void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit) TA_REQ(core_thread_capability);
 
-void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work);
-void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr);
+void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work) TA_REQ(core_thread_capability);
+void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr) TA_REQ(core_thread_capability);
 void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr);
-bool qdr_is_addr_treatment_multicast(qdr_address_t *addr);
-qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *peer, qdr_link_t *link, qd_message_t *msg);
-void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv);
-void qdr_connection_free(qdr_connection_t *conn);
-void qdr_connection_activate_CT(qdr_core_t *core, qdr_connection_t *conn);
-void qdr_close_connection_CT(qdr_core_t *core, qdr_connection_t *conn);
-qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connection_t *conn);
-qdr_address_config_t *qdr_config_for_address_CT(qdr_core_t *core, qdr_connection_t *conn, qd_iterator_t *iter);
-qd_address_treatment_t qdr_treatment_for_address_hash_CT(qdr_core_t *core, qd_iterator_t *iter, qdr_address_config_t **addr_config);
-qd_address_treatment_t qdr_treatment_for_address_hash_with_default_CT(qdr_core_t *core, qd_iterator_t *iter, qd_address_treatment_t default_treatment, qdr_address_config_t **addr_config);
+bool qdr_is_addr_treatment_multicast(qdr_address_t *addr) TA_REQ(core_thread_capability);
+qdr_delivery_t *qdr_forward_new_delivery_CT(qdr_core_t *core, qdr_delivery_t *peer, qdr_link_t *link, qd_message_t *msg) TA_REQ(core_thread_capability);
+void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery_t *dlv) TA_REQ(core_thread_capability);
+void qdr_connection_free(qdr_connection_t *conn) TA_REQ(core_thread_capability);
+void qdr_connection_activate_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability);
+void qdr_close_connection_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability);
+qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability);
+qdr_address_config_t *qdr_config_for_address_CT(qdr_core_t *core, qdr_connection_t *conn, qd_iterator_t *iter) TA_REQ(core_thread_capability);
+qd_address_treatment_t qdr_treatment_for_address_hash_CT(qdr_core_t *core, qd_iterator_t *iter, qdr_address_config_t **addr_config) TA_REQ(core_thread_capability);
+qd_address_treatment_t qdr_treatment_for_address_hash_with_default_CT(qdr_core_t *core, qd_iterator_t *iter, qd_address_treatment_t default_treatment, qdr_address_config_t **addr_config) TA_REQ(core_thread_capability);
 qdr_edge_t *qdr_edge(qdr_core_t *);
 void qdr_edge_free(qdr_edge_t *);
 void qdr_edge_connection_opened(qdr_edge_t *edge, qdr_connection_t *conn);
 void qdr_edge_connection_closed(qdr_edge_t *edge);
-void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, bool on_shutdown);
-void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, bool on_shutdown) TA_REQ(core_thread_capability);
+void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability);
 
 void qdr_connection_enqueue_work_CT(qdr_core_t            *core,
                                     qdr_connection_t      *conn,
-                                    qdr_connection_work_t *work);
+                                    qdr_connection_work_t *work) TA_REQ(core_thread_capability);
 void qdr_link_enqueue_work_CT(qdr_core_t      *core,
                               qdr_link_t      *conn,
-                              qdr_link_work_t *work);
+                              qdr_link_work_t *work) TA_REQ(core_thread_capability);
 
 qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
                                qdr_connection_t  *conn,
@@ -994,11 +994,11 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
                                qdr_terminus_t    *source,
                                qdr_terminus_t    *target,
                                qd_session_class_t ssn_class,
-                               uint8_t priority);
+                               uint8_t priority) TA_REQ(core_thread_capability);
 
-void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition, bool close);
-void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target);
-bool qdr_link_is_idle_CT(const qdr_link_t *link);
+void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition, bool close) TA_REQ(core_thread_capability);
+void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target) TA_REQ(core_thread_capability);
+bool qdr_link_is_idle_CT(const qdr_link_t *link) TA_REQ(core_thread_capability);
 qdr_terminus_t *qdr_terminus_router_control(void);  ///< new terminus for router control links
 qdr_terminus_t *qdr_terminus_router_data(void);  ///< new terminus for router links
 qdr_terminus_t *qdr_terminus_inter_edge(void);  ///< new terminus for inter-edge links
@@ -1021,8 +1021,7 @@ void qdr_adaptors_finalize(qdr_core_t *core);
  * @callback Callback function to be invoked when timer fires.
  * @timer_context Context to be used when firing callback
  */
-qdr_core_timer_t *qdr_core_timer_CT(qdr_core_t *core, qdr_timer_cb_t callback, void *timer_context);
-
+qdr_core_timer_t *qdr_core_timer_CT(qdr_core_t *core, qdr_timer_cb_t callback, void *timer_context) TA_REQ(core_thread_capability);
 
 /**
  * Schedules a core timer with a delay. The timer will fire after "delay" seconds
@@ -1030,7 +1029,7 @@ qdr_core_timer_t *qdr_core_timer_CT(qdr_core_t *core, qdr_timer_cb_t callback, v
  * @param timer Timer object that needs to be scheduled.
  * @param delay The number of seconds to wait before firing the timer
  */
-void qdr_core_timer_schedule_CT(qdr_core_t *core, qdr_core_timer_t *timer, uint32_t delay);
+void qdr_core_timer_schedule_CT(qdr_core_t *core, qdr_core_timer_t *timer, uint32_t delay) TA_REQ(core_thread_capability);
 
 /**
  * Cancels an already scheduled timeer. This does not free the timer. It is the responsibility of the person who

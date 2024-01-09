@@ -58,7 +58,7 @@ typedef struct qcm_heartbeat_edge_t {
  */
 static void on_second_attach(void           *link_context,
                              qdr_terminus_t *remote_source,
-                             qdr_terminus_t *remote_target)
+                             qdr_terminus_t *remote_target) TA_REQ(core_thread_capability)
 {
     qcm_heartbeat_edge_t *client = (qcm_heartbeat_edge_t*) link_context;
     qdr_core_timer_schedule_CT(client->core, client->timer, 1);
@@ -127,7 +127,7 @@ static qdrc_endpoint_desc_t descriptor = {
 // Event Handlers
 //================================================================================
 
-static void on_timer(qdr_core_t *core, void *context)
+static void on_timer(qdr_core_t *core, void *context) TA_REQ(core_thread_capability)
 {
     qcm_heartbeat_edge_t *client = (qcm_heartbeat_edge_t*) context;
     qdr_core_timer_schedule_CT(client->core, client->timer, 2);
@@ -195,7 +195,7 @@ static bool qcm_heartbeat_edge_enable_CT(qdr_core_t *core)
 }
 
 
-static void qcm_heartbeat_edge_init_CT(qdr_core_t *core, void **module_context)
+static void qcm_heartbeat_edge_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     qcm_heartbeat_edge_t *client = NEW(qcm_heartbeat_edge_t);
     ZERO(client);

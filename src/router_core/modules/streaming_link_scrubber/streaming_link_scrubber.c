@@ -55,7 +55,7 @@ struct tracker_t {
  * Check the size of the connections idle link free pool.  If the connection
  * has accumulated too many unused links start closing them
  */
-static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn)
+static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn) TA_REQ(core_thread_capability)
 {
     qdr_link_list_t to_free = DEQ_EMPTY;
 
@@ -97,7 +97,7 @@ static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn)
 }
 
 
-static void timer_handler_CT(qdr_core_t *core, void *context)
+static void timer_handler_CT(qdr_core_t *core, void *context) TA_REQ(core_thread_capability)
 {
     tracker_t            *tracker    = (tracker_t*) context;
     qdr_connection_ref_t *first_ref = DEQ_HEAD(core->streaming_connections);
@@ -113,7 +113,7 @@ static void timer_handler_CT(qdr_core_t *core, void *context)
 }
 
 
-static void qdr_streaming_link_scrubber_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_streaming_link_scrubber_CT(qdr_core_t *core, qdr_action_t *action, bool discard) TA_REQ(core_thread_capability)
 {
     if (discard)
         return;
@@ -164,7 +164,7 @@ static bool qcm_streaming_link_scrubber_enable_CT(qdr_core_t *core)
 }
 
 
-static void qcm_streaming_link_scrubber_init_CT(qdr_core_t *core, void **module_context)
+static void qcm_streaming_link_scrubber_init_CT(qdr_core_t *core, void **module_context) TA_REQ(core_thread_capability)
 {
     tracker_t *tracker = NEW(tracker_t);
     ZERO(tracker);

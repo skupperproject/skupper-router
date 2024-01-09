@@ -195,7 +195,7 @@ static void qdr_manage_advance_config_auto_link_CT(qdr_query_t *query, qdr_auto_
 }
 
 
-void qdra_config_auto_link_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
+void qdra_config_auto_link_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset) TA_REQ(core_thread_capability)
 {
     //
     // Queries that get this far will always succeed.

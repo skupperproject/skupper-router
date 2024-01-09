@@ -21,15 +21,14 @@
 
 #include "router_core_private.h"
 
-void qdra_address_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_address_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qdra_address_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset) TA_REQ(core_thread_capability);
+void qdra_address_get_next_CT(qdr_core_t *core, qdr_query_t *query) TA_REQ(core_thread_capability);
 
 void qdra_address_get_CT(qdr_core_t *core,
                       qd_iterator_t *name,
                       qd_iterator_t *identity,
                       qdr_query_t   *query,
-                      const char *qdr_address_columns[]);
-
+                      const char *qdr_address_columns[]) TA_REQ(core_thread_capability);
 
 #define QDR_ADDRESS_COLUMN_COUNT 21
 
