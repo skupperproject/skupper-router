@@ -54,6 +54,12 @@ typedef enum {
     QD_STREAM_FULLY_CLOSED
 } qd_http2_stream_status_t;
 
+typedef enum {
+    QD_CONNECTION_NEW,          // The connection object has been instantiated but an actual connection has not been made
+    QD_CONNECTION_CONNECTED,    // A PN_RAW_CONNECTION_CONNECTED event was received and this connection is connected.
+    QD_CONNECTION_DISCONNECTED  // A PN_RAW_CONNECTION_DISCONNECTED event was received and this connection is disconnected
+} qd_connection_status_t;
+
 DEQ_DECLARE(qdr_http2_stream_data_t, qd_http2_stream_data_list_t);
 DEQ_DECLARE(qdr_http2_connection_t,  qdr_http2_connection_list_t);
 
@@ -148,7 +154,7 @@ struct qdr_http2_connection_t {
     uint64_t stream_dispatcher_id;
     uint64_t dummy_link_id;
 
-    bool                      connection_established;
+    qd_connection_status_t    connection_status;
     bool                      ingress;
     bool                      delete_egress_connections;  // If set to true, the egress qdr_connection_t and qdr_http2_connection_t objects will be deleted
     bool                      goaway_received;
