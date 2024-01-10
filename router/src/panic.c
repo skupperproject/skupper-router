@@ -25,6 +25,7 @@
 
 #include "config.h"
 
+#include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/threading.h"
 
 #include <assert.h>
@@ -82,6 +83,11 @@ typedef struct {
 static mem_map_t mem_map[MAX_MAP_ENTRIES];
 static int       mem_map_count = 0;
 
+// if multiple threads panic only allow one thread to unwind the stack otherwise we get multiple threads writing to
+// stdout simultaineously which corrupts output.  See github ISSUE-1335
+//
+static sys_atomic_t unwind_in_progress;
+
 // for sorting the map
 //
 static int map_compare(const void *arg1, const void *arg2)
@@ -134,12 +140,19 @@ static void lib_map_init(void)
 void panic_handler_init(void)
 {
     if (getenv("SKUPPER_ROUTER_DISABLE_PANIC_HANDLER") == 0) {
+        sys_atomic_init(&unwind_in_progress, 0);
         lib_map_init();
+
+        // Note well: do not set SA_RESETHAND or SA_NODEFER. Since this process is multithreaded it is possible for more
+        // than one thread to panic simultaineously (e.g. heap corruption affects all threads). Setting SA_RESETHAND etc
+        // will restore the default handler _on_entry_ to panic_signal_handler(). If that is done and another thread
+        // panics then the default handler will run which will kill the process BEFORE the panic handler completes
+        // unwinding the stack.
+        //
         struct sigaction sa = {
-            .sa_flags     = SA_SIGINFO | SA_RESETHAND,
+            .sa_flags     = SA_SIGINFO,
             .sa_sigaction = panic_signal_handler,
         };
-
         sigemptyset(&sa.sa_mask);
 
         for (int i = 0; panic_signals[i].signal != 0; ++i) {
@@ -398,6 +411,18 @@ static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext)
     (void) siginfo;
     (void) ucontext;
 
+    // github ISSUE-1335: Since this process is multi-threaded it is possible that more than one thread may crash
+    // simultaineously. Heap corruption for example will affect all threads. Only allow one thread to unwind the stack
+    // otherwise the output will be corrupted.
+    if (sys_atomic_inc(&unwind_in_progress) != 0) {
+        // There is already another thread running this panic handler! Do not allow this thread to return since doing so
+        // will cause the thread to immediately return to this handler since the faulting code will be re-run by the
+        // kernel. Simply hang the thread until the other thread finishes unwinding and returns to the kernel which will
+        // then kill the entire process (all threads) and create a core dump.
+        while (true)
+            sleep(10);  // signal safe
+    }
+
     print("\n*** SKUPPER-ROUTER FATAL ERROR ***\n");  // or "guru meditation error" (google it)
     print("Version: ");
     print(QPID_DISPATCH_VERSION);
@@ -452,10 +477,18 @@ static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext)
     int err = unw_getcontext(&context);
     if (err) {
         print_libunwind_error(err);
-        return;
+    } else {
+        print_backtrace(&context);
     }
-
-    print_backtrace(&context);
 #endif
     print("*** END ***\n");
+
+    // Restore the default handler. This will cause the kernel to kill the process and produce a core dump when this
+    // handler returns.
+
+    struct sigaction restore_default = {
+        .sa_handler = SIG_DFL,
+    };
+    sigemptyset(&restore_default.sa_mask);
+    sigaction(signum, &restore_default, 0);
 }
