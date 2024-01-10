@@ -1778,7 +1778,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress(qd_http_listener_t* listener
 {
     qdr_http2_connection_t* ingress_http_conn = new_qdr_http2_connection_t();
     ZERO(ingress_http_conn);
-
+    ingress_http_conn->connection_status = QD_CONNECTION_NEW;
     ingress_http_conn->conn_id         = qd_server_allocate_connection_id(listener->server);
     ingress_http_conn->ingress = true;
     ingress_http_conn->require_tls     = !!listener->tls_domain;
@@ -2795,7 +2795,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
 
     ingress_http_conn->qdr_conn = conn;
     qdr_connection_set_context(conn, ingress_http_conn);
-    ingress_http_conn->connection_established = true;
+    ingress_http_conn->connection_status = QD_CONNECTION_CONNECTED;
     qd_connection_counter_inc(QD_PROTOCOL_HTTP2);
     qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
            "[C%" PRIu64 "] qdr_http_connection_ingress_accept, qdr_connection_t object created ",
@@ -2974,7 +2974,8 @@ static void egress_conn_timer_handler(void *context)
         sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
         qdr_connection_closed(conn->qdr_conn);
         qd_connection_counter_dec(QD_PROTOCOL_HTTP2);
-        free_qdr_http2_connection(conn, false);
+        if (conn->connection_status == QD_CONNECTION_NEW)
+            free_qdr_http2_connection(conn, false);
         return;
     }
 
@@ -2988,7 +2989,7 @@ static void egress_conn_timer_handler(void *context)
 
     sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
 
-    if (conn->connection_established)
+    if (conn->connection_status == QD_CONNECTION_CONNECTED)
         return;
 
     if (!conn->ingress) {
@@ -3057,6 +3058,7 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
 {
     qdr_http2_connection_t* egress_http_conn = new_qdr_http2_connection_t();
     ZERO(egress_http_conn);
+    egress_http_conn->connection_status = QD_CONNECTION_NEW;
     egress_http_conn->conn_id         = qd_server_allocate_connection_id(connector->server);
     egress_http_conn->activate_timer = qd_timer(http2_adaptor->core->qd, egress_conn_timer_handler, egress_http_conn);
     egress_http_conn->require_tls     = !!connector->tls_domain;
@@ -3158,7 +3160,7 @@ static void handle_raw_connected_event(qdr_http2_connection_t *conn)
     } else {
         CLEAR_ATOMIC_FLAG(&conn->raw_closed_read);
         CLEAR_ATOMIC_FLAG(&conn->raw_closed_write);
-        conn->connection_established = true;
+        conn->connection_status = QD_CONNECTION_CONNECTED;
         create_stream_dispatcher_link(conn);
         qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                "[C%" PRIu64 "] Created stream dispatcher link in PN_RAW_CONNECTION_CONNECTED", conn->conn_id);
@@ -3244,6 +3246,7 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         break;
     }
     case PN_RAW_CONNECTION_DISCONNECTED: {
+        conn->connection_status = QD_CONNECTION_DISCONNECTED;
         qd_set_condition_on_vflow(conn->pn_raw_conn, conn->vflow);
         if (!conn->ingress) {
             conn->initial_settings_frame_sent = false;
@@ -3261,7 +3264,6 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                                conn->conn_id);
             }
         }
-        conn->connection_established = false;
         // If somehow the PN_RAW_CONNECTION_CLOSED_WRITE and the PN_RAW_CONNECTION_CLOSED_READ events did not come by,
         // we will drain the buffers here just as a backup.
         int drained_buffers = qd_raw_connection_drain_read_write_buffers(conn->pn_raw_conn);
