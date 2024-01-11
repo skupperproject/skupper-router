@@ -3250,11 +3250,14 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
         qd_set_condition_on_vflow(conn->pn_raw_conn, conn->vflow);
         if (!conn->ingress) {
             conn->initial_settings_frame_sent = false;
+            sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
             if (conn->delete_egress_connections) {
+                sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
                 // The egress connection has been deleted, cancel any pending timer
                 cancel_activation(conn);
             }
             else {
+                sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
                 if (schedule_activation(conn, 2000))
                         qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
                                "[C%" PRIu64 "] Scheduling 2 second timer to reconnect to egress connection",
@@ -3364,21 +3367,23 @@ static void handle_listener_accept(qd_adaptor_listener_t *adaptor_listener, pn_l
 void qd_http2_delete_connector(qd_dispatch_t *qd, qd_http_connector_t *connector)
 {
     if (connector) {
-    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s",
-           connector->config->adaptor_config->address, connector->config->adaptor_config->host,
-           connector->config->adaptor_config->port);
+        qd_log(LOG_HTTP_ADAPTOR, QD_LOG_INFO, "Deleted HttpConnector for %s, %s:%s",
+               connector->config->adaptor_config->address, connector->config->adaptor_config->host,
+               connector->config->adaptor_config->port);
 
-    sys_mutex_lock(&http2_adaptor->lock);
-    DEQ_REMOVE(http2_adaptor->connectors, connector);
-    sys_mutex_unlock(&http2_adaptor->lock);
-    //
-    // Deleting a connector must delete the corresponding qdr_connection_t and qdr_http2_connection_t objects also.
-    //
-    if (connector->ctx) {
-        qdr_connection_t       *qdr_conn     = (qdr_connection_t *) connector->ctx;
-        qdr_http2_connection_t *http_conn    = qdr_connection_get_context(qdr_conn);
-        http_conn->delete_egress_connections = true;
-        qdr_core_close_connection(qdr_conn);
+        sys_mutex_lock(&http2_adaptor->lock);
+        DEQ_REMOVE(http2_adaptor->connectors, connector);
+        sys_mutex_unlock(&http2_adaptor->lock);
+        //
+        // Deleting a connector must delete the corresponding qdr_connection_t and qdr_http2_connection_t objects also.
+        //
+        if (connector->ctx) {
+            qdr_connection_t       *qdr_conn     = (qdr_connection_t *) connector->ctx;
+            qdr_http2_connection_t *http_conn    = qdr_connection_get_context(qdr_conn);
+            sys_mutex_lock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+            http_conn->delete_egress_connections = true;
+            sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
+            qdr_core_close_connection(qdr_conn);
         }
         qd_http_connector_decref(connector);
     }
