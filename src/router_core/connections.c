@@ -41,6 +41,7 @@ static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *acti
 static void qdr_link_detach_sent(qdr_link_t *link);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
+static void qdr_connection_set_tracing_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 
 ALLOC_DEFINE_SAFE(qdr_connection_t);
 ALLOC_DEFINE(qdr_connection_work_t);
@@ -151,6 +152,13 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     return conn;
 }
 
+void qdr_connection_set_tracing(qdr_connection_t *conn, bool enable_protocol_trace)
+{
+    qdr_action_t *action = qdr_action(qdr_connection_set_tracing_CT, "connection_tracing_on");
+    set_safe_ptr_qdr_connection_t(conn, &action->args.connection.conn);
+    action->args.connection.enable_protocol_trace = enable_protocol_trace;
+    qdr_action_enqueue(conn->core, action);
+}
 
 void qdr_connection_closed(qdr_connection_t *conn)
 {
@@ -1740,6 +1748,23 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
                out_link->identity, out_link->name);
     }
     return out_link;
+}
+
+static void qdr_connection_set_tracing_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+{
+    qdr_connection_t *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
+    if (discard || !conn)
+        return;
+
+    bool enable_protocol_trace = action->args.connection.enable_protocol_trace;
+    qdr_connection_work_type_t work_type = QDR_CONNECTION_WORK_TRACING_ON;
+    if (!enable_protocol_trace) {
+        work_type = QDR_CONNECTION_WORK_TRACING_OFF;
+    }
+    qdr_connection_work_t *work = new_qdr_connection_work_t();
+    ZERO(work);
+    work->work_type = work_type;
+    qdr_connection_enqueue_work_CT(core, conn, work);
 }
 
 

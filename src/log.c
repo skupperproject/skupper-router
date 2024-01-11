@@ -750,7 +750,9 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
     // so proton frame trace can be output as part of the router trace log.
     //
     if (trace_enabled) {
-        qd_server_trace_all_connections();
+        qd_server_trace_all_connections(true);
+    } else {
+        qd_server_trace_all_connections(false);
     }
 
     return qd_error_code();
