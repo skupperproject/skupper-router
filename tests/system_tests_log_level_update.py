@@ -27,6 +27,7 @@ from proton.reactor import Container
 from system_test import TestCase, Qdrouterd
 from system_test import QdManager, LOG_TYPE
 from system_test import CONNECTION_TYPE
+from system_test import retry_assertion
 
 apply_options = AtMostOnce()
 
@@ -163,15 +164,19 @@ class LogModuleProtocolTest(TestCase):
         TEST_ADDR = "moduletest0"
         self.create_sender_receiver(TEST_ADDR, hello_world_0, blocking_connection)
 
-        num_attaches = 0
-        logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        def check_num_attaches(attaches):
+            num_attaches = 0
+            logs = qd_manager.get_log()
+            for log in logs:
+                if 'PROTOCOL' in log[0]:
+                    if "@attach" in log[2] and TEST_ADDR in log[2]:
+                        num_attaches += 1
 
-        # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
-        self.assertTrue(num_attaches == 4)
+            # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
+            self.assertTrue(num_attaches == attaches)
+
+        # The connector has been deleted, check to make sure that there are no connections of 'inter-router' role
+        retry_assertion(lambda: check_num_attaches(attaches=4), delay=2)
 
         # Turn off trace logging using skmanage
         qd_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
@@ -181,20 +186,11 @@ class LogModuleProtocolTest(TestCase):
         # is emitting proton frame trace messages.
 
         qd_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/PROTOCOL")
-
         TEST_ADDR = "moduletest1"
         hello_world_1 = "Hello World_1!"
         self.create_sender_receiver(TEST_ADDR, hello_world_1, blocking_connection)
 
-        num_attaches = 0
-        logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
-
-        # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
-        self.assertTrue(num_attaches == 4)
+        retry_assertion(lambda: check_num_attaches(attaches=4), delay=2)
 
         # Now turn off trace logging for the PROTOCOL module and make sure
         # that there is no more proton frame trace messages appearing in the log
@@ -205,15 +201,7 @@ class LogModuleProtocolTest(TestCase):
         hello_world_2 = "Hello World_2!"
         self.create_sender_receiver(TEST_ADDR, hello_world_2, blocking_connection)
 
-        num_attaches = 0
-        logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
-
-        # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
-        self.assertTrue(num_attaches == 0)
+        retry_assertion(lambda: check_num_attaches(attaches=0), delay=2)
 
 
 class EnableConnectionLevelInterRouterTraceTest(TestCase):

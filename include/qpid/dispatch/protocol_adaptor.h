@@ -361,6 +361,18 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
 void qdr_connection_closed(qdr_connection_t *conn);
 
 /**
+ * qdr_connection_set_tracing
+ *
+ * Call the function if you want to turn proton trace logging on or off.
+ * Warning: Turning on proton trace logging will call each amqp frame to be logged and could
+ * overwhelm your log.
+ *
+ * @param qdr_connection_t *conn - the connection whose tracing needs to be turned on or off
+ * @param enable_tracing - true if proton trace logging needs to be turned on, false if proton logging needs to be turned off.
+ */
+void qdr_connection_set_tracing(qdr_connection_t *conn, bool enable_tracing);
+
+/**
  * qdr_core_close_connection
  *
  * This function is called when a connection is closed, usually by a management request.
