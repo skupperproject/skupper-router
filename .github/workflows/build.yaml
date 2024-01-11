@@ -918,7 +918,7 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: 1
 
       - name: Enable qemu to build foreign architectures
-        if: matrix.platform != 'linux/amd64/v2'
+        if: matrix.platform != 'linux/amd64'
         run: sudo podman run --privileged --rm docker.io/tonistiigi/binfmt --install all
 
       - name: Build Containerfile
