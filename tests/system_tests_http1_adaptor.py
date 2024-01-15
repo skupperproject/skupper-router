@@ -693,9 +693,11 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("", self.server11_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             clients = []
             for index in range(CLIENT_COUNT):
@@ -841,7 +843,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
 
@@ -923,6 +925,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
 
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             # expect the remaining requests to complete successfully
 
@@ -982,9 +986,11 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             clients = []
             for index in range(CLIENT_COUNT):
@@ -1063,9 +1069,11 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1115,9 +1123,11 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1310,9 +1320,11 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             with self.server_ssl_context.wrap_socket(raw_listener,
                                                      server_side=True) as listener:
                 listener.bind((self.server11_host, self.server11_port))
-                listener.listen(1)
+                listener.listen(0)
                 server, addr = listener.accept()
                 wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+                # prevent router reconnect when server socket closes (ISSUE-1373)
+                listener.shutdown(socket.SHUT_RDWR)
 
                 raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1361,9 +1373,11 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             with self.server_ssl_context.wrap_socket(raw_listener,
                                                      server_side=True) as listener:
                 listener.bind((self.server11_host, self.server11_port))
-                listener.listen(1)
+                listener.listen(0)
                 server, addr = listener.accept()
                 wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+                # prevent router reconnect when server socket closes (ISSUE-1373)
+                listener.shutdown(socket.SHUT_RDWR)
 
                 raw_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 raw_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1689,9 +1703,11 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("", self.http_server_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
             server, addr = listener.accept()
             wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             bad_requests = [
                 # malformed request line
@@ -1752,7 +1768,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("", self.http_server_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
 
             bad_responses = [
                 # malformed response line
@@ -1771,9 +1787,13 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
             # unterminated request to check client cleanup
             request = b'GET / HTTP/1.1\r\nContent-Length: 100\r\n\r\nX'
-            for response in bad_responses:
+            for index in range(len(bad_responses)):
+                response = bad_responses[index]
                 server, addr = listener.accept()
                 wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+                # prevent router reconnect when server socket closes (ISSUE-1373)
+                if index == len(bad_responses) - 1:
+                    listener.shutdown(socket.SHUT_RDWR)
 
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1811,7 +1831,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("", self.http_server_port))
             listener.settimeout(TIMEOUT)
-            listener.listen(1)
+            listener.listen(0)
 
             server, addr = listener.accept()
             wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
@@ -1856,6 +1876,8 @@ class Http1AdaptorBadEndpointsTest(TestCase,
 
             server, addr = listener.accept()
             wait_http_listeners_up(self.INT_A.listener, l_filter={'name': 'L_testServer'})
+            # prevent router reconnect when server socket closes (ISSUE-1373)
+            listener.shutdown(socket.SHUT_RDWR)
 
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
