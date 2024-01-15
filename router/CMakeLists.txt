@@ -31,10 +31,17 @@ set(router_SOURCES
     src/panic.c
     )
 
+include(CheckLinkerFlag)
+check_linker_flag(C "LINKER:-Map=skrouterd.map" linker_map_supported)
+
 add_executable(skrouterd ${router_SOURCES})
 target_include_directories(skrouterd PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(skrouterd PRIVATE skupper-router)
-target_link_options(skrouterd PUBLIC LINKER:-Map=skrouterd.map)
+if (linker_map_supported)
+    target_link_options(skrouterd PUBLIC LINKER:-Map=skrouterd.map)
+else ()
+    message(WARNING "Linker map generation not supported, skrouterd.map will not be written out")
+endif ()
 
 if (ENABLE_PROFILE_GUIDED_OPTIMIZATION)
     if("GNU" STREQUAL ${CMAKE_C_COMPILER_ID})
