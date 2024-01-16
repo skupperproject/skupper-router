@@ -1065,6 +1065,7 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
             if (ctx && ctx->connector) { /* Outgoing connection */
                 const qd_server_config_t *config = &ctx->connector->config;
                 char conn_msg[QD_CXTR_CONN_MSG_BUF_SIZE];  // avoid holding connector lock when logging
+                char conn_msg_1[QD_CXTR_CONN_MSG_BUF_SIZE]; // this connection message does not contain the connection id
 
                 sys_mutex_lock(&ctx->connector->lock);
                 qd_increment_conn_index_lh(ctx);
@@ -1074,14 +1075,32 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                     qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed: %s %s",
                                      ctx->connection_id, config->host_port, pn_condition_get_name(condition),
                                      pn_condition_get_description(condition));
+
+                    qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed: %s %s",
+                                     config->host_port, pn_condition_get_name(condition), pn_condition_get_description(condition));
                 } else {
                     qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed",
                                      ctx->connection_id, config->host_port);
+                    qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed", config->host_port);
                 }
-                strncpy(ctx->connector->conn_msg, conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE);
+                //
+                // This is a fix for https://github.com/skupperproject/skupper-router/issues/1385
+                // The router will repeatedly try to connect to the host/port specified in the connector
+                // If it is unable to connect, an error message will be logged only once and more error messages
+                // from connection failures will only be logged if the error message changes.
+                // This is done so we don't flood the log with connection failure error messages
+                // Even though we restrict the number of times the error message is displayed, the
+                // router will still keep trying to connect to the host/port specified in the connector.
+                //
+                bool log_error_message = false;
+                if (strcmp(ctx->connector->conn_msg, conn_msg_1) != 0) {
+                    strncpy(ctx->connector->conn_msg, conn_msg_1, QD_CXTR_CONN_MSG_BUF_SIZE);
+                    log_error_message = true;
+                }
                 sys_mutex_unlock(&ctx->connector->lock);
-
-                qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
+                if (log_error_message) {
+                    qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
+                }
 
             } else if (ctx && ctx->listener) { /* Incoming connection */
                 if (condition && pn_condition_is_set(condition)) {
