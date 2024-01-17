@@ -148,20 +148,27 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
 
         # There was no inter-router connection established.
         self.assertFalse(passed)
-
         qd_manager = QdManager(address=self.routers[1].addresses[0])
-        logs = qd_manager.get_log()
 
-        sasl_failed = False
-        file_open_failed = False
-        for log in logs:
-            if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
-                sasl_failed = True
-            if log[0] == "CONN_MGR" and log[1] == "error" and "Unable to open password file" in log[2] and "error: No such file or directory" in log[2]:
-                file_open_failed = True
+        def check_sasl_failed():
+            logs = qd_manager.get_log()
+            sasl_failed = False
+            for log in logs:
+                if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
+                    sasl_failed = True
+                    break
+            self.assertTrue(sasl_failed)
 
-        self.assertTrue(sasl_failed)
-        self.assertTrue(file_open_failed)
+        def check_file_open_failed():
+            logs = qd_manager.get_log()
+            file_open_failed = False
+            for log in logs:
+                if log[0] == "CONN_MGR" and log[1] == "error" and "Unable to open password file" in log[2] and "error: No such file or directory" in log[2]:
+                    file_open_failed = True
+            self.assertTrue(file_open_failed)
+
+        retry_assertion(check_sasl_failed, delay=2)
+        retry_assertion(check_file_open_failed, delay=2)
 
 
 class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
@@ -244,14 +251,16 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
 
         # There was no inter-router connection established.
         self.assertFalse(passed)
-        logs = qd_manager.get_log()
 
-        sasl_failed = False
-        for log in logs:
-            if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
-                sasl_failed = True
-
-        self.assertTrue(sasl_failed)
+        def check_sasl_failed():
+            logs = qd_manager.get_log()
+            sasl_failed = False
+            for log in logs:
+                if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
+                    sasl_failed = True
+                    break
+            self.assertTrue(sasl_failed)
+        retry_assertion(check_sasl_failed, delay=2)
 
 
 class RouterTestPlainSasl(RouterTestPlainSaslCommon):
