@@ -324,17 +324,20 @@ ssize_t qd_message_field_length(qd_message_t *msg, qd_message_field_t field);
 ssize_t qd_message_field_copy(qd_message_t *msg, qd_message_field_t field, char *buffer, size_t *hdr_length);
 
 /**
- * Return the buffer and offset of the beginning of the raw body section.  Return NULL if there is no
- * raw body.
+ * Return a pointer to the first octet of non-cutthrough body data in the message.
  *
- * Side effect: Atomically enable cut-through on this stream so there is no race-condition between
- *              the producer and consumer.
+ * This is intended to be used by the message-consuming end of a cut through message. The returned pointer is to the
+ * data that arrived in the message prior to cut through activation. Prior to cut through activation buffers are
+ * appended to the traditional content buffer queue. Once cut through has been activated new buffers are no longer
+ * appended to the content buffer queue but are instead added to the cut through buffer slots. This function allows the
+ * message consumer to access these initial buffers before consuming from the cut through buffer slots.  Return NULL if
+ * there is no raw body buffers available.
  *
  * @param msg A pointer to a stream
  * @param buf [out] pointer to the buffer containing the first octet of the raw body (or 0)
  * @param offset [out] The offset in the buffer to the first octet of the raw body
  */
-void qd_message_raw_body_and_start_cutthrough(qd_message_t *msg, qd_buffer_t **buf, size_t *offset);
+void qd_message_get_raw_body_data(qd_message_t *msg, qd_buffer_t **buf, size_t *offset);
 
 /**
  * This is called when the raw body has been completely consumed by a cut-through consumer.

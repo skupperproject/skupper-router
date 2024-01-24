@@ -30,8 +30,8 @@ from TCP_echo_server import TcpEchoServer
 
 class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
     @classmethod
-    def setUpClass(cls):
-        super(TcpTlsAdaptor, cls).setUpClass(test_ssl=True)
+    def setUpClass(cls, encap='legacy'):
+        super(TcpTlsAdaptor, cls).setUpClass(test_ssl=True, encap=encap)
 
     @unittest.skipIf(not ncat_available(), "Ncat utility is not available")
     def test_authenticate_peer(self):
@@ -78,6 +78,12 @@ class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
         # Look for a log line that proves the peer did not return a certificate.
         self.INTA.wait_log_message("peer did not return a certificate")
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
+
+
+class TcpTlsAdaptorLite(TcpTlsAdaptor):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpTlsAdaptorLite, cls).setUpClass(encap='lite')
 
 
 class TcpTlsBadConfigTests(TestCase):

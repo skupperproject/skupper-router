@@ -34,9 +34,15 @@
 struct qd_tls_domain_t {
     sys_atomic_t     ref_count;
     qd_log_module_t  log_module;
+    const qd_dispatch_t *qd_dispatch;
     pn_tls_config_t *pn_tls_config;
-    char            *ssl_profile_name;
+    char            *name;
     char            *host;
+    char            *ssl_profile_name;
+    char            **alpn_protocols;
+    size_t           alpn_protocol_count;
+    bool             authenticate_peer;
+    bool             verify_host_name;
     bool             is_listener;
 };
 
@@ -122,6 +128,14 @@ qd_tls_t *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, q
         return 0;
     }
 
+    // Avoid partially filled unicast cutthrough slots by bumping up the maximum capacity to match the default
+    // unicast-cutthrough batch size
+    //
+    pn_tls_set_encrypt_input_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
+    pn_tls_set_decrypt_input_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
+    pn_tls_set_encrypt_output_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
+    pn_tls_set_decrypt_output_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
+
     ret = pn_tls_start(tls->tls_session);
     if (ret != 0) {
         qd_log(tls->log_module,
@@ -142,12 +156,15 @@ qd_tls_t *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, q
     return tls;
 }
 
-int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char *alpn_protocols[], int alpn_protocol_count)
+int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char **alpn_protocols, int alpn_protocol_count)
 {
     assert(alpn_protocol_count > 0);
     assert(tls_domain);
     return pn_tls_config_set_alpn_protocols(tls_domain->pn_tls_config, alpn_protocols, alpn_protocol_count);
 }
+
+
+static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *);
 
 qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                const qd_dispatch_t       *qd,
@@ -156,49 +173,95 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                size_t                     alpn_protocol_count,
                                bool                       is_listener)
 {
-    const char *role = is_listener ? "listener" : "connector";
-
     qd_tls_domain_t *tls_domain = new_qd_tls_domain_t();
     ZERO(tls_domain);
     sys_atomic_init(&tls_domain->ref_count, 1);
-    tls_domain->log_module       = log_module;
-    tls_domain->is_listener      = is_listener;
-    tls_domain->host             = qd_strdup(config->host);
-    tls_domain->ssl_profile_name = qd_strdup(config->ssl_profile_name);
+    tls_domain->qd_dispatch       = qd;
+    tls_domain->log_module        = log_module;
+    tls_domain->name              = qd_strdup(config->name);
+    tls_domain->host              = qd_strdup(config->host);
+    tls_domain->ssl_profile_name  = qd_strdup(config->ssl_profile_name);
+    tls_domain->authenticate_peer = config->authenticate_peer;
+    tls_domain->verify_host_name  = config->verify_host_name;
+    tls_domain->is_listener       = is_listener;
+    if (alpn_protocols && alpn_protocol_count > 0) {
+        tls_domain->alpn_protocols = (char **)qd_malloc(sizeof(alpn_protocols[0]) * alpn_protocol_count);
+        tls_domain->alpn_protocol_count = alpn_protocol_count;
+        for (int i = 0; i < alpn_protocol_count; ++i)
+            tls_domain->alpn_protocols[i] = qd_strdup(alpn_protocols[i]);
+    }
 
     qd_log(log_module,
            QD_LOG_DEBUG,
            "Configuring adaptor %s %s sslProfile %s",
-           role,
+           tls_domain->is_listener ? "listener" : "connector",
            config->name,
            config->ssl_profile_name);
 
+    return _tls_domain_init(tls_domain);
+}
+
+qd_tls_domain_t *qd_tls_domain_clone(const qd_tls_domain_t *src)
+{
+    assert(src);
+
+    qd_tls_domain_t *tls_domain = new_qd_tls_domain_t();
+    ZERO(tls_domain);
+    sys_atomic_init(&tls_domain->ref_count, 1);
+    tls_domain->qd_dispatch       = src->qd_dispatch;
+    tls_domain->log_module        = src->log_module;
+    tls_domain->name              = qd_strdup(src->name);
+    tls_domain->host              = qd_strdup(src->host);
+    tls_domain->ssl_profile_name  = qd_strdup(src->ssl_profile_name);
+    tls_domain->authenticate_peer = src->authenticate_peer;
+    tls_domain->verify_host_name  = src->verify_host_name;
+    tls_domain->is_listener       = src->is_listener;
+    if (src->alpn_protocols && src->alpn_protocol_count > 0) {
+        tls_domain->alpn_protocols = (char **)qd_malloc(sizeof(src->alpn_protocols[0]) * src->alpn_protocol_count);
+        tls_domain->alpn_protocol_count = src->alpn_protocol_count;
+        for (int i = 0; i < src->alpn_protocol_count; ++i)
+            tls_domain->alpn_protocols[i] = qd_strdup(src->alpn_protocols[i]);
+    }
+
+    qd_log(tls_domain->log_module,
+           QD_LOG_DEBUG,
+           "Cloning %s %s TLS Domain for profile %s",
+           tls_domain->is_listener ? "listener" : "connector",
+           src->name,
+           src->ssl_profile_name);
+
+    return _tls_domain_init(tls_domain);
+}
+
+static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
+{
+    const char *role = tls_domain->is_listener ? "listener" : "connector";
+
     do {
         // find the ssl profile
-        assert(qd);
-        qd_connection_manager_t *cm = qd_dispatch_connection_manager(qd);
+        qd_connection_manager_t *cm = qd_dispatch_connection_manager(tls_domain->qd_dispatch);
         assert(cm);
-        qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, config->ssl_profile_name);
+        qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, tls_domain->ssl_profile_name);
         if (!config_ssl_profile) {
-            qd_log(log_module,
+            qd_log(tls_domain->log_module,
                    QD_LOG_ERROR,
                    "Adaptor %s %s configuration error: failed to find sslProfile '%s'",
                    role,
-                   config->name,
-                   config->ssl_profile_name);
+                   tls_domain->name,
+                   tls_domain->ssl_profile_name);
             break;
         }
 
         int res                   = -1;  // assume failure
-        tls_domain->pn_tls_config = pn_tls_config(is_listener ? PN_TLS_MODE_SERVER : PN_TLS_MODE_CLIENT);
+        tls_domain->pn_tls_config = pn_tls_config(tls_domain->is_listener ? PN_TLS_MODE_SERVER : PN_TLS_MODE_CLIENT);
 
         if (!tls_domain->pn_tls_config) {
-            qd_log(log_module,
+            qd_log(tls_domain->log_module,
                    QD_LOG_ERROR,
                    "Adaptor %s %s sslProfile %s: failed to create TLS domain",
                    role,
-                   config->name,
-                   config->ssl_profile_name);
+                   tls_domain->name,
+                   tls_domain->ssl_profile_name);
             break;
         }
 
@@ -206,12 +269,12 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
             res = pn_tls_config_set_trusted_certs(tls_domain->pn_tls_config,
                                                   config_ssl_profile->ssl_trusted_certificate_db);
             if (res != 0) {
-                qd_log(log_module,
+                qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
                        "Adaptor %s %s sslProfile %s: failed to set TLS caCertFile %s: (%d)",
                        role,
-                       config->name,
-                       config->ssl_profile_name,
+                       tls_domain->name,
+                       tls_domain->ssl_profile_name,
                        config_ssl_profile->ssl_trusted_certificate_db,
                        res);
                 break;
@@ -225,42 +288,42 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                                 config_ssl_profile->ssl_private_key_file,
                                                 config_ssl_profile->ssl_password);
             if (res != 0) {
-                qd_log(log_module,
+                qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
                        "Adaptor %s %s sslProfile %s: failed to set TLS certificate configuration (certFile) %s: (%d)",
                        role,
-                       config->name,
-                       config->ssl_profile_name,
+                       tls_domain->name,
+                       tls_domain->ssl_profile_name,
                        config_ssl_profile->ssl_certificate_file,
                        res);
                 break;
             }
         } else {
-            qd_log(log_module,
+            qd_log(tls_domain->log_module,
                    QD_LOG_INFO,
                    "Adaptor %s %s sslProfile %s: did not provide a certFile configuration",
                    role,
-                   config->name,
-                   config->ssl_profile_name);
+                   tls_domain->name,
+                   tls_domain->ssl_profile_name);
         }
 
         if (!!config_ssl_profile->ssl_ciphers) {
             res = pn_tls_config_set_impl_ciphers(tls_domain->pn_tls_config, config_ssl_profile->ssl_ciphers);
             if (res != 0) {
-                qd_log(log_module,
+                qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
                        "Adaptor %s %s sslProfile %s: failed to configure ciphers %s (%d)",
                        role,
-                       config->name,
-                       config->ssl_profile_name,
+                       tls_domain->name,
+                       tls_domain->ssl_profile_name,
                        config_ssl_profile->ssl_ciphers,
                        res);
                 break;
             }
         }
 
-        if (is_listener) {
-            if (config->authenticate_peer) {
+        if (tls_domain->is_listener) {
+            if (tls_domain->authenticate_peer) {
                 res = pn_tls_config_set_peer_authentication(
                     tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->ssl_trusted_certificate_db);
             } else {
@@ -268,7 +331,7 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
             }
         } else {
             // Connector.
-            if (config->verify_host_name) {
+            if (tls_domain->verify_host_name) {
                 res = pn_tls_config_set_peer_authentication(
                     tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER_NAME, config_ssl_profile->ssl_trusted_certificate_db);
             } else {
@@ -278,12 +341,12 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
         }
 
         if (res != 0) {
-            qd_log(log_module,
+            qd_log(tls_domain->log_module,
                    QD_LOG_ERROR,
                    "Adaptor %s %s sslProfile %s: failed to configure TLS peer authentication (%d)",
                    role,
-                   config->name,
-                   config->ssl_profile_name,
+                   tls_domain->name,
+                   tls_domain->ssl_profile_name,
                    res);
             break;
         }
@@ -293,26 +356,26 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
         // case, h2 is the only supported protocol. A list of protocols can be found here -
         // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt
         //
-        if (alpn_protocols) {
-            res = qd_tls_set_alpn_protocols(tls_domain, alpn_protocols, alpn_protocol_count);
+        if (tls_domain->alpn_protocols) {
+            res = qd_tls_set_alpn_protocols(tls_domain, (const char **)tls_domain->alpn_protocols, tls_domain->alpn_protocol_count);
             if (res != 0) {
-                qd_log(log_module,
+                qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
                        "Adaptor %s %s sslProfile %s: failed to configure ALPN protocols (%d)",
                        role,
-                       config->name,
-                       config->ssl_profile_name,
+                       tls_domain->name,
+                       tls_domain->ssl_profile_name,
                        res);
                 break;
             }
         }
 
-        qd_log(log_module,
+        qd_log(tls_domain->log_module,
                QD_LOG_INFO,
                "Adaptor %s %s successfully configured sslProfile %s",
                role,
-               config->name,
-               config->ssl_profile_name);
+               tls_domain->name,
+               tls_domain->ssl_profile_name);
         return tls_domain;
 
     } while (0);
@@ -332,8 +395,13 @@ void qd_tls_domain_decref(qd_tls_domain_t *tls_domain)
             if (tls_domain->pn_tls_config)
                 pn_tls_config_free(tls_domain->pn_tls_config);
             sys_atomic_destroy(&tls_domain->ref_count);
+            free(tls_domain->name);
             free(tls_domain->host);
             free(tls_domain->ssl_profile_name);
+            for (int i = 0; i < tls_domain->alpn_protocol_count; ++i) {
+                free(tls_domain->alpn_protocols[i]);
+            }
+            free(tls_domain->alpn_protocols);
             free_qd_tls_domain_t(tls_domain);
         }
     }
@@ -1026,4 +1094,371 @@ int qd_tls_do_io(qd_tls_t                     *tls,
     }
 
     return 0;
+}
+
+
+
+void qd_tls_free2(qd_tls_t *tls)
+{
+    pn_raw_buffer_t pn_raw_desc;
+
+    if (tls) {
+        if (tls->tls_session) {
+            pn_tls_stop(tls->tls_session);
+
+            while (pn_tls_take_encrypt_output_buffers(tls->tls_session, &pn_raw_desc, 1) == 1) {
+                if (pn_raw_desc.context)
+                    qd_buffer_free((qd_buffer_t *) pn_raw_desc.context);
+            }
+            while (pn_tls_take_decrypt_output_buffers(tls->tls_session, &pn_raw_desc, 1) == 1) {
+                if (pn_raw_desc.context)
+                    qd_buffer_free((qd_buffer_t *) pn_raw_desc.context);
+            }
+            while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &pn_raw_desc, 1) == 1) {
+                if (pn_raw_desc.context)
+                    qd_buffer_free((qd_buffer_t *) pn_raw_desc.context);
+            }
+            while (pn_tls_take_decrypt_input_buffers(tls->tls_session, &pn_raw_desc, 1) == 1) {
+                if (pn_raw_desc.context)
+                    qd_buffer_free((qd_buffer_t *) pn_raw_desc.context);
+            }
+
+            pn_tls_free(tls->tls_session);
+            tls->tls_session = 0;
+        }
+        qd_tls_domain_decref(tls->tls_domain);
+        free_qd_tls_t(tls);
+    }
+}
+
+
+// initialize a proton buffer descriptor to hold the given qd_buffer_t
+//
+static inline void _pn_buf_desc_give_buffer(pn_raw_buffer_t *pn_desc, const qd_buffer_t *buffer)
+{
+    pn_desc->size     = qd_buffer_size(buffer);
+    pn_desc->capacity = qd_buffer_capacity(buffer);
+    pn_desc->offset   = 0;
+    pn_desc->bytes    = (char *) qd_buffer_base(buffer);
+    pn_desc->context  = (uintptr_t) buffer;
+}
+
+// take a used buffer from the given proton buffer descriptor
+//
+static inline qd_buffer_t *_pn_buf_desc_take_buffer(pn_raw_buffer_t *pn_desc)
+{
+    qd_buffer_t *buffer = (qd_buffer_t *) pn_desc->context;
+    assert(buffer);
+    // do not use qd_adaptor_buffer_insert() since it *increments* the size, we need to set it:
+    buffer->size = pn_desc->size;
+    assert(buffer->size <= QD_BUFFER_SIZE);
+    return buffer;
+}
+
+// duplicate qd_tls_do_io() for now, deprecate qd_tls_do_io() and friends when/if older qd_adaptor_buffer_t-based
+// adaptors are removed.  If C had true generics this wouldn't be necessary :(
+//
+int qd_tls_do_io2(qd_tls_t                      *tls,
+                  pn_raw_connection_t           *raw_conn,
+                  qd_tls_take_output_data_cb2_t *take_output_cb,
+                  void                          *take_output_context,
+                  qd_buffer_list_t              *input_data,
+                  uint64_t                      *input_data_count)
+{
+    CHECK_PROACTOR_RAW_CONNECTION(raw_conn);
+
+    bool work;
+    pn_raw_buffer_t pn_buf_desc;
+
+    assert(tls);
+    assert(raw_conn);
+
+    if (input_data_count)
+        *input_data_count = 0;
+
+    if (tls->tls_error)
+        return -1;
+    if (tls->input_drained && tls->output_flushed)
+        return QD_TLS_DONE;
+
+    do {
+        size_t          capacity;
+        size_t          taken;
+        size_t          given;
+        uint64_t        total_octets;
+
+        // Loop until no more work can be done. "work" is considered true whenever the TLS layer produces output or
+        // opens up capacity for more input
+
+        work = false;
+
+        //
+        // give empty buffers for holding encrypted and decrypted output from the TLS layer
+        //
+
+        capacity = pn_tls_get_encrypt_output_buffer_capacity(tls->tls_session);
+        while (capacity-- > 0) {
+            _pn_buf_desc_give_buffer(&pn_buf_desc, qd_buffer());
+            given = pn_tls_give_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
+            (void) given;
+            assert(given == 1);
+        }
+        capacity = pn_tls_get_decrypt_output_buffer_capacity(tls->tls_session);
+        while (capacity-- > 0) {
+            _pn_buf_desc_give_buffer(&pn_buf_desc, qd_buffer());
+            given = pn_tls_give_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1);
+            (void) given;
+            assert(given == 1);
+        }
+
+        //
+        // discard written output buffers to make room for new output
+        //
+
+        while (pn_raw_connection_take_written_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
+            qd_buffer_t *buf = (qd_buffer_t *) pn_buf_desc.context;
+            qd_buffer_free(buf);
+        }
+
+        //
+        // push any unencrypted output data from the protocol adaptor into the TLS layer for encryption.
+        //
+
+        if (take_output_cb && pn_tls_is_secure(tls->tls_session)) {
+            capacity = pn_tls_get_encrypt_input_buffer_capacity(tls->tls_session);
+
+            if (capacity > 0) {
+                qd_buffer_list_t ubufs = DEQ_EMPTY;
+
+                int64_t out_octets = take_output_cb(take_output_context, &ubufs, capacity);
+                if (out_octets > 0) {
+                    assert(!DEQ_IS_EMPTY(ubufs) && DEQ_SIZE(ubufs) <= capacity);
+                    qd_log(tls->log_module,
+                           QD_LOG_DEBUG,
+                           "[C%" PRIu64 "] %" PRIi64 " unencrypted bytes taken by TLS for encryption (%zu buffers)",
+                           tls->conn_id,
+                           out_octets,
+                           DEQ_SIZE(ubufs));
+                    qd_buffer_t *abuf = DEQ_HEAD(ubufs);
+                    while (abuf) {
+                        DEQ_REMOVE_HEAD(ubufs);
+                        _pn_buf_desc_give_buffer(&pn_buf_desc, abuf);
+                        given = pn_tls_give_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1);
+                        assert(given == 1);
+                        abuf = DEQ_HEAD(ubufs);
+                    }
+                } else if (out_octets == 0) {
+                    // currently no output, try again later
+                    assert(DEQ_IS_EMPTY(ubufs));
+                } else if (tls->output_eos == false) {
+                    // no further output, flush and close the connection
+                    assert(DEQ_IS_EMPTY(ubufs));
+                    if (out_octets == QD_IO_EOS) {
+                        // clean end-of-output, append TLS close notify:
+                        pn_tls_close_output(tls->tls_session);
+                    }
+                    tls->output_eos = true;
+                    qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] outgoing stream EOS signalled: closing TLS output",
+                           tls->conn_id);
+                }
+            }
+        } else {
+            // TLS is not secure (either handshake is in progress or an error occurred). Either way, do not give it any
+            // more output data.  TLS errors are checked after the TLS state machine runs and are handled on exit from
+            // this loop.
+        }
+
+        //
+        // Push incoming encrypted data from raw conn into TLS. *Important*: once the TLS handshake is completed do not
+        // take raw connection incoming buffers if the calling thread is blocked from taking the resulting decrypted
+        // incoming buffers (input_data == 0). Why? Because if we happen to take the last read buffer from the raw
+        // connection then proactor will generate a PN_RAW_CONNECTION_DISCONNECTED event. Once this happens we can no
+        // longer call pn_raw_connection_wake() on it. This means we can no longer activate this thread when it is
+        // eventually unblocked. This results in unencrypted incoming data being stuck in the TLS session and eventually
+        // discarded when the session is deallocated (data truncation).
+        //
+
+        capacity = pn_tls_get_decrypt_input_buffer_capacity(tls->tls_session);
+        if (capacity > 0 && (!pn_tls_is_secure(tls->tls_session) || input_data != 0)) {
+            size_t pushed = 0;
+            total_octets  = 0;
+            while (pushed < capacity && pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
+                if (pn_buf_desc.size) {
+                    total_octets += pn_buf_desc.size;
+                    given = pn_tls_give_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1);
+                    assert(given == 1);
+                    ++pushed;
+                } else {
+                    qd_buffer_free((qd_buffer_t *) pn_buf_desc.context);
+                }
+            }
+            if (pushed > 0) {
+                tls->encrypted_input_bytes += total_octets;
+                qd_log(tls->log_module,
+                       QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] %" PRIu64
+                       " encrypted bytes read from the raw connection passed to TLS for decryption (%zu buffers)",
+                       tls->conn_id,
+                       total_octets,
+                       pushed);
+            }
+        }
+
+        // run the tls state machine (not considered "work").
+        //
+        // If there is an error the TLS layer may have generated new encrypted output that contains the details about
+        // the failure that needs to be sent to the remote. That is why this code does not immediately cease processing
+        // if pn_tls_process returns an error: there may be more outgoing buffers that have to be written to the raw
+        // connection before it can be closed. This code assumes that the proton TLS library will stop giving capacity
+        // for other work once the error has occurred so it is safe to continue running this work loop.
+
+        if (!tls->tls_error) {
+            const bool check_if_secure = tls->on_secure_cb && !pn_tls_is_secure(tls->tls_session);
+            int        err             = pn_tls_process(tls->tls_session);
+            if (err) {
+                tls->tls_error = true;
+                qd_log(tls->log_module, QD_LOG_DEBUG, "[C%" PRIu64 "] pn_tls_process failed: error=%d", tls->conn_id,
+                       err);
+            } else if (check_if_secure && pn_tls_is_secure(tls->tls_session)) {
+                tls->on_secure_cb(tls, tls->user_context);
+                tls->on_secure_cb = 0;  // one shot
+            }
+        }
+
+        //
+        // Take encrypted TLS output and write it to the raw connection
+        //
+
+        capacity = pn_raw_connection_write_buffers_capacity(raw_conn);
+        if (capacity > 0) {
+            size_t pushed = 0;
+            total_octets  = 0;
+            while (pushed < capacity && pn_tls_take_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+                total_octets += pn_buf_desc.size;
+                given = pn_raw_connection_write_buffers(raw_conn, &pn_buf_desc, 1);
+                assert(given == 1);
+                ++pushed;
+            }
+            if (pushed > 0) {
+                work = true;
+                tls->encrypted_output_bytes += total_octets;
+                qd_log(tls->log_module,
+                       QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] %" PRIu64 " encrypted bytes written to the raw connection by TLS (%zu buffers)",
+                       tls->conn_id,
+                       total_octets,
+                       pushed);
+            }
+        } else if (pn_raw_connection_is_write_closed(raw_conn)) {
+            // drain the TLS buffers - there is no place to send them!
+            taken = 0;
+            while (pn_tls_take_encrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+                assert(pn_buf_desc.context);
+                qd_buffer_free(_pn_buf_desc_take_buffer(&pn_buf_desc));
+                taken += 1;
+            }
+            if (taken) {
+                work = true;
+                qd_log(tls->log_module, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] discarded %zu outgoing encrypted buffers due to raw conn write closed",
+                       tls->conn_id, taken);
+            }
+        }
+
+        //
+        // take decrypted output and give it to the adaptor
+        //
+
+        if (input_data) {
+            total_octets = 0;
+            taken        = 0;
+            while (pn_tls_take_decrypt_output_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+                qd_buffer_t *abuf = _pn_buf_desc_take_buffer(&pn_buf_desc);
+                if (qd_buffer_size(abuf)) {
+                    total_octets += qd_buffer_size(abuf);
+                    DEQ_INSERT_TAIL(*input_data, abuf);
+                    ++taken;
+                } else {
+                    qd_buffer_free(abuf);
+                }
+            }
+            if (taken) {
+                work = true;  // more capacity for decrypted output
+                *input_data_count += total_octets;
+                qd_log(tls->log_module, QD_LOG_DEBUG,
+                       "[C%" PRIu64 "] %" PRIu64 " decrypted bytes taken from TLS for adaptor input (%zu buffers)",
+                       tls->conn_id, total_octets, taken);
+            }
+        }
+
+        //
+        // Release all used TLS input buffers - they are no longer needed
+        //
+
+        taken = 0;
+        while (pn_tls_take_encrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_buffer_t *abuf = (qd_buffer_t *) pn_buf_desc.context;
+            assert(abuf);
+            qd_buffer_free(abuf);
+            ++taken;
+        }
+        while (pn_tls_take_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1) == 1) {
+            qd_buffer_t *abuf = (qd_buffer_t *) pn_buf_desc.context;
+            assert(abuf);
+            qd_buffer_free(abuf);
+            ++taken;
+        }
+        if (taken)
+            work = true;  // more capacity for encrypt/decrypt input buffers
+
+    } while (work);
+
+    // Cannot return an error until all pending outgoing encrypted data have been written to the raw conn so error info
+    // can be sent to peer. See comment above.
+    //
+    if (tls->tls_error && !pn_tls_is_decrypt_output_pending(tls->tls_session)) {
+        char buf[1024] = "Unknown protocol error";  // default error msg
+        int  err = pn_tls_get_session_error(tls->tls_session);
+        if (err) {
+            int rc = snprintf(buf, sizeof(buf), "Code: %d ", err);
+            if (rc > 0 && rc < sizeof(buf)) {
+                pn_tls_get_session_error_string(tls->tls_session, &buf[rc], sizeof(buf) - rc);
+            }
+        }
+        pn_condition_t *cond = pn_raw_connection_condition(raw_conn);
+        if (!!cond && !pn_condition_is_set(cond)) {
+            (void) pn_condition_set_name(cond, "TLS-connection-failed");
+            (void) pn_condition_set_description(cond, buf);
+        }
+        pn_raw_connection_close(raw_conn);
+        qd_log(tls->log_module, QD_LOG_WARNING, "[C%" PRIu64 "] TLS connection failed: %s", tls->conn_id, buf);
+        return -1;
+    }
+
+    if (tls->output_eos && !pn_tls_is_encrypt_output_pending(tls->tls_session)) {
+        // We closed the encrypt side of the TLS connection and we've sent all output
+        tls->output_flushed = true;
+        if (!pn_raw_connection_is_write_closed(raw_conn)) {
+            qd_log(tls->log_module, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] TLS output closed - closing write side of raw connection", tls->conn_id);
+            pn_raw_connection_write_close(raw_conn);
+        }
+    }
+
+    if (pn_tls_is_input_closed(tls->tls_session)
+        || (pn_raw_connection_is_read_closed(raw_conn) && !pn_tls_is_decrypt_output_pending(tls->tls_session))) {
+        // TLS will not take any more encrypted input - drain the raw conn input
+        if (!pn_raw_connection_is_read_closed(raw_conn)) {
+            qd_log(tls->log_module, QD_LOG_DEBUG,
+                   "[C%" PRIu64 "] TLS input closed - closing read side of raw connection", tls->conn_id);
+            pn_raw_connection_read_close(raw_conn);
+        }
+        while (pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
+            qd_buffer_free(_pn_buf_desc_take_buffer(&pn_buf_desc));
+        }
+
+        tls->input_drained = true;
+    }
+
+    return tls->input_drained && tls->output_flushed ? QD_TLS_DONE : 0;
 }

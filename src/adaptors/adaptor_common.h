@@ -33,7 +33,8 @@
 #include <proton/raw_connection.h>
 #include <proton/tls.h>
 
-#define QD_IO_EOS -2  // I/O layer: signal end-of-output stream
+#define QD_IO_EOS     -2  // I/O layer: signal clean end-of-output stream
+#define QD_IO_EOS_ERR -3  // I/O layer: signal error end-of-output stream
 
 #define RAW_BUFFER_BATCH 4
 

@@ -87,16 +87,21 @@ typedef struct tcplite_connector_t {
 } tcplite_connector_t;
 
 
+// LISTENER SIDE state machine:
+//
 typedef enum {
-    LSIDE_INITIAL,
-    LSIDE_LINK_SETUP,
-    LSIDE_STREAM_START,
-    LSIDE_FLOW,
-    CSIDE_INITIAL,
-    CSIDE_RAW_CONNECTION_OPENING,
-    CSIDE_LINK_SETUP,
-    CSIDE_FLOW,
-    XSIDE_CLOSING
+    LSIDE_INITIAL,       // Listener side raw connection accepted
+    LSIDE_TLS_HANDSHAKE, // raw conn opened, TLS handshake in progress
+    LSIDE_LINK_SETUP,    // raw conn/TLS opened, QDR connection and in/out QDR links attaching
+    LSIDE_STREAM_START,  // reply-to set, inbound delivery and streaming msg initialized, wait for out stream/delivery
+    LSIDE_FLOW,          // in/out deliveries and msg active; doing cleartext I/O
+    LSIDE_TLS_FLOW,      // in/out deliveries and msg active; doing TLS I/O
+
+    CSIDE_INITIAL,       // raw connection initiated, out delivery/msg available
+    CSIDE_LINK_SETUP,    // raw conn/TLS opened, QDR conn and links attaching, waiting for inbound credit from core
+    CSIDE_FLOW,          // in/out deliveries and msg active; doing I/O
+    CSIDE_TLS_FLOW,      // in/out deliveries and msg active; doing TLS I/O
+    XSIDE_CLOSING        // raw conn closing
 } tcplite_connection_state_t;
 ENUM_DECLARE(tcplite_connection_state);
 
@@ -136,6 +141,9 @@ typedef struct tcplite_connection_t {
     qd_buffer_t                *outbound_body;
     pn_condition_t             *error;
     char                       *reply_to;
+    qd_tls_domain_t            *tls_domain;    // if configured, owned by this connection
+    qd_tls_t                   *tls;           // tls session if configured
+    char                       *alpn_protocol; // negotiated by TLS else 0
     qd_handler_context_t        context;
     tcplite_connection_state_t  state;
     qdpo_transport_handle_t    *observer_handle;

@@ -30,6 +30,14 @@
 typedef struct qd_tls_domain_t qd_tls_domain_t;
 typedef struct qd_tls_t qd_tls_t;
 
+// ALPN Protocol Property Map Key
+// When ALPN is negotiated with a TLS client the agreed upon value needs to be proxied to the server facing end of the
+// connection. The server-facing handshake will use that negotiated ALPN value. Typically the negotiated ALPN value is
+// added to the message application property map. This defines the map key used.
+#define QD_TLS_ALPN_KEY     "alpn"
+#define QD_TLS_ALPN_KEY_LEN 4
+
+
 /**
  * Constructor to create a new qd_tls_domain_t instance.
  *
@@ -54,6 +62,17 @@ qd_tls_domain_t *qd_tls_domain(const qd_adaptor_config_t *config,
                                const char                *alpn_protocols[],
                                size_t                     alpn_protocol_count,
                                bool                       is_listener);
+
+/**
+ * Create a new qd_tls_domain_t instance from an existing one.
+ *
+ * Creates a new domain using the same configuration parameters as the src domain. All credentials are refreshed which
+ * will cause the new domain to incorporate any changes to the credentials since the src domain was created.
+ *
+ * @param src - Pointer to the domain to be cloned
+ * @return new domain or 0 if failure. Will log an error on failure.
+ */
+qd_tls_domain_t *qd_tls_domain_clone(const qd_tls_domain_t *src);
 
 /**
  * Drop the reference to the qd_tls_domain_t instance. This can free the instance so it must not be referenced after
@@ -149,7 +168,7 @@ pn_tls_t *qd_tls_get_pn_tls_session(qd_tls_t *tls);
  * @alpn_protocols list containing supported alpn protocols
  * @alpn_protocol_count number of elements in the alpn_protocols list.
  */
-int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char *alpn_protocols[], int alpn_protocol_count);
+int qd_tls_set_alpn_protocols(qd_tls_domain_t *tls_domain, const char **alpn_protocols, int alpn_protocol_count);
 
 /**
  * Populates the negotiated ALPN protocol, if any, into the passed in alpn_protocol. Sets the alpn_protocol pointer to
@@ -165,10 +184,6 @@ void qd_tls_get_alpn_protocol(qd_tls_t *tls, char **alpn_protocol);
  * Finally, frees the qd_tls_t object
  */
 void qd_tls_free(qd_tls_t *tls);
-
-////////////////////////////////////////////////////////////////////////
-// Experimental: alternative API for TLS I/O
-////////////////////////////////////////////////////////////////////////
 
 /**
  * True if the output (encrypt) side of the TLS session is closed and all pending output has been written to the raw
@@ -204,11 +219,13 @@ uint64_t qd_tls_get_encrypted_input_octet_count(const qd_tls_t *tls);   // inbou
  * @param limit - at most limit buffers can be appended during this call. Appending less than limit is acceptable,
  * appending more is an error!
  *
- * @return - the total number of data octets added to the buffer list or QD_TLS_EOS to indicate that no more application
- * data will be provided. Returning QD_TLS_EOS will cause the TLS layer to append the TLS closure record to the outbound
- * encrypted data. This confirms a clean close to the peer and avoids a potential security issue (truncation
- * attack). After all encrypted data has been written to the raw connection the qd_tls_io_io() call will close the write
- * side of the raw connection. When QD_TLS_EOS is returned the blist MUST be empty.
+ * @return - the total number of data octets added to the buffer list or QD_IO_EOS(_ERR) to indicate that no more
+ * application data will be provided. Returning QD_IO_EOS will cause the TLS layer to append the TLS closure record to
+ * the outbound encrypted data. This confirms a clean close to the peer and avoids a potential security issue
+ * (truncation attack). Returning QD_IO_EOS_ERR will prevent sending the TLS closure record. This should be used to
+ * signal if the penultimate sender failed to send the proper TLS closure record.  After all encrypted data has been
+ * written to the raw connection the qd_tls_io_io() call will close the write side of the raw connection. When
+ * QD_IO_EOS(_ERR) is returned the blist MUST be empty.
  */
 typedef int64_t qd_tls_take_output_data_cb_t(void *context, qd_adaptor_buffer_list_t *blist, size_t limit);
 
@@ -236,5 +253,24 @@ int qd_tls_do_io(qd_tls_t                     *tls,
                  void                         *take_output_context,
                  qd_adaptor_buffer_list_t     *input_data,
                  uint64_t                     *input_data_count);
+
+
+//
+// Alternative API for using qd_buffer_t buffers instead of qd_adaptor_buffer_t:
+//
+
+
+// @return 0 if I/O in progress, QD_TLS_DONE if the TLS session has closed, or fatal error if < 0
+//
+typedef int64_t qd_tls_take_output_data_cb2_t(void *context, qd_buffer_list_t *blist, size_t limit);
+#define QD_TLS_DONE 1
+int qd_tls_do_io2(qd_tls_t                      *tls,
+                  pn_raw_connection_t           *raw_conn,
+                  qd_tls_take_output_data_cb2_t *take_output_cb,
+                  void                          *take_output_context,
+                  qd_buffer_list_t              *input_data,
+                  uint64_t                      *input_data_count);
+
+void qd_tls_free2(qd_tls_t *tls);
 
 #endif  // __adaptor_tls_h__

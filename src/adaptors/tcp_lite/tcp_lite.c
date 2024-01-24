@@ -50,10 +50,21 @@ ALLOC_DEFINE(tcplite_listener_t);
 ALLOC_DEFINE(tcplite_connector_t);
 ALLOC_DEFINE_SAFE(tcplite_connection_t);
 
-static const char *state_names[] =
-{ "LSIDE_INITIAL", "LSIDE_LINK_SETUP", "LSIDE_STREAM_START", "LSIDE_FLOW",
-  "CSIDE_INITIAL", "CSIDE_RAW_CONNECTION_OPENING", "CSIDE_LINK_SETUP", "CSIDE_FLOW",
-  "XSIDE_CLOSING"
+static const char *const state_names[] =
+{
+    [LSIDE_INITIAL]       = "LSIDE_INITIAL",
+    [LSIDE_TLS_HANDSHAKE] = "LSIDE_TLS_HANDSHAKE",
+    [LSIDE_LINK_SETUP]    = "LSIDE_LINK_SETUP",
+    [LSIDE_STREAM_START]  = "LSIDE_STREAM_START",
+    [LSIDE_FLOW]          = "LSIDE_FLOW",
+    [LSIDE_TLS_FLOW]      = "LSIDE_TLS_FLOW",
+
+    [CSIDE_INITIAL]       = "CSIDE_INITIAL",
+    [CSIDE_LINK_SETUP]    = "CSIDE_LINK_SETUP",
+    [CSIDE_FLOW]          = "CSIDE_FLOW",
+    [CSIDE_TLS_FLOW]      = "CSIDE_TLS_FLOW",
+
+    [XSIDE_CLOSING] = "XSIDE_CLOSING"
 };
 ENUM_DEFINE(tcplite_connection_state, state_names);
 
@@ -118,6 +129,8 @@ static void connection_run_CSIDE_IO(tcplite_connection_t *conn);
 static void connection_run_XSIDE_IO(tcplite_connection_t *conn);
 static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv);
 static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener, void *context);
+static void on_tls_connection_secured(qd_tls_t *tls, void *user_context);
+static char *get_tls_negotiated_alpn(qd_message_t *msg);  // caller must free() returned string!
 
 
 //=================================================================================
@@ -334,6 +347,46 @@ static void set_state_XSIDE_IO(tcplite_connection_t *conn, tcplite_connection_st
     conn->state = new_state;
 }
 
+//
+// Connector/Connection cleanup
+//
+// Both tcplite_connector_t and tcplite_connection_t allocate a core qdr_connection_t instance which is used by the Core
+// thread for activation (see CORE_activate()).  During cleanup of these objects we need to ensure that both the I/O and
+// Core threads do not reference them after they have been deallocated. To do this we use a two-phase approach to
+// freeing these objects. In the first phase all non-activation-related resources are released by the I/O thread (see
+// free_connector(), free_connection_IO). Then the object is passed to the Core thread for cleanup of the activation
+// resources and freeing the base object (see free_tcp_resource(), qdr_core_free_tcp_resource_CT()).
+//
+// tcplite_listener_t does not use a qdr_connection_t so this process does not apply to it.
+//
+
+static void qdr_core_free_tcp_resource_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+{
+    // note: need to release the resource regardless of discard flag
+    tcplite_common_t *common = (tcplite_common_t *)action->args.general.context_1;
+    if (common->context_type == TL_CONNECTION) {
+        tcplite_connection_t *conn = (tcplite_connection_t*) common;
+        sys_atomic_destroy(&conn->core_activation);
+        sys_atomic_destroy(&conn->raw_opened);
+        sys_mutex_free(&conn->activation_lock);
+        free_tcplite_connection_t(conn);
+    } else {
+        // Core does not hold a reference to a listener so they are not freed here
+        assert(common->context_type == TL_CONNECTOR);
+        tcplite_connector_t *cr = (tcplite_connector_t *)common;
+        sys_mutex_free(&cr->lock);
+        free_tcplite_connector_t(cr);
+    }
+}
+
+static void free_tcp_resource(tcplite_common_t *resource)
+{
+    assert(tcplite_context);
+    qdr_action_t *action           = qdr_action(qdr_core_free_tcp_resource_CT, "core free tcp resource");
+    action->args.general.context_1 = resource;
+    qdr_action_enqueue(tcplite_context->core, action);
+}
+
 
 static void free_listener(tcplite_listener_t *li)
 {
@@ -359,6 +412,13 @@ static void free_listener(tcplite_listener_t *li)
 
 static void free_connector(tcplite_connector_t *cr)
 {
+    // Disable activation by the Core thread.
+    sys_mutex_lock(&cr->lock);
+    qd_timer_free(cr->activate_timer);
+    cr->activate_timer = 0;
+    sys_mutex_unlock(&cr->lock);
+    // Do NOT free the cr->lock mutex since the core may be holding it.
+
     sys_mutex_lock(&tcplite_context->lock);
     DEQ_REMOVE(tcplite_context->connectors, cr);
     sys_mutex_unlock(&tcplite_context->lock);
@@ -369,11 +429,12 @@ static void free_connector(tcplite_connector_t *cr)
             "Deleted TcpConnector for %s, %s:%s",
             cr->adaptor_config->address, cr->adaptor_config->host, cr->adaptor_config->port);
 
-    qd_timer_free(cr->activate_timer);
     qd_tls_domain_decref(cr->tls_domain);
     qd_free_adaptor_config(cr->adaptor_config);
-    sys_mutex_free(&cr->lock);
-    free_tcplite_connector_t(cr);
+
+    // Pass connector to Core for final deallocation. The Core will free the cr->lock.
+    // see qdr_core_free_tcp_resource_CT()
+    free_tcp_resource(&cr->common);
 }
 
 
@@ -383,6 +444,12 @@ static void free_connection_IO(void *context)
     bool free_parent = false;
     tcplite_connection_t *conn = (tcplite_connection_t*) context;
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Cleaning up resources", conn->conn_id);
+
+    // disable activation via Core thread
+    sys_mutex_lock(&conn->activation_lock);
+    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+    sys_mutex_unlock(&conn->activation_lock);
+    // Do NOT free the core_activation lock since the core may be holding it
 
     if (!!conn->common.parent && conn->common.parent->context_type == TL_LISTENER) {
         tcplite_listener_t *li = (tcplite_listener_t*) conn->common.parent;
@@ -408,11 +475,11 @@ static void free_connection_IO(void *context)
         }
     }
 
-    sys_atomic_destroy(&conn->core_activation);
-    sys_atomic_destroy(&conn->raw_opened);
     qd_timer_free(conn->close_timer);
-    sys_mutex_free(&conn->activation_lock);
-    free_tcplite_connection_t(conn);
+
+    // Pass connector to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
+    // qdr_core_free_tcp_resource_CT()
+    free_tcp_resource(&conn->common);
 }
 
 
@@ -427,6 +494,8 @@ static void close_raw_connection_XSIDE_IO(tcplite_connection_t *conn)
             drain_read_buffers_XSIDE_IO(conn->raw_conn);
             drain_write_buffers_XSIDE_IO(conn->raw_conn);
 
+            // note: this disables the raw connection event handler. No further PN_RAW_CONNECTION_* events will occur,
+            // including DISCONNECTED!
             sys_mutex_lock(&conn->activation_lock);
             pn_raw_connection_set_context(conn->raw_conn, 0);
             conn->raw_conn = 0;
@@ -435,17 +504,14 @@ static void close_raw_connection_XSIDE_IO(tcplite_connection_t *conn)
     }
 }
 
-
+// Note: if no_delay is true, conn will be freed by this function
+//
 static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 {
     ASSERT_RAW_IO;
     close_raw_connection_XSIDE_IO(conn);
 
     free(conn->reply_to);
-
-    if (!!conn->inbound_link) {
-        qdr_link_detach(conn->inbound_link, QD_LOST, 0);
-    }
 
     qd_message_activation_t activation;
     activation.type     = QD_ACTIVATION_NONE;
@@ -468,17 +534,21 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 
         qdr_delivery_remote_state_updated(tcplite_context->core, conn->inbound_delivery, 0, true, 0, false);
         qdr_delivery_set_context(conn->inbound_delivery, 0);
-        qdr_delivery_decref(tcplite_context->core, conn->inbound_delivery, "close_connection_XSIDE_IO - inbound_delivery");
+        qdr_delivery_decref(tcplite_context->core, conn->inbound_delivery, "close_connection_XSIDE_IO - inbound_delivery released");
     }
 
-    if (!!conn->outbound_link) {
-        qdr_link_detach(conn->outbound_link, QD_LOST, 0);
+    if (!!conn->inbound_link) {
+        qdr_link_detach(conn->inbound_link, QD_LOST, 0);
     }
 
     if (!!conn->outbound_delivery) {
         qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_MODIFIED, true, 0, false);
         qdr_delivery_set_context(conn->outbound_delivery, 0);
-        qdr_delivery_decref(tcplite_context->core, conn->outbound_delivery, "close_connection_XSIDE_IO - outbound_delivery");
+        qdr_delivery_decref(tcplite_context->core, conn->outbound_delivery, "close_connection_XSIDE_IO - outbound_delivery released");
+    }
+
+    if (!!conn->outbound_link) {
+        qdr_link_detach(conn->outbound_link, QD_LOST, 0);
     }
 
     if (!!conn->core_conn) {
@@ -491,6 +561,9 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
         vflow_end_record(conn->common.vflow);
     }
 
+    qd_tls_free2(conn->tls);
+    qd_tls_domain_decref(conn->tls_domain);
+
     conn->reply_to          = 0;
     conn->inbound_link      = 0;
     conn->inbound_stream    = 0;
@@ -500,6 +573,8 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
     conn->outbound_delivery = 0;
     conn->core_conn         = 0;
     conn->common.vflow      = 0;
+    conn->tls               = 0;
+    conn->tls_domain        = 0;
 
     if (!!conn->common.parent && conn->common.parent->context_type == TL_LISTENER) {
         tcplite_listener_t *li = (tcplite_listener_t*) conn->common.parent;
@@ -516,6 +591,7 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
     if (no_delay) {
         free_connection_IO(conn);
     } else {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Scheduling tcplite_conn cleanup", conn->conn_id);
         conn->close_timer = qd_timer(tcplite_context->qd, free_connection_IO, conn);
         qd_timer_schedule(conn->close_timer, CONNECTION_CLOSE_TIME);
     }
@@ -682,6 +758,46 @@ static uint64_t consume_write_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_me
     return octet_count;
 }
 
+// Alternative to consume_message_body_XSIDE_IO() for use with TLS connections. The TLS layer takes ownership of all
+// output message buffers and will free them as they are processed. Due to that we need to make a copy of these buffers
+// in order to avoid freeing buffers that are part of the message (double-free).
+//
+static uint64_t copy_message_body_TLS_XSIDE_IO(tcplite_connection_t *conn, qd_message_t *stream, qd_buffer_list_t *buffers, size_t limit)
+{
+    size_t   offset = 0;
+    uint64_t octets = 0;
+    const bool observe = (conn->listener_side && !!conn->observer_handle);
+
+    assert(conn->tls);
+
+    if (!conn->outbound_body) {
+        assert(!conn->outbound_body_complete);
+        qd_message_get_raw_body_data(stream, &conn->outbound_body, &offset);
+    }
+
+    while (limit-- && conn->outbound_body) {
+        size_t size = qd_buffer_size(conn->outbound_body) - offset;
+        if (size > 0) {
+            qd_buffer_t *clone = qd_buffer();
+            clone->size = size;
+            memcpy(qd_buffer_base(clone), qd_buffer_base(conn->outbound_body) + offset, size);
+            if (observe) {
+                qdpo_data(conn->observer_handle, false, clone, 0);
+            }
+            DEQ_INSERT_TAIL(*buffers, clone);
+        }
+        octets += size;
+        offset = 0;
+        conn->outbound_body = DEQ_NEXT(conn->outbound_body);
+    }
+
+    if (!conn->outbound_body) {
+        conn->outbound_body_complete = true;
+        qd_message_release_raw_body(stream);
+    }
+
+    return octets;
+}
 
 static uint64_t consume_message_body_XSIDE_IO(tcplite_connection_t *conn, qd_message_t *stream)
 {
@@ -692,30 +808,10 @@ static uint64_t consume_message_body_XSIDE_IO(tcplite_connection_t *conn, qd_mes
     size_t   offset = 0;
 
     if (!conn->outbound_body) {
-        qd_message_depth_status_t depth_status = qd_message_check_depth(stream, QD_DEPTH_RAW_BODY);
-        switch (depth_status) {
-        case QD_MESSAGE_DEPTH_INVALID:
-            //
-            // TODO - Handle corrupt message formats
-            //
-            break;
-
-        case QD_MESSAGE_DEPTH_OK:
-            //
-            // If we have complete headers, get the pointer to the buffer containing the first
-            // octet of the body and the offset to that octet.  If there are no body octets, we
-            // will be given a NULL pointer.
-            //
-            qd_message_raw_body_and_start_cutthrough(stream, &conn->outbound_body, &offset);
-            break;
-
-        case QD_MESSAGE_DEPTH_INCOMPLETE:
-            //
-            // We don't have all of the header data for the stream.  Do nothing and wait for
-            // more stuff to arrive.
-            //
-            return 0;
-        }
+        // Get the pointer to the buffer containing the first octet of the body and the offset to that octet.  If there
+        // are no body octets, we will be given a NULL pointer.
+        //
+        qd_message_get_raw_body_data(stream, &conn->outbound_body, &offset);
     }
 
     //
@@ -779,15 +875,13 @@ static void link_setup_CSIDE_IO(tcplite_connection_t *conn, qdr_delivery_t *deli
 {
     ASSERT_RAW_IO;
 
-    qdr_terminus_t *target = qdr_terminus(0);
-    qdr_terminus_set_address(target, conn->reply_to);
-
     assert(conn->common.parent->context_type == TL_CONNECTOR);
     const char *host = ((tcplite_connector_t *)conn->common.parent)->adaptor_config->host_port;
     conn->core_conn  = TL_open_core_connection(conn->conn_id, false, host);
     qdr_connection_set_context(conn->core_conn, conn);
 
-    conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.cside.in", 0, false, 0, &conn->inbound_link_id);
+    // use an anonymous inbound link in order to ensure credit arrives otherwise if the client has dropped the state machine will stall waiting for credit
+    conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), qdr_terminus(0), "tcp.cside.in", 0, false, 0, &conn->inbound_link_id);
     qdr_link_set_context(conn->inbound_link, conn);
     conn->outbound_link = qdr_link_first_attach(conn->core_conn, QD_OUTGOING, qdr_terminus(0), qdr_terminus(0), "tcp.cside.out", 0, false, delivery, &conn->outbound_link_id);
     qdr_link_set_context(conn->outbound_link, conn);
@@ -825,6 +919,16 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(tcplite_connection_t *co
         //qd_compose_insert_null(message);                              // reply-to-group-id
         qd_compose_end_list(message);
 
+        if (conn->alpn_protocol) {
+            // add the ALPN protocol as negotiated with the remote via TLS.
+            message = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, message);
+            qd_compose_start_map(message);
+            qd_compose_insert_string_n(message, (const char *) QD_TLS_ALPN_KEY, QD_TLS_ALPN_KEY_LEN);
+            qd_compose_insert_string_n(message, (const char *) conn->alpn_protocol,
+                                       strlen(conn->alpn_protocol));
+            qd_compose_end_map(message);
+        }
+
         message = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, message);
         qd_compose_insert_null(message);
     }
@@ -843,12 +947,12 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(tcplite_connection_t *co
     //
     // Start cut-through mode for this stream.
     //
-    qd_message_start_unicast_cutthrough(conn->inbound_stream);
     qd_message_activation_t activation;
     activation.type     = QD_ACTIVATION_TCP;
     activation.delivery = 0;
     qd_alloc_set_safe_ptr(&activation.safeptr, conn);
     qd_message_set_producer_activation(conn->inbound_stream, &activation);
+    qd_message_start_unicast_cutthrough(conn->inbound_stream);
 
     //
     // The delivery comes with a ref-count to protect the returned value.  Inherit that ref-count as the
@@ -858,9 +962,7 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(tcplite_connection_t *co
     qdr_delivery_set_context(conn->inbound_delivery, conn);
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
-            "[C%" PRIu64 "][L%" PRIu64 "] Initiating listener side empty client stream message",
-            conn->conn_id, conn->inbound_link_id);
-
+           DLV_FMT " Initiating listener side empty client inbound stream message", DLV_ARGS(conn->inbound_delivery));
     return true;
 }
 
@@ -880,6 +982,7 @@ static void compose_and_send_server_stream_CSIDE_IO(tcplite_connection_t *conn)
     // (or properties if there are no application-properties) section will constitute the stream
     // and will consist solely of AMQP transport frames.
     //
+    assert(conn->reply_to);
     message = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
     qd_compose_start_list(message);
     qd_compose_insert_null(message);                                // message-id
@@ -910,23 +1013,24 @@ static void compose_and_send_server_stream_CSIDE_IO(tcplite_connection_t *conn)
     //
     // Start cut-through mode for this stream.
     //
-    qd_message_start_unicast_cutthrough(conn->inbound_stream);
     qd_message_activation_t activation;
     activation.type     = QD_ACTIVATION_TCP;
     activation.delivery = 0;
     qd_alloc_set_safe_ptr(&activation.safeptr, conn);
     qd_message_set_producer_activation(conn->inbound_stream, &activation);
+    qd_message_start_unicast_cutthrough(conn->inbound_stream);
 
     //
     // The delivery comes with a ref-count to protect the returned value.  Inherit that ref-count as the
     // protection of our held pointer.
     //
-    conn->inbound_delivery = qdr_link_deliver(conn->inbound_link, conn->inbound_stream, 0, false, 0, 0, 0, 0);
+    qd_iterator_t *iter = qd_message_field_iterator(conn->inbound_stream, QD_FIELD_TO);
+    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
+    conn->inbound_delivery = qdr_link_deliver_to(conn->inbound_link, conn->inbound_stream, 0, iter, false, 0, 0, 0, 0);
     qdr_delivery_set_context(conn->inbound_delivery, conn);
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
-            "[C%" PRIu64 "][L%" PRIu64 "] Initiating connector side empty server stream message",
-            conn->conn_id, conn->inbound_link_id);
+           DLV_FMT " Initiating connector side empty server inbound stream message", DLV_ARGS(conn->inbound_delivery));
 }
 
 
@@ -954,11 +1058,12 @@ static void extract_metadata_from_stream_CSIDE(tcplite_connection_t *conn)
 static uint64_t handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qdr_link_t *link, qdr_delivery_t *delivery)
 {
     ASSERT_RAW_IO;
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] handle_outbound_delivery_LSIDE_IO - receive_complete=%s",
-           conn->conn_id, qd_message_receive_complete(conn->outbound_stream) ? "true" : "false");
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " handle_outbound_delivery_LSIDE_IO - receive_complete=%s",
+           DLV_ARGS(delivery), qd_message_receive_complete(conn->outbound_stream) ? "true" : "false");
 
     if (!conn->outbound_delivery) {
-        // newly arrived delivery: validate it
+        // newly arrived delivery: Verify the message sections up to and including the dummy BODY_AMQP_VALUE have
+        // arrived and are valid.
         //
         uint64_t dispo = validate_outbound_message(delivery);
         if (dispo != PN_RECEIVED) {
@@ -976,14 +1081,14 @@ static uint64_t handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qd
         qdr_delivery_set_context(delivery, conn);
 
         //
-        // Note that we do not start_unicast_cutthrough here.  This is done in a more orderly way during
-        // stream-content consumption.
+        // Message validation ensures the start of the message body is present. Activate cutthrough on the body data.
         //
         qd_message_activation_t activation;
         activation.type     = QD_ACTIVATION_TCP;
         activation.delivery = 0;
         qd_alloc_set_safe_ptr(&activation.safeptr, conn);
         qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+        qd_message_start_unicast_cutthrough(conn->outbound_stream);
     }
 
     connection_run_LSIDE_IO(conn);
@@ -1002,15 +1107,58 @@ static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qd
     ASSERT_TIMER_IO;
     assert(!qdr_delivery_get_context(delivery));
 
-    // Verify the message properties have arrived and are valid
+    // Verify the message sections up to and including the dummy BODY_AMQP_VALUE have arrived and are valid.
     //
     uint64_t dispo = validate_outbound_message(delivery);
     if (dispo != PN_RECEIVED) {
         return dispo;
     }
 
+    qd_message_t          *msg = qdr_delivery_message(delivery);
     tcplite_connection_t *conn = new_tcplite_connection_t();
     ZERO(conn);
+
+    conn->conn_id  = qd_server_allocate_connection_id(tcplite_context->server);
+
+    // Catch TLS configuration issues early so we can avoid initializing the entire
+    // connection.
+    //
+    if (cr->tls_domain) {
+        bool failed = true;
+        // note qd_tls_domain_clone() will log error if it fails
+        conn->tls_domain = qd_tls_domain_clone(cr->tls_domain);
+        if (conn->tls_domain) {
+            int rc = 0;
+            assert(!conn->alpn_protocol);
+            conn->alpn_protocol = get_tls_negotiated_alpn(msg);
+            if (conn->alpn_protocol) {
+                const char *alpn_protocols[] = {conn->alpn_protocol};
+                rc = qd_tls_set_alpn_protocols(conn->tls_domain, alpn_protocols, 1);
+                if (rc != 0) {
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR,
+                           "[%" PRIu64 "] tcpConnector %s: failed to configure ALPN protocol '%s' (%d)",
+                           conn->conn_id, cr->adaptor_config->name, conn->alpn_protocol, rc);
+                }
+            }
+            if (rc == 0) {
+                // note: qd_tls() will log error if it fails
+                conn->tls = qd_tls(conn->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+                if (conn->tls) {
+                    failed = false;
+                }
+            }
+        }
+        if (failed) {
+            qd_tls_domain_decref(conn->tls_domain);
+            qd_tls_free2(conn->tls);
+            free(conn->alpn_protocol);
+            free_tcplite_connection_t(conn);
+            qd_message_set_send_complete(msg);
+            return PN_RELEASED;  // redeliver somewhere else!
+        }
+    }
+
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " CSIDE new outbound delivery", DLV_ARGS(delivery));
 
     qdr_delivery_incref(delivery, "CORE_deliver_outbound CSIDE");
     qdr_delivery_set_context(delivery, conn);
@@ -1022,20 +1170,17 @@ static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qd
     sys_atomic_init(&conn->raw_opened, 0);
 
     conn->listener_side     = false;
-    conn->state             = CSIDE_RAW_CONNECTION_OPENING;
+    conn->state             = CSIDE_INITIAL;
     conn->outbound_delivery = delivery;
-    conn->outbound_stream   = qdr_delivery_message(delivery);
+    conn->outbound_stream   = msg;
 
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, cr->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
 
     extract_metadata_from_stream_CSIDE(conn);
 
-    conn->conn_id         = qd_server_allocate_connection_id(tcplite_context->server);
     conn->context.context = conn;
     conn->context.handler = on_connection_event_CSIDE_IO;
-
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] CSIDE outbound delivery", conn->conn_id);
 
     sys_mutex_lock(&cr->lock);
     DEQ_INSERT_TAIL(cr->connections, conn);
@@ -1047,14 +1192,14 @@ static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qd
     pn_raw_connection_set_context(conn->raw_conn, &conn->context);
 
     //
-    // Note that we do not start_unicast_cutthrough here.  This is done in a more orderly way during
-    // stream-content consumption.
+    // Message validation ensures the start of the message body is present. Activate cutthrough on the body data.
     //
     qd_message_activation_t activation;
     activation.type     = QD_ACTIVATION_TCP;
     activation.delivery = 0;
     qd_alloc_set_safe_ptr(&activation.safeptr, conn);
     qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+    qd_message_start_unicast_cutthrough(conn->outbound_stream);
 
     //
     // The raw connection establishment must be the last thing done in this function.
@@ -1237,6 +1382,196 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
     return false;
 }
 
+// Callback from TLS layer to get up to limit qd_buffer_t from the outgoing message for encryption and transmit out raw
+// connection.
+//
+static int64_t tls_consume_data_buffers(void *context, qd_buffer_list_t *buffers, size_t limit)
+{
+    tcplite_connection_t *conn = (tcplite_connection_t *) context;
+    const bool         observe = conn->listener_side && !!conn->observer_handle;
+    uint64_t            octets = 0;
+
+    assert(limit > 0);
+    assert(DEQ_IS_EMPTY(*buffers));
+
+    if (!conn->outbound_stream)
+        return octets;
+
+    if (!conn->outbound_body_complete) {
+        octets = copy_message_body_TLS_XSIDE_IO(conn, conn->outbound_stream, buffers, limit);
+        assert(limit >= DEQ_SIZE(*buffers));
+        limit -= DEQ_SIZE(*buffers);
+    }
+
+    if (conn->outbound_body_complete && limit > 0) {
+        qd_buffer_list_t tmp = DEQ_EMPTY;
+        qd_message_consume_buffers(conn->outbound_stream, &tmp, limit);
+        assert(limit >= DEQ_SIZE(tmp));
+        limit -= DEQ_SIZE(tmp);
+        qd_buffer_t *buf = DEQ_HEAD(tmp);
+        while (buf) {
+            octets += qd_buffer_size(buf);
+            if (observe) {
+                qdpo_data(conn->observer_handle, false, buf, 0);
+            }
+            buf = DEQ_NEXT(buf);
+        }
+        DEQ_APPEND(*buffers, tmp);
+    }
+
+    if (octets) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+               "[C%"PRIu64"] TLS consumed %"PRIu64" cleartext octets from stream", conn->conn_id, octets);
+
+        conn->outbound_octets += octets;
+        conn->window.pending_ack += octets;
+
+        //
+        // Manage latency measurements
+        //
+        if (!conn->outbound_first_octet) {
+            conn->outbound_first_octet = true;
+            if (conn->listener_side) {
+                vflow_latency_end(conn->common.vflow);
+            } else {
+                vflow_latency_start(conn->common.vflow);
+            }
+        }
+
+        //
+        // Check if enough octets have been written to open up the window
+        //
+        if (conn->window.pending_ack >= TCP_ACK_THRESHOLD_BYTES) {
+            qd_delivery_state_t *dstate = qd_delivery_state();
+            dstate->section_number = 0;
+            dstate->section_offset = conn->outbound_octets;
+            qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_RECEIVED,
+                                              false, dstate, false);  // received, !settled, !ref_given
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                   DLV_FMT " sending PN_RECEIVED with section_offset=%" PRIu64 " pending=%" PRIu64,
+                   DLV_ARGS(conn->outbound_delivery), conn->outbound_octets, conn->window.pending_ack);
+            conn->window.pending_ack = 0;
+        }
+    } else if (qd_message_receive_complete(conn->outbound_stream) && !qd_message_can_consume_buffers(conn->outbound_stream)) {
+        //
+        // no more receive data so signal to TLS layer that we've hit the end of the outgoing stream
+        //
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+               DLV_FMT " TLS outbound stream rx complete and rings empty: signalling RX EOS", DLV_ARGS(conn->outbound_delivery));
+        // @TODO(kag): need to check for message aborted and return QD_IO_EOS_ERR to prevent forwarding a TLS close notify alert
+        return QD_IO_EOS;  // stream completed
+    }
+
+    return octets;
+}
+
+
+/**
+ * Manage the steady-state flow of a bi-directional TLS connection from either-side point of view.
+ *
+ * @param conn Pointer to the TCP connection record
+ * @return true if IO processing should be repeated due to state changes
+ * @return false if IO processing should suspend until the next external event
+ */
+static bool manage_tls_flow_XSIDE_IO(tcplite_connection_t *conn)
+{
+    ASSERT_RAW_IO;
+    assert(conn->tls);
+    assert(conn->raw_conn);
+
+    if (qd_tls_is_error(conn->tls))
+        return false;
+
+    qd_buffer_list_t decrypted_buffers = DEQ_EMPTY;
+    uint64_t          decrypted_octets = 0;
+    bool                   can_produce = !!conn->inbound_stream && qd_message_can_produce_buffers(conn->inbound_stream);
+    bool                     more_work = false;
+    bool                window_blocked = window_full(conn);
+
+
+    grant_read_buffers_XSIDE_IO(conn, pn_raw_connection_read_buffers_capacity(conn->raw_conn));
+
+    const int tls_status = qd_tls_do_io2(conn->tls, conn->raw_conn, tls_consume_data_buffers, conn,
+                                         (can_produce) ? &decrypted_buffers : 0,
+                                         &decrypted_octets);
+    //
+    // Process inbound cleartext data.
+    //
+
+    if (decrypted_octets) {
+        more_work = true;
+        conn->inbound_octets += decrypted_octets;
+        qd_message_produce_buffers(conn->inbound_stream, &decrypted_buffers);
+
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE TLS read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', decrypted_octets);
+        if (!window_blocked && window_full(conn)) {
+            conn->window.closed_count += 1;
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
+                   DLV_ARGS(conn->inbound_delivery), conn->inbound_octets,
+                   (conn->inbound_octets - conn->window.last_update));
+        }
+
+        //
+        // Manage latency measurements
+        //
+        if (!conn->inbound_first_octet) {
+            conn->inbound_first_octet = true;
+            if (conn->listener_side) {
+                vflow_latency_start(conn->common.vflow);
+            } else {
+                vflow_latency_end(conn->common.vflow);
+            }
+        }
+    }
+
+    //
+    // Check for end of inbound message data
+    //
+    bool ignore;
+    if (qd_tls_is_input_drained(conn->tls, &ignore) && conn->inbound_stream) {
+        qd_message_activation_t activation;
+        activation.type     = QD_ACTIVATION_NONE;
+        activation.delivery = 0;
+        qd_nullify_safe_ptr(&activation.safeptr);
+
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS inbound stream receive complete", DLV_ARGS(conn->inbound_delivery));
+
+        qd_message_set_receive_complete(conn->inbound_stream);
+        qd_message_set_producer_activation(conn->inbound_stream, &activation);
+
+        qdr_delivery_set_context(conn->inbound_delivery, 0);
+        qdr_delivery_continue(tcplite_context->core, conn->inbound_delivery, false);
+        qdr_delivery_decref(tcplite_context->core, conn->inbound_delivery, "TLS_FLOW_XSIDE_IO - inbound_delivery released");
+        conn->inbound_delivery = 0;
+        conn->inbound_stream   = 0;
+    }
+
+    //
+    // Check for end of outbound message data
+    //
+    if (qd_tls_is_output_flushed(conn->tls) && conn->outbound_stream) {
+        qd_message_activation_t activation;
+        activation.type     = QD_ACTIVATION_NONE;
+        activation.delivery = 0;
+        qd_nullify_safe_ptr(&activation.safeptr);
+
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS outbound stream send complete", DLV_ARGS(conn->outbound_delivery));
+
+        qd_message_set_send_complete(conn->outbound_stream);
+        qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+
+        qdr_delivery_set_context(conn->outbound_delivery, 0);
+        qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery,
+                                          tls_status < 0 ? PN_MODIFIED : PN_ACCEPTED,
+                                          true, 0, false); // settled, 0, ref_given
+        qdr_delivery_decref(tcplite_context->core, conn->outbound_delivery, "TLS_FLOW_XSIDE_IO - outbound_delivery released");
+        conn->outbound_delivery = 0;
+        conn->outbound_stream   = 0;
+    }
+
+    return more_work;
+}
+
 
 static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
 {
@@ -1248,11 +1583,42 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
 
         switch (conn->state) {
         case LSIDE_INITIAL:
+            // raw connection is active
+            if (conn->tls) {
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] LSIDE_IO performing TLS handshake", conn->conn_id);
+                set_state_XSIDE_IO(conn, LSIDE_TLS_HANDSHAKE);
+                repeat = true;
+            } else {
+                link_setup_LSIDE_IO(conn);
+                set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+            }
+            break;
+
+        case LSIDE_TLS_HANDSHAKE:
             //
-            // Begin the setup of the inbound and outbound links for this connection.
+            // For TLS connections wait until the negotiation has succeeded. This is done before bringing up the links
+            // for two reasons: 1) don't establish router links and reply addresses if the client's creditials are bad
+            // and 2) we need the negotiated ALPN value *before* we can construct the inbound message headers.
             //
-            link_setup_LSIDE_IO(conn);
-            set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+            assert(conn->tls);
+            if (!qd_tls_is_secure(conn->tls) && !qd_tls_is_error(conn->tls)) {
+                assert(conn->raw_conn);
+                grant_read_buffers_XSIDE_IO(conn, pn_raw_connection_read_buffers_capacity(conn->raw_conn));
+                int rc = qd_tls_do_io2(conn->tls, conn->raw_conn, 0, 0, 0, 0);
+                if (rc < 0) {
+                    //
+                    // TLS failed! Error logged, raw connection close initiated and error condition set. Clean up in
+                    // DISCONNECTED raw connection event.
+                    //
+                } else if (qd_tls_is_secure(conn->tls)) {
+                    //
+                    // Handshake completed, begin the setup of the inbound and outbound links for this connection.
+                    //
+                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] LSIDE_IO TLS handshake completed OK!", conn->conn_id);
+                    link_setup_LSIDE_IO(conn);
+                    set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+                }
+            }
             break;
 
         case LSIDE_LINK_SETUP:
@@ -1273,7 +1639,7 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
             // LSIDE_FLOW state and let the streaming begin.
             //
             if (!!conn->outbound_stream) {
-                set_state_XSIDE_IO(conn, LSIDE_FLOW);
+                set_state_XSIDE_IO(conn, (conn->tls) ? LSIDE_TLS_FLOW: LSIDE_FLOW);
                 repeat = true;
             }
             break;
@@ -1283,6 +1649,13 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
             // Manage the ongoing bidirectional flow of the connection.
             //
             repeat = manage_flow_XSIDE_IO(conn);
+            break;
+
+        case LSIDE_TLS_FLOW:
+            //
+            // Manage the ongoing bidirectional flow of the TLS connection.
+            //
+            repeat = manage_tls_flow_XSIDE_IO(conn);
             break;
 
         case XSIDE_CLOSING:
@@ -1309,22 +1682,10 @@ static void connection_run_CSIDE_IO(tcplite_connection_t *conn)
         repeat = false;
 
         switch (conn->state) {
-        case CSIDE_RAW_CONNECTION_OPENING:
-            if (!!conn->error && !!conn->outbound_delivery) {
-                //
-                // If there was an error during the connection-open, reject the client delivery.
-                //
-                qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] CSIDE connect error on initial attempt - Rejecting outbound delivery", conn->conn_id);
-                qdr_delivery_set_context(conn->outbound_delivery, 0);
-                qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_REJECTED, true, 0, true); // rejected, settled, ref_given
-                conn->outbound_delivery = 0;
-                conn->outbound_stream   = 0;
-
-                close_connection_XSIDE_IO(conn, false);
-            } else if (!pn_raw_connection_is_read_closed(conn->raw_conn)) {
-                link_setup_CSIDE_IO(conn, conn->outbound_delivery);
-                set_state_XSIDE_IO(conn, CSIDE_LINK_SETUP);
-            }
+        case CSIDE_INITIAL:
+            // raw connection is active
+            link_setup_CSIDE_IO(conn, conn->outbound_delivery);
+            set_state_XSIDE_IO(conn, CSIDE_LINK_SETUP);
             break;
 
         case CSIDE_LINK_SETUP:
@@ -1332,7 +1693,7 @@ static void connection_run_CSIDE_IO(tcplite_connection_t *conn)
 
             if (credit) {
                 compose_and_send_server_stream_CSIDE_IO(conn);
-                set_state_XSIDE_IO(conn, CSIDE_FLOW);
+                set_state_XSIDE_IO(conn, (conn->tls) ? CSIDE_TLS_FLOW : CSIDE_FLOW);
                 repeat = true;
             }
             break;
@@ -1342,6 +1703,13 @@ static void connection_run_CSIDE_IO(tcplite_connection_t *conn)
             // Manage the ongoing bidirectional flow of the connection.
             //
             repeat = manage_flow_XSIDE_IO(conn);
+            break;
+
+        case CSIDE_TLS_FLOW:
+            //
+            // Manage the ongoing bidirectional flow of the TLS connection.
+            //
+            repeat = manage_tls_flow_XSIDE_IO(conn);
             break;
 
         case XSIDE_CLOSING:
@@ -1368,8 +1736,10 @@ static void connection_run_XSIDE_IO(tcplite_connection_t *conn)
     }
 }
 
-// Validate the outbound message associated with out_dlv
+// Validate the outbound message associated with out_dlv. This verifies depth through QD_DEPTH_RAW_BODY and ensures the
+// proper encapsulation.
 //
+// @param out_dlv Outgoing delivery holding the message
 // @return a disposition value indicating the validity of the message:
 // 0: message headers incomplete, wait for more data to arrive
 // PN_REJECTED: corrupt headers, cannot be re-delivered
@@ -1379,7 +1749,7 @@ static void connection_run_XSIDE_IO(tcplite_connection_t *conn)
 static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv)
 {
     qd_message_t *msg = qdr_delivery_message(out_dlv);
-    qd_message_depth_status_t depth_ok = qd_message_check_depth(msg, QD_DEPTH_PROPERTIES);
+    qd_message_depth_status_t depth_ok = qd_message_check_depth(msg, QD_DEPTH_RAW_BODY);
     if (depth_ok == QD_MESSAGE_DEPTH_INCOMPLETE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                DLV_FMT " tcp_adaptor egress message incomplete, waiting for more", DLV_ARGS(out_dlv));
@@ -1408,6 +1778,52 @@ static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv)
     return PN_RECEIVED;
 }
 
+// Callback from TLS I/O handler when the TLS handshake succeeds
+//
+static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
+{
+    tcplite_connection_t *conn = (tcplite_connection_t *) user_context;
+    assert(conn);
+    if (conn->core_conn && conn->core_conn->connection_info) {
+        qd_tls_update_connection_info(conn->tls, conn->core_conn->connection_info);
+    }
+    if (!conn->alpn_protocol)
+        qd_tls_get_alpn_protocol(conn->tls, &conn->alpn_protocol);
+}
+
+// Check for the ALPN value negotiated on the CSIDE TLS connection (optional).
+// Caller must free() returned string! Returns 0 if no ALPN present.
+//
+static char *get_tls_negotiated_alpn(qd_message_t *msg)
+{
+    qd_iterator_t *ap_iter = qd_message_field_iterator(msg, QD_FIELD_APPLICATION_PROPERTIES);
+    if (!ap_iter) {
+        return 0;
+    }
+
+    char *alpn_protocol = 0;
+    qd_parsed_field_t *ap = qd_parse(ap_iter);
+    if (ap && qd_parse_ok(ap) && qd_parse_is_map(ap)) {
+        uint32_t count = qd_parse_sub_count(ap);
+        for (uint32_t i = 0; i < count; i++) {
+            qd_parsed_field_t *key = qd_parse_sub_key(ap, i);
+            if (key == 0) {
+                break;
+            }
+            qd_iterator_t *key_iter = qd_parse_raw(key);
+            if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char *) QD_TLS_ALPN_KEY)) {
+                qd_parsed_field_t *alpn_field = qd_parse_sub_value(ap, i);
+                qd_iterator_t     *alpn_iter  = qd_parse_raw(alpn_field);
+                alpn_protocol                 = (char *) qd_iterator_copy(alpn_iter);
+            }
+        }
+    }
+
+    qd_parse_free(ap);
+    qd_iterator_free(ap_iter);
+    return alpn_protocol;
+}
+
 
 //=================================================================================
 // Handlers for events from the Raw Connections
@@ -1419,7 +1835,20 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] on_connection_event_LSIDE_IO: %s", conn->conn_id, pn_event_type_name(pn_event_type(e)));
 
     if (pn_event_type(e) == PN_RAW_CONNECTION_DISCONNECTED) {
-        close_connection_XSIDE_IO(conn, false);
+        conn->error = !!conn->raw_conn ? pn_raw_connection_condition(conn->raw_conn) : 0;
+
+        if (!!conn->error) {
+            const char *cname = pn_condition_get_name(conn->error);
+            const char *cdesc = pn_condition_get_description(conn->error);
+
+            if (!!cname) {
+                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_RESULT, cname);
+            }
+            if (!!cdesc) {
+                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
+            }
+        }
+        close_connection_XSIDE_IO(conn, true);
         return;
     }
 
@@ -1439,7 +1868,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
 
     if (pn_event_type(e) == PN_RAW_CONNECTION_DISCONNECTED) {
         conn->error = !!conn->raw_conn ? pn_raw_connection_condition(conn->raw_conn) : 0;
-        
+
         if (!!conn->error) {
             const char *cname = pn_condition_get_name(conn->error);
             const char *cdesc = pn_condition_get_description(conn->error);
@@ -1451,11 +1880,8 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
-        
-        if (conn->state == CSIDE_FLOW || conn->state == CSIDE_LINK_SETUP) {
-            close_connection_XSIDE_IO(conn, false);
-            return;
-        }
+        close_connection_XSIDE_IO(conn, true);
+        return;
     }
 
     if (CLEAR_ATOMIC_FLAG(&conn->core_activation) && !!conn->core_conn) {
@@ -1468,10 +1894,33 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
 
 static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener, void *context)
 {
-    tcplite_listener_t *li = (tcplite_listener_t*) context;
+    tcplite_listener_t *li      = (tcplite_listener_t*) context;
+    tcplite_connection_t *conn  = new_tcplite_connection_t();
 
-    tcplite_connection_t *conn = new_tcplite_connection_t();
     ZERO(conn);
+    conn->conn_id  = qd_server_allocate_connection_id(tcplite_context->server);
+
+    // Catch TLS configuration issues early so we can avoid initializing the entire
+    // connection.
+    //
+    if (li->tls_domain) {
+        bool failed = true;
+        conn->tls_domain = qd_tls_domain_clone(li->tls_domain);
+        if (conn->tls_domain) {
+            conn->tls = qd_tls(conn->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+            if (conn->tls) {
+                failed = false;
+            } else {
+                qd_tls_domain_decref(conn->tls_domain);
+            }
+        }
+        if (failed) {
+            // qd_tls(_domain_clone) will log the appropriate error message
+            free_tcplite_connection_t(conn);
+            qd_adaptor_listener_deny_conn(listener, pn_listener);
+            return;
+        }
+    }
 
     conn->common.context_type = TL_CONNECTION;
     conn->common.parent       = (tcplite_common_t*) li;
@@ -1486,7 +1935,6 @@ static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listene
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, li->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
 
-    conn->conn_id         = qd_server_allocate_connection_id(tcplite_context->server);
     conn->context.context = conn;
     conn->context.handler = on_connection_event_LSIDE_IO;
 
@@ -1515,9 +1963,14 @@ static void CORE_activate(void *context, qdr_connection_t *core_conn)
         assert(false);  // listeners are never activated, relies on adaptor_listener callback
         break;
 
-    case TL_CONNECTOR:
-        qd_timer_schedule(((tcplite_connector_t*) common)->activate_timer, 0);
+    case TL_CONNECTOR: {
+        tcplite_connector_t *cr = (tcplite_connector_t *) common;
+        sys_mutex_lock(&cr->lock);
+        if (cr->activate_timer)
+            qd_timer_schedule(cr->activate_timer, 0);
+        sys_mutex_unlock(&cr->lock);
         break;
+    }
 
     case TL_CONNECTION:
         conn = (tcplite_connection_t*) common;
@@ -1745,6 +2198,7 @@ tcplite_listener_t *qd_dispatch_configure_tcp_listener_lite(qd_dispatch_t *qd, q
 
     if (qd_load_adaptor_config(li->adaptor_config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp listener: %s", qd_error_message());
+        qd_free_adaptor_config(li->adaptor_config);
         free_tcplite_listener_t(li);
         return 0;
     }
@@ -1755,9 +2209,21 @@ tcplite_listener_t *qd_dispatch_configure_tcp_listener_lite(qd_dispatch_t *qd, q
                                        TCP_NUM_ALPN_PROTOCOLS, true);
         if (!li->tls_domain) {
             // note qd_tls_domain logged the error
+            qd_free_adaptor_config(li->adaptor_config);
             free_tcplite_listener_t(li);
             return 0;
         }
+
+        // sanity check the configuration by creating a temporary TLS session. Is this fails
+        // an error will be logged by the call to qd_tls()
+        qd_tls_t *test = qd_tls(li->tls_domain, 0, 0, 0);
+        if (!test) {
+            qd_free_adaptor_config(li->adaptor_config);
+            qd_tls_domain_decref(li->tls_domain);
+            free_tcplite_listener_t(li);
+            return 0;
+        }
+        qd_tls_free2(test);
     }
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
@@ -1845,6 +2311,7 @@ tcplite_connector_t *qd_dispatch_configure_tcp_connector_lite(qd_dispatch_t *qd,
 
     if (qd_load_adaptor_config(cr->adaptor_config, entity) != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp connector: %s", qd_error_message());
+        qd_free_adaptor_config(cr->adaptor_config);
         free_tcplite_connector_t(cr);
         return 0;
     }
@@ -1853,9 +2320,21 @@ tcplite_connector_t *qd_dispatch_configure_tcp_connector_lite(qd_dispatch_t *qd,
         cr->tls_domain = qd_tls_domain(cr->adaptor_config, qd, LOG_TCP_ADAPTOR, 0, 0, false);
         if (!cr->tls_domain) {
             // note qd_tls_domain() logged the error
+            qd_free_adaptor_config(cr->adaptor_config);
             free_tcplite_connector_t(cr);
             return 0;
         }
+
+        // sanity check the configuration by creating a temporary TLS session. Is this fails
+        // an error will be logged by the call to qd_tls()
+        qd_tls_t *test = qd_tls(cr->tls_domain, 0, 0, 0);
+        if (!test) {
+            qd_free_adaptor_config(cr->adaptor_config);
+            qd_tls_domain_decref(cr->tls_domain);
+            free_tcplite_connector_t(cr);
+            return 0;
+        }
+        qd_tls_free2(test);
     }
 
     cr->activate_timer = qd_timer(tcplite_context->qd, on_core_activate_TIMER_IO, cr);
@@ -1993,6 +2472,8 @@ static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
 static void ADAPTOR_final(void *adaptor_context)
 {
     SET_THREAD_UNKNOWN;
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Shutting down TCP Lite protocol adaptor");
+
     tcplite_context->adaptor_finalizing = true;
 
     while (DEQ_HEAD(tcplite_context->connectors)) {
@@ -2008,6 +2489,7 @@ static void ADAPTOR_final(void *adaptor_context)
     qdr_protocol_adaptor_free(tcplite_context->core, tcplite_context->pa);
     sys_mutex_free(&tcplite_context->lock);
     free(tcplite_context);
+    tcplite_context = 0;
 }
 
 /**

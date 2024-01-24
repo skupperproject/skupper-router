@@ -31,9 +31,12 @@
 
 typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
 
-// Callback invoked with a client has connected to the listener and needs to be
-// accepted via a call to pn_listener_raw_accept(). This callback is run from
-// the proactor listener event handler thread.
+// Callback invoked when a client has connected to the listener and is waiting to be accepted.  The application may
+// accept the new connection during this callback by allocating a pn_raw_connection_t and passing it to
+// pn_listener_raw_accept().  This callback may instead deny the new connection by calling
+// qd_adaptor_listener_deny_conn(). When denying the connection this callback MUST NOT call pn_listener_raw_accept()!
+//
+// This callback is run from the proactor listener event handler thread.
 //
 typedef void (*qd_adaptor_listener_accept_t)(qd_adaptor_listener_t *listener,
                                              pn_listener_t *pn_listener,
@@ -61,6 +64,11 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *listener);
 // Get the operational state of the listener
 //
 qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_listener_t *listener);
+
+// Deny the new connection rather than accepting it. This may only be called during the
+// qd_adaptor_listener_accept_t callback
+//
+void qd_adaptor_listener_deny_conn(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener);
 
 
 #endif // __adaptor_listener_h__
