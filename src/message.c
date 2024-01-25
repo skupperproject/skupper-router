@@ -34,6 +34,7 @@
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
+#include <qpid/dispatch/cutthrough_utils.h>
 
 #include <proton/object.h>
 
@@ -1530,6 +1531,7 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg)
 
 static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *delivery, pn_link_t *link, qd_message_content_t *content)
 {
+    bool notify_produced = false;
     while (pn_delivery_pending(delivery) > 0 && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 1) {
         //
         // The ring is not full, build a buffer list from the link data and produce one slot.
@@ -1577,6 +1579,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
             //
             // Advance the producer slot pointer
             //
+            notify_produced = true;
             sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
 
             if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
@@ -1587,6 +1590,10 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
 
     if (!pn_delivery_partial(delivery) && pn_delivery_pending(delivery) == 0) {
         qd_message_set_receive_complete(in_msg);
+    }
+
+    if (notify_produced) {
+        cutthrough_notify_buffers_produced_inbound(in_msg);
     }
 }
 
@@ -1873,6 +1880,7 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
 static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_content_t *content, pn_link_t *pnl, pn_session_t *pns, bool *q3_stalled)
 {
     const size_t q3_upper = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
+    bool notify_consumed  = false;
 
     *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
     while (!*q3_stalled && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0) {
@@ -1889,6 +1897,7 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
         }
 
         sys_atomic_set(&content->uct_consume_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+        notify_consumed = true;
         *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
     }
 
@@ -1899,6 +1908,10 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
         // all of the buffered content.  Mark the message as send-complete.
         //
         SET_ATOMIC_FLAG(&msg->send_complete);
+    }
+
+    if (notify_consumed) {
+        cutthrough_notify_buffers_consumed_outbound((qd_message_t *) msg);
     }
 }
 
@@ -3299,6 +3312,7 @@ void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers)
     uint32_t useSlot = sys_atomic_get(&content->uct_produce_slot);
     DEQ_MOVE(*buffers, content->uct_slots[useSlot]);
     sys_atomic_set(&content->uct_produce_slot, (useSlot + 1) % UCT_SLOT_COUNT);
+    cutthrough_notify_buffers_produced_inbound(stream);
 
     if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
         SET_ATOMIC_FLAG(&content->uct_producer_stalled);
@@ -3310,7 +3324,9 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
     int  count = 0;
+    bool notify_consumed = false;
     bool empty = sys_atomic_get(&content->uct_consume_slot) == sys_atomic_get(&content->uct_produce_slot);
+
     while (count < limit && !empty) {
         uint32_t useSlot = sys_atomic_get(&content->uct_consume_slot);
         while (count < limit && !DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
@@ -3320,9 +3336,14 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
             count++;
         }
         if (DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
+            notify_consumed = true;
             sys_atomic_set(&content->uct_consume_slot, (useSlot + 1) % UCT_SLOT_COUNT);
         }
         empty = sys_atomic_get(&content->uct_consume_slot) == sys_atomic_get(&content->uct_produce_slot);
+    }
+
+    if (notify_consumed) {
+        cutthrough_notify_buffers_consumed_outbound(stream);
     }
 
     return count;
