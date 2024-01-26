@@ -36,8 +36,8 @@ on:
         default: false
 
 jobs:
-  build-manual:
-    name: Build and publish skupper-router image
+  build-image-amd64:
+    name: Build and publish skupper-router amd64 image
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -58,16 +58,112 @@ jobs:
           export PROJECT_TAG="${CONTAINER_TAG}"
           # The version of skupper-router should be the same as the version of the image.
           export VERSION="${CONTAINER_TAG}"
+          if [ "${CONTAINER_TAG}" != "main" ]; then
+              export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+              # Only accepts tag if build_number is higher than one
+              # Verify if build number is unique, otherwise fail
+              [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
+          else
+              echo "CONTAINER_TAG is main"
+          fi
           CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
           if [ "${CAN_PUSH_LATEST}" == "true" ]; then
-            echo 'image-manual.yml setting PUSH_LATEST=true, will push :latest tag'
+            echo 'image-manual.yml(job:build-manual-amd64) setting PUSH_LATEST=true, will push :latest tag'
             export PUSH_LATEST=true
           else
-            echo 'image-manual.yml not setting PUSH_LATEST, will not push :latest tag'
+            echo 'image-manual.yml(job:build-manual-amd64) not setting PUSH_LATEST, will not push :latest tag'
           fi
+          export PLATFORM=amd64
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
           CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
           PROTON_SOURCE_URL: '${{github.event.inputs.protonSourceUrl}}'
+          CONTAINER_TAG: '${{github.event.inputs.containerTag}}'
+
+  build-image-arm64:
+    name: Build and publish skupper-router arm64 image
+    runs-on: self-hosted
+    steps:
+      - run: |
+          # validate CONTAINER_TAG
+          [[ ! "${CONTAINER_TAG}" =~ ^[a-z0-9][a-z0-9.-]+[a-z0-9]$ ]] && echo "invalid tag - it must begin and end with letter or digit and contains - and ." && exit 1
+          protected=(latest nightly master)
+          for ptag in ${protected[@]}; do
+            if [[ "${ptag}" = "${CONTAINER_TAG}" ]]; then
+              echo "${ptag} cannot be used (protected tag)"
+              exit 1
+            fi
+          done
+        env:
+          CONTAINER_TAG: '${{github.event.inputs.containerTag}}'
+      - uses: actions/checkout@v4
+      - run: |
+          export PROJECT_TAG="${CONTAINER_TAG}"
+          # The version of skupper-router should be the same as the version of the image.
+          export VERSION="${CONTAINER_TAG}"
+          if [ "${CONTAINER_TAG}" != "main" ]; then
+              export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+              # Only accepts tag if build_number is higher than one
+              # Verify if build number is unique, otherwise fail
+              [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
+          else
+              echo "CONTAINER_TAG is main"
+          fi
+          CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
+          if [ "${CAN_PUSH_LATEST}" == "true" ]; then
+            echo 'image-manual.yml(job:build-image-arm64) setting PUSH_LATEST=true, will push :latest tag'
+            export PUSH_LATEST=true
+          else
+            echo 'image-manual.yml(job:build-image-arm64) not setting PUSH_LATEST, will not push :latest tag'
+          fi
+          export PLATFORM=arm64
+          ./.github/scripts/image.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          PROTON_SOURCE_URL: '${{github.event.inputs.protonSourceUrl}}'
+          CONTAINER_TAG: '${{github.event.inputs.containerTag}}'
+
+  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
+  create-manifest:
+    needs: [build-image-amd64, build-image-arm64]
+    name: Pull skupper-router amd64 and arm64 images and create/push manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install brew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "PATH=/home/linuxbrew/.linuxbrew/bin:${PATH}" >> "${GITHUB_ENV}"
+      - name: Install podman
+        run: |
+          brew install podman
+          brew services start podman
+        env:
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
+        run: |
+          export VERSION="${CONTAINER_TAG}"
+          if [ "${CONTAINER_TAG}" != "main" ]; then
+              export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+              echo "BUILD_NUMER(create-manifest)=${BUILD_NUMBER}"
+              # Only accepts tag if build_number is higher than one
+              # Verify if build number is unique, otherwise fail
+              [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
+          else
+              echo "CONTAINER_TAG is main"
+          fi
+          export PROJECT_TAG="${CONTAINER_TAG}"
+          CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
+          if [ "${CAN_PUSH_LATEST}" == "true" ]; then
+            echo 'image-manual.yml(job:pull-images) setting PUSH_LATEST=true, will push :latest tag'
+            export PUSH_LATEST=true
+          else
+            echo 'image-manual.yml(job:pull-images) not setting PUSH_LATEST, will not push :latest tag'
+          fi
+          ./.github/scripts/manifest.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
           CONTAINER_TAG: '${{github.event.inputs.containerTag}}'

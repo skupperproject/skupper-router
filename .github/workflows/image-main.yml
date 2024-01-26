@@ -25,35 +25,68 @@ on:
     types:
       - completed
 jobs:
-  build-image:
-    name: Publish skupper-router image
+  build-image-amd64:
+    name: Publish skupper-router amd64 image
     runs-on: ubuntu-latest
     steps:
-      - name: Check that container job from build workflow succeeded
-        run: |
-          curl -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            ${{ github.event.workflow_run.jobs_url }} > jobs.json
-
-          conclusion=$(jq < jobs.json --raw-output '.jobs[] |  select( .name == "Container image") | .conclusion')
-          echo ${conclusion}
-
-          [[ ${conclusion} == "success" ]]
-
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: actions/checkout@v4
         if: ${{ !cancelled() }}
 
-      - name: Build and publish the main image
+      - name: Build and publish the main amd image
         if: ${{ !cancelled() }}
         run: |
           # The version on main will be 0.0.0+<commit-sha>-main
           export VERSION="0.0.0+${GITHUB_SHA}-main"
+          export PLATFORM=amd64
+          unset PUSH_LATEST
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
           CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+
+  build-image-arm64:
+    name: Publish skupper-router arm64 image
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ !cancelled() }}
+        
+      - uses: actions/checkout@v4
+      - name: Build and publish the main arm64 image
+        run: |
+          # The version on main will be 0.0.0+<commit-sha>-main
+          export VERSION="0.0.0+${GITHUB_SHA}-main"
+          unset PUSH_LATEST
+          export PLATFORM=arm64
+          ./.github/scripts/image.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+
+  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
+  create-manifest:
+    needs: [build-image-amd64, build-image-arm64]
+    name: Pull skupper-router amd64 and arm64 images and create/push manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install brew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "PATH=/home/linuxbrew/.linuxbrew/bin:${PATH}" >> "${GITHUB_ENV}"
+
+      - name: Install podman
+        run: |
+          brew install podman
+          brew services start podman
+        env:
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
+        run: |
+          # This is the main build which means we WON'T push the :latest tag to the container repo.
+          unset PUSH_LATEST
+          ./.github/scripts/manifest.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+

@@ -28,6 +28,14 @@ export BUILDAH_FORMAT=docker
 if [ -z "$PROJECT_TAG" ]; then
   PROJECT_TAG=main
 fi
+# PLATFORM can be amd64 or arm64
+if [ -z "$PLATFORM" ]; then
+  PLATFORM=linux-amd64
+else
+  PLATFORM=linux-${PLATFORM}
+fi
+
+PROJECT_TAG=${PROJECT_TAG}-${PLATFORM}
 
 # Building the skupper-router image
 # Pass the VERSION as a build argument so Containerfile can use it when calling compile.sh
@@ -53,8 +61,9 @@ if [[ -n "${CONTAINER_USER}" && -n "${CONTAINER_PASSWORD}" ]]; then
     if [ -z "$PUSH_LATEST" ]; then
          echo 'NOT Pushing :latest tag'
     else
-        echo 'Pushing :latest tag'
-        ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:latest
-        ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:latest
+        echo 'Pushing :latest-linux-amd64 tag or :latest-linux-arm64 (image.sh)'
+        PROJECT_TAG_LATEST=latest-${PLATFORM}
+        ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}
+        ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}
     fi
 fi
