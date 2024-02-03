@@ -1226,12 +1226,15 @@ void qdr_delivery_continue_peers_CT(qdr_core_t *core, qdr_delivery_t *in_dlv, bo
 
 static void qdr_delivery_continue_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
-    if (discard)
-        return;
-
     qdr_delivery_t *in_dlv  = action->args.delivery.delivery;
     bool more = action->args.delivery.more;
     bool presettled = action->args.delivery.presettled;
+
+
+    if (discard) {
+        qdr_delivery_decref_CT(core, in_dlv, "qdr_delivery_continue_CT - remove from action to discard");
+        return;
+    }
 
     //
     // If the delivery is already pre-settled, don't do anything with the pre-settled flag.
