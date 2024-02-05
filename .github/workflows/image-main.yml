@@ -37,7 +37,7 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             ${{ github.event.workflow_run.jobs_url }} > jobs.json
 
-          conclusion=$(jq < jobs.json --raw-output '.jobs[] |  select( .name == "Container image (linux/amd64)") | .conclusion')
+          conclusion=$(jq < jobs.json --raw-output '.jobs[] |  select( .name == "Container image") | .conclusion')
           echo ${conclusion}
 
           [[ ${conclusion} == "success" ]]
@@ -46,8 +46,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v4
+        if: ${{ !cancelled() }}
 
       - name: Build and publish the main image
+        if: ${{ !cancelled() }}
         run: |
           # The version on main will be 0.0.0+<commit-sha>-main
           export VERSION="0.0.0+${GITHUB_SHA}-main"
