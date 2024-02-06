@@ -59,8 +59,6 @@ struct tcplite_listener_t {
     sys_mutex_t                lock;
     qd_adaptor_config_t       *adaptor_config;
     qd_tls_domain_t           *tls_domain;
-    uint64_t                   link_id;
-    qdr_link_t                *in_link;
     qd_adaptor_listener_t     *adaptor_listener;
     tcplite_connection_list_t  connections;
     qdpo_config_t             *protocol_observer_config;

@@ -245,17 +245,37 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
     return num_buffers_written;
 }
 
+
+size_t qd_raw_conn_get_address_buf(pn_raw_connection_t *pn_raw_conn, char *buf, size_t buflen)
+{
+    assert(pn_raw_conn);
+    assert(buflen);
+
+    buf[0] = '\0';
+
+    const pn_netaddr_t *netaddr = pn_raw_connection_remote_addr(pn_raw_conn);
+    if (!netaddr)
+        return 0;
+
+    int len = pn_netaddr_str(netaddr, buf, buflen);
+    if (len < 0)
+        return 0;
+    if (len >= buflen) {  // truncated
+        len = buflen - 1;
+        buf[len] = '\0';
+    }
+
+    return (size_t) len;
+}
+
+
 char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn)
 {
-    const pn_netaddr_t *netaddr = pn_raw_connection_remote_addr(pn_raw_conn);
-    char                buffer[1024];
-    int                 len = pn_netaddr_str(netaddr, buffer, 1024);
-    if (len <= 1024) {
-        return strdup(buffer);
-    } else {
-        return strndup(buffer, 1024);
-    }
+    char result[1024];
+    qd_raw_conn_get_address_buf(pn_raw_conn, result, sizeof(result));
+    return strdup(result);
 }
+
 
 int qd_raw_connection_drain_write_buffers(pn_raw_connection_t *pn_raw_conn)
 {
