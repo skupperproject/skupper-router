@@ -83,7 +83,7 @@ jobs:
 
   build-image-arm64:
     name: Build and publish skupper-router arm64 image
-    runs-on: self-hosted
+    runs-on: self-hosted-arm64
     steps:
       - run: |
           # validate CONTAINER_TAG

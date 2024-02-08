@@ -1102,7 +1102,7 @@ jobs:
 
   container_arm64:
     name: arm64 container image
-    runs-on: self-hosted
+    runs-on: self-hosted-arm64
     env:
       ImageName: local/skupper-router:local
 

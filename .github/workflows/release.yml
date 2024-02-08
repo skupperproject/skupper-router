@@ -56,7 +56,7 @@ jobs:
 
   build-image-arm64:
     name: Build and publish skupper-router arm64 image
-    runs-on: self-hosted
+    runs-on: self-hosted-arm64
     steps:
       - uses: actions/checkout@v4
       - name: Get the tag name and set it as the CONTAINER_TAG env variable.

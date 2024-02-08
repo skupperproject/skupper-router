@@ -43,7 +43,7 @@ jobs:
 
   build-image-arm64:
     name: Publish skupper-router arm64 image
-    runs-on: self-hosted
+    runs-on: self-hosted-arm64
     steps:
       - uses: actions/checkout@v4
       - name: Build and publish the main arm64 image
