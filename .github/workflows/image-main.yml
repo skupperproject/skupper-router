@@ -30,10 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        if: ${{ !cancelled() }}
-
-      - name: Build and publish the main amd image
-        if: ${{ !cancelled() }}
+      - name: Build and publish the main amd64 image
         run: |
           # The version on main will be 0.0.0+<commit-sha>-main
           export VERSION="0.0.0+${GITHUB_SHA}-main"
@@ -48,9 +45,6 @@ jobs:
     name: Publish skupper-router arm64 image
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
-        if: ${{ !cancelled() }}
-        
       - uses: actions/checkout@v4
       - name: Build and publish the main arm64 image
         run: |

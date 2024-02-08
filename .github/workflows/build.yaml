@@ -307,7 +307,7 @@ jobs:
 
   compile_and_test_pi5:
     name: "Compile and Test on Pi 5 (aarch64 on Pi 5 proton main)"
-    runs-on: self-hosted
+    runs-on: self-hosted-arm64
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
