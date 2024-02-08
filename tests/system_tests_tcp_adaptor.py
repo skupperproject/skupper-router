@@ -2560,9 +2560,10 @@ class TcpAdaptorConnCounter(TestCase):
 
     def _run_test(self, encaps, idle_ct, active_ct):
         # idle_ct: expected connection count when tcp configured, but prior to
-        # connections active
+        # connections active. This includes the count of special dispatcher
+        # connections.
         # activ_ct: expected connection count when 1 client and 1 server
-        # connected
+        # connected (also include dispatcher conns)
         mgmt = self.router.management
 
         # verify the counters start at zero (not including amqp)
@@ -2602,12 +2603,9 @@ class TcpAdaptorConnCounter(TestCase):
             # expect that simply configuring the tcp listener/connector will
             # instantiate the "dispatcher" connection:
 
-            errmsg = "Expected idle count failed!"
-            errmsg += "\nIf you fixed the phantom tcp-lite connection counter"
-            errmsg += " please update this test with the new counter values!"
             self.assertTrue(retry(lambda:
                                   self._get_conn_counters().get("tcp") == idle_ct),
-                            errmsg)
+                            f"Expected {idle_ct} got {self._get_conn_counters()}!")
 
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
                 client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -2639,8 +2637,8 @@ class TcpAdaptorConnCounter(TestCase):
         """ Create and destroy TCP network connections, verify the connection
         counter is correct.
         """
-        for encaps, idle_ct, active_ct in [('legacy', 1, 3), ('lite', 2, 4)]:
-            self._run_test(encaps, idle_ct, active_ct)
+        for encaps in ['legacy', 'lite']:
+            self._run_test(encaps, idle_ct=1, active_ct=3)
 
 
 class TcpAdaptorNoDelayedDelivery(TestCase):
