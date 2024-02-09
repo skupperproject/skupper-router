@@ -39,13 +39,15 @@ COPY . .
 ENV PROTON_VERSION=main
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.3
-ENV LIBUNWIND_VERSION=v1.8.0
+ENV LIBUNWIND_VERSION=v1.6.2
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
 ENV LIBUNWIND_SOURCE_URL=${LIBUNWIND_SOURCE_URL:-https://github.com/libunwind/libunwind/archive/refs/tags/${LIBUNWIND_VERSION}.tar.gz}
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 ARG VERSION=0.0.0
 ENV VERSION=$VERSION
+ARG PLATFORM=amd64
+ENV PLATFORM=$PLATFORM
 RUN .github/scripts/compile.sh
 RUN tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image && tar zxpf /libunwind-image.tar.gz --one-top-level=/image
 

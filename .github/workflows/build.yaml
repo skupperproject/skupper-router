@@ -1057,7 +1057,7 @@ jobs:
 
       - name: Build Containerfile
         run: |
-          podman build -t ${{ env.ImageName }} -f ./Containerfile .
+          podman build --build-arg PLATFORM=amd64 -t ${{ env.ImageName }} -f ./Containerfile .
 
       # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
       # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
@@ -1110,7 +1110,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build Containerfile
         run: |
-          podman build -t ${{ env.ImageName }} -f ./Containerfile .
+          podman build --build-arg PLATFORM=arm64 -t ${{ env.ImageName }} -f ./Containerfile .
 
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'

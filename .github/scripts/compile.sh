@@ -101,15 +101,25 @@ DESTDIR="${LWS_INSTALL_DIR}" cmake --install "${LWS_BUILD_DIR}"
 tar -z -C "${LWS_INSTALL_DIR}" -cf /libwebsockets-image.tar.gz usr
 #endregion libwebsockets
 
-#region libunwind
-pushd "${LIBUNWIND_DIR}"
-autoreconf -i
-./configure
-make install
-DESTDIR="${LIBUNWIND_INSTALL_DIR}" make install
-tar -z -C "${LIBUNWIND_INSTALL_DIR}" -cf /libunwind-image.tar.gz usr
-popd
-#endregion libunwind
+if [ -z "$PLATFORM" ]; then
+    echo "Error: PLATFORM not specified. Exiting compile.sh"
+    exit 1
+else
+    if [ "$PLATFORM" = "amd64" ]; then
+        #region libunwind
+        echo "PLATFORM is amd64, compiling libunwind from source"
+        pushd "${LIBUNWIND_DIR}"
+        autoreconf -i
+        ./configure
+        make install
+        DESTDIR="${LIBUNWIND_INSTALL_DIR}" make install
+        tar -z -C "${LIBUNWIND_INSTALL_DIR}" -cf /libunwind-image.tar.gz usr
+        popd
+        #endregion libunwind
+    else
+        echo "PLATFORM is arm64, NOT compiling libunwind from source"
+    fi
+fi
 
 do_patch () {
     PATCH_DIR=$1

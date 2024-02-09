@@ -30,17 +30,16 @@ if [ -z "$PROJECT_TAG" ]; then
 fi
 # PLATFORM can be amd64 or arm64
 if [ -z "$PLATFORM" ]; then
-  PLATFORM=linux-amd64
-else
-  PLATFORM=linux-${PLATFORM}
+  PLATFORM=amd64
 fi
 
-PROJECT_TAG=${PROJECT_TAG}-${PLATFORM}
+PLATFORM_LINUX=linux-${PLATFORM}
+PROJECT_TAG=${PROJECT_TAG}-${PLATFORM_LINUX}
 
 # Building the skupper-router image
 # Pass the VERSION as a build argument so Containerfile can use it when calling compile.sh
 # This version is passed in as a -DVERSION build parameter when building skupper-router.
-${CONTAINER} build --build-arg VERSION=$VERSION -t ${PROJECT_NAME}:${PROJECT_TAG}  -f ./Containerfile .
+${CONTAINER} build --build-arg PLATFORM=$PLATFORM --build-arg VERSION=$VERSION -t ${PROJECT_NAME}:${PROJECT_TAG}  -f ./Containerfile .
 
 # Pushing only when credentials available
 if [[ -n "${CONTAINER_USER}" && -n "${CONTAINER_PASSWORD}" ]]; then
@@ -62,7 +61,7 @@ if [[ -n "${CONTAINER_USER}" && -n "${CONTAINER_PASSWORD}" ]]; then
          echo 'NOT Pushing :latest tag'
     else
         echo 'Pushing :latest-linux-amd64 tag or :latest-linux-arm64 (image.sh)'
-        PROJECT_TAG_LATEST=latest-${PLATFORM}
+        PROJECT_TAG_LATEST=latest-${PLATFORM_LINUX}
         ${CONTAINER} tag ${PROJECT_NAME}:${PROJECT_TAG} ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}
         ${CONTAINER} push ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}
     fi
