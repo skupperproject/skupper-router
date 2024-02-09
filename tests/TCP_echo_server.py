@@ -93,7 +93,7 @@ class TcpEchoServerHandler(asyncio.Protocol):
         return False
 
     def data_received(self, data):
-        self.logger.log(f' {self.name}: peer {self.peername} received: {split_chunk_for_display(data)}')
+        self.logger.log(f' {self.name}: peer {self.peername} received: {len(data)} bytes {split_chunk_for_display(data)}')
         self.echo_server.total_bytes_received += len(data)
 
         if self.echo_server.close_on_data:

@@ -1381,7 +1381,7 @@ class CommonTcpTests:
     def test_77_half_closed_INTA_INTC_large_message(self):
         name = "test_77_half_closed_INTA_INTC_large_message"
         self.logger.log("TCP_TEST Start %s" % name)
-        large_msg = b'G' * 40000 + b'END OF TRANSMISSION'
+        large_msg = b'T' * 40000 + b'END OF TRANSMISSION'
         out, _ = self._ncat_runner(name, "INTA", "INTC", large_msg)
         self.assertEqual(large_msg, out, f"ncat command returned invalid data, expected {len(large_msg)} but got {len(out)}")
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
