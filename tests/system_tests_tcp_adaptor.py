@@ -1523,13 +1523,14 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
     deliveries.  See Dispatch-2036.
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap='legacy', test_name='TCPStuckDeliveryTest'):
         super(TcpAdaptorStuckDeliveryTest, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
-        cls.test_name = 'TCPStuckDeliveryTest'
+        cls.encapsulation = encap
+        cls.test_name = test_name
 
         # Topology: linear.
         # tcp-client->edge1->interior1->tcp-server
@@ -1564,7 +1565,8 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                                ('tcpConnector', {'host': "127.0.0.1",
                                                  'port':
                                                  cls.interior_tcp_connector_port,
-                                                 'address': 'nostuck'})])
+                                                 'address': 'nostuck',
+                                                 'encapsulation': cls.encapsulation})])
         cls.i_router.wait_ready()
         cls.e_router = router(cls,
                               "%s_E" % cls.test_name,
@@ -1572,7 +1574,8 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                               [('tcpListener', {'host': "0.0.0.0",
                                                 'port':
                                                 cls.edge_tcp_listener_port,
-                                                'address': 'nostuck'}),
+                                                'address': 'nostuck',
+                                                'encapsulation': cls.encapsulation}),
                                ('connector', {'role': 'edge',
                                               'port':
                                               cls.interior_edge_listener_port})])
@@ -1641,6 +1644,16 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                     self.assertNotIn("Stuck delivery: At least one delivery",
                                      line,
                                      "Stuck deliveries should not be logged!")
+
+
+class TcpAdaptorStuckDeliveryLiteTest(TcpAdaptorStuckDeliveryTest):
+    """
+    Verify that the routers stuck delivery detection is not applied to TCP
+    deliveries.  See Dispatch-2036.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorStuckDeliveryLiteTest, cls).setUpClass(encap='lite', test_name='TCPStuckDeliveryLiteTest')
 
 
 class TcpAdaptorManagementTest(TestCase):
@@ -2635,9 +2648,10 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
     Ensure long lived TCP sessions are not counted as delayed deliveries
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap="legacy"):
         super(TcpAdaptorNoDelayedDelivery, cls).setUpClass()
 
+        cls.encapsulation = encap
         cls.listener_port = cls.tester.get_port()
         cls.connector_port = cls.tester.get_port()
         config = [
@@ -2647,10 +2661,12 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
                           'port': cls.tester.get_port()}),
             ('tcpListener', {'host': "0.0.0.0",
                              'port': cls.listener_port,
-                             'address': "no/delay"}),
+                             'address': "no/delay",
+                             'encapsulation': cls.encapsulation}),
             ('tcpConnector', {'host': "127.0.0.1",
                               'port': cls.connector_port,
-                              'address': "no/delay"}),
+                              'address': "no/delay",
+                              'encapsulation': cls.encapsulation}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]
@@ -2718,6 +2734,15 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
                          f"Expected delay counter to be zero, got {counters}")
         self.assertEqual(0, counters[1] - baseline[1],
                          f"Expected delay counter to be zero, got {counters}")
+
+
+class TcpAdaptorNoDelayedDeliveryLite(TcpAdaptorNoDelayedDelivery):
+    """
+    Ensure long lived TCP sessions are not counted as delayed deliveries
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorNoDelayedDeliveryLite, cls).setUpClass(encap='lite')
 
 
 class TcpMisconfiguredLegacyLiteEncapsTest(TestCase):
