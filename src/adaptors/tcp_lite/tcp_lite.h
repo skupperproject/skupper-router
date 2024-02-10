@@ -51,15 +51,12 @@ struct tcplite_common_t {
     tcplite_context_type_t  context_type;
     tcplite_common_t       *parent;
     vflow_record_t         *vflow;
-    qdr_connection_t       *core_conn;
-    uint64_t                conn_id;
 };
 
 struct tcplite_listener_t {
     tcplite_common_t           common;
     DEQ_LINKS(tcplite_listener_t);
     sys_mutex_t                lock;
-    qd_timer_t                *activate_timer;
     qd_adaptor_config_t       *adaptor_config;
     qd_tls_domain_t           *tls_domain;
     uint64_t                   link_id;
@@ -81,6 +78,8 @@ typedef struct tcplite_connector_t {
     qd_timer_t                *activate_timer;
     qd_adaptor_config_t       *adaptor_config;
     qd_tls_domain_t           *tls_domain;
+    qdr_connection_t          *core_conn;  // dispatcher conn and link
+    uint64_t                   conn_id;
     uint64_t                   link_id;
     qdr_link_t                *out_link;
     tcplite_connection_list_t  connections;
@@ -122,6 +121,8 @@ typedef struct tcplite_connection_t {
     sys_atomic_t                core_activation;
     sys_atomic_t                raw_opened;
     qd_timer_t                 *close_timer;
+    qdr_connection_t           *core_conn;
+    uint64_t                    conn_id;
     qdr_link_t                 *inbound_link;
     qd_message_t               *inbound_stream;
     qdr_delivery_t             *inbound_delivery;
