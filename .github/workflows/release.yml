@@ -27,8 +27,8 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  build:
-    name: Build and publish skupper-router image
+  build-image-amd64:
+    name: Build and publish skupper-router amd64 image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +37,8 @@ jobs:
           echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Build and publish skupper-router image
         run: |
-          export PROJECT_TAG="${CONTAINER_TAG}"
-          export VERSION="${CONTAINER_TAG}"
+          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
+          export VERSION="${{ env.CONTAINER_TAG }}"
           export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
           # Verify if build number is unique, otherwise fail
@@ -48,14 +48,84 @@ jobs:
           # This is a release build which means we need to push the :latest tag
           # to the container repo.
           export PUSH_LATEST=true
+          export PLATFORM=amd64
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
           CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-      # Now that we have successfully pushed a tagged version of the skupper-router container
-      # we will create a draft release and add as much information to it as possible.
+
+  build-image-arm64:
+    name: Build and publish skupper-router arm64 image
+    runs-on: self-hosted-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
+        run:  |
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+      - name: Build and publish skupper-router arm64 image
+        run: |
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
+          export VERSION="${{ env.CONTAINER_TAG }}"
+          # This is a release build which means we need to push the :latest tag to the container repo.
+          export PUSH_LATEST=true
+          export PLATFORM=arm64
+          ./.github/scripts/image.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+
+  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
+  create-manifest:
+    name: Pull skupper-router amd64 and arm64 images and create/push manifest
+    needs: [build-image-amd64, build-image-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install brew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "PATH=/home/linuxbrew/.linuxbrew/bin:${PATH}" >> "${GITHUB_ENV}"
+
+      - name: Install podman
+        run: |
+          brew install podman
+          brew services start podman
+        env:
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+
+      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
+        run:  |
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
+        run: |
+          export VERSION="${CONTAINER_TAG}"
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
+          # This is a release candidate build which means we WON'T push the :latest tag to the container repo.
+          export PUSH_LATEST=true
+          ./.github/scripts/manifest.sh
+        env:
+          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+
+  create-release:
+    name: Create Draft Release
+    needs: create-manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
+        run:  |
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+      - name: Get the build number
+        run: |
+          export VERSION="${CONTAINER_TAG}"
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l`))
+          echo "BUILD_NUMER(create-release)=${BUILD_NUMBER}"
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
+        # Now that we have successfully pushed a tagged version of the skupper-router container
+        # we will create a draft release and add as much information to it as possible.
       - name: Create Draft Release
-        id:  create_release
         if: env.BUILD_NUMBER == '1'
         uses: actions/create-release@v1
         env:
