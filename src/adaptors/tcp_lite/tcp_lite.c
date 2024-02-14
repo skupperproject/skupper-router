@@ -25,7 +25,6 @@
 #include <qpid/dispatch/protocol_adaptor.h>
 #include <qpid/dispatch/server.h>
 #include <qpid/dispatch/log.h>
-#include <qpid/dispatch/cutthrough_utils.h>
 #include <qpid/dispatch/platform.h>
 #include <qpid/dispatch/connection_counters.h>
 #include <proton/proactor.h>
@@ -640,7 +639,6 @@ static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_mes
         if (!DEQ_IS_EMPTY(qd_buffers)) {
             //qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] produce_read_buffers_XSIDE_IO - Producing %ld buffers", conn->conn_id, DEQ_SIZE(qd_buffers));
             qd_message_produce_buffers(stream, &qd_buffers);
-            cutthrough_notify_buffers_produced_inbound(stream);
         }
     } else {
         *blocked = true;
@@ -677,7 +675,6 @@ static uint64_t consume_write_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_me
             }
             //qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] consume_write_buffers_XSIDE_IO - Consuming %ld buffers", conn->conn_id, actual);
             pn_raw_connection_write_buffers(conn->raw_conn, raw_buffers, actual);
-            cutthrough_notify_buffers_consumed_outbound(stream);
         }
     }
 
