@@ -2844,5 +2844,157 @@ class TcpMisconfiguredLegacyLiteEncapsTest(TestCase):
         self._test(ingress_encaps="lite", egress_encaps="legacy")
 
 
+class TcpLiteCutthroughAbortTest(TestCase):
+    """
+    Verify that the TCP adaptor can properly handle an AMQP Aborted delivery
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpLiteCutthroughAbortTest, cls).setUpClass()
+        cls.van_address = 'closest/cutthroughabort'
+        cls.edge_port = cls.tester.get_port()
+        cls.logger = Logger(title="TcpLiteCutthroughAbortTest",
+                            print_to_console=False,
+                            ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                   "setUpClass/TcpCutthroughAbort_server.log"))
+        cls.echo_server = TcpEchoServer(prefix="TcpCutthroughAbortServer",
+                                        port=0,
+                                        logger=cls.logger)
+        assert cls.echo_server.is_running
+
+        e_config = [
+            ('router', {'mode': 'edge', 'id': 'TcpCutthroughAbortEdge'}),
+            ('listener', {'role': 'normal', 'port': cls.tester.get_port()}),
+            ('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.edge_port}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+        i_config = [
+            ('router', {'mode': 'interior', 'id': 'TcpCutthroughAbortInt'}),
+            ('listener', {'role': 'normal', 'port': cls.tester.get_port()}),
+            ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.edge_port}),
+            ('tcpConnector', {'host': "localhost",
+                              'port': cls.echo_server.port,
+                              'address': cls.van_address,
+                              'encapsulation': 'lite'}),
+            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
+            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+        ]
+
+        cls.i_router = cls.tester.qdrouterd('TcpCutthroughAbortInt',
+                                            Qdrouterd.Config(i_config), wait=True)
+        cls.e_router = cls.tester.qdrouterd('TcpCutthroughAbortEdge',
+                                            Qdrouterd.Config(e_config), wait=True)
+        cls.e_address = cls.e_router.addresses[0]
+
+    def test_aborted_streaming_link(self):
+        test = FakeClientStreamAborter(self.e_address, self.van_address, self.logger)
+        test.run()
+        self.assertIsNone(test.error)
+
+
+class FakeClientStreamAborter(MessagingHandler):
+    """
+    Simulate a tcpListener by creating an inbound AMQP link to the service
+    address and a reply-to. Initiate a streaming message to the service. Once
+    data transfer is in progress abort the inbound AMQP delivery
+    """
+    def __init__(self, listener_address, van_address, logger):
+        super(FakeClientStreamAborter, self).__init__(auto_settle=False)
+
+        self.listener_address = listener_address
+        self.van_address = van_address
+        self.logger = logger
+
+        self.error = None
+        self.timer = None
+        self.amqp_conn = None
+        self.amqp_receiver = None
+        self.amqp_sender = None
+        self.inbound_dlv = None
+        self.reply_to = None
+        self.octets_rx = 0
+
+    def done(self, error=None):
+        self.logger.log("done")
+        self.error = error
+        if self.timer:
+            self.timer.cancel()
+        self.amqp_conn.close()
+        if error is not None:
+            self.logger.dump()
+
+    def timeout(self):
+        self.logger.log("Timeout Expired")
+        self.timer = None
+        self.done(error="Timeout Expired")
+
+    def on_start(self, event):
+        self.logger.log("on_start")
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.amqp_conn = event.container.connect(self.listener_address)
+        self.amqp_receiver = event.container.create_receiver(self.amqp_conn,
+                                                             dynamic=True)
+
+    def on_link_opened(self, event):
+        self.logger.log("on_link_opened")
+        if event.receiver == self.amqp_receiver:
+            self.reply_to = self.amqp_receiver.remote_source.address
+            self.logger.log(f"dynamic reply-to {self.reply_to}, attaching sender...")
+            self.amqp_sender = event.container.create_sender(self.amqp_conn,
+                                                             self.van_address)
+
+    def on_sendable(self, event):
+        self.logger.log("on_sendable")
+        if event.sender == self.amqp_sender:
+            if self.inbound_dlv is None:
+                self.logger.log("generating inbound message")
+                assert self.reply_to is not None
+                self.inbound_dlv = self.amqp_sender.delivery("INBOUND-DELIVERY")
+                msg = Message()
+                msg.address = self.van_address
+                msg.reply_to = self.reply_to
+                msg.correlation_id = "A0Z_P:1"
+                msg.content_type = "application/octet-stream"
+                encoded = msg.encode()
+                # add body value null terminator
+                encoded += b'\x00\x53\x77\x40'
+                # and enough content to classify this message as streaming...
+                encoded += b'ABC' * 100000
+                self.amqp_sender.stream(encoded)
+
+    def on_delivery(self, event):
+        self.logger.log("on_delivery")
+        dlv = event.delivery
+        if dlv.readable:
+            data = self.amqp_receiver.recv(dlv.pending)
+            if data:
+                #print(f"RECV-->'{data}'", flush=True)
+                self.octets_rx += len(data)
+                # fake update to TCP window:
+                dlv.local.section_number = 0
+                dlv.local.section_offset = self.octets_rx
+                dlv.update(dlv.RECEIVED)
+            if not self.inbound_dlv.aborted:
+                # Continue streaming but mark end of stream
+                self.logger.log("Sending payload")
+                self.amqp_sender.stream(b'?' * 65535)
+                self.amqp_sender.stream(b'END-OF-STREAM')
+
+                if b'END-OF-STREAM' in data:
+                    # end-of-stream echoed back, abort inbound delivery
+                    self.logger.log(f"END-OF-STREAM received, aborting {self.inbound_dlv.tag}...")
+                    self.inbound_dlv.abort()
+
+            if dlv.partial is False:
+                self.logger.log("End of echo stream, test complete")
+                dlv.update(dlv.ACCEPTED)
+                dlv.settle()
+                self.done()
+
+    def run(self):
+        Container(self).run()
+
+
 if __name__ == '__main__':
     unittest.main(main_module())
