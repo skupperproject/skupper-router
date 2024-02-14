@@ -2972,7 +2972,10 @@ static void egress_conn_timer_handler(void *context)
         // It is ok to call qdr_connection_closed from this timer callback.
         //
         sys_mutex_unlock(qd_server_get_activation_lock(http2_adaptor->core->qd->server));
-        qdr_connection_closed(conn->qdr_conn);
+        if (conn->qdr_conn) {
+            qdr_connection_closed(conn->qdr_conn);
+            conn->qdr_conn = 0;
+        }
         qd_connection_counter_dec(QD_PROTOCOL_HTTP2);
         if (conn->connection_status == QD_CONNECTION_NEW)
             free_qdr_http2_connection(conn, false);
