@@ -96,6 +96,13 @@ int qd_raw_connection_write_buffers(pn_raw_connection_t *pn_raw_conn, qd_adaptor
 char *qd_raw_conn_get_address(pn_raw_connection_t *pn_raw_conn);
 
 /**
+ * Get the raw connections remote address.
+ * Like qd_raw_conn_get_address(), but address buffer is supplied by caller.
+ * @return number of bytes written, zero if no address available (buf is set to the null string).
+ */
+size_t qd_raw_conn_get_address_buf(pn_raw_connection_t *pn_raw_conn, char *buf, size_t buflen);
+
+/**
  * Drains write buffers held by proton raw connection.
  * @param raw_conn - The pn_raw_connection_t to which the write buffers were granted.
  */

@@ -179,13 +179,13 @@ static pn_data_t *TL_conn_properties(void)
 }
 
 
-static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming)
+static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming, const char *host)
 {
     qdr_connection_t *conn;
-    
+
     //
     // The qdr_connection_info() function makes its own copy of the passed in tcp_conn_properties.
-    // So, we need to call pn_data_free(tcp_conn_properties)
+    // So, we need to call pn_data_free(properties)
     //
     pn_data_t *properties       = TL_conn_properties();
     qdr_connection_info_t *info = qdr_connection_info(false,        // is_encrypted,
@@ -193,7 +193,7 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                                       true,         // opened,
                                                       "",           // sasl_mechanisms,
                                                       incoming ? QD_INCOMING : QD_OUTGOING,  // dir,
-                                                      "tcplite",    // host,
+                                                      host,
                                                       "",           // ssl_proto,
                                                       "",           // ssl_cipher,
                                                       "",           // user,
@@ -265,8 +265,9 @@ static void TL_setup_connector(tcplite_connector_t *cr)
     // Set up a core connection to handle all of the links and deliveries for this connector
     //
     cr->conn_id   = qd_server_allocate_connection_id(tcplite_context->server);
-    cr->core_conn = TL_open_core_connection(cr->conn_id, false);
+    cr->core_conn = TL_open_core_connection(cr->conn_id, false, "egress-dispatch");
     qdr_connection_set_context(cr->core_conn, cr);
+    cr->connections_opened = 1;  // for legacy compatibility: it counted the egress-dispatch conn
 
     //
     // Attach an out-link to represent our desire to receive connection streams for the address
@@ -756,11 +757,13 @@ static void link_setup_LSIDE_IO(tcplite_connection_t *conn)
     tcplite_listener_t *li = (tcplite_listener_t*) conn->common.parent;
     qdr_terminus_t *target = qdr_terminus(0);
     qdr_terminus_t *source = qdr_terminus(0);
+    char host[64];  // for numeric remote client IP:port address
 
     qdr_terminus_set_address(target, li->adaptor_config->address);
     qdr_terminus_set_dynamic(source);
-    
-    conn->core_conn = TL_open_core_connection(conn->conn_id, true);
+
+    qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
+    conn->core_conn = TL_open_core_connection(conn->conn_id, true, host);
     qdr_connection_set_context(conn->core_conn, conn);
 
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.lside.in", 0, false, 0, &conn->inbound_link_id);
@@ -776,10 +779,12 @@ static void link_setup_CSIDE_IO(tcplite_connection_t *conn, qdr_delivery_t *deli
 {
     ASSERT_RAW_IO;
     qdr_terminus_t *target = qdr_terminus(0);
+    char host[64];  // for numeric remote server IP:port address
 
     qdr_terminus_set_address(target, conn->reply_to);
 
-    conn->core_conn = TL_open_core_connection(conn->conn_id, false);
+    qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
+    conn->core_conn = TL_open_core_connection(conn->conn_id, false, host);
     qdr_connection_set_context(conn->core_conn, conn);
 
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.cside.in", 0, false, 0, &conn->inbound_link_id);
@@ -1778,12 +1783,15 @@ void qd_dispatch_delete_tcp_listener_lite(qd_dispatch_t *qd, tcplite_listener_t 
     if (li) {
         li->closing = true;
 
-        if (!tcplite_context->adaptor_finalizing) {
-            if (!!li->adaptor_listener) {
-                qd_adaptor_listener_close(li->adaptor_listener);
-                li->adaptor_listener = 0;
-            }
-        } else {
+        // deactivate the listener to prevent new connections from being accepted
+        // on the proactor thread
+        //
+        if (!!li->adaptor_listener) {
+            qd_adaptor_listener_close(li->adaptor_listener);
+            li->adaptor_listener = 0;
+        }
+
+        if (tcplite_context->adaptor_finalizing) {
             tcplite_connection_t *conn = DEQ_HEAD(li->connections);
             if (!!conn) {
                 while (conn) {
@@ -1871,6 +1879,15 @@ void qd_dispatch_delete_tcp_connector_lite(qd_dispatch_t *qd, tcplite_connector_
     SET_THREAD_UNKNOWN;
     if (cr) {
         cr->closing = true;
+
+        // Explicitly drop the out-link so that we notify any link event monitors and stop new deliveries from being
+        // forwarded to this connector
+        //
+        if (!!cr->out_link) {
+            qdr_link_set_context(cr->out_link, 0);
+            qdr_link_detach(cr->out_link, QD_LOST, 0);
+            cr->out_link = 0;
+        }
 
         if (!tcplite_context->adaptor_finalizing) {
             qdr_connection_closed(cr->core_conn);

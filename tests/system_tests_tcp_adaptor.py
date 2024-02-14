@@ -1661,13 +1661,14 @@ class TcpAdaptorManagementTest(TestCase):
     Test Creation and deletion of TCP management entities
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap='legacy', test_name='TCPMgmtTest'):
         super(TcpAdaptorManagementTest, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
-        cls.test_name = 'TCPMgmtTest'
+        cls.test_name = test_name
+        cls.encapsulation = encap
 
         # create edge and interior routers.  The listener/connector will be on
         # the edge router.  It is expected that the edge will create proxy
@@ -1739,12 +1740,14 @@ class TcpAdaptorManagementTest(TestCase):
                     name=listener_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_listener_port,
-                                'host': '127.0.0.1'})
+                                'host': '127.0.0.1',
+                                'encapsulation': self.encapsulation})
         mgmt.create(type=TCP_CONNECTOR_TYPE,
                     name=connector_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_server_port,
-                                'host': '127.0.0.1'})
+                                'host': '127.0.0.1',
+                                'encapsulation': self.encapsulation})
 
         # verify the entities have been created and tcp traffic works
         self.assertEqual(1, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
@@ -1810,12 +1813,14 @@ class TcpAdaptorManagementTest(TestCase):
                         name=listener_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_listener_port,
-                                    'host': '127.0.0.1'})
+                                    'host': '127.0.0.1',
+                                    'encapsulation': self.encapsulation})
             mgmt.create(type=TCP_CONNECTOR_TYPE,
                         name=connector_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_server_port,
-                                    'host': '127.0.0.1'})
+                                    'host': '127.0.0.1',
+                                    'encapsulation': self.encapsulation})
 
             # wait until the listener has initialized
 
@@ -1891,14 +1896,18 @@ class TcpAdaptorManagementTest(TestCase):
             # Verify updated statistics.
 
             l_stats = mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
-            self.assertEqual(10, l_stats['bytesIn'])
-            self.assertEqual(4, l_stats['bytesOut'])
+            if self.encapsulation == 'legacy':
+                # deprecated for tcp-lite
+                self.assertEqual(10, l_stats['bytesIn'])
+                self.assertEqual(4, l_stats['bytesOut'])
             self.assertEqual(1, l_stats['connectionsOpened'])
             self.assertEqual(1, l_stats['connectionsClosed'])
 
             c_stats = mgmt.read(type=TCP_CONNECTOR_TYPE, name=connector_name)
-            self.assertEqual(4, c_stats['bytesIn'])
-            self.assertEqual(10, c_stats['bytesOut'])
+            if self.encapsulation == 'legacy':
+                # deprecated for tcp-lite
+                self.assertEqual(4, c_stats['bytesIn'])
+                self.assertEqual(10, c_stats['bytesOut'])
             self.assertEqual(2, c_stats['connectionsOpened'])
             self.assertEqual(1, c_stats['connectionsClosed'])
 
@@ -1932,6 +1941,16 @@ class TcpAdaptorManagementTest(TestCase):
                     return False
             with self.assertRaises(ConnectionRefusedError):
                 retry(_retry_until_fail, delay=0.25)
+
+
+class TcpAdaptorManagementLiteTest(TcpAdaptorManagementTest):
+    """
+    Test Creation and deletion of TCP management entities
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorManagementLiteTest, cls).setUpClass(encap='lite',
+                                                            test_name='TCPMgmtLiteTest')
 
 
 class TcpAdaptorListenerConnectTest(TestCase):
