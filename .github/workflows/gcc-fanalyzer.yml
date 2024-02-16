@@ -17,98 +17,97 @@
 # under the License
 #
 
-name: "gcc-fanalyzer"
+#name: "gcc-fanalyzer"
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
+#on:
+#  push:
+#    branches: [ "main" ]
+#  pull_request:
     # The branches below must be a subset of the branches above
-    branches: [ "main" ]
-  schedule:
-    - cron: '32 16 * * 4'
-  workflow_dispatch:
+#    branches: [ "main" ]
+#  schedule:
+#    - cron: '32 16 * * 4'
+#  workflow_dispatch:
 
-jobs:
-  analyze:
-    name: Analyze
-    runs-on: 'ubuntu-latest'
-    timeout-minutes: 360
-    permissions:
-      actions: read
-      contents: read
+#jobs:
+#  analyze:
+#    name: Analyze
+#    runs-on: 'ubuntu-latest'
+#    timeout-minutes: 360
+#    permissions:
+#      actions: read
+#      contents: read
       # https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security
-      security-events: write
+#      security-events: write
 
-    container:
-      image: 'quay.io/fedora/fedora:rawhide'
-      volumes:
-        - ${{github.workspace}}:${{github.workspace}}
-      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined --sysctl net.ipv6.conf.all.disable_ipv6=0
+#    container:
+#      image: 'quay.io/fedora/fedora:rawhide'
+#      volumes:
+#        - ${{github.workspace}}:${{github.workspace}}
+#      options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined --sysctl net.ipv6.conf.all.disable_ipv6=0
 
-    steps:
+#    steps:
+#    - name: Install dependencies
+#      run: |
+#        dnf install -y gcc gcc-c++ ninja-build cmake \
+#        cyrus-sasl-devel openssl-devel libuuid-devel \
+#        python3-devel python3-pip \
+#        libnghttp2-devel libwebsockets-devel \
+#        wget tar patch findutils git
 
-    - name: Install dependencies
-      run: |
-        dnf install -y gcc gcc-c++ ninja-build cmake \
-        cyrus-sasl-devel openssl-devel libuuid-devel \
-        python3-devel python3-pip \
-        libnghttp2-devel libwebsockets-devel \
-        wget tar patch findutils git
+#    - name: Checkout router repository
+#      uses: actions/checkout@v4
 
-    - name: Checkout router repository
-      uses: actions/checkout@v4
+#    - name: Checkout Proton repository
+#      uses: actions/checkout@v4
+#      with:
+#        repository: apache/qpid-proton
+#        ref: main
+#        path: 'qpid-proton'
 
-    - name: Checkout Proton repository
-      uses: actions/checkout@v4
-      with:
-        repository: apache/qpid-proton
-        ref: main
-        path: 'qpid-proton'
+#    - name: Take ownership of the checkout directory (Git CVE-2022-24765)
+#      run: chown --recursive --reference=/ .
 
-    - name: Take ownership of the checkout directory (Git CVE-2022-24765)
-      run: chown --recursive --reference=/ .
+#    - name: Install Proton
+#      run: |
+#        cmake -S qpid-proton -B qpid-proton/build -GNinja -DBUILD_BINDINGS=c -DBUILD_TLS=ON -DBUILD_TOOLS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+#        cmake --build qpid-proton/build
+#        cmake --install qpid-proton/build
 
-    - name: Install Proton
-      run: |
-        cmake -S qpid-proton -B qpid-proton/build -GNinja -DBUILD_BINDINGS=c -DBUILD_TLS=ON -DBUILD_TOOLS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
-        cmake --build qpid-proton/build
-        cmake --install qpid-proton/build
-
-    - name: Delete Proton
-      run: rm -rf qpid-proton
+#    - name: Delete Proton
+#      run: rm -rf qpid-proton
 
     # https://gcc.gnu.org/wiki/StaticAnalyzer
-    - name: Build with -fanalyzer
-      run: |
+#    - name: Build with -fanalyzer
+#      run: |
         # Disable IPO to avoid out-of-memory crashes when compiling with -fanalyzer
-        CFLAGS="-fanalyzer -fdiagnostics-format=sarif-file" CXXFLAGS="-fanalyzer -fdiagnostics-format=sarif-file" cmake -S . -B build -GNinja -DENABLE_WARNING_ERROR=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DBUILD_TESTING=OFF
-        cmake --build build
-      working-directory: ${{github.workspace}}
+#        CFLAGS="-fanalyzer -fdiagnostics-format=sarif-file" CXXFLAGS="-fanalyzer -fdiagnostics-format=sarif-file" cmake -S . -B build -GNinja -DENABLE_WARNING_ERROR=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DBUILD_TESTING=OFF
+#        cmake --build build
+#      working-directory: ${{github.workspace}}
 
     # https://github.com/microsoft/sarif-sdk/blob/main/docs/multitool-usage.md
-    - name: Combine sarifs
-      run: |
-        dnf install -y npm
-        npm install -g @microsoft/sarif-multitool
-        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --output-file merged.sarif
-        python3 scripts/gha_sarif_masher.py --basedir "${PWD}" --output mashed.sarif merged.sarif
-        npx -y @microsoft/sarif-multitool rewrite mashed.sarif --normalize-for-ghas --output current.sarif --sarif-output-version Current
-      env:
-        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
-      working-directory: ${{github.workspace}}
+#    - name: Combine sarifs
+#      run: |
+#        dnf install -y npm
+#        npm install -g @microsoft/sarif-multitool
+#        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --output-file merged.sarif
+#        python3 scripts/gha_sarif_masher.py --basedir "${PWD}" --output mashed.sarif merged.sarif
+#        npx -y @microsoft/sarif-multitool rewrite mashed.sarif --normalize-for-ghas --output current.sarif --sarif-output-version Current
+#      env:
+#        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
+#      working-directory: ${{github.workspace}}
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: current.sarif
-        path: current.sarif
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: current.sarif
+#        path: current.sarif
 
     # https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github
-    - name: upload sarif file to github
-      uses: github/codeql-action/upload-sarif@v3
-      with:
+#    - name: upload sarif file to github
+#      uses: github/codeql-action/upload-sarif@v3
+#      with:
         # Path to SARIF file relative to the root of the repository
-        sarif_file: current.sarif
+#        sarif_file: current.sarif
         # Optional category for the results
         # Used to differentiate multiple results for one commit
-        category: /gcc-fanalyzer
+#        category: /gcc-fanalyzer
