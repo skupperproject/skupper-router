@@ -674,7 +674,7 @@ static uint64_t consume_write_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_me
                 octet_count += raw_buffers[i].size;
                 buf = DEQ_NEXT(buf);
             }
-            //qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] consume_write_buffers_XSIDE_IO - Consuming %ld buffers", conn->conn_id, actual);
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] consume_write_buffers_XSIDE_IO - Consuming %ld buffers", conn->conn_id, actual);
             pn_raw_connection_write_buffers(conn->raw_conn, raw_buffers, actual);
         }
     }

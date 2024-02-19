@@ -1570,6 +1570,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
                 // it to the produced buffer list.
                 //
                 qd_buffer_insert(buf, rc);
+                qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_receive_cutthrough - new buffer created %zu, use_slot=%u", rc, use_slot);
                 DEQ_INSERT_TAIL(content->uct_slots[use_slot], buf);
                 produced_data = true;
             }
@@ -3329,8 +3330,10 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
 
     while (count < limit && !empty) {
         uint32_t useSlot = sys_atomic_get(&content->uct_consume_slot);
+        qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers useSlot=%"PRIu32"", useSlot);
         while (count < limit && !DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
             qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[useSlot]);
+            qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers buf size=%zu", qd_buffer_size(buf));
             DEQ_REMOVE_HEAD(content->uct_slots[useSlot]);
             DEQ_INSERT_TAIL(*buffers, buf);
             count++;
