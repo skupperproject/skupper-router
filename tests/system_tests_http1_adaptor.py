@@ -42,6 +42,7 @@ from system_test import nginx_available, get_digest, NginxServer, Process
 from system_test import openssl_available, is_pattern_present
 from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE, ROUTER_TYPE
 from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_LINK_TYPE
+from system_test import Logger
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -620,38 +621,32 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                             self.server11_port)
 
     @staticmethod
-    def _server_get_undelivered_out(mgmt, service_address):
-        # Return the total count of outgoing undelivered deliveries to
-        # service_address
+    def _server_get_outstanding(mgmt, service_address, logger=None):
+        # Return the total count of unsettled and undelivered outgoing
+        # deliveries to service_address
         count = 0
         links = mgmt.query(ROUTER_LINK_TYPE)
-        for link in filter(lambda link:
-                           link['linkName'] == 'http1.server.out' and
-                           link['owningAddr'].endswith(service_address), links):
-            count += link['undeliveredCount']
+        filtered = filter(lambda link:
+                          link['linkName'] == 'http1.server.out' and
+                          link['owningAddr'].endswith(service_address), links)
+        for link in filtered:
+            count += link['unsettledCount'] + link['undeliveredCount']
+        if logger is not None:
+            logger.log(f"_server_get_outstanding returning {count}")
         return count
 
     @staticmethod
-    def _server_get_unsettled_out(mgmt, service_address):
-        # Return the total count of outgoing unsettled deliveries to
-        # service_address
-        count = 0
-        links = mgmt.query(ROUTER_LINK_TYPE)
-        for link in filter(lambda link:
-                           link['linkName'] == 'http1.server.out' and
-                           link['owningAddr'].endswith(service_address), links):
-            count += link['unsettledCount']
-        return count
-
-    @staticmethod
-    def _client_in_link_count(mgmt, service_address):
+    def _client_in_link_count(mgmt, service_address, logger=None):
         # get the total number of active HTTP1 client in-links for the given
         # service address
         links = mgmt.query(ROUTER_LINK_TYPE)
-        count = len(list(filter(lambda link:
-                                link['linkName'] == 'http1.client.in' and
-                                link['owningAddr'].endswith(service_address),
-                                links)))
+        filtered = filter(lambda link:
+                          link['linkName'] == 'http1.client.in' and
+                          link['owningAddr'].endswith(service_address),
+                          links)
+        count = len(list(filtered))
+        if logger is not None:
+            logger.log(f"_client_in_link_count returning {count}")
         return count
 
     def test_3000_N_client_pipeline_cancel(self):
@@ -665,6 +660,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         # note: this test assumes server-side is synchronous. It will need to
         # be re-written if server-facing pipelining is implemented!
 
+        logger = Logger(title="test_3000_N_client_pipeline_cancel",
+                        print_to_console=True)
         CLIENT_COUNT = 10
         KILL_INDEX = [4, 5]  # clients to force close
 
@@ -694,10 +691,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.bind(("", self.server11_port))
             listener.settimeout(TIMEOUT)
             listener.listen(0)
+            logger.log("server waiting to accept connection from router")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
             # prevent router reconnect when server socket closes (ISSUE-1373)
             listener.shutdown(socket.SHUT_RDWR)
+            logger.log("server connected, bringing up clients")
 
             clients = []
             for index in range(CLIENT_COUNT):
@@ -710,6 +709,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                                 exception=ConnectionRefusedError)
                 client.settimeout(TIMEOUT)
                 clients.append(client)
+                logger.log(f"Client {index} connected")
 
                 if index in KILL_INDEX:
                     # Pause before sending the incomplete request until the
@@ -718,58 +718,49 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     # requests and having the server start reading the
                     # incomplete request first (before the abort signal arrives
                     # to cancel the request).
-                    retry(lambda mg=EA2_mgmt, dc=index:
-                          self._server_get_undelivered_out(mg, "testServer11")
-                          + self._server_get_unsettled_out(mg, "testServer11")
-                          == dc,
-                          timeout=TIMEOUT / 2.0)
-                    self.assertEqual(index,
-                                     self._server_get_undelivered_out(EA2_mgmt, "testServer11")
-                                     + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
-                                     "dc=%s undel=%s unset=%s"
-                                     % (index,
-                                        self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
-                                        self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
+                    logger.log(f"Kill client {index} waiting for counts")
+                    retry(lambda mg=EA2_mgmt, dc=index, loggie=logger:
+                          self._server_get_outstanding(mg, "testServer11", loggie) == dc,
+                          delay=0.25)
+                    self.assertEqual(index, self._server_get_outstanding(EA2_mgmt, "testServer11"))
 
                     # Send an incomplete request. When the client closes this
                     # should cause the client-facing router to abort the
                     # in-flight delivery.
                     client.sendall(truncated_req)
+                    logger.log(f"Kill client {index} sent truncated request")
                 else:
                     client.sendall(request % index)
+                    logger.log(f"Client {index} sent request")
 
             # Wait for the client deliveries to arrive on the outgoing link to
             # the server. The arrival order is not guaranteed! The test will
             # validate that responses are sent to the proper client
 
-            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
-                  self._server_get_undelivered_out(mg, "testServer11")
-                  + self._server_get_unsettled_out(mg, "testServer11")
-                  == dc,
-                  timeout=TIMEOUT / 2.0)
-            self.assertEqual(CLIENT_COUNT,
-                             self._server_get_undelivered_out(EA2_mgmt, "testServer11")
-                             + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
-                             "dc=%s undel=%s unset=%s"
-                             % (CLIENT_COUNT,
-                                self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
-                                self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
+            logger.log("waiting for client deliveries to arrive")
+            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT, loggie=logger:
+                  self._server_get_outstanding(mg, "testServer11", loggie) == dc,
+                  delay=0.25)
+            self.assertEqual(CLIENT_COUNT, self._server_get_outstanding(EA2_mgmt, "testServer11"))
 
             # Now destroy the incomplete clients. Wait until the socket has
             # actually closed at the ingress router:
 
             for index in KILL_INDEX:
+                logger.log(f"Closing Kill client {index}")
                 clients[index].shutdown(socket.SHUT_RDWR)
                 clients[index].close()
                 clients[index] = None
 
             # wait for the killed client connections to the router drop
-            retry(lambda mg=EA1_mgmt:
-                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - len(KILL_INDEX),
-                  timeout=TIMEOUT / 2.0)
+            logger.log("Waiting for the killed client connections to the router drop")
+            retry(lambda mg=EA1_mgmt, loggie=logger:
+                  self._client_in_link_count(mg, 'testServer11', loggie) == CLIENT_COUNT - len(KILL_INDEX),
+                  delay=0.25)
             self.assertEqual(CLIENT_COUNT - len(KILL_INDEX),
                              self._client_in_link_count(EA1_mgmt,
                                                         'testServer11'))
+
             sleep(1.0)  # hack: ensure the abort signal has propagated to the server
 
             # Since the cancelled request has yet to be written to the server
@@ -778,6 +769,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # server (or dropping the server connection)
 
             for _ in range(CLIENT_COUNT - len(KILL_INDEX)):
+                logger.log(f"Server handling request {_}")
                 data = _read_socket(server, request_len)
                 self.assertEqual(request_len, len(data))
                 index_match = request_re.search(data.decode())
@@ -787,6 +779,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                 server.sendall(response % int(index_match.group(2)))
 
             # expect no more data from the router
+            logger.log("Waiting for server.recv to timeout")
             server.settimeout(1.0)
             self.assertRaises(socket.timeout, server.recv, 4096)
             server.close()
@@ -795,6 +788,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # are returned
             for index in range(CLIENT_COUNT):
                 if clients[index] is not None:
+                    logger.log(f"Reading response for client {index}")
                     data = _read_socket(clients[index], response_len)
                     self.assertEqual(response_len, len(data))
                     index_match = response_re.search(data.decode())
@@ -803,7 +797,9 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     self.assertEqual(2, len(index_match.groups()))
                     self.assertEqual(index, int(index_match.group(2)))
                     clients[index].close()
+        logger.log("Waiting for http listener to close")
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+        logger.log("Test complete!")
 
     def test_3001_N_client_pipeline_recover(self):
         """
@@ -816,6 +812,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         # note: this test assumes server-side is synchronous. It will need to
         # be re-written if server-facing pipelining is implemented!
 
+        logger = Logger(title="test_3000_N_client_pipeline_recover",
+                        print_to_console=True)
         CLIENT_COUNT = 10
 
         request = b'GET /client_pipeline/3001 HTTP/1.1\r\n' \
@@ -844,8 +842,10 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
             listener.listen(0)
+            logger.log("server waiting to accept connection from router")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+            logger.log("server connected, bringing up clients")
 
             clients = []
             for index in range(CLIENT_COUNT):
@@ -858,6 +858,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                                 exception=ConnectionRefusedError)
                 client.settimeout(TIMEOUT)
                 clients.append(client)
+                logger.log(f"Client {index} connected")
 
                 if index == 0:
                     # Have the first client send an incomplete request. When
@@ -866,38 +867,27 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     # request to arrive at the server in order to prevent the
                     # following requests from arriving first
                     client.sendall(truncated_req)
-                    retry(lambda mg=EA2_mgmt, dc=1:
-                          self._server_get_undelivered_out(mg, "testServer11")
-                          + self._server_get_unsettled_out(mg, "testServer11")
-                          == dc,
-                          timeout=TIMEOUT / 2.0)
-                    self.assertEqual(1, self._server_get_undelivered_out(EA2_mgmt, "testServer11")
-                                     + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
-                                     "dc=1 undel=%s unset=%s"
-                                     % (self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
-                                        self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
+                    logger.log(f"Client {index} sent truncated request")
+                    retry(lambda mg=EA2_mgmt, dc=1, loggie=logger:
+                          self._server_get_outstanding(mg, "testServer11", loggie) == dc,
+                          delay=0.25)
+                    self.assertEqual(1, self._server_get_outstanding(EA2_mgmt, "testServer11"))
                 else:
                     client.sendall(request % index)
+                    logger.log(f"Client {index} sent request")
 
             # Wait for the client deliveries to arrive on the outgoing link to
             # the server. The arrival order is not guaranteed! The test will
             # validate that responses are sent to the proper client
 
-            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT:
-                  self._server_get_undelivered_out(mg, "testServer11")
-                  + self._server_get_unsettled_out(mg, "testServer11")
-                  == dc,
-                  timeout=TIMEOUT / 2.0)
-            self.assertEqual(CLIENT_COUNT,
-                             self._server_get_undelivered_out(EA2_mgmt, "testServer11")
-                             + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
-                             "dc=%s undel=%s unset=%s"
-                             % (CLIENT_COUNT,
-                                self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
-                                self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
+            retry(lambda mg=EA2_mgmt, dc=CLIENT_COUNT, loggie=logger:
+                  self._server_get_outstanding(mg, "testServer11", loggie) == dc,
+                  delay=0.25)
+            self.assertEqual(CLIENT_COUNT, self._server_get_outstanding(EA2_mgmt, "testServer11"))
 
             # Have the server start processing the incomplete request
 
+            logger.log("Server reading truncated request")
             data = _read_socket(server, length=len(truncated_req))
             self.assertEqual(len(truncated_req), len(data))
             self.assertIn(b"potatoes...", data)
@@ -905,17 +895,19 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # Now destroy the client. Wait until the socket has
             # actually closed at the ingress router:
 
+            logger.log("Closing client 0")
             clients[0].shutdown(socket.SHUT_RDWR)
             clients[0].close()
             clients[0] = None
-            retry(lambda mg=EA1_mgmt:
-                  self._client_in_link_count(mg, 'testServer11') == CLIENT_COUNT - 1,
-                  timeout=TIMEOUT / 2.0)
+            retry(lambda mg=EA1_mgmt, loggie=logger:
+                  self._client_in_link_count(mg, 'testServer11', loggie) == CLIENT_COUNT - 1,
+                  delay=0.25)
             self.assertEqual(CLIENT_COUNT - 1, self._client_in_link_count(EA1_mgmt, 'testServer11'))
 
             # attempting to read the rest of the request should result in the
             # server socket closing
 
+            logger.log("Server read attempt for truncated request")
             data = _read_socket(server, 4096, timeout=TIMEOUT)
             self.assertEqual(b'', data, "Server did not disconnect as expected")
             server.shutdown(socket.SHUT_RDWR)
@@ -923,6 +915,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
 
             # expect the router to reconnect
 
+            logger.log("Re-establishing server connection")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
             # prevent router reconnect when server socket closes (ISSUE-1373)
@@ -931,23 +924,27 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             # expect the remaining requests to complete successfully
 
             for index in range(1, CLIENT_COUNT):
+                logger.log(f"Server reading request {index}")
                 data = _read_socket(server, length=request_len)
                 self.assertEqual(request_len, len(data))
                 index_match = request_re.search(data.decode())
                 self.assertIsNotNone(index_match,
                                      f"request not matched >{data.decode()}<")
                 self.assertEqual(2, len(index_match.groups()))
+                logger.log("Server sending response")
                 server.sendall(response % int(index_match.group(2)))
 
             # expect no more data from the router
             server.settimeout(1.0)
             self.assertRaises(socket.timeout, server.recv, 4096)
             server.close()
+            logger.log("Server closed")
 
             # expect remaining clients get responses, and the correct responses
             # are returned
             for index in range(CLIENT_COUNT):
                 if clients[index] is not None:
+                    logger.log(f"Client {index} reading response")
                     data = _read_socket(clients[index], response_len)
                     self.assertEqual(response_len, len(data))
                     index_match = response_re.search(data.decode())
@@ -956,7 +953,9 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                     self.assertEqual(2, len(index_match.groups()))
                     self.assertEqual(index, int(index_match.group(2)))
                     clients[index].close()
+                    logger.log(f"Client {index} closed")
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+        logger.log("Test Complete")
 
     def test_4000_client_half_close(self):
         """
@@ -967,6 +966,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
         # note: this test assumes server-side is synchronous. It will need to
         # be re-written if server-facing pipelining is implemented!
 
+        logger = Logger(title="test_4000_client_half_close",
+                        print_to_console=True)
         CLIENT_COUNT = 9  # single digit or content length will be bad!
 
         request_template = 'GET /client%d HTTP/1.1\r\n' \
@@ -987,10 +988,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
             listener.listen(0)
+            logger.log("server waiting to accept connection from router")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
             # prevent router reconnect when server socket closes (ISSUE-1373)
             listener.shutdown(socket.SHUT_RDWR)
+            logger.log("server connected, bringing up clients")
 
             clients = []
             for index in range(CLIENT_COUNT):
@@ -1005,26 +1008,20 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                 clients.append(client)
                 request = request_template % index
                 client.sendall(request.encode())
+                logger.log(f"Client {index} connected, request sent")
 
                 # Ensure that the delivery arrives at the server before sending
                 # the next request. Otherwise if all requests are sent at once
                 # they can arrive out of order. That will cause the test to
                 # fail since it services each client in order of transmission
-                retry(lambda mg=EA2_mgmt, dc=index + 1:
-                      self._server_get_undelivered_out(mg, "testServer11")
-                      + self._server_get_unsettled_out(mg, "testServer11")
-                      == dc,
-                      timeout=TIMEOUT / 2.0)
-                self.assertEqual(index + 1,
-                                 self._server_get_undelivered_out(EA2_mgmt, "testServer11")
-                                 + self._server_get_unsettled_out(EA2_mgmt, "testServer11"),
-                                 "dc=%s undel=%s unset=%s"
-                                 % (index + 1,
-                                    self._server_get_undelivered_out(EA2_mgmt, "testServer11"),
-                                    self._server_get_unsettled_out(EA2_mgmt, "testServer11")))
+                retry(lambda mg=EA2_mgmt, dc=index + 1, loggie=logger:
+                      self._server_get_outstanding(mg, "testServer11", loggie) == dc,
+                      delay=0.25)
+                self.assertEqual(index + 1, self._server_get_outstanding(EA2_mgmt, "testServer11"))
 
                 # Now close the write side of the client socket:
                 client.shutdown(socket.SHUT_WR)
+                logger.log(f"Client {index} half-closed")
 
             # expect the requests to complete successfully
 
@@ -1032,24 +1029,32 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                 data = _read_socket(server, length=request_length)
                 self.assertEqual(request_length, len(data))
                 self.assertIn(b"GET /client%d" % index, data)
+                logger.log(f"Server read {index} request")
 
                 response = response_template % index
                 server.sendall(response.encode())
+                logger.log(f"Server sent {index} response")
 
                 data = _read_socket(clients[index], length=response_length)
                 self.assertEqual(response_length, len(data))
                 self.assertIn(b"client%d" % index, data)
                 clients[index].close()
+                logger.log(f"Client {index} response received, client closed")
 
             server.shutdown(socket.SHUT_RDWR)
             server.close()
+            logger.log("Server closed")
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+        logger.log("Test Complete")
 
     def test_4001_server_half_close(self):
         """
         Verify that a server can close the side of its socket after receiving a
         request and the response will be received by the client
         """
+
+        logger = Logger(title="test_4000_server_half_close",
+                        print_to_console=True)
 
         # note: this test assumes server-side is synchronous. It will need to
         # be re-written if server-facing pipelining is implemented!
@@ -1070,10 +1075,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
             listener.listen(0)
+            logger.log("server waiting to accept connection from router")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
             # prevent router reconnect when server socket closes (ISSUE-1373)
             listener.shutdown(socket.SHUT_RDWR)
+            logger.log("server connected, bringing up client")
 
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1084,6 +1091,7 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                             exception=ConnectionRefusedError)
             client.settimeout(TIMEOUT)
             client.sendall(request)
+            logger.log("client connected, request sent")
 
             data = _read_socket(server, length=len(request))
             self.assertEqual(len(request), len(data))
@@ -1091,21 +1099,27 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
 
             server.shutdown(socket.SHUT_RD)
             server.sendall(response)
+            logger.log("Server request read, response sent, half-closed")
 
             data = _read_socket(client, length=len(response))
             self.assertEqual(len(response), len(data))
             self.assertIn(b"client1", data)
             client.close()
+            logger.log("Client response read, closing")
 
             server.shutdown(socket.SHUT_RDWR)
             server.close()
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+        logger.log("Test Complete!")
 
     def test_4002_server_early_reply(self):
         """
         Verify that a server can send a response before the entire request
         message has been received.
         """
+
+        logger = Logger(title="test_4002_server_early_reply",
+                        print_to_console=True)
 
         request_part1 = b'GET /early_reply HTTP/1.1\r\n' \
             + b'Content-Length: 50\r\n' \
@@ -1124,10 +1138,12 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             listener.bind((self.server11_host, self.server11_port))
             listener.settimeout(TIMEOUT)
             listener.listen(0)
+            logger.log("server waiting to accept connection from router")
             server, addr = listener.accept()
             wait_http_listeners_up(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
             # prevent router reconnect when server socket closes (ISSUE-1373)
             listener.shutdown(socket.SHUT_RDWR)
+            logger.log("server connected, bringing up client")
 
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1138,23 +1154,28 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                             exception=ConnectionRefusedError)
             client.settimeout(TIMEOUT)
             client.sendall(request_part1)
+            logger.log("Client connected first part request sent")
 
             # server read part 1
             data = _read_socket(server, length=len(request_part1))
             self.assertEqual(len(request_part1), len(data),
                              f"Unexpected request: {data}")
+            logger.log("Server read part 1")
 
             # fire off the response
             server.sendall(response)
+            logger.log("Server response sent")
 
             # Consume response
             data = _read_socket(client, length=len(response))
             self.assertEqual(len(response), len(data),
                              f"Unexpected response: {data}")
+            logger.log("Client read request")
 
             # finish request
             client.sendall(request_part2)
             client.close()
+            logger.log("Client sent part 2 and closed")
 
             # consume the remaining request
             data = _read_socket(server, length=len(request_part2))
@@ -1162,7 +1183,10 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
                              f"Unexpected request: {data}")
             server.shutdown(socket.SHUT_RDWR)
             server.close()
+            logger.log("server read part 2, closed")
+
         wait_http_listeners_down(self.EA1.addresses[0], l_filter={'name': 'L_testServer11'})
+        logger.log("Test Complete!")
 
 
 class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
