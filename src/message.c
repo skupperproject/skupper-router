@@ -1529,68 +1529,69 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg)
 }
 
 
+// Read incoming data from a pn_link_t and store it into a buffer list. Limit buffer list length to a maximum of
+// limit. Helper routine for qd_message_receive_cutthrough()
+//
+// Returns 0 on success else the < 0 status code from pn_link_recv() (PN_EOS, PN_ABORTED, etc).  If 0 returned the
+// caller must check the length of the blist - if it is zero then no data is available to receive at this time.
+//
+static inline ssize_t link_receive_bufs(pn_link_t *link, qd_buffer_list_t *blist, int limit)
+{
+    while (limit-- > 0) {
+        qd_buffer_t *buf = qd_buffer();
+        ssize_t rc = pn_link_recv(link, (char *) qd_buffer_cursor(buf), qd_buffer_capacity(buf));
+        if (rc <= 0) {
+            qd_buffer_free(buf);
+            return rc;
+        }
+
+        qd_buffer_insert(buf, rc);
+        DEQ_INSERT_TAIL(*blist, buf);
+    }
+    return 0;
+}
+
 static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *delivery, pn_link_t *link, qd_message_content_t *content)
 {
+    bool stalled = (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1;
     bool notify_produced = false;
-    while (pn_delivery_pending(delivery) > 0 && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 1) {
+
+    while (!stalled && !qd_message_receive_complete(in_msg)) {
         //
         // The ring is not full, build a buffer list from the link data and produce one slot.
         //
         uint32_t     use_slot = sys_atomic_get(&content->uct_produce_slot);
-        ssize_t      rc;
-        qd_buffer_t *buf;
-        bool         produced_data = false;
-        int          limit = UCT_SLOT_BUF_LIMIT;
-
         assert(DEQ_SIZE(content->uct_slots[use_slot]) == 0);
 
-        while (true) {
-            if (limit-- == 0) {
-                break;
-            }
-
-            buf = qd_buffer();
-            rc  = pn_link_recv(link, (char*) qd_buffer_cursor(buf), qd_buffer_capacity(buf));
-            if (rc < 0) {
-                qd_message_set_receive_complete(in_msg);
-                if (rc != PN_EOS) {
-                    SET_ATOMIC_FLAG(&content->aborted);
-                }
-                qd_buffer_free(buf);
-                break;
-            } else if (rc == 0) {
-                //
-                // We've received all the data that is available now.  We will come back later for more.
-                //
-                qd_buffer_free(buf);
-                break;
-            } else {
-                //
-                // We've received stream data.  Annotate the buffer with the size of the received block and append
-                // it to the produced buffer list.
-                //
-                qd_buffer_insert(buf, rc);
-                qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_receive_cutthrough - new buffer created %zu, use_slot=%u", rc, use_slot);
-                DEQ_INSERT_TAIL(content->uct_slots[use_slot], buf);
-                produced_data = true;
-            }
-        }
-
-        if (produced_data) {
+        ssize_t rc   = link_receive_bufs(link, &content->uct_slots[use_slot], UCT_SLOT_BUF_LIMIT);
+        bool data_rx = DEQ_SIZE(content->uct_slots[use_slot]) > 0;
+        if (data_rx) {
             //
-            // Advance the producer slot pointer
+            // Data received, advance the producer slot pointer
             //
             notify_produced = true;
+            qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_receive_cutthrough - %u octets written to use_slot=%u",
+                   qd_buffer_list_length(&content->uct_slots[use_slot]), use_slot);
             sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
 
             if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
+                stalled = true;
                 SET_ATOMIC_FLAG(&content->uct_producer_stalled);
             }
         }
-    }
 
-    if (!pn_delivery_partial(delivery) && pn_delivery_pending(delivery) == 0) {
-        qd_message_set_receive_complete(in_msg);
+        // Check for rx complete, error, or no data available:
+
+        if (rc < 0 || !pn_delivery_partial(delivery)) {
+            if (pn_delivery_aborted(delivery)) {
+                qd_message_set_aborted(in_msg);
+            }
+            qd_message_set_receive_complete(in_msg);
+            break;
+        } else if (!data_rx) {
+            // not complete but no data available, try again later
+            break;
+        }
     }
 
     if (notify_produced) {
