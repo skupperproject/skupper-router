@@ -778,13 +778,13 @@ static void link_setup_LSIDE_IO(tcplite_connection_t *conn)
 static void link_setup_CSIDE_IO(tcplite_connection_t *conn, qdr_delivery_t *delivery)
 {
     ASSERT_RAW_IO;
-    qdr_terminus_t *target = qdr_terminus(0);
-    char host[64];  // for numeric remote server IP:port address
 
+    qdr_terminus_t *target = qdr_terminus(0);
     qdr_terminus_set_address(target, conn->reply_to);
 
-    qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
-    conn->core_conn = TL_open_core_connection(conn->conn_id, false, host);
+    assert(conn->common.parent->context_type == TL_CONNECTOR);
+    const char *host = ((tcplite_connector_t *)conn->common.parent)->adaptor_config->host_port;
+    conn->core_conn  = TL_open_core_connection(conn->conn_id, false, host);
     qdr_connection_set_context(conn->core_conn, conn);
 
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.cside.in", 0, false, 0, &conn->inbound_link_id);

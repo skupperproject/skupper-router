@@ -1513,9 +1513,6 @@ class TcpAdaptorLite(TcpAdaptorBase, CommonTcpTests):
     def setUpClass(cls):
         super(TcpAdaptorLite, cls).setUpClass(test_ssl=False, encap="lite")
 
-    def test_90_stats(self):
-        self.skipTest("Temporarily disabling test_90_stats on TcpAdaptorLite")
-
 
 class TcpAdaptorStuckDeliveryTest(TestCase):
     """
@@ -1958,9 +1955,10 @@ class TcpAdaptorListenerConnectTest(TestCase):
     Test client connecting to TcpListeners in various scenarios
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap='legacy', test_name='TCPListenConnTest'):
         super(TcpAdaptorListenerConnectTest, cls).setUpClass()
 
+        cls.encapsulation = encap
         cls.test_name = 'TCPListenConnTest'
 
         # 4 router linear deployment:
@@ -2029,14 +2027,16 @@ class TcpAdaptorListenerConnectTest(TestCase):
         a_mgmt.create(type=TCP_LISTENER_TYPE,
                       name="ClientListener01",
                       attributes={'address': van_address,
-                                  'port': listener_port})
+                                  'port': listener_port,
+                                  'encapsulation': self.encapsulation})
 
         b_mgmt = self.INTB.management
         b_mgmt.create(type=TCP_CONNECTOR_TYPE,
                       name="ServerConnector01",
                       attributes={'address': van_address,
                                   'host': '127.0.0.1',
-                                  'port': connector_port})
+                                  'port': connector_port,
+                                  'encapsulation': self.encapsulation})
 
         self.INTA.wait_address(van_address, remotes=1)
 
@@ -2102,7 +2102,8 @@ class TcpAdaptorListenerConnectTest(TestCase):
         l_mgmt.create(type=TCP_LISTENER_TYPE,
                       name=listener_name,
                       attributes={'address': van_address,
-                                  'port': listener_port})
+                                  'port': listener_port,
+                                  'encapsulation': self.encapsulation})
 
         # since there is no connector present, the operational state must be
         # down and connection attempts must be refused
@@ -2129,7 +2130,8 @@ class TcpAdaptorListenerConnectTest(TestCase):
                           name=connector_name,
                           attributes={'address': van_address,
                                       'host': '127.0.0.1',
-                                      'port': connector_port})
+                                      'port': connector_port,
+                                      'encapsulation': self.encapsulation})
 
             # let the connectors address propagate to listener router
 
@@ -2215,17 +2217,26 @@ class TcpAdaptorListenerConnectTest(TestCase):
         self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
 
 
-class TcpDeleteConnectionTest(TestCase):
+class TcpAdaptorListenerConnectLiteTest(TestCase):
+    """
+    Test client connecting to TcpListeners in various scenarios
+    """
     @classmethod
     def setUpClass(cls):
+        super(TcpAdaptorListenerConnectLiteTest, cls).setUpClass(encap='lite', test_name='TCPListenConnLiteTest')
+
+
+class TcpDeleteConnectionTest(TestCase):
+    @classmethod
+    def setUpClass(cls, encap='legacy', test_name="TcpDeleteConnectionTest"):
         super(TcpDeleteConnectionTest, cls).setUpClass()
         cls.good_listener_port = cls.tester.get_port()
-        cls.server_logger = Logger(title="TcpDeleteConnectionTest",
+        cls.server_logger = Logger(title=test_name,
                                    print_to_console=True,
                                    save_for_dump=False,
                                    ofilename=os.path.join(os.path.dirname(os.getcwd()),
                                                           "setUpClass/TcpAdaptor_echo_server_INTA.log"))
-        server_prefix = "ECHO_SERVER_TcpDeleteConnectionTest_INTA"
+        server_prefix = f"ECHO_SERVER_{test_name}_INTA"
         cls.echo_server = TcpEchoServer(prefix=server_prefix,
                                         port=0,
                                         logger=cls.server_logger)
@@ -2242,20 +2253,21 @@ class TcpDeleteConnectionTest(TestCase):
               'host': "localhost",
               'port': cls.good_listener_port,
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
-              'siteId': "mySite"}),
+              'siteId': "mySite",
+              'encapsulation': encap}),
 
             ('tcpConnector',
              {'name': "good-connector",
               'host': "localhost",
               'port': cls.echo_server.port,
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
-              'siteId': "mySite"}),
+              'siteId': "mySite",
+              'encapsulation': encap}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]
 
-        cls.router = cls.tester.qdrouterd('TcpDeleteConnectionTest',
-                                          Qdrouterd.Config(config), wait=True)
+        cls.router = cls.tester.qdrouterd(test_name, Qdrouterd.Config(config), wait=True)
         cls.address = cls.router.addresses[0]
         wait_tcp_listeners_up(cls.router.addresses[0])
 
@@ -2288,6 +2300,12 @@ class TcpDeleteConnectionTest(TestCase):
         # Keep retrying until the connection is gone from the connection table.
         retry_assertion(check_connection_deleted, delay=2)
         client_conn.close()
+
+
+class TcpDeleteConnectionLiteTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpDeleteConnectionLiteTest, cls).setUpClass(encap='lite', test_name="TcpDeleteConnectionLiteTest")
 
 
 class TcpLegacyInvalidEncodingTest(TestCase):
