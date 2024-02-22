@@ -337,25 +337,25 @@ class CommonHttp2Tests:
         self.assertEqual(len(connectors), 0)
 
         # Deleting the connector must have taken out the connection to the server.
-        connections = qd_manager.query(CONNECTION_TYPE)
-        server_conn_found = False
-        for conn in connections:
-            if str(server_port) in conn['name']:
-                server_conn_found = True
-                break
-        self.assertFalse(server_conn_found)
+        def query_connections():
+            conns = qd_manager.query(CONNECTION_TYPE)
+            server_connection_found = False
+            for conn in conns:
+                if str(server_port) in conn['name']:
+                    server_connection_found = True
+                    break
+            self.assertFalse(server_connection_found)
+        retry_assertion(query_connections)
 
-        sleep(2)
-
-        # Now, run a curl client GET request with a timeout
-        request_timed_out = False
-        try:
-            _, out, _ = self.run_curl(client_addr, args=self.get_all_curl_args(), timeout=5)
-            print(out)
-        except Exception as e:
-            request_timed_out = True
-
-        self.assertTrue(request_timed_out)
+        def retry_request():
+            request_timed_out = False
+            # Now, run a curl client GET request with a timeout
+            try:
+                _, out, _ = self.run_curl(client_addr, args=self.get_all_curl_args(), timeout=5)
+            except Exception as e:
+                request_timed_out = True
+            self.assertTrue(request_timed_out)
+        retry_assertion(retry_request)
 
         # Add back the httpConnector
         # skmanage CREATE type=httpConnector address=examples.com host=127.0.0.1 port=80 protocolVersion=HTTP2
@@ -1013,7 +1013,6 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         request_timed_out = False
         try:
             _, out, _ = self.run_curl(address, args=["--head"], timeout=3)
-            print(out)
         except Exception as e:
             request_timed_out = True
         self.assertTrue(request_timed_out)
