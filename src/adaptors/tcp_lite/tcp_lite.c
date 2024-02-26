@@ -563,6 +563,7 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 
     qd_tls_free2(conn->tls);
     qd_tls_domain_decref(conn->tls_domain);
+    free(conn->alpn_protocol);
 
     conn->reply_to          = 0;
     conn->inbound_link      = 0;
@@ -677,7 +678,8 @@ static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t
             raw_buffers[i].size     = 0;
         }
 
-        pn_raw_connection_give_read_buffers(conn->raw_conn, raw_buffers, granted);
+        size_t actual = pn_raw_connection_give_read_buffers(conn->raw_conn, raw_buffers, granted);
+        assert(actual == granted);
 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] grant_read_buffers_XSIDE_IO - %ld", conn->conn_id, granted);
     }
@@ -1614,7 +1616,6 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
                     //
                     // Handshake completed, begin the setup of the inbound and outbound links for this connection.
                     //
-                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] LSIDE_IO TLS handshake completed OK!", conn->conn_id);
                     link_setup_LSIDE_IO(conn);
                     set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
                 }
@@ -1784,6 +1785,8 @@ static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
 {
     tcplite_connection_t *conn = (tcplite_connection_t *) user_context;
     assert(conn);
+
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] TLS handshake succeeded!", conn->conn_id);
     if (conn->core_conn && conn->core_conn->connection_info) {
         qd_tls_update_connection_info(conn->tls, conn->core_conn->connection_info);
     }

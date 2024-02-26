@@ -128,14 +128,6 @@ qd_tls_t *qd_tls(qd_tls_domain_t *tls_domain, void *context, uint64_t conn_id, q
         return 0;
     }
 
-    // Avoid partially filled unicast cutthrough slots by bumping up the maximum capacity to match the default
-    // unicast-cutthrough batch size
-    //
-    pn_tls_set_encrypt_input_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
-    pn_tls_set_decrypt_input_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
-    pn_tls_set_encrypt_output_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
-    pn_tls_set_decrypt_output_buffer_max_capacity(tls->tls_session, UCT_SLOT_BUF_LIMIT);
-
     ret = pn_tls_start(tls->tls_session);
     if (ret != 0) {
         qd_log(tls->log_module,
