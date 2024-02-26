@@ -679,6 +679,7 @@ static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t
         }
 
         size_t actual = pn_raw_connection_give_read_buffers(conn->raw_conn, raw_buffers, granted);
+        (void) actual;
         assert(actual == granted);
 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] grant_read_buffers_XSIDE_IO - %ld", conn->conn_id, granted);
