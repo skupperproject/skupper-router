@@ -1582,7 +1582,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
 
         // Check for rx complete, error, or no data available:
 
-        if (rc < 0 || !pn_delivery_partial(delivery)) {
+        if (rc < 0) {
             if (pn_delivery_aborted(delivery)) {
                 qd_message_set_aborted(in_msg);
             }
@@ -1892,7 +1892,9 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
         while (!!buf) {
             DEQ_REMOVE_HEAD(content->uct_slots[use_slot]);
             if (!IS_ATOMIC_FLAG_SET(&content->aborted)) {
-                pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
+                ssize_t sent = pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
+                (void) sent;
+                assert(sent == qd_buffer_size(buf));
             }
             qd_buffer_free(buf);
             buf = DEQ_HEAD(content->uct_slots[use_slot]);
@@ -3332,10 +3334,8 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
 
     while (count < limit && !empty) {
         uint32_t useSlot = sys_atomic_get(&content->uct_consume_slot);
-        qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers useSlot=%"PRIu32"", useSlot);
         while (count < limit && !DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
             qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[useSlot]);
-            qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers buf size=%zu", qd_buffer_size(buf));
             DEQ_REMOVE_HEAD(content->uct_slots[useSlot]);
             DEQ_INSERT_TAIL(*buffers, buf);
             count++;
