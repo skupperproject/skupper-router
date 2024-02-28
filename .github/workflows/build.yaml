@@ -803,7 +803,7 @@ jobs:
       # https://github.com/codecov/codecov-action
       - name: Upload C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
           flags: ${{matrix.covType}}tests
           verbose: true
@@ -821,7 +821,7 @@ jobs:
 
       - name: Upload Python Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
           flags: py${{matrix.covType}}tests
           verbose: true
