@@ -797,17 +797,18 @@ jobs:
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         working-directory: ${{env.RouterBuildDir}}
         run: |
-          dnf install -y lcov
+          dnf install -y lcov git
           cmake --build . --target coverage
 
       # https://github.com/codecov/codecov-action
       - name: Upload C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           flags: ${{matrix.covType}}tests
           verbose: true
-          gcov: true
           name: skupper-router
           root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
@@ -822,6 +823,8 @@ jobs:
       - name: Upload Python Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           flags: py${{matrix.covType}}tests
           verbose: true
