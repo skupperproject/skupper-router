@@ -810,7 +810,6 @@ jobs:
           flags: ${{matrix.covType}}tests
           verbose: true
           name: skupper-router
-          root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
 
       - name: Process Python coverage
@@ -830,7 +829,6 @@ jobs:
           verbose: true
           directory: ${{env.RouterBuildDir}}/tests
           name: skupper-router
-          root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
 
       - name: Report coredump stacktraces (if any tests failed)
