@@ -140,22 +140,31 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 break;
             }
 
-        case PN_LISTENER_ACCEPT:
-            // Log incoming client connections at DEBUG level since these can flood the router logs.
-            qd_log(log_module, QD_LOG_DEBUG, "Listener %s: new incoming client connection to %s", li->name,
-                   li->host_port);
+         case PN_LISTENER_ACCEPT: {
+             bool denied = false;
 
-            // block qd_adapter_listener_close() from returning during the accept call:
-            sys_mutex_lock(&li->lock);
-            if (li->on_accept)
-                li->on_accept(li, pn_event_listener(e), li->user_context);
-            else {
-                // The adaptor_listener is closing but a connection attempt arrived before the
-                // cleanup is complete. Deny the connection attempt.
-                qd_adaptor_listener_deny_conn(li, pn_event_listener(e));
-            }
-            sys_mutex_unlock(&li->lock);
-            break;
+             // Log incoming client connections at DEBUG level since these can flood the router logs.
+             qd_log(log_module, QD_LOG_DEBUG, "Listener %s: new incoming client connection to %s", li->name,
+                    li->host_port);
+
+             // block qd_adapter_listener_close() from returning during the accept call:
+             sys_mutex_lock(&li->lock);
+             if (li->on_accept)
+                 li->on_accept(li, pn_event_listener(e), li->user_context);
+             else {
+                 // The adaptor_listener is closing but a connection attempt arrived before the
+                 // cleanup is complete. Deny the connection attempt.
+                 qd_adaptor_listener_deny_conn(li, pn_event_listener(e));
+                 denied = true;
+             }
+             sys_mutex_unlock(&li->lock);
+
+             if (denied)
+                 qd_log(log_module, QD_LOG_DEBUG,
+                        "Listener %s: denied new incoming client connection to %s: service not available",
+                        li->name, li->host_port);
+             break;
+         }
 
         case PN_LISTENER_CLOSE: {
             pn_condition_t *cond = pn_listener_condition(pn_event_listener(e));
