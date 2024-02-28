@@ -37,7 +37,7 @@ use tokio::task::JoinHandle;
 const DRAIN_LOGS_TIMEOUT: Duration = Duration::from_secs(5);
 
 // https://hub.docker.com/r/summerwind/h2spec
-pub(crate) const H2SPEC_IMAGE: &str = "summerwind/h2spec:2.6.0";  // do not prefix with `docker.io/`, docker won't find it
+pub(crate) const H2SPEC_IMAGE: &str = "docker.io/summerwind/h2spec:2.6.0";  // do not prefix with `docker.io/` for docker; podman does not mind
 // https://nixery.dev/
 pub(crate) const NGHTTP2_IMAGE: &str = "nixery.dev/nghttp2:latest";
 pub(crate) const NETCAT_IMAGE: &str = "nixery.dev/netcat:latest";
