@@ -507,9 +507,7 @@ class TcpAdaptorBase(TestCase):
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
 
         # monitor router memory usage:
-        if not test_ssl:
-            # temporarily disabled to help debug ISSUE-1276
-            os.environ["SKUPPER_ROUTER_ALLOC_MONITOR_SECS"] = "10"
+        os.environ["SKUPPER_ROUTER_ALLOC_MONITOR_SECS"] = "10"
 
         cls.routers = []
         cls.test_ssl = test_ssl
@@ -1450,10 +1448,6 @@ class CommonTcpTests:
         Take advantage of the long running TCP test to verify that alloc_pool
         metrics have been correctly written to the logs
         """
-        if self.test_ssl:
-            # temporarily disabled to help debug ISSUE-1276
-            self.skipTest("Disabled until ISSUE-1276 resolved")
-
         def _poll_logs(router, regex_mem, regex_action):
             last_mem_match = None  # match the start of the alloc log line
             last_action_match = None  # match the qdr_action_t entry in the log line
@@ -1466,10 +1460,10 @@ class CommonTcpTests:
                     if m:
                         last_action_match = m
             if last_mem_match is None:
-                print("failed to find alloc_pool output, retrying...")
+                print("failed to find alloc_pool output, retrying...", flush=True)
                 return False
             if last_action_match is None:
-                print("failed to find qdr_action_t entry, retrying...")
+                print("failed to find qdr_action_t entry, retrying...", flush=True)
                 return False
 
             # Sanity check that metrics are present:
@@ -1479,16 +1473,18 @@ class CommonTcpTests:
             for mem in mems:
                 name, value = mem.split(':')
                 if name not in ["ram", "vm", "rss", "pool"]:
-                    print(f"failed to find {name} metric, retrying...")
+                    print(f"failed to find {name} metric, retrying...", flush=True)
                     return False
                 value = int(value.split('.')[0])
                 if value <= 0:
-                    print(f"Expected nonzero {name} counter, got {value}, retrying...")
+                    print(f"Expected nonzero {name} counter, got {value}, retrying...",
+                          flush=True)
                     return False
             # match = ' qdr_action_t:192:0'
             name, in_use, in_free = last_action_match.group().strip().split(':')
             if name != "qdr_action_t":
-                print(f"Name mismatch: {name} is not 'qdr_action_t, retrying...")
+                print(f"Name mismatch: {name} is not 'qdr_action_t, retrying...",
+                      flush=True)
                 return False
             if int(in_use) + int(in_free) <= 0:
                 print(f"zero qdr_action_ts alloced? in_use={in_use} in_free={in_free}")

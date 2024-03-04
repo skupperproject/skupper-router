@@ -85,11 +85,7 @@ ALLOC_DEFINE(qd_tcp_connector_t);
 // const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
 const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"http/1.1", "h2"};
 
-const char *alpn        = "alpn";
-int         alpn_length = 4;
-
 typedef struct qdr_tcp_connection_t qdr_tcp_connection_t;
-
 
 struct qdr_tcp_connection_t {
     qd_handler_context_t  context;
@@ -523,13 +519,12 @@ static int handle_incoming(qdr_tcp_connection_t *conn, const char *msg)
         vflow_serialize_identity(conn->vflow, props);
         if (conn->require_tls) {
             if (conn->alpn_protocol) {
+                // propagate negotiated ALPN protocol value to server-facing side
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                        "[C%" PRIu64 "] Using negotiated protocol %s obtained via ALPN", conn->conn_id,
                        conn->alpn_protocol);
-                qd_compose_insert_string_n(props, (const char *) alpn, alpn_length);  // key - "alpn"
-                qd_compose_insert_string_n(
-                    props, (const char *) conn->alpn_protocol,
-                    strlen(conn->alpn_protocol));  // value - whatever the agreed upon ALPN protocol is.
+                qd_compose_insert_string_n(props, (const char *) QD_TLS_ALPN_KEY, QD_TLS_ALPN_KEY_LEN);
+                qd_compose_insert_string_n(props, (const char *) conn->alpn_protocol, strlen(conn->alpn_protocol));
             } else {
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] %s No ALPN protocol was negotiated",
                        conn->conn_id, qdr_tcp_connection_role_name(conn));
@@ -1980,7 +1975,7 @@ static void qdr_process_app_properties(qdr_tcp_connection_t *tc, qd_message_t *m
                 qd_iterator_t *key_iter = qd_parse_raw(key);
                 if (!!key_iter && qd_iterator_equal(key_iter, (const unsigned char*) QD_AP_FLOW_ID)) {
                     id_value = qd_parse_sub_value(ap, i);
-                } else if (!!key_iter && tc->require_tls && qd_iterator_equal(key_iter, (const unsigned char *) alpn)) {
+                } else if (!!key_iter && tc->require_tls && qd_iterator_equal(key_iter, (const unsigned char *) QD_TLS_ALPN_KEY)) {
                     qd_parsed_field_t *alpn_field = qd_parse_sub_value(ap, i);
                     qd_iterator_t     *alpn_iter  = qd_parse_raw(alpn_field);
                     tc->alpn_protocol             = (char *) qd_iterator_copy(alpn_iter);

@@ -72,14 +72,12 @@ static qd_adaptor_listener_list_t _listeners;
 //
 static bool _finalized;
 
-// There is a window during listener shutdown where connection attempts may occur. These connections need to be
-// rejected. Proactor does not provide a "reject" api for the listener, so we have to accept them and immediately close
-// them. This is a raw connect event handler that just closes the connection.
+// Proactor does not provide a "reject" api for the listener, so we have to accept them and immediately close them. This
+// is a raw connect event handler that just closes the connection. See qd_adaptor_listener_deny()
 //
-static void _conn_event_handler(pn_event_t *e, qd_server_t *qd_server, void *context);
-
-static qd_handler_context_t _conn_event_context = {
-    .handler = _conn_event_handler,
+static void _deny_conn_handler(pn_event_t *e, qd_server_t *qd_server, void *context);
+static qd_handler_context_t _deny_conn_context = {
+    .handler = _deny_conn_handler,
 };
 
 // called during shutdown: must not schedule work!
@@ -142,25 +140,31 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 break;
             }
 
-        case PN_LISTENER_ACCEPT:
-            // Log incoming client connections at DEBUG level since these can flood the router logs.
-            qd_log(log_module, QD_LOG_DEBUG, "Listener %s: new incoming client connection to %s", li->name,
-                   li->host_port);
+         case PN_LISTENER_ACCEPT: {
+             bool denied = false;
 
-            // block qd_adapter_listener_close() from returning during the accept call:
-            sys_mutex_lock(&li->lock);
-            if (li->on_accept)
-                li->on_accept(li, pn_event_listener(e), li->user_context);
-            else {
-                // the adaptor_listener is closing but a connection attempt arrived before the
-                // cleanup is complete.  Need to accept it then close it when the connection
-                // completes
-                pn_raw_connection_t *close_me = pn_raw_connection();
-                pn_raw_connection_set_context(close_me, &_conn_event_context);
-                pn_listener_raw_accept(pn_event_listener(e), close_me);
-            }
-            sys_mutex_unlock(&li->lock);
-            break;
+             // Log incoming client connections at DEBUG level since these can flood the router logs.
+             qd_log(log_module, QD_LOG_DEBUG, "Listener %s: new incoming client connection to %s", li->name,
+                    li->host_port);
+
+             // block qd_adapter_listener_close() from returning during the accept call:
+             sys_mutex_lock(&li->lock);
+             if (li->on_accept)
+                 li->on_accept(li, pn_event_listener(e), li->user_context);
+             else {
+                 // The adaptor_listener is closing but a connection attempt arrived before the
+                 // cleanup is complete. Deny the connection attempt.
+                 qd_adaptor_listener_deny_conn(li, pn_event_listener(e));
+                 denied = true;
+             }
+             sys_mutex_unlock(&li->lock);
+
+             if (denied)
+                 qd_log(log_module, QD_LOG_DEBUG,
+                        "Listener %s: denied new incoming client connection to %s: service not available",
+                        li->name, li->host_port);
+             break;
+         }
 
         case PN_LISTENER_CLOSE: {
             pn_condition_t *cond = pn_listener_condition(pn_event_listener(e));
@@ -311,11 +315,14 @@ static void _on_watched_address_cancel(void *context)
     }
 }
 
-static void _conn_event_handler(pn_event_t *e, qd_server_t *qd_server, void *context)
+// dummy event handler that is used to deny unwanted connection attempts.
+//
+static void _deny_conn_handler(pn_event_t *e, qd_server_t *qd_server, void *context)
 {
-    // the listener is closing - reject the connection
     if (pn_event_type(e) == PN_RAW_CONNECTION_CONNECTED) {
-        pn_raw_connection_close(pn_event_raw_connection(e));
+        pn_raw_connection_t *close_me = pn_event_raw_connection(e);
+        pn_raw_connection_set_context(close_me, 0);  // prevent further callbacks
+        pn_raw_connection_close(close_me);
     }
 }
 
@@ -400,6 +407,15 @@ qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_liste
     sys_mutex_unlock((sys_mutex_t *) &li->lock);
     return value;
 }
+
+
+void qd_adaptor_listener_deny_conn(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener)
+{
+    pn_raw_connection_t *close_me = pn_raw_connection();
+    pn_raw_connection_set_context(close_me, &_deny_conn_context);
+    pn_listener_raw_accept(pn_listener, close_me);
+}
+
 
 void qd_adaptor_listener_init(void)
 {

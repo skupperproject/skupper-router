@@ -30,8 +30,8 @@ from TCP_echo_server import TcpEchoServer
 
 class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
     @classmethod
-    def setUpClass(cls):
-        super(TcpTlsAdaptor, cls).setUpClass(test_ssl=True)
+    def setUpClass(cls, encap='legacy'):
+        super(TcpTlsAdaptor, cls).setUpClass(test_ssl=True, encap=encap)
 
     @unittest.skipIf(not ncat_available(), "Ncat utility is not available")
     def test_authenticate_peer(self):
@@ -80,14 +80,21 @@ class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
 
+class TcpTlsAdaptorLite(TcpTlsAdaptor):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpTlsAdaptorLite, cls).setUpClass(encap='lite')
+
+
 class TcpTlsBadConfigTests(TestCase):
     """
     Negative test for invalid TCP connector and listener configurations
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap='legacy'):
         super(TcpTlsBadConfigTests, cls).setUpClass()
 
+        cls.encapsulation = encap
         config = [
             ('router', {'mode': 'interior',
                         'id': 'BadTcpConfigRouter'}),
@@ -108,6 +115,7 @@ class TcpTlsBadConfigTests(TestCase):
                           {'address': 'foo',
                            'host': '127.0.0.1',
                            'port': port,
+                           'encapsulation': self.encapsulation,
                            'sslProfile': "NotFound"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
         self.assertIn("Invalid tcpConnector configuration", mgmt.stdout)
@@ -123,6 +131,7 @@ class TcpTlsBadConfigTests(TestCase):
                           {'address': 'foo',
                            'host': '127.0.0.1',
                            'port': port,
+                           'encapsulation': self.encapsulation,
                            'sslProfile': "BadCAFile"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
         self.assertIn("Invalid tcpConnector configuration", mgmt.stdout)
@@ -136,6 +145,7 @@ class TcpTlsBadConfigTests(TestCase):
                           {'address': 'foo',
                            'host': '0.0.0.0',
                            'port': port,
+                           'encapsulation': self.encapsulation,
                            'sslProfile': "NotFound"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
         self.assertIn("Invalid tcpListener configuration", mgmt.stdout)
@@ -151,16 +161,27 @@ class TcpTlsBadConfigTests(TestCase):
                           {'address': 'foo',
                            'host': '0.0.0.0',
                            'port': port,
+                           'encapsulation': self.encapsulation,
                            'sslProfile': "BadCAFile"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
         self.assertIn("Invalid tcpListener configuration", mgmt.stdout)
         mgmt.delete("sslProfile", name='BadCAFile')
 
 
-class TcpAdaptorOpenSSLTests(TestCase):
+class TcpLiteTlsBadConfigTests(TcpTlsBadConfigTests):
+    """
+    Negative test for invalid TCP connector and listener configurations
+    """
     @classmethod
     def setUpClass(cls):
+        super(TcpLiteTlsBadConfigTests, cls).setUpClass(encap='lite')
+
+
+class TcpAdaptorOpenSSLTests(TestCase):
+    @classmethod
+    def setUpClass(cls, encap='legacy'):
         super(TcpAdaptorOpenSSLTests, cls).setUpClass()
+        cls.encapsulation = encap
         cls.openssl_server_listening_port_http11 = cls.tester.get_port()
         cls.openssl_server_listening_port_http2 = cls.tester.get_port()
         cls.openssl_server_listening_port_auth_peer = cls.tester.get_port()
@@ -224,6 +245,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_http11,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'http11',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"
               }
              ),
@@ -233,6 +255,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_http2,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'http2',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"
               }
              ),
@@ -242,6 +265,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_auth_peer,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'http2',
+              'encapsulation': cls.encapsulation,
               'authenticatePeer': 'yes',
               'siteId': "mySite"
               }
@@ -252,6 +276,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_tlsv12,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'tlsv12',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"
               }
              ),
@@ -261,6 +286,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_server_auth_peer,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'server-requires-client-cert',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"
               }
              ),
@@ -270,6 +296,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
               'port': cls.router_listener_port_server_auth_peer_1,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'server-requires-client-cert-1',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"
               }
              ),
@@ -296,6 +323,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
                               'name': 'http11-connector',
                               # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
                               'verifyHostname': 'yes',
+                              'encapsulation': cls.encapsulation,
                               'sslProfile': 'tcp-connector-ssl-profile'
                               }),
             ('tcpConnector', {'port': cls.openssl_server_listening_port_http2,
@@ -304,6 +332,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
                               'name': 'http2-connector',
                               # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
                               'verifyHostname': 'yes',
+                              'encapsulation': cls.encapsulation,
                               'sslProfile': 'tcp-connector-ssl-profile'
                               }),
             ('tcpConnector', {'port': cls.openssl_server_listening_port_tlsv1_2,
@@ -312,6 +341,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
                               'name': 'tlsv12-connector',
                               # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
                               'verifyHostname': 'yes',
+                              'encapsulation': cls.encapsulation,
                               'sslProfile': 'tcp-connector-ssl-profile'
                               }),
             # This connector is connecting to an openssl server which requires a client auth but this connector
@@ -324,6 +354,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
                               'name': 'server-requires-client-cert',
                               # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
                               'verifyHostname': 'yes',
+                              'encapsulation': cls.encapsulation,
                               'sslProfile': 'tcp-connector-ssl-profile-no-client-cert'
                               }),
             # This connector is connecting to an openssl server which requires a client auth and this connector
@@ -334,6 +365,7 @@ class TcpAdaptorOpenSSLTests(TestCase):
                               'name': 'server-requires-client-cert-1',
                               # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
                               'verifyHostname': 'yes',
+                              'encapsulation': cls.encapsulation,
                               'sslProfile': 'tcp-connector-ssl-profile'
                               }),
         ])
@@ -470,10 +502,17 @@ class TcpAdaptorOpenSSLTests(TestCase):
         self.openssl_server_auth_peer.wait_out_message("test_connector_requires_client_auth_pass")
 
 
-class TcpTlsGoodListenerBadClient(TestCase):
+class TcpAdaptorLiteOpenSSLTests(TcpAdaptorOpenSSLTests):
     @classmethod
     def setUpClass(cls):
+        super(TcpAdaptorLiteOpenSSLTests, cls).setUpClass(encap='lite')
+
+
+class TcpTlsGoodListenerBadClient(TestCase):
+    @classmethod
+    def setUpClass(cls, encap='legacy'):
         super(TcpTlsGoodListenerBadClient, cls).setUpClass()
+        cls.encapsulation = encap
         cls.good_listener_port = cls.tester.get_port()
         cls.bad_server_port = cls.tester.get_port()
 
@@ -508,6 +547,7 @@ class TcpTlsGoodListenerBadClient(TestCase):
               'port': cls.good_listener_port,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"}),
             ('sslProfile', {'name': 'tcp-connector-ssl-profile',
                             'caCertFile': CA_CERT,
@@ -520,6 +560,7 @@ class TcpTlsGoodListenerBadClient(TestCase):
               'port': cls.echo_server.port,
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
               'sslProfile': 'tcp-connector-ssl-profile',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
@@ -532,6 +573,7 @@ class TcpTlsGoodListenerBadClient(TestCase):
               'port': cls.bad_server_port,
               'sslProfile': 'tcp-listener-ssl-profile',
               'address': 'ES_BAD_CONNECTOR_CERT_INTA',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"}),
             ('sslProfile', {'name': 'bad-server-cert-connector-ssl-profile',
                             'caCertFile': BAD_CA_CERT}),
@@ -541,6 +583,7 @@ class TcpTlsGoodListenerBadClient(TestCase):
               'port': cls.echo_server.port,
               'address': 'ES_BAD_CONNECTOR_CERT_INTA',
               'sslProfile': 'bad-server-cert-connector-ssl-profile',
+              'encapsulation': cls.encapsulation,
               'siteId': "mySite"})
         ]
 
@@ -623,6 +666,12 @@ class TcpTlsGoodListenerBadClient(TestCase):
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
 
+class TcpLiteTlsGoodListenerBadClient(TcpTlsGoodListenerBadClient):
+    @classmethod
+    def setUpClass(cls):
+        super(TcpLiteTlsGoodListenerBadClient, cls).setUpClass(encap='lite')
+
+
 @unittest.skipIf(skip_nginx_test(), "nginx and curl needed to run nginx http2 tests")
 class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
     """
@@ -634,11 +683,12 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
     We are doing http1/http2 over tcp
     """
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, encap='legacy'):
         super(HttpOverTcpTestTlsTwoRouterNginx, cls).setUpClass()
         if skip_nginx_test():
             return
 
+        cls.encapsulation = encap
         cls.nginx_port = cls.tester.get_port()
         nginx_config = os.path.join(os.path.dirname(os.path.abspath(__file__)) + '/nginx/nginx-configs/nginx.conf')
         env = dict()
@@ -665,6 +715,7 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
                                    'host': 'localhost',
                                    'name': cls.listener_name,
                                    'authenticatePeer': 'yes',
+                                   'encapsulation': cls.encapsulation,
                                    'sslProfile': 'http-listener-ssl-profile'}
         config_qdra = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR.A'}),
@@ -687,6 +738,7 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
             'name': cls.connector_name,
             # Verifies host name. The host name in the certificate sent by the server must match 'localhost'
             'verifyHostname': 'yes',
+            'encapsulation': cls.encapsulation,
             'sslProfile': 'http-connector-ssl-profile'
         }
         config_qdrb = Qdrouterd.Config([
@@ -731,3 +783,20 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         digest_of_server_file = get_digest(image_file(image_file(image_file_name[1:])))
         digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
         self.assertEqual(digest_of_server_file, digest_of_response_file)
+
+
+@unittest.skipIf(skip_nginx_test(), "nginx and curl needed to run nginx http2 tests")
+class HttpOverTcpLiteTestTlsTwoRouterNginx(HttpOverTcpTestTlsTwoRouterNginx):
+    """
+    In this two router test, the  tcpListener is on Router QDR.A and the tcpConnector is on router
+    QDR.B. Both the tcpListener and the tcpConnector are encrypted. The nginx server that QDR.B connects to
+    is also encrypted.
+    Client authentication is required for curl to talk to the router QDR.A listener http port.
+    Client authentication is required for the QDR.B to talk to the nginx server ssl port.
+    We are doing http1/http2 over tcp
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(HttpOverTcpLiteTestTlsTwoRouterNginx, cls).setUpClass(encap='lite')
+        if skip_nginx_test():
+            return

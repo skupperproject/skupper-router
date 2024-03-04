@@ -1582,7 +1582,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
 
         // Check for rx complete, error, or no data available:
 
-        if (rc < 0 || !pn_delivery_partial(delivery)) {
+        if (rc < 0) {
             if (pn_delivery_aborted(delivery)) {
                 qd_message_set_aborted(in_msg);
             }
@@ -1892,7 +1892,9 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
         while (!!buf) {
             DEQ_REMOVE_HEAD(content->uct_slots[use_slot]);
             if (!IS_ATOMIC_FLAG_SET(&content->aborted)) {
-                pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
+                ssize_t sent = pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
+                (void) sent;
+                assert(sent == qd_buffer_size(buf));
             }
             qd_buffer_free(buf);
             buf = DEQ_HEAD(content->uct_slots[use_slot]);
@@ -2425,12 +2427,20 @@ ssize_t qd_message_field_copy(qd_message_t *msg, qd_message_field_t field, char 
 }
 
 
-void qd_message_raw_body_and_start_cutthrough(qd_message_t *in_msg, qd_buffer_t **buf, size_t *offset)
+void qd_message_get_raw_body_data(qd_message_t *in_msg, qd_buffer_t **buf, size_t *offset)
 {
     qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
     qd_message_content_t *content = msg->content;
 
     LOCK(&content->lock);
+
+    // This is intended to be used only with cut-through. Caller must validate in_msg to a depth of QD_DEPTH_RAW_BODY to
+    // ensure that section_raw_body has been initialized to point to the first data octet past the dummy body section
+    // (see the message compose code in tcp_lite.c). If uct_enabled has not been set prior to calling then the body
+    // buffer list may be modified at any time by another thread and the caller will not have exclusive access to the
+    // buffer list (crash!).
+    assert(content->parse_depth >= QD_DEPTH_RAW_BODY);
+    assert(IS_ATOMIC_FLAG_SET(&content->uct_enabled));
 
     //
     // If there are no body octets in the buffer list, return a NULL buffer pointer.  We will do pure cut-through in this case.
@@ -2441,16 +2451,6 @@ void qd_message_raw_body_and_start_cutthrough(qd_message_t *in_msg, qd_buffer_t 
     } else {
         *buf    = content->section_raw_body.buffer;
         *offset = content->section_raw_body.offset;
-    }
-
-    //
-    // Start the unicast-cut-through operation on this stream.  This means that any further data that is received into this stream will be placed in the 
-    // cut-through buffer-list ring.
-    //
-    if (!IS_ATOMIC_FLAG_SET(&content->uct_enabled)) {
-        SET_ATOMIC_FLAG(&content->uct_enabled);
-        sys_atomic_init(&content->uct_produce_slot, 0);
-        sys_atomic_init(&content->uct_consume_slot, 0);
     }
 
     UNLOCK(&content->lock);
@@ -3311,6 +3311,9 @@ int qd_message_full_slot_count(const qd_message_t *stream)
 void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers)
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
+
+    assert(qd_message_can_produce_buffers(stream));
+
     uint32_t useSlot = sys_atomic_get(&content->uct_produce_slot);
     DEQ_MOVE(*buffers, content->uct_slots[useSlot]);
     sys_atomic_set(&content->uct_produce_slot, (useSlot + 1) % UCT_SLOT_COUNT);
@@ -3331,10 +3334,8 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
 
     while (count < limit && !empty) {
         uint32_t useSlot = sys_atomic_get(&content->uct_consume_slot);
-        qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers useSlot=%"PRIu32"", useSlot);
         while (count < limit && !DEQ_IS_EMPTY(content->uct_slots[useSlot])) {
             qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[useSlot]);
-            qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_consume_buffers buf size=%zu", qd_buffer_size(buf));
             DEQ_REMOVE_HEAD(content->uct_slots[useSlot]);
             DEQ_INSERT_TAIL(*buffers, buf);
             count++;
