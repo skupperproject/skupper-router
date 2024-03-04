@@ -21,6 +21,8 @@ import unittest
 
 from http1_tests import wait_http_listeners_up, HttpTlsBadConfigTestsBase, wait_tcp_listeners_up
 from system_test import Qdrouterd, DIR
+from system_test import CA_CERT, CHAINED_CERT, SERVER_CERTIFICATE, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, \
+    SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_NO_PASS, CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
 from system_tests_ssl import RouterTestSslBase
 
 from proton import VERSION, SASL
@@ -67,10 +69,10 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
             'name': cls.connector_name
         }
         cls.listener_ssl_profile = {'name': 'http-listener-ssl-profile',
-                                    'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                    'certFile': cls.ssl_file('server-certificate.pem'),
-                                    'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                                    'password': 'server-password'}
+                                    'caCertFile': CA_CERT,
+                                    'certFile': SERVER_CERTIFICATE,
+                                    'privateKeyFile': SERVER_PRIVATE_KEY,
+                                    'password': SERVER_PRIVATE_KEY_PASSWORD}
         if cls.tls_v12:
             cls.listener_ssl_profile['protocols'] = 'TLSv1.2'
         else:
@@ -91,9 +93,9 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
         wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         if cls.tls_v12:
-            cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.2']
+            cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM', '--tlsv1.2']
         else:
-            cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.3']
+            cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM', '--tlsv1.3']
 
 
 class Http2ATlsV12TestStandaloneRouter(Http2TestTlsStandaloneRouter, RouterTestSslBase):
@@ -132,9 +134,9 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
                                                       'SERVER_TLS': "yes",
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port),
-                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
-                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
-                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                      'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                                                      'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                                                      'SERVER_CA_CERT': CA_CERT
                                                   },
                                                   abort=True)
         inter_router_port = cls.tester.get_port()
@@ -152,11 +154,11 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
             # curl will connect to this httpListener and run the tests.
             ('httpListener', cls.http_listener_props),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'protocols': 'TLSv1.3',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port})
         ])
 
@@ -179,11 +181,11 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
                            'port': inter_router_port,
                            'verifyHostname': 'no'}),
             ('sslProfile', {'name': 'http-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'protocols': 'TLSv1.3',
-                            'password': 'client-password'}),
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
         ])
 
         cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
@@ -194,9 +196,9 @@ class Http2TestTlsTwoRouter(Http2TestTwoRouter, RouterTestSslBase):
         wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
-                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
-                         '--key', cls.ssl_file('client-private-key.pem')]
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM',
+                         '--cert', CLIENT_CERTIFICATE + ":" + CLIENT_PRIVATE_KEY_PASSWORD,
+                         '--key', CLIENT_PRIVATE_KEY]
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     # Tests the HTTP2 head request without http2-prior-knowledge
@@ -245,10 +247,6 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
                                         CommonHttp2Tests):
 
     @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
-
-    @staticmethod
     def sasl_file(name):
         return os.path.join(DIR, 'sasl_files', name)
 
@@ -285,9 +283,9 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
                                                       'SERVER_TLS': "yes",
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port),
-                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
-                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
-                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                      'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                                                      'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                                                      'SERVER_CA_CERT': CA_CERT
                                                   },
                                                   abort=True)
         config_qdra = Qdrouterd.Config([
@@ -304,17 +302,17 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
                               'authenticatePeer': 'yes',
                               'sslProfile': 'http-listener-ssl-profile'}),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'protocols': 'TLSv1.3',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('sslProfile', {'name': 'inter-router-server-ssl-profile',
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'protocols': 'TLSv1.1 TLSv1.2',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('router', {'id': 'QDR.A',
                         'mode': 'interior',
                         'saslConfigName': 'tests-mech-PLAIN',
@@ -345,13 +343,13 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
                            'saslPassword': 'file:' + cls.sasl_file('password.txt')}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': b_listener_port}),
             ('sslProfile', {'name': 'http-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'protocols': 'TLSv1.3',
-                            'password': 'client-password'}),
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
             ('sslProfile', {'name': 'inter-router-client-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem')}),
+                            'caCertFile': CA_CERT}),
         ])
         cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
         cls.router_qdrb = cls.tester.qdrouterd("http2-two-router-tls-B", config_qdrb)
@@ -361,9 +359,9 @@ class Http2TwoRouterTlsOverSASLExternal(RouterTestPlainSaslCommon,
         wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
-                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
-                         '--key', cls.ssl_file('client-private-key.pem')]
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM',
+                         '--cert', CLIENT_CERTIFICATE + ":" + CLIENT_PRIVATE_KEY_PASSWORD,
+                         '--key', CLIENT_PRIVATE_KEY]
 
 
 class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
@@ -402,10 +400,10 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
 
         cls.listener_ssl_profile = {
             'name': 'http-listener-ssl-profile',
-            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-            'certFile': cls.ssl_file('server-certificate.pem'),
-            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-            'password': 'server-password',
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': SERVER_PRIVATE_KEY_PASSWORD,
             'protocols': 'TLSv1.3'
         }
 
@@ -427,7 +425,7 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # Note that the curl client does not present client cert. It only presents the ca-cert
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.3']
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM', '--tlsv1.3']
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     def test_head_request(self):
@@ -489,9 +487,9 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                                                       'SERVER_TLS': "yes",
                                                       'QUART_APP': "http2server:app",
                                                       'SERVER_LISTEN_PORT': str(cls.server_port),
-                                                      'SERVER_CERTIFICATE': cls.ssl_file('server-certificate.pem'),
-                                                      'SERVER_PRIVATE_KEY': cls.ssl_file('server-private-key-no-pass.pem'),
-                                                      'SERVER_CA_CERT': cls.ssl_file('ca-certificate.pem')
+                                                      'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                                                      'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                                                      'SERVER_CA_CERT': CA_CERT
                                                   },
                                                   abort=True)
         inter_router_port = cls.tester.get_port()
@@ -508,10 +506,10 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
             # curl will connect to this tcpListener and run the tests.
             ('tcpListener', cls.tcp_listener_props),
             ('sslProfile', {'name': 'tcp-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port})
         ])
 
@@ -533,10 +531,10 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                            'port': inter_router_port,
                            'verifyHostname': 'no'}),
             ('sslProfile', {'name': 'tcp-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
         ])
 
         cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
@@ -546,9 +544,9 @@ class Http2TestTlsOverTcpTwoRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
         wait_tcp_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
-                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
-                         '--key', cls.ssl_file('client-private-key.pem')]
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM',
+                         '--cert', CLIENT_CERTIFICATE + ":" + CLIENT_PRIVATE_KEY_PASSWORD,
+                         '--key', CLIENT_PRIVATE_KEY]
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
     # Tests the HTTP2 head request
@@ -612,10 +610,10 @@ class Http2TestTlsTwoRouterNginx(Http2TestBase, RouterTestSslBase):
         env['ssl'] = 'ssl'
         env['tls-enabled'] = ''  # Will enable TLS lines
         # TLS stuff
-        env['chained-pem'] = cls.ssl_file('chained.pem')
-        env['server-private-key-no-pass-pem'] = cls.ssl_file('server-private-key-no-pass.pem')
+        env['chained-pem'] = CHAINED_CERT
+        env['server-private-key-no-pass-pem'] = SERVER_PRIVATE_KEY_NO_PASS
         env['ssl-verify-client'] = 'on'
-        env['ca-certificate'] = cls.ssl_file('ca-certificate.pem')
+        env['ca-certificate'] = CA_CERT
         cls.nginx_server = cls.tester.nginxserver(config_path=nginx_config, env=env)
         inter_router_port = cls.tester.get_port()
         cls.listener_name = 'listenerToBeDeleted'
@@ -632,10 +630,10 @@ class Http2TestTlsTwoRouterNginx(Http2TestBase, RouterTestSslBase):
             # curl will connect to this httpListener and run the tests.
             ('httpListener', cls.http_listener_props),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port})
         ])
 
@@ -658,10 +656,10 @@ class Http2TestTlsTwoRouterNginx(Http2TestBase, RouterTestSslBase):
                            'port': inter_router_port,
                            'verifyHostname': 'no'}),
             ('sslProfile', {'name': 'http-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
         ])
         cls.router_qdra = cls.tester.qdrouterd("http2-two-router-tls-A", config_qdra, wait=True)
         cls.router_qdrb = cls.tester.qdrouterd("http2-two-router-tls-B", config_qdrb)
@@ -671,9 +669,9 @@ class Http2TestTlsTwoRouterNginx(Http2TestBase, RouterTestSslBase):
         wait_http_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
-                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
-                         '--key', cls.ssl_file('client-private-key.pem')]
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM',
+                         '--cert', CLIENT_CERTIFICATE + ":" + CLIENT_PRIVATE_KEY_PASSWORD,
+                         '--key', CLIENT_PRIVATE_KEY]
 
     def test_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge

@@ -20,6 +20,8 @@
 import os
 from system_test import TestCase, Qdrouterd, DIR, main_module
 from system_test import unittest
+from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, \
+    CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
 import proton
 from proton import SSLDomain, Delivery
 from proton.utils import BlockingConnection
@@ -27,10 +29,6 @@ from skupper_router_internal.compat import BINARY
 
 
 class QdSSLUseridTest(TestCase):
-
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
 
     @classmethod
     def setUpClass(cls):
@@ -47,117 +45,117 @@ class QdSSLUseridTest(TestCase):
 
             # sha1
             ('sslProfile', {'name': 'server-ssl1',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '1',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # sha256
             ('sslProfile', {'name': 'server-ssl2',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '2',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # sha512
             ('sslProfile', {'name': 'server-ssl3',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '5',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # sha256 combination
             ('sslProfile', {'name': 'server-ssl4',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '2noucs',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # sha1 combination
             ('sslProfile', {'name': 'server-ssl5',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '1cs',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # sha512 combination
             ('sslProfile', {'name': 'server-ssl6',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': 'cs5',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # no fingerprint field
             ('sslProfile', {'name': 'server-ssl7',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': 'nsuco',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # no fingerprint field variation
             ('sslProfile', {'name': 'server-ssl8',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': 'scounl',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # no uidFormat
             ('sslProfile', {'name': 'server-ssl9',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # one component of uidFormat is invalid (x), the unrecognized component will be ignored,
             # this will be treated like 'uidFormat': '1'
             ('sslProfile', {'name': 'server-ssl10',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '1x',
                             'uidNameMappingFile': ssl_profile2_json,
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # All components in the uidFormat are unrecognized, pn_get_transport_user will be returned
             ('sslProfile', {'name': 'server-ssl11',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': 'abxd',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             ('sslProfile', {'name': 'server-ssl12',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '1',
                             'uidNameMappingFile': ssl_profile1_json,
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # should translate a display name
             ('sslProfile', {'name': 'server-ssl13',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '2',
                             'uidNameMappingFile': ssl_profile2_json,
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             ('sslProfile', {'name': 'server-ssl14',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'uidFormat': '1',
                             'uidNameMappingFile': ssl_profile1_json,
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl1', 'authenticatePeer': 'yes',
                           'requireSsl': 'yes', 'saslMechanisms': 'EXTERNAL'}),
@@ -237,10 +235,10 @@ class QdSSLUseridProxy(QdSSLUseridTest):
 
     def test_message_user_id_proxy_bad_name_disallowed(self):
         ssl_opts = dict()
-        ssl_opts['ssl-trustfile'] = self.ssl_file('ca-certificate.pem')
-        ssl_opts['ssl-certificate'] = self.ssl_file('client-certificate.pem')
-        ssl_opts['ssl-key'] = self.ssl_file('client-private-key.pem')
-        ssl_opts['ssl-password'] = 'client-password'
+        ssl_opts['ssl-trustfile'] = CA_CERT
+        ssl_opts['ssl-certificate'] = CLIENT_CERTIFICATE
+        ssl_opts['ssl-key'] = CLIENT_PRIVATE_KEY
+        ssl_opts['ssl-password'] = CLIENT_PRIVATE_KEY_PASSWORD
 
         # create the SSL domain object
         domain = self.create_ssl_domain(ssl_opts)
@@ -269,10 +267,10 @@ class QdSSLUseridProxy(QdSSLUseridTest):
         # in the client receiving credit.
         credit_limit = 250   # router issues 250 credits
         ssl_opts = dict()
-        ssl_opts['ssl-trustfile'] = self.ssl_file('ca-certificate.pem')
-        ssl_opts['ssl-certificate'] = self.ssl_file('client-certificate.pem')
-        ssl_opts['ssl-key'] = self.ssl_file('client-private-key.pem')
-        ssl_opts['ssl-password'] = 'client-password'
+        ssl_opts['ssl-trustfile'] = CA_CERT
+        ssl_opts['ssl-certificate'] = CLIENT_CERTIFICATE
+        ssl_opts['ssl-key'] = CLIENT_PRIVATE_KEY
+        ssl_opts['ssl-password'] = CLIENT_PRIVATE_KEY_PASSWORD
 
         # create the SSL domain object
         domain = self.create_ssl_domain(ssl_opts)

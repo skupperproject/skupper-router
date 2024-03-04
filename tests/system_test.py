@@ -100,6 +100,29 @@ SSL_PROFILE_TYPE = 'io.skupper.router.sslProfile'
 TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
 
+# The directory where this module lives. Used to locate static configuration files etc.
+DIR = os.path.dirname(__file__)
+
+
+def ssl_file(name):
+    return os.path.join(DIR, 'ssl_certs', name)
+
+
+SERVER_CERTIFICATE = ssl_file('server-certificate.pem')
+SERVER_PRIVATE_KEY = ssl_file('server-private-key.pem')
+SERVER_PRIVATE_KEY_NO_PASS = ssl_file('server-private-key-no-pass.pem')
+SERVER_PRIVATE_KEY_PASSWORD = 'server-password'
+CLIENT_CERTIFICATE = ssl_file('client-certificate.pem')
+CLIENT_PRIVATE_KEY = ssl_file('client-private-key.pem')
+CLIENT_PRIVATE_KEY_NO_PASS = ssl_file('client-private-key-no-pass.pem')
+BAD_CA_CERT = ssl_file('bad-ca-certificate.pem')
+CLIENT_PRIVATE_KEY_PASSWORD = 'client-password'
+CA_CERT = ssl_file('ca-certificate.pem')
+CLIENT_PASSWORD_FILE = ssl_file('client-password-file.txt')
+SERVER_PASSWORD_FILE = ssl_file('server-password-file.txt')
+CHAINED_CERT = ssl_file('chained.pem')
+
+
 try:
     import qpidtoollibs  # pylint: disable=unused-import
 except ImportError as err:
@@ -128,10 +151,6 @@ def find_exe(program):
             if is_exe(exe_file):
                 return exe_file
     return None
-
-
-# The directory where this module lives. Used to locate static configuration files etc.
-DIR = os.path.dirname(__file__)
 
 
 def _check_requirements():

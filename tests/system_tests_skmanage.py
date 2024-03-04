@@ -18,7 +18,6 @@
 #
 
 import json
-import os
 import sys
 from subprocess import PIPE, STDOUT
 from time import sleep
@@ -29,13 +28,14 @@ from skupper_router_internal.compat import dictify
 from skupper_router_internal.management.qdrouter import QdSchema
 
 from system_test import unittest, retry_assertion
-from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT, DIR
+from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT
 from system_test import QdManager, DUMMY_TYPE, SSL_PROFILE_TYPE, LOG_STATS_TYPE
 from system_test import CONFIG_ADDRESS_TYPE, ROUTER_ADDRESS_TYPE
 from system_test import AMQP_LISTENER_TYPE, LOG_TYPE, ROUTER_TYPE
 from system_test import CONFIG_ENTITY_TYPE, ENTITY_TYPE, CONFIG_AUTOLINK_TYPE
 from system_test import AMQP_CONNECTOR_TYPE, ROUTER_LINK_TYPE, CONNECTION_TYPE
-
+from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, \
+    CLIENT_CERTIFICATE, CLIENT_PASSWORD_FILE, CLIENT_PRIVATE_KEY
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
 TOTAL_ENTITIES = 29   # for tests that check the total # of entities
@@ -43,10 +43,6 @@ TOTAL_ENTITIES = 29   # for tests that check the total # of entities
 
 class SkmanageTest(TestCase):
     """Test skmanage tool output"""
-
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
 
     @classmethod
     def setUpClass(cls):
@@ -57,10 +53,10 @@ class SkmanageTest(TestCase):
         config_1 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'R1'}),
             ('sslProfile', {'name': 'server-ssl',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'port': cls.tester.get_port()}),
 
             ('connector', {'role': 'inter-router', 'port': cls.inter_router_port}),
@@ -431,9 +427,9 @@ class SkmanageTest(TestCase):
 
     def test_create_delete_ssl_profile(self):
         ssl_profile_name = 'ssl-profile-test'
-        ssl_create_command = f'CREATE --type={SSL_PROFILE_TYPE} certFile=' + self.ssl_file('server-certificate.pem') + \
-            ' privateKeyFile=' + self.ssl_file('server-private-key.pem') + ' password=server-password' + \
-            ' name=' + ssl_profile_name + ' caCertFile=' + self.ssl_file('ca-certificate.pem')
+        ssl_create_command = f'CREATE --type={SSL_PROFILE_TYPE} certFile=' + SERVER_CERTIFICATE + \
+            ' privateKeyFile=' + SERVER_PRIVATE_KEY + ' password=' + SERVER_PRIVATE_KEY_PASSWORD + \
+            ' name=' + ssl_profile_name + ' caCertFile=' + CA_CERT
         output = json.loads(self.run_skmanage(ssl_create_command))
         self.assertEqual(output['name'], ssl_profile_name)
         self.run_skmanage(f'DELETE --type={SSL_PROFILE_TYPE} --name=' +
@@ -625,21 +621,21 @@ class SkmanageTest(TestCase):
 
         # this should pass:
         self.run_skmanage(query + " --ssl-trustfile " +
-                          self.ssl_file('ca-certificate.pem'),
+                          CA_CERT,
                           address=ssl_address)
 
         # this should fail: wrong hostname
         with self.assertRaises(RuntimeError,
                                msg="failure expected: wrong hostname") as exc:
             self.run_skmanage(query + " --ssl-trustfile " +
-                              self.ssl_file('ca-certificate.pem'),
+                              CA_CERT,
                               address="amqps://127.0.0.1:%s" % self.secure_port)
         self.assertIn("certificate verify failed", str(exc.exception),
                       "unexpected exception: %s" % str(exc.exception))
 
         # this should pass: disable hostname check:
         self.run_skmanage(query + " --ssl-trustfile " +
-                          self.ssl_file('ca-certificate.pem') +
+                          CA_CERT +
                           " --ssl-disable-peer-name-verify",
                           address="amqps://127.0.0.1:%s" % self.secure_port)
 
@@ -647,20 +643,20 @@ class SkmanageTest(TestCase):
         with self.assertRaises(RuntimeError,
                                msg="client authentication should fail") as exc:
             self.run_skmanage(query + " --ssl-trustfile " +
-                              self.ssl_file('ca-certificate.pem'),
+                              CA_CERT,
                               address=ssl_user_address)
         self.assertIn("SSL Failure", str(exc.exception),
                       "unexpected exception: %s" % str(exc.exception))
 
         # this should pass: skmanage provides credentials
         self.run_skmanage(query + " --ssl-trustfile " +
-                          self.ssl_file('ca-certificate.pem') +
+                          CA_CERT +
                           " --ssl-certificate " +
-                          self.ssl_file('client-certificate.pem') +
+                          CLIENT_CERTIFICATE +
                           " --ssl-password-file " +
-                          self.ssl_file('client-password-file.txt') +
+                          CLIENT_PASSWORD_FILE +
                           " --ssl-key " +
-                          self.ssl_file('client-private-key.pem'),
+                          CLIENT_PRIVATE_KEY,
                           address=ssl_user_address)
 
     def test_listener_connector_cost(self):

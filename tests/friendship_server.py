@@ -20,6 +20,7 @@
 from concurrent import futures
 
 import grpc
+from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY_NO_PASS
 from system_tests_ssl import RouterTestSslBase
 
 from friendship_pb2 import Person, CreateResult, PersonEmail, CommonFriendsResult, FriendshipResponse
@@ -101,9 +102,9 @@ def serve_secure(port, options=None):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1),
                          options=options)
     add_FriendshipServicer_to_server(FriendShipService(), server)
-    server_ca = RouterTestSslBase.get_byte_string(RouterTestSslBase.ssl_file('ca-certificate.pem'))
-    server_cert = RouterTestSslBase.get_byte_string(RouterTestSslBase.ssl_file('server-certificate.pem'))
-    server_key = RouterTestSslBase.get_byte_string(RouterTestSslBase.ssl_file('server-private-key-no-pass.pem'))
+    server_ca = RouterTestSslBase.get_byte_string(CA_CERT)
+    server_cert = RouterTestSslBase.get_byte_string(SERVER_CERTIFICATE)
+    server_key = RouterTestSslBase.get_byte_string(SERVER_PRIVATE_KEY_NO_PASS)
     server_credentials = grpc.ssl_server_credentials([(server_key, server_cert)],
                                                      root_certificates=server_ca,
                                                      require_client_auth=True)

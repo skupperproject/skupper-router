@@ -17,11 +17,12 @@
 # under the License.
 #
 import os
-from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl
-from system_tests_ssl import RouterTestSslBase
-from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available, \
+from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl, \
     CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
-    SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT
+    SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT, \
+    CHAINED_CERT
+from system_tests_ssl import RouterTestSslBase
+from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available
 from http1_tests import wait_tcp_listeners_up
 from system_tests_http2 import get_address, get_digest, image_file
 from system_tests_http2 import skip_nginx_test
@@ -702,10 +703,10 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         env['tls-enabled'] = ''  # Will enable TLS lines
 
         # TLS stuff
-        env['chained-pem'] = cls.ssl_file('chained.pem')
-        env['server-private-key-no-pass-pem'] = cls.ssl_file('server-private-key-no-pass.pem')
+        env['chained-pem'] = CHAINED_CERT
+        env['server-private-key-no-pass-pem'] = SERVER_PRIVATE_KEY_NO_PASS
         env['ssl-verify-client'] = 'on'
-        env['ca-certificate'] = cls.ssl_file('ca-certificate.pem')
+        env['ca-certificate'] = CA_CERT
         cls.nginx_server = cls.tester.nginxserver(config_path=nginx_config, env=env)
 
         inter_router_port = cls.tester.get_port()
@@ -723,10 +724,10 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
             # curl will connect to this httpListener and run the tests.
             ('tcpListener', cls.http_listener_props),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port})
         ])
 
@@ -749,10 +750,10 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
                            'port': inter_router_port,
                            'verifyHostname': 'yes'}),
             ('sslProfile', {'name': 'http-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
         ])
         cls.router_qdra = cls.tester.qdrouterd("tcp-two-router-tls-A", config_qdra, wait=True)
         cls.router_qdrb = cls.tester.qdrouterd("tcp-two-router-tls-B", config_qdrb)
@@ -761,9 +762,9 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         wait_tcp_listeners_up(cls.router_qdra.addresses[0])
 
         # curl will use these additional args to connect to the router.
-        cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM',
-                         '--cert', cls.ssl_file('client-certificate.pem') + ":client-password",
-                         '--key', cls.ssl_file('client-private-key.pem')]
+        cls.curl_args = ['--cacert', CA_CERT, '--cert-type', 'PEM',
+                         '--cert', CLIENT_CERTIFICATE + ":" + CLIENT_PRIVATE_KEY_PASSWORD,
+                         '--key', CLIENT_PRIVATE_KEY]
 
     def test_get_image_jpg_http2(self):
         image_file_name = '/test.jpg'

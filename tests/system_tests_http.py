@@ -24,12 +24,12 @@ import ssl
 
 from urllib.request import urlopen, build_opener, HTTPSHandler
 from urllib.error import HTTPError, URLError
-
 from skupper_router._skupper_router_site import SKIP_DELETE_HTTP_LISTENER
 from system_test import Process, QdManager, retry
-from system_test import TestCase, Qdrouterd, main_module, DIR
+from system_test import TestCase, Qdrouterd, main_module
 from system_test import unittest, AMQP_LISTENER_TYPE, ALLOCATOR_TYPE
-
+from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
+    SERVER_CERTIFICATE, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY
 #
 # Note: these tests exercise the management interface accessed via HTTP. These
 # tests have nothing to do with the HTTP adaptors!
@@ -37,10 +37,6 @@ from system_test import unittest, AMQP_LISTENER_TYPE, ALLOCATOR_TYPE
 
 
 class RouterTestHttp(TestCase):
-
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
 
     @classmethod
     def setUpClass(cls):
@@ -51,7 +47,7 @@ class RouterTestHttp(TestCase):
     @classmethod
     def get(cls, url, use_ca=True):
         if use_ca:
-            http_data = urlopen(url, cafile=cls.ssl_file('ca-certificate.pem'))
+            http_data = urlopen(url, cafile=CA_CERT)
         else:
             http_data = urlopen(url)
         return http_data.read().decode('utf-8')
@@ -59,10 +55,10 @@ class RouterTestHttp(TestCase):
     @classmethod
     def get_cert(cls, url):
         context = ssl.create_default_context()
-        context.load_cert_chain(cls.ssl_file('client-certificate.pem'),
-                                cls.ssl_file('client-private-key.pem'),
-                                'client-password')
-        context.load_verify_locations(cls.ssl_file('ca-certificate.pem'))
+        context.load_cert_chain(CLIENT_CERTIFICATE,
+                                CLIENT_PRIVATE_KEY,
+                                CLIENT_PRIVATE_KEY_PASSWORD)
+        context.load_verify_locations(CA_CERT)
         opener = build_opener(HTTPSHandler(context=context))
         return opener.open(url).read().decode('utf-8')
 
@@ -230,7 +226,7 @@ class RouterTestHttp(TestCase):
 
         def _test(stat_names, port):
             # sanity check that all expected stats are reported
-            resp = urlopen(f"http://localhost:{port}/metrics", cafile=self.ssl_file('ca-certificate.pem'))
+            resp = urlopen(f"http://localhost:{port}/metrics", cafile=CA_CERT)
             self.assertEqual(200, resp.getcode())
             metrics = [x for x in resp.read().decode('utf-8').splitlines() if not x.startswith("#")]
 
@@ -288,7 +284,7 @@ class RouterTestHttp(TestCase):
         r = self.qdrouterd('metrics-test-router', config)
 
         def test(port):
-            result = urlopen("http://localhost:%d/healthz" % port, cafile=self.ssl_file('ca-certificate.pem'))
+            result = urlopen("http://localhost:%d/healthz" % port, cafile=CA_CERT)
             self.assertEqual(200, result.getcode())
 
         # Sequential calls on multiple ports
@@ -329,11 +325,11 @@ class RouterTestHttp(TestCase):
         config = Qdrouterd.Config([
             ('router', {'id': 'QDR.HTTPS'}),
             ('sslProfile', {'name': 'simple-ssl',
-                            'caCertFile': self.ssl_file('ca-certificate.pem'),
-                            'certFile': self.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': self.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': 'server-password'
+                            'password': SERVER_PRIVATE_KEY_PASSWORD
                             }),
             http_listener(sslProfile='simple-ssl', requireSsl=False, authenticatePeer=False),
             http_listener(sslProfile='simple-ssl', requireSsl=True, authenticatePeer=False),

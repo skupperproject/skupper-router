@@ -49,7 +49,9 @@ from system_test import CONNECTION_TYPE, TCP_CONNECTOR_TYPE, TCP_LISTENER_TYPE
 from system_test import ROUTER_LINK_TYPE, ROUTER_TYPE
 from system_test import retry_assertion
 from system_test import retry_exception
-from system_tests_ssl import RouterTestSslBase
+from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
+    CLIENT_PRIVATE_KEY_NO_PASS, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, \
+    SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT
 from http1_tests import wait_tcp_listeners_up
 
 # Tests in this file are organized by classes that inherit TestCase.
@@ -77,17 +79,6 @@ try:
 except ImportError:
     DISABLE_SELECTOR_TESTS = True
     DISABLE_SELECTOR_REASON = "Python selectors module is not available on this platform."
-
-SERVER_CERTIFICATE = RouterTestSslBase.ssl_file('server-certificate.pem')
-SERVER_PRIVATE_KEY = RouterTestSslBase.ssl_file('server-private-key.pem')
-SERVER_PRIVATE_KEY_NO_PASS = RouterTestSslBase.ssl_file('server-private-key-no-pass.pem')
-SERVER_PRIVATE_KEY_PASSWORD = 'server-password'
-CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
-CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
-CLIENT_PRIVATE_KEY_NO_PASS = RouterTestSslBase.ssl_file('client-private-key-no-pass.pem')
-BAD_CA_CERT = RouterTestSslBase.ssl_file('bad-ca-certificate.pem')
-CLIENT_PRIVATE_KEY_PASSWORD = 'client-password'
-CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
 
 # This code takes a wild guess how long an echo server must stall receiving
 # input data before it fills the adaptor's flow control window in the host
@@ -533,7 +524,7 @@ class TcpAdaptorBase(TestCase):
                             'CA_CERT': CA_CERT}
             cls.client_ssl_info = {'CLIENT_CERTIFICATE': CLIENT_CERTIFICATE,
                                    'CLIENT_PRIVATE_KEY': CLIENT_PRIVATE_KEY,
-                                   'CLIENT_PRIVATE_KEY_PASSWORD': 'client-password',
+                                   'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT_PRIVATE_KEY_PASSWORD,
                                    'BAD_CA_CERT': BAD_CA_CERT,
                                    'CLIENT_PRIVATE_KEY_NO_PASS': CLIENT_PRIVATE_KEY_NO_PASS,
                                    'CA_CERT': CA_CERT}

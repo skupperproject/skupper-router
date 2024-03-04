@@ -19,7 +19,8 @@
 import unittest
 
 from http1_tests import wait_http_listeners_up, wait_tcp_listeners_up
-from system_test import TestCase, Qdrouterd, TIMEOUT
+from system_test import TestCase, Qdrouterd, TIMEOUT, CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, \
+    CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
 try:
     import grpc
     import friendship_server as fs
@@ -247,22 +248,22 @@ class GrpcServiceMethodsTestOverHttp2Tls(GrpcServiceMethodsTest, RouterTestSslBa
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('httpListener', cls.listener_props),
             ('httpConnector', cls.connector_props),
             ('sslProfile', {'name': 'http-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'})
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD})
         ])
         cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config, wait=True)
         wait_http_listeners_up(cls.router_qdr.addresses[0])
 
-        ca_certificate = RouterTestSslBase.get_byte_string(cls.ssl_file('ca-certificate.pem'))
+        ca_certificate = RouterTestSslBase.get_byte_string(CA_CERT)
         credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
 
         # The GRPC client is opening a secure channel to the TLS enabled router listener port which has its
@@ -314,22 +315,22 @@ class GrpcServiceMethodsTestOverTcpTls(GrpcServiceMethodsTest, RouterTestSslBase
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('sslProfile', {'name': 'tcp-listener-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('tcpListener', cls.listener_props),
             ('tcpConnector', cls.connector_props),
             ('sslProfile', {'name': 'tcp-connector-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'})
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD})
         ])
         cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config, wait=True)
         wait_tcp_listeners_up(cls.router_qdr.addresses[0])
 
-        ca_certificate = RouterTestSslBase.get_byte_string(cls.ssl_file('ca-certificate.pem'))
+        ca_certificate = RouterTestSslBase.get_byte_string(CA_CERT)
         credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
 
         # The GRPC client is opening a secure channel to the TLS enabled router listener tcp port which has its
