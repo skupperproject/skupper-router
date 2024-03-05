@@ -43,6 +43,8 @@ from system_test import openssl_available, is_pattern_present
 from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE, ROUTER_TYPE
 from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_LINK_TYPE
 from system_test import Logger
+from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, \
+    SERVER_PRIVATE_KEY_NO_PASS, CHAINED_CERT, SERVER_PRIVATE_KEY_PASSWORD, CLIENT_PRIVATE_KEY_PASSWORD
 from http1_tests import http1_ping, TestServer, RequestHandler10
 from http1_tests import RequestMsg, ResponseMsg, ResponseValidator
 from http1_tests import ThreadedTestClient, Http1OneRouterTestBase
@@ -55,15 +57,6 @@ from http1_tests import wait_http_listeners_up, wait_http_listeners_down
 from http1_tests import HttpAdaptorListenerConnectTestBase
 from http1_tests import HttpTlsBadConfigTestsBase
 from http1_tests import http1_simple_request
-from system_tests_ssl import RouterTestSslBase
-
-CA_CERT = RouterTestSslBase.ssl_file('ca-certificate.pem')
-SERVER_CERTIFICATE = RouterTestSslBase.ssl_file('server-certificate.pem')
-SERVER_PRIVATE_KEY = RouterTestSslBase.ssl_file('server-private-key.pem')
-CLIENT_CERTIFICATE = RouterTestSslBase.ssl_file('client-certificate.pem')
-CLIENT_PRIVATE_KEY = RouterTestSslBase.ssl_file('client-private-key.pem')
-SERVER_KEY_NO_PASS = RouterTestSslBase.ssl_file('server-private-key-no-pass.pem')
-CHAINED_PEM = RouterTestSslBase.ssl_file('chained.pem')
 
 
 def _read_socket(sock, length, timeout=TIMEOUT):
@@ -467,7 +460,7 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
             'caCertFile': CA_CERT,
             'certFile': CLIENT_CERTIFICATE,
             'privateKeyFile': CLIENT_PRIVATE_KEY,
-            'password': "client-password",
+            'password': CLIENT_PRIVATE_KEY_PASSWORD,
         }
 
         # TLS configuration for use by the test servers
@@ -475,7 +468,7 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
         ctxt.load_verify_locations(cafile=CA_CERT)
         ctxt.load_cert_chain(SERVER_CERTIFICATE,
                              SERVER_PRIVATE_KEY,
-                             "server-password")
+                             SERVER_PRIVATE_KEY_PASSWORD)
         ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = False
         cls.server_ssl_context = ctxt
@@ -485,7 +478,7 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
             'caCertFile': CA_CERT,
             'certFile': SERVER_CERTIFICATE,
             'privateKeyFile': SERVER_PRIVATE_KEY,
-            'password': "server-password"
+            'password': SERVER_PRIVATE_KEY_PASSWORD
         }
 
         # TLS configuration for use by the test clients
@@ -493,7 +486,7 @@ class Http1AdaptorOneRouterTLSTest(Http1AdaptorOneRouterTest):
         ctxt.load_verify_locations(cafile=CA_CERT)
         ctxt.load_cert_chain(CLIENT_CERTIFICATE,
                              CLIENT_PRIVATE_KEY,
-                             "client-password")
+                             CLIENT_PRIVATE_KEY_PASSWORD)
         ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = True
         cls.client_ssl_context = ctxt
@@ -1217,7 +1210,7 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             'caCertFile': CA_CERT,
             'certFile': CLIENT_CERTIFICATE,
             'privateKeyFile': CLIENT_PRIVATE_KEY,
-            'password': "client-password",
+            'password': CLIENT_PRIVATE_KEY_PASSWORD,
         }
 
         # TLS configuration for use by the test servers
@@ -1225,7 +1218,7 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
         ctxt.load_verify_locations(cafile=CA_CERT)
         ctxt.load_cert_chain(SERVER_CERTIFICATE,
                              SERVER_PRIVATE_KEY,
-                             "server-password")
+                             SERVER_PRIVATE_KEY_PASSWORD)
         ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = False
         cls.server_ssl_context = ctxt
@@ -1235,14 +1228,14 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             'caCertFile': CA_CERT,
             'certFile': SERVER_CERTIFICATE,
             'privateKeyFile': SERVER_PRIVATE_KEY,
-            'password': "server-password"
+            'password': SERVER_PRIVATE_KEY_PASSWORD
         }
 
         ctxt = SSLContext(protocol=PROTOCOL_TLS_CLIENT)
         ctxt.load_verify_locations(cafile=CA_CERT)
         ctxt.load_cert_chain(CLIENT_CERTIFICATE,
                              CLIENT_PRIVATE_KEY,
-                             "client-password")
+                             CLIENT_PRIVATE_KEY_PASSWORD)
         ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = True
         cls.client_ssl_context = ctxt
@@ -2706,7 +2699,7 @@ class Http1TLSConnectorErrorTests(TestCase):
             ctxt.load_verify_locations(cafile=CA_CERT)
             ctxt.load_cert_chain(SERVER_CERTIFICATE,
                                  SERVER_PRIVATE_KEY,
-                                 "server-password")
+                                 SERVER_PRIVATE_KEY_PASSWORD)
             # ctxt.verify_mode = CERT_REQUIRED
             # ctxt.check_hostname = False
 
@@ -2758,7 +2751,7 @@ class Http1TLSConnectorErrorTests(TestCase):
             ctxt.load_verify_locations(cafile=CA_CERT)
             ctxt.load_cert_chain(SERVER_CERTIFICATE,
                                  SERVER_PRIVATE_KEY,
-                                 "server-password")
+                                 SERVER_PRIVATE_KEY_PASSWORD)
             ctxt.verify_mode = CERT_REQUIRED
 
             with ctxt.wrap_socket(socket.socket(socket.AF_INET,
@@ -2784,7 +2777,7 @@ class Http1TLSConnectorErrorTests(TestCase):
             ctxt.load_verify_locations(cafile=CA_CERT)
             ctxt.load_cert_chain(SERVER_CERTIFICATE,
                                  SERVER_PRIVATE_KEY,
-                                 "server-password")
+                                 SERVER_PRIVATE_KEY_PASSWORD)
             with ctxt.wrap_socket(socket.socket(socket.AF_INET,
                                                 socket.SOCK_STREAM),
                                   server_side=True) as server:
@@ -2819,7 +2812,7 @@ class Http1TLSListenerErrorTests(TestCase):
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'password': "server-password"}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('httpListener', {'name': 'L_HTTP1TLSListenerErrorTests',
                               'address': 'HTTP1TLSListenerErrorTests',
                               'host': 'localhost',
@@ -2850,7 +2843,7 @@ class Http1TLSListenerErrorTests(TestCase):
         ctxt.load_verify_locations(cafile=CA_CERT)
         ctxt.load_cert_chain(CLIENT_CERTIFICATE,
                              CLIENT_PRIVATE_KEY,
-                             "client-password")
+                             CLIENT_PRIVATE_KEY_PASSWORD)
         ctxt.verify_mode = CERT_REQUIRED
         ctxt.check_hostname = True
 
@@ -2934,7 +2927,7 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'password': "server-password"}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('httpListener', {'name': 'L_curl',
                               'port': cls.http_listener_port,
                               'protocolVersion': 'HTTP1',
@@ -2960,7 +2953,7 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
                             'caCertFile': CA_CERT,
                             'certFile': CLIENT_CERTIFICATE,
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
-                            'password': "client-password"}),
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
             ('httpConnector', {'name': 'C_nginx',
                                'host': 'localhost',
                                'port': cls.http_server_port,
@@ -2984,8 +2977,8 @@ class Http1AdaptorTwoRouterNginxTLS(TestCase):
         env['tls-enabled'] = ''  # Will enable TLS lines
 
         # TLS stuff
-        env['chained-pem'] = CHAINED_PEM
-        env['server-private-key-no-pass-pem'] = SERVER_KEY_NO_PASS
+        env['chained-pem'] = CHAINED_CERT
+        env['server-private-key-no-pass-pem'] = SERVER_PRIVATE_KEY_NO_PASS
         env['ssl-verify-client'] = 'on'
         env['ca-certificate'] = CA_CERT
         cls.nginx_server = cls.tester.nginxserver(config_path=NginxServer.CONFIG_FILE,
@@ -3097,7 +3090,7 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'password': "server-password"}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('httpListener', {'name': 'L_INTA',
                               'port': cls.http_listener_port,
                               'protocolVersion': 'HTTP1',
@@ -3123,7 +3116,7 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
                             'caCertFile': CA_CERT,
                             'certFile': CLIENT_CERTIFICATE,
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
-                            'password': "client-password"}),
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
             ('httpConnector', {'name': 'C_INTB',
                                'host': 'localhost',
                                'port': cls.http_server_port,
@@ -3141,7 +3134,7 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
         ssl_info['CA_CERT'] = CA_CERT
         ssl_info['SERVER_CERTIFICATE'] = SERVER_CERTIFICATE
         ssl_info['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
-        ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = "server-password"
+        ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = SERVER_PRIVATE_KEY_PASSWORD
 
         server_args = ["-Verify", "1", "-WWW"]
         cls.openssl_server = cls.tester.openssl_server(listening_port=cls.http_server_port,
@@ -3176,7 +3169,7 @@ class Http1AdaptorTwoRouterOpensslServer(TestCase):
         ssl_info['CA_CERT'] = CA_CERT
         ssl_info['CLIENT_CERTIFICATE'] = CLIENT_CERTIFICATE
         ssl_info['CLIENT_PRIVATE_KEY'] = CLIENT_PRIVATE_KEY
-        ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'] = "client-password"
+        ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'] = CLIENT_PRIVATE_KEY_PASSWORD
 
         # create a file for the openssl server to serve
         with open(os.path.join(self.openssl_server.outdir, "s_client_test.txt"),

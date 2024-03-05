@@ -35,8 +35,7 @@ from system_test import Process, unittest, QdManager, TestTimeout
 from system_test import AMQP_CONNECTOR_TYPE, AMQP_LISTENER_TYPE
 from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE, ROUTER_LINK_TYPE
 from system_test import ROUTER_TYPE
-
-from system_tests_ssl import RouterTestSslBase as SSL_TEST
+from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 CONNECTION_PROPERTIES_SYMBOL = dict()
@@ -461,9 +460,9 @@ class RouterConfigTest(TestCase):
                               'port': 9999,
                               'sslProfile': "BrokenProfile"}),
             ('sslProfile', {'name': "BrokenProfile",
-                            'caCertFile': SSL_TEST.ssl_file('ca-certificate.pem'),
-                            'certFile': SSL_TEST.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': SSL_TEST.ssl_file('client-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'password': "invalid-password"})
         ])
         cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
@@ -479,9 +478,9 @@ class RouterConfigTest(TestCase):
                                    'protocolVersion': index[1],
                                    'sslProfile': "BrokenProfile"}),
                 ('sslProfile', {'name': "BrokenProfile",
-                                'caCertFile': SSL_TEST.ssl_file('ca-certificate.pem'),
-                                'certFile': SSL_TEST.ssl_file('client-certificate.pem'),
-                                'privateKeyFile': SSL_TEST.ssl_file('client-private-key.pem'),
+                                'caCertFile': CA_CERT,
+                                'certFile': CLIENT_CERTIFICATE,
+                                'privateKeyFile': CLIENT_PRIVATE_KEY,
                                 'password': "invalid-password"})
             ])
             cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
@@ -496,7 +495,7 @@ class RouterConfigTest(TestCase):
                              'port': 9999,
                              'sslProfile': "BadCipherProfile"}),
             ('sslProfile', {'name': "BadCipherProfile",
-                            'caCertFile': SSL_TEST.ssl_file('ca-certificate.pem'),
+                            'caCertFile': CA_CERT,
                             'ciphers': "Blah-Blah-Blabbity-Blab"}),
         ])
         cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
@@ -512,7 +511,7 @@ class RouterConfigTest(TestCase):
                                   'protocolVersion': index[1],
                                   'sslProfile': "BadCipherProfile"}),
                 ('sslProfile', {'name': "BadCipherProfile",
-                                'caCertFile': SSL_TEST.ssl_file('ca-certificate.pem'),
+                                'caCertFile': CA_CERT,
                                 'ciphers': "Blah-Blah-Blabbity-Blab"}),
             ])
             cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,

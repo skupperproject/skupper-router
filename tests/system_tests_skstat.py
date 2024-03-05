@@ -21,11 +21,11 @@ import os
 import re
 import unittest
 from subprocess import PIPE
-
 from proton import Url, SSLDomain, SSLUnavailable, SASL
 from proton.utils import BlockingConnection
-
-from system_test import main_module, TIMEOUT, TestCase, Qdrouterd, DIR, Process, Logger
+from system_test import main_module, TIMEOUT, TestCase, Qdrouterd, Process, Logger
+from system_test import CA_CERT, BAD_CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CLIENT_CERTIFICATE, \
+    CLIENT_PRIVATE_KEY, CLIENT_PASSWORD_FILE, SERVER_PRIVATE_KEY_PASSWORD, CLIENT_PRIVATE_KEY_PASSWORD
 
 
 class SkstatTestBase(TestCase):
@@ -740,14 +740,6 @@ def _has_ssl():
 class SkstatSslTest(SkstatTestBase):
     """Test skstat tool output"""
 
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
-
-    @staticmethod
-    def sasl_path():
-        return os.path.join(DIR, 'sasl_configs')
-
     @classmethod
     def setUpClass(cls):
         super(SkstatSslTest, cls).setUpClass()
@@ -763,10 +755,10 @@ class SkstatSslTest(SkstatTestBase):
                         'workerThreads': 1,
                         'saslConfigName': 'tests-mech-EXTERNAL'}),
             ('sslProfile', {'name': 'server-ssl',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
 
             # 'none', 'none_s':
             ('listener', {'host': 'localhost', 'port': cls.tester.get_port()}),
@@ -792,11 +784,11 @@ class SkstatSslTest(SkstatTestBase):
         """
         args = dict(
             sasl_external=['--sasl-mechanisms', 'EXTERNAL'],
-            trustfile=['--ssl-trustfile', self.ssl_file('ca-certificate.pem')],
-            bad_trustfile=['--ssl-trustfile', self.ssl_file('bad-ca-certificate.pem')],
-            client_cert=['--ssl-certificate', self.ssl_file('client-certificate.pem')],
-            client_key=['--ssl-key', self.ssl_file('client-private-key.pem')],
-            client_pass=['--ssl-password', 'client-password'])
+            trustfile=['--ssl-trustfile', CA_CERT],
+            bad_trustfile=['--ssl-trustfile', BAD_CA_CERT],
+            client_cert=['--ssl-certificate', CLIENT_CERTIFICATE],
+            client_key=['--ssl-key', CLIENT_PRIVATE_KEY],
+            client_pass=['--ssl-password', CLIENT_PRIVATE_KEY_PASSWORD])
         args['client_cert_all'] = args['client_cert'] + args['client_key'] + args['client_pass']
 
         return args
@@ -978,11 +970,11 @@ class SkstatSslTestSslPasswordFile(SkstatSslTest):
     def get_ssl_args(self):
         args = dict(
             sasl_external=['--sasl-mechanisms', 'EXTERNAL'],
-            trustfile=['--ssl-trustfile', self.ssl_file('ca-certificate.pem')],
-            bad_trustfile=['--ssl-trustfile', self.ssl_file('bad-ca-certificate.pem')],
-            client_cert=['--ssl-certificate', self.ssl_file('client-certificate.pem')],
-            client_key=['--ssl-key', self.ssl_file('client-private-key.pem')],
-            client_pass=['--ssl-password-file', self.ssl_file('client-password-file.txt')])
+            trustfile=['--ssl-trustfile', CA_CERT],
+            bad_trustfile=['--ssl-trustfile', BAD_CA_CERT],
+            client_cert=['--ssl-certificate', CLIENT_CERTIFICATE],
+            client_key=['--ssl-key', CLIENT_PRIVATE_KEY],
+            client_pass=['--ssl-password-file', CLIENT_PASSWORD_FILE])
         args['client_cert_all'] = args['client_cert'] + args['client_key'] + args['client_pass']
 
         return args
@@ -991,14 +983,6 @@ class SkstatSslTestSslPasswordFile(SkstatSslTest):
 @unittest.skipIf(_has_ssl() is False, "Proton SSL support unavailable")
 class SkstatSslNoExternalTest(SkstatTestBase):
     """Test skstat can't connect without sasl_mech EXTERNAL"""
-
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
-
-    @staticmethod
-    def sasl_path():
-        return os.path.join(DIR, 'sasl_configs')
 
     @classmethod
     def setUpClass(cls):
@@ -1013,10 +997,10 @@ class SkstatSslNoExternalTest(SkstatTestBase):
                         'workerThreads': 1,
                         'saslConfigName': 'tests-mech-NOEXTERNAL'}),
             ('sslProfile', {'name': 'server-ssl',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('listener', {'port': cls.tester.get_port()}),
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl', 'authenticatePeer': 'no', 'requireSsl': 'yes'}),
             ('listener', {'port': cls.tester.get_port(), 'sslProfile': 'server-ssl', 'authenticatePeer': 'no', 'requireSsl': 'no'}),
@@ -1030,11 +1014,11 @@ class SkstatSslNoExternalTest(SkstatTestBase):
         See test_ssl_* below.
         """
         args = dict(
-            trustfile=['--ssl-trustfile', self.ssl_file('ca-certificate.pem')],
-            bad_trustfile=['--ssl-trustfile', self.ssl_file('bad-ca-certificate.pem')],
-            client_cert=['--ssl-certificate', self.ssl_file('client-certificate.pem')],
-            client_key=['--ssl-key', self.ssl_file('client-private-key.pem')],
-            client_pass=['--ssl-password', 'client-password'])
+            trustfile=['--ssl-trustfile', CA_CERT],
+            bad_trustfile=['--ssl-trustfile', BAD_CA_CERT],
+            client_cert=['--ssl-certificate', CLIENT_CERTIFICATE],
+            client_key=['--ssl-key', CLIENT_PRIVATE_KEY],
+            client_pass=['--ssl-password', CLIENT_PRIVATE_KEY_PASSWORD])
         args['client_cert_all'] = args['client_cert'] + args['client_key'] + args['client_pass']
 
         addrs = [self.router.addresses[i] for i in range(4)]

@@ -22,6 +22,8 @@ import os
 from subprocess import PIPE, Popen
 from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT, retry_assertion
 from system_test import unittest, QdManager, Process, CONNECTION_TYPE
+from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CA_CERT, CLIENT_CERTIFICATE, \
+    CLIENT_PRIVATE_KEY_PASSWORD, CLIENT_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
 from skupper_router.management.client import Node
 from proton import SASL
 
@@ -402,10 +404,6 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
 class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
     @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
-
-    @staticmethod
     def sasl_file(name):
         return os.path.join(DIR, 'sasl_files', name)
 
@@ -441,11 +439,11 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
                           'sslProfile': 'server-ssl-profile',
                           'saslMechanisms': 'PLAIN', 'authenticatePeer': 'yes'}),
             ('sslProfile', {'name': 'server-ssl-profile',
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'protocols': 'TLSv1.1 TLSv1.2',
-                            'password': 'server-password'}),
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
@@ -467,7 +465,7 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
             ('sslProfile', {'name': 'client-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem')}),
+                            'caCertFile': CA_CERT}),
         ])
 
         cls.routers[1].wait_router_connected('QDR.X')
@@ -486,10 +484,10 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
                  '--sasl-password=password',
                  # The following are SSL args
                  '--ssl-disable-peer-name-verify',
-                 '--ssl-trustfile=' + self.ssl_file('ca-certificate.pem'),
-                 '--ssl-certificate=' + self.ssl_file('client-certificate.pem'),
-                 '--ssl-key=' + self.ssl_file('client-private-key.pem'),
-                 '--ssl-password=client-password'],
+                 '--ssl-trustfile=' + CA_CERT,
+                 '--ssl-certificate=' + CLIENT_CERTIFICATE,
+                 '--ssl-key=' + CLIENT_PRIVATE_KEY,
+                 '--ssl-password=' + CLIENT_PRIVATE_KEY_PASSWORD],
                 name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
                 universal_newlines=True)
 
@@ -540,9 +538,6 @@ class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
 
 
 class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
 
     @staticmethod
     def sasl_file(name):
@@ -576,9 +571,9 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port(),
                           'authenticatePeer': 'no'}),
             ('sslProfile', {'name': 'server-ssl-profile',
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
@@ -600,7 +595,7 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
             ('sslProfile', {'name': 'client-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem')}),
+                            'caCertFile': CA_CERT}),
         ])
 
         cls.routers[0].wait_ports()
@@ -632,10 +627,6 @@ class RouterTestVerifyHostNameYes(RouterTestPlainSaslCommon):
 
 
 class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
-
-    @staticmethod
-    def ssl_file(name):
-        return os.path.join(DIR, 'ssl_certs', name)
 
     x_listener_port = None
 
@@ -669,10 +660,10 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                           'authenticatePeer': 'no'}),
             ('sslProfile', {'name': 'server-ssl-profile',
                             # TODO: should add a specific test, this one presumably doesnt even use it due to not doing client-certificate authentication
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
             ('router', {'workerThreads': n_worker_threads,
                         'id': 'QDR.X',
                         'mode': 'interior',
@@ -696,7 +687,7 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
                         'id': 'QDR.Y'}),
             ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': y_listener_port}),
             ('sslProfile', {'name': 'client-ssl-profile',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem')}),
+                            'caCertFile': CA_CERT}),
         ])
 
         cls.routers[0].wait_ports()
@@ -763,10 +754,10 @@ class RouterTestVerifyHostNameNo(RouterTestPlainSaslCommon):
         # re-create the ssl profile
         local_node.create({'type': 'sslProfile',
                            'name': 'client-ssl-profile',
-                           'certFile': self.ssl_file('client-certificate.pem'),
-                           'privateKeyFile': self.ssl_file('client-private-key.pem'),
-                           'password': 'client-password',
-                           'caCertFile': self.ssl_file('ca-certificate.pem')})
+                           'certFile': CLIENT_CERTIFICATE,
+                           'privateKeyFile': CLIENT_PRIVATE_KEY,
+                           'password': CLIENT_PRIVATE_KEY_PASSWORD,
+                           'caCertFile': CA_CERT})
         # re-create connector
         local_node.create({'type': 'connector',
                            'name': 'connectorToX',

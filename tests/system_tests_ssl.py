@@ -30,8 +30,10 @@ from proton import SASL, Url, SSLDomain, SSLUnavailable, ConnectionException
 from proton.utils import BlockingConnection
 
 from skupper_router.management.client import Node
-from system_test import TIMEOUT, TestCase, main_module, Qdrouterd, DIR
-from system_test import unittest, retry, CONNECTION_TYPE, ROUTER_NODE_TYPE
+from system_test import TIMEOUT, TestCase, main_module, Qdrouterd
+from system_test import unittest, retry, CONNECTION_TYPE, ROUTER_NODE_TYPE, ssl_file
+from system_test import CA_CERT, BAD_CA_CERT, CLIENT_CERTIFICATE, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, \
+    CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
 
 
 def protocol_name(proto):
@@ -76,15 +78,6 @@ class RouterTestSslBase(TestCase):
         cls.assertTrue(len(cls.PROTON_VERSIONS) > 0,
                        "Failed to find any supported protocol versions!")
         cls.ALL_VERSIONS = ' '.join(cls.PROTON_VERSIONS)
-
-    @staticmethod
-    def ssl_file(name):
-        """
-        Returns fully qualified ssl certificate file name
-        :param name:
-        :return:
-        """
-        return os.path.join(DIR, 'ssl_certs', name)
 
     @classmethod
     def get_byte_string(cls, file_path):
@@ -158,13 +151,13 @@ class RouterTestSslClient(RouterTestSslBase):
             cls.TLS_PORT_VERSION_MAP[version] = cls.tester.get_port()
             conf += [
                 ('sslProfile', {'name': f"ssl-profile-{version}",
-                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                'certFile': cls.ssl_file('server-certificate.pem'),
-                                'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                                'caCertFile': CA_CERT,
+                                'certFile': SERVER_CERTIFICATE,
+                                'privateKeyFile': SERVER_PRIVATE_KEY,
                                 'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                 'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                                 'protocols': version,
-                                'password': 'server-password'}),
+                                'password': SERVER_PRIVATE_KEY_PASSWORD}),
                 ('listener', {'host': '0.0.0.0', 'role': 'normal',
                               'port': cls.TLS_PORT_VERSION_MAP[version],
                               'authenticatePeer': 'no',
@@ -178,10 +171,10 @@ class RouterTestSslClient(RouterTestSslBase):
             conf += [
                 # TLS SASL PLAIN authentication for proton client validation
                 ('sslProfile', {'name': 'ssl-profile-tls-all',
-                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                'certFile': cls.ssl_file('server-certificate.pem'),
-                                'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                                'password': 'server-password'}),
+                                'caCertFile': CA_CERT,
+                                'certFile': SERVER_CERTIFICATE,
+                                'privateKeyFile': SERVER_PRIVATE_KEY,
+                                'password': SERVER_PRIVATE_KEY_PASSWORD}),
                 ('listener', {'host': '0.0.0.0', 'role': 'normal',
                               'port': cls.PORT_TLS_SASL,
                               'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
@@ -219,10 +212,10 @@ class RouterTestSslClient(RouterTestSslBase):
         # Preparing SSLDomain (client cert) and SASL authentication info
         domain = SSLDomain(SSLDomain.MODE_CLIENT)
         if sasl_enabled:
-            domain.set_credentials(self.ssl_file('client-certificate.pem'),
-                                   self.ssl_file('client-private-key.pem'),
-                                   'client-password')
-        domain.set_trusted_ca_db(self.ssl_file('ca-certificate.pem'))
+            domain.set_credentials(CLIENT_CERTIFICATE,
+                                   CLIENT_PRIVATE_KEY,
+                                   CLIENT_PRIVATE_KEY_PASSWORD)
+        domain.set_trusted_ca_db(CA_CERT)
         domain.set_peer_authentication(SSLDomain.VERIFY_PEER)
 
         # Restrict client to using only the given TLS protocol version.
@@ -392,10 +385,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                           'requireEncryption': 'yes', 'requireSsl': 'yes',
                           'sslProfile': 'ssl-profile-tls-all'}),
             ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
-                            'password': 'server-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
         ]
 
         # create inter-router listeners that restrict the allowed TLS version
@@ -405,11 +398,11 @@ class RouterTestSslInterRouter(RouterTestSslBase):
             cls.TLS_PORT_VERSION_MAP[version] = cls.tester.get_port()
             conf += [
                 ('sslProfile', {'name': f"ssl-profile-{version}",
-                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                'certFile': cls.ssl_file('server-certificate.pem'),
-                                'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                                'caCertFile': CA_CERT,
+                                'certFile': SERVER_CERTIFICATE,
+                                'privateKeyFile': SERVER_PRIVATE_KEY,
                                 'protocols': version,
-                                'password': 'server-password'}),
+                                'password': SERVER_PRIVATE_KEY_PASSWORD}),
                 ('listener', {'host': '0.0.0.0', 'role': 'inter-router',
                               'port': cls.TLS_PORT_VERSION_MAP[version],
                               'authenticatePeer': 'yes', 'saslMechanisms': 'PLAIN',
@@ -430,10 +423,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                           cls.tester.get_port()}),
 
             ('sslProfile', {'name': "ssl-profile-tls-all",
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('client-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                            'password': 'client-password'}),
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
 
             ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
                            'port': cls.PORT_TLS_ALL,
@@ -459,10 +452,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                               cls.tester.get_port()}),
 
                 ('sslProfile', {'name': "ssl-profile-all",
-                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                'certFile': cls.ssl_file('client-certificate.pem'),
-                                'privateKeyFile': cls.ssl_file('client-private-key.pem'),
-                                'password': 'client-password'}),
+                                'caCertFile': CA_CERT,
+                                'certFile': CLIENT_CERTIFICATE,
+                                'privateKeyFile': CLIENT_PRIVATE_KEY,
+                                'password': CLIENT_PRIVATE_KEY_PASSWORD}),
 
                 ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
                                'port': cls.TLS_PORT_VERSION_MAP[version],
@@ -484,11 +477,11 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                               cls.tester.get_port()}),
 
                 ('sslProfile', {'name': f"ssl-profile-{version}",
-                                'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                                'certFile': cls.ssl_file('client-certificate.pem'),
-                                'privateKeyFile': cls.ssl_file('client-private-key.pem'),
+                                'caCertFile': CA_CERT,
+                                'certFile': CLIENT_CERTIFICATE,
+                                'privateKeyFile': CLIENT_PRIVATE_KEY,
                                 'protocols': version,
-                                'password': 'client-password'}),
+                                'password': CLIENT_PRIVATE_KEY_PASSWORD}),
 
                 ('connector', {'host': '0.0.0.0', 'role': 'inter-router',
                                'port': cls.TLS_PORT_VERSION_MAP[version],
@@ -671,12 +664,12 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
                           'sslProfile': 'ssl-profile-tls-all'}),
             # SSL Profile for all TLS versions (protocols element not defined)
             ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': 'server-password'})
+                            'password': SERVER_PRIVATE_KEY_PASSWORD})
         ])
 
         # Router B has a connector to listener that allows all protocols but will not verify hostname.
@@ -703,7 +696,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
             # router to connect. The object is to trigger a specific failure in the ssl
             # setup chain of calls to pn_ssl_domain_* functions.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate-INVALID-FILENAME.pem'),
+                            'caCertFile': ssl_file('ca-certificate-INVALID-FILENAME.pem'),
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'})
         ])
@@ -835,12 +828,12 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
                           'sslProfile': 'ssl-profile-tls-all'}),
             # SSL Profile for all TLS versions (protocols element not defined)
             ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('ca-certificate.pem'),
-                            'certFile': cls.ssl_file('server-certificate.pem'),
-                            'privateKeyFile': cls.ssl_file('server-private-key.pem'),
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': 'server-password'})
+                            'password': SERVER_PRIVATE_KEY_PASSWORD})
         ])
 
         # Router B has a connector to listener that allows all protocols but will not verify hostname.
@@ -856,7 +849,7 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
             # SSL Profile with caCertFile to cert that does not sign the server cert. The correct path here would allow this
             # router to connect. The object is to trigger a certificate verification failure while hostname verification is off.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': cls.ssl_file('bad-ca-certificate.pem'),
+                            'caCertFile': BAD_CA_CERT,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'})
         ])
