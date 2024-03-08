@@ -118,10 +118,8 @@ uint64_t qdr_delivery_disposition(const qdr_delivery_t *delivery)
 void qdr_delivery_incref(qdr_delivery_t *delivery, const char *label)
 {
     uint32_t rc = sys_atomic_inc(&delivery->ref_count);
-    qdr_link_t *link = qdr_delivery_link(delivery);
-    if (link)
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery incref:    rc:%" PRIu32 "  %s",
-               DLV_ARGS(delivery), rc + 1, label);
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery incref:    rc:%" PRIu32 "  %s",
+           DLV_ARGS(delivery), rc + 1, label);
 }
 
 
@@ -207,7 +205,9 @@ void qdr_delivery_remote_state_updated(qdr_core_t *core, qdr_delivery_t *deliver
     // the given ref rather than increment a new one.
     //
     if (!ref_given)
-        qdr_delivery_incref(delivery, "qdr_delivery_update_disposition - add to action list");
+        qdr_delivery_incref(delivery, "qdr_delivery_remote_state_updated - add to action list");
+    else
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery transfer: qdr_delivery_remote_state_updated add to action-list", DLV_ARGS(delivery));
 
     qdr_action_enqueue(core, action);
 }
