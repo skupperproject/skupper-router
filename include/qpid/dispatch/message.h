@@ -754,20 +754,6 @@ void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers)
 int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, int limit);
 
 
-/**
- * Indicate whether this stream should be resumed from a stalled state.  This will be the case
- * if (a) the stream was stalled due to being full, and (b) the payload has shrunk down below
- * the resume threshold.
- *
- * If the result is true, there is a side effect of clearing the 'stalled' state.
- *
- * @param stream Pointer to the message
- * @return true Yes, the stream was stalled and buffer production may continue
- * @return false No, the stream was not stalled or it was stalled and is not yet ready to resume
- */
-bool qd_message_resume_from_stalled(qd_message_t *stream);
-
-
 typedef enum {
     QD_ACTIVATION_NONE = 0,
     QD_ACTIVATION_AMQP,
@@ -784,33 +770,31 @@ typedef struct {
  * Tell the message stream which connection is consuming its buffers.
  *
  * @param stream Pointer to the message
- * @param connection Pointer to the qd_connection that is consuming this stream's buffers
+ * @param activation Parameters for activating the consuming I/O thread
  */
 void qd_message_set_consumer_activation(qd_message_t *stream, qd_message_activation_t *activation);
 
 /**
- * Return the connection that is consuming this message stream's buffers.
+ * Cancel the activation. No further activations will be occur on return from this call.
  *
  * @param stream Pointer to the message
- * @return qd_connection_t* Pointer to the connection that is consuming buffers from this stream
  */
-void qd_message_get_consumer_activation(const qd_message_t *stream, qd_message_activation_t *activation);
+void qd_message_cancel_consumer_activation(qd_message_t *stream);
 
 /**
  * Tell the message stream which connection is producing its buffers.
  *
  * @param stream Pointer to the message
- * @param connection Pointer to the qd_connection that is consuming this stream's buffers
+ * @param activation Parameters for activating the producing I/O thread
  */
 void qd_message_set_producer_activation(qd_message_t *stream, qd_message_activation_t *activation);
 
 /**
- * Return the connection that is producing this message stream's buffers.
+ * Cancel the activation. No further activations will occur on return from this call.
  *
  * @param stream Pointer to the message
- * @return qd_connection_t* Pointer to the connection that is consuming buffers from this stream
  */
-void qd_message_get_producer_activation(const qd_message_t *stream, qd_message_activation_t *activation);
+void qd_message_cancel_producer_activation(qd_message_t *stream);
 
 ///@}
 

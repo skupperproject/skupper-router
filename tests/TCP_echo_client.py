@@ -177,6 +177,8 @@ class TcpEchoClient:
                     self.logger.log('%s Failed to connect to host:%s port:%d - Retrying...'
                                     % (self.prefix, self.host, self.port))
 
+            laddr = self.sock.getsockname()
+            self.logger.log(f"{self.prefix} Connection from {laddr[0]}:{laddr[1]} to {self.host}:{self.port} active!")
             self.sock.setblocking(False)
 
             # set up selector

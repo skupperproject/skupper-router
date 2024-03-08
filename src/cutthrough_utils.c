@@ -25,7 +25,7 @@
 #include "adaptors/tcp_lite/tcp_lite.h"
 
 
-static void activate_connection(qd_message_activation_t *activation, qd_direction_t dir)
+static void activate_connection(const qd_message_activation_t *activation, qd_direction_t dir)
 {
     switch (activation->type) {
     case QD_ACTIVATION_NONE:
@@ -77,20 +77,13 @@ static void activate_connection(qd_message_activation_t *activation, qd_directio
 }
 
 
-void cutthrough_notify_buffers_produced_inbound(qd_message_t *msg)
+void cutthrough_notify_buffers_produced_inbound(const qd_message_activation_t *activation)
 {
-    qd_message_activation_t activation;
-    qd_message_get_consumer_activation(msg, &activation);
-    activate_connection(&activation, QD_OUTGOING);
+    activate_connection(activation, QD_OUTGOING);
 }
 
 
-void cutthrough_notify_buffers_consumed_outbound(qd_message_t *msg)
+void cutthrough_notify_buffers_consumed_outbound(const qd_message_activation_t *activation)
 {
-    bool unstall = qd_message_resume_from_stalled(msg);
-    if (unstall) {
-        qd_message_activation_t activation;
-        qd_message_get_producer_activation(msg, &activation);
-        activate_connection(&activation, QD_INCOMING);
-    }
+    activate_connection(activation, QD_INCOMING);
 }

@@ -160,6 +160,7 @@ void qdr_delivery_decref(qdr_core_t *core, qdr_delivery_t *delivery, const char 
         // The delivery deletion must occur inside the core thread.
         // Queue up an action to do the work.
         //
+        assert(!delivery->in_message_activation);  // you forgot to remove delivery from message activation!
         qdr_action_t *action = qdr_action(qdr_delete_delivery_CT, "delete_delivery");
         action->args.delivery.delivery = delivery;
         action->label = label;
@@ -679,8 +680,10 @@ void qdr_delivery_decref_CT(qdr_core_t *core, qdr_delivery_t *dlv, const char *l
     qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery decref_CT: rc:%" PRIu32 " %s", DLV_ARGS(dlv),
            ref_count - 1, label);
 
-    if (ref_count == 1)
+    if (ref_count == 1) {
+        assert(!dlv->in_message_activation);  // you forgot to remove delivery from message activation!
         qdr_delete_delivery_internal_CT(core, dlv);
+    }
 }
 
 
