@@ -131,7 +131,7 @@ static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv);
 static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener, void *context);
 static void on_tls_connection_secured(qd_tls_t *tls, void *user_context);
 static char *get_tls_negotiated_alpn(qd_message_t *msg);  // caller must free() returned string!
-
+static int setup_tls_session(tcplite_connection_t *conn, const qd_tls_domain_t *parent_domain, const char *alpn_protocol);
 
 //=================================================================================
 // Thread assertions
@@ -484,26 +484,34 @@ static void free_connection_IO(void *context)
     free_tcp_resource(&conn->common);
 }
 
-
-static void close_raw_connection_XSIDE_IO(tcplite_connection_t *conn)
+// Initate close of the raw connection.
+//
+// The close will be complete when the PN_RAW_CONNECTION_DISCONNECTED event is handled. At that point any associated
+// connection condition information will be read from the raw conn and written to the flow log.
+//
+// @param conn Holds the raw connection to close
+// @param condition Optional condition identifying the reason the connection was closed
+// @param description Optional description assocated with condition
+//
+static void close_raw_connection(tcplite_connection_t *conn, const char *condition, const char *description)
 {
     ASSERT_RAW_IO;
-    if (conn->state != XSIDE_CLOSING) {
-        set_state_XSIDE_IO(conn, XSIDE_CLOSING);
-        if (!!conn->raw_conn) {
-            CLEAR_ATOMIC_FLAG(&conn->raw_opened);
-            pn_raw_connection_close(conn->raw_conn);
-            drain_read_buffers_XSIDE_IO(conn->raw_conn);
-            drain_write_buffers_XSIDE_IO(conn->raw_conn);
 
-            // note: this disables the raw connection event handler. No further PN_RAW_CONNECTION_* events will occur,
-            // including DISCONNECTED!
-            sys_mutex_lock(&conn->activation_lock);
-            pn_raw_connection_set_context(conn->raw_conn, 0);
-            conn->raw_conn = 0;
-            sys_mutex_unlock(&conn->activation_lock);
+    assert(conn->raw_conn);
+    if (condition) {
+        pn_condition_t *cond = pn_raw_connection_condition(conn->raw_conn);
+        if (!!cond) {
+            (void) pn_condition_set_name(cond, condition);
+            if (description) {
+                (void) pn_condition_set_description(cond, description);
+            }
         }
     }
+
+    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+    pn_raw_connection_close(conn->raw_conn);
+
+    // Connection cleanup occurs on the PN_RAW_CONNECTION_DISCONNECTED event
 }
 
 // Note: if no_delay is true, conn will be freed by this function
@@ -511,7 +519,23 @@ static void close_raw_connection_XSIDE_IO(tcplite_connection_t *conn)
 static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 {
     ASSERT_RAW_IO;
-    close_raw_connection_XSIDE_IO(conn);
+
+    if (conn->state != XSIDE_CLOSING)
+        set_state_XSIDE_IO(conn, XSIDE_CLOSING);
+
+    if (!!conn->raw_conn) {
+        CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+        pn_raw_connection_close(conn->raw_conn);
+        drain_read_buffers_XSIDE_IO(conn->raw_conn);
+        drain_write_buffers_XSIDE_IO(conn->raw_conn);
+
+        // note: this disables the raw connection event handler. No further PN_RAW_CONNECTION_* events will occur,
+        // including DISCONNECTED!
+        sys_mutex_lock(&conn->activation_lock);
+        pn_raw_connection_set_context(conn->raw_conn, 0);
+        conn->raw_conn = 0;
+        sys_mutex_unlock(&conn->activation_lock);
+    }
 
     free(conn->reply_to);
 
@@ -1119,55 +1143,16 @@ static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qd
         return dispo;
     }
 
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " CSIDE new outbound delivery", DLV_ARGS(delivery));
+
     qd_message_t          *msg = qdr_delivery_message(delivery);
     tcplite_connection_t *conn = new_tcplite_connection_t();
     ZERO(conn);
 
-    conn->conn_id  = qd_server_allocate_connection_id(tcplite_context->server);
-
-    // Catch TLS configuration issues early so we can avoid initializing the entire
-    // connection.
-    //
-    if (cr->tls_domain) {
-        bool failed = true;
-        // note qd_tls_domain_clone() will log error if it fails
-        conn->tls_domain = qd_tls_domain_clone(cr->tls_domain);
-        if (conn->tls_domain) {
-            int rc = 0;
-            assert(!conn->alpn_protocol);
-            conn->alpn_protocol = get_tls_negotiated_alpn(msg);
-            if (conn->alpn_protocol) {
-                const char *alpn_protocols[] = {conn->alpn_protocol};
-                rc = qd_tls_set_alpn_protocols(conn->tls_domain, alpn_protocols, 1);
-                if (rc != 0) {
-                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR,
-                           "[%" PRIu64 "] tcpConnector %s: failed to configure ALPN protocol '%s' (%d)",
-                           conn->conn_id, cr->adaptor_config->name, conn->alpn_protocol, rc);
-                }
-            }
-            if (rc == 0) {
-                // note: qd_tls() will log error if it fails
-                conn->tls = qd_tls(conn->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
-                if (conn->tls) {
-                    failed = false;
-                }
-            }
-        }
-        if (failed) {
-            qd_tls_domain_decref(conn->tls_domain);
-            qd_tls_free2(conn->tls);
-            free(conn->alpn_protocol);
-            free_tcplite_connection_t(conn);
-            qd_message_set_send_complete(msg);
-            return PN_RELEASED;  // redeliver somewhere else!
-        }
-    }
-
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " CSIDE new outbound delivery", DLV_ARGS(delivery));
-
     qdr_delivery_incref(delivery, "CORE_deliver_outbound CSIDE");
     qdr_delivery_set_context(delivery, conn);
 
+    conn->conn_id  = qd_server_allocate_connection_id(tcplite_context->server);
     conn->common.context_type = TL_CONNECTION;
     conn->common.parent       = (tcplite_common_t*) cr;
 
@@ -1587,10 +1572,17 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
         switch (conn->state) {
         case LSIDE_INITIAL:
             if (IS_ATOMIC_FLAG_SET(&conn->raw_opened)) { // raw connection is active
-                if (conn->tls) {
-                    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] LSIDE_IO performing TLS handshake", conn->conn_id);
-                    set_state_XSIDE_IO(conn, LSIDE_TLS_HANDSHAKE);
-                    repeat = true;
+                tcplite_listener_t *li = (tcplite_listener_t *) conn->common.parent;
+                if (li->tls_domain) {
+                    if (setup_tls_session(conn, li->tls_domain, 0) != 0) {
+                        // TLS setup failed: check logs for details
+                        close_raw_connection(conn, "TLS-connection-failed", "Error loading credentials");
+                        set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
+                    } else {
+                        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] LSIDE_IO performing TLS handshake", conn->conn_id);
+                        set_state_XSIDE_IO(conn, LSIDE_TLS_HANDSHAKE);
+                        repeat = true;
+                    }
                 } else {
                     link_setup_LSIDE_IO(conn);
                     set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
@@ -1614,6 +1606,7 @@ static void connection_run_LSIDE_IO(tcplite_connection_t *conn)
                     // TLS failed! Error logged, raw connection close initiated and error condition set. Clean up in
                     // DISCONNECTED raw connection event.
                     //
+                    set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
                 } else if (qd_tls_is_secure(conn->tls)) {
                     //
                     // Handshake completed, begin the setup of the inbound and outbound links for this connection.
@@ -1687,6 +1680,19 @@ static void connection_run_CSIDE_IO(tcplite_connection_t *conn)
         switch (conn->state) {
         case CSIDE_INITIAL:
             if (IS_ATOMIC_FLAG_SET(&conn->raw_opened)) { // raw connection is active
+                tcplite_connector_t *cr = (tcplite_connector_t *) conn->common.parent;
+                if (cr->tls_domain) {
+                    assert(conn->outbound_stream);
+                    char *alpn = get_tls_negotiated_alpn(conn->outbound_stream);
+                    int rc = setup_tls_session(conn, cr->tls_domain, alpn);
+                    free(alpn);
+                    if (rc != 0) {
+                        // TLS setup failed: check logs for details
+                        close_raw_connection(conn, "TLS-connection-failed", "Error loading credentials");
+                        set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
+                        break;
+                    }
+                }
                 link_setup_CSIDE_IO(conn, conn->outbound_delivery);
                 set_state_XSIDE_IO(conn, CSIDE_LINK_SETUP);
             }
@@ -1793,8 +1799,12 @@ static void on_tls_connection_secured(qd_tls_t *tls, void *user_context)
     if (conn->core_conn && conn->core_conn->connection_info) {
         qd_tls_update_connection_info(conn->tls, conn->core_conn->connection_info);
     }
-    if (!conn->alpn_protocol)
+
+    // check if we need to propagate client ALPN to server
+    if (conn->listener_side) {
+        assert(!conn->alpn_protocol);
         qd_tls_get_alpn_protocol(conn->tls, &conn->alpn_protocol);
+    }
 }
 
 // Check for the ALPN value negotiated on the CSIDE TLS connection (optional).
@@ -1828,6 +1838,37 @@ static char *get_tls_negotiated_alpn(qd_message_t *msg)
     qd_parse_free(ap);
     qd_iterator_free(ap_iter);
     return alpn_protocol;
+}
+
+/**
+ * Create a new TLS session for the given connection.
+ *
+ * @param parent_domain Reference to parent connector/listener TLS domain context
+ * @param alpn_protocol If CSIDE the optional alpn protocol value to pass to the remote server
+ *
+ * @return 0 on success, non-zero on error
+ */
+static int setup_tls_session(tcplite_connection_t *conn, const qd_tls_domain_t *parent_domain, const char *alpn_protocol)
+{
+    conn->tls_domain = qd_tls_domain_clone(parent_domain);
+    if (!conn->tls_domain)
+        return -1;  // error logged in qd_tls_domain_clone()
+
+    if (alpn_protocol) {
+        const char *alpn_protocols[] = {alpn_protocol};
+        int rc = qd_tls_set_alpn_protocols(conn->tls_domain, alpn_protocols, 1);
+        if (rc != 0) {
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR,
+                   "[%" PRIu64 "] failed to configure ALPN protocol '%s' (%d)", conn->conn_id, alpn_protocol, rc);
+            return -1;
+        }
+    }
+
+    conn->tls = qd_tls(conn->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
+    if (!conn->tls)
+        return -1;  // error logged in qd_tls()
+
+    return 0;
 }
 
 
@@ -1915,29 +1956,6 @@ static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listene
 
     ZERO(conn);
     conn->conn_id  = qd_server_allocate_connection_id(tcplite_context->server);
-
-    // Catch TLS configuration issues early so we can avoid initializing the entire
-    // connection.
-    //
-    if (li->tls_domain) {
-        bool failed = true;
-        conn->tls_domain = qd_tls_domain_clone(li->tls_domain);
-        if (conn->tls_domain) {
-            conn->tls = qd_tls(conn->tls_domain, conn, conn->conn_id, on_tls_connection_secured);
-            if (conn->tls) {
-                failed = false;
-            } else {
-                qd_tls_domain_decref(conn->tls_domain);
-            }
-        }
-        if (failed) {
-            // qd_tls(_domain_clone) will log the appropriate error message
-            free_tcplite_connection_t(conn);
-            qd_adaptor_listener_deny_conn(listener, pn_listener);
-            return;
-        }
-    }
-
     conn->common.context_type = TL_CONNECTION;
     conn->common.parent       = (tcplite_common_t*) li;
 
@@ -2129,14 +2147,7 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
             if (final_outcome && disp != PN_ACCEPTED) {
                 // The delivery failed - this is unrecoverable.
                 if (!!conn->raw_conn) {
-                    // set the raw connection condition info so it will appear in the vanflow logs
-                    // when the connection disconnects
-                    pn_condition_t *cond = pn_raw_connection_condition(conn->raw_conn);
-                    if (!!cond) {
-                        (void) pn_condition_set_name(cond, "delivery-failed");
-                        (void) pn_condition_set_description(cond, "destination unreachable");
-                    }
-                    pn_raw_connection_close(conn->raw_conn);
+                    close_raw_connection(conn, "delivery-failed", "destination unreachable");
                     // clean stuff up when DISCONNECT event arrives
                 }
             } else {
