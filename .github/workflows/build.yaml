@@ -41,18 +41,28 @@ env:
   protonBranch: "${{ github.event.inputs.protonBranch || 'main' }}"
 
 jobs:
+
+######################
+### Ubuntu Compile ###
+######################
+
   compile:
-    name: "Compile (${{matrix.os}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}})"
+    name: "Compile (${{matrix.os}}, ${{matrix.buildType}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}})"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        buildType: [Debug]
-        runtimeCheck: [asan]
+        buildType: [Debug, RelWithDebInfo]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
+        exclude:
+          - buildType: Debug
+            runtimeCheck: tsan
+          - buildType: RelWithDebInfo
+            runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -141,7 +151,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx
+          sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx libunwind-dev
 
       - name: Zero ccache stats
         run: ccache -z
@@ -197,21 +207,31 @@ jobs:
           name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
           path: /tmp/archive.tar.xz
 
+
+###################
+### Ubuntu Test ###
+###################
+
   test:
-    name: 'Test (${{matrix.os}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})'
+    name: 'Test (${{matrix.os}}, ${{matrix.buildType}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})'
     runs-on: ${{ matrix.os }}
     needs: [compile]
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        buildType: [Debug]
-        runtimeCheck: [asan]
+        buildType: [Debug, RelWithDebInfo]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
         shard: [1, 2]
         shards: [2]
+        exclude:
+          - buildType: Debug
+            runtimeCheck: tsan
+          - buildType: RelWithDebInfo
+            runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -269,7 +289,7 @@ jobs:
         run: |
           sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
-
+          sudo sysctl -w vm.mmap_rnd_bits=28
           ctest --timeout 1200 -V --output-junit=Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
@@ -304,6 +324,11 @@ jobs:
           name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
+
+
+####################
+### Raspberry PI ###
+####################
 
   compile_and_test_pi5:
     name: "Compile and Test on Pi 5 (aarch64 on Pi 5 proton main)"
@@ -450,6 +475,11 @@ jobs:
           path: |
             **/coredump*
 
+
+####################
+### Fedora Tests ###
+####################
+
   compile_and_test:
     name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.runtimeCheck}}, ${{matrix.cc}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
     runs-on: ${{ matrix.os }}
@@ -462,15 +492,15 @@ jobs:
         cc: [gcc]
         cxx: [g++]
         python: [python3.11]
-        buildType: [RelWithDebInfo]
-        runtimeCheck: [asan, tsan]
+        buildType: [RelWithDebInfo, Debug]
+        runtimeCheck: [OFF]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
         include:
-          # CentOS 9
+          # CentOS 9: Coverage Proton-main 1 of 2
           - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream9
@@ -483,6 +513,7 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
             shards: 2
+          # CentOS 9: Coverage Proton-main 2 of 2
           - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream9
@@ -495,7 +526,7 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
-          # CentOS 8
+          # CentOS 8: Release Proton-main 1 of 2
           - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
@@ -507,6 +538,7 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
             shards: 2
+          # CentOS 8: Release Proton-main 2 of 2
           - os: ubuntu-22.04
             container: 'centos'
             containerTag: stream8
@@ -518,43 +550,43 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
-          - os: ubuntu-22.04
-            container: 'centos'
-            containerTag: stream8
-            cc: gcc
-            cxx: g++
-            python: python3
-            buildType: RelWithDebInfo
-            runtimeCheck: OFF
-            protonGitRef: 0.39.0
-            shard: 1
-            shards: 2
-          - os: ubuntu-22.04
-            container: 'centos'
-            containerTag: stream8
-            cc: gcc
-            cxx: g++
-            python: python3
-            buildType: RelWithDebInfo
-            runtimeCheck: OFF
-            protonGitRef: 0.39.0
-            shard: 2
-            shards: 2
-          # unittest coverage
-          - os: ubuntu-22.04
-            container: 'fedora'
-            containerTag: 39
-            cc: gcc
-            cxx: g++
-            python: python3.12
-            buildType: Coverage
-            covType: unit
-            runtimeCheck: OFF
-            protonGitRef: 0.39.0
-            routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|adaptor_buffer_test|router_engine_test|management_test|router_policy_test|test_command'"
-            shard: 1
-            shards: 1
-          # clang
+          # - os: ubuntu-22.04
+          #   container: 'centos'
+          #   containerTag: stream8
+          #   cc: gcc
+          #   cxx: g++
+          #   python: python3
+          #   buildType: RelWithDebInfo
+          #   runtimeCheck: OFF
+          #   protonGitRef: 0.39.0
+          #   shard: 1
+          #   shards: 2
+          # - os: ubuntu-22.04
+          #   container: 'centos'
+          #   containerTag: stream8
+          #   cc: gcc
+          #   cxx: g++
+          #   python: python3
+          #   buildType: RelWithDebInfo
+          #   runtimeCheck: OFF
+          #   protonGitRef: 0.39.0
+          #   shard: 2
+          #   shards: 2
+          # # unittest coverage
+          # - os: ubuntu-22.04
+          #   container: 'fedora'
+          #   containerTag: 39
+          #   cc: gcc
+          #   cxx: g++
+          #   python: python3.12
+          #   buildType: Coverage
+          #   covType: unit
+          #   runtimeCheck: OFF
+          #   protonGitRef: 0.39.0
+          #   routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|adaptor_buffer_test|router_engine_test|management_test|router_policy_test|test_command'"
+          #   shard: 1
+          #   shards: 1
+          # # clang
           #- os: ubuntu-22.04
           #  container: 'fedora'
           #  containerTag: 39
@@ -867,6 +899,11 @@ jobs:
           path: |
             **/coredump*
 
+
+######################
+### Python Checker ###
+######################
+
   python:
     name: 'Python Checker (${{ matrix.os }})'
     runs-on: '${{ matrix.os }}'
@@ -922,6 +959,11 @@ jobs:
       - name: CTest -R python-checker
         working-directory: ${{env.DispatchBuildDir}}
         run: ctest -VV -R python-checker
+
+
+###################################
+### Profile Guided Optimization ###
+###################################
 
   pgo:
     name: Profile Guided Optimization
@@ -1033,6 +1075,11 @@ jobs:
       - name: skupper-router cmake build/install
         run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
 
+
+###################################
+### AMD64 Container Image Build ###
+###################################
+
   container_amd64:
     name: amd64 container image
     runs-on: ubuntu-latest
@@ -1099,6 +1146,11 @@ jobs:
         run: |
           podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock docker.io/anchore/grype:latest \
             --only-fixed --fail-on low ${{ env.ImageName }}
+
+
+####################################
+### ARM 64 Container Image Build ###
+####################################
 
   container_arm64:
     name: arm64 container image
@@ -1197,6 +1249,11 @@ jobs:
           man skrouterd.conf
           man skstat
           man skmanage
+
+
+###########
+### RAT ###
+###########
 
   rat_check:
     name: RAT Check
