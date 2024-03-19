@@ -481,7 +481,7 @@ jobs:
 ####################
 
   compile_and_test:
-    name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.runtimeCheck}}, ${{matrix.cc}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
+    name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.buildType}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
