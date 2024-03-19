@@ -713,13 +713,13 @@ static void grant_read_buffers_XSIDE_IO(tcplite_connection_t *conn, const size_t
 }
 
 
-static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_message_t *stream, bool *blocked)
+static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_message_t *stream, bool *read_closed)
 {
     ASSERT_RAW_IO;
     uint64_t octet_count = 0;
+    *read_closed = false;
 
     if (qd_message_can_produce_buffers(stream)) {
-        *blocked = false;
         qd_buffer_list_t qd_buffers = DEQ_EMPTY;
         pn_raw_buffer_t  raw_buffers[RAW_BUFFER_BATCH_SIZE];
         size_t           count;
@@ -742,12 +742,15 @@ static uint64_t produce_read_buffers_XSIDE_IO(tcplite_connection_t *conn, qd_mes
             count = pn_raw_connection_take_read_buffers(conn->raw_conn, raw_buffers, RAW_BUFFER_BATCH_SIZE);
         }
 
+        // ISSUE-1446: it is only safe to check pn_raw_connection_is_read_closed() after all read buffers are drained since
+        // the connection can be marked closed while read buffers are still pending in the raw connection.
+        //
+        *read_closed = pn_raw_connection_is_read_closed(conn->raw_conn);
+
         if (!DEQ_IS_EMPTY(qd_buffers)) {
             //qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] produce_read_buffers_XSIDE_IO - Producing %ld buffers", conn->conn_id, DEQ_SIZE(qd_buffers));
             qd_message_produce_buffers(stream, &qd_buffers);
         }
-    } else {
-        *blocked = true;
     }
 
     return octet_count;
@@ -1240,14 +1243,14 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         //
         // Produce available read buffers into the inbound stream
         //
+        bool read_closed = false;
         bool was_blocked = window_full(conn);
-        bool blocked;
-        uint64_t octet_count = produce_read_buffers_XSIDE_IO(conn, conn->inbound_stream, &blocked);
+        uint64_t octet_count = produce_read_buffers_XSIDE_IO(conn, conn->inbound_stream, &read_closed);
         conn->inbound_octets += octet_count;
 
         if (octet_count > 0) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', octet_count);
-            if (!was_blocked && window_full(conn)) {
+            if (!was_blocked && window_full(conn) && !read_closed) {
                 conn->window.closed_count += 1;
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
                        DLV_ARGS(conn->inbound_delivery), conn->inbound_octets,
@@ -1271,8 +1274,8 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         // If the raw connection is read-closed and the last produce did not block, settle and complete
         // the inbound stream/delivery and close out the inbound half of the connection.
         //
-        if (pn_raw_connection_is_read_closed(conn->raw_conn) && !blocked) {
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Read-closed - close inbound delivery", conn->conn_id);
+        if (read_closed) {
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Raw conn read-closed - close inbound delivery", DLV_ARGS(conn->inbound_delivery));
             qd_message_set_receive_complete(conn->inbound_stream);
             qdr_delivery_continue(tcplite_context->core, conn->inbound_delivery, false);
             qdr_delivery_set_context(conn->inbound_delivery, 0);
