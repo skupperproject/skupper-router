@@ -58,9 +58,10 @@ struct qd_tls_t {
     qd_tls_on_secure_cb_t *on_secure_cb;
     bool                   tls_has_output;
     bool                   tls_error;
-    bool                   output_eos;      // pn_tls_close_output() called
-    bool                   input_drained;   // no more decrypted output, raw conn read closed
-    bool                   output_flushed;  // encrypt done, raw conn write closed
+    bool                   output_eos;       // pn_tls_close_output() called
+    bool                   raw_read_drained; // raw conn read closed and all buffer read
+    bool                   input_drained;    // no more decrypted output, raw conn read closed
+    bool                   output_flushed;   // encrypt done, raw conn write closed
 
     uint64_t encrypted_output_bytes;
     uint64_t encrypted_input_bytes;
@@ -1274,8 +1275,13 @@ int qd_tls_do_io2(qd_tls_t                      *tls,
         if (capacity > 0 && (!pn_tls_is_secure(tls->tls_session) || input_data != 0)) {
             size_t pushed = 0;
             total_octets  = 0;
-            while (pushed < capacity && pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
-                if (pn_buf_desc.size) {
+            while (pushed < capacity) {
+                size_t took = pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1);
+                if (took != 1) {
+                    // No more read buffers available. Now it is safe to check if the raw connection has closed
+                    tls->raw_read_drained = pn_raw_connection_is_read_closed(raw_conn);
+                    break;
+                } else if (pn_buf_desc.size) {
                     total_octets += pn_buf_desc.size;
                     given = pn_tls_give_decrypt_input_buffers(tls->tls_session, &pn_buf_desc, 1);
                     assert(given == 1);
@@ -1427,6 +1433,8 @@ int qd_tls_do_io2(qd_tls_t                      *tls,
         return -1;
     }
 
+    // check if the output (encrypt) side is done
+    //
     if (tls->output_eos && !pn_tls_is_encrypt_output_pending(tls->tls_session)) {
         // We closed the encrypt side of the TLS connection and we've sent all output
         tls->output_flushed = true;
@@ -1437,9 +1445,12 @@ int qd_tls_do_io2(qd_tls_t                      *tls,
         }
     }
 
-    if (pn_tls_is_input_closed(tls->tls_session)
-        || (pn_raw_connection_is_read_closed(raw_conn) && !pn_tls_is_decrypt_output_pending(tls->tls_session))) {
-        // TLS will not take any more encrypted input - drain the raw conn input
+    // check for end of input (decrypt done)
+    //
+    if (pn_tls_is_input_closed(tls->tls_session)) {
+        // TLS clean close signalled by remote. Do not read any more data (prevent truncation attack).
+        //
+        tls->input_drained = true;
         if (!pn_raw_connection_is_read_closed(raw_conn)) {
             qd_log(tls->log_module, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] TLS input closed - closing read side of raw connection", tls->conn_id);
@@ -1448,8 +1459,12 @@ int qd_tls_do_io2(qd_tls_t                      *tls,
         while (pn_raw_connection_take_read_buffers(raw_conn, &pn_buf_desc, 1) == 1) {
             qd_buffer_free(_pn_buf_desc_take_buffer(&pn_buf_desc));
         }
-
+    } else if (tls->raw_read_drained && !pn_tls_is_decrypt_output_pending(tls->tls_session)) {
+        // Unclean close: remote simply dropped the connection. Done reading remaining decrypted output.
+        //
         tls->input_drained = true;
+        qd_log(tls->log_module, QD_LOG_DEBUG,
+               "[C%" PRIu64 "] TLS input closed", tls->conn_id);
     }
 
     return tls->input_drained && tls->output_flushed ? QD_TLS_DONE : 0;
