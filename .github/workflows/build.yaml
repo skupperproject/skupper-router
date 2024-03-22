@@ -1095,7 +1095,7 @@ jobs:
 
       - name: Install podman
         run: |
-          brew install podman
+          brew install podman@4.9.3
           brew services start podman
           echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
           echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
