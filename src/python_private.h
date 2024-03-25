@@ -35,11 +35,6 @@
 #define QD_PY_INT_2_INT64(PO) ((int64_t)PyLong_AsLongLong(PO))
 #endif
 
-// Convert a Python string type to a C string.  The resulting string may be
-// UTF-8 encoded.  Caller must free returned string buffer.  Returns NULL on
-// failure
-char *py_string_2_c(PyObject *py_str);
-
 // Convert the string representation of an arbitrary Python type object to a
 // null terminated C string.  Equivalent to calling 'str(o)' in Python.  The
 // resulting string may be UTF-8 encoded. Caller must free the returned string

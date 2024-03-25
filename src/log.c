@@ -25,7 +25,6 @@
 #include "entity.h"
 #include "entity_cache.h"
 #include "log_private.h"
-#include "server_private.h"
 
 #include "qpid/dispatch/alloc.h"
 #include "qpid/dispatch/atomic.h"
@@ -34,6 +33,7 @@
 #include "qpid/dispatch/internal/annotations.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/amqp_adaptor.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -621,9 +621,13 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
     bool has_include_timestamp = false;
     bool has_include_source = false;
     bool is_sink_syslog = false;
-    bool trace_enabled = false;
     bool error_in_output = false;
     bool error_in_enable = false;
+
+    // DISPATCH-1514: need to explicitly register a protocol tracing callback on each AMQP connection when PROTOCOL has
+    // DEBUG level logging enabled (and deregister it when DEBUG is disable). Note this also applies if PROTOCOL uses
+    // the DEFAULT log level and DEBUG is turned on.
+    bool old_protocol_debug = qd_log_enabled(LOG_PROTOCOL, QD_LOG_DEBUG);
 
     do {
         //
@@ -710,10 +714,6 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
             else {
                 src->mask = mask;
             }
-
-            if (log_enabled_lh(src, QD_LOG_DEBUG)) {
-                trace_enabled = true;
-            }
         }
 
         if (has_include_timestamp && !is_sink_syslog) {
@@ -746,13 +746,14 @@ QD_EXPORT qd_error_t qd_log_entity(qd_entity_t *entity)
         free(enable);
 
     //
-    // If debug logging is enabled, loop thru all connections in the router and call the pn_transport_set_tracer callback
-    // so proton frame trace can be output as part of the router trace log.
+    // DISPATCH-1514: If PROTOCOL debug level has changed notify the AMQP adaptor so the Proton frame tracer can be
+    // enabled/disabled on all AMQP connections.
     //
-    if (trace_enabled) {
-        qd_server_trace_all_connections(true);
-    } else {
-        qd_server_trace_all_connections(false);
+    if (has_enable) {
+        bool new_protocol_debug = qd_log_enabled(LOG_PROTOCOL, QD_LOG_DEBUG);
+        if (old_protocol_debug != new_protocol_debug) {
+            qd_amqp_connection_set_tracing(new_protocol_debug);
+        }
     }
 
     return qd_error_code();

@@ -21,7 +21,6 @@
 
 #include "qpid/dispatch/buffer.h"
 #include "qpid/dispatch/compose.h"
-#include "qpid/dispatch/container.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/iterator.h"
 #include "qpid/dispatch/log.h"
@@ -30,6 +29,7 @@
 #include <proton/raw_connection.h>
 
 typedef struct qdr_delivery_t qdr_delivery_t;
+typedef struct qd_link_t      qd_link_t;
 
 /**@file
  * Message representation. 
@@ -514,9 +514,15 @@ int qd_message_stream_data_append(qd_message_t *msg, qd_buffer_list_t *data, boo
 /** Put string representation of a message suitable for logging in buffer. Note that log message text is limited to
  * QD_LOG_TEXT_MAX bytes which includes the terminating null byte.
  *
+ * Invoke qd_message_repr_flags() with a string representation of the message header fields desired to be included in
+ * the string. See the description of messageLoggingComponents in the router schema. This will compile the string to a
+ * set of field flags.  Pass these field flags to message_repr() to specify the set of fields to include in the
+ * string.
+ *
  * @return buffer
  */
-char* qd_message_repr(qd_message_t *msg, char* buffer, size_t len, qd_log_bits log_message);
+uint32_t qd_message_repr_flags(const char *msg_fields);
+char* qd_message_repr(qd_message_t *msg, char* buffer, size_t len, uint32_t message_repr_flags);
 
 qd_log_source_t *qd_message_log_source(void);
 

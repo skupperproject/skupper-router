@@ -24,7 +24,6 @@
 // not in the public API.
 //
 typedef struct qd_server_t           qd_server_t;
-typedef struct qd_container_t        qd_container_t;
 typedef struct qd_router_link_t      qd_router_link_t;
 typedef struct qd_router_node_t      qd_router_node_t;
 typedef struct qd_router_ref_t       qd_router_ref_t;
@@ -38,12 +37,10 @@ typedef struct qd_config_address_t   qd_config_address_t;
 #include "server_private.h"
 
 #include "qpid/dispatch/connection_manager.h"
-#include "qpid/dispatch/container.h"
 #include "qpid/dispatch/router.h"
 
 struct qd_dispatch_t {
     qd_server_t             *server;
-    qd_container_t          *container;
     qd_router_t             *router;
     void                    *agent;
     qd_connection_manager_t *connection_manager;
@@ -128,7 +125,5 @@ void qd_dispatch_unregister_entity(qd_dispatch_t *qd, void *impl);
 QD_EXPORT void qd_dispatch_set_agent(qd_dispatch_t *qd, void *agent);
 
 qdr_core_t* qd_dispatch_router_core(const qd_dispatch_t *qd);
-
-sys_mutex_t *qd_server_get_activation_lock(qd_server_t *server);
 
 #endif

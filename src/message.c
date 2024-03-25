@@ -22,7 +22,6 @@
 #include "aprintf.h"
 #include "buffer_field_api.h"
 #include "compose_private.h"
-#include "connection_manager_private.h"
 #include "message_private.h"
 #include "policy.h"
 
@@ -35,6 +34,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/threading.h"
 #include <qpid/dispatch/cutthrough_utils.h>
+#include <qpid/dispatch/amqp_adaptor.h>
 
 #include <proton/object.h>
 
@@ -296,10 +296,89 @@ static void print_parsed_field(qd_parsed_field_t *parsed_field, char **begin, ch
    }
 }
 
+//
+// Convert AMQP message to a string representation for logging
+//
+
+static const char *qd_log_message_components[] = {
+    "message-id",
+    "user-id",
+    "to",
+    "subject",
+    "reply-to",
+    "correlation-id",
+    "content-type",
+    "content-encoding",
+    "absolute-expiry-time",
+    "creation-time",
+    "group-id",
+    "group-sequence",
+    "reply-to-group-id",
+    "app-properties",
+    0};
+
+static const char *ALL = "all";
+static const char *NONE = "none";
+
+uint32_t qd_message_repr_flags(const char *log_message)
+{
+    uint32_t ret_val = 0;
+
+    if (!log_message || strcmp(log_message, NONE) == 0)
+        return ret_val;
+
+    //If log_message is set to 'all', turn on all bits.
+    if (strcmp(log_message, ALL) == 0)
+        return UINT32_MAX;
+
+    char *delim = ",";
+
+    // Have to copy this string since strtok modifies original string.
+    char *s = qd_strdup(log_message);
+    char *save = 0;
+
+    /* get the first token */
+    char *token = strtok_r(s, delim, &save);
+
+    const char *component = 0;
+
+    /* walk through other tokens */
+    while( token != NULL ) {
+       for (int i=0;; i++) {
+           component = qd_log_message_components[i];
+           if (component == 0)
+               break;
+
+           if (strcmp(component, token) == 0) {
+                   ret_val |= 1 << i;
+           }
+       }
+       token = strtok_r(NULL, delim, &save);
+    }
+
+    free(s);
+    return ret_val;
+}
+
+
+static bool is_log_component_enabled(uint32_t flags, const char *component_name)
+{
+    for(int i=0;;i++) {
+        const char *component = qd_log_message_components[i];
+        if (component == 0)
+            break;
+        if (strcmp(component_name, component) == 0)
+            return (flags >> i) & 1;
+    }
+
+    return 0;
+}
+
+
 /* Print field if enabled by log bits, leading comma if !*first */
 static void print_field(
     qd_message_t *msg, int field, const char *name,
-    qd_log_bits flags, bool *first, char **begin, char *end)
+    uint32_t flags, bool *first, char **begin, char *end)
 {
     if (is_log_component_enabled(flags, name)) {
         qd_iterator_t* iter = (field == QD_FIELD_APPLICATION_PROPERTIES) ?
@@ -324,7 +403,7 @@ static void print_field(
 
 static const char REPR_END[] = "}\0";
 
-char* qd_message_repr(qd_message_t *msg, char* buffer, size_t len, qd_log_bits flags) {
+char* qd_message_repr(qd_message_t *msg, char* buffer, size_t len, uint32_t flags) {
     if (flags == 0
         || qd_message_check_depth(msg, QD_DEPTH_APPLICATION_PROPERTIES) != QD_MESSAGE_DEPTH_OK
         || !((qd_message_pvt_t *)msg)->content->section_application_properties.parsed) {

@@ -21,8 +21,10 @@
 #include <qpid/dispatch/message.h>
 #include <proton/raw_connection.h>
 #include "delivery.h"
-#include "qd_connection.h"
 #include "adaptors/tcp/tcp_adaptor.h"
+
+// KAG: todo: fix this layering violation:
+#include "adaptors/amqp/qd_connection.h"
 
 
 static void activate_connection(const qd_message_activation_t *activation, qd_direction_t dir)
@@ -55,7 +57,7 @@ static void activate_connection(const qd_message_activation_t *activation, qd_di
         sys_spinlock_unlock(spinlock);
 
         if (notify) {
-            qd_server_activate_cutthrough(qconn, dir == QD_INCOMING);
+            qd_connection_activate_cutthrough(qconn, dir == QD_INCOMING);
         } else {
             free_qdr_delivery_ref_t(dref);
         }

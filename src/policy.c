@@ -23,11 +23,15 @@
 #include "policy.h"
 
 #include "dispatch_private.h"
-#include "qd_connection.h"
 #include "parse_tree.h"
 #include "policy_internal.h"
 
-#include "qpid/dispatch/container.h"
+// KAG: todo: fix these layering violation:
+#include "adaptors/amqp/qd_connection.h"
+#include "adaptors/amqp/qd_listener.h"
+#include "adaptors/amqp/qd_connector.h"
+#include "adaptors/amqp/container.h"
+
 #include "qpid/dispatch/server.h"
 
 #include <proton/condition.h>
@@ -1167,7 +1171,7 @@ void qd_policy_amqp_open(qd_connection_t *qd_conn) {
 
     const char *policy_vhost = 0;
     if (!!qd_conn->listener)
-        policy_vhost = qd_conn->listener->config.policy_vhost;
+        policy_vhost = qd_listener_config(qd_conn->listener)->policy_vhost;
 
     if (policy->enableVhostPolicy && (!qd_conn->role || strcmp(qd_conn->role, "inter-router"))) {
         // Open connection or not based on policy.

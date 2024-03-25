@@ -52,6 +52,13 @@ set(qpid_dispatch_SOURCES
   adaptors/tcp/tcp_adaptor.c
   adaptors/test_adaptor.c
   adaptors/adaptor_listener.c
+  adaptors/amqp/amqp_adaptor.c
+  adaptors/amqp/container.c
+  adaptors/amqp/connection_manager.c
+  adaptors/amqp/qd_listener.c
+  adaptors/amqp/qd_connection.c
+  adaptors/amqp/qd_connector.c
+  adaptors/amqp/server_config.c
   alloc.c
   alloc_pool.c
   aprintf.c
@@ -63,8 +70,6 @@ set(qpid_dispatch_SOURCES
   error.c
   compose.c
   ctools.c
-  connection_manager.c
-  container.c
   cutthrough_utils.c
   delivery_state.c
   discriminator.c
@@ -130,7 +135,6 @@ set(qpid_dispatch_SOURCES
   router_core/modules/stuck_delivery_detection/delivery_tracker.c
   router_core/modules/mobile_sync/mobile.c
   router_core/modules/streaming_link_scrubber/streaming_link_scrubber.c
-  router_node.c
   router_pynode.c
   schema_enum.c
   static_assert.c

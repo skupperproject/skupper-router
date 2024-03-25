@@ -28,6 +28,8 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/router.h"
 
+#include <proton/disposition.h>
+
 #include <ctype.h>
 
 

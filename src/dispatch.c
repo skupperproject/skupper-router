@@ -46,11 +46,9 @@
 /**
  * Private Function Prototypes
  */
-qd_server_t    *qd_server(qd_dispatch_t *qd, int tc, const char *container_name,
+qd_server_t    *qd_server(qd_dispatch_t *qd, int tc, const char *router_id,
                           const char *sasl_config_path, const char *sasl_config_name);
 void            qd_server_free(qd_server_t *server);
-qd_container_t *qd_container(qd_dispatch_t *qd);
-void            qd_container_free(qd_container_t *container);
 qd_policy_t    *qd_policy(qd_dispatch_t *qd);
 void            qd_policy_free(qd_policy_t *policy);
 qd_router_t    *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id);
@@ -109,6 +107,8 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
         seed = (unsigned int)(getpid() ^ timestamp);
     }
     srandom(seed);
+
+    sys_atomic_init(&global_delivery_id, 1);
 
     qd = NEW(qd_dispatch_t);
     ZERO(qd);
@@ -341,7 +341,6 @@ qd_error_t qd_dispatch_prepare(qd_dispatch_t *qd)
 {
     qd_log_global_options(qd->timestamp_format, qd->timestamps_in_utc);
     qd->server             = qd_server(qd, qd->thread_count, qd->router_id, qd->sasl_config_path, qd->sasl_config_name);
-    qd->container          = qd_container(qd);
     qd->router             = qd_router(qd, qd->router_mode, qd->router_area, qd->router_id);
     qd->connection_manager = qd_connection_manager(qd);
     qd->policy             = qd_policy(qd);
@@ -393,7 +392,6 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_policy_free(qd->policy);
     Py_XDECREF((PyObject*) qd->agent);
     qd_router_free(qd->router);
-    qd_container_free(qd->container);
     qd_server_free(qd->server);
     qd_log_finalize();
     qd_alloc_finalize();
@@ -404,6 +402,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_iterator_finalize();
     free(qd->timestamp_format);
     free(qd->metadata);
+    sys_atomic_destroy(&global_delivery_id);
 
     free(qd);
 }
@@ -422,4 +421,25 @@ qdr_core_t* qd_dispatch_router_core(const qd_dispatch_t *qd)
  */
 qd_connection_manager_t *qd_dispatch_connection_manager(const qd_dispatch_t *qd) {
     return qd->connection_manager;
+}
+
+
+QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd)
+{
+    qd->router->tracemask   = qd_tracemask();
+    qd->router->router_core = qdr_core(qd, qd->router->router_mode, qd->router->router_area, qd->router->router_id, qd->router->van_id);
+    qd_router_python_setup(qd->router);
+    qd_timer_schedule(qd->router->timer, 1000);
+}
+
+
+qdr_core_t *qd_router_core(const qd_dispatch_t *qd)
+{
+    return qd->router->router_core;
+}
+
+
+qd_policy_t *qd_dispatch_get_policy(const qd_dispatch_t *dispatch)
+{
+    return qd->policy;
 }
