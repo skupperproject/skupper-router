@@ -539,17 +539,14 @@ static void close_connection_XSIDE_IO(tcplite_connection_t *conn, bool no_delay)
 
     free(conn->reply_to);
 
-    qd_message_activation_t activation;
-    activation.type     = QD_ACTIVATION_NONE;
-    activation.delivery = 0;
-    qd_nullify_safe_ptr(&activation.safeptr);
-
     if (!!conn->inbound_stream) {
-        qd_message_set_producer_activation(conn->inbound_stream, &activation);
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP cancel producer activation", DLV_ARGS(conn->inbound_delivery));
+        qd_message_cancel_producer_activation(conn->inbound_stream);
     }
 
     if (!!conn->outbound_stream) {
-        qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP cancel consumer activation", DLV_ARGS(conn->outbound_delivery));
+        qd_message_cancel_consumer_activation(conn->outbound_stream);
     }
 
     if (!!conn->inbound_delivery) {
@@ -917,6 +914,17 @@ static void link_setup_CSIDE_IO(tcplite_connection_t *conn, qdr_delivery_t *deli
     qdr_link_set_context(conn->inbound_link, conn);
     conn->outbound_link = qdr_link_first_attach(conn->core_conn, QD_OUTGOING, qdr_terminus(0), qdr_terminus(0), "tcp.cside.out", 0, false, delivery, &conn->outbound_link_id);
     qdr_link_set_context(conn->outbound_link, conn);
+
+    // now that the raw connection is up and able to be activated enable cutthrough activation
+
+    assert(conn->outbound_stream);
+    qd_message_activation_t activation;
+    activation.type     = QD_ACTIVATION_TCP;
+    activation.delivery = 0;
+    qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP enabling consumer activation", DLV_ARGS(delivery));
+    qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+    qd_message_start_unicast_cutthrough(conn->outbound_stream);
 }
 
 
@@ -983,6 +991,7 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(tcplite_connection_t *co
     activation.type     = QD_ACTIVATION_TCP;
     activation.delivery = 0;
     qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] TCP enabling producer activation", conn->conn_id, conn->inbound_link_id);
     qd_message_set_producer_activation(conn->inbound_stream, &activation);
     qd_message_start_unicast_cutthrough(conn->inbound_stream);
 
@@ -1049,6 +1058,7 @@ static void compose_and_send_server_stream_CSIDE_IO(tcplite_connection_t *conn)
     activation.type     = QD_ACTIVATION_TCP;
     activation.delivery = 0;
     qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "][L%" PRIu64 "] TCP enabling producer activation", conn->conn_id, conn->inbound_link_id);
     qd_message_set_producer_activation(conn->inbound_stream, &activation);
     qd_message_start_unicast_cutthrough(conn->inbound_stream);
 
@@ -1119,6 +1129,7 @@ static uint64_t handle_outbound_delivery_LSIDE_IO(tcplite_connection_t *conn, qd
         activation.type     = QD_ACTIVATION_TCP;
         activation.delivery = 0;
         qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP enabling consumer activation", DLV_ARGS(delivery));
         qd_message_set_consumer_activation(conn->outbound_stream, &activation);
         qd_message_start_unicast_cutthrough(conn->outbound_stream);
     }
@@ -1183,16 +1194,6 @@ static uint64_t handle_first_outbound_delivery_CSIDE(tcplite_connector_t *cr, qd
 
     conn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(conn->raw_conn, &conn->context);
-
-    //
-    // Message validation ensures the start of the message body is present. Activate cutthrough on the body data.
-    //
-    qd_message_activation_t activation;
-    activation.type     = QD_ACTIVATION_TCP;
-    activation.delivery = 0;
-    qd_alloc_set_safe_ptr(&activation.safeptr, conn);
-    qd_message_set_consumer_activation(conn->outbound_stream, &activation);
-    qd_message_start_unicast_cutthrough(conn->outbound_stream);
 
     //
     // The raw connection establishment must be the last thing done in this function.
@@ -1274,12 +1275,16 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         // If the raw connection is read-closed and the last produce did not block, settle and complete
         // the inbound stream/delivery and close out the inbound half of the connection.
         //
+
         if (read_closed) {
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Raw conn read-closed - close inbound delivery", DLV_ARGS(conn->inbound_delivery));
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
+                   DLV_FMT " Raw conn read-closed - close inbound delivery, cancel producer activation",
+                   DLV_ARGS(conn->inbound_delivery));
             qd_message_set_receive_complete(conn->inbound_stream);
+            qd_message_cancel_producer_activation(conn->inbound_stream);
             qdr_delivery_continue(tcplite_context->core, conn->inbound_delivery, false);
             qdr_delivery_set_context(conn->inbound_delivery, 0);
-            qdr_delivery_decref(tcplite_context->core, conn->inbound_delivery, "TCP_LSIDE_IO - read-close");
+            qdr_delivery_decref(tcplite_context->core, conn->inbound_delivery, "FLOW_XSIDE_IO - inbound_delivery released");
             conn->inbound_delivery = 0;
             conn->inbound_stream   = 0;
             return true;
@@ -1346,10 +1351,14 @@ static bool manage_flow_XSIDE_IO(tcplite_connection_t *conn)
         // payload has been consumed and written before write-closing the connection.
         //
         if (qd_message_receive_complete(conn->outbound_stream) && !qd_message_can_consume_buffers(conn->outbound_stream)) {
-            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Rx-complete, rings empty: Write-closing the raw connection", conn->conn_id);
+            qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " Rx-complete, rings empty: Write-closing the raw connection, consumer activation cancelled",
+                   DLV_ARGS(conn->outbound_delivery));
             pn_raw_connection_write_close(conn->raw_conn);
+            qd_message_set_send_complete(conn->outbound_stream);
+            qd_message_cancel_consumer_activation(conn->outbound_stream);
             qdr_delivery_set_context(conn->outbound_delivery, 0);
             qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery, PN_ACCEPTED, true, 0, true); // accepted, settled, ref_given
+            // do NOT decref outbound_delivery - ref count passed to qdr_delivery_remote_state_updated()!
             conn->outbound_delivery = 0;
             conn->outbound_stream   = 0;
         } else {
@@ -1520,15 +1529,10 @@ static bool manage_tls_flow_XSIDE_IO(tcplite_connection_t *conn)
     //
     bool ignore;
     if (qd_tls_is_input_drained(conn->tls, &ignore) && conn->inbound_stream) {
-        qd_message_activation_t activation;
-        activation.type     = QD_ACTIVATION_NONE;
-        activation.delivery = 0;
-        qd_nullify_safe_ptr(&activation.safeptr);
-
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS inbound stream receive complete", DLV_ARGS(conn->inbound_delivery));
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS inbound stream receive complete, producer activation cancelled", DLV_ARGS(conn->inbound_delivery));
 
         qd_message_set_receive_complete(conn->inbound_stream);
-        qd_message_set_producer_activation(conn->inbound_stream, &activation);
+        qd_message_cancel_producer_activation(conn->inbound_stream);
 
         qdr_delivery_set_context(conn->inbound_delivery, 0);
         qdr_delivery_continue(tcplite_context->core, conn->inbound_delivery, false);
@@ -1541,21 +1545,16 @@ static bool manage_tls_flow_XSIDE_IO(tcplite_connection_t *conn)
     // Check for end of outbound message data
     //
     if (qd_tls_is_output_flushed(conn->tls) && conn->outbound_stream) {
-        qd_message_activation_t activation;
-        activation.type     = QD_ACTIVATION_NONE;
-        activation.delivery = 0;
-        qd_nullify_safe_ptr(&activation.safeptr);
-
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS outbound stream send complete", DLV_ARGS(conn->outbound_delivery));
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TLS outbound stream send complete, consumer activation cancelled", DLV_ARGS(conn->outbound_delivery));
 
         qd_message_set_send_complete(conn->outbound_stream);
-        qd_message_set_consumer_activation(conn->outbound_stream, &activation);
+        qd_message_cancel_consumer_activation(conn->outbound_stream);
 
         qdr_delivery_set_context(conn->outbound_delivery, 0);
         qdr_delivery_remote_state_updated(tcplite_context->core, conn->outbound_delivery,
                                           tls_status < 0 ? PN_MODIFIED : PN_ACCEPTED,
-                                          true, 0, false); // settled, 0, ref_given
-        qdr_delivery_decref(tcplite_context->core, conn->outbound_delivery, "TLS_FLOW_XSIDE_IO - outbound_delivery released");
+                                          true, 0, true); // settled, 0, ref_given
+        // do NOT decref outbound_delivery - ref count passed to qdr_delivery_remote_state_updated()!
         conn->outbound_delivery = 0;
         conn->outbound_stream   = 0;
     }

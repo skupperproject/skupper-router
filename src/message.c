@@ -1528,6 +1528,31 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg)
     return false;
 }
 
+static inline void activate_message_consumer(qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+    LOCK(&content->lock);
+    if (content->uct_consumer_activation.type != QD_ACTIVATION_NONE) {
+        cutthrough_notify_buffers_produced_inbound(&content->uct_consumer_activation);
+    }
+    UNLOCK(&content->lock);
+}
+
+
+static inline void activate_message_producer(qd_message_t *stream)
+{
+    qd_message_content_t *content = MSG_CONTENT(stream);
+
+    uint32_t full_slots = (sys_atomic_get(&content->uct_produce_slot) - sys_atomic_get(&content->uct_consume_slot)) % UCT_SLOT_COUNT;
+    if (full_slots < UCT_RESUME_THRESHOLD) {
+        LOCK(&content->lock);
+        if (content->uct_producer_activation.type != QD_ACTIVATION_NONE) {
+            cutthrough_notify_buffers_consumed_outbound(&content->uct_producer_activation);
+        }
+        UNLOCK(&content->lock);
+    }
+}
+
 
 // Read incoming data from a pn_link_t and store it into a buffer list. Limit buffer list length to a maximum of
 // limit. Helper routine for qd_message_receive_cutthrough()
@@ -1576,7 +1601,6 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
 
             if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
                 stalled = true;
-                SET_ATOMIC_FLAG(&content->uct_producer_stalled);
             }
         }
 
@@ -1595,7 +1619,7 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
     }
 
     if (notify_produced) {
-        cutthrough_notify_buffers_produced_inbound(in_msg);
+        activate_message_consumer(in_msg);
     }
 }
 
@@ -1912,10 +1936,11 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
         // all of the buffered content.  Mark the message as send-complete.
         //
         SET_ATOMIC_FLAG(&msg->send_complete);
+        notify_consumed = false;  // no need to restart producer - it is done
     }
 
     if (notify_consumed) {
-        cutthrough_notify_buffers_consumed_outbound((qd_message_t *) msg);
+        activate_message_producer((qd_message_t *) msg);
     }
 }
 
@@ -3317,11 +3342,7 @@ void qd_message_produce_buffers(qd_message_t *stream, qd_buffer_list_t *buffers)
     uint32_t useSlot = sys_atomic_get(&content->uct_produce_slot);
     DEQ_MOVE(*buffers, content->uct_slots[useSlot]);
     sys_atomic_set(&content->uct_produce_slot, (useSlot + 1) % UCT_SLOT_COUNT);
-    cutthrough_notify_buffers_produced_inbound(stream);
-
-    if ((sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT == 1) {
-        SET_ATOMIC_FLAG(&content->uct_producer_stalled);
-    }
+    activate_message_consumer(stream);
 }
 
 
@@ -3348,50 +3369,41 @@ int qd_message_consume_buffers(qd_message_t *stream, qd_buffer_list_t *buffers, 
     }
 
     if (notify_consumed) {
-        cutthrough_notify_buffers_consumed_outbound(stream);
+        activate_message_producer(stream);
     }
 
     return count;
 }
 
-
-bool qd_message_resume_from_stalled(qd_message_t *stream)
-{
-    qd_message_content_t *content = MSG_CONTENT(stream);
-
-    if (IS_ATOMIC_FLAG_SET(&content->uct_producer_stalled)
-        && (sys_atomic_get(&content->uct_produce_slot) - sys_atomic_get(&content->uct_consume_slot)) % UCT_SLOT_COUNT < UCT_RESUME_THRESHOLD) {
-        CLEAR_ATOMIC_FLAG(&content->uct_producer_stalled);
-        return true;
-    }
-
-    return false;
-}
-
-
 void qd_message_set_consumer_activation(qd_message_t *stream, qd_message_activation_t *activation)
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
+    LOCK(&content->lock);
     content->uct_consumer_activation = *activation;
+    UNLOCK(&content->lock);
 }
 
 
-void qd_message_get_consumer_activation(const qd_message_t *stream, qd_message_activation_t *activation)
+void qd_message_cancel_consumer_activation(qd_message_t *stream)
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
-    *activation = content->uct_consumer_activation;
+    LOCK(&content->lock);
+    content->uct_consumer_activation.type = QD_ACTIVATION_NONE;
+    UNLOCK(&content->lock);
 }
-
 
 void qd_message_set_producer_activation(qd_message_t *stream, qd_message_activation_t *activation)
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
+    LOCK(&content->lock);
     content->uct_producer_activation = *activation;
+    UNLOCK(&content->lock);
 }
 
-
-void qd_message_get_producer_activation(const qd_message_t *stream, qd_message_activation_t *activation)
+void qd_message_cancel_producer_activation(qd_message_t *stream)
 {
     qd_message_content_t *content = MSG_CONTENT(stream);
-    *activation = content->uct_producer_activation;
+    LOCK(&content->lock);
+    content->uct_producer_activation.type = QD_ACTIVATION_NONE;
+    UNLOCK(&content->lock);
 }

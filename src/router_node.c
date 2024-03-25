@@ -53,6 +53,8 @@ static char *node_id;
 
 static void deferred_AMQP_rx_handler(void *context, bool discard);
 static bool parse_failover_property_list(qd_router_t *router, qd_connection_t *conn, pn_data_t *props);
+static void clear_producer_activation(qdr_core_t *core, qdr_delivery_t *delivery);
+static void clear_consumer_activation(qdr_core_t *core, qdr_delivery_t *delivery);
 
 const char *QD_AMQP_COND_OVERSIZE_DESCRIPTION = "Message size exceeded";
 
@@ -90,7 +92,6 @@ static void qdr_node_connect_deliveries(qd_link_t *link, qdr_delivery_t *qdlv, p
     pn_delivery_set_context(pdlv, ref);
     qdr_delivery_set_context(qdlv, pdlv);
     qdr_delivery_incref(qdlv, "referenced by a pn_delivery");
-    
 }
 
 
@@ -108,6 +109,12 @@ static void qdr_node_disconnect_deliveries(qdr_core_t *core, qd_link_t *link, qd
 
         pn_delivery_set_context(pdlv, 0);
         qdr_delivery_set_context(qdlv, 0);
+
+        if (qd_link_direction(link) == QD_INCOMING) {
+            clear_producer_activation(core, qdlv);
+        } else {
+            clear_consumer_activation(core, qdlv);
+        }
         qdr_delivery_decref(core, qdlv, "qdr_node_disconnect_deliveries - removed reference from pn_delivery");
     }
 }
@@ -125,7 +132,8 @@ static qdr_delivery_t *qdr_node_delivery_qdr_from_pn(pn_delivery_t *dlv)
     return ref ? (qdr_delivery_t*) ref->ref : 0;
 }
 
-
+// clean up all qdr_delivery/pn_delivery bindings for the link
+//
 void qd_link_abandoned_deliveries_handler(void *context, qd_link_t *link)
 {
     qd_router_t    *router = (qd_router_t*) context;
@@ -133,12 +141,12 @@ void qd_link_abandoned_deliveries_handler(void *context, qd_link_t *link)
     qd_link_ref_t      *ref  = DEQ_HEAD(*list);
 
     while (ref) {
-        DEQ_REMOVE_HEAD(*list);
         qdr_delivery_t *dlv = (qdr_delivery_t*) ref->ref;
-        ref->ref = 0;
-        qdr_delivery_set_context(dlv, 0);
-        qdr_delivery_decref(router->router_core, dlv, "qd_link_abandoned_deliveries_handler");
-        free_qd_link_ref_t(ref);
+        pn_delivery_t *pdlv = qdr_delivery_get_context(dlv);
+        assert(pdlv && ref == (qd_link_ref_t*) pn_delivery_get_context(pdlv));
+
+        // this will remove and release the ref
+        qdr_node_disconnect_deliveries(router->router_core, link, dlv, pdlv);
         ref = DEQ_HEAD(*list);
     }
 }
@@ -315,35 +323,23 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
 }
 
 
-static void clear_consumer_activation(qdr_core_t *core, qd_message_t *stream)
+static void clear_consumer_activation(qdr_core_t *core, qdr_delivery_t *delivery)
 {
-    qd_message_activation_t activation;
-    qd_message_get_consumer_activation(stream, &activation);
-    if (!!activation.delivery) {
-        activation.delivery->in_message_activation = false;
-        qdr_delivery_decref(core, activation.delivery, "Removing delivery from activation (out)");
+    if (delivery->in_message_activation) {
+        delivery->in_message_activation = false;
+        qd_log(LOG_ROUTER, QD_LOG_DEBUG, DLV_FMT " AMQP cancel consumer activation", DLV_ARGS(delivery));
+        qd_message_cancel_consumer_activation(qdr_delivery_message(delivery));
     }
-
-    activation.type     = QD_ACTIVATION_NONE;
-    activation.delivery = 0;
-    qd_nullify_safe_ptr(&activation.safeptr);
-    qd_message_set_consumer_activation(stream, &activation);
 }
 
 
-static void clear_producer_activation(qdr_core_t *core, qd_message_t *stream)
+static void clear_producer_activation(qdr_core_t *core, qdr_delivery_t *delivery)
 {
-    qd_message_activation_t activation;
-    qd_message_get_producer_activation(stream, &activation);
-    if (!!activation.delivery) {
-        activation.delivery->in_message_activation = false;
-        qdr_delivery_decref(core, activation.delivery, "Removing delivery from activation (in)");
+    if (delivery->in_message_activation) {
+        delivery->in_message_activation = false;
+        qd_log(LOG_ROUTER, QD_LOG_DEBUG, DLV_FMT " AMQP cancel producer activation", DLV_ARGS(delivery));
+        qd_message_cancel_producer_activation(qdr_delivery_message(delivery));
     }
-
-    activation.type     = QD_ACTIVATION_NONE;
-    activation.delivery = 0;
-    qd_nullify_safe_ptr(&activation.safeptr);
-    qd_message_set_producer_activation(stream, &activation);
 }
 
 
@@ -380,31 +376,40 @@ static int AMQP_conn_wake_handler(void *type_context, qd_connection_t *conn, voi
                 break;
             }
 
+            //
+            // Verify that the activation is still in force - it may have been cancelled after it was added to the
+            // worklist
+            //
             qdr_delivery_t *delivery = dref->dlv;
-            qd_link_t      *qlink    = (qd_link_t*) qdr_link_get_context(qdr_delivery_link(delivery));
-            qd_message_t   *stream   = qdr_delivery_message(delivery);
-            bool            q3_stalled;
+            if (delivery->in_message_activation) {
+                qd_link_t      *qlink  = (qd_link_t*) qdr_link_get_context(qdr_delivery_link(delivery));
+                qd_message_t   *stream = qdr_delivery_message(delivery);
+                bool            q3_stalled;
+
+                //
+                // Send content from the stream outbound on the link. The message and the link must NOT be released while
+                // delivery->in_message_activation is true!
+                //
+                assert(stream);
+                assert(qlink);
+                qd_message_send(stream, qlink, 0, &q3_stalled);
+                if (q3_stalled) {
+                    qd_link_q3_block(qlink);
+                }
+
+                //
+                // If the stream is send complete, we don't need to be activated any more.  Cancel the activation on the stream.
+                //
+                if (qd_message_send_complete(stream)) {
+                    clear_consumer_activation(router->router_core, delivery);
+                }
+            }
 
             //
             // Account for the removed reference and free the reference object
             //
-            qdr_delivery_decref(router->router_core, dref->dlv, "AMQP_conn_wake_handler - cut-through activation worklist");
+            qdr_delivery_decref(router->router_core, delivery, "AMQP_conn_wake_handler - cut-through activation worklist");
             free_qdr_delivery_ref_t(dref);
-
-            //
-            // Send content from the stream outbound on the link
-            //
-            qd_message_send(stream, qlink, 0, &q3_stalled);
-            if (q3_stalled) {
-                qd_link_q3_block(qlink);
-            }
-
-            //
-            // If the stream is send complete, we don't need to be activated any more.  Cancel the activation on the stream.
-            //
-            if (qd_message_send_complete(stream)) {
-                clear_consumer_activation(router->router_core, stream);
-            }
         }
     }
 
@@ -432,25 +437,36 @@ static int AMQP_conn_wake_handler(void *type_context, qd_connection_t *conn, voi
             }
 
             //
-            // Account for the removed reference and free the reference object
+            // Verify that the activation is still in force - it may have been cancelled after it was added to the
+            // worklist
             //
             qdr_delivery_t *delivery = dref->dlv;
-            qd_message_t   *stream   = qdr_delivery_message(delivery);
+            if (delivery->in_message_activation) {
+                pn_delivery_t *pnd   = qdr_node_delivery_pn_from_qdr(delivery);
+                qd_message_t *stream = qdr_delivery_message(delivery);
 
-            qdr_delivery_decref(router->router_core, dref->dlv, "AMQP_conn_wake_handler - cut-through activation worklist");
-            free_qdr_delivery_ref_t(dref);
+                //
+                // Receive content from the link and produce it into the stream. The proton deliver MUST NOT be released
+                // while delivery->in_message_activation is true!
+                //
+                assert(pnd);
+                qd_message_receive(pnd);
 
-            //
-            // Receive content from the link and produce it into the stream
-            //
-            qd_message_receive(qdr_node_delivery_pn_from_qdr(delivery));
-
-            //
-            // If the stream is receive complete, we don't need to be activated any more.  Cancel the activation on the stream.
-            //
-            if (qd_message_receive_complete(stream)) {
-                clear_producer_activation(router->router_core, stream);
+                //
+                // If the stream is receive complete, we don't need to be activated any more.  Cancel the activation on
+                // the stream. The message (stream) MUST NOT be unlinked from the delivery while in_message_activation is true!
+                //
+                assert(stream);
+                if (qd_message_receive_complete(stream)) {
+                    clear_producer_activation(router->router_core, delivery);
+                }
             }
+
+            //
+            // Account for the removed reference and free the reference object
+            //
+            qdr_delivery_decref(router->router_core, delivery, "AMQP_conn_wake_handler - cut-through activation worklist");
+            free_qdr_delivery_ref_t(dref);
         }
     }
 
@@ -563,14 +579,24 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
     qd_message_t   *msg   = qd_message_receive(pnd);
     bool receive_complete = qd_message_receive_complete(msg);
 
-    if (!receive_complete && !!delivery && !delivery->in_message_activation && qd_message_is_unicast_cutthrough(msg)) {
-        qd_message_activation_t activation;
-        activation.delivery = delivery;
-        activation.type     = QD_ACTIVATION_AMQP;
-        qd_alloc_set_safe_ptr(&activation.safeptr, conn);
-        delivery->in_message_activation = true;
-        qdr_delivery_incref(delivery, "AMQP_rx_handler - Added to message activation");
-        qd_message_set_producer_activation(msg, &activation);
+    // check if cut-through can be enabled or disabled
+    //
+    if (!!delivery) {
+        if (receive_complete) {
+            if (delivery->in_message_activation) {
+                clear_producer_activation(router->router_core, delivery);
+            }
+        } else {  // !receive_complete
+            if (!delivery->in_message_activation && qd_message_is_unicast_cutthrough(msg)) {
+                qd_message_activation_t activation;
+                activation.delivery = delivery;
+                activation.type     = QD_ACTIVATION_AMQP;
+                qd_alloc_set_safe_ptr(&activation.safeptr, conn);
+                delivery->in_message_activation = true;
+                qd_log(LOG_ROUTER, QD_LOG_DEBUG, DLV_FMT " AMQP enable producer activation", DLV_ARGS(delivery));
+                qd_message_set_producer_activation(msg, &activation);
+            }
+        }
     }
 
     if (!qd_message_oversize(msg)) {
@@ -581,7 +607,6 @@ static bool AMQP_rx_handler(void* context, qd_link_t *link)
             //
             pn_link_advance(pn_link);
             next_delivery = pn_link_current(pn_link) != 0;
-            clear_producer_activation(router->router_core, msg);
         }
 
         if (qd_message_is_discard(msg)) {
@@ -2195,7 +2220,7 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
         activation.type     = QD_ACTIVATION_AMQP;
         qd_alloc_set_safe_ptr(&activation.safeptr, qconn);
         dlv->in_message_activation = true;
-        qdr_delivery_incref(dlv, "CORE_link_deliver - Added to message activation");
+        qd_log(LOG_ROUTER, QD_LOG_DEBUG, DLV_FMT " AMQP enable consumer activation", DLV_ARGS(dlv));
         qd_message_set_consumer_activation(msg_out, &activation);
     }
 
@@ -2230,7 +2255,7 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
                 }
             }
         }
-        clear_consumer_activation(router->router_core, msg_out);
+        clear_consumer_activation(router->router_core, dlv);
         log_link_message(qconn, plink, msg_out);
     }
     return update;

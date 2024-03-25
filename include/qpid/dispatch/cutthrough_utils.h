@@ -24,10 +24,10 @@
 /**
  * Perform any needed cut-through notification upon the production or consumption of stream buffers
  * either inbound (from outside of the router) or outbound (to outside of the router).
- * 
- * @param msg - Pointer to a stream
+ *
+ * @param activation - activation record taken from the message (see message.c)
  */
-void cutthrough_notify_buffers_produced_inbound(qd_message_t *msg);
-void cutthrough_notify_buffers_consumed_outbound(qd_message_t *msg);
+void cutthrough_notify_buffers_produced_inbound(const qd_message_activation_t *activation);
+void cutthrough_notify_buffers_consumed_outbound(const qd_message_activation_t *activation);
 
 #endif

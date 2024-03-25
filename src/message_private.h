@@ -156,7 +156,6 @@ typedef struct {
     qd_buffer_list_t         uct_slots[UCT_SLOT_COUNT];
     sys_atomic_t             uct_produce_slot;
     sys_atomic_t             uct_consume_slot;
-    sys_atomic_t             uct_producer_stalled;
     qd_message_activation_t  uct_producer_activation;
     qd_message_activation_t  uct_consumer_activation;
 } qd_message_content_t;
