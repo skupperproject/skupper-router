@@ -1336,12 +1336,6 @@
                     "default": true,
                     "description": "yes: Ensures that when initiating a connection (as a client) the host name in the URL to which this connector connects to matches the host name in the digital certificate that the peer sends back as part of the TLS connection; no: Does not perform host name verification",
                     "create": true
-                },
-                "encapsulation": {
-                    "type": ["legacy", "lite"],
-                    "default": "legacy",
-                    "description": "legacy: Use the original chunked TCP adaptor encapsulation; lite: use the raw/cut-through encapsulation",
-                    "create": true
                 }
             }
         },

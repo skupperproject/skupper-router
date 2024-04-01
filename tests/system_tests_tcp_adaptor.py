@@ -291,14 +291,14 @@ class TcpAdaptorBase(TestCase):
     echo_server_NS_CONN_STALL = None
 
     @classmethod
-    def setUpClass(cls, test_ssl=False, encap="legacy"):
+    def setUpClass(cls, test_ssl=False):
         """Start a router"""
         super(TcpAdaptorBase, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
-        def router(name, mode, connection, extra=None, ssl=False, encapsulation="legacy"):
+        def router(name, mode, connection, extra=None, ssl=False):
             """
             Launch a router through the system_test framework.
             For each router:
@@ -310,7 +310,6 @@ class TcpAdaptorBase(TestCase):
             :param name: router name
             :param mode: router mode: interior or edge
             :param connection: list of router-level connection/listener tuples
-            :param encapsulation: do we use the tcp legacy or the tcp_lite adaptor.
             :param extra: yet more configuation tuples. unused for now
             :param ssl: use an sslProfile on the connectors and listeners.
 
@@ -322,31 +321,26 @@ class TcpAdaptorBase(TestCase):
                                   'port': cls.nodest_listener_ports[name],
                                   'address': 'nodest',
                                   'sslProfile': tcp_listener_ssl_profile_name,
-                                  'encapsulation': encapsulation,
                                   'siteId': cls.site}
                 listener_props_balanced_1 = {'host': "localhost",
                                              'port': cls.balanced_listener_ports[name][0],
                                              'address': 'ES_ALL_1',
                                              'sslProfile': tcp_listener_ssl_profile_name,
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_2 = {'host': "localhost",
                                              'port': cls.balanced_listener_ports[name][1],
                                              'address': 'ES_ALL_2',
                                              'sslProfile': tcp_listener_ssl_profile_name,
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_3 = {'host': "localhost",
                                              'port': cls.balanced_listener_ports[name][2],
                                              'address': 'ES_ALL_3',
                                              'sslProfile': tcp_listener_ssl_profile_name,
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_4 = {'host': "localhost",
                                              'port': cls.balanced_listener_ports[name][3],
                                              'address': 'ES_ALL_4',
                                              'sslProfile': tcp_listener_ssl_profile_name,
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
 
                 connector_props_balanced_1 = {'name': "balanced-ES_ALL_1",
@@ -354,94 +348,79 @@ class TcpAdaptorBase(TestCase):
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_1',
                                               'sslProfile': 'tcp-connector-ssl-profile',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_2 = {'name': "balanced-ES_ALL_2",
                                               'host': "localhost",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_2',
                                               'sslProfile': 'tcp-connector-ssl-profile',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_3 = {'name': "balanced-ES_ALL_3",
                                               'host': "localhost",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_3',
                                               'sslProfile': 'tcp-connector-ssl-profile',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_4 = {'name': "balanced-ES_ALL_4",
                                               'host': "localhost",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_4',
                                               'sslProfile': 'tcp-connector-ssl-profile',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
 
                 connector_props_direct = {'host': "localhost",
                                           'port': cls.tcp_server_listener_ports[name],
                                           'address': 'ES_' + name,
                                           'sslProfile': 'tcp-connector-ssl-profile',
-                                          'encapsulation': encapsulation,
                                           'siteId': cls.site}
 
             else:
                 listener_props = {'host': "0.0.0.0",
                                   'port': cls.nodest_listener_ports[name],
                                   'address': 'nodest',
-                                  'encapsulation': encapsulation,
                                   'siteId': cls.site}
 
                 listener_props_balanced_1 = {'host': "0.0.0.0",
                                              'port': cls.balanced_listener_ports[name][0],
                                              'address': 'ES_ALL_1',
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_2 = {'host': "0.0.0.0",
                                              'port': cls.balanced_listener_ports[name][1],
                                              'address': 'ES_ALL_2',
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_3 = {'host': "0.0.0.0",
                                              'port': cls.balanced_listener_ports[name][2],
                                              'address': 'ES_ALL_3',
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
                 listener_props_balanced_4 = {'host': "0.0.0.0",
                                              'port': cls.balanced_listener_ports[name][3],
                                              'address': 'ES_ALL_4',
-                                             'encapsulation': encapsulation,
                                              'siteId': cls.site}
 
                 connector_props_balanced_1 = {'name': "balanced-ES_ALL_1",
                                               'host': "127.0.0.1",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_1',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_2 = {'name': "balancedES_ALL_2",
                                               'host': "127.0.0.1",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_2',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_3 = {'name': "balanced-ES_ALL_3",
                                               'host': "127.0.0.1",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_3',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
                 connector_props_balanced_4 = {'name': "balanced-ES_ALL_4",
                                               'host': "127.0.0.1",
                                               'port': cls.tcp_server_listener_ports[name],
                                               'address': 'ES_ALL_4',
-                                              'encapsulation': encapsulation,
                                               'siteId': cls.site}
 
                 connector_props_direct = {'host': "127.0.0.1",
                                           'port': cls.tcp_server_listener_ports[name],
                                           'address': 'ES_' + name,
-                                          'encapsulation': encapsulation,
                                           'siteId': cls.site}
             if mode == "interior":
                 router_dict = {'mode': mode, 'id': name, 'dataConnectionCount': '4', "helloMaxAgeSeconds": '10'}
@@ -483,7 +462,6 @@ class TcpAdaptorBase(TestCase):
                 listener = {'host': "localhost",
                             'port': cls.tcp_client_listener_ports[name][rtr],
                             'address': 'ES_' + rtr,
-                            'encapsulation': encapsulation,
                             'siteId': cls.site}
                 if ssl:
                     listener['sslProfile'] = tcp_listener_ssl_profile_name
@@ -502,7 +480,6 @@ class TcpAdaptorBase(TestCase):
 
         cls.routers = []
         cls.test_ssl = test_ssl
-        cls.encapsulation = encap
         # define logging levels. Set the following two flags to True
         # if you want to see copious logging from the echo client and echo server
         ###################################################################
@@ -586,7 +563,7 @@ class TcpAdaptorBase(TestCase):
         int_a_config = [('listener', {'role': 'inter-router', 'port': inter_router_port_AB}),
                         ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port}),
                         ('tcpListener', {'host': "0.0.0.0", 'port': cls.INTA_conn_stall_listener_port,
-                                         'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation, 'siteId': cls.site})]
+                                         'address': 'NS_EC2_CONN_STALL', 'siteId': cls.site})]
 
         if cls.test_ssl:
             # This listener will be used to test the authenticatePeer functionality.
@@ -596,52 +573,44 @@ class TcpAdaptorBase(TestCase):
                                   'sslProfile': 'tcp-listener-ssl-profile',
                                   'authenticatePeer': 'yes',
                                   'address': 'ES_INTA',
-                                  'encapsulation': cls.encapsulation,
                                   'siteId': cls.site}))
 
         # Launch the routers using the sea of router ports
         cls.logger.log("TCP_TEST Launching interior routers")
-        router('INTA', 'interior', int_a_config, ssl=cls.test_ssl, encapsulation=cls.encapsulation)
+        router('INTA', 'interior', int_a_config, ssl=cls.test_ssl)
         inter_router_port_BC = cls.tester.get_port()
         cls.INTB_edge_port = cls.tester.get_port()
         router('INTB', 'interior',
                [('connector', {'role': 'inter-router', 'port': inter_router_port_AB}),
                 ('listener', {'role': 'inter-router', 'port': inter_router_port_BC}),
-                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
 
         cls.INTC_edge_port = cls.tester.get_port()
         router('INTC', 'interior',
                [('connector', {'role': 'inter-router', 'port': inter_router_port_BC}),
-                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+                ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
 
         cls.logger.log("TCP_TEST Launching edge routers")
         router('EA1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl)
         router('EA2', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTA_edge_port})], ssl=cls.test_ssl)
         router('EB1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
         router('EB2', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTB_edge_port})], ssl=cls.test_ssl)
         router('EC1', 'edge',
-               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl,
-               encapsulation=cls.encapsulation)
+               [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port})], ssl=cls.test_ssl)
         cls.EC2_conn_stall_listener_port = cls.tester.get_port()
         router('EC2', 'edge',
                [('connector', {'name': 'uplink', 'role': 'edge', 'port': cls.INTC_edge_port}),
                 ('tcpConnector', {'host': "127.0.0.1", 'port': cls.EC2_conn_stall_connector_port,
-                                  'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation,
+                                  'address': 'NS_EC2_CONN_STALL',
                                   'siteId': cls.site}),
                 ('tcpListener', {'host': "0.0.0.0", 'port': cls.EC2_conn_stall_listener_port,
-                                 'address': 'NS_EC2_CONN_STALL', 'encapsulation': cls.encapsulation,
+                                 'address': 'NS_EC2_CONN_STALL',
                                  'siteId': cls.site})],
-               ssl=cls.test_ssl, encapsulation=cls.encapsulation)
+               ssl=cls.test_ssl)
 
         cls.INTA = cls.routers[0]
         cls.INTB = cls.routers[1]
@@ -1495,25 +1464,18 @@ class TcpAdaptor(TcpAdaptorBase, CommonTcpTests):
         super(TcpAdaptor, cls).setUpClass(test_ssl=False)
 
 
-class TcpAdaptorLite(TcpAdaptorBase, CommonTcpTests):
-    @classmethod
-    def setUpClass(cls):
-        super(TcpAdaptorLite, cls).setUpClass(test_ssl=False, encap="lite")
-
-
 class TcpAdaptorStuckDeliveryTest(TestCase):
     """
     Verify that the routers stuck delivery detection is not applied to TCP
     deliveries.  See Dispatch-2036.
     """
     @classmethod
-    def setUpClass(cls, encap='legacy', test_name='TCPStuckDeliveryTest'):
+    def setUpClass(cls, test_name='TCPStuckDeliveryTest'):
         super(TcpAdaptorStuckDeliveryTest, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
-        cls.encapsulation = encap
         cls.test_name = test_name
 
         # Topology: linear.
@@ -1549,8 +1511,7 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                                ('tcpConnector', {'host': "127.0.0.1",
                                                  'port':
                                                  cls.interior_tcp_connector_port,
-                                                 'address': 'nostuck',
-                                                 'encapsulation': cls.encapsulation})])
+                                                 'address': 'nostuck'})])
         cls.i_router.wait_ready()
         cls.e_router = router(cls,
                               "%s_E" % cls.test_name,
@@ -1558,8 +1519,7 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                               [('tcpListener', {'host': "0.0.0.0",
                                                 'port':
                                                 cls.edge_tcp_listener_port,
-                                                'address': 'nostuck',
-                                                'encapsulation': cls.encapsulation}),
+                                                'address': 'nostuck'}),
                                ('connector', {'role': 'edge',
                                               'port':
                                               cls.interior_edge_listener_port})])
@@ -1630,29 +1590,28 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
                                      "Stuck deliveries should not be logged!")
 
 
-class TcpAdaptorStuckDeliveryLiteTest(TcpAdaptorStuckDeliveryTest):
-    """
-    Verify that the routers stuck delivery detection is not applied to TCP
-    deliveries.  See Dispatch-2036.
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(TcpAdaptorStuckDeliveryLiteTest, cls).setUpClass(encap='lite', test_name='TCPStuckDeliveryLiteTest')
-
-
 class TcpAdaptorManagementTest(TestCase):
     """
     Test Creation and deletion of TCP management entities
     """
+    def _query_links_by_addr(self, router_mgmt, owning_addr):
+        attrs = ['owningAddr', 'linkDir']
+
+        links = []
+        rc = router_mgmt.query(type=ROUTER_LINK_TYPE, attribute_names=attrs).results
+        for link in rc:
+            if link[0] is not None and link[0].endswith(owning_addr):
+                links.append(link)
+        return links
+
     @classmethod
-    def setUpClass(cls, encap='legacy', test_name='TCPMgmtTest'):
+    def setUpClass(cls, test_name='TCPMgmtTest'):
         super(TcpAdaptorManagementTest, cls).setUpClass()
 
         if DISABLE_SELECTOR_TESTS:
             return
 
         cls.test_name = test_name
-        cls.encapsulation = encap
 
         # create edge and interior routers.  The listener/connector will be on
         # the edge router.  It is expected that the edge will create proxy
@@ -1694,16 +1653,6 @@ class TcpAdaptorManagementTest(TestCase):
         cls.i_router.wait_ready()
         cls.e_router.wait_ready()
 
-    def _query_links_by_addr(self, router_mgmt, owning_addr):
-        attrs = ['owningAddr', 'linkDir']
-
-        links = []
-        rc = router_mgmt.query(type=ROUTER_LINK_TYPE, attribute_names=attrs).results
-        for link in rc:
-            if link[0] is not None and link[0].endswith(owning_addr):
-                links.append(link)
-        return links
-
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
     def test_01_mgmt(self):
         """
@@ -1724,14 +1673,12 @@ class TcpAdaptorManagementTest(TestCase):
                     name=listener_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_listener_port,
-                                'host': '127.0.0.1',
-                                'encapsulation': self.encapsulation})
+                                'host': '127.0.0.1'})
         mgmt.create(type=TCP_CONNECTOR_TYPE,
                     name=connector_name,
                     attributes={'address': van_address,
                                 'port': self.tcp_server_port,
-                                'host': '127.0.0.1',
-                                'encapsulation': self.encapsulation})
+                                'host': '127.0.0.1'})
 
         # verify the entities have been created and tcp traffic works
         self.assertEqual(1, len(mgmt.query(type=TCP_LISTENER_TYPE).results))
@@ -1797,14 +1744,12 @@ class TcpAdaptorManagementTest(TestCase):
                         name=listener_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_listener_port,
-                                    'host': '127.0.0.1',
-                                    'encapsulation': self.encapsulation})
+                                    'host': '127.0.0.1'})
             mgmt.create(type=TCP_CONNECTOR_TYPE,
                         name=connector_name,
                         attributes={'address': van_address,
                                     'port': self.tcp_server_port,
-                                    'host': '127.0.0.1',
-                                    'encapsulation': self.encapsulation})
+                                    'host': '127.0.0.1'})
 
             # wait until the listener has initialized
 
@@ -1880,18 +1825,10 @@ class TcpAdaptorManagementTest(TestCase):
             # Verify updated statistics.
 
             l_stats = mgmt.read(type=TCP_LISTENER_TYPE, name=listener_name)
-            if self.encapsulation == 'legacy':
-                # deprecated for tcp-lite
-                self.assertEqual(10, l_stats['bytesIn'])
-                self.assertEqual(4, l_stats['bytesOut'])
             self.assertEqual(1, l_stats['connectionsOpened'])
             self.assertEqual(1, l_stats['connectionsClosed'])
 
             c_stats = mgmt.read(type=TCP_CONNECTOR_TYPE, name=connector_name)
-            if self.encapsulation == 'legacy':
-                # deprecated for tcp-lite
-                self.assertEqual(4, c_stats['bytesIn'])
-                self.assertEqual(10, c_stats['bytesOut'])
             self.assertEqual(2, c_stats['connectionsOpened'])
             self.assertEqual(1, c_stats['connectionsClosed'])
 
@@ -1933,8 +1870,7 @@ class TcpAdaptorManagementLiteTest(TcpAdaptorManagementTest):
     """
     @classmethod
     def setUpClass(cls):
-        super(TcpAdaptorManagementLiteTest, cls).setUpClass(encap='lite',
-                                                            test_name='TCPMgmtLiteTest')
+        super(TcpAdaptorManagementLiteTest, cls).setUpClass(test_name='TCPMgmtLiteTest')
 
 
 class TcpAdaptorListenerConnectTest(TestCase):
@@ -1942,10 +1878,9 @@ class TcpAdaptorListenerConnectTest(TestCase):
     Test client connecting to TcpListeners in various scenarios
     """
     @classmethod
-    def setUpClass(cls, encap='legacy', test_name='TCPListenConnTest'):
+    def setUpClass(cls, test_name='TCPListenConnTest'):
         super(TcpAdaptorListenerConnectTest, cls).setUpClass()
 
-        cls.encapsulation = encap
         cls.test_name = 'TCPListenConnTest'
 
         # 4 router linear deployment:
@@ -2014,16 +1949,14 @@ class TcpAdaptorListenerConnectTest(TestCase):
         a_mgmt.create(type=TCP_LISTENER_TYPE,
                       name="ClientListener01",
                       attributes={'address': van_address,
-                                  'port': listener_port,
-                                  'encapsulation': self.encapsulation})
+                                  'port': listener_port})
 
         b_mgmt = self.INTB.management
         b_mgmt.create(type=TCP_CONNECTOR_TYPE,
                       name="ServerConnector01",
                       attributes={'address': van_address,
                                   'host': '127.0.0.1',
-                                  'port': connector_port,
-                                  'encapsulation': self.encapsulation})
+                                  'port': connector_port})
 
         self.INTA.wait_address(van_address, remotes=1)
 
@@ -2089,8 +2022,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
         l_mgmt.create(type=TCP_LISTENER_TYPE,
                       name=listener_name,
                       attributes={'address': van_address,
-                                  'port': listener_port,
-                                  'encapsulation': self.encapsulation})
+                                  'port': listener_port})
 
         # since there is no connector present, the operational state must be
         # down and connection attempts must be refused
@@ -2117,8 +2049,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
                           name=connector_name,
                           attributes={'address': van_address,
                                       'host': '127.0.0.1',
-                                      'port': connector_port,
-                                      'encapsulation': self.encapsulation})
+                                      'port': connector_port})
 
             # let the connectors address propagate to listener router
 
@@ -2210,12 +2141,12 @@ class TcpAdaptorListenerConnectLiteTest(TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        super(TcpAdaptorListenerConnectLiteTest, cls).setUpClass(encap='lite', test_name='TCPListenConnLiteTest')
+        super(TcpAdaptorListenerConnectLiteTest, cls).setUpClass()
 
 
 class TcpDeleteConnectionTest(TestCase):
     @classmethod
-    def setUpClass(cls, encap='legacy', test_name="TcpDeleteConnectionTest"):
+    def setUpClass(cls, test_name="TcpDeleteConnectionTest"):
         super(TcpDeleteConnectionTest, cls).setUpClass()
         cls.good_listener_port = cls.tester.get_port()
         cls.server_logger = Logger(title=test_name,
@@ -2240,16 +2171,14 @@ class TcpDeleteConnectionTest(TestCase):
               'host': "localhost",
               'port': cls.good_listener_port,
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
-              'siteId': "mySite",
-              'encapsulation': encap}),
+              'siteId': "mySite"}),
 
             ('tcpConnector',
              {'name': "good-connector",
               'host': "localhost",
               'port': cls.echo_server.port,
               'address': 'ES_GOOD_CONNECTOR_CERT_INTA',
-              'siteId': "mySite",
-              'encapsulation': encap}),
+              'siteId': "mySite"}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]
@@ -2287,111 +2216,6 @@ class TcpDeleteConnectionTest(TestCase):
         # Keep retrying until the connection is gone from the connection table.
         retry_assertion(check_connection_deleted, delay=2)
         client_conn.close()
-
-
-class TcpDeleteConnectionLiteTest(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super(TcpDeleteConnectionLiteTest, cls).setUpClass(encap='lite', test_name="TcpDeleteConnectionLiteTest")
-
-
-class TcpLegacyInvalidEncodingTest(TestCase):
-    """
-    Ensure that the TCP adaptor can recover from receiving an improperly
-    formatted AMQP encoded stream message.
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(TcpLegacyInvalidEncodingTest, cls).setUpClass()
-
-        config = [
-            ('router', {'mode': 'interior', 'id': 'TcpInvalidEncoding'}),
-            # Listener for handling router management requests.
-            ('listener', {'role': 'normal',
-                          'port': cls.tester.get_port()}),
-            ('tcpConnector', {'host': "127.0.0.1",
-                              'port': cls.tester.get_port(),
-                              'address': 'tcp-connector',
-                              'encapsulation': 'legacy',
-                              'siteId': "mySite"}),
-            ('tcpListener', {'host': "0.0.0.0",
-                             'port': cls.tester.get_port(),
-                             'address': 'tcp-listener',
-                             'encapsulation': 'legacy',
-                             'siteId': "mySite"}),
-            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
-            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-        ]
-
-        cls.router = cls.tester.qdrouterd('TcpInvalidEncoding',
-                                          Qdrouterd.Config(config), wait=True)
-
-        cls.amqp_address = cls.router.addresses[0]
-        cls.listener_address = cls.router.tcp_addresses[0]
-
-    def test_invalid_egress_client_request_encaps(self):
-        """
-        Simulate an message with an incompatible ecapsulation sent by a client
-        that arrives at the egress connector. Verify that the egress connector
-        RELEASED the message and an error has been logged. The message should
-        be released so it can be delivered to another (compatible) connector.
-        """
-
-        # send a request message with an incompatible encapsulation
-
-        msg = Message()
-        msg.to = "tcp-connector"
-        msg.subject = "stuff"
-        msg.reply_to = "invalid/reply/to"
-        msg.content_type = "This-is-wrong"
-        test = InvalidClientSendRequest(msg, self.amqp_address, 'tcp-connector')
-        test.run()
-        self.assertIsNone(test.error)
-        self.router.wait_log_message(pattern=r"Misconfigured tcpConnector \(wrong encapsulation\)")
-
-    def test_invalid_ingress_server_reply_encaps(self):
-        """
-        Simulate an invalid reply message arriving at the ingress
-        listener. Verify the message is REJECTED and an error has been
-        logged. The message is rejected because the link is a reply-to stream
-        with a unique address for the client - it cannot be redelivered to
-        another client.
-        """
-
-        # send a reply message with an incompatible encapsulation
-
-        msg = Message()
-        msg.subject = "Subject"
-        msg.annotations = {":flowid": "whatever"}
-        msg.content_type = "This-is-wrong"
-        test = InvalidServerSendReply(msg, self.amqp_address,
-                                      self.listener_address, 'tcp-listener',
-                                      Disposition.REJECTED)
-        test.run()
-        self.assertIsNone(test.error)
-        self.router.wait_log_message(pattern=r"Misconfigured tcpListener \(wrong outgoing encapsulation\)")
-
-    def test_invalid_ingress_server_reply_body(self):
-        """
-        Simulate a reply message arriving at the ingress listener that has an
-        invalid body structure. The client should close the connection and set
-        the outcome to ACCEPTED. The reason REJECTED is not used is because
-        data may already have been sent to the TCP client and it is too late to
-        reject the message.
-        """
-
-        # send a reply message with an incompatible body format
-
-        msg = Message()
-        msg.subject = "Subject"
-        msg.annotations = {":flowid": "whatever"}
-        msg.body = "This is a STRING, NOT VBIN!"
-        test = InvalidServerSendReply(msg, self.amqp_address,
-                                      self.listener_address, 'tcp-listener',
-                                      Disposition.ACCEPTED)
-        test.run()
-        self.assertIsNone(test.error)
-        self.router.wait_log_message(pattern=r"Invalid body data for streaming message")
 
 
 class InvalidClientSendRequest(MessagingHandler):
@@ -2504,7 +2328,6 @@ class InvalidServerSendReply(MessagingHandler):
         # response streaming message.
         try:
             data = self.server_receiver.recv(self.request_dlv.pending)
-            #print(f"len={len(xxx)}\nBODY=[{xxx}]", flush=True)
             msg = Message()
             msg.decode(data)
             self.server_sender = event.container.create_sender(self.server_conn,
@@ -2582,7 +2405,7 @@ class TcpAdaptorConnCounter(TestCase):
         self.assertIsNotNone(counters, "expected a counter map to be returned")
         return counters
 
-    def _run_test(self, encaps, idle_ct, active_ct):
+    def _run_test(self, idle_ct, active_ct):
         # idle_ct: expected connection count when tcp configured, but prior to
         # connections active. This includes the count of special dispatcher
         # connections.
@@ -2612,14 +2435,12 @@ class TcpAdaptorConnCounter(TestCase):
             mgmt.create(type=TCP_LISTENER_TYPE,
                         name="ClientListener",
                         attributes={'address': 'closest/tcpService',
-                                    'port': listener_port,
-                                    'encapsulation': encaps})
+                                    'port': listener_port})
             mgmt.create(type=TCP_CONNECTOR_TYPE,
                         name="ServerConnector",
                         attributes={'address': 'closest/tcpService',
                                     'host': "localhost",
-                                    'port': connector_port,
-                                    'encapsulation': encaps})
+                                    'port': connector_port})
 
             wait_tcp_listeners_up(self.router.addresses[0],
                                   l_filter={'name': 'ClientListener'})
@@ -2661,8 +2482,7 @@ class TcpAdaptorConnCounter(TestCase):
         """ Create and destroy TCP network connections, verify the connection
         counter is correct.
         """
-        for encaps in ['legacy', 'lite']:
-            self._run_test(encaps, idle_ct=1, active_ct=3)
+        self._run_test(idle_ct=1, active_ct=3)
 
 
 class TcpAdaptorNoDelayedDelivery(TestCase):
@@ -2670,10 +2490,9 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
     Ensure long lived TCP sessions are not counted as delayed deliveries
     """
     @classmethod
-    def setUpClass(cls, encap="legacy"):
+    def setUpClass(cls):
         super(TcpAdaptorNoDelayedDelivery, cls).setUpClass()
 
-        cls.encapsulation = encap
         cls.listener_port = cls.tester.get_port()
         cls.connector_port = cls.tester.get_port()
         config = [
@@ -2683,12 +2502,10 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
                           'port': cls.tester.get_port()}),
             ('tcpListener', {'host': "0.0.0.0",
                              'port': cls.listener_port,
-                             'address': "no/delay",
-                             'encapsulation': cls.encapsulation}),
+                             'address': "no/delay"}),
             ('tcpConnector', {'host': "127.0.0.1",
                               'port': cls.connector_port,
-                              'address': "no/delay",
-                              'encapsulation': cls.encapsulation}),
+                              'address': "no/delay"}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]
@@ -2758,107 +2575,16 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
                          f"Expected delay counter to be zero, got {counters}")
 
 
-class TcpAdaptorNoDelayedDeliveryLite(TcpAdaptorNoDelayedDelivery):
-    """
-    Ensure long lived TCP sessions are not counted as delayed deliveries
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(TcpAdaptorNoDelayedDeliveryLite, cls).setUpClass(encap='lite')
-
-
-class TcpMisconfiguredLegacyLiteEncapsTest(TestCase):
-    """
-    Ensure that the TCP adaptor can detect misconfiguration of the
-    encapsulation setting by creating a tcpListener and tcpConnector pair that
-    use different encaps.
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(TcpMisconfiguredLegacyLiteEncapsTest, cls).setUpClass()
-
-        config = [
-            ('router', {'mode': 'interior', 'id': 'TcpMisconfiguredEncaps'}),
-            # Listener for handling router management requests.
-            ('listener', {'role': 'normal',
-                          'port': cls.tester.get_port()}),
-            ('address', {'prefix': 'closest',   'distribution': 'closest'}),
-            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-        ]
-
-        cls.router = cls.tester.qdrouterd('TcpInvalidEncoding',
-                                          Qdrouterd.Config(config), wait=True)
-        cls.address = cls.router.addresses[0]
-
-    def _test(self, ingress_encaps, egress_encaps):
-        ingress_port = self.tester.get_port()
-        egress_port = self.tester.get_port()
-        mgmt = self.router.qd_manager
-
-        mgmt.create(TCP_CONNECTOR_TYPE,
-                    {"name": "EncapsConnector",
-                     "address": "EncapsTest",
-                     "host": "localhost",
-                     "port": egress_port,
-                     "encapsulation": egress_encaps})
-        mgmt.create(TCP_LISTENER_TYPE,
-                    {"name": "EncapsListener",
-                     "address": "EncapsTest",
-                     "port": ingress_port,
-                     "encapsulation": ingress_encaps})
-        wait_tcp_listeners_up(self.address)
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server.settimeout(TIMEOUT)
-            server.bind(("", egress_port))
-            server.listen(1)
-
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_conn:
-                client_conn.settimeout(TIMEOUT)
-                while True:
-                    try:
-                        client_conn.connect(('127.0.0.1', ingress_port))
-                        break
-                    except ConnectionRefusedError:
-                        # There may be a delay between the operStatus going up and
-                        # the actual listener socket availability, so allow that:
-                        time.sleep(0.1)
-                        continue
-
-                # send data to kick off the flow, but expect connection to fail
-                # in recv (either close or reset)
-
-                client_conn.sendall(b' test ')
-                try:
-                    data = client_conn.recv(4096)
-                except ConnectionResetError:
-                    data = b''
-
-                self.assertEqual(b'', data, "expected recv to fail")
-
-        mgmt.delete(TCP_CONNECTOR_TYPE, name="EncapsConnector")
-        mgmt.delete(TCP_LISTENER_TYPE, name="EncapsListener")
-
-    def test_01_encaps_mismatch(self):
-        """
-        Attempt to configure incompatible TCP encapsulation on each side of the
-        TCP path
-        """
-        self._test(ingress_encaps="legacy", egress_encaps="lite")
-        self._test(ingress_encaps="lite", egress_encaps="legacy")
-
-
-class TcpLiteCutthroughAbortTest(TestCase):
+class TcpCutthroughAbortTest(TestCase):
     """
     Verify that the TCP adaptor can properly handle an AMQP Aborted delivery
     """
     @classmethod
     def setUpClass(cls):
-        super(TcpLiteCutthroughAbortTest, cls).setUpClass()
+        super(TcpCutthroughAbortTest, cls).setUpClass()
         cls.van_address = 'closest/cutthroughabort'
         cls.edge_port = cls.tester.get_port()
-        cls.logger = Logger(title="TcpLiteCutthroughAbortTest",
+        cls.logger = Logger(title="TcpCutthroughAbortTest",
                             print_to_console=False,
                             ofilename=os.path.join(os.path.dirname(os.getcwd()),
                                                    "setUpClass/TcpCutthroughAbort_server.log"))
@@ -2880,8 +2606,7 @@ class TcpLiteCutthroughAbortTest(TestCase):
             ('listener', {'name': 'uplink', 'role': 'edge', 'port': cls.edge_port}),
             ('tcpConnector', {'host': "localhost",
                               'port': cls.echo_server.port,
-                              'address': cls.van_address,
-                              'encapsulation': 'lite'}),
+                              'address': cls.van_address}),
             ('address', {'prefix': 'closest',   'distribution': 'closest'}),
             ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
         ]

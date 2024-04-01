@@ -30,7 +30,7 @@ class Http1OverTcpOneRouterTest(Http1OneRouterTestBase,
     Test HTTP servers and clients attached to a standalone router
     """
     @classmethod
-    def setUpClass(cls, encap='legacy'):
+    def setUpClass(cls):
         """Start a router"""
         super(Http1OverTcpOneRouterTest, cls).setUpClass()
 
@@ -48,19 +48,15 @@ class Http1OverTcpOneRouterTest(Http1OneRouterTestBase,
         super(Http1OverTcpOneRouterTest, cls).router('INT.A', 'standalone',
                                                      [('tcpConnector', {'port': cls.server11_port,
                                                                         'host': cls.server11_host,
-                                                                        'encapsulation': encap,
                                                                         'address': 'testServer11'}),
                                                       ('tcpConnector', {'port': cls.server10_port,
                                                                         'host': cls.server10_host,
-                                                                        'encapsulation': encap,
                                                                         'address': 'testServer10'}),
                                                       ('tcpListener', {'port': cls.listener11_port,
                                                                        'host': cls.listener11_host,
-                                                                       'encapsulation': encap,
                                                                        'address': 'testServer11'}),
                                                       ('tcpListener', {'port': cls.listener10_port,
                                                                        'host': cls.listener10_host,
-                                                                       'encapsulation': encap,
                                                                        'address': 'testServer10'})
                                                       ])
 
@@ -80,24 +76,13 @@ class Http1OverTcpOneRouterTest(Http1OneRouterTestBase,
         super().tearDownClass()
 
 
-class Http1OverTcpLiteOneRouterTest(Http1OverTcpOneRouterTest):
-    """
-    Test HTTP servers and clients attached to a standalone router
-    Tcp Lite version
-    """
-    @classmethod
-    def setUpClass(cls):
-        """Start a router"""
-        super(Http1OverTcpLiteOneRouterTest, cls).setUpClass(encap='lite')
-
-
 class Http1OverTcpEdge2EdgeTest(Http1Edge2EdgeTestBase, CommonHttp1Edge2EdgeTest):
     """
     Test an HTTP servers and clients attached to edge routers separated by an
     interior router
     """
     @classmethod
-    def setUpClass(cls, encap='legacy'):
+    def setUpClass(cls):
         """Start a router"""
         super(Http1OverTcpEdge2EdgeTest, cls).setUpClass()
 
@@ -127,10 +112,8 @@ class Http1OverTcpEdge2EdgeTest(Http1Edge2EdgeTestBase, CommonHttp1Edge2EdgeTest
             router('EA1', 'edge', [('connector', {'name': 'uplink', 'role': 'edge',
                                                   'port': cls.INTA_edge1_port}),
                                    ('tcpListener', {'port': cls.listener11_port,
-                                                    'encapsulation': encap,
                                                     'address': 'testServer11'}),
                                    ('tcpListener', {'port': cls.listener10_port,
-                                                    'encapsulation': encap,
                                                     'address': 'testServer10'})
                                    ])
         cls.EA1 = cls.routers[1]
@@ -141,11 +124,9 @@ class Http1OverTcpEdge2EdgeTest(Http1Edge2EdgeTestBase, CommonHttp1Edge2EdgeTest
                                                   'port': cls.INTA_edge2_port}),
                                    ('tcpConnector', {'port': cls.server11_port,
                                                      'host': cls.server11_host,
-                                                     'encapsulation': encap,
                                                      'address': 'testServer11'}),
                                    ('tcpConnector', {'port': cls.server10_port,
                                                      'host': cls.server10_host,
-                                                     'encapsulation': encap,
                                                      'address': 'testServer10'})
                                    ])
         cls.EA2 = cls.routers[-1]
@@ -154,13 +135,3 @@ class Http1OverTcpEdge2EdgeTest(Http1Edge2EdgeTestBase, CommonHttp1Edge2EdgeTest
         cls.INT_A.wait_address('EA1')
         cls.INT_A.wait_address('EA2')
         wait_tcp_listeners_up(cls.EA1.listener)
-
-
-class Http1OverTcpLiteEdge2EdgeTest(Http1OverTcpEdge2EdgeTest):
-    """
-    Test an HTTP servers and clients attached to edge routers separated by an
-    interior router
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(Http1OverTcpLiteEdge2EdgeTest, cls).setUpClass(encap='lite')
