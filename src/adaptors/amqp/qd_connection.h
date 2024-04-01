@@ -115,8 +115,9 @@ struct qd_connection_t {
 
 ALLOC_DECLARE_SAFE(qd_connection_t);
 
-qd_connection_t *qd_server_connection(qd_server_t *server, qd_server_config_t* config);
-qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config_t *config, qd_connection_t *ctx, qd_connector_t *connector);
+// initialize a newly allocated qd_connection_t
+void qd_connection_init(qd_connection_t *qd_conn, qd_server_t *server, qd_server_config_t *config,
+                        qd_connector_t *connector, qd_listener_t *listener);
 
 qd_connector_t* qd_connection_connector(const qd_connection_t *c);
 

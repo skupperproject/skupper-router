@@ -44,7 +44,7 @@ void check_amqp_listener_startup_log_message(qd_server_config_t config, std::str
     CaptureCStream css(stderr);
     qdr.initialize("./minimal_trace.conf");
 
-    qd_listener_t *li = qd_server_listener(qdr.qd->server);
+    qd_listener_t *li = qd_listener(qdr.qd->server);
     li->config = config;
 
     CHECK(qd_listener_listen(li));
@@ -71,7 +71,7 @@ void check_http_listener_startup_log_message(qd_server_config_t config, std::str
     CaptureCStream css(stderr);
     qdr.initialize("./minimal_trace.conf");
 
-    qd_listener_t *li = qd_server_listener(qdr.qd->server);
+    qd_listener_t *li = qd_listener(qdr.qd->server);
     li->config = config;
 
     const bool http_supported = qd_server_http(qdr.qd->server) != nullptr;

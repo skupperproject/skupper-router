@@ -27,6 +27,7 @@
 #include "qpid/dispatch/proton_utils.h"
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/proactor.h>
 #include <proton/sasl.h>
@@ -445,10 +446,8 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
  * Does not allocate any managed objects and therefore
  * does not take ENTITY_CACHE lock.
  */
-qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config_t *config, qd_connection_t *ctx, qd_connector_t *connector)
+void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, qd_server_config_t *config, qd_connector_t *connector, qd_listener_t *listener)
 {
-    assert(ctx);
-    ZERO(ctx);
     ctx->pn_conn = pn_connection();
     assert(ctx->pn_conn);
     sys_mutex_init(&ctx->deferred_call_lock);
@@ -466,29 +465,23 @@ qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config
     DEQ_INIT(ctx->deferred_calls);
     DEQ_INIT(ctx->free_link_session_list);
 
+    // note: setup connector or listener before decorating the connection since
+    // decoration involves accessing the connection's parent.
+
     if (!!connector) {
-        ctx->connector = connector;
-        strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+        assert(!listener);
+        qd_connector_add_connection(connector, ctx);
+    } else if (!!listener) {
+        qd_listener_add_connection(listener, ctx);
     }
+
     decorate_connection(ctx, config);
 
     sys_mutex_lock(&amqp_adaptor.lock);
     DEQ_INSERT_TAIL(amqp_adaptor.conn_list, ctx);
     sys_mutex_unlock(&amqp_adaptor.lock);
-
-    return ctx;
 }
 
-/* Construct a new qd_connection. Thread safe.
- * Allocates a qd_connection_t object and therefore
- * takes ENTITY_CACHE lock.
- */
-qd_connection_t *qd_server_connection(qd_server_t *server, qd_server_config_t *config)
-{
-    qd_connection_t *ctx = new_qd_connection_t();
-    if (!ctx) return NULL;
-    return qd_server_connection_impl(server, config, ctx, 0);
-}
 
 qd_connector_t* qd_connection_connector(const qd_connection_t *c) {
     return c->connector;
@@ -553,18 +546,21 @@ void qd_connection_set_user(qd_connection_t *conn)
 
 static void qd_connection_free(qd_connection_t *qd_conn)
 {
-    // If this is a dispatch connector uncouple it from the
-    // connection and restart the re-connect timer if necessary
-
-    if (qd_conn->connector) {
-        qd_connector_release_connection(qd_conn->connector, qd_conn);
-        qd_connector_decref(qd_conn->connector);  // drop connection's reference
-        qd_conn->connector = 0;
-    }
-
     sys_mutex_lock(&amqp_adaptor.lock);
     DEQ_REMOVE(amqp_adaptor.conn_list, qd_conn);
     sys_mutex_unlock(&amqp_adaptor.lock);
+
+    // If this connection is from a connector uncouple it and restart the re-connect timer if necessary
+
+    if (qd_conn->connector) {
+        qd_connector_remove_connection(qd_conn->connector);
+        qd_conn->connector = 0;
+    }
+
+    if (qd_conn->listener) {
+        qd_listener_remove_connection(qd_conn->listener, qd_conn);
+        qd_conn->listener = 0;
+    }
 
     // If counted for policy enforcement, notify it has closed
     if (qd_conn->policy_counted) {

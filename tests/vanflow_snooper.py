@@ -22,8 +22,10 @@ import argparse
 import json
 import logging
 import sys
+from copy import deepcopy
 from os import path
 from threading import Thread
+from threading import Lock
 
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
@@ -50,6 +52,7 @@ record_types = {
     12: "PROCESS_GROUP",
     13: "HOST",
     14: "LOG",
+    15: "ACCESS_POINT"
 }
 
 RECORD_TYPE = 0
@@ -107,7 +110,10 @@ attribute_types = {
     48: "LOG_SEVERITY",
     49: "LOG_TEXT",
     50: "SOURCE_FILE",
-    51: "SOURCE_LINE"
+    51: "SOURCE_LINE",
+    52: "LINK_COUNT",
+    53: "OPER_STATUS",
+    54: "ROLE"
 }
 
 
@@ -153,11 +159,11 @@ class EventSource:
             for key, value in attributes.items():
                 if key not in attribute_types:
                     # need to update attribute_types with new type?
-                    raise Exception(f"Missing VanFlow attribute type '{key}'")
+                    raise Exception(f"Unknown VanFlow attribute type '{key}'")
                 if key == RECORD_TYPE:
                     if value not in record_types:
                         # need to update record_types with new type?
-                        raise Exception(f"Missing VanFlow record type '{value}'")
+                        raise Exception(f"Unknown VanFlow record type '{value}'")
                     record['RECORD_TYPE'] = record_types[value]
                 else:
                     record[attribute_types[key]] = value
@@ -178,6 +184,7 @@ class VFlowSnooper(MessagingHandler):
         self.address = address  # router address
         self.conn = None
         self.beacon_receiver = None
+        self.sources_lock = Lock()
         self.sources = {}
         self._error = None
         self._sources_subscribed = 0
@@ -199,13 +206,14 @@ class VFlowSnooper(MessagingHandler):
             addr = event.link.source.address
         logger.debug("%s link opened: %s", ltype, addr)
 
-        for name in self.sources.keys():
-            if name in addr:
-                self.sources[name].links_pending -= 1
-                assert self.sources[name].links_pending >= 0
-                if self.sources[name].links_pending == 0:
-                    self._sources_subscribed += 1
-                    logger.debug("%s sources ready", self.sources_ready)
+        with self.sources_lock:
+            for name in self.sources.keys():
+                if name in addr:
+                    self.sources[name].links_pending -= 1
+                    assert self.sources[name].links_pending >= 0
+                    if self.sources[name].links_pending == 0:
+                        self._sources_subscribed += 1
+                        logger.debug("%s sources ready", self.sources_ready)
 
     def on_link_closed(self, event):
         if event.link.is_sender:
@@ -272,6 +280,7 @@ class VFlowSnooper(MessagingHandler):
         self.container.create_receiver(self.conn, base_address)
         self.container.create_receiver(self.conn, flow_address)
         sender = self.container.create_sender(self.conn, command_address)
+        assert self.sources_lock.locked()
         self.sources[name] = EventSource(name, base_address, sender)
 
     def handle_beacon(self, message):
@@ -279,30 +288,34 @@ class VFlowSnooper(MessagingHandler):
         logger.debug("Beacon from %s", source_id)
 
         name = id_2_source(source_id)
-        if name not in self.sources:
-            self.add_source(name, message.properties['address'], message.properties['direct'])
+        with self.sources_lock:
+            if name not in self.sources:
+                self.add_source(name, message.properties['address'], message.properties['direct'])
 
     def handle_heartbeat(self, message):
         source_id = message.properties['id']
         logger.debug("Heartbeat from %s", source_id)
+        sender = None
         name = id_2_source(source_id)
-        source = self.sources.get(name)
-        if source is not None:
-            source.idle_heartbeats += 1
-            if self._idle_timeout > 0:
-                # Check all known sources for idle timeout
-                idle = True
-                for src in self.sources.values():
-                    if src.idle_heartbeats < self._idle_timeout:
-                        idle = False
-                        break
-                if idle:
-                    logger.debug("Exiting due to idle_timeout")
-                    self.exit()
-                    return
+        with self.sources_lock:
+            source = self.sources.get(name)
+            if source is not None:
+                source.idle_heartbeats += 1
+                if self._idle_timeout > 0:
+                    # Check all known sources for idle timeout
+                    idle = True
+                    for src in self.sources.values():
+                        if src.idle_heartbeats < self._idle_timeout:
+                            idle = False
+                            break
+                    if idle:
+                        logger.debug("Exiting due to idle_timeout")
+                        self.exit()
+                        return
+                sender = source.sender
 
-            if source.sender.credit > 0:
-                source.sender.send(Message(subject='FLUSH'))
+        if sender is not None and sender.credit > 0:
+            sender.send(Message(subject='FLUSH'))
 
     def handle_records(self, message):
         for record in message.body:
@@ -311,20 +324,21 @@ class VFlowSnooper(MessagingHandler):
                 err = f"ERROR: received record with no id: {record}"
                 logger.error(err)
                 self.exit(err)
-            source = self.sources.get(id_2_source(identity))
-            if source is None:
-                err = f"ERROR: source {identity} not in sources!!"
-                logger.error(err)
-                self.exit(err)
+            with self.sources_lock:
+                source = self.sources.get(id_2_source(identity))
+                if source is None:
+                    err = f"ERROR: source {identity} not in sources!!"
+                    logger.error(err)
+                    self.exit(err)
 
-            if identity not in source.records:
-                logger.debug("New record: %s", identity)
-                self._total_records += 1
-                source.records[identity] = record
-                source.idle_heartbeats = 0  # new record
-            else:
-                logger.debug("Record update: %s", identity)
-                source.records[identity].update(record)
+                if identity not in source.records:
+                    logger.debug("New record: %s", identity)
+                    self._total_records += 1
+                    source.records[identity] = record
+                    source.idle_heartbeats = 0  # new record
+                else:
+                    logger.debug("Record update: %s", identity)
+                    source.records[identity].update(record)
 
     def get_results(self):
         """
@@ -333,8 +347,9 @@ class VFlowSnooper(MessagingHandler):
         """
         results = {}
         if self.error is None:
-            for source_id, event in self.sources.items():
-                results[f"{source_id}:0"] = event.get_records()
+            with self.sources_lock:
+                for source_id, event in self.sources.items():
+                    results[f"{source_id}:0"] = deepcopy(event.get_records())
         return results
 
 
