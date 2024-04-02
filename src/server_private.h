@@ -31,6 +31,7 @@
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/discriminator.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/engine.h>
 #include <proton/event.h>
@@ -100,12 +101,14 @@ struct qd_listener_t {
     /* May be referenced by connection_manager and pn_listener_t */
     qd_handler_context_t      type;
     sys_atomic_t              ref_count;
+    sys_atomic_t              connection_count;
     qd_server_t              *server;
     qd_server_config_t        config;
     pn_listener_t            *pn_listener;
     qd_lws_listener_t        *http;
     DEQ_LINKS(qd_listener_t);
     bool                      exit_on_error;
+    vflow_record_t           *vflow_record;
 };
 
 DEQ_DECLARE(qd_listener_t, qd_listener_list_t);
@@ -128,6 +131,7 @@ struct qd_connector_t {
     sys_mutex_t               lock;
     cxtr_state_t              state;
     qd_connection_t          *qd_conn;
+    vflow_record_t           *vflow_record;
 
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
     qd_failover_item_list_t   conn_info_list;

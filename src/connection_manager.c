@@ -606,6 +606,14 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
     } else {
         li->config.failover_list = 0;
     }
+
+    //
+    // Set up the vanflow record for this listener (ACCESS_POINT)
+    //
+    li->vflow_record = vflow_start_record(VFLOW_RECORD_ACCESS_POINT, 0);
+    vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
+    vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
+
     DEQ_ITEM_INIT(li);
     DEQ_INSERT_TAIL(cm->listeners, li);
     log_config(&li->config, "Listener", true);
@@ -852,8 +860,17 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         item->host_port = malloc(hplen);
         snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
 
-        DEQ_INSERT_TAIL(ct->conn_info_list, item);
+        //
+        // Set up the vanflow record for this listener (ACCESS_POINT)
+        //
+        ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
+        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
+        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
+        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
 
+        DEQ_INSERT_TAIL(ct->conn_info_list, item);
         return ct;
     }
 
