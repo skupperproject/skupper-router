@@ -861,7 +861,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
 
         //
-        // Set up the vanflow record for this listener (ACCESS_POINT)
+        // Set up the vanflow record for this connector (LINK)
         //
         ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
         vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
