@@ -138,6 +138,7 @@ typedef struct {
     char                *event_address_my_flow;
     char                *event_address_my_log;
     char                *command_address;
+    char                *router_mode;
     bool                 sleeping;
     vflow_work_list_t    work_list;
     vflow_record_t      *local_router;
@@ -591,6 +592,7 @@ static void _vflow_create_router_record(void)
     }
 
     vflow_set_string(router, VFLOW_ATTRIBUTE_BUILD_VERSION, QPID_DISPATCH_VERSION);
+    vflow_set_string(router, VFLOW_ATTRIBUTE_MODE, state->router_mode);
 }
 
 
@@ -1732,6 +1734,13 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 
     state->router_area = qdr_core_dispatch(core)->router_area;
     state->router_name = qdr_core_dispatch(core)->router_id;
+
+    switch (qdr_core_dispatch(core)->router_mode) {
+    case QD_ROUTER_MODE_STANDALONE: state->router_mode = "standalone"; break;
+    case QD_ROUTER_MODE_INTERIOR:   state->router_mode = "interior";   break;
+    case QD_ROUTER_MODE_EDGE:       state->router_mode = "edge";       break;
+    case QD_ROUTER_MODE_ENDPOINT:   state->router_mode = "endpoint";   break;
+    }
 
     for (int slot = 0; slot < FLUSH_SLOT_COUNT; slot++) {
         DEQ_INIT(state->unflushed_flow_records[slot]);
