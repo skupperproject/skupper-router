@@ -49,7 +49,6 @@ const unsigned char *address_entity_type           = (unsigned char*) "io.skuppe
 const unsigned char *link_entity_type              = (unsigned char*) "io.skupper.router.router.link";
 const unsigned char *router_entity_type            = (unsigned char*) "io.skupper.router.router";
 const unsigned char *connection_entity_type        = (unsigned char*) "io.skupper.router.connection";
-const unsigned char *tcp_connection_entity_type    = (unsigned char*) "io.skupper.router.tcpConnection";
 const unsigned char *http_request_info_entity_type = (unsigned char*) "io.skupper.router.httpRequestInfo";
 
 const char * const status_description = "statusDescription";
@@ -436,8 +435,6 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
         *entity_type = QD_ROUTER_ROUTER;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), connection_entity_type))
         *entity_type = QD_ROUTER_CONNECTION;
-    else if (qd_iterator_equal(qd_parse_raw(parsed_field), tcp_connection_entity_type))
-        *entity_type = QD_ROUTER_TCP_CONNECTION;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), http_request_info_entity_type))
         *entity_type = QD_ROUTER_HTTP_REQUEST_INFO;
     else

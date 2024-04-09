@@ -22,7 +22,7 @@
 #include <proton/raw_connection.h>
 #include "delivery.h"
 #include "qd_connection.h"
-#include "adaptors/tcp_lite/tcp_lite.h"
+#include "adaptors/tcp/tcp_adaptor.h"
 
 
 static void activate_connection(const qd_message_activation_t *activation, qd_direction_t dir)
@@ -63,7 +63,7 @@ static void activate_connection(const qd_message_activation_t *activation, qd_di
     }
 
     case QD_ACTIVATION_TCP: {
-        tcplite_connection_t *conn = safe_deref_tcplite_connection_t(activation->safeptr);
+        qd_tcp_connection_t *conn = safe_deref_qd_tcp_connection_t(activation->safeptr);
         if (!!conn) {
             sys_mutex_lock(&conn->activation_lock);
             if (IS_ATOMIC_FLAG_SET(&conn->raw_opened)) {

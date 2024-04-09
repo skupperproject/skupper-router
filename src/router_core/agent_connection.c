@@ -522,7 +522,6 @@ static void qdra_connection_update_set_status(qdr_core_t *core, qdr_query_t *que
 {
     if (conn) {
         qd_iterator_t *admin_status_iter = qd_parse_raw(admin_state);
-
         if (qd_iterator_equal(admin_status_iter, (unsigned char*) QDR_CONNECTION_ADMIN_STATUS_DELETED)) {
             // This connection has been force-closed.  There are certain types of connections that cannot be
             // force-closed by management because they are essential for the correct operation of the router

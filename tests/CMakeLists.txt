@@ -161,12 +161,11 @@ foreach(py_test_module
     system_tests_routing_protocol
     system_tests_open_properties
     system_tests_http2 
-    system_tests_grpc 
+    system_tests_grpc
     system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_tcp_adaptor
     system_tests_tcp_adaptor_tls
-    system_tests_tcp_half_close
     system_tests_http2_tls
     system_tests_heartbeats
     system_tests_address_watch
