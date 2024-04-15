@@ -393,8 +393,13 @@ static void free_listener(qd_tcp_listener_t *li)
     sys_mutex_lock(&tcp_context->lock);
     DEQ_REMOVE(tcp_context->listeners, li);
     sys_mutex_unlock(&tcp_context->lock);
-
-    vflow_end_record(li->common.vflow);
+    //
+    // This call to vflow_end_record is only here to doubly make sure that any future calls to free_listener
+    // will end the vflow record if it has not already ended.
+    //
+    if (li->common.vflow) {
+        vflow_end_record(li->common.vflow);
+    }
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Deleted TcpListener for %s, %s:%s",
@@ -2296,7 +2301,6 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
 
 QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 {
-
     SET_THREAD_UNKNOWN;
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
     if (li) {
@@ -2307,18 +2311,36 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         //
         if (!!li->adaptor_listener) {
             qd_adaptor_listener_close(li->adaptor_listener);
+            //
+            // The above function (qd_adaptor_listener_close) synchronously closes the listening port of the listener,
+            // so there will be no new connections created via the listener anymore.
+            //
+            vflow_end_record(li->common.vflow);
+            li->common.vflow = 0;
             li->adaptor_listener = 0;
         }
 
         if (tcp_context->adaptor_finalizing) {
             qd_tcp_connection_t *conn = DEQ_HEAD(li->connections);
-            if (!!conn) {
                 while (conn) {
                     qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
                     close_connection_XSIDE_IO(conn, tcp_context->adaptor_finalizing);
                     conn = next_conn;
                 }
-            } else {
+                //
+                // All connections associated from this listener have been closed.
+                // It is safe to free the listener at this time.
+                //
+                free_listener(li);
+        }
+        else {
+            //
+            // The adaptor is not finalizing, qd_dispatch_delete_tcp_listener() is being called
+            // by a management client.
+            // If there are any existing connections, don't free the listener yet. The listener will
+            // be deleted when the last connection associated with the listener disconnects.
+            //
+            if (DEQ_SIZE(li->connections) == 0) {
                 free_listener(li);
             }
         }
