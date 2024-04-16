@@ -67,6 +67,7 @@ struct qd_tcp_listener_t {
     qdpo_t                    *protocol_observer;
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
+    sys_atomic_t               ref_count;
     bool                       closing;
 };
 
@@ -85,6 +86,7 @@ typedef struct qd_tcp_connector_t {
     qd_tcp_connection_list_t  connections;
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
+    sys_atomic_t               ref_count;
     bool                       closing;
 } qd_tcp_connector_t;
 
