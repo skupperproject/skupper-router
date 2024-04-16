@@ -590,6 +590,36 @@ static void connection_wake(qd_connection_t *ctx) {
     if (ctx->pn_conn) pn_connection_wake(ctx->pn_conn);
 }
 
+static void add_connection_to_listener(qd_connection_t *ctx, qd_listener_t *listener)
+{
+    sys_atomic_inc(&listener->ref_count);
+    ctx->listener = listener;
+    if (!!listener->vflow_record) {
+        uint32_t count = sys_atomic_inc(&listener->connection_count) + 1;
+        vflow_set_uint64(listener->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+    }
+}
+
+static void remove_connection_from_listener(qd_connection_t *ctx, qd_listener_t *listener)
+{
+    if (!!listener->vflow_record) {
+        uint32_t count = sys_atomic_dec(&listener->connection_count) - 1;
+        vflow_set_uint64(listener->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+    }
+    ctx->listener = 0;
+    qd_listener_decref(listener);
+}
+
+static void add_connection_to_connector(qd_connection_t *ctx, qd_connector_t *connector)
+{
+    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
+}
+
+static void remove_connection_from_connector(qd_connection_t *ctx, qd_connector_t *connector)
+{
+    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+}
+
 /* Construct a new qd_connection. Thread safe.
  * Does not allocate any managed objects and therefore
  * does not take ENTITY_CACHE lock.
@@ -620,6 +650,7 @@ qd_connection_t *qd_server_connection_impl(qd_server_t *server, qd_server_config
     if (!!connector) {
         ctx->connector = connector;
         strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+        add_connection_to_connector(ctx, connector);
     }
     decorate_connection(ctx, config);
     return ctx;
@@ -646,7 +677,7 @@ static void on_accept(pn_event_t *e, qd_listener_t *listener)
                listener->config.host_port);
         return;
     }
-    ctx->listener = listener;
+    add_connection_to_listener(ctx, listener);
     qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "]: Accepting incoming connection to '%s'",
            ctx->connection_id, ctx->listener->config.host_port);
     /* Asynchronous accept, configure the transport on PN_CONNECTION_BOUND */
@@ -901,11 +932,16 @@ static void qd_connection_free(qd_connection_t *qd_conn)
     qd_server_t    *qd_server = qd_conn->server;
     qd_connector_t *connector = qd_conn->connector;
 
+    if (!!qd_conn->listener) {
+        remove_connection_from_listener(qd_conn, qd_conn->listener);
+    }
+
     // If this is a dispatch connector uncouple it from the
     // connection and restart the re-connect timer if necessary
 
     if (connector) {
         sys_mutex_lock(&connector->lock);
+        remove_connection_from_connector(qd_conn, connector);
         connector->qd_conn = 0;  // this connection to be freed
         if (connector->state != CXTR_STATE_DELETED) {
             // Increment the connection index by so that we can try connecting to the failover url (if any).
@@ -1438,10 +1474,8 @@ qd_http_server_t *qd_server_http(qd_server_t *qd_server) {
     return qd_server->http;
 }
 
-void qd_server_free(qd_server_t *qd_server)
+void qd_server_close_connections(qd_server_t *qd_server)
 {
-    if (!qd_server) return;
-
     qd_connection_t *ctx = DEQ_HEAD(qd_server->conn_list);
     while (ctx) {
         qd_log(LOG_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Closing connection on shutdown", ctx->connection_id);
@@ -1462,8 +1496,11 @@ void qd_server_free(qd_server_t *qd_server)
         if (ctx->policy_settings)
             qd_policy_settings_free(ctx->policy_settings);
         if (ctx->connector) {
+            remove_connection_from_connector(ctx, ctx->connector);
             ctx->connector->qd_conn = 0;
             qd_connector_decref(ctx->connector);
+        } else if (ctx->listener) {
+            remove_connection_from_listener(ctx, ctx->listener);
         }
         sys_atomic_destroy(&ctx->wake_core);
         sys_atomic_destroy(&ctx->wake_cutthrough_inbound);
@@ -1474,6 +1511,13 @@ void qd_server_free(qd_server_t *qd_server)
         free_qd_connection_t(ctx);
         ctx = DEQ_HEAD(qd_server->conn_list);
     }
+}
+
+void qd_server_free(qd_server_t *qd_server)
+{
+    if (!qd_server) return;
+
+    qd_server_close_connections(qd_server);
     pn_proactor_free(qd_server->proactor);
     qd_timer_finalize();
     sys_mutex_free(&qd_server->lock);
@@ -1674,6 +1718,7 @@ qd_listener_t *qd_server_listener(qd_server_t *server)
     if (!li) return 0;
     ZERO(li);
     sys_atomic_init(&li->ref_count, 1);
+    sys_atomic_init(&li->connection_count, 0);
     li->server      = server;
     li->http = NULL;
     li->type.context = li;
@@ -1717,7 +1762,9 @@ bool qd_listener_listen(qd_listener_t *li) {
 void qd_listener_decref(qd_listener_t* li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
+        vflow_end_record(li->vflow_record);
         qd_server_config_free(&li->config);
+        li->vflow_record = 0;
         free_qd_listener_t(li);
     }
 }
@@ -1778,6 +1825,8 @@ void qd_connector_decref(qd_connector_t* connector)
         assert(connector->state == CXTR_STATE_DELETED);
         assert(connector->qd_conn == 0);
 
+        vflow_end_record(connector->vflow_record);
+        connector->vflow_record = 0;
         qd_server_config_free(&connector->config);
         qd_timer_free(connector->timer);
         sys_mutex_free(&connector->lock);

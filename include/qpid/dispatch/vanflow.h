@@ -51,6 +51,7 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_PROCESS_GROUP = 0x0c,  // A grouping of PROCESS
     VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
     VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
+    VFLOW_RECORD_ACCESS_POINT  = 0x0f,  // An access point for inter-router connections
 } vflow_record_type_t;
 
 // clang-format off
@@ -121,13 +122,17 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_LOG_TEXT         = 49,  // String
     VFLOW_ATTRIBUTE_SOURCE_FILE      = 50,  // String
     VFLOW_ATTRIBUTE_SOURCE_LINE      = 51,  // uint
+
+    VFLOW_ATTRIBUTE_LINK_COUNT       = 52,  // uint/counter
+    VFLOW_ATTRIBUTE_OPER_STATUS      = 53,  // String
+    VFLOW_ATTRIBUTE_ROLE             = 54,  // String
 } vflow_attribute_t;
 // clang-format on
 
 #define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x00099ffa07800119
-#define VALID_COUNTER_ATTRS 0x0000035000800000
-#define VALID_STRING_ATTRS  0x00060005787ffe00
+#define VALID_UINT_ATTRS    0x00199ffa07800119
+#define VALID_COUNTER_ATTRS 0x0010035000800000
+#define VALID_STRING_ATTRS  0x00660005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
 typedef enum vflow_log_severity {

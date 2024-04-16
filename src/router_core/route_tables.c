@@ -243,7 +243,6 @@ void qdr_route_table_setup_CT(qdr_core_t *core)
         core->routers_by_mask_bit       = NEW_PTR_ARRAY(qdr_node_t, qd_bitmask_width());
         core->control_links_by_mask_bit = NEW_PTR_ARRAY(qdr_link_t, qd_bitmask_width());
         core->rnode_conns_by_mask_bit   = NEW_PTR_ARRAY(qdr_connection_t, qd_bitmask_width());
-        core->vflow_links_by_mask_bit   = NEW_PTR_ARRAY(vflow_record_t, qd_bitmask_width());
         core->data_links_by_mask_bit    = NEW_ARRAY(qdr_priority_sheaf_t, qd_bitmask_width());
         DEQ_INIT(core->unallocated_group_members);
         core->group_correlator_by_maskbit = NEW_PTR_ARRAY(char, qd_bitmask_width());
@@ -253,7 +252,6 @@ void qdr_route_table_setup_CT(qdr_core_t *core)
             core->control_links_by_mask_bit[idx]    = 0;
             core->data_links_by_mask_bit[idx].count = 0;
             core->rnode_conns_by_mask_bit[idx]      = 0;
-            core->vflow_links_by_mask_bit[idx]      = 0;
             for (int priority = 0; priority < QDR_N_PRIORITIES; ++ priority) {
                 core->data_links_by_mask_bit[idx].links[priority] = 0;
             }
@@ -459,28 +457,6 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
 
     //
-    // Allocate a vFlow record for the link only if there is not already one in place.
-    // In the (misconfigured) case where there are multiple inter-router connections between
-    // a pair of routers, multiple calls to qdr_set_link_CT can occur without interleaved calls
-    // to qdr_remove_link_CT.  See skupper-router issue #980.
-    //
-    if (core->vflow_links_by_mask_bit[router_maskbit] == 0) {
-        core->vflow_links_by_mask_bit[router_maskbit] = vflow_start_record(VFLOW_RECORD_LINK, 0);
-    }
-
-    const char *rname = (const char*) qd_hash_key_by_handle(rnode->owning_addr->hash_handle);
-    vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_NAME, &rname[1]);
-    vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_MODE, "interior");
-
-    qdr_link_t       *link = core->control_links_by_mask_bit[conn_maskbit];
-    qdr_connection_t *conn = link->conn;
-
-    if (!!conn) {
-        vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_DIRECTION,
-                        conn->incoming ? "incoming" : "outgoing");
-    }
-
-    //
     // Add the peer_link reference to the router record.
     //
     rnode->conn_mask_bit = conn_maskbit;
@@ -505,12 +481,6 @@ static void qdr_remove_link_CT(qdr_core_t *core, qdr_action_t *action, bool disc
         qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "remove_link: Router not found");
         return;
     }
-
-    //
-    // Close out the protocol log record for this link.
-    //
-    vflow_end_record(core->vflow_links_by_mask_bit[router_maskbit]);
-    core->vflow_links_by_mask_bit[router_maskbit] = 0;
 
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];
     rnode->conn_mask_bit = -1;
@@ -590,13 +560,6 @@ static void qdr_set_cost_CT(qdr_core_t *core, qdr_action_t *action, bool discard
         qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "set_cost: Invalid cost %d for maskbit: %d", cost,
                router_maskbit);
         return;
-    }
-
-    //
-    // Set the link cost in the protocol log record.
-    //
-    if (!!core->vflow_links_by_mask_bit[router_maskbit]) {
-        vflow_set_uint64(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_LINK_COST, (uint64_t) cost);
     }
 
     qdr_node_t *rnode = core->routers_by_mask_bit[router_maskbit];

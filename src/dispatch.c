@@ -48,6 +48,7 @@
  */
 qd_server_t    *qd_server(qd_dispatch_t *qd, int tc, const char *container_name,
                           const char *sasl_config_path, const char *sasl_config_name);
+void            qd_server_close_connections(qd_server_t *server);
 void            qd_server_free(qd_server_t *server);
 qd_container_t *qd_container(qd_dispatch_t *qd);
 void            qd_container_free(qd_container_t *container);
@@ -392,6 +393,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_connection_manager_free(qd->connection_manager);
     qd_policy_free(qd->policy);
     Py_XDECREF((PyObject*) qd->agent);
+    qd_server_close_connections(qd->server);
     qd_router_free(qd->router);
     qd_container_free(qd->container);
     qd_server_free(qd->server);
