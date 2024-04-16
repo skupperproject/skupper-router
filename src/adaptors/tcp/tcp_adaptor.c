@@ -524,7 +524,7 @@ static void close_raw_connection(qd_tcp_connection_t *conn, const char *conditio
 static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn, bool no_delay)
 {
     ASSERT_RAW_IO;
-
+    assert(no_delay == true);
     if (conn->state != XSIDE_CLOSING)
         set_state_XSIDE_IO(conn, XSIDE_CLOSING);
 
