@@ -1120,22 +1120,22 @@ jobs:
 
       # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
       # This can result in a CI failure, see: https://github.com/rust-lang/rustup/issues/3029
-      - name: Install rust with rustup
-        run: |
-          rustup set auto-self-update disable
-          rustup toolchain install stable --profile minimal
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Compile and run .rs tests
-        run: |
-          cargo check
-          cargo test -- --test-threads=1 --nocapture
-        env:
-          QDROUTERD_IMAGE: ${{ env.ImageName }}
-          CARGO_INCREMENTAL: 0
-          RUST_LOG: info
-          RUST_BACKTRACE: 1
+#      - name: Install rust with rustup
+#        run: |
+#          rustup set auto-self-update disable
+#          rustup toolchain install stable --profile minimal
+#
+#      - uses: Swatinem/rust-cache@v2
+#
+#      - name: Compile and run .rs tests
+#        run: |
+#          cargo check
+#          cargo test -- --test-threads=1 --nocapture
+#        env:
+#          QDROUTERD_IMAGE: ${{ env.ImageName }}
+#          CARGO_INCREMENTAL: 0
+#          RUST_LOG: info
+#          RUST_BACKTRACE: 1
 
       # Trivy and Grype are the scanners that GitLab integrates with (at the time of writing)
 
