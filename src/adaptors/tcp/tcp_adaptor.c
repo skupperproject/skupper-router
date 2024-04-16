@@ -393,8 +393,13 @@ static void free_listener(qd_tcp_listener_t *li)
     sys_mutex_lock(&tcp_context->lock);
     DEQ_REMOVE(tcp_context->listeners, li);
     sys_mutex_unlock(&tcp_context->lock);
-
-    vflow_end_record(li->common.vflow);
+    //
+    // This call to vflow_end_record is only here to doubly make sure that any future calls to free_listener
+    // will end the vflow record if it has not already ended and zeroed out.
+    //
+    if (li->common.vflow) {
+        vflow_end_record(li->common.vflow);
+    }
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Deleted TcpListener for %s, %s:%s",
@@ -2308,6 +2313,12 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         if (!!li->adaptor_listener) {
             qd_adaptor_listener_close(li->adaptor_listener);
             li->adaptor_listener = 0;
+            //
+            // End the vanflow record here. This will make sure that the vanflow is ended
+            // as soon as the listener is deleted.
+            //
+            vflow_end_record(li->common.vflow);
+            li->common.vflow = 0;
         }
 
         if (tcp_context->adaptor_finalizing) {
