@@ -482,8 +482,6 @@ static void free_connection_IO(void *context)
         }
     }
 
-    qd_timer_free(conn->close_timer);
-
     // Pass connector to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
     // qdr_core_free_tcp_resource_CT()
     free_tcp_resource(&conn->common);
@@ -519,9 +517,7 @@ static void close_raw_connection(qd_tcp_connection_t *conn, const char *conditio
     // Connection cleanup occurs on the PN_RAW_CONNECTION_DISCONNECTED event
 }
 
-// Note: if no_delay is true, conn will be freed by this function
-//
-static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn, bool no_delay)
+static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
 {
     ASSERT_RAW_IO;
     assert(no_delay == true);
@@ -617,13 +613,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn, bool no_delay)
         sys_mutex_unlock(&cr->lock);
     }
 
-    if (no_delay) {
-        free_connection_IO(conn);
-    } else {
-        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Scheduling tcp_conn cleanup", conn->conn_id);
-        conn->close_timer = qd_timer(tcp_context->qd, free_connection_IO, conn);
-        qd_timer_schedule(conn->close_timer, CONNECTION_CLOSE_TIME);
-    }
+    free_connection_IO(conn);
 }
 
 
@@ -1907,7 +1897,7 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
-        close_connection_XSIDE_IO(conn, true);
+        close_connection_XSIDE_IO(conn);
         return;
     }
 
@@ -1944,7 +1934,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
-        close_connection_XSIDE_IO(conn, true);
+        close_connection_XSIDE_IO(conn);
         return;
     }
 
@@ -2326,7 +2316,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
             if (!!conn) {
                 while (conn) {
                     qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                    close_connection_XSIDE_IO(conn, tcp_context->adaptor_finalizing);
+                    close_connection_XSIDE_IO(conn);
                     conn = next_conn;
                 }
             } else {
@@ -2443,7 +2433,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
             if (!!conn) {
                 while (conn) {
                     qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                    close_connection_XSIDE_IO(conn, tcp_context->adaptor_finalizing);
+                    close_connection_XSIDE_IO(conn);
                     conn = next_conn;
                 }
             } else {

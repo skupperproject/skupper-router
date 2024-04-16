@@ -125,7 +125,6 @@ typedef struct qd_tcp_connection_t {
     sys_mutex_t                 activation_lock;
     sys_atomic_t                core_activation;
     sys_atomic_t                raw_opened;
-    qd_timer_t                 *close_timer;
     qdr_connection_t           *core_conn;
     uint64_t                    conn_id;
     qdr_link_t                 *inbound_link;
