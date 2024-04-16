@@ -84,7 +84,6 @@ typedef struct {
     qd_tcp_connection_list_t  connections;
     sys_mutex_t                lock;
     pn_proactor_t             *proactor;
-    bool                       adaptor_finalizing;
 } qd_tcp_context_t;
 
 static qd_tcp_context_t *tcp_context;
@@ -150,9 +149,9 @@ __thread qd_tcp_thread_state_t tcp_thread_state;
 #define SET_THREAD_TIMER_IO    tcp_thread_state = THREAD_TIMER_IO
 #define SET_THREAD_RAW_IO      tcp_thread_state = THREAD_RAW_IO
 
-#define ASSERT_ROUTER_CORE assert(tcp_thread_state == THREAD_ROUTER_CORE || tcp_context->adaptor_finalizing)
-#define ASSERT_TIMER_IO    assert(tcp_thread_state == THREAD_TIMER_IO    || tcp_context->adaptor_finalizing)
-#define ASSERT_RAW_IO      assert(tcp_thread_state == THREAD_RAW_IO      || tcp_context->adaptor_finalizing)
+#define ASSERT_ROUTER_CORE assert(tcp_thread_state == THREAD_ROUTER_CORE)
+#define ASSERT_TIMER_IO    assert(tcp_thread_state == THREAD_TIMER_IO)
+#define ASSERT_RAW_IO      assert(tcp_thread_state == THREAD_RAW_IO)
 
 
 //=================================================================================
@@ -2292,35 +2291,26 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 {
 
     SET_THREAD_UNKNOWN;
-    qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
-    if (li) {
-        li->closing = true;
+    qd_tcp_listener_t *listener = (qd_tcp_listener_t*) impl;
+    if (listener) {
+        listener->closing = true;
 
         // deactivate the listener to prevent new connections from being accepted
         // on the proactor thread
         //
-        if (!!li->adaptor_listener) {
-            qd_adaptor_listener_close(li->adaptor_listener);
-            li->adaptor_listener = 0;
+        if (!!listener->adaptor_listener) {
+            qd_adaptor_listener_close(listener->adaptor_listener);
+            listener->adaptor_listener = 0;
             //
             // End the vanflow record here. This will make sure that the vanflow is ended
             // as soon as the listener is deleted.
             //
-            vflow_end_record(li->common.vflow);
-            li->common.vflow = 0;
+            vflow_end_record(listener->common.vflow);
+            listener->common.vflow = 0;
         }
 
-        if (tcp_context->adaptor_finalizing) {
-            qd_tcp_connection_t *conn = DEQ_HEAD(li->connections);
-            if (!!conn) {
-                while (conn) {
-                    qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                    close_connection_XSIDE_IO(conn);
-                    conn = next_conn;
-                }
-            } else {
-                free_listener(li);
-            }
+        if (DEQ_SIZE(listener->connections) == 0) {
+            free_listener(listener);
         }
     }
 }
@@ -2424,20 +2414,11 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
             connector->out_link = 0;
         }
 
-        if (!tcp_context->adaptor_finalizing) {
-            qdr_connection_closed(connector->core_conn);
-            qd_connection_counter_dec(QD_PROTOCOL_TCP);
-        } else {
-            qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
-            if (!!conn) {
-                while (conn) {
-                    qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                    close_connection_XSIDE_IO(conn);
-                    conn = next_conn;
-                }
-            } else {
-                free_connector(connector);
-            }
+        qdr_connection_closed(connector->core_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
+
+        if (DEQ_SIZE(connector->connections) == 0) {
+            free_connector(connector);
         }
     }
 }
@@ -2530,16 +2511,26 @@ static void ADAPTOR_final(void *adaptor_context)
     SET_THREAD_UNKNOWN;
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Shutting down TCP protocol adaptor");
 
-    tcp_context->adaptor_finalizing = true;
-
-    while (DEQ_HEAD(tcp_context->connectors)) {
-        qd_tcp_connector_t *cr   = DEQ_HEAD(tcp_context->connectors);
-        qd_dispatch_delete_tcp_connector(tcp_context->qd, cr);
+    while (DEQ_HEAD(tcp_context->listeners)) {
+        qd_tcp_listener_t *listener   = DEQ_HEAD(tcp_context->listeners);
+        qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
+        while (conn) {
+            qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            close_connection_XSIDE_IO(conn);
+            conn = next_conn;
+        }
+        free_listener(listener);
     }
 
-    while (DEQ_HEAD(tcp_context->listeners)) {
-        qd_tcp_listener_t *li   = DEQ_HEAD(tcp_context->listeners);
-        qd_dispatch_delete_tcp_listener(tcp_context->qd, li);
+    while (DEQ_HEAD(tcp_context->connectors)) {
+        qd_tcp_connector_t *connector   = DEQ_HEAD(tcp_context->connectors);
+        qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
+        while (conn) {
+            qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            close_connection_XSIDE_IO(conn);
+            conn = next_conn;
+        }
+        free_connector(connector);
     }
 
     qdr_protocol_adaptor_free(tcp_context->core, tcp_context->pa);
