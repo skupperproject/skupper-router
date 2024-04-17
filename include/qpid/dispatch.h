@@ -44,7 +44,6 @@
 #include "qpid/dispatch/buffer.h"
 #include "qpid/dispatch/compose.h"
 #include "qpid/dispatch/connection_manager.h"
-#include "qpid/dispatch/container.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/hash.h"

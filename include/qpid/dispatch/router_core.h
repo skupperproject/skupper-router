@@ -34,6 +34,9 @@
 
 typedef struct qdr_subscription_t qdr_subscription_t;
 typedef struct qdr_error_t        qdr_error_t;
+typedef struct qdr_delivery_ref_t qdr_delivery_ref_t;
+DEQ_DECLARE(qdr_delivery_ref_t, qdr_delivery_ref_list_t);
+
 
 typedef enum {
     QD_ROUTER_MODE_STANDALONE,  ///< Standalone router.  No routing protocol participation

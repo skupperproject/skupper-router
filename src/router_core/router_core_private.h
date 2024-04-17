@@ -28,6 +28,7 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/router_core.h"
 
 #include <memory.h>
 
@@ -388,7 +389,6 @@ typedef struct qdr_delivery_ref_t {
 } qdr_delivery_ref_t;
 
 ALLOC_DECLARE(qdr_delivery_ref_t);
-DEQ_DECLARE(qdr_delivery_ref_t, qdr_delivery_ref_list_t);
 
 struct qdr_subscription_t {
     DEQ_LINKS(qdr_subscription_t);

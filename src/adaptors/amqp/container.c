@@ -17,11 +17,12 @@
  * under the License.
  */
 
-#include "qpid/dispatch/container.h"
+#include "container.h"
 
-#include "dispatch_private.h"
 #include "policy.h"
 #include "qd_connection.h"
+#include "node_type.h"
+#include "private.h"
 
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/ctools.h"
@@ -31,6 +32,7 @@
 #include "qpid/dispatch/message.h"
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/amqp_adaptor.h"
 
 #include <proton/connection.h>
 #include <proton/engine.h>
@@ -41,20 +43,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/** Instance of a node type in a container */
-struct qd_node_t {
-    DEQ_LINKS(qd_node_t);
-    qd_container_t       *container;
-    const qd_node_type_t *ntype; ///< Type of node, defines callbacks.
-    char                 *name;
-    void                 *context;
-    qd_dist_mode_t        supported_dist;
-    qd_lifetime_policy_t  life_policy;
-};
-
-DEQ_DECLARE(qd_node_t, qd_node_list_t);
-ALLOC_DECLARE(qd_node_t);
-ALLOC_DEFINE(qd_node_t);
 
 /** Encapsulates a proton link for sending and receiving messages */
 struct qd_link_t {
@@ -63,7 +51,6 @@ struct qd_link_t {
     pn_link_t                  *pn_link;
     qd_direction_t              direction;
     void                       *context;
-    qd_node_t                  *node;
     qd_alloc_safe_ptr_t         incoming_msg;  // DISPATCH-1690: for cleanup
     pn_snd_settle_mode_t        remote_snd_settle_mode;
     qd_link_ref_list_t          ref_list;
@@ -82,6 +69,17 @@ struct qd_session_t {
     pn_session_t   *pn_sess;
     qd_link_list_t  q3_blocked_links;  ///< Q3 blocked if !empty
 };
+
+// Bug workaround to free links/session when we hope they are no longer used!
+// Fingers crossed! :|
+//
+struct qd_pn_free_link_session_t {
+    DEQ_LINKS(qd_pn_free_link_session_t);
+    pn_session_t *pn_session;
+    pn_link_t    *pn_link;
+};
+ALLOC_DEFINE(qd_pn_free_link_session_t);
+
 
 // macros to work around PROTON-2184 (see container.h)
 //
@@ -107,31 +105,16 @@ typedef struct qdc_node_type_t {
 DEQ_DECLARE(qdc_node_type_t, qdc_node_type_list_t);
 
 struct qd_container_t {
-    qd_dispatch_t        *qd;
-    qd_server_t          *server;
-    qd_hash_t            *node_type_map;
-    qd_hash_t            *node_map;
-    qd_node_list_t        nodes;
+    qd_router_t          *qd_router;
+    const qd_node_type_t *ntype;
     sys_mutex_t           lock;
-    qd_node_t            *default_node;
-    qdc_node_type_list_t  node_type_list;
+    // KAG: todo move to amqp_adaptor
     qd_link_list_t        links;
 };
 
-ALLOC_DEFINE(qd_pn_free_link_session_t);
 
 static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
 {
-    qd_node_t *node = container->default_node;
-
-    if (node == 0) {
-        pn_condition_t *cond = pn_link_condition(pn_link);
-        pn_condition_set_name(cond, QD_AMQP_COND_NOT_FOUND);
-        pn_condition_set_description(cond, "Source node does not exist");
-        pn_link_close(pn_link);
-        return;
-    }
-
     qd_link_t *link = new_qd_link_t();
     if (!link) {
         pn_condition_t *cond = pn_link_condition(pn_link);
@@ -148,28 +131,16 @@ static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
     link->pn_sess    = pn_link_session(pn_link);
     link->pn_link    = pn_link;
     link->direction  = QD_OUTGOING;
-    link->context    = 0;
-    link->node       = node;
 
     link->remote_snd_settle_mode = pn_link_remote_snd_settle_mode(pn_link);
 
     pn_link_set_context(pn_link, link);
-    node->ntype->outgoing_handler(node->context, link);
+    container->ntype->outgoing_handler(container->qd_router, link);
 }
 
 
 static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, uint64_t max_size)
 {
-    qd_node_t *node = container->default_node;
-
-    if (node == 0) {
-        pn_condition_t *cond = pn_link_condition(pn_link);
-        pn_condition_set_name(cond, QD_AMQP_COND_NOT_FOUND);
-        pn_condition_set_description(cond, "Target node does not exist");
-        pn_link_close(pn_link);
-        return;
-    }
-
     qd_link_t *link = new_qd_link_t();
     if (!link) {
         pn_condition_t *cond = pn_link_condition(pn_link);
@@ -186,15 +157,13 @@ static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, u
     link->pn_sess    = pn_link_session(pn_link);
     link->pn_link    = pn_link;
     link->direction  = QD_INCOMING;
-    link->context    = 0;
-    link->node       = node;
     link->remote_snd_settle_mode = pn_link_remote_snd_settle_mode(pn_link);
 
     if (max_size) {
         pn_link_set_max_message_size(pn_link, max_size);
     }
     pn_link_set_context(pn_link, link);
-    node->ntype->incoming_handler(node->context, link);
+    container->ntype->incoming_handler(container->qd_router, link);
 }
 
 
@@ -203,24 +172,20 @@ static void handle_link_open(qd_container_t *container, pn_link_t *pn_link)
     qd_link_t *link = (qd_link_t*) pn_link_get_context(pn_link);
     if (link == 0)
         return;
-    if (link->node->ntype->link_attach_handler)
-        link->node->ntype->link_attach_handler(link->node->context, link);
+    container->ntype->link_attach_handler(container->qd_router, link);
 }
 
 
-static void do_receive(pn_link_t *pn_link, pn_delivery_t *pnd)
+static void do_receive(qd_container_t *container, pn_link_t *pn_link, pn_delivery_t *pnd)
 {
     qd_link_t     *link     = (qd_link_t*) pn_link_get_context(pn_link);
 
     if (link) {
-        qd_node_t *node = link->node;
-        if (node) {
-            while (true) {
-                if (!node->ntype->rx_handler(node->context, link))
-                    break;
-            }
-            return;
+        while (true) {
+            if (!container->ntype->rx_handler(container->qd_router, link))
+                break;
         }
+        return;
     }
 
     //
@@ -233,45 +198,23 @@ static void do_receive(pn_link_t *pn_link, pn_delivery_t *pnd)
 }
 
 
-static void do_updated(pn_delivery_t *pnd)
+static void do_updated(qd_container_t *container, pn_delivery_t *pnd)
 {
     pn_link_t     *pn_link  = pn_delivery_link(pnd);
     qd_link_t     *link     = (qd_link_t*) pn_link_get_context(pn_link);
 
     if (link) {
-        qd_node_t *node = link->node;
-        if (node)
-            node->ntype->disp_handler(node->context, link, pnd);
+        container->ntype->disp_handler(container->qd_router, link, pnd);
     }
 }
 
 
 static void notify_opened(qd_container_t *container, qd_connection_t *conn, void *context)
 {
-    const qd_node_type_t *nt;
-
-    //
-    // Note the locking structure in this function.  Generally this would be unsafe, but since
-    // this particular list is only ever appended to and never has items inserted or deleted,
-    // this usage is safe in this case.
-    //
-    sys_mutex_lock(&container->lock);
-    qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(&container->lock);
-
-    while (nt_item) {
-        nt = nt_item->ntype;
-        if (qd_connection_inbound(conn)) {
-            if (nt->inbound_conn_opened_handler)
-                nt->inbound_conn_opened_handler(nt->type_context, conn, context);
-        } else {
-            if (nt->outbound_conn_opened_handler)
-                nt->outbound_conn_opened_handler(nt->type_context, conn, context);
-        }
-
-        sys_mutex_lock(&container->lock);
-        nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(&container->lock);
+    if (qd_connection_inbound(conn)) {
+        container->ntype->inbound_conn_opened_handler(container->qd_router, conn, context);
+    } else {
+        container->ntype->outbound_conn_opened_handler(container->qd_router, conn, context);
     }
 }
 
@@ -282,28 +225,7 @@ void policy_notify_opened(void *container, qd_connection_t *conn, void *context)
 
 static void notify_closed(qd_container_t *container, qd_connection_t *conn, void *context)
 {
-    const qd_node_type_t *nt;
-
-    //
-    // Note the locking structure in this function.  Generally this would be unsafe, but since
-    // this particular list is only ever appended to and never has items inserted or deleted,
-    // this usage is safe in this case.
-    //
-    // This assumes that pointer assignment is atomic, which it is on most platforms.
-    //
-    sys_mutex_lock(&container->lock);
-    qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(&container->lock);
-
-    while (nt_item) {
-        nt = nt_item->ntype;
-        if (nt->conn_closed_handler)
-            nt->conn_closed_handler(nt->type_context, conn, context);
-
-        sys_mutex_lock(&container->lock);
-        nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(&container->lock);
-    }
+    container->ntype->conn_closed_handler(container->qd_router, conn, context);
 }
 
 static void close_links(qd_container_t *container, pn_connection_t *conn, bool print_log)
@@ -319,12 +241,11 @@ static void close_links(qd_container_t *container, pn_connection_t *conn, bool p
             continue;
         }
 
-        if (qd_link && qd_link->node) {
-            qd_node_t *node = qd_link->node;
+        if (qd_link) {
             if (print_log)
                 qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
                        pn_link_name(pn_link));
-            node->ntype->link_detach_handler(node->context, qd_link, QD_LOST);
+            container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
         }
         pn_link = pn_link_next(pn_link, 0);
     }
@@ -371,25 +292,7 @@ static int close_handler(qd_container_t *container, pn_connection_t *conn, qd_co
 
 static void writable_handler(qd_container_t *container, pn_connection_t *conn, qd_connection_t* qd_conn)
 {
-    const qd_node_type_t *nt;
-    //
-    // Note the locking structure in this function.  Generally this would be unsafe, but since
-    // this particular list is only ever appended to and never has items inserted or deleted,
-    // this usage is safe in this case.
-    //
-    sys_mutex_lock(&container->lock);
-    qdc_node_type_t *nt_item = DEQ_HEAD(container->node_type_list);
-    sys_mutex_unlock(&container->lock);
-
-    while (nt_item) {
-        nt = nt_item->ntype;
-        if (nt->writable_handler)
-            nt->writable_handler(nt->type_context, qd_conn, 0);
-
-        sys_mutex_lock(&container->lock);
-        nt_item = DEQ_NEXT(nt_item);
-        sys_mutex_unlock(&container->lock);
-    }
+    container->ntype->writable_handler(container->qd_router, qd_conn, 0);
 }
 
 
@@ -606,7 +509,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                         qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
 
                         if ((pn_link_state(pn_link) == (PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE))) {
-                            if (qd_link && qd_link->node) {
+                            if (qd_link) {
                                 if (qd_conn->policy_settings) {
                                     if (qd_link->direction == QD_OUTGOING) {
                                         qd_conn->n_receivers--;
@@ -618,8 +521,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                                 }
                                 qd_log(LOG_CONTAINER, QD_LOG_DEBUG,
                                        "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
-                                qd_link->node->ntype->link_detach_handler(qd_link->node->context,
-                                                                          qd_link, QD_LOST);
+                                container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
                             }
                         }
 
@@ -675,9 +577,8 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
             pn_link = pn_event_link(event);
             qd_link = (qd_link_t*) pn_link_get_context(pn_link);
             if (qd_link) {
-                qd_node_t *node = qd_link->node;
                 qd_detach_type_t dt = pn_event_type(event) == PN_LINK_REMOTE_CLOSE ? QD_CLOSED : QD_DETACHED;
-                if (!node && qd_link->pn_link == pn_link) {
+                if (qd_link->pn_link == pn_link) {
                     pn_link_close(pn_link);
                 }
                 if (qd_conn->policy_counted && qd_conn->policy_settings) {
@@ -697,9 +598,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                 if (pn_link_state(pn_link) & PN_LOCAL_CLOSED) {
                     add_link_to_free_list(&qd_conn->free_link_session_list, pn_link);
                 }
-                if (node) {
-                    node->ntype->link_detach_handler(node->context, qd_link, dt);
-                }
+                container->ntype->link_detach_handler(container->qd_router, qd_link, dt);
             } else {
                 add_link_to_free_list(&qd_conn->free_link_session_list, pn_link);
             }
@@ -718,8 +617,8 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
     case PN_LINK_FLOW :
         pn_link = pn_event_link(event);
         qd_link = (qd_link_t*) pn_link_get_context(pn_link);
-        if (qd_link && qd_link->node && qd_link->node->ntype->link_flow_handler)
-            qd_link->node->ntype->link_flow_handler(qd_link->node->context, qd_link);
+        if (qd_link)
+            container->ntype->link_flow_handler(container->qd_router, qd_link);
         break;
 
     case PN_DELIVERY :
@@ -727,10 +626,10 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         pn_link  = pn_event_link(event);
 
         if (pn_delivery_readable(delivery))
-            do_receive(pn_link, delivery);
+            do_receive(container, pn_link, delivery);
 
         if (pn_delivery_updated(delivery) || pn_delivery_settled(delivery)) {
-            do_updated(delivery);
+            do_updated(container, delivery);
             pn_delivery_clear(delivery);
         }
         break;
@@ -750,21 +649,18 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
 }
 
 
-qd_container_t *qd_container(qd_dispatch_t *qd)
+qd_container_t *qd_container(qd_router_t *router, const qd_node_type_t *ntype)
 {
     qd_container_t *container = NEW(qd_container_t);
 
     ZERO(container);
-    container->qd            = qd;
-    container->server        = qd->server;
-    container->node_type_map = qd_hash(6,  4, 1);  // 64 buckets, item batches of 4
-    container->node_map      = qd_hash(10, 32, 0); // 1K buckets, item batches of 32
-    container->default_node  = 0;
-    sys_mutex_init(&container->lock);
-    DEQ_INIT(container->nodes);
-    DEQ_INIT(container->node_type_list);
 
-    qd_server_set_container(qd, container);
+    assert(router);
+    container->qd_router     = router;
+    container->ntype         = ntype;
+    sys_mutex_init(&container->lock);
+    DEQ_INIT(container->links);
+
     qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Container Initialized");
     return container;
 }
@@ -773,163 +669,26 @@ qd_container_t *qd_container(qd_dispatch_t *qd)
 void qd_container_free(qd_container_t *container)
 {
     if (!container) return;
-    if (container->default_node)
-        qd_container_destroy_node(container->default_node);
+    sys_mutex_lock(&container->lock);
     qd_link_t *link = DEQ_HEAD(container->links);
     while (link) {
         DEQ_REMOVE_HEAD(container->links);
+
+        sys_mutex_unlock(&container->lock);
         cleanup_link(link);
         free_qd_link_t(link);
+        sys_mutex_lock(&container->lock);
+
         link = DEQ_HEAD(container->links);
     }
+    sys_mutex_unlock(&container->lock);
 
-    qd_node_t *node = DEQ_HEAD(container->nodes);
-    while (node) {
-        qd_container_destroy_node(node);
-        node = DEQ_HEAD(container->nodes);
-    }
-
-    qdc_node_type_t *nt = DEQ_HEAD(container->node_type_list);
-    while (nt) {
-        DEQ_REMOVE_HEAD(container->node_type_list);
-        free(nt);
-        nt = DEQ_HEAD(container->node_type_list);
-    }
-    qd_hash_free(container->node_map);
-    qd_hash_free(container->node_type_map);
     sys_mutex_free(&container->lock);
     free(container);
 }
 
 
-int qd_container_register_node_type(qd_dispatch_t *qd, const qd_node_type_t *nt)
-{
-    qd_container_t *container = qd->container;
-
-    int result;
-    qd_iterator_t *iter = qd_iterator_string(nt->type_name, ITER_VIEW_ALL);
-    qdc_node_type_t     *nt_item = NEW(qdc_node_type_t);
-    DEQ_ITEM_INIT(nt_item);
-    nt_item->ntype = nt;
-
-    sys_mutex_lock(&container->lock);
-    result = qd_hash_insert_const(container->node_type_map, iter, nt, 0);
-    DEQ_INSERT_TAIL(container->node_type_list, nt_item);
-    sys_mutex_unlock(&container->lock);
-
-    qd_iterator_free(iter);
-    if (result < 0)
-        return result;
-    qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node Type Registered - %s", nt->type_name);
-
-    return 0;
-}
-
-
-qd_node_t *qd_container_set_default_node_type(qd_dispatch_t        *qd,
-                                              const qd_node_type_t *nt,
-                                              void                 *context,
-                                              qd_dist_mode_t        supported_dist)
-{
-    qd_container_t *container = qd->container;
-
-    if (container->default_node)
-        qd_container_destroy_node(container->default_node);
-
-    if (nt) {
-        container->default_node = qd_container_create_node(qd, nt, 0, context, supported_dist, QD_LIFE_PERMANENT);
-        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node of type '%s' installed as default node", nt->type_name);
-    } else {
-        container->default_node = 0;
-        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Default node removed");
-    }
-
-    return container->default_node;
-}
-
-
-qd_node_t *qd_container_create_node(qd_dispatch_t        *qd,
-                                    const qd_node_type_t *nt,
-                                    const char           *name,
-                                    void                 *context,
-                                    qd_dist_mode_t        supported_dist,
-                                    qd_lifetime_policy_t  life_policy)
-{
-    qd_container_t *container = qd->container;
-    int result;
-    qd_node_t *node = new_qd_node_t();
-    if (!node)
-        return 0;
-
-    DEQ_ITEM_INIT(node);
-    node->container      = container;
-    node->ntype          = nt;
-    node->name           = 0;
-    node->context        = context;
-    node->supported_dist = supported_dist;
-    node->life_policy    = life_policy;
-
-    if (name) {
-        qd_iterator_t *iter = qd_iterator_string(name, ITER_VIEW_ALL);
-        sys_mutex_lock(&container->lock);
-        result = qd_hash_insert(container->node_map, iter, node, 0);
-        if (result >= 0)
-            DEQ_INSERT_HEAD(container->nodes, node);
-        sys_mutex_unlock(&container->lock);
-        qd_iterator_free(iter);
-        if (result < 0) {
-            free_qd_node_t(node);
-            return 0;
-        }
-
-        node->name = (char*) malloc(strlen(name) + 1);
-        strcpy(node->name, name);
-    }
-
-    if (name)
-        qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Node of type '%s' created with name '%s'", nt->type_name, name);
-
-    return node;
-}
-
-
-void qd_container_destroy_node(qd_node_t *node)
-{
-    qd_container_t *container = node->container;
-
-    if (node->name) {
-        qd_iterator_t *iter = qd_iterator_string(node->name, ITER_VIEW_ALL);
-        sys_mutex_lock(&container->lock);
-        qd_hash_remove(container->node_map, iter);
-        DEQ_REMOVE(container->nodes, node);
-        sys_mutex_unlock(&container->lock);
-        qd_iterator_free(iter);
-        free(node->name);
-    }
-
-    free_qd_node_t(node);
-}
-
-
-void qd_container_node_set_context(qd_node_t *node, void *node_context)
-{
-    node->context = node_context;
-}
-
-
-qd_dist_mode_t qd_container_node_get_dist_modes(const qd_node_t *node)
-{
-    return node->supported_dist;
-}
-
-
-qd_lifetime_policy_t qd_container_node_get_life_policy(const qd_node_t *node)
-{
-    return node->life_policy;
-}
-
-
-qd_link_t *qd_link(qd_node_t *node, qd_connection_t *conn, qd_direction_t dir, const char* name, qd_session_class_t ssn_class)
+qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char* name, qd_session_class_t ssn_class)
 {
     const qd_server_config_t * cf = qd_connection_config(conn);
 
@@ -956,9 +715,9 @@ qd_link_t *qd_link(qd_node_t *node, qd_connection_t *conn, qd_direction_t dir, c
     }
     ZERO(link);
 
-    sys_mutex_lock(&node->container->lock);
-    DEQ_INSERT_TAIL(node->container->links, link);
-    sys_mutex_unlock(&node->container->lock);
+    sys_mutex_lock(&amqp_adaptor.container->lock);
+    DEQ_INSERT_TAIL(amqp_adaptor.container->links, link);
+    sys_mutex_unlock(&amqp_adaptor.container->lock);
 
     link->pn_sess = pn_ssn;
 
@@ -968,8 +727,6 @@ qd_link_t *qd_link(qd_node_t *node, qd_connection_t *conn, qd_direction_t dir, c
         link->pn_link = pn_receiver(link->pn_sess, name);
 
     link->direction  = dir;
-    link->context    = node->context;
-    link->node       = node;
     link->remote_snd_settle_mode = pn_link_remote_snd_settle_mode(link->pn_link);
 
     pn_link_set_context(link->pn_link, link);
@@ -981,13 +738,12 @@ qd_link_t *qd_link(qd_node_t *node, qd_connection_t *conn, qd_direction_t dir, c
 void qd_link_free(qd_link_t *link)
 {
     if (!link) return;
-    qd_container_t *container = link->node->container;
-    sys_mutex_lock(&container->lock);
-    DEQ_REMOVE(container->links, link);
-    sys_mutex_unlock(&container->lock);
 
-    qd_node_t *node = link->node;
-    node->ntype->link_abandoned_deliveries_handler(node->context, link);
+    sys_mutex_lock(&amqp_adaptor.container->lock);
+    DEQ_REMOVE(amqp_adaptor.container->links, link);
+    sys_mutex_unlock(&amqp_adaptor.container->lock);
+
+    amqp_adaptor.container->ntype->link_abandoned_deliveries_handler(amqp_adaptor.container->qd_router, link);
 
     cleanup_link(link);
     free_qd_link_t(link);
@@ -1006,12 +762,12 @@ void qd_link_set_context(qd_link_t *link, void *context)
 }
 
 
-void *qd_link_get_context(qd_link_t *link)
+void *qd_link_get_context(const qd_link_t *link)
 {
     return link->context;
 }
 
-pn_link_t *qd_link_pn(qd_link_t *link)
+pn_link_t *qd_link_pn(const qd_link_t *link)
 {
     return link->pn_link;
 }
@@ -1022,7 +778,7 @@ pn_session_t *qd_link_pn_session(qd_link_t *link)
 }
 
 
-bool qd_link_is_q2_limit_unbounded(qd_link_t *link)
+bool qd_link_is_q2_limit_unbounded(const qd_link_t *link)
 {
     return link->q2_limit_unbounded;
 }
@@ -1044,7 +800,7 @@ pn_snd_settle_mode_t qd_link_remote_snd_settle_mode(const qd_link_t *link)
     return link->remote_snd_settle_mode;
 }
 
-qd_connection_t *qd_link_connection(qd_link_t *link)
+qd_connection_t *qd_link_connection(const qd_link_t *link)
 {
     if (!link || !link->pn_link)
         return 0;
@@ -1103,12 +859,6 @@ void qd_link_detach(qd_link_t *link)
         pn_link_detach(link->pn_link);
         pn_link_close(link->pn_link);
     }
-}
-
-
-void *qd_link_get_node_context(const qd_link_t *link)
-{
-    return (link && link->node) ? link->node->context : 0;
 }
 
 

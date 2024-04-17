@@ -181,10 +181,7 @@ void qdr_adaptors_finalize(qdr_core_t *core)
         adaptor->on_final(adaptor->context);
         adaptor = DEQ_PREV(adaptor);
     }
-
-    // release the default AMQP adaptor (it is not a module)
-    assert(DEQ_SIZE(core->protocol_adaptors) == 1);
-    qdr_protocol_adaptor_free(core, DEQ_HEAD(core->protocol_adaptors));
+    assert(DEQ_SIZE(core->protocol_adaptors) == 0);
 
     qd_adaptor_listener_finalize();
 }

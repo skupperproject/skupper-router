@@ -31,6 +31,43 @@ typedef struct qdr_delivery_t          qdr_delivery_t;
 typedef struct qdr_terminus_t          qdr_terminus_t;
 typedef struct qdr_connection_info_t   qdr_connection_info_t;
 
+
+/**
+ * Data flow direction with respect to the router
+ */
+typedef enum {
+    QD_INCOMING,
+    QD_OUTGOING
+} qd_direction_t;
+
+
+/**
+ * Session Class
+ *
+ * Used when creating new links from the router.  A connection maintains a set
+ * of sessions over which links can be created.  The session class indicates
+ * which session to use when creating a link.
+ */
+typedef enum {
+    QD_SSN_ENDPOINT,          ///< client data links
+    QD_SSN_ROUTER_CONTROL,    ///< router protocol
+    QD_SSN_ROUTER_DATA_PRI_0, ///< inter-router data links (by priority)
+    QD_SSN_ROUTER_DATA_PRI_1,
+    QD_SSN_ROUTER_DATA_PRI_2,
+    QD_SSN_ROUTER_DATA_PRI_3,
+    QD_SSN_ROUTER_DATA_PRI_4,
+    QD_SSN_ROUTER_DATA_PRI_5,
+    QD_SSN_ROUTER_DATA_PRI_6,
+    QD_SSN_ROUTER_DATA_PRI_7,
+    QD_SSN_ROUTER_DATA_PRI_8,
+    QD_SSN_ROUTER_DATA_PRI_9,
+    QD_SSN_CORE_ENDPOINT,     ///< core subscriptions
+    QD_SSN_LINK_ROUTE,        ///< link routes
+    QD_SSN_LINK_STREAMING,    ///< link dedicated to streaming messages
+    QD_SSN_CLASS_COUNT
+} qd_session_class_t;
+
+
 /**
  ******************************************************************************
  * Callback function definitions
@@ -436,6 +473,8 @@ int qdr_connection_process(qdr_connection_t *conn);
  ******************************************************************************
  */
 
+typedef struct pn_terminus_t pn_terminus_t;
+
 /**
  * qdr_terminus
  *
@@ -614,6 +653,12 @@ void qdr_terminus_set_dnp_address_iterator(qdr_terminus_t *term, qd_iterator_t *
  * Link functions
  ******************************************************************************
  */
+
+typedef enum {
+    QD_DETACHED,  // Protocol detach
+    QD_CLOSED,    // Protocol close
+    QD_LOST       // Connection or session closed
+} qd_detach_type_t;
 
 /**
  * qdr_link_set_context

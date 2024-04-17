@@ -30,8 +30,9 @@
  * @{
  */
 
-typedef struct qd_dispatch_t qd_dispatch_t;
+typedef struct qd_dispatch_t           qd_dispatch_t;
 typedef struct qd_connection_manager_t qd_connection_manager_t;
+typedef struct qd_policy_t             qd_policy_t;
 
 /**
  * Initialize the Dispatch library and prepare it for operation.
@@ -73,6 +74,15 @@ qd_error_t qd_dispatch_validate_config(const char *config_path);
  */
 
 qd_connection_manager_t *qd_dispatch_connection_manager(const qd_dispatch_t *qd);
+
+/**
+ * Return a reference to the policy agent
+ *
+ * @param qd The dispatch handle returned by qd_dispatch
+ * @return pointer to qd_policy_t object.
+ */
+qd_policy_t *qd_dispatch_get_policy(const qd_dispatch_t *dispatch);
+
 
 /**
  * @}

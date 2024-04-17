@@ -50,7 +50,7 @@ typedef struct qd_policy_t qd_policy_t;
 // Policy settings are defined in include/qpid/dispatch/policy_settings.h
 //
 
-struct qd_policy__settings_s {
+struct qd_policy_settings_t {
     qd_policy_spec_t spec;
     char *sources;
     char *targets;
@@ -62,7 +62,7 @@ struct qd_policy__settings_s {
     char *vhost_name;
 };
 
-typedef struct qd_policy__settings_s qd_policy_settings_t;
+typedef struct qd_policy_settings_t qd_policy_settings_t;
 
 ALLOC_DECLARE(qd_policy_settings_t);
 

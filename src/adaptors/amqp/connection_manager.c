@@ -19,11 +19,13 @@
 
 #include "qpid/dispatch/connection_manager.h"
 
-#include "connection_manager_private.h"
+#include "qd_connection.h"
+#include "qd_listener.h"
+#include "qd_connector.h"
+#include "server_config.h"
 #include "dispatch_private.h"
 #include "entity.h"
 #include "server_private.h"
-#include "qd_connection.h"
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/failoverlist.h"
@@ -36,6 +38,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define CHECK() if (qd_error_code()) goto error
+
 DEQ_DECLARE(qd_config_ssl_profile_t, qd_config_ssl_profile_list_t);
 
 struct qd_connection_manager_t {
@@ -45,26 +49,6 @@ struct qd_connection_manager_t {
     qd_connector_list_t           data_connectors;
     qd_config_ssl_profile_list_t  config_ssl_profiles;
 };
-
-const char *qd_log_message_components[] =
-    {"message-id",
-     "user-id",
-     "to",
-     "subject",
-     "reply-to",
-     "correlation-id",
-     "content-type",
-     "content-encoding",
-     "absolute-expiry-time",
-     "creation-time",
-     "group-id",
-     "group-sequence",
-     "reply-to-group-id",
-     "app-properties",
-     0};
-
-const char *ALL = "all";
-const char *NONE = "none";
 
 
 /**
@@ -77,431 +61,6 @@ qd_config_ssl_profile_t *qd_find_ssl_profile(const qd_connection_manager_t *cm, 
         if (strcmp(ssl_profile->name, ssl_profile_name) == 0)
             return ssl_profile;
         ssl_profile = DEQ_NEXT(ssl_profile);
-    }
-
-    return 0;
-}
-
-/**
- * Read the file from the password_file location on the file system and populate password_field with the
- * contents of the file.
- */
-static void qd_set_password_from_file(const char *password_file, char **password_field)
-{
-    if (password_file) {
-        FILE *file = fopen(password_file, "r");
-
-        if (file == NULL) {
-            //
-            // The global variable errno (found in <errno.h>) contains information about what went wrong; you can use perror() to print that information as a readable string
-            //
-            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to open password file %s, error: %s", password_file,
-                   strerror(errno));
-            return;
-        }
-
-        char buffer[200];
-
-        int c;
-        int i=0;
-
-        while (i < 200 - 1) {
-            c = fgetc(file);
-            if (c == EOF || c == '\n')
-                break;
-            buffer[i++] = c;
-        }
-
-        if (i != 0) {
-            buffer[i] = '\0';
-            free(*password_field);
-            *password_field = strdup(buffer);
-        }
-        fclose(file);
-    }
-}
-
-void qd_server_config_free(qd_server_config_t *cf)
-{
-    if (!cf) return;
-    free(cf->host);
-    free(cf->port);
-    free(cf->host_port);
-    free(cf->role);
-    if (cf->http_root_dir)         free(cf->http_root_dir);
-    if (cf->name)                  free(cf->name);
-    if (cf->socket_address_family) free(cf->socket_address_family);
-    if (cf->sasl_username)         free(cf->sasl_username);
-    if (cf->sasl_password)         free(cf->sasl_password);
-    if (cf->sasl_mechanisms)       free(cf->sasl_mechanisms);
-    if (cf->ssl_profile)           free(cf->ssl_profile);
-    if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
-    if (cf->log_message)           free(cf->log_message);
-    if (cf->policy_vhost)          free(cf->policy_vhost);
-
-    if (cf->ssl_certificate_file)       free(cf->ssl_certificate_file);
-    if (cf->ssl_private_key_file)       free(cf->ssl_private_key_file);
-    if (cf->ssl_ciphers)                free(cf->ssl_ciphers);
-    if (cf->ssl_protocols)              free(cf->ssl_protocols);
-    if (cf->ssl_password)               free(cf->ssl_password);
-    if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
-    if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
-    if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
-    free(cf->data_connection_count);
-    if (cf->conn_props) pn_data_free(cf->conn_props);
-
-    memset(cf, 0, sizeof(*cf));
-}
-
-#define CHECK() if (qd_error_code()) goto error
-#define SSTRDUP(S) ((S) ? strdup(S) : NULL)
-
-/**
- * Private function to set the values of booleans strip_inbound_annotations and strip_outbound_annotations
- * based on the corresponding values for the settings in skrouter.json
- * strip_inbound_annotations and strip_outbound_annotations are defaulted to true
- */
-static void load_strip_annotations(qd_server_config_t *config, const char* stripAnnotations)
-{
-    if (stripAnnotations) {
-    	if      (strcmp(stripAnnotations, "both") == 0) {
-    		config->strip_inbound_annotations  = true;
-    		config->strip_outbound_annotations = true;
-    	}
-    	else if (strcmp(stripAnnotations, "in") == 0) {
-    		config->strip_inbound_annotations  = true;
-    		config->strip_outbound_annotations = false;
-    	}
-    	else if (strcmp(stripAnnotations, "out") == 0) {
-    		config->strip_inbound_annotations  = false;
-    		config->strip_outbound_annotations = true;
-    	}
-    	else if (strcmp(stripAnnotations, "no") == 0) {
-    		config->strip_inbound_annotations  = false;
-    		config->strip_outbound_annotations = false;
-    	}
-    }
-    else {
-    	assert(stripAnnotations);
-    	//This is just for safety. Default to stripInboundAnnotations and stripOutboundAnnotations to true (to "both").
-		config->strip_inbound_annotations  = true;
-		config->strip_outbound_annotations = true;
-    }
-}
-
-/**
- * Since both the host and the addr have defaults of 127.0.0.1, we will have to use the non-default wherever it is available.
- */
-static void set_config_host(qd_server_config_t *config, qd_entity_t* entity)
-{
-    config->host = qd_entity_opt_string(entity, "host", 0);
-
-    assert(config->host);
-
-    int hplen = strlen(config->host) + strlen(config->port) + 2;
-    config->host_port = malloc(hplen);
-    snprintf(config->host_port, hplen, "%s:%s", config->host, config->port);
-}
-
-static void qd_config_process_password(char **actual_val, char *pw, bool *is_file, bool allow_literal_prefix)
-{
-    if (!pw)
-        return;
-
-    //
-    // If the "password" starts with "env:" then the remaining
-    // text is the environment variable that contains the password
-    //
-    if (strncmp(pw, "env:", 4) == 0) {
-        char *env = pw + 4;
-        // skip the leading whitespace if it is there
-        while (*env == ' ') ++env;
-
-        const char* passwd = getenv(env);
-        if (passwd) {
-            //
-            // Replace the allocated directive with the looked-up password
-            //
-            *actual_val = strdup(passwd);
-        } else {
-            qd_error(QD_ERROR_NOT_FOUND, "Failed to find a password in the environment variable");
-        }
-    }
-
-    //
-    // If the "password" starts with "literal:" or "pass:" then
-    // the remaining text is the password and the heading should be
-    // stripped off
-    //
-    else if ( (strncmp(pw, "literal:", 8) == 0 && allow_literal_prefix) || strncmp(pw, "pass:", 5) == 0) {
-        qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
-               "It is unsafe to provide plain text passwords in the config file");
-
-        if (strncmp(pw, "l", 1) == 0) {
-            // skip the "literal:" header
-            pw += 8;
-        }
-        else {
-            // skip the "pass:" header
-            pw += 5;
-        }
-
-        //
-        // Replace the password with a copy of the string after "literal: or "pass:"
-        //
-        char *copy = strdup(pw);
-        *actual_val = copy;
-    }
-    //
-    // If the password starts with a file: literal set the is_file to true.
-    //
-    else if (strncmp(pw, "file:", 5) == 0) {
-        pw += 5;
-
-        // Replace the password with a copy of the string after "file:"
-        char *copy = strdup(pw);
-        *actual_val = copy;
-        *is_file = true;
-    }
-    else {
-        //
-        // THe password field does not have any prefixes. Use it as plain text
-        //
-        qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
-               "It is unsafe to provide plain text passwords in the config file");
-    }
-}
-
-static qd_log_bits populate_log_message(const qd_server_config_t *config)
-{
-    //May have to copy this string since strtok modifies original string.
-    char *log_message = config->log_message;
-
-    int32_t ret_val = 0;
-
-    if (!log_message || strcmp(log_message, NONE) == 0)
-        return ret_val;
-
-    //If log_message is set to 'all', turn on all bits.
-    if (strcmp(log_message, ALL) == 0)
-        return INT32_MAX;
-
-    char *delim = ",";
-
-    /* get the first token */
-    char *token = strtok(log_message, delim);
-
-    const char *component = 0;
-
-    /* walk through other tokens */
-    while( token != NULL ) {
-       for (int i=0;; i++) {
-           component = qd_log_message_components[i];
-           if (component == 0)
-               break;
-
-           if (strcmp(component, token) == 0) {
-                   ret_val |= 1 << i;
-           }
-       }
-       token = strtok(NULL, delim);
-    }
-
-    return ret_val;
-}
-
-
-static qd_error_t load_server_config(qd_dispatch_t *qd, qd_server_config_t *config, qd_entity_t* entity, bool is_listener, const char *role_override)
-{
-    qd_error_clear();
-
-    bool authenticatePeer   = qd_entity_opt_bool(entity, "authenticatePeer",  false);    CHECK();
-    bool verifyHostname     = qd_entity_opt_bool(entity, "verifyHostname",    true);     CHECK();
-    bool requireEncryption  = qd_entity_opt_bool(entity, "requireEncryption", false);    CHECK();
-    bool requireSsl         = qd_entity_opt_bool(entity, "requireSsl",        false);    CHECK();
-
-    ZERO(config);
-    config->log_message          = qd_entity_opt_string(entity, "messageLoggingComponents", 0);     CHECK();
-    config->log_bits             = populate_log_message(config);
-    config->port                 = qd_entity_get_string(entity, "port");              CHECK();
-    config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
-    long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
-
-    if (!role_override) {
-        config->role = qd_entity_get_string(entity, "role"); CHECK();
-    } else {
-        config->role = strdup(role_override);
-    }
-
-    //
-    // The cost field on the listener or the connector should be > 0 and <= INT32_MAX
-    // The router will terminate on invalid cost values.
-    //
-    if (inter_router_cost <= 0 || inter_router_cost > INT32_MAX) {
-        return qd_error(QD_ERROR_CONFIG,
-                        "Invalid cost (%li) specified. Minimum value for cost is 1 and maximum value is %i",
-                        inter_router_cost, INT32_MAX);
-    }
-
-    config->inter_router_cost = inter_router_cost;
-    config->socket_address_family      = qd_entity_opt_string(entity, "socketAddressFamily", 0); CHECK();
-    config->healthz              = qd_entity_opt_bool(entity, "healthz", true);       CHECK();
-    config->metrics              = qd_entity_opt_bool(entity, "metrics", true);       CHECK();
-    config->websockets           = qd_entity_opt_bool(entity, "websockets", true);    CHECK();
-    config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
-    config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
-    config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
-    config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
-    config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
-    uint64_t ssn_frames          = qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
-    config->idle_timeout_seconds = qd_entity_get_long(entity, "idleTimeoutSeconds");  CHECK();
-    if (is_listener) {
-        config->initial_handshake_timeout_seconds = qd_entity_get_long(entity, "initialHandshakeTimeoutSeconds");  CHECK();
-    }
-    config->sasl_username        = qd_entity_opt_string(entity, "saslUsername", 0);   CHECK();
-    config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
-    config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
-    config->ssl_profile          = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
-    config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
-    config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
-    config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
-    config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
-
-
-    if (strcmp(config->role, "inter-router") == 0) {
-        // For inter-router connections only, the dataConnectionCount defaults to "auto",
-        // which means it will be determined as a function of the number of worker threads.
-        config->data_connection_count = strdup(qd->data_connection_count);
-        // If the user has *not* explicitly set the value "0",
-        // then we will have some data connections.
-        if (strcmp(config->data_connection_count, "0")) {
-            config->has_data_connectors = true;
-        }
-    } else {
-        config->data_connection_count = strdup("0");
-    }
-
-    set_config_host(config, entity);
-
-    if (config->sasl_password) {
-        //
-        //Process the sasl password field and set the right values based on prefixes.
-        //
-        char *actual_pass = 0;
-        bool is_file_path = 0;
-        qd_config_process_password(&actual_pass, config->sasl_password, &is_file_path, false);
-        if (actual_pass) {
-            if (is_file_path) {
-                   qd_set_password_from_file(actual_pass, &config->sasl_password);
-                   free(actual_pass);
-            }
-            else {
-                free(config->sasl_password);
-                config->sasl_password = actual_pass;
-            }
-        }
-    }
-
-    //
-    // Handle the defaults for various settings
-    //
-    if (config->link_capacity == 0)
-        config->link_capacity = 250;
-
-    if (config->max_sessions == 0 || config->max_sessions > 32768)
-        // Proton disallows > 32768
-        config->max_sessions = 32768;
-
-    if (config->max_frame_size < QD_AMQP_MIN_MAX_FRAME_SIZE)
-        // Silently promote the minimum max-frame-size
-        // Proton will do this but the number is needed for the
-        // incoming capacity calculation.
-        config->max_frame_size = QD_AMQP_MIN_MAX_FRAME_SIZE;
-
-    //
-    // Given session frame count and max frame size, compute session incoming_capacity
-    //   On 64-bit systems the capacity has no practical limit.
-    //   On 32-bit systems the largest default capacity is half the process address space.
-    //
-    bool is_64bit = sizeof(size_t) == 8;
-#define MAX_32BIT_CAPACITY ((size_t)(2147483647))
-    if (ssn_frames == 0) {
-        config->incoming_capacity = is_64bit ? MAX_32BIT_CAPACITY * (size_t)config->max_frame_size : MAX_32BIT_CAPACITY;
-    } else {
-        // Limited incoming frames.
-        if (is_64bit) {
-            // Specify this to proton by setting capacity to be
-            // the product (max_frame_size * ssn_frames).
-            config->incoming_capacity = (size_t)config->max_frame_size * (size_t)ssn_frames;
-        } else {
-            // 32-bit systems have an upper bound to the capacity
-            uint64_t max_32bit_capacity = (uint64_t)MAX_32BIT_CAPACITY;
-            uint64_t capacity     = (uint64_t)config->max_frame_size * (uint64_t)ssn_frames;
-            if (capacity <= max_32bit_capacity) {
-                config->incoming_capacity = (size_t)capacity;
-            } else {
-                config->incoming_capacity = MAX_32BIT_CAPACITY;
-                uint64_t actual_frames = max_32bit_capacity / (uint64_t)config->max_frame_size;
-
-                qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
-                       "Server configuration for I/O adapter entity name:'%s', host:'%s', port:'%s', "
-                       "requested maxSessionFrames truncated from %" PRId64 " to %" PRId64,
-                       config->name, config->host, config->port, ssn_frames, actual_frames);
-            }
-        }
-    }
-
-    //
-    // For now we are hardwiring this attribute to true.  If there's an outcry from the
-    // user community, we can revisit this later.
-    //
-    config->allowInsecureAuthentication = true;
-    config->verify_host_name = verifyHostname;
-
-    char *stripAnnotations  = qd_entity_opt_string(entity, "stripAnnotations", 0);
-    load_strip_annotations(config, stripAnnotations);
-    free(stripAnnotations);
-    stripAnnotations = 0;
-    CHECK();
-
-    config->requireAuthentication = authenticatePeer;
-    config->requireEncryption     = requireEncryption || requireSsl;
-
-    if (config->ssl_profile) {
-        config->ssl_required = requireSsl;
-        config->ssl_require_peer_authentication = config->sasl_mechanisms &&
-            strstr(config->sasl_mechanisms, "EXTERNAL") != 0;
-
-        qd_config_ssl_profile_t *ssl_profile =
-            qd_find_ssl_profile(qd->connection_manager, config->ssl_profile);
-        if (ssl_profile) {
-            config->ssl_certificate_file = SSTRDUP(ssl_profile->ssl_certificate_file);
-            config->ssl_private_key_file = SSTRDUP(ssl_profile->ssl_private_key_file);
-            config->ssl_ciphers = SSTRDUP(ssl_profile->ssl_ciphers);
-            config->ssl_protocols = SSTRDUP(ssl_profile->ssl_protocols);
-            config->ssl_password = SSTRDUP(ssl_profile->ssl_password);
-            config->ssl_trusted_certificate_db = SSTRDUP(ssl_profile->ssl_trusted_certificate_db);
-            config->ssl_uid_format = SSTRDUP(ssl_profile->ssl_uid_format);
-            config->ssl_uid_name_mapping_file = SSTRDUP(ssl_profile->uid_name_mapping_file);
-        }
-    }
-
-    return QD_ERROR_NONE;
-
-  error:
-    qd_server_config_free(config);
-    return qd_error_code();
-}
-
-
-bool is_log_component_enabled(qd_log_bits log_message, const char *component_name) {
-
-    for(int i=0;;i++) {
-        const char *component = qd_log_message_components[i];
-        if (component == 0)
-            break;
-        if (strcmp(component_name, component) == 0)
-            return (log_message >> i) & 1;
     }
 
     return 0;
@@ -547,7 +106,7 @@ QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch
         //
         char *actual_pass = 0;
         bool is_file_path = 0;
-        qd_config_process_password(&actual_pass, ssl_profile->ssl_password, &is_file_path, true);
+        qd_server_config_process_password(&actual_pass, ssl_profile->ssl_password, &is_file_path, true);
         CHECK();
         if (actual_pass) {
             if (is_file_path) {
@@ -584,11 +143,12 @@ static void log_config(qd_server_config_t *c, const char *what, bool create)
            c->ssl_profile ? ", sslProfile=" : "", c->ssl_profile ? c->ssl_profile : "");
 }
 
+
 QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
     qd_listener_t *li = qd_server_listener(qd->server);
-    if (!li || load_server_config(qd, &li->config, entity, true, 0) != QD_ERROR_NONE) {
+    if (!li || qd_server_config_load(qd, &li->config, entity, true, 0) != QD_ERROR_NONE) {
         qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener: %s", qd_error_message());
         qd_listener_decref(li);
         return 0;
@@ -652,6 +212,7 @@ static int get_failover_info_length(qd_failover_item_list_t   conn_info_list)
 
     return arr_length;
 }
+
 
 /**
  *
@@ -769,6 +330,7 @@ static int auto_calc_connection_count(qd_dispatch_t *qd)
   return (qdr_core_get_worker_thread_count(qd_dispatch_router_core(qd)) + 1) / 2;
 }
 
+
 QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
@@ -776,7 +338,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
 
     qd_error_clear();
 
-    if (ct && load_server_config(qd, &ct->config, entity, false, 0) == QD_ERROR_NONE) {
+    if (ct && qd_server_config_load(qd, &ct->config, entity, false, 0) == QD_ERROR_NONE) {
         ct->policy_vhost = qd_entity_opt_string(entity, "policyVhost", 0); CHECK();
         DEQ_ITEM_INIT(ct);
         DEQ_INSERT_TAIL(cm->connectors, ct);
@@ -814,7 +376,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             qd_generate_discriminator(ct->group_correlator);
             for (uint32_t i = 0; i < connection_count; i++) {
                 qd_connector_t *dc = qd_server_connector(qd->server);
-                if (dc && load_server_config(qd, &dc->config, entity, false, "inter-router-data") == QD_ERROR_NONE) {
+                if (dc && qd_server_config_load(qd, &dc->config, entity, false, "inter-router-data") == QD_ERROR_NONE) {
                     strncpy(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE);
                     dc->is_data_connector = true;
                     DEQ_INSERT_TAIL(cm->data_connectors, dc);

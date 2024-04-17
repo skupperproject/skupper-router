@@ -20,7 +20,10 @@
 #include "config.h"
 #include "http.h"
 #include "server_private.h"
-#include "qd_connection.h"
+
+// KAG: todo: fix these layering violations:
+#include "adaptors/amqp/qd_connection.h"
+#include "adaptors/amqp/qd_listener.h"
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/amqp.h"
@@ -188,13 +191,16 @@ static int handle_events(connection_t* c) {
         return unexpected_close(c->wsi, "not-established");
     }
     pn_event_t *e;
-    while ((e = pn_connection_driver_next_event(&c->driver))) {
-        if (c->qd_conn && e) {
-            if (!qd_connection_handle(c->qd_conn, e)) {
+    while ((e = pn_connection_driver_next_event(&c->driver)) != 0) {
+        if (c->qd_conn) {
+            if (!qd_amqpws_handle_connection_event(c->qd_conn, e)) {
                 c->qd_conn = 0;  // connection closed
             }
         }
     }
+    if (c->qd_conn)
+        qd_amqpws_end_of_batch(c->qd_conn);
+
     if (pn_connection_driver_write_buffer(&c->driver).size) {
         lws_callback_on_writable(c->wsi);
     }

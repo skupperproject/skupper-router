@@ -96,4 +96,10 @@ qd_python_lock_state_t qd_python_lock(void);
 void qd_python_unlock(qd_python_lock_state_t state);
 void qd_python_check_lock(void);
 
+/** Convert a Python string type to a C string.  The resulting string may be
+ * UTF-8 encoded.  Caller must free returned string buffer.  Returns NULL on
+ * failure
+ */
+char *py_string_2_c(PyObject *py_str);
+
 #endif

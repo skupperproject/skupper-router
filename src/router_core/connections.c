@@ -538,8 +538,8 @@ void qdr_link_set_context(qdr_link_t *link, void *context)
                 free(link->user_context);
             }
 
-            qd_link_t_sp *safe_ptr = NEW(qd_alloc_safe_ptr_t);
-            set_safe_ptr_qd_link_t(context, safe_ptr);
+            qd_alloc_safe_ptr_t *safe_ptr = NEW(qd_alloc_safe_ptr_t);
+            qd_alloc_set_safe_ptr(safe_ptr, context);
             link->user_context = safe_ptr;
         }
     }
@@ -550,9 +550,9 @@ void *qdr_link_get_context(const qdr_link_t *link)
 {
     if (link) {
         if (link->user_context) {
-            qd_link_t_sp *safe_qdl = (qd_link_t_sp*) link->user_context;
+            qd_alloc_safe_ptr_t *safe_qdl = (qd_alloc_safe_ptr_t*) link->user_context;
             if (safe_qdl)
-                return safe_deref_qd_link_t(*safe_qdl);
+                return qd_alloc_deref_safe_ptr(safe_qdl);
         }
     }
 
