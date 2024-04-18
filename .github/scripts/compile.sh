@@ -136,7 +136,8 @@ do_patch () {
 do_patch "patches/proton" "${PROTON_DIR}"
 
 # This is required to install the python packages that the system tests use.
-python3 -m pip install -r "${SKUPPER_DIR}"/requirements-dev.txt
+python3 -m pip install --upgrade -r "${SKUPPER_DIR}"/requirements-dev.txt
+python3 -m pip install --upgrade -r "${PROTON_DIR}"/python/ci_requirements.txt
 
 cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -154,7 +155,7 @@ cmake --install "$PROTON_BUILD_DIR"
 
 # This will install the proton python libraries in sys.path so the tests using
 # proton can be run successfully.
-python3 -m pip install "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+python3 -m pip install "$(find "$PROTON_BUILD_DIR/python/dist" -name 'python_qpid_proton*.whl')"
 
 cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -166,7 +167,7 @@ cmake -S "${SKUPPER_DIR}" -B "${SKUPPER_BUILD_DIR}" \
 cmake --build "${SKUPPER_BUILD_DIR}" --verbose
 
 # Install Proton Python
-python3 -m pip install --disable-pip-version-check --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/" -name 'python-qpid-proton-*.tar.gz')"
+python3 -m pip install --disable-pip-version-check --ignore-installed --prefix="$PROTON_INSTALL_DIR/usr" "$(find "$PROTON_BUILD_DIR/python/dist" -name 'python_qpid_proton*.whl')"
 
 tar -z -C "${PROTON_INSTALL_DIR}" -cf /qpid-proton-image.tar.gz usr
 
