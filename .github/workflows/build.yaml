@@ -379,7 +379,7 @@ jobs:
           path: 'skupper-router'
       - name: Install Linux build dependencies
         run: |
-          sudo apt update; sudo apt install -y flake8 mypy pylint python3-qpid-proton libpython3-dev ninja-build ccache libwebsockets-dev libnghttp2-dev nginx python3-cffi python3-pip python3-setuptools python3-wheel
+          sudo apt update; sudo apt install -y flake8 mypy pylint python3-qpid-proton libpython3-dev ninja-build ccache libwebsockets-dev libnghttp2-dev nginx python3-build python3-cffi python3-pip python3-setuptools python3-wheel tox
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
       - name: Prepare ccache timestamp
@@ -402,9 +402,6 @@ jobs:
 
       - name: Zero ccache stats
         run: ccache -z
-
-      - name: Install qpid-proton python dependencies from ci_requirements.txt
-        run: python3 -m pip install --upgrade -r ${{github.workspace}}/qpid-proton/python/ci_requirements.txt
 
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
