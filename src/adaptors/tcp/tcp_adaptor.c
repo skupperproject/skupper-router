@@ -1918,6 +1918,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
 
     if (etype == PN_RAW_CONNECTION_CONNECTED) {
         // it is safe to call pn_raw_connection_wake() now
+        qd_set_vflow_netaddr_string(conn->common.vflow, conn->raw_conn, conn->listener_side);
         assert(!IS_ATOMIC_FLAG_SET(&conn->raw_opened));
         SET_ATOMIC_FLAG(&conn->raw_opened);
     } else if (etype == PN_RAW_CONNECTION_DISCONNECTED) {
