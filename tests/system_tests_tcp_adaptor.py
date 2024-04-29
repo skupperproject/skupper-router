@@ -2643,7 +2643,8 @@ class FakeClientStreamAborter(MessagingHandler):
         self.amqp_sender = None
         self.inbound_dlv = None
         self.reply_to = None
-        self.octets_rx = 0
+        self.payload_tx = 0
+        self.payload_rx = 0
 
     def done(self, error=None):
         self.logger.log("done")
@@ -2690,30 +2691,29 @@ class FakeClientStreamAborter(MessagingHandler):
                 # add body value null terminator
                 encoded += b'\x00\x53\x77\x40'
                 # and enough content to classify this message as streaming...
-                encoded += b'ABC' * 100000
+                self.payload_tx = 100000
+                encoded += b'ABC' * self.payload_tx
                 self.amqp_sender.stream(encoded)
 
     def on_delivery(self, event):
         self.logger.log("on_delivery")
         dlv = event.delivery
         if dlv.readable:
+            # Reply data is available. This indicates that the return path
+            # has been established. Now we can abort the inbound message.
             data = self.amqp_receiver.recv(dlv.pending)
             if data:
-                #print(f"RECV-->'{data}'", flush=True)
-                self.octets_rx += len(data)
-                # fake update to TCP window:
+                self.payload_rx += len(data)
+                self.logger.log(f"client recv--> ({len(data)}) '{data.decode(errors='replace')[:100]} ...'")
+                # Fake update to TCP window, do not acknowledge msg header octets
+                # which makes the total number of octets received greater than
+                # the total number of octets sent (ISSUE #1452)
                 dlv.local.section_number = 0
-                dlv.local.section_offset = self.octets_rx
+                dlv.local.section_offset = min(self.payload_rx, self.payload_tx)
                 dlv.update(dlv.RECEIVED)
-            if not self.inbound_dlv.aborted:
-                # Continue streaming but mark end of stream
-                self.logger.log("Sending payload")
-                self.amqp_sender.stream(b'?' * 65535)
-                self.amqp_sender.stream(b'END-OF-STREAM')
 
-                if b'END-OF-STREAM' in data:
-                    # end-of-stream echoed back, abort inbound delivery
-                    self.logger.log(f"END-OF-STREAM received, aborting {self.inbound_dlv.tag}...")
+                if not self.inbound_dlv.aborted:
+                    self.logger.log(f"Reply received, aborting {self.inbound_dlv.tag}...")
                     self.inbound_dlv.abort()
 
             if dlv.partial is False:
