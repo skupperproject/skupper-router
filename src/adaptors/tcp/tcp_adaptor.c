@@ -1174,6 +1174,7 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
 
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     extract_metadata_from_stream_CSIDE(conn);
@@ -1243,6 +1244,7 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
         bool was_blocked = window_full(conn);
         uint64_t octet_count = produce_read_buffers_XSIDE_IO(conn, conn->inbound_stream, &read_closed);
         conn->inbound_octets += octet_count;
+        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
 
         if (octet_count > 0) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', octet_count);
@@ -1498,6 +1500,7 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
     if (decrypted_octets) {
         more_work = true;
         conn->inbound_octets += decrypted_octets;
+        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
         qd_message_produce_buffers(conn->inbound_stream, &decrypted_buffers);
 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE TLS read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', decrypted_octets);
@@ -1972,6 +1975,7 @@ static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listene
 
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, li->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;
