@@ -1215,6 +1215,10 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
     vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
+    // Call vflow_set_trace() only on the outbound CSIDE.
+    // See https://github.com/skupperproject/skupper-router/blob/2.6.x/src/adaptors/tcp/tcp_adaptor.c#L1486
+    vflow_set_trace(conn->common.vflow, msg);
+
     extract_metadata_from_stream_CSIDE(conn);
 
     conn->context.context = conn;
