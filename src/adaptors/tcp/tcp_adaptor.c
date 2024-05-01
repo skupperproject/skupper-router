@@ -167,6 +167,10 @@ static void qd_tcp_connector_incref(qd_tcp_connector_t *connector)
     sys_atomic_inc(&connector->ref_count);
 }
 
+/**
+ * NOTE: Do not call this function directly. This function should only be called directly from ADAPTOR_final().
+ * To free the listener, call qd_tcp_listener_decref which will check the listener's ref_count before freeing it.
+ */
 static void qd_tcp_listener_free(qd_tcp_listener_t *listener)
 {
     sys_mutex_lock(&tcp_context->lock);
@@ -200,6 +204,10 @@ static void qd_tcp_listener_decref(qd_tcp_listener_t *listener)
     }
 }
 
+/**
+ * NOTE: Do not call this function directly. This function should only be called directly from ADAPTOR_final().
+ * To free the connector, call qd_tcp_connector_decref which will check the connector's ref_count before freeing it.
+ */
 static void qd_tcp_connector_free(qd_tcp_connector_t *connector)
 {
     // Disable activation by the Core thread.
@@ -467,7 +475,7 @@ static void free_tcp_resource(qd_tcp_common_t *resource)
     qdr_action_enqueue(tcp_context->core, action);
 }
 
-static void free_connection_IO(void *context, bool do_decref)
+static void free_connection_IO(void *context)
 {
     // No thread assertion here - can be RAW_IO or TIMER_IO
     qd_tcp_connection_t *conn = (qd_tcp_connection_t*) context;
@@ -491,7 +499,7 @@ static void free_connection_IO(void *context, bool do_decref)
             // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
             //
             conn->common.parent = 0;
-            if (do_decref) qd_tcp_listener_decref(listener);
+            qd_tcp_listener_decref(listener);
         } else {
             qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
             sys_mutex_lock(&connector->lock);
@@ -501,7 +509,7 @@ static void free_connection_IO(void *context, bool do_decref)
             // Call connector decref when a connection associated with the connector is removed (DEQ_REMOVE(connector->connections, conn))
             //
             conn->common.parent = 0;
-            if (do_decref) qd_tcp_connector_decref(connector);
+            qd_tcp_connector_decref(connector);
         }
     }
 
@@ -540,7 +548,7 @@ static void close_raw_connection(qd_tcp_connection_t *conn, const char *conditio
     // Connection cleanup occurs on the PN_RAW_CONNECTION_DISCONNECTED event
 }
 
-static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn, bool do_decref)
+static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
 {
     ASSERT_RAW_IO;
     if (conn->state != XSIDE_CLOSING)
@@ -638,7 +646,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn, bool do_decref)
         }
     }
 
-    free_connection_IO(conn, do_decref);
+    free_connection_IO(conn);
 }
 
 
@@ -1937,7 +1945,7 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
-        close_connection_XSIDE_IO(conn, true);
+        close_connection_XSIDE_IO(conn);
         return;
     }
 
@@ -1975,7 +1983,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
             }
         }
-        close_connection_XSIDE_IO(conn, true);
+        close_connection_XSIDE_IO(conn);
         return;
     }
 
@@ -2564,13 +2572,17 @@ static void ADAPTOR_final(void *adaptor_context)
 {
     SET_THREAD_UNKNOWN;
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Shutting down TCP protocol adaptor");
-
     while (DEQ_HEAD(tcp_context->listeners)) {
         qd_tcp_listener_t *listener   = DEQ_HEAD(tcp_context->listeners);
+        //
+        // Deliberately call qd_tcp_listener_incref() to make sure that freeing the connections, don't
+        // free the listener. Then we call qd_tcp_listener_free() to forcefully free the listener without checking the listener->ref_count
+        //
+        qd_tcp_listener_incref(listener);
         qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
         while (conn) {
             qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-            close_connection_XSIDE_IO(conn, false);
+            close_connection_XSIDE_IO(conn);
             conn = next_conn;
         }
         qd_tcp_listener_free(listener);
@@ -2578,10 +2590,16 @@ static void ADAPTOR_final(void *adaptor_context)
 
     while (DEQ_HEAD(tcp_context->connectors)) {
         qd_tcp_connector_t *connector   = DEQ_HEAD(tcp_context->connectors);
+        //
+        // Deliberately call qd_tcp_connector_incref() to make sure that freeing the connections, don't
+        // free the connector. Then we call qd_tcp_connector_free() to forcefully free the connector without checking the connector->ref_count
+        //
+        qd_tcp_connector_incref(connector);
+
         qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
         while (conn) {
             qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-            close_connection_XSIDE_IO(conn, false);
+            close_connection_XSIDE_IO(conn);
             conn = next_conn;
         }
         qd_tcp_connector_free(connector);
