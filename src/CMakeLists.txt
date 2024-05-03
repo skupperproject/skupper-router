@@ -59,6 +59,10 @@ set(qpid_dispatch_SOURCES
   adaptors/amqp/qd_connection.c
   adaptors/amqp/qd_connector.c
   adaptors/amqp/server_config.c
+  observers/protocol_observer.c
+  observers/tcp_observer.c
+  observers/http1_observer.c
+  observers/http2_observer.c
   alloc.c
   alloc_pool.c
   aprintf.c
@@ -87,7 +91,6 @@ set(qpid_dispatch_SOURCES
   policy.c
   policy_spec.c
   protocol_adaptor.c
-  protocol_observer.c
   proton_utils.c
   posix/threading.c
   python_embedded.c

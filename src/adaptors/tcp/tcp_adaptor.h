@@ -62,7 +62,7 @@ struct qd_tcp_listener_t {
     qd_adaptor_config_t       *adaptor_config;
     qd_tls_domain_t           *tls_domain;
     qd_adaptor_listener_t     *adaptor_listener;
-    qd_tcp_connection_list_t  connections;
+    qd_tcp_connection_list_t   connections;
     qdpo_config_t             *protocol_observer_config;
     qdpo_t                    *protocol_observer;
     uint64_t                   connections_opened;
