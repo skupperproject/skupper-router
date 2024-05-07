@@ -70,6 +70,9 @@ target_link_libraries(threaded_timer_test skupper-router)
 add_executable(adaptor_buffer_test adaptor_buffer_test.c)
 target_link_libraries(adaptor_buffer_test skupper-router)
 
+add_executable(http1-relay http1_relay.c)
+target_link_libraries(http1-relay skupper-router)
+
 set(TEST_WRAP ${Python_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/run.py)
 
 add_test(unit_tests_size_10000 ${TEST_WRAP} unit_tests_size 10000)
@@ -174,6 +177,7 @@ foreach(py_test_module
     system_tests_expandvars
     system_tests_panic_handler
     system_tests_resend_released
+    system_tests_http1_decoder
     )
 
   string(CONFIGURE "${PYTHON_TEST_COMMAND}" CONFIGURED_PYTHON_TEST_COMMAND)
