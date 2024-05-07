@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <string.h>
 
+#define MAX_SERVER_DATA_LEN 16384
 
 // HTTP/2.0 protocol prefix (RFC 9113)
 // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -33,6 +34,44 @@ const uint8_t http2_prefix[HTTP2_PREFIX_LEN] = {
     0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a
 };
 STATIC_ASSERT(TCP_PREFIX_LEN >= HTTP2_PREFIX_LEN, "Increase TCP_PREFIX_LEN");
+
+
+// Start a new protocol observer for the content of the tcp data stream
+//
+// This is a bit tricky since the handle uses an union for protocol state data we need to
+// make a separate copy of the saved data for the new observer.
+//
+static void activate_inner(qdpo_transport_handle_t *th, qd_protocol_t inner_protocol, const unsigned char *data, size_t length)
+{
+    tcp_observer_state_t save = th->tcp;
+
+    DEQ_INIT(th->tcp.server_data);  // prevent free by qdpo_tcp_final()
+    qdpo_tcp_final(th);
+
+    switch (inner_protocol) {
+        case QD_PROTOCOL_HTTP1:
+            qdpo_http1_init(th);
+            break;
+        case QD_PROTOCOL_HTTP2:
+            qdpo_http2_init(th);
+            break;
+        default:
+            assert(false);  // unsupported protocol
+            break;
+    }
+
+    // pass save data to new observer
+
+    th->observe(th, true, save.prefix, save.prefix_len);
+    th->observe(th, true, data, length);
+    qd_buffer_t *buf = DEQ_HEAD(save.server_data);
+    while (buf) {
+        DEQ_REMOVE_HEAD(save.server_data);
+        th->observe(th, false, qd_buffer_base(buf), qd_buffer_size(buf));
+        qd_buffer_free(buf);
+        buf = DEQ_HEAD(save.server_data);
+    }
+}
 
 
 static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const unsigned char *data, size_t length)
@@ -60,10 +99,7 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
         if (memcmp(th->tcp.prefix, http2_prefix, to_match) == 0) {
             // did we match the entire http2_prefix?
             if (to_match == HTTP2_PREFIX_LEN) {
-                qdpo_tcp_final(th);
-                qdpo_http2_init(th);  // note: this overwrites tcp.prefix, so use http2_prefix:
-                th->observe(th, from_client, http2_prefix, HTTP2_PREFIX_LEN);
-                th->observe(th, from_client, data, length);
+                activate_inner(th, QD_PROTOCOL_HTTP2, data, length);
                 return;
             } else {
                 return; // Partial match for HTTP/2 prefix, wait for more
@@ -85,11 +121,7 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
                 size_t to_match = MIN(th->tcp.prefix_len, cmd_len);
                 if (memcmp(th->tcp.prefix, http1_commands[i], to_match) == 0) {
                     if (to_match == cmd_len) {
-                        tcp_observer_state_t save = th->tcp;
-                        qdpo_tcp_final(th);
-                        qdpo_http1_init(th);
-                        th->observe(th, from_client, save.prefix, save.prefix_len);
-                        th->observe(th, from_client, data, length);
+                        activate_inner(th, QD_PROTOCOL_HTTP1, data, length);
                         return;
                     } else {
                         return;  // partial match need more
@@ -100,8 +132,15 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
 
     } else {  // !from_client
 
-        // Unexpected response data arrived before classification complete.
-        // Protocol unknown
+        // hold server data until protocol is classified
+        if (length + th->tcp.server_bytes < MAX_SERVER_DATA_LEN) {
+            qd_buffer_list_append(&th->tcp.server_data, data, length);
+            th->tcp.server_bytes += length;
+            return;
+        }
+
+        // Server has sent too much data for us to hold while classifying. Protocol unknown.
+        //
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] TCP observer response received before classification completed", th->conn_id);
     }
 
@@ -116,7 +155,10 @@ void qdpo_tcp_init(qdpo_transport_handle_t *th)
 {
     th->protocol       = QD_PROTOCOL_TCP;
     th->observe        = tcp_observe;
-    th->tcp.prefix_len = 0;
+
+    th->tcp.prefix_len   = 0;
+    th->tcp.server_bytes = 0;
+    DEQ_INIT(th->tcp.server_data);
     memset(th->tcp.prefix, 0, TCP_PREFIX_LEN);
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] TCP observer initialized", th->conn_id);
@@ -126,5 +168,6 @@ void qdpo_tcp_final(qdpo_transport_handle_t *th)
 {
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] TCP observer finalized", th->conn_id);
     th->observe = 0;
+    qd_buffer_list_free_buffers(&th->tcp.server_data);
 }
 

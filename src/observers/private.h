@@ -41,6 +41,10 @@ struct tcp_observer_state_t {
     // buffer holding enough of the stream to classify the protocol
     uint8_t prefix[TCP_PREFIX_LEN];
     int     prefix_len;
+
+    // store incoming server data arriving prior to completing classification.
+    qd_buffer_list_t  server_data;
+    size_t            server_bytes;
 };
 
 /**
