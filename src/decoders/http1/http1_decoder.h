@@ -78,14 +78,14 @@ struct qd_http1_decoder_config_t {
                        uint32_t version_major,
                        uint32_t version_minor);
 
-    // Invoked for each HTTP header received. from_client is true if the header was read from the stream sent by the
-    // client, false if the stream is sent from the server. Neither key nor value is preserved on return from this
-    // call. The callback must copy the data associated with these values if they need to be saved.
+    // (Optional) invoked for each HTTP header received. from_client is true if the header was read from the stream sent
+    // by the client, false if the stream is sent from the server. Neither key nor value is preserved on return from
+    // this call. The callback must copy the data associated with these values if they need to be saved.
     //
     int (*rx_header)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client,
                      const char *key, const char *value);
 
-    // Invoked after the last HTTP header (after the last rx_header() callback for this message).
+    // (Optional) invoked after the last HTTP header (after the last rx_header() callback for this message).
     //
     int (*rx_headers_done)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client);
 

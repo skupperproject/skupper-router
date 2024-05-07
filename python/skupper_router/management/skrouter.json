@@ -1366,6 +1366,7 @@
                         "HTTP_ADAPTOR",
                         "FLOW_LOG",
                         "ADDRESS_WATCH",
+                        "HTTP_OBSERVER",
                         "DEFAULT"
                     ],
                     "required": true,

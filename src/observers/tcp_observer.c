@@ -79,8 +79,6 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
            "[C%" PRIu64 "] TCP observer classifying protocol: %zu %s octets", th->conn_id, length, from_client ? "client" : "server");
 
-    // wicked brain-dead classification just for POC
-
     if (from_client) {
 
         // fill up the protocol classification prefix buffer
@@ -107,27 +105,12 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
 
         } else {
 
-            // HTTP/2.0 check failed, try HTTP/1.x
+            // HTTP/2.0 check failed. Currently the only other supported protocol is HTTP/1.x so try that
+            // unconditionally. If the HTTP/1.x observer fails to find HTTP/1.x traffic it will disable itself without
+            // posting an error.
 
-            // hack for now. probably best to just start handing off the http1 observer and let it
-            // try to find a proper HTTP/1.x request line.
-
-            const char * const http1_commands[] = {
-                "GET ", "HEAD ", "POST ", "PUT ", "DELETE ", 0
-            };
-
-            for (int i = 0; http1_commands[i] != 0; ++i) {
-                size_t cmd_len  = strlen(http1_commands[i]);
-                size_t to_match = MIN(th->tcp.prefix_len, cmd_len);
-                if (memcmp(th->tcp.prefix, http1_commands[i], to_match) == 0) {
-                    if (to_match == cmd_len) {
-                        activate_inner(th, QD_PROTOCOL_HTTP1, data, length);
-                        return;
-                    } else {
-                        return;  // partial match need more
-                    }
-                }
-            }
+            activate_inner(th, QD_PROTOCOL_HTTP1, data, length);
+            return;
         }
 
     } else {  // !from_client
