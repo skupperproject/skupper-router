@@ -20,6 +20,7 @@
  */
 
 #include <qpid/dispatch/buffer.h>
+#include <qpid/dispatch/protocols.h>
 #include <qpid/dispatch/vanflow.h>
 
 /**
@@ -68,7 +69,7 @@ void qdpo_config_add_address(qdpo_config_t *config, const char *field, const cha
 
 
 typedef struct qdpo_t qdpo_t;
-typedef void* qdpo_transport_handle_t;
+typedef struct qdpo_transport_handle_t qdpo_transport_handle_t;
 
 /**
  * Create a new protocol observer.  Protocol observers take raw octets and attempt to detect the application protocol
@@ -78,7 +79,7 @@ typedef void* qdpo_transport_handle_t;
  * @param config Configuration returned by qdpo_config
  * @return qdpo_t* Newly allocated observer
  */
-qdpo_t *protocol_observer(const char *base, qdpo_config_t *config);
+qdpo_t *protocol_observer(qd_protocol_t base, qdpo_config_t *config);
 
 /**
  * Free an allocated observer
@@ -88,26 +89,25 @@ qdpo_t *protocol_observer(const char *base, qdpo_config_t *config);
 void qdpo_free(qdpo_t *observer);
 
 /**
- * Provide the first buffer for a new connection.  This is payload sent from the client of the connection.
+ * Create an observer for a new connection.
  *
  * @param observer The observer returned by protocol_observer
  * @param vflow The vanflow record for the client-side transport flow
  * @param transport_context A context unique to this connections transport (used in callbacks)
- * @param buf The buffer containing the protocol payload
- * @param offset The offset into the buffer where the first protocol octet is found
- * @return void* A transport handle that references the observer's state for this connection
+ * @param conn_id The routers connection identifier associated with this flow.
+ * @return A transport handle that references the observer's state for this connection
  */
-qdpo_transport_handle_t qdpo_first(qdpo_t *observer, vflow_record_t *vflow, void *transport_context, qd_buffer_t *buf, size_t offset);
+qdpo_transport_handle_t *qdpo_begin(qdpo_t *observer, vflow_record_t *vflow, void *transport_context, uint64_t conn_id);
 
 /**
  * Provide subsequent payload data to an already established connection.
  *
  * @param transport_handle The handle returned by qdpo_first
  * @param from_client True if this payload is from the client, false if from the server
- * @param buf The buffer containing the protocol payload
- * @param offset The offset into the buffer where the next protocol octet is found
+ * @param data The raw protocol data octets
+ * @param length The length of the data in octets
  */
-void qdpo_data(qdpo_transport_handle_t transport_handle, bool from_client, qd_buffer_t *buf, size_t offset);
+void qdpo_data(qdpo_transport_handle_t *transport_handle, bool from_client, const unsigned char *data, size_t length);
 
 /**
  * Indicate the end of a connection.
@@ -115,6 +115,6 @@ void qdpo_data(qdpo_transport_handle_t transport_handle, bool from_client, qd_bu
  * @param connection_handle The handle returned by qdpo_first.  This handle
  *                          should not be used after making this call.
  */
-void qdpo_end(qdpo_transport_handle_t transport_handle);
+void qdpo_end(qdpo_transport_handle_t *transport_handle);
 
 #endif

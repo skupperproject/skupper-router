@@ -347,7 +347,7 @@ static void TL_setup_listener(qd_tcp_listener_t *li)
     // TODO - add configuration to the listener to influence whether and how the observer is set up.
     //
     li->protocol_observer_config = qdpo_config(0, true);
-    li->protocol_observer = protocol_observer("tcp", li->protocol_observer_config);
+    li->protocol_observer = protocol_observer(QD_PROTOCOL_TCP, li->protocol_observer_config);
 
     //
     // Create an adaptor listener. This listener will automatically create a listening socket when there is at least one
@@ -489,6 +489,11 @@ static void free_connection_IO(void *context)
     sys_mutex_unlock(&conn->activation_lock);
     // Do NOT free the core_activation lock since the core may be holding it
 
+    if (conn->observer_handle) {
+        qdpo_end(conn->observer_handle);
+        conn->observer_handle = 0;
+    }
+
     if (conn->common.parent) {
         if (conn->common.parent->context_type == TL_LISTENER) {
             qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
@@ -513,7 +518,7 @@ static void free_connection_IO(void *context)
         }
     }
 
-    // Pass connector to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
+    // Pass connection to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
     // qdr_core_free_tcp_resource_CT()
     free_tcp_resource(&conn->common);
 }
@@ -758,7 +763,7 @@ static uint64_t produce_read_buffers_XSIDE_IO(qd_tcp_connection_t *conn, qd_mess
                 if (qd_buffer_size(buf) > 0) {
                     DEQ_INSERT_TAIL(qd_buffers, buf);
                     if (conn->listener_side && !!conn->observer_handle) {
-                        qdpo_data(conn->observer_handle, true, buf, 0);
+                        qdpo_data(conn->observer_handle, true, qd_buffer_base(buf), qd_buffer_size(buf));
                     }
                 } else {
                     qd_buffer_free(buf);
@@ -797,7 +802,7 @@ static uint64_t consume_write_buffers_XSIDE_IO(qd_tcp_connection_t *conn, qd_mes
             qd_buffer_t *buf = DEQ_HEAD(buffers);
             for (size_t i = 0; i < actual; i++) {
                 if (conn->listener_side && !!conn->observer_handle) {
-                    qdpo_data(conn->observer_handle, false, buf, 0);
+                    qdpo_data(conn->observer_handle, false, qd_buffer_base(buf), qd_buffer_size(buf));
                 }
                 raw_buffers[i].context  = (uintptr_t) buf;
                 raw_buffers[i].bytes    = (char*) qd_buffer_base(buf);
@@ -819,11 +824,9 @@ static uint64_t consume_write_buffers_XSIDE_IO(qd_tcp_connection_t *conn, qd_mes
 // output message buffers and will free them as they are processed. Due to that we need to make a copy of these buffers
 // in order to avoid freeing buffers that are part of the message (double-free).
 //
-static uint64_t copy_message_body_TLS_XSIDE_IO(qd_tcp_connection_t *conn, qd_message_t *stream, qd_buffer_list_t *buffers, size_t limit)
+static void copy_message_body_TLS_XSIDE_IO(qd_tcp_connection_t *conn, qd_message_t *stream, qd_buffer_list_t *buffers, size_t limit)
 {
     size_t   offset = 0;
-    uint64_t octets = 0;
-    const bool observe = (conn->listener_side && !!conn->observer_handle);
 
     assert(conn->tls);
 
@@ -838,12 +841,8 @@ static uint64_t copy_message_body_TLS_XSIDE_IO(qd_tcp_connection_t *conn, qd_mes
             qd_buffer_t *clone = qd_buffer();
             clone->size = size;
             memcpy(qd_buffer_base(clone), qd_buffer_base(conn->outbound_body) + offset, size);
-            if (observe) {
-                qdpo_data(conn->observer_handle, false, clone, 0);
-            }
             DEQ_INSERT_TAIL(*buffers, clone);
         }
-        octets += size;
         offset = 0;
         conn->outbound_body = DEQ_NEXT(conn->outbound_body);
     }
@@ -852,8 +851,6 @@ static uint64_t copy_message_body_TLS_XSIDE_IO(qd_tcp_connection_t *conn, qd_mes
         conn->outbound_body_complete = true;
         qd_message_release_raw_body(stream);
     }
-
-    return octets;
 }
 
 static uint64_t consume_message_body_XSIDE_IO(qd_tcp_connection_t *conn, qd_message_t *stream)
@@ -879,16 +876,20 @@ static uint64_t consume_message_body_XSIDE_IO(qd_tcp_connection_t *conn, qd_mess
     // Note: There may be a non-zero offset only on the first body buffer.  It is assumed that 
     //       every subsequent buffer will have an offset of 0.
     //
+    const bool observe = conn->listener_side && !!conn->observer_handle;
     while (!!conn->outbound_body && pn_raw_connection_write_buffers_capacity(conn->raw_conn) > 0) {
-        if (conn->listener_side && !!conn->observer_handle) {
-            qdpo_data(conn->observer_handle, false, conn->outbound_body, offset);
+        unsigned char *bytes = qd_buffer_base(conn->outbound_body) + offset;
+        size_t         size  = qd_buffer_size(conn->outbound_body) - offset;
+
+        if (observe) {
+            qdpo_data(conn->observer_handle, false, bytes, size);
         }
         pn_raw_buffer_t raw_buffer;
         raw_buffer.context  = 0;
-        raw_buffer.bytes    = (char*) qd_buffer_base(conn->outbound_body);
-        raw_buffer.capacity = qd_buffer_capacity(conn->outbound_body);
-        raw_buffer.size     = qd_buffer_size(conn->outbound_body) - offset;
-        raw_buffer.offset   = offset;
+        raw_buffer.bytes    = (char*) bytes;
+        raw_buffer.capacity = 0;
+        raw_buffer.size     = size;
+        raw_buffer.offset   = 0;
         octets += raw_buffer.size;
         pn_raw_connection_write_buffers(conn->raw_conn, &raw_buffer, 1);
         conn->outbound_body = DEQ_NEXT(conn->outbound_body);
@@ -1429,9 +1430,8 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
 //
 static int64_t tls_consume_data_buffers(void *context, qd_buffer_list_t *buffers, size_t limit)
 {
-    qd_tcp_connection_t *conn = (qd_tcp_connection_t *) context;
-    const bool         observe = conn->listener_side && !!conn->observer_handle;
-    uint64_t            octets = 0;
+    qd_tcp_connection_t *conn    = (qd_tcp_connection_t *) context;
+    uint64_t             octets  = 0;
 
     assert(limit > 0);
     assert(DEQ_IS_EMPTY(*buffers));
@@ -1440,7 +1440,7 @@ static int64_t tls_consume_data_buffers(void *context, qd_buffer_list_t *buffers
         return octets;
 
     if (!conn->outbound_body_complete) {
-        octets = copy_message_body_TLS_XSIDE_IO(conn, conn->outbound_stream, buffers, limit);
+        copy_message_body_TLS_XSIDE_IO(conn, conn->outbound_stream, buffers, limit);
         assert(limit >= DEQ_SIZE(*buffers));
         limit -= DEQ_SIZE(*buffers);
     }
@@ -1449,19 +1449,21 @@ static int64_t tls_consume_data_buffers(void *context, qd_buffer_list_t *buffers
         qd_buffer_list_t tmp = DEQ_EMPTY;
         qd_message_consume_buffers(conn->outbound_stream, &tmp, limit);
         assert(limit >= DEQ_SIZE(tmp));
-        limit -= DEQ_SIZE(tmp);
-        qd_buffer_t *buf = DEQ_HEAD(tmp);
-        while (buf) {
-            octets += qd_buffer_size(buf);
-            if (observe) {
-                qdpo_data(conn->observer_handle, false, buf, 0);
-            }
-            buf = DEQ_NEXT(buf);
-        }
         DEQ_APPEND(*buffers, tmp);
     }
 
-    if (octets) {
+    if (!DEQ_IS_EMPTY(*buffers)) {
+        const bool observe = conn->listener_side && !!conn->observer_handle;
+
+        qd_buffer_t *buf = DEQ_HEAD(*buffers);
+        while (buf) {
+            octets += qd_buffer_size(buf);
+            if (observe) {
+                qdpo_data(conn->observer_handle, false, qd_buffer_base(buf), qd_buffer_size(buf));
+            }
+            buf = DEQ_NEXT(buf);
+        }
+
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                "[C%"PRIu64"] TLS consumed %"PRIu64" cleartext octets from stream", conn->conn_id, octets);
 
@@ -1536,6 +1538,7 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
     const int tls_status = qd_tls_do_io2(conn->tls, conn->raw_conn, tls_consume_data_buffers, conn,
                                          (can_produce) ? &decrypted_buffers : 0,
                                          &decrypted_octets);
+
     //
     // Process inbound cleartext data.
     //
@@ -1544,6 +1547,15 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
         more_work = true;
         conn->inbound_octets += decrypted_octets;
         vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
+
+        if (conn->listener_side && !!conn->observer_handle) {
+            qd_buffer_t *buf = DEQ_HEAD(decrypted_buffers);
+            while (buf) {
+                qdpo_data(conn->observer_handle, true, qd_buffer_base(buf), qd_buffer_size(buf));
+                buf = DEQ_NEXT(buf);
+            }
+        }
+
         qd_message_produce_buffers(conn->inbound_stream, &decrypted_buffers);
 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE TLS read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', decrypted_octets);
@@ -2013,7 +2025,6 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     //
     qd_tcp_listener_incref(listener);
 
-
     sys_mutex_init(&conn->activation_lock);
     sys_atomic_init(&conn->core_activation, 0);
     sys_atomic_init(&conn->raw_opened, 0);
@@ -2036,8 +2047,13 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
     sys_mutex_unlock(&listener->lock);
 
+    if (listener->protocol_observer) {
+        conn->observer_handle = qdpo_begin(listener->protocol_observer, conn->common.vflow, conn, conn->conn_id);
+    }
+
     conn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(conn->raw_conn, &conn->context);
+    // Note: this will trigger the connection's event handler on another thread:
     pn_listener_raw_accept(pn_listener, conn->raw_conn);
 }
 
