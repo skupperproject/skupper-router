@@ -365,7 +365,6 @@ class VFlowSnooperThread:
             raise Exception("VFlowSnooperThread failed to join!")
 
     def get_results(self):
-        assert not self._thread.is_alive()
         return self._snooper.get_results()
 
     @property

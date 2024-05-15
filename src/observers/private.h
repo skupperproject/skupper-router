@@ -20,6 +20,7 @@
  */
 
 #include <qpid/dispatch/protocol_observer.h>
+#include <qpid/dispatch/hash.h>
 
 struct qdpo_config_t {
     qdpo_use_address_t  use_address;
@@ -36,6 +37,8 @@ struct qdpo_t {
  * state machine for observing TCP
  */
 #define TCP_PREFIX_LEN 32
+
+
 typedef struct tcp_observer_state_t tcp_observer_state_t;
 struct tcp_observer_state_t {
     // buffer holding enough of the stream to classify the protocol
@@ -54,19 +57,35 @@ typedef struct qd_http1_decoder_connection_t  qd_http1_decoder_connection_t;
 typedef struct http1_request_state_t          http1_request_state_t;
 DEQ_DECLARE(http1_request_state_t, http1_request_state_list_t);
 
+typedef struct qd_http2_decoder_connection_t  qd_http2_decoder_connection_t;
 typedef struct http1_observer_state_t http1_observer_state_t;
 struct http1_observer_state_t {
     qd_http1_decoder_connection_t *decoder;
     http1_request_state_list_t     requests;
 };
 
-
 /**
- * state machine for observing HTTP/2.0
+ * state machine for observing HTTP/2
  */
-typedef struct http2_observer_state_t http2_observer_state_t;
+typedef struct qd_http2_decoder_connection_t  qd_http2_decoder_connection_t;
+typedef struct http2_observer_state_t         http2_observer_state_t;
+typedef struct qd_http2_stream_info_t         qd_http2_stream_info_t;
+
+struct qd_http2_stream_info_t {
+    DEQ_LINKS(qd_http2_stream_info_t);
+    qd_http2_decoder_connection_t *conn_state;             // Reference to the stream's connection state information
+    vflow_record_t                *vflow;                  // stream level vanflow. this is a vanflow per request
+    uint32_t                       stream_id;              // stream_id of the stream.
+
+};
+
+ALLOC_DECLARE(qd_http2_stream_info_t);
+DEQ_DECLARE(qd_http2_stream_info_t, qd_http2_stream_info_list_t);
+
 struct http2_observer_state_t {
-    int tbd;
+    qd_http2_decoder_connection_t *conn_state;
+    qd_hash_t                     *stream_id_hash;
+    qd_http2_stream_info_list_t    streams;    // A connection can have many streams.
 };
 
 

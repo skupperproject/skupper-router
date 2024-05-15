@@ -1367,6 +1367,8 @@
                         "FLOW_LOG",
                         "ADDRESS_WATCH",
                         "HTTP1_OBSERVER",
+                        "HTTP2_OBSERVER",
+                        "HTTP2_DECODER",
                         "DEFAULT"
                     ],
                     "required": true,

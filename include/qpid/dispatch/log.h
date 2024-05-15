@@ -57,6 +57,8 @@ typedef enum {
     LOG_FLOW_LOG,
     LOG_ADDRESS_WATCH,
     LOG_HTTP1_OBSERVER,
+    LOG_HTTP2_OBSERVER,
+    LOG_HTTP2_DECODER,
     LOG_DEFAULT
 } qd_log_module_t;
 

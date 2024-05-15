@@ -18,6 +18,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+#include <stdio.h>
 
 typedef char* (*testcase_t)(void *context);
 
