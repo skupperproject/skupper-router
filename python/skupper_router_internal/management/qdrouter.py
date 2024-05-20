@@ -62,6 +62,7 @@ class QdSchema(schema.Schema):
         super(QdSchema, self).validate_add(attributes, entities)
         entities.append(attributes)
         router_mode = router_id = listener_connector_role = listener_role = None
+        list_conn_entity = None
         for e in entities:
             short_type = self.short_name(e['type'])
             if short_type == "router":

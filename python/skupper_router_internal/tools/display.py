@@ -224,9 +224,7 @@ class Display:
             width = len(head)
             for row in rows:
                 text = UNICODE(row[col])
-                cellWidth = len(text)
-                if cellWidth > width:
-                    width = cellWidth
+                width = max(width, len(text))
             colWidth.append(width + self.tableSpacing)
             line = line + head
             if col < len(heads) - 1:

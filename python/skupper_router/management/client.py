@@ -296,8 +296,7 @@ class Node:
                 if count == len_response_results:
                     break
 
-                if count - len_response_results < request_count:
-                    request_count = count - len_response_results
+                request_count = min(request_count, count - len_response_results)
 
             offset += request_count
 

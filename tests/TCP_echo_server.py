@@ -83,7 +83,6 @@ class TcpEchoServerHandler(asyncio.Protocol):
         if self.echo_server.close_on_conn:
             self.logger.log(f' {self.name}: Connection from {self.peername} closing due to close_on_conn')
             self.transport.close()
-            return
 
     def connection_lost(self, exc):
         self.logger.log(f' {self.name}: Connection to {self.peername} lost, exception={exc}')
