@@ -109,11 +109,13 @@ class TcpEchoClient:
             total_sent = 0
             total_rcvd = 0
 
+            payload_out = []
+            out_list_idx = 0  # current _out array being sent
+            out_byte_idx = 0  # next-to-send in current array
+            out_ready_to_send = False
+
             if self.count > 0 and self.size > 0:
                 # outbound payload only if count and size both greater than zero
-                payload_out = []
-                out_list_idx = 0  # current _out array being sent
-                out_byte_idx = 0  # next-to-send in current array
                 out_ready_to_send = True
                 # Generate unique content for each message so you can tell where the message
                 # or fragment belongs in the whole stream. Chunks look like:

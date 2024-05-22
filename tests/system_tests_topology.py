@@ -535,6 +535,8 @@ class TopologyFailover (MessagingHandler):
                 router = 'C'
             elif event.receiver == self.routers['D']['mgmt_receiver']:
                 router = 'D'
+            else:
+                raise Exception("Unexpected event receiver")
 
             # ----------------------------------------------------------------
             # This is a management message.

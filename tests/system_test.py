@@ -259,7 +259,8 @@ def get_local_host_socket(socket_address_family='IPv4'):
     elif socket_address_family == 'IPv6':
         s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         host = '::1'
-
+    else:
+        raise Exception(f"Invalid socket_address_family: {socket_address_family}")
     return s, host
 
 

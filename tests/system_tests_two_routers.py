@@ -482,9 +482,9 @@ class DeleteConnectionWithReceiver(MessagingHandler):
                 if event.message.properties['statusDescription'] != 'OK':
                     error = "Expected statusDescription to be OK but instead got %s" % \
                             event.message.properties['statusDescription']
-                elif event.message.body['adminStatus'] != self.deleted_admin_status:
+                else:
                     error = "Expected adminStatus to be %s but instead got %s" % \
-                            (self.deleted_admin_status, event.message.properties['adminStatus'])
+                        (self.deleted_admin_status, event.message.properties['adminStatus'])
                 self.bail(error)
 
         elif event.receiver == self.mgmt_receiver_2:

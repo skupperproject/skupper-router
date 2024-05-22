@@ -1150,8 +1150,7 @@ class TopologyDisposition (MessagingHandler):
                 count = count + 1
                 if first == -1 :
                     first = i
-                if i > last :
-                    last = i
+                last = i
 
         print('    first : %s sent : %.6lf' % (first, self.message_times[str(first)]))
         print('    last  : %s sent : %.6lf' % (last, self.message_times[str(last)]))
