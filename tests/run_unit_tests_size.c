@@ -76,7 +76,7 @@ static int router_id_tests(void)
     //
 
     memset(boundary_id, 'B', 254);
-    boundary_id[255] = 0;
+    boundary_id[254] = 0;
 
     qd_router_id_initialize("0", boundary_id);
     id = qd_router_id();
