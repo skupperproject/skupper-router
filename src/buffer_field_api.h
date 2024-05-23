@@ -79,7 +79,9 @@ static inline size_t qd_buffer_field_extend(qd_buffer_field_t *bfield, size_t am
 /* qd_buffer_field_ncopy
  *
  * Copy up to n octets from bfield to dest, advance bfield by the number of
- * octets copied
+ * octets copied.
+ *
+ * NOTE: dest will not be null terminated! If you are trying to extract a C string use qd_buffer_field_strdup!
  *
  * @return total of octets copied - may be < n if len(bfield) < n
  */

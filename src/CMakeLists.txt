@@ -61,7 +61,8 @@ set(qpid_dispatch_SOURCES
   adaptors/amqp/server_config.c
   observers/protocol_observer.c
   observers/tcp_observer.c
-  observers/http1_observer.c
+  observers/http1/http1_observer.c
+  observers/http1/http1_decoder.c
   observers/http2_observer.c
   alloc.c
   alloc_pool.c
