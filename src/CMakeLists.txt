@@ -62,8 +62,8 @@ set(qpid_dispatch_SOURCES
   observers/protocol_observer.c
   observers/tcp_observer.c
   observers/http1/http1_observer.c
-  observers/http1/http1_decoder.c
   observers/http2_observer.c
+  decoders/http1/http1_decoder.c
   alloc.c
   alloc_pool.c
   aprintf.c
