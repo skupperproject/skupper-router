@@ -54,15 +54,16 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         buildType: [Debug, RelWithDebInfo]
-        runtimeCheck: [asan, tsan]
+        #runtimeCheck: [asan, tsan]
+        runtimeCheck: [OFF]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
-        exclude:
-          - buildType: Debug
-            runtimeCheck: tsan
-          - buildType: RelWithDebInfo
-            runtimeCheck: asan
+        # exclude:
+        #   - buildType: Debug
+        #     runtimeCheck: tsan
+        #   - buildType: RelWithDebInfo
+        #     runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -228,17 +229,17 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         buildType: [Debug, RelWithDebInfo]
-        runtimeCheck: [asan, tsan]
+        runtimeCheck: [OFF]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
         shard: [1, 2]
         shards: [2]
-        exclude:
-          - buildType: Debug
-            runtimeCheck: tsan
-          - buildType: RelWithDebInfo
-            runtimeCheck: asan
+        # exclude:
+        #   - buildType: Debug
+        #     runtimeCheck: tsan
+        #   - buildType: RelWithDebInfo
+        #     runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -489,7 +490,7 @@ jobs:
 ####################
 
   compile_and_test:
-    name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.buildType}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
+    name: "Compile and Test (${{matrix.container}}:${{matrix.containerTag}}, ${{matrix.buildType}}, ${{matrix.runtimeCheck}}, proton ${{matrix.protonGitRef}}, shard ${{matrix.shard}} of ${{matrix.shards}})"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -501,12 +502,17 @@ jobs:
         cxx: [g++]
         python: [python3.11]
         buildType: [RelWithDebInfo, Debug]
-        runtimeCheck: [OFF]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
+        exclude:
+          - buildType: Debug
+            runtimeCheck: tsan
+          - buildType: RelWithDebInfo
+            runtimeCheck: asan
         include:
           # CentOS 9: Coverage Proton-main 1 of 2
           - os: ubuntu-22.04
@@ -517,8 +523,8 @@ jobs:
             python: python3
             buildType: Coverage
             covType: system
-            runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
+            runtimeCheck: OFF
             shard: 1
             shards: 2
           # CentOS 9: Coverage Proton-main 2 of 2
