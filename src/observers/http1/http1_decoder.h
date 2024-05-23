@@ -1,5 +1,5 @@
-#ifndef http1_observer_decoder_H
-#define http1_observer_decoder_H 1
+#ifndef __http1_decoder_h__
+#define __http1_decoder_h__ 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -34,23 +34,19 @@
 //
 // This library provides two classes:
 //
-// * h1_decode_connection_t - a context for a single TCP connection over which
-//   HTTP/1.x messages are exchanged between a client and a server.
+// * qd_http1_decoder_connection_t - a context for a single TCP connection over which HTTP/1.x messages are exchanged
+//   between a client and a server.
 //
-// * h1_decode_request_state_t - a context which tracks the state of a single
-//   HTTP/1.x Request <-> Response message exchange. Multiple
-//   h1_decode_request_state_t can be associated with an h1_decode_connection_t due to
-//   request pipelining.
+// * qd_http1_decoder_config.h - a structure to configure the callbacks for a given qd_http1_decoder_connection_t. A
+//   pointer to an initialized instances of this must be passed to the qd_http1_decoder_connection() constructor. It is
+//   expected that the instance's lifecycle will remain valid until return of the call to the
+//   qd_http1_decoder_connection_free() destructor.
 //
 
+typedef struct qd_http1_decoder_config_t      qd_http1_decoder_config_t;
+typedef struct qd_http1_decoder_connection_t  qd_http1_decoder_connection_t;
 
-#define HTTP1_VERSION_1_1  "HTTP/1.1"
-#define HTTP1_VERSION_1_0  "HTTP/1.0"
-
-typedef struct h1_decode_config_t      h1_decode_config_t;
-typedef struct h1_decode_connection_t  h1_decode_connection_t;
-
-struct h1_decode_config_t {
+struct qd_http1_decoder_config_t {
     //
     // Decoder callbacks
     //
@@ -63,7 +59,7 @@ struct h1_decode_config_t {
     // pertaining to this request/response transaction. The method and target are not preserved on return from this
     // call. The callback must copy the data associated with these values if they need to be saved.
     //
-    int (*rx_request)(h1_decode_connection_t *hconn,
+    int (*rx_request)(qd_http1_decoder_connection_t *hconn,
                       const char *method,
                       const char *target,
                       uint32_t   version_major,
@@ -76,7 +72,7 @@ struct h1_decode_config_t {
     // LAST response for the given request has been received. The reason_phrase is not preserved on return from this
     // call. The callback must copy the data associated with this value if it needs to be saved.
     //
-    int (*rx_response)(h1_decode_connection_t *hconn, uintptr_t request_context,
+    int (*rx_response)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context,
                        int status_code,
                        const char *reason_phrase,
                        uint32_t version_major,
@@ -86,56 +82,56 @@ struct h1_decode_config_t {
     // client, false if the stream is sent from the server. Neither key nor value is preserved on return from this
     // call. The callback must copy the data associated with these values if they need to be saved.
     //
-    int (*rx_header)(h1_decode_connection_t *hconn, uintptr_t request_context, bool from_client,
+    int (*rx_header)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client,
                      const char *key, const char *value);
 
     // Invoked after the last HTTP header (after the last rx_header() callback for this message).
     //
-    int (*rx_headers_done)(h1_decode_connection_t *hconn, uintptr_t request_context, bool from_client);
+    int (*rx_headers_done)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client);
 
     // (Optional) invoked as the HTTP1 message body is parsed. length is set to the number of data octets in the
     // body buffer. The body buffer lifecycle ends on return from this call - if the caller needs to preserve the body
     // data it must copy it.
     //
-    int (*rx_body)(h1_decode_connection_t *hconn, uintptr_t request_context, bool from_client, const unsigned char *body, size_t length);
+    int (*rx_body)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client, const unsigned char *body, size_t length);
 
     // Invoked after a received HTTP message has been completely parsed.
     //
-    int (*message_done)(h1_decode_connection_t *hconn, uintptr_t request_context, bool from_client);
+    int (*message_done)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client);
 
     // Invoked when the HTTP request/response messages have been completely encoded/decoded and the transaction is complete.
     // The request_context will never be used by the decoder again on return from this call.
     //
-    int (*transaction_complete)(h1_decode_connection_t *hconn, uintptr_t request_context);
+    int (*transaction_complete)(qd_http1_decoder_connection_t *hconn, uintptr_t request_context);
 
     // Invoked if the decoder is unable to parse the incoming stream. No further callbacks will occur for this
     // connection.  The h1_docode_connection_rx_data() will return a non-zero value. It is expected that the user will
     // clean up all context(s) associated with the connection and any in-progress transactions.
     //
-    void (*protocol_error)(h1_decode_connection_t *hconn, const char *reason);
+    void (*protocol_error)(qd_http1_decoder_connection_t *hconn, const char *reason);
 
 };
 
 
 // Create a new connection and assign it a context. The config object lifecycle must exist for the duration of the
-// h1_decode_connection_t.
+// qd_http1_decoder_connection_t.
 //
-h1_decode_connection_t *h1_decode_connection(const h1_decode_config_t *config, uintptr_t context);
+qd_http1_decoder_connection_t *qd_http1_decoder_connection(const qd_http1_decoder_config_t *config, uintptr_t context);
 
 // Obtain the connection context given in the h1_decode_connection() call.
 //
-uintptr_t h1_decode_connection_get_context(const h1_decode_connection_t *conn);
+uintptr_t qd_http1_decoder_connection_get_context(const qd_http1_decoder_connection_t *conn);
 
 // Release the codec. Any outstanding request/response state is released immediately, including any in-progress
 // requests.
 //
-void h1_decode_connection_free(h1_decode_connection_t *conn);
+void qd_http1_decoder_connection_free(qd_http1_decoder_connection_t *conn);
 
 // Push inbound network data into the http1 decoder. All callbacks occur during this call.  The return value is zero on
 // success.  If a parse error occurs then the protocol_error callback will be invoked and a non-zero value is returned.
 //
 // Errors are not recoverable: further calls will return a non-zero value.
 //
-int h1_decode_connection_rx_data(h1_decode_connection_t *conn, bool from_client, const unsigned char *data, size_t len);
+int qd_http1_decoder_connection_rx_data(qd_http1_decoder_connection_t *conn, bool from_client, const unsigned char *data, size_t len);
 
-#endif // http1_observer_decoder_H
+#endif // __http1_decoder_h__

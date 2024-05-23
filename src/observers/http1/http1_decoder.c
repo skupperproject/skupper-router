@@ -18,7 +18,7 @@
  *
  */
 
-#include "decoder.h"
+#include "http1_decoder.h"
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/discriminator.h"
@@ -106,8 +106,8 @@ typedef struct parse_buffer_t {
 //
 struct h1_decode_request_state_t {
     DEQ_LINKS(h1_decode_request_state_t);
-    h1_decode_connection_t *hconn;
-    uintptr_t               user_context;
+    qd_http1_decoder_connection_t *hconn;
+    uintptr_t                      user_context;
 
 #if 0  // TBD
     uint64_t client_octets;  // # total octets arriving from client for this request
@@ -134,10 +134,10 @@ ALLOC_DEFINE(h1_decode_request_state_t);
 //
 struct decoder_t {
 
-    h1_decode_connection_t    *hconn;  // parent connection
-    h1_decode_request_state_t *hrs;    // current request/response state
-    http1_decoder_state_t      state;
-    parse_buffer_t             buffer;
+    qd_http1_decoder_connection_t *hconn;  // parent connection
+    h1_decode_request_state_t     *hrs;    // current request/response state
+    http1_decoder_state_t          state;
+    parse_buffer_t                 buffer;
 
     int64_t                    body_length;  // content length or current chunk length
 
@@ -153,9 +153,9 @@ struct decoder_t {
 
 // The HTTP/1.1 connection
 //
-struct h1_decode_connection_t {
-    uintptr_t                 user_context;
-    const h1_decode_config_t *config;
+struct qd_http1_decoder_connection_t {
+    uintptr_t                        user_context;
+    const qd_http1_decoder_config_t *config;
 
     // Pipelining allows a client to send multiple requests before receiving any responses.  Pending request are stored
     // in order: new requests are added to TAIL. The in-progress response is at HEAD.
@@ -166,8 +166,8 @@ struct h1_decode_connection_t {
     decoder_t   client;       // client stream decoder
     decoder_t   server;       // server stream decoder
 };
-ALLOC_DECLARE(h1_decode_connection_t);
-ALLOC_DEFINE(h1_decode_connection_t);
+ALLOC_DECLARE(qd_http1_decoder_connection_t);
+ALLOC_DEFINE(qd_http1_decoder_connection_t);
 
 
 // Expand the parse buffer up to required octets.
@@ -196,7 +196,7 @@ static inline void decoder_new_state(decoder_t *decoder, http1_decoder_state_t n
 
 // A protocol parsing error has occurred.  There is no recovery - we're dead in the water.
 //
-static void parser_error(h1_decode_connection_t *hconn, const char *reason)
+static void parser_error(qd_http1_decoder_connection_t *hconn, const char *reason)
 {
     if (!hconn->parse_error) {
         hconn->parse_error = reason;
@@ -234,7 +234,7 @@ static void decoder_reset(decoder_t *decoder)
 
 // Create a new request state - this is done when a new http request arrives.
 //
-static h1_decode_request_state_t *h1_decode_request_state(h1_decode_connection_t *hconn)
+static h1_decode_request_state_t *h1_decode_request_state(qd_http1_decoder_connection_t *hconn)
 {
     h1_decode_request_state_t *hrs = new_h1_decode_request_state_t();
     ZERO(hrs);
@@ -256,11 +256,11 @@ static void h1_decode_request_state_free(h1_decode_request_state_t *hrs)
 
 // Create a new connection state instance.
 //
-h1_decode_connection_t *h1_decode_connection(const h1_decode_config_t *config, uintptr_t user_context)
+qd_http1_decoder_connection_t *h1_decode_connection(const qd_http1_decoder_config_t *config, uintptr_t user_context)
 {
     assert(config);
 
-    h1_decode_connection_t *hconn = new_h1_decode_connection_t();
+    qd_http1_decoder_connection_t *hconn = new_qd_http1_decoder_connection_t();
     ZERO(hconn);
 
     hconn->user_context = user_context;
@@ -281,7 +281,7 @@ h1_decode_connection_t *h1_decode_connection(const h1_decode_config_t *config, u
 }
 
 
-uintptr_t h1_decode_connection_get_context(const h1_decode_connection_t *hconn)
+uintptr_t h1_decode_connection_get_context(const qd_http1_decoder_connection_t *hconn)
 {
     assert(hconn);
     return hconn->user_context;
@@ -290,7 +290,7 @@ uintptr_t h1_decode_connection_get_context(const h1_decode_connection_t *hconn)
 
 // Free the connection
 //
-void h1_decode_connection_free(h1_decode_connection_t *conn)
+void h1_decode_connection_free(qd_http1_decoder_connection_t *conn)
 {
     if (conn) {
         h1_decode_request_state_t *hrs = DEQ_HEAD(conn->hrs_queue);
@@ -306,7 +306,7 @@ void h1_decode_connection_free(h1_decode_connection_t *conn)
         decoder_reset(&conn->server);
         free(conn->server.buffer.data);
 
-        free_h1_decode_connection_t(conn);
+        free_qd_http1_decoder_connection_t(conn);
     }
 }
 
@@ -414,7 +414,7 @@ static void truncate_whitespace(char *line)
 // Called when incoming message is complete.
 // Returns false on parse error, else true.
 //
-static bool message_done(h1_decode_connection_t *hconn, decoder_t *decoder)
+static bool message_done(qd_http1_decoder_connection_t *hconn, decoder_t *decoder)
 {
     h1_decode_request_state_t *hrs = decoder->hrs;
 
@@ -464,7 +464,7 @@ static bool message_done(h1_decode_connection_t *hconn, decoder_t *decoder)
 // parse the HTTP/1.1 request line:
 // "method SP request-target SP HTTP-version CRLF"
 //
-static bool parse_request_line(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_request_line(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     char *line = read_line(decoder, data, length);
     if (!line)
@@ -522,7 +522,7 @@ static bool parse_request_line(h1_decode_connection_t *hconn, decoder_t *decoder
 // parse the HTTP/1.1 response line
 // "HTTP-version SP status-code [SP reason-phrase] CRLF"
 //
-static bool parse_response_line(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_response_line(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     char *line = read_line(decoder, data, length);
     if (!line)
@@ -608,7 +608,7 @@ static bool parse_response_line(h1_decode_connection_t *hconn, decoder_t *decode
 //
 // Returns true on success, false on error
 //
-static bool headers_done(h1_decode_connection_t *hconn, struct decoder_t *decoder)
+static bool headers_done(qd_http1_decoder_connection_t *hconn, struct decoder_t *decoder)
 {
     h1_decode_request_state_t *hrs = decoder->hrs;
     assert(hrs);
@@ -682,7 +682,7 @@ static bool headers_done(h1_decode_connection_t *hconn, struct decoder_t *decode
 // Process a received header to determine message body length, etc.
 // Returns false if parse error occurs.
 //
-static bool process_header(h1_decode_connection_t *hconn, decoder_t *decoder, char *key, char *value)
+static bool process_header(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, char *key, char *value)
 {
     if (strlen(key) > strlen("Transfer-Encoding"))
         // this is not the key we are looking for...
@@ -725,7 +725,7 @@ static bool process_header(h1_decode_connection_t *hconn, decoder_t *decoder, ch
 // See RFC7230 for details.  If header line folding (obs-folding) is detected,
 // replace the folding with spaces.
 //
-static bool parse_header(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_header(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     char *line = read_line(decoder, data, length);
     if (!line)
@@ -791,7 +791,7 @@ static bool parse_header(h1_decode_connection_t *hconn, decoder_t *decoder, cons
 // Helper used by both content-length and chunked encoded bodies. Caller must check decoder->body_length to determine if
 // all the expected data has been consumed (decoder->body_length == 0) and *length to see if any **data remains
 //
-static bool consume_body(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool consume_body(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     size_t amount = MIN(*length, decoder->body_length);
 
@@ -815,7 +815,7 @@ static bool consume_body(h1_decode_connection_t *hconn, decoder_t *decoder, cons
 // chunk-ext = *( BWS ";" BWS chunk-ext-name
 //      [ BWS "=" BWS chunk-ext-val ] )*(OWS*(;))
 //
-static bool parse_chunk_header(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_chunk_header(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     char *line = read_line(decoder, data, length);
     if (!line)
@@ -840,7 +840,7 @@ static bool parse_chunk_header(h1_decode_connection_t *hconn, decoder_t *decoder
 
 // Parse the data section of a chunk
 //
-static bool parse_chunk_data(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_chunk_data(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     bool ok = consume_body(hconn, decoder, data, length);
     if (!ok)
@@ -867,7 +867,7 @@ static bool parse_chunk_data(h1_decode_connection_t *hconn, decoder_t *decoder, 
 
 // Keep reading chunk trailers until the terminating empty line is read
 //
-static bool parse_chunk_trailer(h1_decode_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_chunk_trailer(qd_http1_decoder_connection_t *hconn, decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     char *line = read_line(decoder, data, length);
     if (!line)
@@ -892,7 +892,7 @@ static bool parse_chunk_trailer(h1_decode_connection_t *hconn, decoder_t *decode
 
 // Parse a message body using content-length
 //
-static bool parse_body(h1_decode_connection_t *hconn, struct decoder_t *decoder, const unsigned char **data, size_t *length)
+static bool parse_body(qd_http1_decoder_connection_t *hconn, struct decoder_t *decoder, const unsigned char **data, size_t *length)
 {
     bool ok = consume_body(hconn, decoder, data, length);
     if (!ok)
@@ -913,7 +913,7 @@ static bool parse_body(h1_decode_connection_t *hconn, struct decoder_t *decoder,
 // This is the main decode loop.  All callbacks take place in the context of this call.
 //
 //
-int h1_decode_connection_rx_data(h1_decode_connection_t *hconn, bool from_client, const unsigned char *data, size_t length)
+int h1_decode_connection_rx_data(qd_http1_decoder_connection_t *hconn, bool from_client, const unsigned char *data, size_t length)
 {
     bool more = true;
 
