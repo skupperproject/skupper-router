@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         buildType: [Debug, RelWithDebInfo]
         #runtimeCheck: [asan, tsan]
         runtimeCheck: [OFF]
@@ -227,7 +227,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         buildType: [Debug, RelWithDebInfo]
         runtimeCheck: [OFF]
         protonGitRef:
@@ -282,7 +282,7 @@ jobs:
 
       - name: Install Linux runtime/test dependencies
         run: |
-          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets16 libbenchmark1 pixz curl ncat gdb elfutils findutils file python3-dbg
+          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets19t64 libbenchmark1.8.3 pixz curl ncat gdb elfutils findutils file python3-dbg
 
       - name: Unpack archive
         run: tar -I pixz -xf archive.tar.xz
@@ -495,7 +495,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         container: ['fedora']
         containerTag: ['40']
         cc: [gcc]
@@ -515,7 +515,7 @@ jobs:
             runtimeCheck: asan
         include:
           # CentOS 9: Coverage Proton-main 1 of 2
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             container: 'centos'
             containerTag: stream9
             cc: gcc
@@ -528,7 +528,7 @@ jobs:
             shard: 1
             shards: 2
           # CentOS 9: Coverage Proton-main 2 of 2
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             container: 'centos'
             containerTag: stream9
             cc: gcc
@@ -541,7 +541,7 @@ jobs:
             shard: 2
             shards: 2
           # CentOS 8: Release Proton-main 1 of 2
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             container: 'centos'
             containerTag: stream8
             cc: gcc
@@ -553,7 +553,7 @@ jobs:
             shard: 1
             shards: 2
           # CentOS 8: Release Proton-main 2 of 2
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             container: 'centos'
             containerTag: stream8
             cc: gcc
@@ -564,7 +564,7 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
             shards: 2
-          # - os: ubuntu-22.04
+          # - os: ubuntu-24.04
           #   container: 'centos'
           #   containerTag: stream8
           #   cc: gcc
@@ -575,7 +575,7 @@ jobs:
           #   protonGitRef: 0.39.0
           #   shard: 1
           #   shards: 2
-          # - os: ubuntu-22.04
+          # - os: ubuntu-24.04
           #   container: 'centos'
           #   containerTag: stream8
           #   cc: gcc
@@ -587,7 +587,7 @@ jobs:
           #   shard: 2
           #   shards: 2
           # # unittest coverage
-          # - os: ubuntu-22.04
+          # - os: ubuntu-24.04
           #   container: 'fedora'
           #   containerTag: 40
           #   cc: gcc
@@ -601,7 +601,7 @@ jobs:
           #   shard: 1
           #   shards: 1
           # # clang
-          #- os: ubuntu-22.04
+          #- os: ubuntu-24.04
           #  container: 'fedora'
           #  containerTag: 40
           #  cc: clang
@@ -612,7 +612,7 @@ jobs:
           #  protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
           #  shard: 1
           #  shards: 2
-          #- os: ubuntu-22.04
+          #- os: ubuntu-24.04
           #  container: 'fedora'
           #  containerTag: 40
           #  cc: clang
@@ -931,7 +931,7 @@ jobs:
     runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
-        os: [ 'ubuntu-22.04' ]
+        os: [ 'ubuntu-24.04' ]
 
     env:
       DispatchBuildDir: ${{github.workspace}}/build
@@ -989,7 +989,7 @@ jobs:
 
   container_amd64:
     name: amd64 container image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ImageName: local/skupper-router:local
 
@@ -1085,7 +1085,7 @@ jobs:
     runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
-        os: [ 'ubuntu-22.04' ]
+        os: [ 'ubuntu-24.04' ]
         container: [ 'centos' ]
         containerTag: [ 'stream9' ]
 
@@ -1173,7 +1173,7 @@ jobs:
 
   rat_check:
     name: RAT Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
