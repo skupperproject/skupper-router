@@ -18,8 +18,7 @@
  */
 
 #include "observers/private.h"
-
-#include "http1_decoder.h"
+#include "decoders/http1/http1_decoder.h"
 
 #include <inttypes.h>
 
