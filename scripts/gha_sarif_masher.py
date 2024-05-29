@@ -79,12 +79,14 @@ def fill_in_missing_pysicalLocations(sarif):
                 }
             }
         # Code Scanning could not process the submitted SARIF file: buildRelatedLocations:expected physical location
-        if 'relatedLocations' in item and 'physicalLocation' not in item['relatedLocations']:
-            item['relatedLocations']['physicalLocation'] = {
-                'artifactLocation': {
-                    'uri': 'gcc/associated/no/file'
-                }
-            }
+        if 'relatedLocations' in item:
+            for related_location in item['relatedLocations']:
+                if 'physicalLocation' not in related_location:
+                    related_location['physicalLocation'] = {
+                        'artifactLocation': {
+                            'uri': 'gcc/associated/no/file'
+                        }
+                    }
 
 
 if __name__ == '__main__':
