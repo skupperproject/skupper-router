@@ -54,16 +54,15 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         buildType: [Debug, RelWithDebInfo]
-        #runtimeCheck: [asan, tsan]
-        runtimeCheck: [OFF]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
-        # exclude:
-        #   - buildType: Debug
-        #     runtimeCheck: tsan
-        #   - buildType: RelWithDebInfo
-        #     runtimeCheck: asan
+        exclude:
+          - buildType: Debug
+            runtimeCheck: tsan
+          - buildType: RelWithDebInfo
+            runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -229,17 +228,17 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         buildType: [Debug, RelWithDebInfo]
-        runtimeCheck: [OFF]
+        runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.39.0
         shard: [1, 2]
         shards: [2]
-        # exclude:
-        #   - buildType: Debug
-        #     runtimeCheck: tsan
-        #   - buildType: RelWithDebInfo
-        #     runtimeCheck: asan
+        exclude:
+          - buildType: Debug
+            runtimeCheck: tsan
+          - buildType: RelWithDebInfo
+            runtimeCheck: asan
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
