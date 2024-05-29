@@ -66,15 +66,21 @@ def relativize_urls(sarif, basedir):
 
 def fill_in_missing_pysicalLocations(sarif):
     """GitHub SARIF importer requires physicalLocation to be present, otherwise
-    the following error is raised.
-
-    `Code Scanning could not process the submitted SARIF file: buildCodeFlows: expected physical location`
+    the error is raised.
     """
     for item in iterate_subtrees(sarif):
         if not isinstance(item, dict):
             continue
+        # `Code Scanning could not process the submitted SARIF file: buildCodeFlows: expected physical location`
         if 'location' in item and 'physicalLocation' not in item['location']:
             item['location']['physicalLocation'] = {
+                'artifactLocation': {
+                    'uri': 'gcc/associated/no/file'
+                }
+            }
+        # Code Scanning could not process the submitted SARIF file: buildRelatedLocations:expected physical location
+        if 'relatedLocations' in item and 'physicalLocation' not in item['relatedLocations']:
+            item['relatedLocations']['physicalLocation'] = {
                 'artifactLocation': {
                     'uri': 'gcc/associated/no/file'
                 }
