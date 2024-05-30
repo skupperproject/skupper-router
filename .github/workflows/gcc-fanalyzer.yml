@@ -41,7 +41,7 @@ jobs:
       security-events: write
 
     container:
-      image: 'quay.io/fedora/fedora:rawhide'
+      image: 'quay.io/fedora/fedora:40'
       volumes:
         - ${{github.workspace}}:${{github.workspace}}
       options: --privileged --ulimit core=-1 --security-opt apparmor:unconfined --security-opt seccomp=unconfined --sysctl net.ipv6.conf.all.disable_ipv6=0
