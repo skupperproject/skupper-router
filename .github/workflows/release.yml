@@ -47,7 +47,6 @@ jobs:
             { echo Unable to get a unique build number ; exit 1 ; }
           # This is a release build which means we need to push the :latest tag
           # to the container repo.
-          export PUSH_LATEST=true
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
