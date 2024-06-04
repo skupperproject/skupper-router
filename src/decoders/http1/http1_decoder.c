@@ -65,7 +65,8 @@ static const char * const LWS_CHARS  = " \t";
 
 
 typedef enum {
-    HTTP1_DECODE_REQUEST = 0,   // parsing request start line
+    HTTP1_INVALID_STATE = 0,
+    HTTP1_DECODE_REQUEST,       // parsing request start line
     HTTP1_DECODE_RESPONSE,      // parsing response start line
     HTTP1_DECODE_HEADERS,       // parsing headers
     HTTP1_DECODE_BODY,          // parsing fixed-length body
@@ -77,6 +78,7 @@ typedef enum {
 
 #if DEBUG_DECODER
 const char * const decoder_state[] = {
+    "HTTP1_INVALID_STATE",
     "HTTP1_DECODE_REQUEST",
     "HTTP1_DECODE_RESPONSE",
     "HTTP1_DECODE_HEADERS",
@@ -187,8 +189,13 @@ static void ensure_buffer_size(parse_buffer_t *b, size_t required)
 static inline void decoder_new_state(decoder_t *decoder, http1_decoder_state_t new_state)
 {
 #if DEBUG_DECODER
-    fprintf(stdout, "%s decoder state %s -> %s\n", decoder->is_client ? "client" : "server",
-            decoder_state[decoder->state], decoder_state[new_state]);
+    if (decoder->state == HTTP1_INVALID_STATE) {
+        fprintf(stdout, "%s decoder initial state: %s\n", decoder->is_client ? "client" : "server",
+                decoder_state[new_state]);
+    } else {
+        fprintf(stdout, "%s decoder state %s -> %s\n", decoder->is_client ? "client" : "server",
+                decoder_state[decoder->state], decoder_state[new_state]);
+    }
 #endif
     decoder->state = new_state;
 }
@@ -256,7 +263,7 @@ static void h1_decode_request_state_free(h1_decode_request_state_t *hrs)
 
 // Create a new connection state instance.
 //
-qd_http1_decoder_connection_t *h1_decode_connection(const qd_http1_decoder_config_t *config, uintptr_t user_context)
+qd_http1_decoder_connection_t *qd_http1_decoder_connection(const qd_http1_decoder_config_t *config, uintptr_t user_context)
 {
     assert(config);
 
@@ -281,7 +288,7 @@ qd_http1_decoder_connection_t *h1_decode_connection(const qd_http1_decoder_confi
 }
 
 
-uintptr_t h1_decode_connection_get_context(const qd_http1_decoder_connection_t *hconn)
+uintptr_t qd_http1_decoder_connection_get_context(const qd_http1_decoder_connection_t *hconn)
 {
     assert(hconn);
     return hconn->user_context;
@@ -290,7 +297,7 @@ uintptr_t h1_decode_connection_get_context(const qd_http1_decoder_connection_t *
 
 // Free the connection
 //
-void h1_decode_connection_free(qd_http1_decoder_connection_t *conn)
+void qd_http1_decoder_connection_free(qd_http1_decoder_connection_t *conn)
 {
     if (conn) {
         h1_decode_request_state_t *hrs = DEQ_HEAD(conn->hrs_queue);
@@ -314,7 +321,7 @@ void h1_decode_connection_free(qd_http1_decoder_connection_t *conn)
 static void debug_print_line(const char *prefix, const char *line)
 {
 #if DEBUG_DECODER
-    fprintf(stdout, "%s: '%s'\n", prefix, line);
+    fprintf(stdout, "%s '%s'\n", prefix, line);
     fflush(stdout);
 #endif
 }
@@ -376,8 +383,8 @@ static char *read_line(decoder_t *decoder, const unsigned char **data, size_t *l
     assert(decoder->buffer.length > 0);
     unsigned char *trim = &decoder->buffer.data[decoder->buffer.length - 1];
     while (*trim == LF_TOKEN || *trim == CR_TOKEN) {
-        *trim-- = '\0';
-        if (trim == &decoder->buffer.data[0])
+        *trim = '\0';
+        if (trim-- == &decoder->buffer.data[0])
             break;
     }
     decoder->buffer.length = 0;  // reset line parser
@@ -433,7 +440,7 @@ static bool message_done(qd_http1_decoder_connection_t *hconn, decoder_t *decode
 
     // signal the message receive is complete
     int rc = hconn->config->message_done(hconn, hrs->user_context, decoder->is_client);
-    if (!rc) {
+    if (rc) {
         parser_error(hconn, "message_done callback failed");
         return false;
     }
@@ -446,7 +453,7 @@ static bool message_done(qd_http1_decoder_connection_t *hconn, decoder_t *decode
         DEQ_REMOVE_HEAD(hconn->hrs_queue);
         h1_decode_request_state_free(hrs);
         hrs = 0;
-        if (!rc) {
+        if (rc) {
             parser_error(hconn, "transaction_complete callback failed");
             return false;
         }
@@ -529,8 +536,6 @@ static bool parse_response_line(qd_http1_decoder_connection_t *hconn, decoder_t 
         return false;  // need more data
 
     const size_t in_octets = strlen(line);
-    char *eol = &line[in_octets];  // eol points to null terminator
-
     if (in_octets == 0) {
         // RFC9112 ignore blank lines before the response
         return !!(*length);
@@ -554,6 +559,7 @@ static bool parse_response_line(qd_http1_decoder_connection_t *hconn, decoder_t 
     char *saveptr = 0;
     char *version = strtok_r(line, LWS_CHARS, &saveptr);
     char *status_code = strtok_r(0, LWS_CHARS, &saveptr);
+    char *reason = strtok_r(0, "", &saveptr);
 
     if (!version || !status_code) {
         parser_error(hconn, "Malformed response line");
@@ -580,14 +586,11 @@ static bool parse_response_line(qd_http1_decoder_connection_t *hconn, decoder_t 
         return false;
     }
 
-    // The reason phrase is optional and may contain spaces.
+    // The reason phrase is optional
 
-    while (eoc < eol) {
-        // There is something trailing the status code.
-        eoc = trim_whitespace(eoc);
-    }
+    reason = !!reason ? trim_whitespace(reason) : "";
 
-    int rc = hconn->config->rx_response(hconn, hrs->user_context, hrs->response_code, *eoc ? eoc : 0, 1, minor);
+    int rc = hconn->config->rx_response(hconn, hrs->user_context, hrs->response_code, reason, 1, minor);
     if (rc) {
         parser_error(hconn, "rx_response callback failed");
         return false;
@@ -605,6 +608,9 @@ static bool parse_response_line(qd_http1_decoder_connection_t *hconn, decoder_t 
 
 // Called after the last incoming header was decoded and passed to the
 // application.
+//
+// Determines if there is any content to the message. If there is no content we proceed directly to message_done
+// otherwise transition to the content consume state.
 //
 // Returns true on success, false on error
 //
@@ -631,8 +637,7 @@ static bool headers_done(qd_http1_decoder_connection_t *hconn, struct decoder_t 
             decoder->is_chunked = false;
             decoder->hdr_content_length = true;
             decoder->body_length = 0;
-            decoder_new_state(decoder, HTTP1_DECODE_BODY);
-            return true;
+            return message_done(hconn, decoder);
         }
     }
 
@@ -669,13 +674,22 @@ static bool headers_done(qd_http1_decoder_connection_t *hconn, struct decoder_t 
             decoder->body_length = INT64_MAX;
             decoder_new_state(decoder, HTTP1_DECODE_BODY);
             return true;
+        } else {
+            // Case 7: assume zero length request body
+            decoder->hdr_content_length = true;
+            decoder->body_length = 0;
         }
-        decoder->body_length = 0;  // Case 7: assume zero length body
     }
 
-    // case 6: use content-length
-    decoder_new_state(decoder, HTTP1_DECODE_BODY);
-    return true;
+    // at this point we have elminated chunked and should be set to decode a fixed content length which may be zero
+    // (Case 6):
+    assert(decoder->hdr_content_length);
+    if (decoder->body_length) {
+        decoder_new_state(decoder, HTTP1_DECODE_BODY);
+        return true;
+    } else {
+        return message_done(hconn, decoder);
+    }
 }
 
 
@@ -806,6 +820,8 @@ static bool consume_body(qd_http1_decoder_connection_t *hconn, decoder_t *decode
 
     *data += amount;
     *length -= amount;
+    decoder->body_length -= amount;
+
     return true;
 }
 
@@ -913,7 +929,7 @@ static bool parse_body(qd_http1_decoder_connection_t *hconn, struct decoder_t *d
 // This is the main decode loop.  All callbacks take place in the context of this call.
 //
 //
-int h1_decode_connection_rx_data(qd_http1_decoder_connection_t *hconn, bool from_client, const unsigned char *data, size_t length)
+int qd_http1_decoder_connection_rx_data(qd_http1_decoder_connection_t *hconn, bool from_client, const unsigned char *data, size_t length)
 {
     bool more = true;
 
@@ -956,6 +972,7 @@ int h1_decode_connection_rx_data(qd_http1_decoder_connection_t *hconn, bool from
                 break;
 
             case HTTP1_DECODE_ERROR:
+            case HTTP1_INVALID_STATE:
                 more = false;
                 break;
         }
