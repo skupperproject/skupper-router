@@ -45,12 +45,15 @@ static int rx_request(qd_http1_decoder_connection_t *hconn, const char *method, 
     qdpo_transport_handle_t *th = (qdpo_transport_handle_t *) qd_http1_decoder_connection_get_context(hconn);
     assert(th);
 
-    qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer rx_request(method=%s target=%s)", th->conn_id, method, target);
+    qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] HTTP/1.1 observer rx_request(method=%s target=%s version=%"PRIu32".%"PRIu32")",
+           th->conn_id, method, target, version_major, version_minor);
 
     http1_request_state_t *hreq = new_http1_request_state_t();
     ZERO(hreq);
     DEQ_ITEM_INIT(hreq);
     hreq->vflow = vflow_start_record(VFLOW_RECORD_FLOW, th->vflow);
+    vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_PROTOCOL, version_minor == 1 ? "HTTP/1.1" : "HTTP/1.0");
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_METHOD, method);
     vflow_latency_start(hreq->vflow);
     hreq->latency_done = false;
@@ -65,7 +68,9 @@ static int rx_response(qd_http1_decoder_connection_t *hconn, uintptr_t request_c
     qdpo_transport_handle_t *th = (qdpo_transport_handle_t *) qd_http1_decoder_connection_get_context(hconn);
     assert(th);
 
-    qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer rx_response(status=%d reason=%s)", th->conn_id, status_code, reason_phrase);
+    qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG,
+           "[C%" PRIu64 "] HTTP/1.1 observer rx_response(status=%d reason=%s version=%"PRIu32".%"PRIu32")",
+           th->conn_id, status_code, reason_phrase, version_major, version_minor);
 
     http1_request_state_t *hreq = (http1_request_state_t *) request_context;
     assert(hreq);
@@ -92,7 +97,7 @@ static int transaction_complete(qd_http1_decoder_connection_t *hconn, uintptr_t 
     qdpo_transport_handle_t *th = (qdpo_transport_handle_t *) qd_http1_decoder_connection_get_context(hconn);
     assert(th);
 
-    qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer transaction complete", th->conn_id);
+    qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer transaction complete", th->conn_id);
 
     http1_request_state_t *hreq = (http1_request_state_t *) request_context;
     assert(hreq);
@@ -113,10 +118,10 @@ static void protocol_error(qd_http1_decoder_connection_t *hconn, const char *rea
     // carrying HTTP/1.x data.
 
     if (DEQ_SIZE(th->http1.requests)) {
-        qd_log(LOG_HTTP_OBSERVER, QD_LOG_ERROR,
+        qd_log(LOG_HTTP1_OBSERVER, QD_LOG_ERROR,
                "[C%" PRIu64 "] HTTP/1.1 observer disabled due to protocol error: %s", th->conn_id, reason);
     } else {
-        qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer protocol error: %s", th->conn_id, reason);
+        qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer protocol error: %s", th->conn_id, reason);
     }
 
     // An error code will be returned to the http1_observe() call and this observer will be cleaned up there.
@@ -148,7 +153,7 @@ static void http1_observe(qdpo_transport_handle_t *th, bool from_client, const u
 
 void qdpo_http1_init(qdpo_transport_handle_t *th)
 {
-    qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer initialized", th->conn_id);
+    qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer initialized", th->conn_id);
 
     th->protocol  = QD_PROTOCOL_HTTP1;
     th->observe   = http1_observe;
@@ -166,7 +171,7 @@ void qdpo_http1_init(qdpo_transport_handle_t *th)
 
 void qdpo_http1_final(qdpo_transport_handle_t *th)
 {
-    qd_log(LOG_HTTP_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer finalized", th->conn_id);
+    qd_log(LOG_HTTP1_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/1.1 observer finalized", th->conn_id);
 
     if (th->observe) {
         th->observe = 0;

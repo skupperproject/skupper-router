@@ -522,16 +522,26 @@ class Http1Server(Process):
         name = name or "http.server"
         kwargs.setdefault('stdin', subprocess.DEVNULL)  # no input accepted
         kwargs.setdefault('directory', os.path.join(current_dir, "http1-data"))
-        kwargs.setdefault('protocol', "HTTP/1.1")
+
         args = [sys.executable,
                 "-m", "http.server",
                 "-d", kwargs['directory'],
-                "-p", kwargs['protocol'],
-                "--cgi",
-                str(port)]
+                "--cgi"]
+
+        protocol_supported = sys.version_info >= (3, 11)
+        if protocol_supported:
+            kwargs.setdefault('protocol', "HTTP/1.1")
+            args.append("-p")
+            args.append(kwargs['protocol'])
+        elif 'protocol' in kwargs:
+            raise NotImplementedError("http.server does not support '--protocol' param")
+
+        args.append(str(port))
+
         # remove keywords not used by super class
         kwargs.pop('directory')
-        kwargs.pop('protocol')
+        if 'protocol' in kwargs:
+            kwargs.pop('protocol')
         super(Http1Server, self).__init__(args, name=name, expect=expect, **kwargs)
 
     def __enter__(self):

@@ -58,7 +58,7 @@ int qd_log_max_len(void)
 const char *log_module_names[] = {"ROUTER",      "ROUTER_CORE",  "ROUTER_HELLO", "ROUTER_LS",     "ROUTER_MA",
                                   "MESSAGE",     "SERVER",       "AGENT",        "CONTAINER",     "ERROR",
                                   "POLICY",      "HTTP",         "CONN_MGR",     "PYTHON",        "PROTOCOL",
-                                  "TCP_ADAPTOR", "HTTP_ADAPTOR", "FLOW_LOG",     "ADDRESS_WATCH", "HTTP_OBSERVER",
+                                  "TCP_ADAPTOR", "HTTP_ADAPTOR", "FLOW_LOG",     "ADDRESS_WATCH", "HTTP1_OBSERVER",
                                   "DEFAULT"};
 
 typedef struct qd_log_entry_t qd_log_entry_t;

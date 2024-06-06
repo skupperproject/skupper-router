@@ -21,7 +21,7 @@
 # Test the HTTP/1.x Protocol observer
 #
 
-import os
+import sys
 
 from system_test import TestCase, unittest, main_module, Qdrouterd
 from system_test import curl_available, run_curl
@@ -78,15 +78,7 @@ class Http1ObserverTest(TestCase):
                              'address': 'Http1ObserverTest'}),
             ('tcpConnector', {'host': "localhost",
                               'port': server_port,
-                              'address': 'Http1ObserverTest'}),
-
-            ('log', {'module': 'DEFAULT',
-                     'enable': 'warning+',
-                     'includeTimestamp': 'false',
-                     'includeSource': 'false',
-                     'outputFile': os.path.abspath(f"{name}-flow.log")}),
-            ('log', {'module': 'HTTP_OBSERVER', 'enable': 'debug+'}),
-            ('log', {'module': 'FLOW_LOG', 'enable': 'debug+'})
+                              'address': 'Http1ObserverTest'})
         ]
 
         if extra_config is not None:
@@ -108,6 +100,7 @@ class Http1ObserverTest(TestCase):
         cls.http1_port = cls.tester.get_port()
         cls.http1_server = cls.tester.cleanup(Http1Server(cls.http1_port))
 
+    @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
     def test_01_get(self):
         """
         Simple pipelined GET request.
@@ -121,15 +114,14 @@ class Http1ObserverTest(TestCase):
 
         curl_args = [
             '--http1.1',
-            '--output', "/dev/null",
             '-G'
         ]
 
         pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
         for page in pages:
             curl_args.append(f"http://localhost:{l_port}/{page}")
-        (rc, _, err) = run_curl(args=curl_args)
-        self.assertEqual(0, rc, f"curl failed: {err}")
+        (rc, out, err) = run_curl(args=curl_args)
+        self.assertEqual(0, rc, f"curl failed: {rc}, {err}, {out}")
 
         # Expect at least 8 records:
         # 1 - Listener
@@ -159,10 +151,13 @@ class Http1ObserverTest(TestCase):
                 self.assertEqual('200', record['RESULT'])
                 self.assertIn('REASON', record)
                 self.assertEqual('OK', record['REASON'])
+                self.assertIn('PROTOCOL', record)
+                self.assertEqual('HTTP/1.1', record['PROTOCOL'])
                 matches += 1
 
         self.assertEqual(len(pages), matches, f"unexpected results {results}")
 
+    @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
     def test_02_post(self):
         """
         Simple POST request (chunked). Uses the Http server from the Python
@@ -180,27 +175,25 @@ class Http1ObserverTest(TestCase):
 
         curl_args = [
             '--http1.1',
-            '--output', "/dev/null",
             '-H', "Transfer-Encoding: chunked",
             '--data-ascii', "Start",
             '--data-ascii', "End",
             f"http://localhost:{l_port}/cgi-bin/script.py"
         ]
 
-        (rc, _, err) = run_curl(args=curl_args)
-        self.assertEqual(0, rc, f"curl post failed: {err}")
+        (rc, out, err) = run_curl(args=curl_args)
+        self.assertEqual(0, rc, f"curl post failed: {rc}, {err}, {out}")
 
         # this will pipeline 3 get requests due to the globbing parameter
         # 'ignore':
         curl_args = [
             '--http1.1',
-            '--output', "/dev/null",
             '-G',
             f"http://localhost:{l_port}/index.html?ignore=[1-3]"
         ]
 
-        (rc, _, err) = run_curl(args=curl_args)
-        self.assertEqual(0, rc, f"curl get failed: {err}")
+        (rc, out, err) = run_curl(args=curl_args)
+        self.assertEqual(0, rc, f"curl get failed: {rc}, {err}, {out}")
 
         # Expect at least 10 records: listener, connector, two tcp flows, two
         # counter flows, and 4 HTTP requests:
@@ -222,13 +215,17 @@ class Http1ObserverTest(TestCase):
                     self.assertEqual('200', record['RESULT'])
                     self.assertIn('REASON', record)
                     self.assertEqual('OK', record['REASON'])
+                    self.assertIn('PROTOCOL', record)
+                    self.assertEqual('HTTP/1.1', record['PROTOCOL'])
                     get_count += 1
                 else:
                     self.assertEqual('POST', record['METHOD'])
                     self.assertIn('RESULT', record)
                     self.assertEqual('200', record['RESULT'])
-                    self.assertIn('REASON', record)
+                    self.assertIn('PROTOCOL', record)
+                    self.assertEqual('HTTP/1.1', record['PROTOCOL'])
                     # reason is hardcoded by Python Http server:
+                    self.assertIn('REASON', record)
                     self.assertEqual('Script output follows', record['REASON'])
                     post_count += 1
 

@@ -22,6 +22,7 @@ import argparse
 import json
 import logging
 import sys
+from enum import IntEnum, unique
 from threading import Thread
 
 from proton.handlers import MessagingHandler
@@ -33,89 +34,79 @@ from proton import Message
 # updated as new records/attributes/etc are added
 #
 
-record_types = {
-    0: "SITE",
-    1: "ROUTER",
-    2: "LINK",
-    3: "CONTROLLER",
-    4: "LISTENER",
-    5: "CONNECTOR",
-    6: "FLOW",
-    7: "PROCESS",
-    8: "IMAGE",
-    9: "INGRESS",
-    10: "EGRESS",
-    11: "COLLECTOR",
-    12: "PROCESS_GROUP",
-    13: "HOST",
-    14: "LOG",
-}
+@unique
+class RecordTypes(IntEnum):
+    SITE = 0
+    ROUTER = 1
+    LINK = 2
+    CONTROLLER = 3
+    LISTENER = 4
+    CONNECTOR = 5
+    FLOW = 6
+    PROCESS = 7
+    IMAGE = 8
+    INGRESS = 9
+    EGRESS = 10
+    COLLECTOR = 11
+    PROCESS_GROUP = 12
+    HOST = 13
+    LOG = 14
 
-RECORD_TYPE = 0
-IDENTITY = 1
 
-attribute_types = {
-    RECORD_TYPE: "RECORD_TYPE",
-    IDENTITY: "IDENTITY",
-    2: "PARENT",
-    3: "START_TIME",
-    4: "END_TIME",
-    5: "COUNTERFLOW",
-    6: "PEER",
-    7: "PROCESS",
-    8: "SIBLING_ORDINAL",
-    9: "LOCATION",
-    10: "PROVIDER",
-    11: "PLATFORM",
-    12: "NAMESPACE",
-    13: "MODE",
-    14: "SOURCE_HOST",
-    15: "DESTINATION_HOST",
-    16: "PROTOCOL",
-    17: "SOURCE_PORT",
-    18: "DESTINATION_PORT",
-    19: "VAN_ADDRESS",
-    20: "IMAGE_NAME",
-    21: "IMAGE_VERSION",
-    22: "HOST_NAME",
-    23: "OCTETS",
-    24: "LATENCY",
-    25: "TRANSIT_LATENCY",
-    26: "BACKLOG",
-    27: "METHOD",
-    28: "RESULT",
-    29: "REASON",
-    30: "NAME",
-    31: "TRACE",
-    32: "BUILD_VERSION",
-    33: "LINK_COST",
-    34: "DIRECTION",
-    35: "OCTET_RATE",
-    36: "OCTETS_OUT",
-    37: "OCTETS_UNACKED",
-    38: "WINDOW_CLOSURES",
-    39: "WINDOW_SIZE",
-    40: "FLOW_COUNT_L4",
-    41: "FLOW_COUNT_L7",
-    42: "FLOW_RATE_L4",
-    43: "FLOW_RATE_L7",
-    44: "DURATION",
-    45: "IMAGE",
-    46: "GROUP",
-    47: "STREAM_ID",
-    48: "LOG_SEVERITY",
-    49: "LOG_TEXT",
-    50: "SOURCE_FILE",
-    51: "SOURCE_LINE",
-}
-
-log_severity = {
-    0: "DEBUG",
-    1: "INFO",
-    2: "WARNING",
-    3: "ERROR",
-    4: "CRITICAL"
-}
+@unique
+class AttributeTypes(IntEnum):
+    RECORD_TYPE = 0
+    IDENTITY = 1
+    PARENT = 2
+    START_TIME = 3
+    END_TIME = 4
+    COUNTERFLOW = 5
+    PEER = 6
+    PROCESS = 7
+    SIBLING_ORDINAL = 8
+    LOCATION = 9
+    PROVIDER = 10
+    PLATFORM = 11
+    NAMESPACE = 12
+    MODE = 13
+    SOURCE_HOST = 14
+    DESTINATION_HOST = 15
+    PROTOCOL = 16
+    SOURCE_PORT = 17
+    DESTINATION_PORT = 18
+    VAN_ADDRESS = 19
+    IMAGE_NAME = 20
+    IMAGE_VERSION = 21
+    HOST_NAME = 22
+    OCTETS = 23
+    LATENCY = 24
+    TRANSIT_LATENCY = 25
+    BACKLOG = 26
+    METHOD = 27
+    RESULT = 28
+    REASON = 29
+    NAME = 30
+    TRACE = 31
+    BUILD_VERSION = 32
+    LINK_COST = 33
+    DIRECTION = 34
+    OCTET_RATE = 35
+    OCTETS_OUT = 36
+    OCTETS_UNACKED = 37
+    WINDOW_CLOSURES = 38
+    WINDOW_SIZE = 39
+    FLOW_COUNT_L4 = 40
+    FLOW_COUNT_L7 = 41
+    FLOW_RATE_L4 = 42
+    FLOW_RATE_L7 = 43
+    DURATION = 44
+    IMAGE = 45
+    GROUP = 46
+    STREAM_ID = 47
+    LOG_SEVERITY = 48
+    LOG_TEXT = 49
+    SOURCE_FILE = 50
+    SOURCE_LINE = 51
 
 
 logger = logging.getLogger(__name__)
@@ -157,10 +148,14 @@ class EventSource:
         for record_id, attributes in self.records.items():
             record = {}
             for key, value in attributes.items():
-                if key == RECORD_TYPE:
-                    record[attribute_types[key]] = record_types[value]
+                if key not in AttributeTypes:
+                    raise Exception(f"Missing VanFlow attribute type '{key}'")
+                if key == AttributeTypes.RECORD_TYPE:
+                    if value not in RecordTypes:
+                        raise Exception(f"Missing VanFlow record type '{value}'")
+                    record[AttributeTypes.RECORD_TYPE.name] = RecordTypes(value).name
                 else:
-                    record[attribute_types[key]] = value
+                    record[AttributeTypes(key).name] = value
             records.append(record)
         return records
 
@@ -294,7 +289,7 @@ class VFlowSnooper(MessagingHandler):
 
     def handle_records(self, message):
         for record in message.body:
-            identity = record.get(IDENTITY)
+            identity = record.get(AttributeTypes.IDENTITY)
             if identity is None:
                 err = f"ERROR: received record with no id: {record}"
                 logger.error(err)
