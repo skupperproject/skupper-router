@@ -749,12 +749,9 @@ static bool parse_header(qd_http1_decoder_connection_t *hconn, decoder_t *decode
         // need more data
         return false;
 
-    size_t in_octets = strlen(line);
-    char *eol = &line[in_octets];  // eol points to null terminator
-
     debug_print_line("header:", line);
 
-    if (in_octets == 0) {
+    if (*line == '\0') {
         // empty header == end of headers
         bool ok = headers_done(hconn, decoder);
         if (!ok)
@@ -762,7 +759,7 @@ static bool parse_header(qd_http1_decoder_connection_t *hconn, decoder_t *decode
         return !!(*length);
     }
 
-    // TODO: support obsolete line folding. For now I punt:
+    // TODO: support obsolete line folding. For now I punt and ignore the continued header
     if (*line == ' ' || *line == '\t')
         return !!(*length);
 
@@ -770,21 +767,17 @@ static bool parse_header(qd_http1_decoder_connection_t *hconn, decoder_t *decode
 
     char *saveptr = 0;
     char *key = strtok_r(line, ":", &saveptr);
+    char *value = strtok_r(0, "", &saveptr);
 
-    if (!key) {
-        parser_error(hconn, "Malformed header key");
-        return false;
+    if (!key || *key == '\0' || !value) {
+        // Unable to parse this header, skip it
+        return !!(*length);
     }
 
     // According to RFC9112, the key is immediately followed by ':'. Value may start and end with whitespace which must
     // be removed before value can be processed.
-
-    char *value = &key[strlen(key)];  // value points to null at end of key
-    if (value < eol) {
-        value++;  // skip to start of value
-        value = trim_whitespace(value);
-        truncate_whitespace(value);
-    }
+    value = trim_whitespace(value);
+    truncate_whitespace(value);
 
     if (hconn->config->rx_header) {
         assert(decoder->hrs);

@@ -23,6 +23,7 @@ import json
 import logging
 import sys
 from enum import IntEnum, unique
+from os import path
 from threading import Thread
 
 from proton.handlers import MessagingHandler
@@ -137,6 +138,7 @@ class EventSource:
         self.sender = sender
         self.records = {}  # indexed by identifier
         self.links_pending = 3  # 1 sender, 1 for events, 1 for flows
+        self.idle_heartbeats = 0
         logger.debug("New EventSource name=%s base-addr=%s", name, base_address)
 
     def get_records(self):
@@ -168,16 +170,16 @@ class VFlowSnooper(MessagingHandler):
     instantiate a new EventSource for that source. Open receiver links to
     subscribe to that source's event and flow records.
     '''
-    def __init__(self, address):
+    def __init__(self, address, idle_timeout=0):
         super(VFlowSnooper, self).__init__()
         self.address = address  # router address
         self.conn = None
         self.beacon_receiver = None
         self.sources = {}
-        self.heartbeats_seen = 0
         self._error = None
         self._sources_subscribed = 0
         self._total_records = 0
+        self._idle_timeout = idle_timeout
 
     def on_connection_opened(self, event):
         logger.debug("Connection opened")
@@ -280,10 +282,22 @@ class VFlowSnooper(MessagingHandler):
     def handle_heartbeat(self, message):
         source_id = message.properties['id']
         logger.debug("Heartbeat from %s", source_id)
-        self.heartbeats_seen += 1
         name = id_2_source(source_id)
         source = self.sources.get(name)
         if source is not None:
+            source.idle_heartbeats += 1
+            if self._idle_timeout > 0:
+                # Check all known sources for idle timeout
+                idle = True
+                for src in self.sources.values():
+                    if src.idle_heartbeats < self._idle_timeout:
+                        idle = False
+                        break
+                if idle:
+                    logger.debug("Exiting due to idle_timeout")
+                    self.exit()
+                    return
+
             if source.sender.credit > 0:
                 source.sender.send(Message(subject='FLUSH'))
 
@@ -304,7 +318,9 @@ class VFlowSnooper(MessagingHandler):
                 logger.debug("New record: %s", identity)
                 self._total_records += 1
                 source.records[identity] = record
+                source.idle_heartbeats = 0  # new record
             else:
+                logger.debug("Record update: %s", identity)
                 source.records[identity].update(record)
 
     def get_results(self):
@@ -376,11 +392,15 @@ def main():
                         default="localhost:5672")
     parser.add_argument("-d", "--debug", help="Verbose logging",
                         action='store_true')
+    it_help = f"""Exit {path.basename(sys.argv[0])} after no new records have
+    arrived for this many heartbeats across all sources (0 for no timeout)"""
+    parser.add_argument("--idle-timeout", help=it_help, type=int, default=0)
+
     args = parser.parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    snooper = VFlowSnooper(args.address)
+    snooper = VFlowSnooper(args.address, idle_timeout=args.idle_timeout)
     cid = f"vanflow-snooper-{args.address}"
     try:
         Container(snooper, container_id=cid).run()

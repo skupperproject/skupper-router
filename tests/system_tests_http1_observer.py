@@ -21,12 +21,17 @@
 # Test the HTTP/1.x Protocol observer
 #
 
+import json
+import os
+import subprocess
 import sys
 
 from system_test import TestCase, unittest, main_module, Qdrouterd
-from system_test import curl_available, run_curl
-from system_test import nginx_available, NginxServer
+from system_test import curl_available, run_curl, Process
+from system_test import nginx_available, NginxServer, current_dir
 from system_test import Http1Server, retry, TIMEOUT
+from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY
+from system_test import SERVER_PRIVATE_KEY_PASSWORD
 from vanflow_snooper import VFlowSnooperThread
 
 
@@ -53,6 +58,41 @@ def spawn_nginx(port, tester):
     # env['ca-certificate'] = CA_CERT
 
     return tester.nginxserver(config_path=NginxServer.CONFIG_FILE, env=env)
+
+
+class VFlowSnooperProcess(Process):
+    """
+    For testing the vanflow_snooper tool. Not intended for general testing -
+    use the VFlowSnooperThread instead (see above imports).  The
+    VFlowSnooperThread has an API to help synchronize it with the testcase
+    which helps avoid racy tests.
+    """
+    def __init__(self, router_address, name=None, expect=Process.EXIT_OK, **kwargs):
+        name = name or "vanflow_snooper_process"
+        kwargs.setdefault('stdout', subprocess.PIPE)
+        kwargs.setdefault('stderr', subprocess.PIPE)
+        if 'idle_timeout' in kwargs:
+            kwargs['idle_timeout'] = str(kwargs['idle_timeout'])
+        else:
+            kwargs.setdefault('idle_timeout', "0")
+        kwargs.setdefault('debug', False)
+
+        args = [os.path.join(current_dir, "vanflow_snooper.py"),
+                "-a", router_address,
+                "--idle-timeout", kwargs['idle_timeout']]
+        if kwargs['debug'] is True:
+            args.append("-d")
+
+        # remove keywords not used by super class
+        kwargs.pop('idle_timeout')
+        kwargs.pop('debug')
+        super(VFlowSnooperProcess, self).__init__(args, name=name, expect=expect, **kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.teardown()
 
 
 @unittest.skipUnless(nginx_available() and curl_available(),
@@ -231,6 +271,96 @@ class Http1ObserverTest(TestCase):
 
         self.assertEqual(3, get_count, f"{results}")
         self.assertEqual(1, post_count, f"{results}")
+
+    @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
+    def test_03_encrypted(self):
+        """
+        Verify that the observer simply ignores encrypted HTTP data.
+        """
+        s_port = self.tester.get_port()
+        l_port = self.tester.get_port()
+
+        server_ssl_cfg = dict()
+        server_ssl_cfg['CA_CERT'] = CA_CERT
+        server_ssl_cfg['SERVER_CERTIFICATE'] = SERVER_CERTIFICATE
+        server_ssl_cfg['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
+        server_ssl_cfg['SERVER_PRIVATE_KEY_PASSWORD'] = SERVER_PRIVATE_KEY_PASSWORD
+
+        # Start SSL Server
+        server_func = self.tester.openssl_server
+        openssl_server_alpn_http11 = server_func(listening_port=s_port,
+                                                 ssl_info=server_ssl_cfg,
+                                                 name="OpenSSLServerhttp11",
+                                                 cl_args=['-alpn', 'http/1.1'])
+
+        # configure the router to use pass-through TCP (i.e. do not use
+        # re-encrypt!)
+        router = self.router("test_03", l_port, s_port)
+
+        snooper_thread = VFlowSnooperThread(router.addresses[0])
+        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
+        self.assertEqual(1, snooper_thread.sources_ready, "timed out waiting for router beacon")
+
+        # Transfer encrypted data across the router
+        client_ssl_cfg = dict()
+        client_ssl_cfg['CA_CERT'] = CA_CERT
+        out, error = self.opensslclient(port=l_port, ssl_info=client_ssl_cfg,
+                                        data=b"test_encrypted_http11",
+                                        cl_args=['-alpn', 'http/1.1'])
+        self.assertIn(b"Verification: OK", out)
+        self.assertIn(b"Verify return code: 0 (ok)", out)
+
+        # Wait for at least 5 flows: Connector, Listener, TCP flow,
+        # counterflow, and router
+        retry(lambda: snooper_thread.total_records > 4, delay=0.25)
+        self.assertLess(4, snooper_thread.total_records, f"{snooper_thread.total_records}")
+
+        router.teardown()
+        snooper_thread.join(timeout=TIMEOUT)
+        results = snooper_thread.get_results()
+
+        # Ensure no HTTP/1.x related record attributes
+
+        self.assertEqual(1, len(results), f"Expected one router entry: {results}")
+        records = results.popitem()[1]
+        for record in records:
+            if 'RECORD_TYPE' in record and record['RECORD_TYPE'] == "FLOW":
+                self.assertNotIn('RESULT', record)
+                self.assertNotIn('METHOD', record)
+
+    @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
+    def test_999_vanflow_snooper(self):
+        """
+        Validate that the vanflow_snooper tool correctly reports records.
+        """
+        l_port = self.tester.get_port()
+        router = self.router("test_999", l_port, self.nginx_port)
+
+        snooper_process = self.tester.cleanup(VFlowSnooperProcess(router.addresses[0],
+                                                                  idle_timeout=3))
+        out, err = snooper_process.communicate(timeout=TIMEOUT)
+        rc = snooper_process.poll()
+        self.assertEqual(0, rc, f"snooper failed: {rc}, {out}, {err}")
+
+        # Expect at least 3 records:
+        # 1 - Router
+        # 1 - Listener
+        # 1 - Connector
+
+        results = json.loads(out)
+        self.assertEqual(1, len(results), f"Expected one router entry: {results}")
+        records = results.popitem()[1]
+
+        matches = 0
+        for record in records:
+            if 'RECORD_TYPE' in record:
+                if record['RECORD_TYPE'] == 'ROUTER':
+                    matches += 1
+                elif record['RECORD_TYPE'] == 'CONNECTOR':
+                    matches += 1
+                elif record['RECORD_TYPE'] == 'LISTENER':
+                    matches += 1
+        self.assertLessEqual(3, matches, f"Unexpected results: {results}")
 
 
 if __name__ == '__main__':

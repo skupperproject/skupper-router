@@ -60,14 +60,17 @@ static void activate_inner(qdpo_transport_handle_t *th, qd_protocol_t inner_prot
             break;
     }
 
-    // pass save data to new observer
+    // Pass save data to new observer. The observer may deregister itself if a parse error is encountered so avoid
+    // passing data if that occurs.
 
     th->observe(th, true, save.prefix, save.prefix_len);
-    th->observe(th, true, data, length);
+    if (th->observe)
+        th->observe(th, true, data, length);
     qd_buffer_t *buf = DEQ_HEAD(save.server_data);
     while (buf) {
         DEQ_REMOVE_HEAD(save.server_data);
-        th->observe(th, false, qd_buffer_base(buf), qd_buffer_size(buf));
+        if (th->observe)
+            th->observe(th, false, qd_buffer_base(buf), qd_buffer_size(buf));
         qd_buffer_free(buf);
         buf = DEQ_HEAD(save.server_data);
     }
