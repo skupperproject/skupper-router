@@ -513,12 +513,45 @@ class Config:
         return name
 
 
-class HttpServer(Process):
-    def __init__(self, args, name=None, expect=Process.RUNNING, **kwargs):
-        super(HttpServer, self).__init__(args, name=name, expect=expect, **kwargs)
+class Http1Server(Process):
+    """
+    Run the Python library http.server as a background process.
+    Default content can be found in the http1-data subdirectory.
+    """
+    def __init__(self, port, name=None, expect=Process.RUNNING, **kwargs):
+        name = name or "http.server"
+        kwargs.setdefault('stdin', subprocess.DEVNULL)  # no input accepted
+        kwargs.setdefault('directory', os.path.join(current_dir, "http1-data"))
+
+        args = [sys.executable,
+                "-m", "http.server",
+                "-d", kwargs['directory'],
+                "--cgi"]
+
+        protocol_supported = sys.version_info >= (3, 11)
+        if protocol_supported:
+            kwargs.setdefault('protocol', "HTTP/1.1")
+            args.append("-p")
+            args.append(kwargs['protocol'])
+        elif 'protocol' in kwargs:
+            raise NotImplementedError("http.server does not support '--protocol' param")
+
+        args.append(str(port))
+
+        # remove keywords not used by super class
+        kwargs.pop('directory')
+        if 'protocol' in kwargs:
+            kwargs.pop('protocol')
+        super(Http1Server, self).__init__(args, name=name, expect=expect, **kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.teardown()
 
 
-class Http2Server(HttpServer):
+class Http2Server(Process):
     """A HTTP2 Server that will respond to requests made via the router."""
 
     def __init__(self, name=None, listen_port=None, wait=True,

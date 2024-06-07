@@ -489,11 +489,6 @@ static void free_connection_IO(void *context)
     sys_mutex_unlock(&conn->activation_lock);
     // Do NOT free the core_activation lock since the core may be holding it
 
-    if (conn->observer_handle) {
-        qdpo_end(conn->observer_handle);
-        conn->observer_handle = 0;
-    }
-
     if (conn->common.parent) {
         if (conn->common.parent->context_type == TL_LISTENER) {
             qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
@@ -610,15 +605,19 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
         qdr_link_detach(conn->outbound_link, QD_LOST, 0);
     }
 
-    if (!!conn->core_conn) {
-        qdr_connection_closed(conn->core_conn);
-        conn->core_conn = 0;
-        qd_connection_counter_dec(QD_PROTOCOL_TCP);
+    if (conn->observer_handle) {
+        qdpo_end(conn->observer_handle);
     }
 
     if (!!conn->common.vflow) {
         vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
         vflow_end_record(conn->common.vflow);
+    }
+
+    if (!!conn->core_conn) {
+        qdr_connection_closed(conn->core_conn);
+        conn->core_conn = 0;
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
     }
 
     qd_tls_free2(conn->tls);
@@ -632,8 +631,9 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     conn->outbound_link     = 0;
     conn->outbound_stream   = 0;
     conn->outbound_delivery = 0;
-    conn->core_conn         = 0;
+    conn->observer_handle   = 0;
     conn->common.vflow      = 0;
+    conn->core_conn         = 0;
     conn->tls               = 0;
     conn->tls_domain        = 0;
 

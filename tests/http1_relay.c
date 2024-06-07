@@ -228,7 +228,7 @@ void protocol_error(qd_http1_decoder_connection_t *hconn, const char *reason)
 }
 
 
-qd_http1_decoder_config_t decoder_config = {
+static qd_http1_decoder_config_t decoder_config = {
     .rx_request = rx_request,
     .rx_response = rx_response,
     .rx_header = rx_header,

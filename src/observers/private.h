@@ -50,9 +50,14 @@ struct tcp_observer_state_t {
 /**
  * state machine for observing HTTP/1.x
  */
+typedef struct qd_http1_decoder_connection_t  qd_http1_decoder_connection_t;
+typedef struct http1_request_state_t          http1_request_state_t;
+DEQ_DECLARE(http1_request_state_t, http1_request_state_list_t);
+
 typedef struct http1_observer_state_t http1_observer_state_t;
 struct http1_observer_state_t {
-    int tbd;
+    qd_http1_decoder_connection_t *decoder;
+    http1_request_state_list_t     requests;
 };
 
 

@@ -209,8 +209,7 @@ static void parser_error(qd_http1_decoder_connection_t *hconn, const char *reaso
         hconn->parse_error = reason;
         decoder_new_state(&hconn->client, HTTP1_DECODE_ERROR);
         decoder_new_state(&hconn->server, HTTP1_DECODE_ERROR);
-        if (hconn->config->protocol_error)
-            hconn->config->protocol_error(hconn, reason);
+        hconn->config->protocol_error(hconn, reason);
     }
 }
 
@@ -439,10 +438,12 @@ static bool message_done(qd_http1_decoder_connection_t *hconn, decoder_t *decode
     }
 
     // signal the message receive is complete
-    int rc = hconn->config->message_done(hconn, hrs->user_context, decoder->is_client);
-    if (rc) {
-        parser_error(hconn, "message_done callback failed");
-        return false;
+    if (hconn->config->message_done) {
+        int rc = hconn->config->message_done(hconn, hrs->user_context, decoder->is_client);
+        if (rc) {
+            parser_error(hconn, "message_done callback failed");
+            return false;
+        }
     }
 
     decoder_reset(decoder);  // resets decode state to parse_request or parse_response
@@ -619,10 +620,12 @@ static bool headers_done(qd_http1_decoder_connection_t *hconn, struct decoder_t 
     h1_decode_request_state_t *hrs = decoder->hrs;
     assert(hrs);
 
-    int rc = hconn->config->rx_headers_done(hconn, hrs->user_context, decoder->is_client);
-    if (rc) {
-        parser_error(hconn, "rx_headers_done callback failed");
-        return false;
+    if (hconn->config->rx_headers_done) {
+        int rc = hconn->config->rx_headers_done(hconn, hrs->user_context, decoder->is_client);
+        if (rc) {
+            parser_error(hconn, "rx_headers_done callback failed");
+            return false;
+        }
     }
 
     // Determine if a body is present.  See RFC9112 Message Body Length
@@ -783,11 +786,13 @@ static bool parse_header(qd_http1_decoder_connection_t *hconn, decoder_t *decode
         truncate_whitespace(value);
     }
 
-    assert(decoder->hrs);
-    int rc = hconn->config->rx_header(hconn, decoder->hrs->user_context, decoder->is_client, key, value);
-    if (rc) {
-        parser_error(hconn, "rx_header callback failed");
-        return false;
+    if (hconn->config->rx_header) {
+        assert(decoder->hrs);
+        int rc = hconn->config->rx_header(hconn, decoder->hrs->user_context, decoder->is_client, key, value);
+        if (rc) {
+            parser_error(hconn, "rx_header callback failed");
+            return false;
+        }
     }
 
     if (!process_header(hconn, decoder, key, value))
