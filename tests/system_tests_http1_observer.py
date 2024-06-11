@@ -77,7 +77,7 @@ class VFlowSnooperProcess(Process):
             kwargs.setdefault('idle_timeout', "0")
         kwargs.setdefault('debug', False)
 
-        args = [os.path.join(current_dir, "vanflow_snooper.py"),
+        args = [sys.executable, os.path.join(current_dir, "vanflow_snooper.py"),
                 "-a", router_address,
                 "--idle-timeout", kwargs['idle_timeout']]
         if kwargs['debug'] is True:
