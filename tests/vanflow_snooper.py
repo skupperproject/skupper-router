@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -22,7 +22,7 @@ import argparse
 import json
 import logging
 import sys
-from enum import IntEnum, unique
+from os import path
 from threading import Thread
 
 from proton.handlers import MessagingHandler
@@ -34,79 +34,81 @@ from proton import Message
 # updated as new records/attributes/etc are added
 #
 
-@unique
-class RecordTypes(IntEnum):
-    SITE = 0
-    ROUTER = 1
-    LINK = 2
-    CONTROLLER = 3
-    LISTENER = 4
-    CONNECTOR = 5
-    FLOW = 6
-    PROCESS = 7
-    IMAGE = 8
-    INGRESS = 9
-    EGRESS = 10
-    COLLECTOR = 11
-    PROCESS_GROUP = 12
-    HOST = 13
-    LOG = 14
+record_types = {
+    0: "SITE",
+    1: "ROUTER",
+    2: "LINK",
+    3: "CONTROLLER",
+    4: "LISTENER",
+    5: "CONNECTOR",
+    6: "FLOW",
+    7: "PROCESS",
+    8: "IMAGE",
+    9: "INGRESS",
+    10: "EGRESS",
+    11: "COLLECTOR",
+    12: "PROCESS_GROUP",
+    13: "HOST",
+    14: "LOG",
+}
 
+RECORD_TYPE = 0
+IDENTITY = 1
 
-@unique
-class AttributeTypes(IntEnum):
-    RECORD_TYPE = 0
-    IDENTITY = 1
-    PARENT = 2
-    START_TIME = 3
-    END_TIME = 4
-    COUNTERFLOW = 5
-    PEER = 6
-    PROCESS = 7
-    SIBLING_ORDINAL = 8
-    LOCATION = 9
-    PROVIDER = 10
-    PLATFORM = 11
-    NAMESPACE = 12
-    MODE = 13
-    SOURCE_HOST = 14
-    DESTINATION_HOST = 15
-    PROTOCOL = 16
-    SOURCE_PORT = 17
-    DESTINATION_PORT = 18
-    VAN_ADDRESS = 19
-    IMAGE_NAME = 20
-    IMAGE_VERSION = 21
-    HOST_NAME = 22
-    OCTETS = 23
-    LATENCY = 24
-    TRANSIT_LATENCY = 25
-    BACKLOG = 26
-    METHOD = 27
-    RESULT = 28
-    REASON = 29
-    NAME = 30
-    TRACE = 31
-    BUILD_VERSION = 32
-    LINK_COST = 33
-    DIRECTION = 34
-    OCTET_RATE = 35
-    OCTETS_OUT = 36
-    OCTETS_UNACKED = 37
-    WINDOW_CLOSURES = 38
-    WINDOW_SIZE = 39
-    FLOW_COUNT_L4 = 40
-    FLOW_COUNT_L7 = 41
-    FLOW_RATE_L4 = 42
-    FLOW_RATE_L7 = 43
-    DURATION = 44
-    IMAGE = 45
-    GROUP = 46
-    STREAM_ID = 47
-    LOG_SEVERITY = 48
-    LOG_TEXT = 49
-    SOURCE_FILE = 50
-    SOURCE_LINE = 51
+attribute_types = {
+    RECORD_TYPE: "RECORD_TYPE",
+    IDENTITY: "IDENTITY",
+    2: "PARENT",
+    3: "START_TIME",
+    4: "END_TIME",
+    5: "COUNTERFLOW",
+    6: "PEER",
+    7: "PROCESS",
+    8: "SIBLING_ORDINAL",
+    9: "LOCATION",
+    10: "PROVIDER",
+    11: "PLATFORM",
+    12: "NAMESPACE",
+    13: "MODE",
+    14: "SOURCE_HOST",
+    15: "DESTINATION_HOST",
+    16: "PROTOCOL",
+    17: "SOURCE_PORT",
+    18: "DESTINATION_PORT",
+    19: "VAN_ADDRESS",
+    20: "IMAGE_NAME",
+    21: "IMAGE_VERSION",
+    22: "HOST_NAME",
+    23: "OCTETS",
+    24: "LATENCY",
+    25: "TRANSIT_LATENCY",
+    26: "BACKLOG",
+    27: "METHOD",
+    28: "RESULT",
+    29: "REASON",
+    30: "NAME",
+    31: "TRACE",
+    32: "BUILD_VERSION",
+    33: "LINK_COST",
+    34: "DIRECTION",
+    35: "OCTET_RATE",
+    36: "OCTETS_OUT",
+    37: "OCTETS_UNACKED",
+    38: "WINDOW_CLOSURES",
+    39: "WINDOW_SIZE",
+    40: "FLOW_COUNT_L4",
+    41: "FLOW_COUNT_L7",
+    42: "FLOW_RATE_L4",
+    43: "FLOW_RATE_L7",
+    44: "DURATION",
+    45: "IMAGE",
+    46: "GROUP",
+    47: "STREAM_ID",
+    48: "LOG_SEVERITY",
+    49: "LOG_TEXT",
+    50: "SOURCE_FILE",
+    51: "SOURCE_LINE"
+}
 
 
 logger = logging.getLogger(__name__)
@@ -137,6 +139,7 @@ class EventSource:
         self.sender = sender
         self.records = {}  # indexed by identifier
         self.links_pending = 3  # 1 sender, 1 for events, 1 for flows
+        self.idle_heartbeats = 0
         logger.debug("New EventSource name=%s base-addr=%s", name, base_address)
 
     def get_records(self):
@@ -148,14 +151,16 @@ class EventSource:
         for record_id, attributes in self.records.items():
             record = {}
             for key, value in attributes.items():
-                if key not in AttributeTypes:
+                if key not in attribute_types:
+                    # need to update attribute_types with new type?
                     raise Exception(f"Missing VanFlow attribute type '{key}'")
-                if key == AttributeTypes.RECORD_TYPE:
-                    if value not in RecordTypes:
+                if key == RECORD_TYPE:
+                    if value not in record_types:
+                        # need to update record_types with new type?
                         raise Exception(f"Missing VanFlow record type '{value}'")
-                    record[AttributeTypes.RECORD_TYPE.name] = RecordTypes(value).name
+                    record['RECORD_TYPE'] = record_types[value]
                 else:
-                    record[AttributeTypes(key).name] = value
+                    record[attribute_types[key]] = value
             records.append(record)
         return records
 
@@ -168,16 +173,16 @@ class VFlowSnooper(MessagingHandler):
     instantiate a new EventSource for that source. Open receiver links to
     subscribe to that source's event and flow records.
     '''
-    def __init__(self, address):
+    def __init__(self, address, idle_timeout=0):
         super(VFlowSnooper, self).__init__()
         self.address = address  # router address
         self.conn = None
         self.beacon_receiver = None
         self.sources = {}
-        self.heartbeats_seen = 0
         self._error = None
         self._sources_subscribed = 0
         self._total_records = 0
+        self._idle_timeout = idle_timeout
 
     def on_connection_opened(self, event):
         logger.debug("Connection opened")
@@ -280,16 +285,28 @@ class VFlowSnooper(MessagingHandler):
     def handle_heartbeat(self, message):
         source_id = message.properties['id']
         logger.debug("Heartbeat from %s", source_id)
-        self.heartbeats_seen += 1
         name = id_2_source(source_id)
         source = self.sources.get(name)
         if source is not None:
+            source.idle_heartbeats += 1
+            if self._idle_timeout > 0:
+                # Check all known sources for idle timeout
+                idle = True
+                for src in self.sources.values():
+                    if src.idle_heartbeats < self._idle_timeout:
+                        idle = False
+                        break
+                if idle:
+                    logger.debug("Exiting due to idle_timeout")
+                    self.exit()
+                    return
+
             if source.sender.credit > 0:
                 source.sender.send(Message(subject='FLUSH'))
 
     def handle_records(self, message):
         for record in message.body:
-            identity = record.get(AttributeTypes.IDENTITY)
+            identity = record.get(IDENTITY)
             if identity is None:
                 err = f"ERROR: received record with no id: {record}"
                 logger.error(err)
@@ -304,7 +321,9 @@ class VFlowSnooper(MessagingHandler):
                 logger.debug("New record: %s", identity)
                 self._total_records += 1
                 source.records[identity] = record
+                source.idle_heartbeats = 0  # new record
             else:
+                logger.debug("Record update: %s", identity)
                 source.records[identity].update(record)
 
     def get_results(self):
@@ -376,11 +395,15 @@ def main():
                         default="localhost:5672")
     parser.add_argument("-d", "--debug", help="Verbose logging",
                         action='store_true')
+    it_help = f"""Exit {path.basename(sys.argv[0])} after no new records have
+    arrived for this many heartbeats across all sources (0 for no timeout)"""
+    parser.add_argument("--idle-timeout", help=it_help, type=int, default=0)
+
     args = parser.parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    snooper = VFlowSnooper(args.address)
+    snooper = VFlowSnooper(args.address, idle_timeout=args.idle_timeout)
     cid = f"vanflow-snooper-{args.address}"
     try:
         Container(snooper, container_id=cid).run()

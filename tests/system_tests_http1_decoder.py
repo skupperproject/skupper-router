@@ -120,15 +120,24 @@ class Http1DecoderTest(TestCase):
                                 exception=(ConnectionRefusedError,
                                            ConnectionAbortedError))
 
-                # wait for the server connection from the proxy
+                # wait for the server connection from the proxy then push one
+                # byte of data at a time to simulate worst-case tcp stream
+                # fragmentation
 
                 server, _ = listener.accept()
                 try:
-                    client.sendall(client_stream)
+                    while client_stream:
+                        client.sendall(client_stream[:1])
+                        client_stream = client_stream[1:]
                     client.shutdown(socket.SHUT_WR)
+
                     server_output = _drain_socket(server)
-                    server.sendall(server_stream)
+
+                    while server_stream:
+                        server.sendall(server_stream[:1])
+                        server_stream = server_stream[1:]
                     server.shutdown(socket.SHUT_WR)
+
                     client_output = _drain_socket(client)
                     return (client_output, server_output)
 
@@ -824,6 +833,304 @@ class Http1DecoderTest(TestCase):
             (MATCH, '[C1:R2] TRANSACTION-COMPLETE\n')
         ]
         log = self._test_runner("test_15", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_16_header_line_length_error(self):
+        """
+        Handle header lines that exceed our internal maximum (64k)
+        """
+        client_stream = b'GET /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'header: bar\r\n' \
+            + b'toobig: ' + b'X' * 128000 \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=GET TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=content-length VALUE=4\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=bar\n'),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=protocol error: received line too long\n')
+        ]
+        log = self._test_runner("test_16", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_17_xfer_encoding_unchunked(self):
+        """
+        Handle a server-side transfer encoding that does not use chunked.
+        Decoder should allow assuming response ends on connection close.
+        """
+        client_stream = b'GET /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'transfer-encoding: yeah,right\r\n' \
+            + b'header: bar\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=GET TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=transfer-encoding VALUE=yeah,right\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=bar\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER-DONE\n'),
+            (SERVER_BODY, '[C1:R1]', 4)
+        ]
+        log = self._test_runner("test_17", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_18_invalid_xfer_encoding(self):
+        """
+        Detect client using invalid transfer-encoding
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'transfer-encoding: biff,bang,bong\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=transfer-encoding VALUE=biff,bang,bong\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Unrecognized Transfer-Encoding\n')
+        ]
+        log = self._test_runner("test_18", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_19_invalid_response_code(self):
+        """
+        Detect server invalid response code
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 9999999999 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Bad response code\n')
+        ]
+        log = self._test_runner("test_19", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_20_missing_response_code(self):
+        """
+        Detect server missing response code
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 \r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Malformed response line\n')
+        ]
+        log = self._test_runner("test_20", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_21_invalid_content_len(self):
+        """
+        Detect invalid content-length header
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: BAGELS!\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=content-length VALUE=BAGELS!\n'),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Malformed Content-Length value\n')
+        ]
+        log = self._test_runner("test_21", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_22_content_smuggling(self):
+        """
+        Detect content smuggling attach via duplicate length headers
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'content-length: 13\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=content-length VALUE=4\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=content-length VALUE=13\n'),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Invalid duplicate Content-Length header\n')
+        ]
+        log = self._test_runner("test_22", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_23_invalid_header_format(self):
+        """
+        Ignore invalid HTTP headers
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'content-length: 4\r\n' \
+            + b'bogus-header:\r\n' \
+            + b':this is an invalid header field\r\n' \
+            + b'\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=content-length VALUE=4\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER-DONE\n'),
+            (SERVER_BODY, '[C1:R1]', 4),
+            (MATCH, '[C1:R1] SERVER-MSG-DONE\n'),
+            (MATCH, '[C1:R1] TRANSACTION-COMPLETE\n')
+        ]
+        log = self._test_runner("test_23", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_24_invalid_chunk_len(self):
+        """
+        Detect invalid chunk length encoding
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'transfer-encoding: chunked\r\n' \
+            + b'\r\n' \
+            + b'WOOF\r\n' \
+            + b'1234'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=transfer-encoding VALUE=chunked\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER-DONE\n'),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Invalid chunk length\n')
+        ]
+        log = self._test_runner("test_24", client_stream, server_stream)
+        self._compare_log(expected, log)
+
+    def test_25_invalid_end_chunk(self):
+        """
+        Detect invalid terminal chunk
+        """
+        client_stream = b'POST /one HTTP/1.1\r\n' \
+            + b'IAmAHeader: Header value\r\n' \
+            + b'content-length: 0\r\n' \
+            + b'\r\n'
+        server_stream = b'HTTP/1.1 200 OK\r\n' \
+            + b'header: foo\r\n' \
+            + b'transfer-encoding: chunked\r\n' \
+            + b'\r\n' \
+            + b'4\r\n' \
+            + b'1234X\r\n'
+
+        expected = [
+            (MATCH, '[C1:R1] RX-REQ METHOD=POST TARGET=/one VMAJOR=1 VMINOR=1\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=IAmAHeader VALUE=Header value\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER KEY=content-length VALUE=0\n'),
+            (MATCH, '[C1:R1] CLIENT-HEADER-DONE\n'),
+            (MATCH, '[C1:R1] CLIENT-MSG-DONE\n'),
+
+            (MATCH, '[C1:R1] RX-RESP STATUS=200 VMAJOR=1 VMINOR=1 REASON=OK\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=header VALUE=foo\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER KEY=transfer-encoding VALUE=chunked\n'),
+            (MATCH, '[C1:R1] SERVER-HEADER-DONE\n'),
+            (SERVER_BODY, '[C1:R1]', 4),
+            (MATCH, '[C1] PROTOCOL-ERROR REASON=Unexpected chunk body end\n')
+        ]
+        log = self._test_runner("test_25", client_stream, server_stream)
         self._compare_log(expected, log)
 
 
