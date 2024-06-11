@@ -44,7 +44,7 @@
 #define TEXT_MAX QD_LOG_TEXT_MAX
 #define LOG_MAX (QD_LOG_TEXT_MAX+128)
 #define LIST_MAX 1000
-#define NUM_LOG_SOURCES 21
+#define NUM_LOG_SOURCES 23
 
 const char *QD_LOG_STATS_TYPE = "logStats";
 
@@ -59,7 +59,7 @@ const char *log_module_names[] = {"ROUTER",      "ROUTER_CORE",  "ROUTER_HELLO",
                                   "MESSAGE",     "SERVER",       "AGENT",        "CONTAINER",     "ERROR",
                                   "POLICY",      "HTTP",         "CONN_MGR",     "PYTHON",        "PROTOCOL",
                                   "TCP_ADAPTOR", "HTTP_ADAPTOR", "FLOW_LOG",     "ADDRESS_WATCH", "HTTP1_OBSERVER",
-                                  "DEFAULT"};
+                                  "HTTP2_OBSERVER", "HTTP2_DECODER", "DEFAULT"};
 
 typedef struct qd_log_entry_t qd_log_entry_t;
 

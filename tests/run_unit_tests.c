@@ -35,6 +35,7 @@ int version_tests(void);
 int hash_tests(void);
 int thread_tests(void);
 int platform_tests(void);
+int http2_decoder_tests(void);
 
 
 int main(int argc, char** argv)
@@ -71,6 +72,7 @@ int main(int argc, char** argv)
     result += hash_tests();
     result += thread_tests();
     result += platform_tests();
+    result += http2_decoder_tests();
 
     qd_dispatch_free(qd);       // dispatch_free last.
 

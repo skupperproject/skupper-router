@@ -1,3 +1,6 @@
+#ifndef __observers_http2_test_h__
+#define __observers_http2_test_h__ 1
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,32 +20,16 @@
  * under the License.
  */
 
-#include "private.h"
+#include "http2_decoder.h"
 
-#include <inttypes.h>
+typedef struct qd_decoder_buffer_t   qd_decoder_buffer_t;
+typedef struct qd_http2_decoder_t          qd_http2_decoder_t;
 
+bool is_client_decoder_state_decode_connection_preface(qd_http2_decoder_connection_t *conn_state);
+bool is_client_decoder_state_decode_frame_header(qd_http2_decoder_connection_t *conn_state);
+bool is_client_decoder_state_skip_frame_payload(qd_http2_decoder_connection_t *conn_state);
+void move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t data_length);
+uint32_t get_stream_identifier(const uint8_t *data);
+void reset_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer);
 
-static void http2_observe(qdpo_transport_handle_t *th, bool from_client, const unsigned char *data, size_t length)
-{
-    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,
-           "[C%" PRIu64 "] HTTP/2.0 observer classifying protocol: %zu %s octets", th->conn_id, length, from_client ? "client" : "server");
-
-}
-
-
-void qdpo_http2_init(qdpo_transport_handle_t *th)
-{
-    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,  "[C%" PRIu64 "] HTTP/2.0 observer initialized", th->conn_id);
-
-    th->protocol = QD_PROTOCOL_HTTP2;
-    th->observe = http2_observe;
-    th->http2.tbd = 42;  // whatever
-}
-
-
-void qdpo_http2_final(qdpo_transport_handle_t *th)
-{
-    qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/2.0 observer finalized", th->conn_id);
-    th->observe = 0;
-}
-
+#endif

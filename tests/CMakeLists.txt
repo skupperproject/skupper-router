@@ -31,6 +31,7 @@ set(unit_test_SOURCES
     run_unit_tests.c
     tool_test.c
     failoverlist_test.c
+    http2_decoder_tests.c
     timer_test.c
     core_timer_test.c
     parse_tree_tests.c
