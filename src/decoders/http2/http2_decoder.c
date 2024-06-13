@@ -408,7 +408,7 @@ static bool skip_frame_payload(qd_http2_decoder_t *decoder, const uint8_t **data
         decoder_new_state(decoder, HTTP2_DECODE_FRAME_HEADER);
         return true;
     } else {
-        data += *length;
+        *data += *length;
         decoder->frame_length_processed += *length;
         qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] skip_frame_payload - decoder->frame_length=%" PRIu32", decoder->frame_length_processed=%" PRIu32"", decoder->conn_state->conn_id, decoder->frame_length, decoder->frame_length_processed);
         *length = 0;
@@ -461,7 +461,7 @@ static bool parse_frame_header(qd_http2_decoder_t *decoder, const uint8_t **data
                 return false;
             }
             *length = 0;
-            data += *length;
+            *data += *length;
             return false;
         }
     }
