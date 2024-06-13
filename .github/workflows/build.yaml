@@ -828,7 +828,7 @@ jobs:
         with:
           flags: ${{matrix.covType}}tests
           verbose: true
-          plugin: gcov
+          plugins: gcov, pycoverage
           name: skupper-router
           root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
