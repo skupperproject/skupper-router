@@ -68,10 +68,11 @@ race:^qdr_link_process_deliveries$
 # ISSUE-65
 race:^qdr_delivery_continue_CT$
 
-# ISSUE-543
+# ISSUE-543 and ISSUE-1507
 race:^_lws_log$
 race:^_lws_logv$
 race:^__lws_logv$
+race:^qd_http_server_listen$
 
 #
 # External libraries
