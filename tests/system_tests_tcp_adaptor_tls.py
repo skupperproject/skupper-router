@@ -814,7 +814,7 @@ class TcpAdaptorCertCorruptionTests(TestCase):
         self.openssl_server = openssl_server(listening_port=self.openssl_server_listening_port,
                                              ssl_info=server_ssl_info,
                                              name="OpenSSLServerAuthPeer",
-                                             cl_args=['-Verify', '1'])
+                                             cl_args=['-Verify', '1', '-verify_return_error'])
 
         client_ssl_info = dict()
         client_ssl_info['CA_CERT'] = CA_CERT
