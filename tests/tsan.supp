@@ -73,6 +73,7 @@ race:^_lws_log$
 race:^_lws_logv$
 race:^__lws_logv$
 race:^qd_http_server_listen$
+race:^lws_snprintf$
 
 #
 # External libraries
