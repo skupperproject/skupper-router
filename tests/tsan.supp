@@ -68,11 +68,6 @@ race:^qdr_link_process_deliveries$
 # ISSUE-65
 race:^qdr_delivery_continue_CT$
 
-# ISSUE-543
-race:^_lws_log$
-race:^_lws_logv$
-race:^__lws_logv$
-
 #
 # External libraries
 #
@@ -91,8 +86,16 @@ race:^listener_final_free$
 race:^pn_logger_reset_mask$
 race:^pni_logger_log$
 
-# DISPATCH-2151
+# libwebsockets logging is the king of races:
+# DISPATCH-2151, ISSUE-543,ISSUE-1507
+#
 race:^_lws_logv.part.0$
+race:^_lws_log$
+race:^_lws_logv$
+race:^__lws_logv$
+race:^qd_http_server_listen$
+race:^lws_snprintf$
+race:^handle_stats_results$
 
 # DISPATCH-2155
 race:^qd_connection_manager_delete_listener$
