@@ -168,8 +168,20 @@ static void daemon_process(const char *config_path, const char *python_pkgdir, b
             close(0);
             int fd = open("/dev/null", O_RDWR);
             if (fd != 0) fail(pipefd[1], "Can't redirect stdin to /dev/null");
-            if (dup(fd) < 0) fail(pipefd[1], "Can't redirect stdout to /dev/null");
-            if (dup(fd) < 0) fail(pipefd[1], "Can't redirect stderr /dev/null");
+
+            int fd1 = dup(fd);
+            if (fd1 < 0) {
+                close(fd1);
+                fail(pipefd[1], "Can't redirect stdout to /dev/null");
+            }
+            close(fd1);
+
+            int fd2 = dup(fd);
+            if (fd2 < 0) {
+                close(fd2);
+                fail(pipefd[1], "Can't redirect stderr /dev/null");
+            }
+            close(fd2);
 
             //
             // Set the umask to 0
@@ -225,9 +237,12 @@ static void daemon_process(const char *config_path, const char *python_pkgdir, b
             //
             if (pidfile) {
                 FILE *pf = fopen(pidfile, "w");
-                if (pf == 0) fail(pipefd[1], "Can't write pidfile %s", pidfile);
-                fprintf(pf, "%d\n", getpid());
-                fclose(pf);
+                if (pf == 0) {
+                    fail(pipefd[1], "Can't write pidfile %s", pidfile);
+                } else {
+                    fprintf(pf, "%d\n", getpid());
+                    fclose(pf);
+                }
             }
 
             //
