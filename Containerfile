@@ -39,7 +39,7 @@ COPY . .
 ENV PROTON_VERSION=main
 ENV PROTON_SOURCE_URL=${PROTON_SOURCE_URL:-https://github.com/apache/qpid-proton/archive/${PROTON_VERSION}.tar.gz}
 ENV LWS_VERSION=v4.3.3
-ENV LIBUNWIND_VERSION=v1.6.2
+ENV LIBUNWIND_VERSION=v1.8.1
 ENV LWS_SOURCE_URL=${LWS_SOURCE_URL:-https://github.com/warmcat/libwebsockets/archive/refs/tags/${LWS_VERSION}.tar.gz}
 ENV LIBUNWIND_SOURCE_URL=${LIBUNWIND_SOURCE_URL:-https://github.com/libunwind/libunwind/archive/refs/tags/${LIBUNWIND_VERSION}.tar.gz}
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
