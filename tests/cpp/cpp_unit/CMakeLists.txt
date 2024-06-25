@@ -40,7 +40,6 @@ add_executable(cpp_unit
         test_amqp.cpp
         test_server.cpp
         test_terminus.cpp
-        test_static_assert.c
 )
 target_link_libraries(cpp_unit cpp-stub pthread skupper-router ${bfd_lib})
 # http_common.h includes "delivery.h"
