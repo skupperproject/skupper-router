@@ -1,6 +1,3 @@
-#ifndef STATIC_ASSERT_H
-#define STATIC_ASSERT_H
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -20,22 +17,14 @@
  * under the License.
  */
 
-#include <assert.h>
-#include <stdbool.h>
+#include "qpid/dispatch/static_assert.h"
 
-/** @file
- * STATIC_ASSERT allows you to do compile time assertions at file scope or in a function.
- * @param expr: a boolean expression that is valid at compile time.
- * @param msg: a "message" that must also be a valid identifier, i.e. message_with_underscores
- */
+static unsigned long ul;
+static long          l;
+static int           i;
 
+STATIC_ASSERT(IS_SAME(unsigned long, ul), ul is unsigned long);
+STATIC_ASSERT(!IS_SAME(unsigned long, l), l is not unsigned long);
 
-#define STATIC_ASSERT(expr, msg) static_assert(expr, #msg)
-
-#define STATIC_ASSERT_ARRAY_LEN(array, len) \
-    STATIC_ASSERT(sizeof(array)/sizeof(array[0]) == len, array##_wrong_size);
-
-// A C11 implementation of https://en.cppreference.com/w/cpp/types/is_same
-#define IS_SAME(type, var) _Generic(var, type: true, default: false)
-
-#endif // STATIC_ASSERT_H
+STATIC_ASSERT(!IS_SAME(int, l), l is not int);
+STATIC_ASSERT(!IS_SAME(long, i), i is not long);
