@@ -420,14 +420,20 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
             qd_conn->closed = true;
         if (pn_connection_state(conn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
             close_links(container, conn, false);
-            qd_session_cleanup(qd_conn);
+            if(qd_conn) {
+                qd_session_cleanup(qd_conn);
+            }
             pn_connection_close(conn);
-            qd_conn_event_batch_complete(container, qd_conn, true);
+            if(qd_conn) {
+                qd_conn_event_batch_complete(container, qd_conn, true);
+            }
         } else if (pn_connection_state(conn) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
             close_links(container, conn, false);
-            qd_session_cleanup(qd_conn);
-            notify_closed(container, qd_conn, qd_connection_get_context(qd_conn));
-            qd_conn_event_batch_complete(container, qd_conn, true);
+            if(qd_conn) {
+                qd_session_cleanup(qd_conn);
+                notify_closed(container, qd_conn, qd_connection_get_context(qd_conn));
+                qd_conn_event_batch_complete(container, qd_conn, true);
+            }
         }
         break;
 
