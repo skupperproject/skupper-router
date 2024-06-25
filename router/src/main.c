@@ -236,13 +236,14 @@ static void daemon_process(const char *config_path, const char *python_pkgdir, b
             //
             if (user) {
                 struct passwd *pwd = getpwnam(user);
-                if (pwd == 0) fail(pipefd[1], "Can't look up user %s", user);
-                if (setuid(pwd->pw_uid) < 0) fail(pipefd[1], "Can't set user ID for user %s, errno=%d", user, errno);
-                //if (setgid(pwd->pw_gid) < 0) fail(pipefd[1], "Can't set group ID for user %s, errno=%d", user, errno);
+                if (pwd == 0) {
+                    fail(pipefd[1], "Can't look up user %s", user);
+                }
+                else if (setuid(pwd->pw_uid) < 0) {
+                     fail(pipefd[1], "Can't set user ID for user %s, errno=%d", user, errno);
+                }
             }
-
             main_process((config_path_full ? config_path_full : config_path), python_pkgdir, test_hooks, pipefd[1]);
-
             free(config_path_full);
         } else
             //
