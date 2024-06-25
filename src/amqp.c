@@ -19,6 +19,8 @@
 
 #include "qpid/dispatch/amqp.h"
 
+#include "qpid/dispatch/static_assert.h"
+
 #include <errno.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -121,10 +123,11 @@ int qd_port_int(const char *port_str) {
     errno = 0;
     n = strtoul(port_str, &endptr, 10);
     if (*endptr == '\0') {
-        if (!errno && n >= 0 && n <= 0xFFFF)
+        STATIC_ASSERT(IS_SAME(unsigned long, n), n may not be negative);
+        if (!errno && n <= 0xFFFF) {
             return n;
-        else
-            return -1;
+        }
+        return -1;
     }
 
     // digits halfway?
