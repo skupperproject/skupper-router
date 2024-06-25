@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "../include/qpid/dispatch/static_assert.h"
+#include "qpid/dispatch/static_assert.h"
 
 static unsigned long ul;
 static long          l;
