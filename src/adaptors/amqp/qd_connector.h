@@ -32,6 +32,7 @@
 typedef struct qd_timer_t  qd_timer_t;
 typedef struct qd_server_t qd_server_t;
 typedef struct qd_connection_t qd_connection_t;
+typedef struct vflow_record_t  vflow_record_t;
 
 typedef enum {
     CXTR_STATE_INIT = 0,
@@ -58,6 +59,7 @@ typedef struct qd_connector_t {
     sys_mutex_t               lock;
     cxtr_state_t              state;
     qd_connection_t          *qd_conn;
+    vflow_record_t           *vflow_record;
 
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
     qd_failover_item_list_t   conn_info_list;
@@ -94,5 +96,12 @@ bool qd_connector_has_failover_info(const qd_connector_t* ct);
 const char *qd_connector_policy_vhost(const qd_connector_t* ct);
 void qd_connector_handle_transport_error(qd_connector_t *connector, uint64_t connection_id, pn_condition_t *condition);
 void qd_connector_remote_opened(qd_connector_t *connector);
-void qd_connector_release_connection(qd_connector_t *connector, qd_connection_t *qd_conn);
+
+// add a new connection to the parent connector
+void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx);
+
+// remove the child connection
+// NOTE WELL: this may free the connector if the connection is holding the last
+// reference to it
+void qd_connector_remove_connection(qd_connector_t *connector);
 #endif

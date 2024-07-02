@@ -1022,13 +1022,13 @@ static int callback_amqpws(struct lws *wsi, enum lws_callback_reasons reason,
         if (hl == NULL || !hl->listener->config.websockets) {
             return unexpected_close(c->wsi, "cannot-upgrade");
         }
-        c->qd_conn = qd_server_connection(hs->server, &hl->listener->config);
-        if (c->qd_conn == NULL) {
-            return unexpected_close(c->wsi, "out-of-memory");
-        }
+
+        c->qd_conn = new_qd_connection_t();
+        ZERO(c->qd_conn);
+        qd_connection_init(c->qd_conn, hs->server, &hl->listener->config, 0, hl->listener);
         c->qd_conn->context = c;
         c->qd_conn->wake = connection_wake;
-        c->qd_conn->listener = hl->listener;
+
         lws_get_peer_simple(wsi, c->qd_conn->rhost, sizeof(c->qd_conn->rhost));
         int err = pn_connection_driver_init(&c->driver, c->qd_conn->pn_conn, NULL);
         if (err) {

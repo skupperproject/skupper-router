@@ -29,6 +29,8 @@
 typedef struct qd_lws_listener_t qd_lws_listener_t;
 typedef struct qd_server_t       qd_server_t;
 typedef struct pn_listener_t     pn_listener_t;
+typedef struct vflow_record_t    vflow_record_t;
+typedef struct qd_connection_t   qd_connection_t;
 
 /**
  * Listener objects represent the desire to accept incoming AMQP transport connections.
@@ -36,14 +38,16 @@ typedef struct pn_listener_t     pn_listener_t;
 typedef struct qd_listener_t qd_listener_t;
 struct qd_listener_t {
     /* May be referenced by connection_manager and pn_listener_t */
-    qd_handler_context_t     type;
-    sys_atomic_t             ref_count;
+    qd_handler_context_t      type;
+    sys_atomic_t              ref_count;
+    sys_atomic_t              connection_count;
     qd_server_t              *server;
     qd_server_config_t        config;
     pn_listener_t            *pn_listener;
     qd_lws_listener_t        *http;
     DEQ_LINKS(qd_listener_t);
     bool                      exit_on_error;
+    vflow_record_t           *vflow_record;
 };
 
 DEQ_DECLARE(qd_listener_t, qd_listener_list_t);
@@ -53,9 +57,17 @@ DEQ_DECLARE(qd_listener_t, qd_listener_list_t);
  * Listen for incoming connections, return true if listening succeeded.
  */
 bool qd_listener_listen(qd_listener_t *l);
-qd_listener_t *qd_server_listener(qd_server_t *server);
+qd_listener_t *qd_listener(qd_server_t *server);
 void qd_listener_decref(qd_listener_t* ct);
 qd_lws_listener_t *qd_listener_http(const qd_listener_t *li);
 const qd_server_config_t *qd_listener_config(const qd_listener_t *li);
+
+// add a new connection with the parent listener
+void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *ctx);
+
+// remove the connection with its parent listener
+// NOTE WELL: may free the listener if this connection is holding the last reference
+// to it
+void qd_listener_remove_connection(qd_listener_t *li, qd_connection_t *qd_conn);
 
 #endif

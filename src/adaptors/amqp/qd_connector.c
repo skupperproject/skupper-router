@@ -23,6 +23,7 @@
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/timer.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/proactor.h>
 
@@ -46,22 +47,10 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_
 
 
 /* Timer callback to try/retry connection open, connector->lock held */
-static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection) TA_REQ(connector->lock)
+static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_REQ(connector->lock)
 {
-    // connection until pn_proactor_connect is called below
-    qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
-    if (!qd_conn) {                 /* Try again later */
-        qd_log(LOG_SERVER, QD_LOG_CRITICAL, "Allocation failure connecting to %s",
-               connector->config.host_port);
-        connector->delay = 10000;
-        connector->state = CXTR_STATE_CONNECTING;
-        qd_timer_schedule(connector->timer, connector->delay);
-        return;
-    }
+    qd_connection_init(qd_conn, connector->server, &connector->config, connector, 0);
 
-    sys_atomic_inc(&connector->ref_count);
-
-    connector->qd_conn = qd_conn;
     connector->state   = CXTR_STATE_OPEN;
     connector->delay   = 5000;
 
@@ -101,13 +90,7 @@ static void try_open_cb(void *context)
     // Allocate connection before taking connector lock to avoid
     // CONNECTOR - ENTITY_CACHE lock inversion deadlock window.
     qd_connection_t *ctx = new_qd_connection_t();
-    if (!ctx) {
-        qd_log(LOG_SERVER, QD_LOG_CRITICAL, "Allocation failure connecting to %s", ct->config.host_port);
-        ct->delay = 10000;
-        ct->state = CXTR_STATE_CONNECTING;
-        qd_timer_schedule(ct->timer, ct->delay);
-        return;
-    }
+    ZERO(ctx);
 
     sys_mutex_lock(&ct->lock);
 
@@ -185,6 +168,8 @@ void qd_connector_decref(qd_connector_t* connector)
         assert(connector->state == CXTR_STATE_DELETED);
         assert(connector->qd_conn == 0);
 
+        vflow_end_record(connector->vflow_record);
+        connector->vflow_record = 0;
         qd_server_config_free(&connector->config);
         qd_timer_free(connector->timer);
         sys_mutex_free(&connector->lock);
@@ -291,16 +276,35 @@ void qd_connector_remote_opened(qd_connector_t *connector)
     sys_mutex_unlock(&connector->lock);
 }
 
+/**
+ * Set the child connection of the connector
+ */
+void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx)
+{
+    assert(ctx->connector == 0);
+
+    sys_atomic_inc(&connector->ref_count);
+    ctx->connector = connector;
+    connector->qd_conn = ctx;
+
+    strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
+}
+
 
 /**
  * The connection associated with this connector is about to be freed,
  * clean up all related state
  */
-void qd_connector_release_connection(qd_connector_t *connector, qd_connection_t *qd_conn)
+void qd_connector_remove_connection(qd_connector_t *connector)
 {
     sys_mutex_lock(&connector->lock);
-    assert(connector->qd_conn == qd_conn);
-    connector->qd_conn = 0;  // this connection to be freed
+
+    qd_connection_t *ctx = connector->qd_conn;
+    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+    connector->qd_conn = 0;
+    ctx->connector = 0;
+
     if (connector->state != CXTR_STATE_DELETED) {
         // Increment the connection index by so that we can try connecting to the failover url (if any).
         bool has_failover = qd_connector_has_failover_info(connector);
@@ -316,4 +320,7 @@ void qd_connector_release_connection(qd_connector_t *connector, qd_connection_t 
         qd_timer_schedule(connector->timer, delay);
     }
     sys_mutex_unlock(&connector->lock);
+
+    // Drop reference held by connection.
+    qd_connector_decref(connector);
 }

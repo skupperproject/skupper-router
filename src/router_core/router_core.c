@@ -356,7 +356,6 @@ void qdr_core_free(qdr_core_t *core)
     if (core->data_links_by_mask_bit)      free(core->data_links_by_mask_bit);
     if (core->neighbor_free_mask)          qd_bitmask_free(core->neighbor_free_mask);
     if (core->rnode_conns_by_mask_bit)     free(core->rnode_conns_by_mask_bit);
-    if (core->vflow_links_by_mask_bit)     free(core->vflow_links_by_mask_bit);
     if (core->group_correlator_by_maskbit) {
         for (int idx = 0; idx < qd_bitmask_width(); idx++) {
             free(core->group_correlator_by_maskbit[idx]);

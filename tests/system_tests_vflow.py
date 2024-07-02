@@ -17,10 +17,15 @@
 # under the License.
 #
 
-from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest, TestTimeout
+from http1_tests import wait_tcp_listeners_up
+from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest
+from system_test import TestTimeout, retry, Logger
+from vanflow_snooper import VFlowSnooperThread
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
+from TCP_echo_server import TcpEchoServer
+
 
 #
 # Various codepoints from the VanFlow specification. These are
@@ -319,6 +324,181 @@ class VFlowEventsGrabber(MessagingHandler):
 
     def run(self):
         Container(self).run()
+
+
+class RecordCounter(dict):
+    """
+    Counts the total number of each record type present in the list of records
+    """
+    def __init__(self, records):
+        super(dict, self).__init__()
+        for record in records:
+            if 'RECORD_TYPE' in record:
+                rtype = record['RECORD_TYPE']
+                self[rtype] = self.get(rtype, 0) + 1
+
+
+class VFlowInterRouterTest(TestCase):
+    """
+    Verify that a multi-hop router network generates the proper Vanflow records
+    for the topology.
+    """
+    @classmethod
+    def setUpClass(cls):
+        """
+        Create a three router network: two interiors and an edge hanging off
+        one of the interior.
+        """
+        super(VFlowInterRouterTest, cls).setUpClass()
+
+        cls.inter_router_port = cls.tester.get_port()
+        cls.edge_router_port = cls.tester.get_port()
+        cls.tcp_listener_port = cls.tester.get_port()
+        cls.tcp_connector_port = cls.tester.get_port()
+
+        configs = [
+            # Router INTA
+            [
+                ('router', {'id': 'INTA',
+                            'mode': 'interior',
+                            'dataConnectionCount': 4}),
+                ('listener', {'role': 'normal',
+                              'port': cls.tester.get_port()}),
+                ('connector', {'role': 'inter-router',
+                               'port': cls.inter_router_port}),
+                ('tcpConnector', {'host': '127.0.0.1',
+                                  'port': cls.tcp_connector_port,
+                                  'address': 'tcpServiceAddress'}),
+                # a dummy connector which never connects (operStatus == down)
+                ('connector', {'role': 'inter-router',
+                               'port': cls.tester.get_port()}),
+                # health-check listener
+                ('listener', {'role': 'normal',
+                              'host': '0.0.0.0',
+                              'port': cls.tester.get_port(),
+                              'http': 'true',
+                              'healthz': 'true'})
+            ],
+            # Router INTB
+            [
+                ('router', {'id': 'INTB',
+                            'mode': 'interior',
+                            'dataConnectionCount': 4}),
+                ('listener', {'role': 'normal',
+                              'port': cls.tester.get_port()}),
+                ('listener', {'role': 'inter-router',
+                              'port': cls.inter_router_port}),
+                ('listener', {'role': 'edge',
+                              'port': cls.edge_router_port}),
+            ],
+            # Router EdgeB
+            [
+                ('router', {'id': 'EdgeB',
+                            'mode': 'edge'}),
+                ('listener', {'role': 'normal',
+                              'port': cls.tester.get_port()}),
+                ('connector', {'role': 'edge',
+                               'port': cls.edge_router_port}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_listener_port,
+                                 'address': 'tcpServiceAddress'}),
+                # metrics listener
+                ('listener', {'role': 'normal',
+                              'host': '0.0.0.0',
+                              'port': cls.tester.get_port(),
+                              'http': 'true',
+                              'metrics': 'true'})
+            ]
+        ]
+
+        # fire up the TCP echo server
+
+        logger = Logger(title="VFlowEchoServer")
+        cls.echo_server = TcpEchoServer(port=cls.tcp_connector_port, logger=logger)
+        assert cls.echo_server.is_running
+
+        # bring up the routers
+
+        cls.inta = cls.tester.qdrouterd('INTA', Qdrouterd.Config(configs[0]), wait=False, cl_args=["-T"])
+        cls.intb = cls.tester.qdrouterd('INTB', Qdrouterd.Config(configs[1]), wait=False, cl_args=["-T"])
+        cls.edgeb = cls.tester.qdrouterd('EdgeB', Qdrouterd.Config(configs[2]), wait=False, cl_args=["-T"])
+        cls.inta.wait_router_connected('INTB')
+        cls.intb.wait_router_connected('INTA')
+        cls.intb.is_edge_routers_connected()
+        cls.edgeb.wait_ports()
+        wait_tcp_listeners_up(cls.edgeb.addresses[0])
+
+        # start the vanflow event collector thread
+
+        cls.snooper_thread = VFlowSnooperThread(cls.inta.addresses[0])
+
+    def _inta_check(self, records):
+        # Verify the expected records are present for router inta's configuration
+        counts = RecordCounter(records)
+        return counts.get('ROUTER') == 1 and \
+            counts.get('CONNECTOR') == 1 and \
+            counts.get('LISTENER') is None and \
+            counts.get('LINK') == 2 and \
+            counts.get('ACCESS_POINT') is None
+
+    def _intb_check(self, records):
+        # Verify the expected records are present for router intb's configuration
+        counts = RecordCounter(records)
+        return counts.get('ROUTER') == 1 and \
+            counts.get('CONNECTOR') is None and \
+            counts.get('LISTENER') is None and \
+            counts.get('LINK') is None and \
+            counts.get('ACCESS_POINT') == 2
+
+    def _edgeb_check(self, records):
+        # Verify the expected records are present for router edgeb's configuration
+        counts = RecordCounter(records)
+        return counts.get('ROUTER') == 1 and \
+            counts.get('CONNECTOR') is None and \
+            counts.get('LISTENER') == 1 and \
+            counts.get('LINK') == 2 and \
+            counts.get('ACCESS_POINT') is None
+
+    def _check_routers(self):
+        """
+        Check the database of received events for each router to verify that
+        the expected records for that router are present
+        """
+        inta_ok = False
+        intb_ok = False
+        edgeb_ok = False
+        if self.snooper_thread.sources_ready == 3:
+            results = self.snooper_thread.get_results()
+            for router, records in results.items():
+                for record in records:
+                    rtype = record.get('RECORD_TYPE')
+                    if rtype == 'ROUTER':
+                        name = record.get('NAME')
+                        if 'INTA' in name:
+                            inta_ok = self._inta_check(records)
+                        elif 'INTB' in name:
+                            intb_ok = self._intb_check(records)
+                        elif 'EdgeB' in name:
+                            edgeb_ok = self._edgeb_check(records)
+        return inta_ok and intb_ok and edgeb_ok
+
+    def test_01_check_topology(self):
+        """
+        Verify the records related to the router configuration and topology are
+        present and correct
+        """
+        success = retry(self._check_routers, delay=1.0)
+        self.assertTrue(success,
+                        f"Failed record check: {self.snooper_thread.get_results()}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.echo_server.wait()
+
+        # we need to manually teardown the router to force the snooper thread
+        # to exit
+        cls.inta.teardown()
+        cls.snooper_thread.join(timeout=TIMEOUT)
 
 
 if __name__ == '__main__':

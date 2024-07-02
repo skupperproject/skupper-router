@@ -23,6 +23,7 @@
 
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/log.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/event.h>
 #include <proton/listener.h>
@@ -39,17 +40,16 @@ static void on_accept(pn_event_t *e, qd_listener_t *listener)
 {
     assert(pn_event_type(e) == PN_LISTENER_ACCEPT);
     pn_listener_t *pn_listener = pn_event_listener(e);
-    qd_connection_t *ctx = qd_server_connection(listener->server, &listener->config);
-    if (!ctx) {
-        qd_log(LOG_SERVER, QD_LOG_CRITICAL, "Allocation failure during accept to %s",
-               listener->config.host_port);
-        return;
-    }
-    ctx->listener = listener;
+
+    qd_connection_t *ctx = new_qd_connection_t();
+    ZERO(ctx);
+    qd_connection_init(ctx, listener->server, &listener->config, 0, listener);
     qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "]: Accepting incoming connection to '%s'",
            ctx->connection_id, ctx->listener->config.host_port);
     /* Asynchronous accept, configure the transport on PN_CONNECTION_BOUND */
     pn_listener_accept(pn_listener, ctx->pn_conn);
+    // Note well: at this point the connection may now be scheduled on another thread.
+    // Do not access it.
  }
 
 
@@ -112,12 +112,13 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
     }
 }
 
-qd_listener_t *qd_server_listener(qd_server_t *server)
+qd_listener_t *qd_listener(qd_server_t *server)
 {
     qd_listener_t *li = new_qd_listener_t();
     if (!li) return 0;
     ZERO(li);
     sys_atomic_init(&li->ref_count, 1);
+    sys_atomic_init(&li->connection_count, 0);
     li->server      = server;
     li->http = NULL;
     li->type.context = li;
@@ -164,6 +165,10 @@ bool qd_listener_listen(qd_listener_t *li)
 void qd_listener_decref(qd_listener_t* li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
+        if (!!li->vflow_record) {
+            vflow_end_record(li->vflow_record);
+            li->vflow_record = 0;
+        }
         qd_server_config_free(&li->config);
         free_qd_listener_t(li);
     }
@@ -179,3 +184,24 @@ const qd_server_config_t *qd_listener_config(const qd_listener_t *li)
     return &li->config;
 }
 
+
+void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *ctx)
+{
+    sys_atomic_inc(&li->ref_count);
+    ctx->listener = li;
+    if (!!li->vflow_record) {
+        uint32_t count = sys_atomic_inc(&li->connection_count) + 1;
+        vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+    }
+}
+
+void qd_listener_remove_connection(qd_listener_t *li, qd_connection_t *ctx)
+{
+    assert(ctx->listener == li);
+    if (!!li->vflow_record) {
+        uint32_t count = sys_atomic_dec(&li->connection_count) - 1;
+        vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+    }
+    ctx->listener = 0;
+    qd_listener_decref(li);
+}

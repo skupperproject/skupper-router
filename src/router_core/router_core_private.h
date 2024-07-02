@@ -878,7 +878,6 @@ struct qdr_core_t {
     qdr_node_t            **routers_by_mask_bit;          ///< indexed by qdr_node_t->mask_bit
     qdr_connection_t      **rnode_conns_by_mask_bit;      ///< inter-router conns indexed by conn->mask_bit
     qdr_link_t            **control_links_by_mask_bit;    ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
-    vflow_record_t        **vflow_links_by_mask_bit;      ///< indexed by qdr_node_t->mask_bit
     qdr_priority_sheaf_t   *data_links_by_mask_bit;       ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
     qdr_connection_list_t   unallocated_group_members;    ///< List of unallocated group members (i.e. before the group is given a maskbit)
     char                  **group_correlator_by_maskbit;  ///< Group correlator number indexed by conn->maskbit
