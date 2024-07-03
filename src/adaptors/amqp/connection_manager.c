@@ -176,6 +176,7 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
         strcmp(li->config.role, "edge") == 0 ||
         strcmp(li->config.role, "inter-edge") == 0) {
         li->vflow_record = vflow_start_record(VFLOW_RECORD_ROUTER_ACCESS, 0);
+        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_NAME, li->config.name);
         vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
     }
@@ -436,6 +437,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             strcmp(ct->config.role, "edge") == 0 ||
             strcmp(ct->config.role, "inter-edge") == 0) {
             ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_NAME, ct->config.name);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
