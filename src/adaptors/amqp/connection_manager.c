@@ -30,6 +30,7 @@
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/failoverlist.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/vanflow.h"
 
 #include <proton/listener.h>
 
@@ -147,7 +148,7 @@ static void log_config(qd_server_config_t *c, const char *what, bool create)
 QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
-    qd_listener_t *li = qd_server_listener(qd->server);
+    qd_listener_t *li = qd_listener(qd->server);
     if (!li || qd_server_config_load(qd, &li->config, entity, true, 0) != QD_ERROR_NONE) {
         qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener: %s", qd_error_message());
         qd_listener_decref(li);
@@ -166,6 +167,19 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
     } else {
         li->config.failover_list = 0;
     }
+
+    //
+    // Set up the vanflow record for this listener (ACCESS_POINT).
+    // Do this only for router-to-router links: not mgmt/metrics/healthz/websockets listeners
+    //
+    if (strcmp(li->config.role, "inter-router") == 0 ||
+        strcmp(li->config.role, "edge") == 0 ||
+        strcmp(li->config.role, "inter-edge") == 0) {
+        li->vflow_record = vflow_start_record(VFLOW_RECORD_ACCESS_POINT, 0);
+        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
+        vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
+    }
+
     DEQ_ITEM_INIT(li);
     DEQ_INSERT_TAIL(cm->listeners, li);
     log_config(&li->config, "Listener", true);
@@ -414,8 +428,22 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         item->host_port = malloc(hplen);
         snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
 
-        DEQ_INSERT_TAIL(ct->conn_info_list, item);
+        //
+        // Set up the vanflow record for this connector (LINK)
+        // Do this only for router-to-router connectors since the record represents an inter-router link
+        //
+        if (strcmp(ct->config.role, "inter-router") == 0 ||
+            strcmp(ct->config.role, "edge") == 0 ||
+            strcmp(ct->config.role, "inter-edge") == 0) {
+            ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
+        }
 
+        DEQ_INSERT_TAIL(ct->conn_info_list, item);
         return ct;
     }
 

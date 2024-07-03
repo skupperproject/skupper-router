@@ -20,6 +20,7 @@
 #include "private.h"
 #include "qd_connector.h"
 #include "qd_connection.h"
+#include "qd_listener.h"
 #include "container.h"
 #include "node_type.h"
 
@@ -2366,8 +2367,12 @@ static void qd_amqp_adaptor_final(void *adaptor_context)
         if (ctx->policy_settings)
             qd_policy_settings_free(ctx->policy_settings);
         if (ctx->connector) {
-            ctx->connector->qd_conn = 0;
-            qd_connector_decref(ctx->connector);
+            qd_connector_remove_connection(ctx->connector);
+            ctx->connector = 0;
+        }
+        if (ctx->listener) {
+            qd_listener_remove_connection(ctx->listener, ctx);
+            ctx->listener = 0;
         }
         sys_atomic_destroy(&ctx->wake_core);
         sys_atomic_destroy(&ctx->wake_cutthrough_inbound);

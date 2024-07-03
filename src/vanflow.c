@@ -685,6 +685,7 @@ static const char *_vflow_record_type_name(const vflow_record_t *record)
     case VFLOW_RECORD_PROCESS_GROUP : return "PROCESS_GROUP";
     case VFLOW_RECORD_HOST          : return "HOST";
     case VFLOW_RECORD_LOG           : return "LOG";
+    case VFLOW_RECORD_ACCESS_POINT  : return "ACCESS_POINT";
     }
     return "UNKNOWN";
 }
@@ -745,6 +746,9 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_LOG_TEXT         : return "logText";
     case VFLOW_ATTRIBUTE_SOURCE_FILE      : return "sourceFile";
     case VFLOW_ATTRIBUTE_SOURCE_LINE      : return "sourceLine";
+    case VFLOW_ATTRIBUTE_LINK_COUNT       : return "linkCount";
+    case VFLOW_ATTRIBUTE_OPER_STATUS      : return "operStatus";
+    case VFLOW_ATTRIBUTE_ROLE             : return "role";
     }
     return "UNKNOWN";
 }
