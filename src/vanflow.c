@@ -685,7 +685,7 @@ static const char *_vflow_record_type_name(const vflow_record_t *record)
     case VFLOW_RECORD_PROCESS_GROUP : return "PROCESS_GROUP";
     case VFLOW_RECORD_HOST          : return "HOST";
     case VFLOW_RECORD_LOG           : return "LOG";
-    case VFLOW_RECORD_ACCESS_POINT  : return "ACCESS_POINT";
+    case VFLOW_RECORD_ROUTER_ACCESS : return "ROUTER_ACCESS";
     }
     return "UNKNOWN";
 }

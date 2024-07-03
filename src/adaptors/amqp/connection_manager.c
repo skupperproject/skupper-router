@@ -169,13 +169,13 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
     }
 
     //
-    // Set up the vanflow record for this listener (ACCESS_POINT).
+    // Set up the vanflow record for this listener (ROUTER_ACCESS).
     // Do this only for router-to-router links: not mgmt/metrics/healthz/websockets listeners
     //
     if (strcmp(li->config.role, "inter-router") == 0 ||
         strcmp(li->config.role, "edge") == 0 ||
         strcmp(li->config.role, "inter-edge") == 0) {
-        li->vflow_record = vflow_start_record(VFLOW_RECORD_ACCESS_POINT, 0);
+        li->vflow_record = vflow_start_record(VFLOW_RECORD_ROUTER_ACCESS, 0);
         vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
     }

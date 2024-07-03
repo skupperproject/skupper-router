@@ -51,7 +51,7 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_PROCESS_GROUP = 0x0c,  // A grouping of PROCESS
     VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
     VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
-    VFLOW_RECORD_ACCESS_POINT  = 0x0f,  // An access point for inter-router connections
+    VFLOW_RECORD_ROUTER_ACCESS = 0x0f,  // An access point for inter-router connections
 } vflow_record_type_t;
 
 // clang-format off
