@@ -170,7 +170,7 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
 
     //
     // Set up the vanflow record for this listener (ACCESS_POINT).
-    // Do this only for router-to-routers links: not mgmt/metrics/healthz/websockets listeners
+    // Do this only for router-to-router links: not mgmt/metrics/healthz/websockets listeners
     //
     if (strcmp(li->config.role, "inter-router") == 0 ||
         strcmp(li->config.role, "edge") == 0 ||
@@ -430,13 +430,18 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
 
         //
         // Set up the vanflow record for this connector (LINK)
+        // Do this only for router-to-router connectors since the record represents an inter-router link
         //
-        ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
-        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
-        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
-        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
-        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
-        vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
+        if (strcmp(ct->config.role, "inter-router") == 0 ||
+            strcmp(ct->config.role, "edge") == 0 ||
+            strcmp(ct->config.role, "inter-edge") == 0) {
+            ct->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
+            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
+        }
 
         DEQ_INSERT_TAIL(ct->conn_info_list, item);
         return ct;
