@@ -456,7 +456,7 @@ class VFlowInterRouterTest(TestCase):
         return counts.get('ROUTER') == 1 and \
             counts.get('CONNECTOR') is None and \
             counts.get('LISTENER') == 1 and \
-            counts.get('LINK') == 2 and \
+            counts.get('LINK') == 1 and \
             counts.get('ROUTER_ACCESS') is None
 
     def _check_routers(self):
