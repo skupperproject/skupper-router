@@ -222,6 +222,15 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
 void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter);
 
 /**
+ * vflow_set_ref_from_pn
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param iter Pointer to a Proton pn_data
+ */
+void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data);
+
+/**
  * vflow_set_string
  * 
  * Set a string-typed attribute in a record.

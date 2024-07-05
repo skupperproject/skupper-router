@@ -1541,6 +1541,23 @@ void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute
 }
 
 
+void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data)
+{
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
+        work->record    = record;
+        work->attribute = attribute_type;
+
+        pn_bytes_t bytes = pn_data_get_string(data);
+        work->value.string_val = (char*) qd_malloc(bytes.size + 1);
+        strncpy(work->value.string_val, bytes.start, bytes.size);
+
+        _vflow_post_work(work);
+    }
+}
+
+
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
