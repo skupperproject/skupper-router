@@ -20,6 +20,7 @@
  */
 
 #include "stdint.h"
+#include "proton/codec.h"
 #include "qpid/dispatch/message.h"
 #include "qpid/dispatch/iterator.h"
 
@@ -177,6 +178,15 @@ void vflow_end_record(vflow_record_t *record);
  */
 void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t *field);
 
+/**
+ * vflow_serialize_identity_pn
+ * 
+ * Encode the identity of the indicated record into the supplied Proton pn_data
+ * 
+ * @param record Pointer to the record from which to obtain the identity
+ * @param field Pointer to the pn_data into which to serialize the identity
+ */
+void vflow_serialize_identity_pn(const vflow_record_t *record, pn_data_t *data);
 
 /**
  * vflow_set_ref_from_record
