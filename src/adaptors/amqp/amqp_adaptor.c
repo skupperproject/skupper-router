@@ -1445,7 +1445,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
             const size_t num_items = pn_data_get_map(props);
             int props_found = 0;  // once all props found exit loop
             pn_data_enter(props);
-            for (int i = 0; i < num_items / 2 && props_found < 6; ++i) {
+            for (int i = 0; i < num_items / 2 && props_found < 7; ++i) {
                 if (!pn_data_next(props)) break;
                 if (pn_data_type(props) != PN_SYMBOL) break;  // invalid properties map
                 pn_bytes_t key = pn_data_get_symbol(props);
@@ -1511,6 +1511,13 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                         const int annos_version = (int) pn_data_get_int(props);
                         qd_log(LOG_ROUTER, QD_LOG_DEBUG, "Remote router annotations version: %d",
                                annos_version);
+                    }
+
+                } else if ((key.size == strlen(QD_CONNECTION_PROPERTY_ACCESS_ID)
+                           && strncmp(key.start, QD_CONNECTION_PROPERTY_ACCESS_ID, key.size) == 0)) {
+                    if (!pn_data_next(props)) break;
+                    if (!!conn->connector && !!conn->connector->vflow_record && pn_data_type(props) == PN_STRING) {
+                        vflow_set_ref_from_pn(conn->connector->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
                     }
 
                 } else {

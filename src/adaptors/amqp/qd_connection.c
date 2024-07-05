@@ -367,6 +367,12 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
                            pn_bytes(strnlen(ctx->group_correlator, QD_DISCRIMINATOR_SIZE - 1), ctx->group_correlator));
     }
 
+    if (ctx->listener && !!ctx->listener->vflow_record) {
+        pn_data_put_symbol(pn_connection_properties(conn),
+                           pn_bytes(strlen(QD_CONNECTION_PROPERTY_ACCESS_ID), QD_CONNECTION_PROPERTY_ACCESS_ID));
+        vflow_serialize_identity_pn(ctx->listener->vflow_record, pn_connection_properties(conn));
+    }
+
     if (config) {
         if (strcmp(config->role, "inter-router") == 0 || strcmp(config->role, "edge") == 0) {
             pn_data_put_symbol(pn_connection_properties(conn),
