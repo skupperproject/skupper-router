@@ -22,10 +22,10 @@ import json
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from test_broker import FakeBroker
-from system_test import TestCase, unittest, main_module, Qdrouterd
+from system_test import TestCase, unittest, main_module, Qdrouterd, retry_assertion
 from system_test import retry, TIMEOUT, wait_port, QdManager, Process
 from system_test import CONNECTION_TYPE
-
+from vanflow_snooper import VFlowSnooperThread
 
 def strip_default_options(options):
     # remove default connection properties added by router to all connections
@@ -482,7 +482,72 @@ class OpenPropertiesEdgeRouterTest(TestCase):
             if any(c['container'] == 'RouterB' for c in results):
                 break
 
-    def test_01_check_annotations(self):
+    def test_01_check_vflow_linkage(self):
+        """
+        Verify that the LINK record on the edge has the ROUTER_ACCESS id of the listener on the interior
+        """
+        print("START VFLOW SNOOPING")
+        snooper_thread = VFlowSnooperThread(self.RouterA.addresses[0], verbose=True)
+        retry(lambda: snooper_thread.sources_ready == 2, delay=0.25)
+
+        router_access = None
+        link          = None
+
+        def wait_for_vflow():
+            nonlocal router_access
+            nonlocal link
+
+            results = snooper_thread.get_results()
+            sources = list(results.keys())
+            self.assertEqual(len(sources), 2)
+
+            ##
+            ## Identify which source is routerA (interior) and which is routerB (edge)
+            ## A has a ROUTER_ACCESS record and B has a LINK record
+            ##
+            a_index = -1
+            b_index = -1
+            records_0 = results[sources[0]]
+            records_1 = results[sources[1]]
+            for record in records_0:
+                if record['RECORD_TYPE'] == 'ROUTER_ACCESS':
+                    a_index = 0
+                    b_index = 1
+                    router_access = record
+                    break
+                if record['RECORD_TYPE'] == 'LINK':
+                    a_index = 1
+                    b_index = 0
+                    link = record
+                    break
+            for record in records_1:
+                if record['RECORD_TYPE'] == 'ROUTER_ACCESS':
+                    a_index = 1
+                    b_index = 0
+                    router_access = record
+                    break
+                if record['RECORD_TYPE'] == 'LINK':
+                    a_index = 0
+                    b_index = 1
+                    link = record
+                    break
+            self.assertNotEqual(a_index, -1)
+            self.assertNotEqual(b_index, -1)
+
+        retry_assertion(wait_for_vflow, delay=2)
+
+        print("ROUTER_ACCESS: %r" % router_access)
+        print("LINK: %r" % link)
+
+        ##
+        ## Verify that the LINK's PEER references the ROUTER_ACCESS
+        ##
+        self.assertEqual(router_access['LINK_COUNT'], 1)
+        self.assertTrue('PEER' in link, 'LINK record does not have a PEER attribute')
+        self.assertEqual(link['PEER'], router_access['IDENTITY'], "LINK's PEER attribute (%s) does not match the identity (%s) of the ROUTER_ACCESS" % (link['PEER'], router_access['IDENTITY']))
+
+
+    def test_02_check_annotations(self):
         """
         Verify the router annotations version
         """
