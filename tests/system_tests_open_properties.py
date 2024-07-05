@@ -27,6 +27,7 @@ from system_test import retry, TIMEOUT, wait_port, QdManager, Process
 from system_test import CONNECTION_TYPE
 from vanflow_snooper import VFlowSnooperThread
 
+
 def strip_default_options(options):
     # remove default connection properties added by router to all connections
     defaults = [
@@ -486,7 +487,6 @@ class OpenPropertiesEdgeRouterTest(TestCase):
         """
         Verify that the LINK record on the edge has the ROUTER_ACCESS id of the listener on the interior
         """
-        print("START VFLOW SNOOPING")
         snooper_thread = VFlowSnooperThread(self.RouterA.addresses[0], verbose=True)
         retry(lambda: snooper_thread.sources_ready == 2, delay=0.25)
 
@@ -536,16 +536,12 @@ class OpenPropertiesEdgeRouterTest(TestCase):
 
         retry_assertion(wait_for_vflow, delay=2)
 
-        print("ROUTER_ACCESS: %r" % router_access)
-        print("LINK: %r" % link)
-
         ##
         ## Verify that the LINK's PEER references the ROUTER_ACCESS
         ##
         self.assertEqual(router_access['LINK_COUNT'], 1)
-        self.assertTrue('PEER' in link, 'LINK record does not have a PEER attribute')
+        self.assertTrue('PEER' in list(link.keys()), 'LINK record does not have a PEER attribute')
         self.assertEqual(link['PEER'], router_access['IDENTITY'], "LINK's PEER attribute (%s) does not match the identity (%s) of the ROUTER_ACCESS" % (link['PEER'], router_access['IDENTITY']))
-
 
     def test_02_check_annotations(self):
         """
