@@ -272,6 +272,20 @@ class RouterEntity(EntityAdapter):
         return super(RouterEntity, self).__str__().replace("Entity(", "RouterEntity(")
 
 
+class SiteEntity(EntityAdapter):
+    def __init__(self, agent, entity_type, attributes=None):
+        super(SiteEntity, self).__init__(agent, entity_type, attributes, validate=False)
+
+    def _identifier(self):
+        return self.attributes.get('id')
+
+    def create(self):
+        self._qd.qd_dispatch_configure_site(self._dispatch, self)
+
+    def __str__(self):
+        return super(SiteEntity, self).__str__().replace("Entity(", "SiteEntity(")
+
+
 class LogEntity(EntityAdapter):
     def __init__(self, agent, entity_type, attributes=None, validate=True):
         # This is for backward compatibility, we will remove this after a few releases.
