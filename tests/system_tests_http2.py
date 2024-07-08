@@ -450,6 +450,7 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         def check_head_method_in_record():
             results = snooper_thread.get_results()
             records = results.popitem()[1]
+            self.assertTrue(len(records) > 0)
             for record in records:
                 if 'METHOD' in record:
                     self.assertEqual('HEAD', record['METHOD'])
@@ -474,6 +475,7 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         def check_get_method_in_record():
             results = snooper_thread.get_results()
             records = results.popitem()[1]
+            self.assertTrue(len(records) > 0)
             for record in records:
                 if 'METHOD' in record:
                     self.assertEqual('GET', record['METHOD'])
