@@ -159,7 +159,11 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
     } else if (strcmp(HTTP_STATUS, (const char *)name) == 0) {
         qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         assert(stream_info != 0);
-        if(error == QD_ERROR_NONE) {
+        //
+        // We expect that the above call to get_stream_info_from_hashtable() should return a valid stream_info object.
+        // The qd_hash_retrieve_str() function always returns QD_ERROR_NONE but it is an error if we did not get back a non-zero stream_info object.
+        //
+        if(error == QD_ERROR_NONE && stream_info == 0) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_STATUS -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
         }
         else {
