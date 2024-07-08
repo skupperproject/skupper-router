@@ -31,40 +31,40 @@ ALLOC_DEFINE(qd_http2_stream_info_t);
 /**
  * Inserts the passed in stream_info object into the stream_id hash table.
  */
-static void insert_stream_info_into_hashtable(qdpo_transport_handle_t *transport_handle, qd_http2_stream_info_t *stream_info, uint32_t stream_id)
+static qd_error_t insert_stream_info_into_hashtable(qdpo_transport_handle_t *transport_handle, qd_http2_stream_info_t *stream_info, uint32_t stream_id)
 {
     assert(stream_id != 0);
     qd_hash_t  *stream_id_hash = transport_handle->http2.stream_id_hash;
     // Convert stream_id to string
     char stream_id_str[11];
     snprintf(stream_id_str, sizeof stream_id_str, "%" PRIu32, stream_id);
-    qd_hash_insert_str(stream_id_hash, (const unsigned char *)stream_id_str, stream_info, 0);
+    return qd_hash_insert_str(stream_id_hash, (const unsigned char *)stream_id_str, stream_info, 0);
 }
 
 /**
  * Gets the stream_info object from the hashtable using the passed in stream_id as the key.
  */
-static void get_stream_info_from_hashtable(qdpo_transport_handle_t *transport_handle, qd_http2_stream_info_t **stream_info, uint32_t stream_id)
+static qd_error_t get_stream_info_from_hashtable(qdpo_transport_handle_t *transport_handle, qd_http2_stream_info_t **stream_info, uint32_t stream_id)
 {
     assert(stream_id != 0);
     qd_hash_t  *stream_id_hash = transport_handle->http2.stream_id_hash;
     // Convert stream_id to string
     char stream_id_str[11];
     snprintf(stream_id_str, sizeof stream_id_str, "%" PRIu32, stream_id);
-    qd_hash_retrieve_str(stream_id_hash, (const unsigned char *)stream_id_str, (void **)stream_info);
+    return qd_hash_retrieve_str(stream_id_hash, (const unsigned char *)stream_id_str, (void **)stream_info);
 }
 
 /**
  * Delete the stream_info object from the hashtable whose key is the passed in stream_id
  */
-static void delete_stream_info_from_hashtable(qdpo_transport_handle_t *transport_handle, uint32_t stream_id)
+static qd_error_t delete_stream_info_from_hashtable(qdpo_transport_handle_t *transport_handle, uint32_t stream_id)
 {
     assert(stream_id != 0);
     qd_hash_t  *stream_id_hash = transport_handle->http2.stream_id_hash;
     // Convert stream_id to string
     char stream_id_str[11];
     snprintf(stream_id_str, sizeof stream_id_str, "%" PRIu32, stream_id);
-    qd_hash_remove_str(stream_id_hash, (const unsigned char *)stream_id_str);
+    return qd_hash_remove_str(stream_id_hash, (const unsigned char *)stream_id_str);
 }
 
 /*
@@ -91,12 +91,12 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
 {
     qdpo_transport_handle_t *transport_handle = (qdpo_transport_handle_t *) qd_http2_decoder_connection_get_context(conn_state);
     qd_http2_stream_info_t *stream_info = 0;
-    get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+    qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
     if (from_client) {
         // HTTP2 can have more than one header frame come in for the same request.
         // For example, in GRPC, we can get a header at the beginning of the stream
         // and a footer at the end of the stream and both these frames are HEADER type frames.
-        if (!stream_info) {
+        if (error == QD_ERROR_NONE && !stream_info) {
             qd_http2_stream_info_t *stream_info = new_qd_http2_stream_info_t();
             ZERO(stream_info);
             DEQ_INSERT_TAIL(transport_handle->http2.streams, stream_info);
@@ -106,7 +106,10 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
             stream_info->stream_id = stream_id;
             vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_info->stream_id);
             vflow_latency_start(stream_info->vflow);
-            insert_stream_info_into_hashtable(transport_handle, stream_info, stream_id);
+            qd_error_t error = insert_stream_info_into_hashtable(transport_handle, stream_info, stream_id);
+            if (error == QD_ERROR_ALREADY_EXISTS) {
+                qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_begin_header_callback - already exists in hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+            }
         } else { // !stream_info
             //
             // There is already a stream info object for this stream_id, this header might be a footer(GRPC),
@@ -115,7 +118,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
         }
 
     } else { // from_client
-        if (stream_info) {
+        if (error != QD_ERROR_NONE && stream_info) {
             vflow_latency_end(stream_info->vflow);
         }
     }
@@ -141,32 +144,49 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
 
     if (strcmp(HTTP_METHOD, (const char *)name) == 0) {
         // Set the http method (GET, POST, PUT, DELETE etc) on the stream's vflow object.
-        get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+        qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         assert(stream_info != 0);
         //
         // Set the http request method (GET, POST etc) on the stream's vflow object.
         //
-        vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_METHOD, (const char *)value);
+        if(error == QD_ERROR_NONE) {
+            qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_METHOD -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+        }
+        else {
+            vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_METHOD, (const char *)value);
+        }
 
     } else if (strcmp(HTTP_STATUS, (const char *)name) == 0) {
-        get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+        qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         assert(stream_info != 0);
-
-        char *status_code_int = 0;  // set to octet past status_code
-        int status_code = strtol((const char *)value, &status_code_int, 10);
-        if (status_code / 100 != 1) {  // terminal response code
-            char status_code_str[16];
-            snprintf(status_code_str, sizeof(status_code_str), "%d", status_code);
-            //
-            // Set the http response status (200, 404 etc) on the stream's vflow object.
-            //
-            vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
+        //
+        // We expect that the above call to get_stream_info_from_hashtable() should return a valid stream_info object.
+        // The qd_hash_retrieve_str() function always returns QD_ERROR_NONE but it is an error if we did not get back a non-zero stream_info object.
+        //
+        if(error == QD_ERROR_NONE && stream_info == 0) {
+            qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_STATUS -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
         }
-        // We have got the response status back, time to end the stream_info->vflow and free the stream
-        vflow_end_record(stream_info->vflow);
-        delete_stream_info_from_hashtable(transport_handle, stream_id);
-        DEQ_REMOVE(transport_handle->http2.streams, stream_info);
-        free_qd_http2_stream_info_t(stream_info);
+        else {
+            char *status_code_int = 0;  // set to octet past status_code
+            int status_code = strtol((const char *)value, &status_code_int, 10);
+            if (status_code / 100 != 1) {  // terminal response code
+                char status_code_str[16];
+                snprintf(status_code_str, sizeof(status_code_str), "%d", status_code);
+                //
+                // Set the http response status (200, 404 etc) on the stream's vflow object.
+                //
+                vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
+            }
+            // We have got the response status back, time to end the stream_info->vflow and free the stream
+            vflow_end_record(stream_info->vflow);
+            qd_error_t error = delete_stream_info_from_hashtable(transport_handle, stream_id);
+            if (error == QD_ERROR_NOT_FOUND) {
+                qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+            }
+            DEQ_REMOVE(transport_handle->http2.streams, stream_info);
+            free_qd_http2_stream_info_t(stream_info);
+        }
+
     }
     return 0;
 }
