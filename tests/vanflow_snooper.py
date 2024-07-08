@@ -52,7 +52,7 @@ record_types = {
     12: "PROCESS_GROUP",
     13: "HOST",
     14: "LOG",
-    15: "ACCESS_POINT"
+    15: "ROUTER_ACCESS"
 }
 
 RECORD_TYPE = 0

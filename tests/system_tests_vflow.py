@@ -439,7 +439,7 @@ class VFlowInterRouterTest(TestCase):
             counts.get('CONNECTOR') == 1 and \
             counts.get('LISTENER') is None and \
             counts.get('LINK') == 2 and \
-            counts.get('ACCESS_POINT') is None
+            counts.get('ROUTER_ACCESS') is None
 
     def _intb_check(self, records):
         # Verify the expected records are present for router intb's configuration
@@ -448,7 +448,7 @@ class VFlowInterRouterTest(TestCase):
             counts.get('CONNECTOR') is None and \
             counts.get('LISTENER') is None and \
             counts.get('LINK') is None and \
-            counts.get('ACCESS_POINT') == 2
+            counts.get('ROUTER_ACCESS') == 2
 
     def _edgeb_check(self, records):
         # Verify the expected records are present for router edgeb's configuration
@@ -456,8 +456,8 @@ class VFlowInterRouterTest(TestCase):
         return counts.get('ROUTER') == 1 and \
             counts.get('CONNECTOR') is None and \
             counts.get('LISTENER') == 1 and \
-            counts.get('LINK') == 2 and \
-            counts.get('ACCESS_POINT') is None
+            counts.get('LINK') == 1 and \
+            counts.get('ROUTER_ACCESS') is None
 
     def _check_routers(self):
         """

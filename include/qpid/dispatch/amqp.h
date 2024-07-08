@@ -164,6 +164,7 @@ extern const char * const QD_CONNECTION_PROPERTY_FAILOVER_HOSTNAME_KEY;
 extern const char * const QD_CONNECTION_PROPERTY_ADAPTOR_KEY;
 extern const char * const QD_CONNECTION_PROPERTY_TCP_ADAPTOR_VALUE;
 extern const char * const QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY;
+extern const char * const QD_CONNECTION_PROPERTY_ACCESS_ID;
 /// @}
 
 /** @name Terminus Addresses */

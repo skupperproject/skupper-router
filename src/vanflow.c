@@ -685,7 +685,7 @@ static const char *_vflow_record_type_name(const vflow_record_t *record)
     case VFLOW_RECORD_PROCESS_GROUP : return "PROCESS_GROUP";
     case VFLOW_RECORD_HOST          : return "HOST";
     case VFLOW_RECORD_LOG           : return "LOG";
-    case VFLOW_RECORD_ACCESS_POINT  : return "ACCESS_POINT";
+    case VFLOW_RECORD_ROUTER_ACCESS : return "ROUTER_ACCESS";
     }
     return "UNKNOWN";
 }
@@ -1477,6 +1477,17 @@ void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t 
 }
 
 
+void vflow_serialize_identity_pn(const vflow_record_t *record, pn_data_t *data)
+{
+    char buffer[IDENTITY_MAX + 1];
+    assert(!!record);
+    if (!!record) {
+        snprintf(buffer, IDENTITY_MAX, "%s:%"PRIu64, record->identity.source_id, record->identity.record_id);
+        pn_data_put_string(data, pn_bytes(strlen(buffer), buffer));
+    }
+}
+
+
 void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribute_type, vflow_record_t *referenced_record)
 {
     if (!!record && !!referenced_record) {
@@ -1526,6 +1537,24 @@ void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute
             free_vflow_work_t(work);
             qd_log(LOG_FLOW_LOG, QD_LOG_WARNING, "Reference ID cannot be parsed from the received field");
         }
+    }
+}
+
+
+void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data)
+{
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
+        work->record    = record;
+        work->attribute = attribute_type;
+
+        pn_bytes_t bytes = pn_data_get_string(data);
+        work->value.string_val = (char*) qd_malloc(bytes.size + 1);
+        strncpy(work->value.string_val, bytes.start, bytes.size);
+        work->value.string_val[bytes.size] = (char) 0;
+
+        _vflow_post_work(work);
     }
 }
 

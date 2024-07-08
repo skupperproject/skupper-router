@@ -20,6 +20,7 @@
  */
 
 #include "stdint.h"
+#include "proton/codec.h"
 #include "qpid/dispatch/message.h"
 #include "qpid/dispatch/iterator.h"
 
@@ -51,7 +52,7 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_PROCESS_GROUP = 0x0c,  // A grouping of PROCESS
     VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
     VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
-    VFLOW_RECORD_ACCESS_POINT  = 0x0f,  // An access point for inter-router connections
+    VFLOW_RECORD_ROUTER_ACCESS = 0x0f,  // An access point for inter-router connections
 } vflow_record_type_t;
 
 // clang-format off
@@ -177,6 +178,15 @@ void vflow_end_record(vflow_record_t *record);
  */
 void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t *field);
 
+/**
+ * vflow_serialize_identity_pn
+ * 
+ * Encode the identity of the indicated record into the supplied Proton pn_data
+ * 
+ * @param record Pointer to the record from which to obtain the identity
+ * @param field Pointer to the pn_data into which to serialize the identity
+ */
+void vflow_serialize_identity_pn(const vflow_record_t *record, pn_data_t *data);
 
 /**
  * vflow_set_ref_from_record
@@ -210,6 +220,15 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
  * @param iter Pointer to an iterator containing the serialized form of a record identity
  */
 void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter);
+
+/**
+ * vflow_set_ref_from_pn
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param iter Pointer to a Proton pn_data
+ */
+void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data);
 
 /**
  * vflow_set_string
