@@ -28,6 +28,9 @@
 #include "qpid/dispatch/amqp.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/discriminator.h"
+#include "qpid/dispatch/atomic.h"
+#include "qpid/dispatch/error.h"
+#include "entity.h"
 #include "dispatch_private.h"
 #include "buffer_field_api.h"
 #include "stdbool.h"
@@ -128,6 +131,8 @@ static const int   initial_flush_interval_msec = 2000;
 static const int   rate_slot_flush_intervals   = 10;    // For a two-second slot interval
 static const int   rate_span                   = 10;    // Ten-second rolling average
 
+static sys_atomic_t site_configured;
+
 typedef struct {
     qdr_core_t          *router_core;
     sys_mutex_t          lock;
@@ -141,6 +146,8 @@ typedef struct {
     char                *router_mode;
     bool                 sleeping;
     vflow_work_list_t    work_list;
+    vflow_record_t      *local_root;
+    vflow_record_t      *local_site;
     vflow_record_t      *local_router;
     char                *local_router_id;
     vflow_record_list_t  unflushed_flow_records[FLUSH_SLOT_COUNT];
@@ -334,12 +341,27 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
 
     //
     // If the record type is ROUTER, this is the local-router record.  Store it.
+    // If the record type is SITE, this router owns the site records as well, link it in.
     // Otherwise, if the parent is not specified, use the local_router as the parent.
+    //
+    // Note that the first record to be inserted will always be the ROUTER record.
     //
     vflow_record_t *record = work->record;
     if (record->record_type == VFLOW_RECORD_ROUTER) {
         state->local_router = record;
+        state->local_root   = record;
         state->local_router_id = _vflow_id_to_new_string(&record->identity);
+    } else if (record->record_type == VFLOW_RECORD_SITE) {
+        state->local_site = record;
+        state->local_root = record;
+
+        //
+        // Update the existing router record to have the site record as its parent
+        //
+        assert(!!state->local_router);
+        state->local_router->parent = record;
+        DEQ_INSERT_TAIL(record->children, state->local_router);
+        _vflow_post_flush_record_TH(state->local_router);
     } else if (record->parent == 0) {
         record->parent = state->local_router;
     }
@@ -1094,7 +1116,7 @@ static void _vflow_refresh_record_TH(vflow_record_t *record)
 static void _vflow_refresh_events_TH(vflow_work_t *work, bool discard)
 {
     if (!discard) {
-        _vflow_refresh_record_TH(state->local_router);
+        _vflow_refresh_record_TH(state->local_root);
     }
 }
 
@@ -1344,7 +1366,7 @@ static void *_vflow_thread_TH(void *context)
     //
     // Free all remaining records in the tree
     //
-    _vflow_free_record_TH(state->local_router, true);
+    _vflow_free_record_TH(state->local_root, true);
 
     qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Protocol logging completed");
     return 0;
@@ -1661,6 +1683,36 @@ void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, v
     }
 }
 
+//=====================================================================================
+// Configuration Module Callbacks
+//=====================================================================================
+
+QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    bool configured = sys_atomic_set(&site_configured, 1);
+    if (configured) {
+        return QD_ERROR_ALREADY_EXISTS;
+    }
+    
+    const char *name      = qd_entity_opt_string(entity, "name", 0);
+    const char *location  = qd_entity_opt_string(entity, "location", 0);
+    const char *provider  = qd_entity_opt_string(entity, "provider", 0);
+    const char *platform  = qd_entity_opt_string(entity, "platform", 0);
+    const char *namespace = qd_entity_opt_string(entity, "namespace", 0);
+
+    if (qd_error_code()) {
+        return qd_error_code();
+    }
+
+    vflow_record_t *site = vflow_start_record(VFLOW_RECORD_SITE, 0);
+    if (name)      vflow_set_string(site, VFLOW_ATTRIBUTE_NAME, name);
+    if (location)  vflow_set_string(site, VFLOW_ATTRIBUTE_LOCATION, location);
+    if (provider)  vflow_set_string(site, VFLOW_ATTRIBUTE_PROVIDER, provider);
+    if (platform)  vflow_set_string(site, VFLOW_ATTRIBUTE_PLATFORM, platform);
+    if (namespace) vflow_set_string(site, VFLOW_ATTRIBUTE_NAMESPACE, namespace);
+
+    return QD_ERROR_NONE;
+}
 
 //=====================================================================================
 // IO Module Callbacks
@@ -1734,6 +1786,7 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
  */
 static void _vflow_init(qdr_core_t *core, void **adaptor_context)
 {
+    sys_atomic_init(&site_configured, 0);
     state = NEW(vflow_state_t);
     ZERO(state);
 
@@ -1862,6 +1915,7 @@ static void _vflow_final(void *adaptor_context)
     // Free the module state
     //
     free(state);
+    sys_atomic_destroy(&site_configured);
 }
 
 

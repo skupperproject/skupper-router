@@ -395,6 +395,7 @@ class VFlowInterRouterTest(TestCase):
             [
                 ('router', {'id': 'EdgeB',
                             'mode': 'edge'}),
+                ('site', {'name': 'edge-b', 'platform': 'skrouter-system-tests'}),
                 ('listener', {'role': 'normal',
                               'port': cls.tester.get_port()}),
                 ('connector', {'role': 'edge',
@@ -436,6 +437,7 @@ class VFlowInterRouterTest(TestCase):
         # Verify the expected records are present for router inta's configuration
         counts = RecordCounter(records)
         return counts.get('ROUTER') == 1 and \
+            counts.get('SITE') is None and \
             counts.get('CONNECTOR') == 1 and \
             counts.get('LISTENER') is None and \
             counts.get('LINK') == 2 and \
@@ -445,6 +447,7 @@ class VFlowInterRouterTest(TestCase):
         # Verify the expected records are present for router intb's configuration
         counts = RecordCounter(records)
         return counts.get('ROUTER') == 1 and \
+            counts.get('SITE') is None and \
             counts.get('CONNECTOR') is None and \
             counts.get('LISTENER') is None and \
             counts.get('LINK') is None and \
@@ -454,6 +457,7 @@ class VFlowInterRouterTest(TestCase):
         # Verify the expected records are present for router edgeb's configuration
         counts = RecordCounter(records)
         return counts.get('ROUTER') == 1 and \
+            counts.get('SITE') == 1 and \
             counts.get('CONNECTOR') is None and \
             counts.get('LISTENER') == 1 and \
             counts.get('LINK') == 1 and \

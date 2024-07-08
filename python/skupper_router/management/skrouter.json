@@ -618,6 +618,36 @@
                 }
             }
         },
+        "site": {
+            "description":"Optional.  If present, this entity causes the router to emit a SITE record for VanFLow in the case that there is not an external controller to emit this record.",
+            "extends": "configurationEntity",
+            "attributes": {
+                "location": {
+                    "description":"Location (geographical or otherwise) describing where the site is.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
+                "provider": {
+                    "description":"Description of the underlying provider for the site.  This could be the name of a public cloud service, or the name of a data center, etc.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
+                "platform": {
+                    "description":"Description of the platform on which the site is deployed.  Examples are Kubernetes, Docker, Podman, Linux, etc.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
+                "namespace": {
+                    "description":"The namespace of the platform on which the site is deployed.  This can be the namespace in a Kubernetes cluster, or the username for a user-deployed Podman, etc.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                }
+            }
+        },
         "sslProfile": {
             "description":"Attributes for setting TLS/SSL configuration for connections.",
             "referential": true,
