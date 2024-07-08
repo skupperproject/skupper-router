@@ -347,26 +347,30 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         """
         Make skstat use sasl plain authentication.
         """
-
-        p = self.popen(
-            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
-             '--sasl-username=test@domain.com', '--sasl-password=password'],
-            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
-            universal_newlines=True)
-
-        out = p.communicate()[0]
-        assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
-
-        split_list = out.split()
-
         # There will be 1 inter-router connection and 1 skstat client connection that
         # have authenticated using SASL PLAIN. And also the number of inter-router-data
         # connections that are determined by the worker thread count.
         n_total_connections = worker_threads_to_data_connections(n_worker_threads) + 1 + 1
-        self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
-        self.assertEqual(1, split_list.count("inter-router"))
-        self.assertEqual(1, split_list.count("normal"))
+
+        def check_sasl_on_connections():
+            p = self.popen(
+                ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
+                 '--sasl-username=test@domain.com', '--sasl-password=password'],
+                name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
+                universal_newlines=True)
+
+            out = p.communicate()[0]
+            assert p.returncode == 0, \
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
+
+            split_list = out.split()
+
+            self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
+            self.assertEqual(1, split_list.count("inter-router"))
+            self.assertEqual(1, split_list.count("normal"))
+
+        # Sometimes the router needs time to establish the connections, especially on a slow CI system.
+        retry_assertion(check_sasl_on_connections, delay=1)
 
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_skstat_connect_sasl_password_file(self):
@@ -377,28 +381,31 @@ class RouterTestPlainSasl(RouterTestPlainSaslCommon):
         # Create a SASL configuration file.
         with open(password_file, 'w') as sasl_client_password_file:
             sasl_client_password_file.write("password")
-
         sasl_client_password_file.close()
-
-        p = self.popen(
-            ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
-             '--sasl-username=test@domain.com', '--sasl-password-file=' + password_file],
-            name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
-            universal_newlines=True)
-
-        out = p.communicate()[0]
-        assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
-
-        split_list = out.split()
 
         # There will be 1 inter-router connection and 1 skstat client connection that
         # have authenticated using SASL PLAIN. And also the number of inter-router-data
         # connections that are determined by the worker thread count.
         n_total_connections = worker_threads_to_data_connections(n_worker_threads) + 1 + 1
-        self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
-        self.assertEqual(1, split_list.count("inter-router"))
-        self.assertEqual(1, split_list.count("normal"))
+
+        def check_sasl_on_connections():
+            p = self.popen(
+                ['skstat', '-b', str(self.routers[0].addresses[2]), '-c', '--sasl-mechanisms=PLAIN',
+                 '--sasl-username=test@domain.com', '--sasl-password-file=' + password_file],
+                name='skstat-' + self.id(), stdout=PIPE, expect=Process.EXIT_OK,
+                universal_newlines=True)
+
+            out = p.communicate()[0]
+            assert p.returncode == 0, \
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
+
+            split_list = out.split()
+            self.assertEqual(n_total_connections, split_list.count("test@domain.com(PLAIN)"))
+            self.assertEqual(1, split_list.count("inter-router"))
+            self.assertEqual(1, split_list.count("normal"))
+
+        # Sometimes the router needs time to establish the connections, especially on a slow CI system.
+        retry_assertion(check_sasl_on_connections, delay=1)
 
 
 class RouterTestPlainSaslOverSsl(RouterTestPlainSaslCommon):
