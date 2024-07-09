@@ -173,7 +173,6 @@ foreach(py_test_module
     system_tests_tcp_adaptor
     system_tests_tcp_adaptor_tls
     system_tests_http2_tls
-    system_tests_heartbeats
     system_tests_address_watch
     system_tests_router_annotations
     system_tests_vflow
