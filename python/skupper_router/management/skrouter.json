@@ -1260,7 +1260,7 @@
                 "siteId": {
                     "type": "string",
                     "required": false,
-                    "description": "Used to identify where connection is handled.",
+                    "description": "DEPRECATED: Used to identify where connection is handled.",
                     "create": true
                 },
                 "connectionsOpened": {
@@ -1332,7 +1332,13 @@
                 "siteId": {
                     "type": "string",
                     "required": false,
-                    "description": "Used to identify origin of connections.",
+                    "description": "DEPRECATED: Used to identify origin of connections.",
+                    "create": true
+                },
+                "processId": {
+                    "type": "string",
+                    "required": false,
+                    "description": "The VanFlow record-identifier for a process record.  The VanFlow record emitted for this connector shall contain this process reference.",
                     "create": true
                 },
                 "connectionsOpened": {

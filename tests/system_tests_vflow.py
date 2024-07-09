@@ -355,6 +355,7 @@ class VFlowInterRouterTest(TestCase):
         cls.edge_router_port = cls.tester.get_port()
         cls.tcp_listener_port = cls.tester.get_port()
         cls.tcp_connector_port = cls.tester.get_port()
+        cls.tcp_noproc_port = cls.tester.get_port()
 
         configs = [
             # Router INTA
@@ -368,7 +369,11 @@ class VFlowInterRouterTest(TestCase):
                                'port': cls.inter_router_port}),
                 ('tcpConnector', {'host': '127.0.0.1',
                                   'port': cls.tcp_connector_port,
-                                  'address': 'tcpServiceAddress'}),
+                                  'address': 'tcpServiceAddress',
+                                  'processId': 'abcde:1'}),
+                ('tcpConnector', {'host': '127.0.0.1',
+                                  'port': cls.tcp_noproc_port,
+                                  'address': 'noProcessAddress'}),
                 # a dummy connector which never connects (operStatus == down)
                 ('connector', {'role': 'inter-router',
                                'port': cls.tester.get_port()}),
@@ -435,10 +440,22 @@ class VFlowInterRouterTest(TestCase):
 
     def _inta_check(self, records):
         # Verify the expected records are present for router inta's configuration
+
+        # Check that the connector has the expected process reference
+        for record in records:
+            if record['RECORD_TYPE'] == 'CONNECTOR' and record['VAN_ADDRESS'] == 'tcpServiceAddress':
+                if 'PROCESS' in record:
+                    if record['PROCESS'] != 'abcde:1':
+                        return False
+            elif record['RECORD_TYPE'] == 'CONNECTOR' and record['VAN_ADDRESS'] == 'noProcessAddress':
+                if 'PROCESS' in record:
+                    return False
+
+        # Check the record counts
         counts = RecordCounter(records)
         return counts.get('ROUTER') == 1 and \
             counts.get('SITE') is None and \
-            counts.get('CONNECTOR') == 1 and \
+            counts.get('CONNECTOR') == 2 and \
             counts.get('LISTENER') is None and \
             counts.get('LINK') == 2 and \
             counts.get('ROUTER_ACCESS') is None

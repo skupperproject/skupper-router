@@ -388,6 +388,10 @@ static void TL_setup_connector(qd_tcp_connector_t *connector)
     vflow_set_uint64(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
     vflow_add_rate(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, VFLOW_ATTRIBUTE_FLOW_RATE_L4);
 
+    if (!!connector->process_ref) {
+        vflow_set_string(connector->common.vflow, VFLOW_ATTRIBUTE_PROCESS, connector->process_ref);
+    }
+
     connector->out_link = qdr_link_first_attach(connector->core_conn, QD_OUTGOING, source, 0, "tcp.connector.out", 0, false, 0, &connector->link_id);
     qdr_link_set_user_streaming(connector->out_link);
     qdr_link_set_context(connector->out_link, connector);
@@ -451,7 +455,7 @@ static void set_state_XSIDE_IO(qd_tcp_connection_t *conn, qd_tcp_connection_stat
 static void qdr_core_free_tcp_resource_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     // note: need to release the resource regardless of discard flag
-    qd_tcp_common_t *common = (qd_tcp_common_t *)action->args.general.context_1;
+    qd_tcp_common_t *common = (qd_tcp_common_t*) action->args.general.context_1;
     if (common->context_type == TL_CONNECTION) {
         qd_tcp_connection_t *conn = (qd_tcp_connection_t*) common;
         sys_atomic_destroy(&conn->core_activation);
@@ -461,8 +465,9 @@ static void qdr_core_free_tcp_resource_CT(qdr_core_t *core, qdr_action_t *action
     } else {
         // Core does not hold a reference to a listener so they are not freed here
         assert(common->context_type == TL_CONNECTOR);
-        qd_tcp_connector_t *cr = (qd_tcp_connector_t *)common;
+        qd_tcp_connector_t *cr = (qd_tcp_connector_t*) common;
         sys_mutex_free(&cr->lock);
+        free(cr->process_ref);
         free_qd_tcp_connector_t(cr);
     }
 }
@@ -2458,6 +2463,7 @@ qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_en
     qd_tcp_connector_t *connector = new_qd_tcp_connector_t();
     ZERO(connector);
     sys_atomic_init(&connector->ref_count, 1);
+    connector->process_ref = qd_entity_opt_string(entity, "processId", 0);
 
     connector->adaptor_config = new_qd_adaptor_config_t();
     ZERO(connector->adaptor_config);

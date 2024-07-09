@@ -80,6 +80,7 @@ typedef struct qd_tcp_connector_t {
     qd_adaptor_config_t       *adaptor_config;
     qd_tls_domain_t           *tls_domain;
     qdr_connection_t          *core_conn;  // dispatcher conn and link
+    char                      *process_ref;  // VanFlow Process ID
     uint64_t                   conn_id;
     uint64_t                   link_id;
     qdr_link_t                *out_link;
