@@ -189,19 +189,27 @@ void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *ctx)
 {
     sys_atomic_inc(&li->ref_count);
     ctx->listener = li;
+}
+
+void qd_listener_remove_connection(qd_listener_t *li, qd_connection_t *ctx)
+{
+    assert(ctx->listener == li);
+    ctx->listener = 0;
+    qd_listener_decref(li);
+}
+
+void qd_listener_add_link(qd_listener_t *li)
+{
     if (!!li->vflow_record) {
         uint32_t count = sys_atomic_inc(&li->connection_count) + 1;
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
     }
 }
 
-void qd_listener_remove_connection(qd_listener_t *li, qd_connection_t *ctx)
+void qd_listener_remove_link(qd_listener_t *li)
 {
-    assert(ctx->listener == li);
     if (!!li->vflow_record) {
         uint32_t count = sys_atomic_dec(&li->connection_count) - 1;
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
     }
-    ctx->listener = 0;
-    qd_listener_decref(li);
 }
