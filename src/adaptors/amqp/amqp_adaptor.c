@@ -1586,6 +1586,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         qd_connection_counter_inc(QD_PROTOCOL_AMQP);
     }
 
+    if (!!conn->listener && role != QDR_ROLE_INTER_ROUTER_DATA) {
+        qd_listener_add_link(conn->listener);
+    }
+
     if (conn->connector) {
         sys_mutex_lock(&conn->connector->lock);
         qd_format_string(conn->connector->conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE,
@@ -1767,6 +1771,9 @@ static int AMQP_closed_handler(qd_router_t *router, qd_connection_t *conn, void 
 
         if (qdrc->role == QDR_ROLE_NORMAL) {
             qd_connection_counter_dec(QD_PROTOCOL_AMQP);
+        }
+        if (!!conn->listener && qdrc->role != QDR_ROLE_INTER_ROUTER_DATA) {
+            qd_listener_remove_link(conn->listener);
         }
         qdr_connection_closed(qdrc);
         qd_connection_set_context(conn, 0);

@@ -70,4 +70,10 @@ void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *ctx);
 // to it
 void qd_listener_remove_connection(qd_listener_t *li, qd_connection_t *qd_conn);
 
+// account for an added link to the listener
+void qd_listener_add_link(qd_listener_t *li);
+
+// account for a removed link from the listener
+void qd_listener_remove_link(qd_listener_t *li);
+
 #endif
