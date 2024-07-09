@@ -462,6 +462,14 @@ class VFlowInterRouterTest(TestCase):
 
     def _intb_check(self, records):
         # Verify the expected records are present for router intb's configuration
+
+        # Check that each ROUTER_ACCESS record has a link-count of 1
+        for record in records:
+            if record['RECORD_TYPE'] == 'ROUTER_ACCESS':
+                if record['LINK_COUNT'] != 1:
+                    return False
+
+        # Check the record counts
         counts = RecordCounter(records)
         return counts.get('ROUTER') == 1 and \
             counts.get('SITE') is None and \
