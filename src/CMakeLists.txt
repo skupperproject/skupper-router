@@ -126,8 +126,6 @@ set(qpid_dispatch_SOURCES
   router_core/modules/mesh_discovery/mesh_discovery_edge.c
   router_core/modules/mesh_discovery/mesh_discovery_interior.c
   router_core/modules/address_lookup_client/address_lookup_client.c
-  router_core/modules/heartbeat_edge/heartbeat_edge.c
-  router_core/modules/heartbeat_server/heartbeat_server.c
   router_core/modules/stuck_delivery_detection/delivery_tracker.c
   router_core/modules/mobile_sync/mobile.c
   router_core/modules/streaming_link_scrubber/streaming_link_scrubber.c
