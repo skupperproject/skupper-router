@@ -60,6 +60,7 @@ typedef struct qd_connector_t {
     cxtr_state_t              state;
     qd_connection_t          *qd_conn;
     vflow_record_t           *vflow_record;
+    bool                      oper_status_down;  // set when oper-status transitions to 'down' to avoid repeated error indications.
 
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
     qd_failover_item_list_t   conn_info_list;
@@ -99,9 +100,10 @@ void qd_connector_remote_opened(qd_connector_t *connector);
 
 // add a new connection to the parent connector
 void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx);
+void qd_connector_add_link(qd_connector_t *connector);
 
 // remove the child connection
 // NOTE WELL: this may free the connector if the connection is holding the last
 // reference to it
-void qd_connector_remove_connection(qd_connector_t *connector);
+void qd_connector_remove_connection(qd_connector_t *connector, bool final, const char *condition_name, const char *condition_description);
 #endif

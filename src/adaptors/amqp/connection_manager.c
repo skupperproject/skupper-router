@@ -367,23 +367,24 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         // for high load, as determined by throughput performance
         // testing.
         //
-          if (!strcmp("auto", ct->config.data_connection_count)) {
-              // The user has explicitly requested 'auto'.
-              connection_count = auto_calc_connection_count(qd);
-              qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
-                     connection_count);
-          } else if (1 == sscanf(ct->config.data_connection_count, "%u", &connection_count)) {
-              // The user has requested a specific number of connections.
-              qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
-          } else {
-              // The user has entered a non-numeric value that is not 'auto'.
-              // This is not a legal value. Default to 'auto' and mention it.
-              qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ",
-                     ct->config.data_connection_count);
-              connection_count = auto_calc_connection_count(qd);
-              qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
-                     connection_count);
-          }
+        if (!strcmp("auto", ct->config.data_connection_count)) {
+            // The user has explicitly requested 'auto'.
+            connection_count = auto_calc_connection_count(qd);
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
+                    connection_count);
+        } else if (1 == sscanf(ct->config.data_connection_count, "%u", &connection_count)) {
+            // The user has requested a specific number of connections.
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections set to %d ", connection_count);
+        } else {
+            // The user has entered a non-numeric value that is not 'auto'.
+            // This is not a legal value. Default to 'auto' and mention it.
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ",
+                    ct->config.data_connection_count);
+            connection_count = auto_calc_connection_count(qd);
+            qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Inter-router data connections calculated at %d ",
+                    connection_count);
+        }
+
         //
         // If this connection has a data-connection-group, set up the group members now
         //
@@ -440,6 +441,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_NAME, ct->config.name);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+            vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 0);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);

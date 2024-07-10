@@ -1590,6 +1590,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         qd_listener_add_link(conn->listener);
     }
 
+    if (!!conn->connector) {
+        qd_connector_add_link(conn->connector);
+    }
+
     if (conn->connector) {
         sys_mutex_lock(&conn->connector->lock);
         qd_format_string(conn->connector->conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE,
@@ -2381,7 +2385,7 @@ static void qd_amqp_adaptor_final(void *adaptor_context)
         if (ctx->policy_settings)
             qd_policy_settings_free(ctx->policy_settings);
         if (ctx->connector) {
-            qd_connector_remove_connection(ctx->connector);
+            qd_connector_remove_connection(ctx->connector, true, 0, 0);
             ctx->connector = 0;
         }
         if (ctx->listener) {

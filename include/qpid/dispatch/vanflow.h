@@ -127,12 +127,16 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_LINK_COUNT       = 52,  // uint/counter
     VFLOW_ATTRIBUTE_OPER_STATUS      = 53,  // String
     VFLOW_ATTRIBUTE_ROLE             = 54,  // String
+    VFLOW_ATTRIBUTE_UP_TIMESTAMP     = 55,  // uint          Timestamp of last transition to oper-status up
+
+    VFLOW_ATTRIBUTE_DOWN_TIMESTAMP   = 56,  // uint          Timestamp of last transition to oper-status down
+    VFLOW_ATTRIBUTE_DOWN_COUNT       = 57,  // uint/counter  Number of transitions to oper-status down
 } vflow_attribute_t;
 // clang-format on
 
 #define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x00199ffa07800119
-#define VALID_COUNTER_ATTRS 0x0010035000800000
+#define VALID_UINT_ATTRS    0x03999ffa07800119
+#define VALID_COUNTER_ATTRS 0x0210035000800000
 #define VALID_STRING_ATTRS  0x00660005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
@@ -242,6 +246,16 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value);
 
 /**
+ * vflow_set_timestamp_now
+ *
+ * Set an integer attribute to the current timestamp.
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ */
+void vflow_set_timestamp_now(vflow_record_t *record, vflow_attribute_t attribute_type);
+
+/**
  * vflow_set_uint64
  * 
  * Set a uint64-typed attribute in a record.
@@ -251,6 +265,18 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
  * @param value The unsigned integer value to be set
  */
 void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t value);
+
+
+/**
+ * vflow_inc_counter
+ *
+ * Increment a counter attribute by the addend.  If the attribute does not exist, set it to the addend.
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param addend The number to add to the counter
+ */
+void vflow_inc_counter(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t addend);
 
 
 /**

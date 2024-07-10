@@ -543,6 +543,51 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
 
 
 /**
+ * @brief Work handler for vflow_inc_counter
+ * 
+ * @param work Pointer to work context
+ * @param discard Indicator that this work must be discarded
+ */
+static void _vflow_inc_int_TH(vflow_work_t *work, bool discard)
+{
+    if (discard) {
+        return;
+    }
+
+    vflow_record_t         *record = work->record;
+    vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
+    vflow_attribute_data_t *data;
+
+    if (!insert || insert->attribute_type != work->attribute) {
+        //
+        // The attribute does not exist, create a new one and insert appropriately
+        //
+        data = new_vflow_attribute_data_t();
+        ZERO(data);
+        data->attribute_type = work->attribute;
+        data->emit_ordinal   = record->emit_ordinal;
+        data->value.uint_val = work->value.int_val;
+        if (!!insert) {
+            DEQ_INSERT_AFTER(record->attributes, data, insert);
+        } else {
+            DEQ_INSERT_HEAD(record->attributes, data);
+        }
+    } else {
+        //
+        // The attribute already exists, increment the value
+        //
+        insert->value.uint_val += work->value.int_val;
+        insert->emit_ordinal   = record->emit_ordinal;
+    }
+
+    //
+    // Schedule this record for flushing
+    //
+    _vflow_post_flush_record_TH(record);
+}
+
+
+/**
  * @brief Allocate a work object pre-loaded with a handler.
  * 
  * @param handler The handler to be called on the vflow thread to do the work
@@ -771,6 +816,9 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_LINK_COUNT       : return "linkCount";
     case VFLOW_ATTRIBUTE_OPER_STATUS      : return "operStatus";
     case VFLOW_ATTRIBUTE_ROLE             : return "role";
+    case VFLOW_ATTRIBUTE_UP_TIMESTAMP     : return "upTimeStamp";
+    case VFLOW_ATTRIBUTE_DOWN_TIMESTAMP   : return "downTimeStamp";
+    case VFLOW_ATTRIBUTE_DOWN_COUNT       : return "downCount";
     }
     return "UNKNOWN";
 }
@@ -1581,6 +1629,12 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
 }
 
 
+void vflow_set_timestamp_now(vflow_record_t *record, vflow_attribute_t attribute_type)
+{
+    vflow_set_uint64(record, attribute_type, _now_in_usec());
+}
+
+
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
@@ -1603,6 +1657,19 @@ void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, 
         work->record        = record;
         work->attribute     = attribute_type;
         work->value.int_val = value;
+        _vflow_post_work(work);
+    }
+}
+
+
+void vflow_inc_counter(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t addend)
+{
+    if (!!record) {
+        assert((uint64_t) 1 << attribute_type & VALID_COUNTER_ATTRS);
+        vflow_work_t *work = _vflow_work(_vflow_inc_int_TH);
+        work->record        = record;
+        work->attribute     = attribute_type;
+        work->value.int_val = addend;
         _vflow_post_work(work);
     }
 }
