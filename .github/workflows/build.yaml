@@ -298,7 +298,7 @@ jobs:
           sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
           sudo sysctl -w vm.mmap_rnd_bits=28
-          ctest --timeout 1200 -V --output-junit=Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1200 -V --output-junit Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
@@ -444,7 +444,7 @@ jobs:
         run: |
           ulimit -c unlimited
           threads=4
-          ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -j${threads}
+          ctest --timeout 1200 -V --output-junit Testing/Test.xml --output-on-failure --no-compress-output -j${threads}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
@@ -812,7 +812,7 @@ jobs:
             threads=6
           fi
 
-          ctest --timeout 1200 -V --output-junit=Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1200 -V --output-junit Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
 
       - name: Process C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
