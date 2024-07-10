@@ -550,7 +550,7 @@ void qd_connection_set_user(qd_connection_t *conn)
     }
 }
 
-static void qd_connection_free(qd_connection_t *qd_conn)
+static void qd_connection_free(qd_connection_t *qd_conn, const char *condition_name, const char *condition_description)
 {
     sys_mutex_lock(&amqp_adaptor.lock);
     DEQ_REMOVE(amqp_adaptor.conn_list, qd_conn);
@@ -559,7 +559,7 @@ static void qd_connection_free(qd_connection_t *qd_conn)
     // If this connection is from a connector uncouple it and restart the re-connect timer if necessary
 
     if (qd_conn->connector) {
-        qd_connector_remove_connection(qd_conn->connector);
+        qd_connector_remove_connection(qd_conn->connector, condition_name, condition_description);
         qd_conn->connector = 0;
     }
 
@@ -1139,7 +1139,10 @@ bool qd_connection_handle_event(qd_server_t *qd_server, pn_event_t *e, void *con
             qd_container_handle_event(amqp_adaptor.container, e, pn_conn, ctx);
             qd_conn_event_batch_complete(amqp_adaptor.container, ctx, true);
             pn_connection_set_context(pn_conn, NULL);
-            qd_connection_free(ctx);
+            pn_condition_t *cond = pn_event_condition(e);
+            const char *condition_name        = !!cond ? pn_condition_get_name(cond) : 0;
+            const char *condition_descriprion = !!cond ? pn_condition_get_description(cond) : 0;
+            qd_connection_free(ctx, condition_name, condition_descriprion);
             ctx = 0;
         }
         break;

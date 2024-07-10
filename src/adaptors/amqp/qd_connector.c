@@ -288,7 +288,16 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
     connector->qd_conn = ctx;
 
     strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
-    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
+}
+
+
+void qd_connector_add_link(qd_connector_t *connector)
+{
+    if (!connector->is_data_connector) {
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
+        vflow_set_timestamp_now(connector->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
+        connector->oper_status_down = false;
+    }
 }
 
 
@@ -296,12 +305,22 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
  * The connection associated with this connector is about to be freed,
  * clean up all related state
  */
-void qd_connector_remove_connection(qd_connector_t *connector)
+void qd_connector_remove_connection(qd_connector_t *connector, const char *condition_name, const char *condition_description)
 {
     sys_mutex_lock(&connector->lock);
 
     qd_connection_t *ctx = connector->qd_conn;
-    vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+    if (!connector->is_data_connector && !connector->oper_status_down) {
+        connector->oper_status_down = true;
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+        vflow_inc_counter(connector->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
+        if (!!condition_name) {
+            vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_RESULT, condition_name);
+        }
+        if (!!condition_description) {
+            vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_REASON, condition_description);
+        }
+    }
     connector->qd_conn = 0;
     ctx->connector = 0;
 
