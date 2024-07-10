@@ -105,5 +105,5 @@ void qd_connector_add_link(qd_connector_t *connector);
 // remove the child connection
 // NOTE WELL: this may free the connector if the connection is holding the last
 // reference to it
-void qd_connector_remove_connection(qd_connector_t *connector, const char *condition_name, const char *condition_description);
+void qd_connector_remove_connection(qd_connector_t *connector, bool final, const char *condition_name, const char *condition_description);
 #endif

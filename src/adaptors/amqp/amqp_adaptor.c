@@ -2385,7 +2385,7 @@ static void qd_amqp_adaptor_final(void *adaptor_context)
         if (ctx->policy_settings)
             qd_policy_settings_free(ctx->policy_settings);
         if (ctx->connector) {
-            qd_connector_remove_connection(ctx->connector, 0, 0);
+            qd_connector_remove_connection(ctx->connector, true, 0, 0);
             ctx->connector = 0;
         }
         if (ctx->listener) {

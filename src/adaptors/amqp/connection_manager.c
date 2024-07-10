@@ -441,7 +441,6 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_NAME, ct->config.name);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_ROLE, ct->config.role);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
-            vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_REASON, "Never connected");
             vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 0);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);

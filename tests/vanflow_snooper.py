@@ -115,7 +115,8 @@ attribute_types = {
     53: "OPER_STATUS",
     54: "ROLE",
     55: "UP_TIMESTAMP",
-    56: "DOWN_COUNT"
+    56: "DOWN_TIMESTAMP",
+    57: "DOWN_COUNT"
 }
 
 

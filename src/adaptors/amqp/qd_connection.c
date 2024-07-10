@@ -559,7 +559,7 @@ static void qd_connection_free(qd_connection_t *qd_conn, const char *condition_n
     // If this connection is from a connector uncouple it and restart the re-connect timer if necessary
 
     if (qd_conn->connector) {
-        qd_connector_remove_connection(qd_conn->connector, condition_name, condition_description);
+        qd_connector_remove_connection(qd_conn->connector, false, condition_name, condition_description);
         qd_conn->connector = 0;
     }
 

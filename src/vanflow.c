@@ -817,6 +817,7 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_OPER_STATUS      : return "operStatus";
     case VFLOW_ATTRIBUTE_ROLE             : return "role";
     case VFLOW_ATTRIBUTE_UP_TIMESTAMP     : return "upTimeStamp";
+    case VFLOW_ATTRIBUTE_DOWN_TIMESTAMP   : return "downTimeStamp";
     case VFLOW_ATTRIBUTE_DOWN_COUNT       : return "downCount";
     }
     return "UNKNOWN";
