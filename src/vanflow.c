@@ -771,6 +771,7 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_LINK_COUNT       : return "linkCount";
     case VFLOW_ATTRIBUTE_OPER_STATUS      : return "operStatus";
     case VFLOW_ATTRIBUTE_ROLE             : return "role";
+    case VFLOW_ATTRIBUTE_UP_TIMESTAMP     : return "upTimeStamp";
     }
     return "UNKNOWN";
 }

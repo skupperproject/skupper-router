@@ -127,11 +127,12 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_LINK_COUNT       = 52,  // uint/counter
     VFLOW_ATTRIBUTE_OPER_STATUS      = 53,  // String
     VFLOW_ATTRIBUTE_ROLE             = 54,  // String
+    VFLOW_ATTRIBUTE_UP_TIMESTAMP     = 55,  // uint     Timestamp of last transition to oper-status up
 } vflow_attribute_t;
 // clang-format on
 
 #define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x00199ffa07800119
+#define VALID_UINT_ATTRS    0x00999ffa07800119
 #define VALID_COUNTER_ATTRS 0x0010035000800000
 #define VALID_STRING_ATTRS  0x00660005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
