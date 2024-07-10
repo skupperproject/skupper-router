@@ -243,6 +243,16 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value);
 
 /**
+ * vflow_set_timestamp_now
+ *
+ * Set an integer attribute to the current timestamp.
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ */
+void vflow_set_timestamp_now(vflow_record_t *record, vflow_attribute_t attribute_type);
+
+/**
  * vflow_set_uint64
  * 
  * Set a uint64-typed attribute in a record.

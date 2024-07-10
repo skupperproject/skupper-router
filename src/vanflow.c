@@ -1582,6 +1582,12 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
 }
 
 
+void vflow_set_timestamp_now(vflow_record_t *record, vflow_attribute_t attribute_type)
+{
+    vflow_set_uint64(record, attribute_type, _now_in_usec());
+}
+
+
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value)
 {
 #define MAX_STRING_VALUE 300
