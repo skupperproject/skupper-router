@@ -53,6 +53,8 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
     VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
     VFLOW_RECORD_ROUTER_ACCESS = 0x0f,  // An access point for inter-router connections
+    VFLOW_RECORD_BIFLOW_TPORT  = 0x10,  // Bidirectional Transport (L4) flow
+    VFLOW_RECORD_BIFLOW_APP    = 0x11,  // Bidirectional Application (L7) flow
 } vflow_record_type_t;
 
 // clang-format off
@@ -129,14 +131,18 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_ROLE             = 54,  // String
     VFLOW_ATTRIBUTE_UP_TIMESTAMP     = 55,  // uint          Timestamp of last transition to oper-status up
 
-    VFLOW_ATTRIBUTE_DOWN_TIMESTAMP   = 56,  // uint          Timestamp of last transition to oper-status down
-    VFLOW_ATTRIBUTE_DOWN_COUNT       = 57,  // uint/counter  Number of transitions to oper-status down
+    VFLOW_ATTRIBUTE_DOWN_TIMESTAMP     = 56,  // uint          Timestamp of last transition to oper-status down
+    VFLOW_ATTRIBUTE_DOWN_COUNT         = 57,  // uint/counter  Number of transitions to oper-status down
+    VFLOW_ATTRIBUTE_OCTETS_REVERSE     = 58,  // uint/counter  Octet count in reverse direction
+    VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE = 59,  // uint          Octet rate in reverse direction
+
+    VFLOW_ATTRIBUTE_CONNECTOR        = 60,  // Reference     Reference to a CONNECTOR for a BIFLOW_TPORT
 } vflow_attribute_t;
 // clang-format on
 
-#define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x03999ffa07800119
-#define VALID_COUNTER_ATTRS 0x0210035000800000
+#define VALID_REF_ATTRS     0x10006000000000e6
+#define VALID_UINT_ATTRS    0x0f999ffa07800119
+#define VALID_COUNTER_ATTRS 0x0610035000800000
 #define VALID_STRING_ATTRS  0x00660005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
