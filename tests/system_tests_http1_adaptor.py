@@ -1734,23 +1734,23 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                 # unsupported version
                 b'GET /wrongversion HTTP/0.9\r\n',
                 # invalid header format
-                b'GET /badheader HTTP/1.1\r\n' \
+                b'GET /badheader HTTP/1.1\r\n'
                 + b'novalue\r\n\r\n',
                 # invalid header format 2
-                b'GET /badheader1 HTTP/1.1\r\n' \
+                b'GET /badheader1 HTTP/1.1\r\n'
                 + b'novalue :\r\n\r\n',
                 # invalid transfer encoding value
-                b'PUT /bad/encoding HTTP/1.1\r\n' \
+                b'PUT /bad/encoding HTTP/1.1\r\n'
                 + b'Transfer-Encoding: bannana\r\n\r\nBLAH',
                 # invalid content length format
-                b'PUT /bad/len1 HTTP/1.1\r\n' \
+                b'PUT /bad/len1 HTTP/1.1\r\n'
                 + b'Content-Length:\r\n\r\nFOO',
                 # invalid content length
-                b'PUT /bad/len2 HTTP/1.1\r\n' \
+                b'PUT /bad/len2 HTTP/1.1\r\n'
                 + b'Content-Length: spaghetti\r\n\r\nFOO',
                 # duplicate conflicting content length fields
-                b'PUT /dup/len3 HTTP/1.1\r\n' \
-                + b'Content-length: 1\r\n' \
+                b'PUT /dup/len3 HTTP/1.1\r\n'
+                + b'Content-length: 1\r\n'
                 + b'Content-length: 2\r\n\r\nHA',
             ]
 
