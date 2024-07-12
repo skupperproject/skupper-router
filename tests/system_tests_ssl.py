@@ -667,7 +667,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
+                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'password': SERVER_PRIVATE_KEY_PASSWORD})
         ])
@@ -697,7 +697,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
             # setup chain of calls to pn_ssl_domain_* functions.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
                             'caCertFile': ssl_file('ca-certificate-INVALID-FILENAME.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
+                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'})
         ])
 
@@ -831,7 +831,7 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
+                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
                             'password': SERVER_PRIVATE_KEY_PASSWORD})
         ])
@@ -850,7 +850,7 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
             # router to connect. The object is to trigger a certificate verification failure while hostname verification is off.
             ('sslProfile', {'name': 'ssl-profile-tls-all',
                             'caCertFile': BAD_CA_CERT,
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:' \
+                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'})
         ])
 
