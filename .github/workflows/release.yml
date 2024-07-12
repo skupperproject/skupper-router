@@ -39,7 +39,7 @@ jobs:
         run: |
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           export VERSION="${{ env.CONTAINER_TAG }}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
           # Verify if build number is unique, otherwise fail
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
@@ -64,9 +64,9 @@ jobs:
           echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Build and publish skupper-router arm64 image
         run: |
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           export VERSION="${{ env.CONTAINER_TAG }}"
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           # This is a release build which means we need to push the :latest tag to the container repo.
           export PUSH_LATEST=true
           export PLATFORM=arm64
@@ -109,7 +109,7 @@ jobs:
       - name: Pull skupper-router amd64 and arm64 images and create/push manifest
         run: |
           export VERSION="${CONTAINER_TAG}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           # This is a release candidate build which means we WON'T push the :latest tag to the container repo.
           export PUSH_LATEST=true
@@ -129,7 +129,7 @@ jobs:
       - name: Get the build number
         run: |
           export VERSION="${CONTAINER_TAG}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l`))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l`))
           echo "BUILD_NUMER(create-release)=${BUILD_NUMBER}"
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
         # Now that we have successfully pushed a tagged version of the skupper-router container
