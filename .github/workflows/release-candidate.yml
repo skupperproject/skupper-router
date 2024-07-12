@@ -39,7 +39,7 @@ jobs:
         run: |
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           export VERSION="${{ env.CONTAINER_TAG }}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           # Verify if build number is unique, otherwise fail
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
             jq .tags | grep -E '^\[\]$' || \
@@ -62,7 +62,7 @@ jobs:
           echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Build and publish skupper-router image
         run: |
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           # Verify if build number is unique, otherwise fail
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
             jq .tags | grep -E '^\[\]$' || \
@@ -110,7 +110,7 @@ jobs:
           echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Pull skupper-router amd64 and arm64 images and create/push manifest
         run: |
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq .tags[].name | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           unset PUSH_LATEST
           ./.github/scripts/manifest.sh
