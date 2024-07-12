@@ -129,7 +129,7 @@ jobs:
       - name: Get the build number
         run: |
           export VERSION="${CONTAINER_TAG}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
+          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l`))
           echo "BUILD_NUMER(create-release)=${BUILD_NUMBER}"
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
         # Now that we have successfully pushed a tagged version of the skupper-router container
