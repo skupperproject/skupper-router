@@ -792,11 +792,12 @@ jobs:
       - name: Install Python runtime/test dependencies
         run: ${PYTHON} -m pip install -r ${{github.workspace}}/skupper-router/requirements-dev.txt
 
+      # temporarily avoid debuginfo install on centos9 due to checksum error from mirror
       - name: Install Linux runtime/test dependencies
         run: |
           dnf install -y nmap-ncat gdb binutils elfutils elfutils-debuginfod-client findutils file nginx
           command -v curl || dnf install -y curl
-          dnf debuginfo-install -y python3
+          if [[ "${{ matrix.containerTag }}" != "stream9" ]]; then dnf debuginfo-install -y python3; fi
 
       - name: install qpid-proton python wheel
         run: ${PYTHON} -m pip install $(find ${ProtonBuildDir}/python/dist -name 'python_qpid_proton*.whl')
