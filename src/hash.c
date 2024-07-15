@@ -410,10 +410,11 @@ qd_error_t qd_hash_retrieve_str(qd_hash_t *h, const unsigned char *key, void **v
                                                          key);
     if (item) {
         *val = item->v.val;
+        return QD_ERROR_NONE;
 	} else {
         *val = 0;
+        return QD_ERROR_NOT_FOUND;
     }
-	return QD_ERROR_NONE;
 }
 
 

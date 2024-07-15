@@ -96,7 +96,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
         // HTTP2 can have more than one header frame come in for the same request.
         // For example, in GRPC, we can get a header at the beginning of the stream
         // and a footer at the end of the stream and both these frames are HEADER type frames.
-        if (error == QD_ERROR_NONE && !stream_info) {
+        if (error == QD_ERROR_NOT_FOUND) {
             qd_http2_stream_info_t *stream_info = new_qd_http2_stream_info_t();
             ZERO(stream_info);
             DEQ_INSERT_TAIL(transport_handle->http2.streams, stream_info);
@@ -118,7 +118,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
         }
 
     } else { // from_client
-        if (error != QD_ERROR_NONE && stream_info) {
+        if (error != QD_ERROR_NOT_FOUND && stream_info) {
             vflow_latency_end(stream_info->vflow);
         }
     }
@@ -149,7 +149,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
         //
         // Set the http request method (GET, POST etc) on the stream's vflow object.
         //
-        if(error == QD_ERROR_NONE) {
+        if(error == QD_ERROR_NOT_FOUND) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_METHOD -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
         }
         else {
@@ -161,9 +161,8 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
         assert(stream_info != 0);
         //
         // We expect that the above call to get_stream_info_from_hashtable() should return a valid stream_info object.
-        // The qd_hash_retrieve_str() function always returns QD_ERROR_NONE but it is an error if we did not get back a non-zero stream_info object.
         //
-        if(error == QD_ERROR_NONE && stream_info == 0) {
+        if(error == QD_ERROR_NOT_FOUND) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_STATUS -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
         }
         else {
