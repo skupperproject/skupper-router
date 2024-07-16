@@ -1116,7 +1116,7 @@ static int _server_rx_response_cb(h1_codec_request_state_t *hrs,
     // We are about to start decoding the HTTP response from the server.
     // End the server side latency for the server request's vanflow.
     //
-    vflow_latency_end(hreq->base.vflow);
+    vflow_latency_end(hreq->base.vflow, VFLOW_ATTRIBUTE_LATENCY);
 
     _server_response_msg_t *rmsg = new__server_response_msg_t();
     ZERO(rmsg);

@@ -918,7 +918,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
             //
             int32_t                  stream_id   = frame->hd.stream_id;
             qdr_http2_stream_data_t *stream_data = nghttp2_session_get_stream_user_data(conn->session, stream_id);
-            vflow_latency_end(stream_data->vflow);
+            vflow_latency_end(stream_data->vflow, VFLOW_ATTRIBUTE_LATENCY);
         }
     }
 
@@ -2592,7 +2592,7 @@ static uint64_t qdr_http_deliver(void *context, qdr_link_t *link, qdr_delivery_t
             // On an ingress connection, the response qdr_delivery_t is being received for a particular stream.
             // This is the time we call the vflow_latency_end and we do it only once.
             //
-            vflow_latency_end(stream_data->vflow);
+            vflow_latency_end(stream_data->vflow, VFLOW_ATTRIBUTE_LATENCY);
         }
     }
     qd_log(LOG_HTTP_ADAPTOR, QD_LOG_DEBUG,

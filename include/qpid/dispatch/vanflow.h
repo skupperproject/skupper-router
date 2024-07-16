@@ -137,11 +137,12 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE = 59,  // uint          Octet rate in reverse direction
 
     VFLOW_ATTRIBUTE_CONNECTOR        = 60,  // Reference     Reference to a CONNECTOR for a BIFLOW_TPORT
+    VFLOW_ATTRIBUTE_PROCESS_LATENCY  = 61,  // uint          Latency of workload measured from connector (first octet to first octet)
 } vflow_attribute_t;
 // clang-format on
 
 #define VALID_REF_ATTRS     0x10006000000000e6
-#define VALID_UINT_ATTRS    0x0f999ffa07800119
+#define VALID_UINT_ATTRS    0x2f999ffa07800119
 #define VALID_COUNTER_ATTRS 0x0610035000800000
 #define VALID_STRING_ATTRS  0x00660005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
@@ -169,9 +170,26 @@ typedef enum vflow_log_severity {
 vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record_t *parent);
 
 /**
+ * vflow_start_co_record
+ *
+ * Open a co-record for a base-record that is owned by a different router.  Co-records function like normal records
+ * with the following exceptions:
+ *
+ *  - Lifecycle is not tracked and start/end timestamps are not emitted.
+ *  - They are not part of the local record hierarchy.  They are stored separately.
+ *  - They are not refreshed by a FLUSH request
+ *  - They are refreshed by a source-id-specific CO-FLUSH request from another router.
+ *
+ * @param record_type The type for the newly opened record
+ * @param identity_iter Iterator containing the identity of the base record
+ * @return Pointer to the new record or NULL if the identity didn't parse properly
+ */
+vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_iterator_t *identity_iter);
+
+/**
  * vflow_end_record
  * 
- * Close a record when it is no longer needed.  After a record is closed, it cannot be referenced
+ * Close a record (or co-record) when it is no longer needed.  After a record is closed, it cannot be referenced
  * or accessed in any way thereafter.
  * 
  * @param record The record pointer returned by vflow_start_record
@@ -307,10 +325,13 @@ void vflow_set_trace(vflow_record_t *record, qd_message_t *msg);
  *
  * If vflow_latency_end is called without a prior call to vflow_latency_start, the call will do nothing.
  *
+ * Note that a record can only track one latency measurement at a time.
+ *
  * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The attribute into which to store the latency
  */
 void vflow_latency_start(vflow_record_t *record);
-void vflow_latency_end(vflow_record_t *record);
+void vflow_latency_end(vflow_record_t *record, vflow_attribute_t attribute_type);
 
 /**
  * @brief Request that the rate of change of a counter attribute be stored in a rate attribute.

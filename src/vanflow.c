@@ -94,6 +94,7 @@ struct vflow_record_t {
     bool                         never_logged;
     bool                         force_log;
     bool                         ended;
+    bool                         co_record;
 };
 
 ALLOC_DECLARE(vflow_record_t);
@@ -150,6 +151,7 @@ typedef struct {
     vflow_record_t      *local_site;
     vflow_record_t      *local_router;
     char                *local_router_id;
+    vflow_record_list_t  co_records;
     vflow_record_list_t  unflushed_flow_records[FLUSH_SLOT_COUNT];
     vflow_record_list_t  unflushed_log_records[FLUSH_SLOT_COUNT];
     vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];  // not flow or log records
@@ -262,6 +264,45 @@ static void _vflow_strncat_id(char *buffer, size_t n, const vflow_identity_t *id
 
 
 /**
+ * @brief Parse the contents of an iterator into an identity object.  Return true iff successful.
+ *
+ * @param identity Pointer to the identity object to write to
+ * @param iter Iterator for a string representation of an identity 
+ * @return true if the parse was valid
+ * @return false if the parse failed
+ */
+static bool _vflow_parse_id_iter(vflow_identity_t *identity, qd_iterator_t *iter)
+{
+    identity->record_id = 0;
+    size_t source_size = qd_iterator_ncopy(iter, (uint8_t*) identity->source_id, ROUTER_ID_SIZE - 1);
+    identity->source_id[source_size] = '\0';
+    if (source_size != ROUTER_ID_SIZE - 1) {
+        return false;
+    }
+    const char colon = qd_iterator_octet(iter);
+    if (colon != ':') {
+        return false;
+    }
+
+    size_t total_size = ROUTER_ID_SIZE + 1;
+    while (!qd_iterator_end(iter)) {
+        total_size++;
+        if (total_size > IDENTITY_MAX) {
+            return false;
+        }
+        const unsigned char digit = qd_iterator_octet(iter);
+
+        if (digit < '0' || digit > '9') {
+            return false;
+        }
+        identity->record_id = (identity->record_id * 10) + (digit - '0');
+    }
+
+    return true;
+}
+
+
+/**
  * @brief Concatenate the attribute name onto a string.
  *
  * @param buffer Target string for concatenation
@@ -314,6 +355,8 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
         record->flush_slot = state->current_flush_slot;
         switch (record->record_type) {
             case VFLOW_RECORD_FLOW:
+            case VFLOW_RECORD_BIFLOW_APP:
+            case VFLOW_RECORD_BIFLOW_TPORT:
                 DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
                 break;
             case VFLOW_RECORD_LOG:
@@ -339,60 +382,68 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
         return;
     }
 
-    //
-    // If the record type is ROUTER, this is the local-router record.  Store it.
-    // If the record type is SITE, this router owns the site records as well, link it in.
-    // Otherwise, if the parent is not specified, use the local_router as the parent.
-    //
-    // Note that the first record to be inserted will always be the ROUTER record.
-    //
     vflow_record_t *record = work->record;
-    if (record->record_type == VFLOW_RECORD_ROUTER) {
-        state->local_router = record;
-        state->local_root   = record;
-        state->local_router_id = _vflow_id_to_new_string(&record->identity);
-    } else if (record->record_type == VFLOW_RECORD_SITE) {
-        state->local_site = record;
-        state->local_root = record;
+
+    if (!record->co_record) {
+        //
+        // If the record type is ROUTER, this is the local-router record.  Store it.
+        // If the record type is SITE, this router owns the site records as well, link it in.
+        // Otherwise, if the parent is not specified, use the local_router as the parent.
+        //
+        // Note that the first record to be inserted will always be the ROUTER record.
+        //
+        if (record->record_type == VFLOW_RECORD_ROUTER) {
+            state->local_router = record;
+            state->local_root   = record;
+            state->local_router_id = _vflow_id_to_new_string(&record->identity);
+        } else if (record->record_type == VFLOW_RECORD_SITE) {
+            state->local_site = record;
+            state->local_root = record;
+
+            //
+            // Update the existing router record to have the site record as its parent
+            //
+            assert(!!state->local_router);
+            state->local_router->parent = record;
+            DEQ_INSERT_TAIL(record->children, state->local_router);
+            _vflow_post_flush_record_TH(state->local_router);
+        } else if (record->parent == 0) {
+            record->parent = state->local_router;
+        }
 
         //
-        // Update the existing router record to have the site record as its parent
+        // Record the creation timestamp in the record.  Log records provide their own start timestamp
         //
-        assert(!!state->local_router);
-        state->local_router->parent = record;
-        DEQ_INSERT_TAIL(record->children, state->local_router);
-        _vflow_post_flush_record_TH(state->local_router);
-    } else if (record->parent == 0) {
-        record->parent = state->local_router;
-    }
+        if (record->record_type != VFLOW_RECORD_LOG) {
+            vflow_work_t sub_work;
+            sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
+            sub_work.record    = record;
+            sub_work.value.int_val = work->timestamp;
+            _vflow_set_int_TH(&sub_work, false);
+        }
 
-    //
-    // Record the creation timestamp in the record.  Log records provide their own start timestamp
-    //
-    if (record->record_type != VFLOW_RECORD_LOG) {
-        vflow_work_t sub_work;
-        sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
-        sub_work.record    = record;
-        sub_work.value.int_val = work->timestamp;
-        _vflow_set_int_TH(&sub_work, false);
-    }
+        //
+        // Record the parent reference.
+        //
+        if (!!record->parent) {
+            vflow_work_t sub_work;
+            sub_work.attribute = VFLOW_ATTRIBUTE_PARENT;
+            sub_work.record    = record;
+            sub_work.value.string_val = _vflow_id_to_new_string(&record->parent->identity);
+            _vflow_set_string_TH(&sub_work, false);
+        }
 
-    //
-    // Record the parent reference.
-    //
-    if (!!record->parent) {
-        vflow_work_t sub_work;
-        sub_work.attribute = VFLOW_ATTRIBUTE_PARENT;
-        sub_work.record    = record;
-        sub_work.value.string_val = _vflow_id_to_new_string(&record->parent->identity);
-        _vflow_set_string_TH(&sub_work, false);
-    }
-
-    //
-    // Place the new record on the parent's list of children
-    //
-    if (!!record->parent) {
-        DEQ_INSERT_TAIL(record->parent->children, record);
+        //
+        // Place the new record on the parent's list of children
+        //
+        if (!!record->parent) {
+            DEQ_INSERT_TAIL(record->parent->children, record);
+        }
+    } else {
+        //
+        // It's a co-record.  Store it in the co-record list.
+        //
+        DEQ_INSERT_TAIL(state->co_records, record);
     }
 
     //
@@ -419,7 +470,7 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     //
     // Record the deletion timestamp in the record. Log records provide their own end timestamp
     //
-    if (record->record_type != VFLOW_RECORD_LOG) {
+    if (record->record_type != VFLOW_RECORD_LOG && !record->co_record) {
         vflow_work_t sub_work;
         sub_work.attribute = VFLOW_ATTRIBUTE_END_TIME;
         sub_work.record    = record;
@@ -512,6 +563,7 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
     vflow_record_t         *record = work->record;
     vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
     vflow_attribute_data_t *data;
+    bool                    changed = true;
 
     if (!insert || insert->attribute_type != work->attribute) {
         //
@@ -531,6 +583,7 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
         //
         // The attribute already exists, overwrite the value
         //
+        changed = insert->value.uint_val != work->value.int_val;
         insert->value.uint_val = work->value.int_val;
         insert->emit_ordinal   = record->emit_ordinal;
     }
@@ -538,7 +591,9 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
     //
     // Schedule this record for flushing
     //
-    _vflow_post_flush_record_TH(record);
+    if (changed) {
+        _vflow_post_flush_record_TH(record);
+    }
 }
 
 
@@ -678,12 +733,18 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
         DEQ_REMOVE(record->parent->children, record);
     }
 
+    if (record->co_record) {
+        DEQ_REMOVE(state->co_records, record);
+    }
+
     //
     // Remove the record from the unflushed list if needed
     //
     if (record->flush_slot >= 0) {
         switch (record->record_type) {
             case VFLOW_RECORD_FLOW:
+            case VFLOW_RECORD_BIFLOW_APP:
+            case VFLOW_RECORD_BIFLOW_TPORT:
                 DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
                 break;
             case VFLOW_RECORD_LOG:
@@ -824,6 +885,7 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_OCTETS_REVERSE     : return "octetsReverse";
     case VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE : return "octetRateReverse";
     case VFLOW_ATTRIBUTE_CONNECTOR          : return "connector";
+    case VFLOW_ATTRIBUTE_PROCESS_LATENCY    : return "processLatency";
     }
     return "UNKNOWN";
 }
@@ -853,7 +915,7 @@ static char *_vflow_unserialize_identity(qd_parsed_field_t *field)
  */
 static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
 {
-    qd_log_level_t log_level = record->record_type == VFLOW_RECORD_FLOW ? QD_LOG_DEBUG : QD_LOG_INFO;
+    qd_log_level_t log_level = record->record_type == VFLOW_RECORD_FLOW ? QD_LOG_DEBUG : QD_LOG_INFO; // TODO - Add BIFLOWs here
     if (!qd_log_enabled(LOG_FLOW_LOG, log_level))
         return;
 #define LINE_MAX 1000
@@ -1421,6 +1483,13 @@ static void *_vflow_thread_TH(void *context)
     //
     _vflow_free_record_TH(state->local_root, true);
 
+    //
+    // Free all remaining co-records
+    //
+    while (!DEQ_IS_EMPTY(state->co_records)) {
+        _vflow_free_record_TH(DEQ_HEAD(state->co_records), false);
+    }
+
     qd_log(LOG_FLOW_LOG, QD_LOG_INFO, "Protocol logging completed");
     return 0;
 }
@@ -1524,6 +1593,33 @@ vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record
     // Assign a unique identity to the new record
     //
     _vflow_next_id(&record->identity);
+
+    _vflow_post_work(work);
+    return record;
+}
+
+
+vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_iterator_t *identity_iterator)
+{
+    vflow_record_t *record = new_vflow_record_t();
+    ZERO(record);
+    record->record_type   = record_type;
+    record->parent        = 0;
+    record->flush_slot    = -1;
+    record->never_logged  = true;
+    record->force_log     = false;
+    record->ended         = false;
+    record->co_record     = true;
+
+    bool parse_success = _vflow_parse_id_iter(&record->identity, identity_iterator);
+    if (!parse_success) {
+        free_vflow_record_t(record);
+        return 0;
+    }
+
+    vflow_work_t *work = _vflow_work(_vflow_start_record_TH);
+    work->record    = record;
+    work->timestamp = _now_in_usec();
 
     _vflow_post_work(work);
     return record;
@@ -1728,11 +1824,11 @@ void vflow_latency_start(vflow_record_t *record)
 }
 
 
-void vflow_latency_end(vflow_record_t *record)
+void vflow_latency_end(vflow_record_t *record, vflow_attribute_t attribute_type)
 {
     if (!!record && record->latency_start > 0) {
         uint64_t now = _now_in_usec();
-        vflow_set_uint64(record, VFLOW_ATTRIBUTE_LATENCY, now - record->latency_start);
+        vflow_set_uint64(record, attribute_type, now - record->latency_start);
         //
         // Clear the latency_start so that any subsequent calls to vflow_latency_end on the
         // same vanflow will not have any effect.

@@ -27,6 +27,7 @@
 #include <qpid/dispatch/log.h>
 #include <qpid/dispatch/platform.h>
 #include <qpid/dispatch/connection_counters.h>
+#include <qpid/dispatch/vanflow.h>
 #include <proton/proactor.h>
 #include <proton/raw_connection.h>
 #include <proton/listener.h>
@@ -615,7 +616,9 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->common.vflow) {
-        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
+        if (conn->listener_side) {
+            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
+        }
         vflow_end_record(conn->common.vflow);
     }
 
@@ -1058,12 +1061,15 @@ static void compose_and_send_server_stream_CSIDE_IO(qd_tcp_connection_t *conn)
     // and will consist solely of AMQP transport frames.
     //
     assert(conn->reply_to);
+    assert(conn->common.parent && conn->common.parent->context_type == TL_CONNECTOR);
+    vflow_record_t *connector_record = conn->common.parent->vflow;
+
     message = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
     qd_compose_start_list(message);
     qd_compose_insert_null(message);                                // message-id
     qd_compose_insert_null(message);                                // user-id
     qd_compose_insert_string(message, conn->reply_to);              // to
-    qd_compose_insert_null(message);                                // subject
+    vflow_serialize_identity(connector_record, message);            // subject
     qd_compose_insert_null(message);                                // reply-to
     qd_compose_insert_null(message);                                // correlation-id
     qd_compose_insert_string(message, QD_CONTENT_TYPE_APP_OCTETS);  // content-type
@@ -1122,8 +1128,12 @@ static void extract_metadata_from_stream_CSIDE(qd_tcp_connection_t *conn)
     }
 
     if (!!ci_iter) {
-        vflow_set_ref_from_iter(conn->common.vflow, VFLOW_ATTRIBUTE_COUNTERFLOW, ci_iter);
+        //
+        // If we have an iterator for the base-record identity, use it to create a co-record
+        //
+        conn->common.vflow = vflow_start_co_record_iter(VFLOW_RECORD_BIFLOW_TPORT, ci_iter);
         qd_iterator_free(ci_iter);
+        vflow_set_trace(conn->common.vflow, conn->outbound_stream);
     }
 }
 
@@ -1193,7 +1203,7 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " CSIDE new outbound delivery", DLV_ARGS(delivery));
 
-    qd_message_t          *msg = qdr_delivery_message(delivery);
+    qd_message_t         *msg = qdr_delivery_message(delivery);
     qd_tcp_connection_t *conn = new_qd_tcp_connection_t();
     ZERO(conn);
 
@@ -1216,16 +1226,12 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
     conn->outbound_delivery = delivery;
     conn->outbound_stream   = msg;
 
-    conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, connector->common.vflow);
-    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
-    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
-
-    // Call vflow_set_trace() only on the outbound CSIDE.
-    // See https://github.com/skupperproject/skupper-router/blob/2.6.x/src/adaptors/tcp/tcp_adaptor.c#L1486
-    vflow_set_trace(conn->common.vflow, msg);
-
+    //
+    // Get relevant data from the connection stream.  If there is base-record data in the stream,
+    // this will create a VanFlow co-record that we can use to report metrics and state.
+    //
     extract_metadata_from_stream_CSIDE(conn);
+    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;
     conn->context.handler = on_connection_event_CSIDE_IO;
@@ -1293,7 +1299,6 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
         bool was_blocked = window_full(conn);
         uint64_t octet_count = produce_read_buffers_XSIDE_IO(conn, conn->inbound_stream, &read_closed);
         conn->inbound_octets += octet_count;
-        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
 
         if (octet_count > 0) {
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', octet_count);
@@ -1305,6 +1310,9 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
                        DLV_ARGS(conn->inbound_delivery), conn->inbound_octets, unacked);
             }
+            if (conn->listener_side) {
+                vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
+            }
         }
 
         //
@@ -1315,7 +1323,7 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
             if (conn->listener_side) {
                 vflow_latency_start(conn->common.vflow);
             } else {
-                vflow_latency_end(conn->common.vflow);
+                vflow_latency_end(conn->common.vflow, VFLOW_ATTRIBUTE_PROCESS_LATENCY);
             }
         }
 
@@ -1378,6 +1386,9 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
             conn->window.pending_ack += octets;
             if (octets > 0) {
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE Raw write: Consumed %"PRIu64" octets from stream", conn->conn_id, conn->listener_side ? 'L' : 'C', octets);
+                if (conn->listener_side) {
+                    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, conn->outbound_octets);
+                }
             }
         }
 
@@ -1387,7 +1398,7 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
         if (!conn->outbound_first_octet && conn->outbound_octets > 0) {
             conn->outbound_first_octet = true;
             if (conn->listener_side) {
-                vflow_latency_end(conn->common.vflow);
+                vflow_latency_end(conn->common.vflow, VFLOW_ATTRIBUTE_LATENCY);
             } else {
                 vflow_latency_start(conn->common.vflow);
             }
@@ -1481,7 +1492,7 @@ static int64_t tls_consume_data_buffers(void *context, qd_buffer_list_t *buffers
         if (!conn->outbound_first_octet) {
             conn->outbound_first_octet = true;
             if (conn->listener_side) {
-                vflow_latency_end(conn->common.vflow);
+                vflow_latency_end(conn->common.vflow, VFLOW_ATTRIBUTE_LATENCY);
             } else {
                 vflow_latency_start(conn->common.vflow);
             }
@@ -1551,7 +1562,6 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
     if (decrypted_octets) {
         more_work = true;
         conn->inbound_octets += decrypted_octets;
-        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
 
         if (conn->listener_side && !!conn->observer_handle) {
             qd_buffer_t *buf = DEQ_HEAD(decrypted_buffers);
@@ -1559,6 +1569,7 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
                 qdpo_data(conn->observer_handle, true, qd_buffer_base(buf), qd_buffer_size(buf));
                 buf = DEQ_NEXT(buf);
             }
+            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
         }
 
         qd_message_produce_buffers(conn->inbound_stream, &decrypted_buffers);
@@ -1582,7 +1593,7 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
             if (conn->listener_side) {
                 vflow_latency_start(conn->common.vflow);
             } else {
-                vflow_latency_end(conn->common.vflow);
+                vflow_latency_end(conn->common.vflow, VFLOW_ATTRIBUTE_PROCESS_LATENCY);
             }
         }
     }
@@ -1960,7 +1971,7 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
             const char *cdesc = pn_condition_get_description(conn->error);
 
             if (!!cname) {
-                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_RESULT, cname);
+                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_RESULT, cname);  // TODO - LSIDE?
             }
             if (!!cdesc) {
                 vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
@@ -2037,9 +2048,11 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     conn->listener_side = true;
     conn->state         = LSIDE_INITIAL;
 
-    conn->common.vflow = vflow_start_record(VFLOW_RECORD_FLOW, listener->common.vflow);
+    conn->common.vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_TPORT, listener->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
     vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;

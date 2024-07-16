@@ -77,7 +77,7 @@ static int rx_response(qd_http1_decoder_connection_t *hconn, uintptr_t request_c
 
     // stop latency even if the request is not complete (1xx response code)
     if (!hreq->latency_done) {
-        vflow_latency_end(hreq->vflow);
+        vflow_latency_end(hreq->vflow, VFLOW_ATTRIBUTE_LATENCY);
         hreq->latency_done = true;
     }
 
