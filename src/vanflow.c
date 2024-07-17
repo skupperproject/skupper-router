@@ -205,7 +205,8 @@ static uint8_t valid_attributes[] = {
     ATTR_UINT,   ATTR_STRING, ATTR_STRING, ATTR_UINT,
     ATTR_UCOUNT, ATTR_STRING, ATTR_STRING, ATTR_UINT,
     ATTR_UINT,   ATTR_UCOUNT, ATTR_UCOUNT, ATTR_UINT,
-    ATTR_REF,    ATTR_UINT,
+    ATTR_REF,    ATTR_UINT,   ATTR_STRING, ATTR_STRING,
+    ATTR_STRING, ATTR_STRING,
 };
 
 /**
@@ -850,68 +851,72 @@ static const char *_vflow_record_type_name(const vflow_record_t *record)
 static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
 {
     switch (data->attribute_type) {
-    case VFLOW_ATTRIBUTE_RECORD_TYPE        : return "recordType";
-    case VFLOW_ATTRIBUTE_IDENTITY           : return "identity";
-    case VFLOW_ATTRIBUTE_PARENT             : return "parent";
-    case VFLOW_ATTRIBUTE_START_TIME         : return "startTime";
-    case VFLOW_ATTRIBUTE_END_TIME           : return "endTime";
-    case VFLOW_ATTRIBUTE_COUNTERFLOW        : return "counterflow";
-    case VFLOW_ATTRIBUTE_PEER               : return "peer";
-    case VFLOW_ATTRIBUTE_PROCESS            : return "process";
-    case VFLOW_ATTRIBUTE_SIBLING_ORDINAL    : return "sibOrdinal";
-    case VFLOW_ATTRIBUTE_LOCATION           : return "location";
-    case VFLOW_ATTRIBUTE_PROVIDER           : return "provider";
-    case VFLOW_ATTRIBUTE_PLATFORM           : return "platform";
-    case VFLOW_ATTRIBUTE_NAMESPACE          : return "namespace";
-    case VFLOW_ATTRIBUTE_MODE               : return "mode";
-    case VFLOW_ATTRIBUTE_SOURCE_HOST        : return "sourceHost";
-    case VFLOW_ATTRIBUTE_DESTINATION_HOST   : return "destHost";
-    case VFLOW_ATTRIBUTE_PROTOCOL           : return "protocol";
-    case VFLOW_ATTRIBUTE_SOURCE_PORT        : return "sourcePort";
-    case VFLOW_ATTRIBUTE_DESTINATION_PORT   : return "destPort";
-    case VFLOW_ATTRIBUTE_VAN_ADDRESS        : return "vanAddress";
-    case VFLOW_ATTRIBUTE_IMAGE_NAME         : return "imageName";
-    case VFLOW_ATTRIBUTE_IMAGE_VERSION      : return "imageVersion";
-    case VFLOW_ATTRIBUTE_HOST_NAME          : return "hostname";
-    case VFLOW_ATTRIBUTE_OCTETS             : return "octets";
-    case VFLOW_ATTRIBUTE_LATENCY            : return "latency";
-    case VFLOW_ATTRIBUTE_TRANSIT_LATENCY    : return "transitLatency";
-    case VFLOW_ATTRIBUTE_BACKLOG            : return "backlog";
-    case VFLOW_ATTRIBUTE_METHOD             : return "method";
-    case VFLOW_ATTRIBUTE_RESULT             : return "result";
-    case VFLOW_ATTRIBUTE_REASON             : return "reason";
-    case VFLOW_ATTRIBUTE_NAME               : return "name";
-    case VFLOW_ATTRIBUTE_TRACE              : return "trace";
-    case VFLOW_ATTRIBUTE_BUILD_VERSION      : return "buildVersion";
-    case VFLOW_ATTRIBUTE_LINK_COST          : return "linkCost";
-    case VFLOW_ATTRIBUTE_DIRECTION          : return "direction";
-    case VFLOW_ATTRIBUTE_OCTET_RATE         : return "octetRate";
-    case VFLOW_ATTRIBUTE_OCTETS_OUT         : return "octetsOut";
-    case VFLOW_ATTRIBUTE_OCTETS_UNACKED     : return "octetsUnacked";
-    case VFLOW_ATTRIBUTE_WINDOW_CLOSURES    : return "windowClosures";
-    case VFLOW_ATTRIBUTE_WINDOW_SIZE        : return "windowSize";
-    case VFLOW_ATTRIBUTE_FLOW_COUNT_L4      : return "flowCountL4";
-    case VFLOW_ATTRIBUTE_FLOW_COUNT_L7      : return "flowCountL7";
-    case VFLOW_ATTRIBUTE_FLOW_RATE_L4       : return "flowRateL4";
-    case VFLOW_ATTRIBUTE_FLOW_RATE_L7       : return "flowRateL7";
-    case VFLOW_ATTRIBUTE_DURATION           : return "duration";
-    case VFLOW_ATTRIBUTE_IMAGE              : return "image";
-    case VFLOW_ATTRIBUTE_GROUP              : return "group";
-    case VFLOW_ATTRIBUTE_STREAM_ID          : return "streamId";
-    case VFLOW_ATTRIBUTE_LOG_SEVERITY       : return "logSeverity";
-    case VFLOW_ATTRIBUTE_LOG_TEXT           : return "logText";
-    case VFLOW_ATTRIBUTE_SOURCE_FILE        : return "sourceFile";
-    case VFLOW_ATTRIBUTE_SOURCE_LINE        : return "sourceLine";
-    case VFLOW_ATTRIBUTE_LINK_COUNT         : return "linkCount";
-    case VFLOW_ATTRIBUTE_OPER_STATUS        : return "operStatus";
-    case VFLOW_ATTRIBUTE_ROLE               : return "role";
-    case VFLOW_ATTRIBUTE_UP_TIMESTAMP       : return "upTimeStamp";
-    case VFLOW_ATTRIBUTE_DOWN_TIMESTAMP     : return "downTimeStamp";
-    case VFLOW_ATTRIBUTE_DOWN_COUNT         : return "downCount";
-    case VFLOW_ATTRIBUTE_OCTETS_REVERSE     : return "octetsReverse";
-    case VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE : return "octetRateReverse";
-    case VFLOW_ATTRIBUTE_CONNECTOR          : return "connector";
-    case VFLOW_ATTRIBUTE_PROCESS_LATENCY    : return "processLatency";
+    case VFLOW_ATTRIBUTE_RECORD_TYPE          : return "recordType";
+    case VFLOW_ATTRIBUTE_IDENTITY             : return "identity";
+    case VFLOW_ATTRIBUTE_PARENT               : return "parent";
+    case VFLOW_ATTRIBUTE_START_TIME           : return "startTime";
+    case VFLOW_ATTRIBUTE_END_TIME             : return "endTime";
+    case VFLOW_ATTRIBUTE_COUNTERFLOW          : return "counterflow";
+    case VFLOW_ATTRIBUTE_PEER                 : return "peer";
+    case VFLOW_ATTRIBUTE_PROCESS              : return "process";
+    case VFLOW_ATTRIBUTE_SIBLING_ORDINAL      : return "sibOrdinal";
+    case VFLOW_ATTRIBUTE_LOCATION             : return "location";
+    case VFLOW_ATTRIBUTE_PROVIDER             : return "provider";
+    case VFLOW_ATTRIBUTE_PLATFORM             : return "platform";
+    case VFLOW_ATTRIBUTE_NAMESPACE            : return "namespace";
+    case VFLOW_ATTRIBUTE_MODE                 : return "mode";
+    case VFLOW_ATTRIBUTE_SOURCE_HOST          : return "sourceHost";
+    case VFLOW_ATTRIBUTE_DESTINATION_HOST     : return "destHost";
+    case VFLOW_ATTRIBUTE_PROTOCOL             : return "protocol";
+    case VFLOW_ATTRIBUTE_SOURCE_PORT          : return "sourcePort";
+    case VFLOW_ATTRIBUTE_DESTINATION_PORT     : return "destPort";
+    case VFLOW_ATTRIBUTE_VAN_ADDRESS          : return "vanAddress";
+    case VFLOW_ATTRIBUTE_IMAGE_NAME           : return "imageName";
+    case VFLOW_ATTRIBUTE_IMAGE_VERSION        : return "imageVersion";
+    case VFLOW_ATTRIBUTE_HOST_NAME            : return "hostname";
+    case VFLOW_ATTRIBUTE_OCTETS               : return "octets";
+    case VFLOW_ATTRIBUTE_LATENCY              : return "latency";
+    case VFLOW_ATTRIBUTE_TRANSIT_LATENCY      : return "transitLatency";
+    case VFLOW_ATTRIBUTE_BACKLOG              : return "backlog";
+    case VFLOW_ATTRIBUTE_METHOD               : return "method";
+    case VFLOW_ATTRIBUTE_RESULT               : return "result";
+    case VFLOW_ATTRIBUTE_REASON               : return "reason";
+    case VFLOW_ATTRIBUTE_NAME                 : return "name";
+    case VFLOW_ATTRIBUTE_TRACE                : return "trace";
+    case VFLOW_ATTRIBUTE_BUILD_VERSION        : return "buildVersion";
+    case VFLOW_ATTRIBUTE_LINK_COST            : return "linkCost";
+    case VFLOW_ATTRIBUTE_DIRECTION            : return "direction";
+    case VFLOW_ATTRIBUTE_OCTET_RATE           : return "octetRate";
+    case VFLOW_ATTRIBUTE_OCTETS_OUT           : return "octetsOut";
+    case VFLOW_ATTRIBUTE_OCTETS_UNACKED       : return "octetsUnacked";
+    case VFLOW_ATTRIBUTE_WINDOW_CLOSURES      : return "windowClosures";
+    case VFLOW_ATTRIBUTE_WINDOW_SIZE          : return "windowSize";
+    case VFLOW_ATTRIBUTE_FLOW_COUNT_L4        : return "flowCountL4";
+    case VFLOW_ATTRIBUTE_FLOW_COUNT_L7        : return "flowCountL7";
+    case VFLOW_ATTRIBUTE_FLOW_RATE_L4         : return "flowRateL4";
+    case VFLOW_ATTRIBUTE_FLOW_RATE_L7         : return "flowRateL7";
+    case VFLOW_ATTRIBUTE_DURATION             : return "duration";
+    case VFLOW_ATTRIBUTE_IMAGE                : return "image";
+    case VFLOW_ATTRIBUTE_GROUP                : return "group";
+    case VFLOW_ATTRIBUTE_STREAM_ID            : return "streamId";
+    case VFLOW_ATTRIBUTE_LOG_SEVERITY         : return "logSeverity";
+    case VFLOW_ATTRIBUTE_LOG_TEXT             : return "logText";
+    case VFLOW_ATTRIBUTE_SOURCE_FILE          : return "sourceFile";
+    case VFLOW_ATTRIBUTE_SOURCE_LINE          : return "sourceLine";
+    case VFLOW_ATTRIBUTE_LINK_COUNT           : return "linkCount";
+    case VFLOW_ATTRIBUTE_OPER_STATUS          : return "operStatus";
+    case VFLOW_ATTRIBUTE_ROLE                 : return "role";
+    case VFLOW_ATTRIBUTE_UP_TIMESTAMP         : return "upTimeStamp";
+    case VFLOW_ATTRIBUTE_DOWN_TIMESTAMP       : return "downTimeStamp";
+    case VFLOW_ATTRIBUTE_DOWN_COUNT           : return "downCount";
+    case VFLOW_ATTRIBUTE_OCTETS_REVERSE       : return "octetsReverse";
+    case VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE   : return "octetRateReverse";
+    case VFLOW_ATTRIBUTE_CONNECTOR            : return "connector";
+    case VFLOW_ATTRIBUTE_PROCESS_LATENCY      : return "processLatency";
+    case VFLOW_ATTRIBUTE_PROXY_HOST           : return "proxyHost";
+    case VFLOW_ATTRIBUTE_PROXY_PORT           : return "proxyPort";
+    case VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  : return "errorListenerSide";
+    case VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE : return "errorConnectorSide";
     }
     return "UNKNOWN";
 }
@@ -1772,6 +1777,27 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
         work->attribute        = attribute_type;
         work->value.string_val = !!value ? strndup(value, strnlen(value, MAX_STRING_VALUE)) : 0;
         _vflow_post_work(work);
+    }
+}
+
+void vflow_set_pn_condition_string(vflow_record_t *record, vflow_attribute_t attribute_type, pn_condition_t *cond)
+{
+    if (!!record && !!cond) {
+        assert(valid_attributes[attribute_type] & ATTR_STRING);
+        const char *cname = pn_condition_get_name(cond);
+        const char *cdesc = pn_condition_get_description(cond);
+
+        if (!!cname && !!cdesc) {
+            size_t max = strlen(cname) + strlen(cdesc) + 4;
+            char *text = (char*) qd_malloc(max);
+            snprintf(text, max, "%s (%s)", cname, cdesc);
+
+            vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
+            work->record           = record;
+            work->attribute        = attribute_type;
+            work->value.string_val = text;
+            _vflow_post_work(work);
+        }
     }
 }
 

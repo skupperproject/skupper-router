@@ -138,6 +138,11 @@ typedef enum vflow_attribute {
 
     VFLOW_ATTRIBUTE_CONNECTOR        = 60,  // Reference     Reference to a CONNECTOR for a BIFLOW_TPORT
     VFLOW_ATTRIBUTE_PROCESS_LATENCY  = 61,  // uint          Latency of workload measured from connector (first octet to first octet)
+    VFLOW_ATTRIBUTE_PROXY_HOST       = 62,  // String
+    VFLOW_ATTRIBUTE_PROXY_PORT       = 63,  // String
+
+    VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  = 64,  // String
+    VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE = 65,  // String
 } vflow_attribute_t;
 // clang-format on
 
@@ -262,6 +267,17 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
  * @param value The string value to be set
  */
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value);
+
+/**
+ * vflow_set_pn_condition_string
+ *
+ * Set a string attribute with the condition name and description.
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param cond Pointer to a proton condition object
+ */
+void vflow_set_pn_condition_string(vflow_record_t *record, vflow_attribute_t attribute_type, pn_condition_t *cond);
 
 /**
  * vflow_set_timestamp_now
