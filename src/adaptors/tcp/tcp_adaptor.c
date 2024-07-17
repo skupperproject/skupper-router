@@ -1062,14 +1062,13 @@ static void compose_and_send_server_stream_CSIDE_IO(qd_tcp_connection_t *conn)
     //
     assert(conn->reply_to);
     assert(conn->common.parent && conn->common.parent->context_type == TL_CONNECTOR);
-    vflow_record_t *connector_record = conn->common.parent->vflow;
 
     message = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
     qd_compose_start_list(message);
     qd_compose_insert_null(message);                                // message-id
     qd_compose_insert_null(message);                                // user-id
     qd_compose_insert_string(message, conn->reply_to);              // to
-    vflow_serialize_identity(connector_record, message);            // subject
+    qd_compose_insert_null(message);                                // subject
     qd_compose_insert_null(message);                                // reply-to
     qd_compose_insert_null(message);                                // correlation-id
     qd_compose_insert_string(message, QD_CONTENT_TYPE_APP_OCTETS);  // content-type
@@ -1241,6 +1240,7 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
 
     connector->connections_opened++;
     vflow_set_uint64(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, connector->connections_opened);
+    vflow_set_ref_from_record(conn->common.vflow, VFLOW_ATTRIBUTE_CONNECTOR, connector->common.vflow);
     sys_mutex_unlock(&connector->lock);
 
     conn->raw_conn = pn_raw_connection();
