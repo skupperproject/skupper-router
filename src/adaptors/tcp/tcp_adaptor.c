@@ -1231,7 +1231,7 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
     // this will create a VanFlow co-record that we can use to report metrics and state.
     //
     extract_metadata_from_stream_CSIDE(conn);
-    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
+    //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;
     conn->context.handler = on_connection_event_CSIDE_IO;
@@ -1305,8 +1305,8 @@ static bool manage_flow_XSIDE_IO(qd_tcp_connection_t *conn)
             if (!was_blocked && window_full(conn) && !read_closed) {
                 uint64_t unacked = conn->inbound_octets - conn->window.last_update;
                 conn->window.closed_count += 1;
-                vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, unacked);
-                vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window.closed_count);
+                //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, unacked);
+                //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window.closed_count);
                 qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
                        DLV_ARGS(conn->inbound_delivery), conn->inbound_octets, unacked);
             }
@@ -1576,10 +1576,10 @@ static bool manage_tls_flow_XSIDE_IO(qd_tcp_connection_t *conn)
 
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] %cSIDE TLS read: Produced %"PRIu64" octets into stream", conn->conn_id, conn->listener_side ? 'L' : 'C', decrypted_octets);
         if (!window_blocked && window_full(conn)) {
-            uint64_t unacked = conn->inbound_octets - conn->window.last_update;
+            //uint64_t unacked = conn->inbound_octets - conn->window.last_update;
             conn->window.closed_count += 1;
-            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, unacked);
-            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window.closed_count);
+            //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, unacked);
+            //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_CLOSURES, conn->window.closed_count);
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP RX window CLOSED: inbound_bytes=%" PRIu64 " unacked=%" PRIu64,
                    DLV_ARGS(conn->inbound_delivery), conn->inbound_octets,
                    (conn->inbound_octets - conn->window.last_update));
@@ -1965,18 +1965,7 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
         SET_ATOMIC_FLAG(&conn->raw_opened);
     } else if (etype == PN_RAW_CONNECTION_DISCONNECTED) {
         conn->error = !!conn->raw_conn ? pn_raw_connection_condition(conn->raw_conn) : 0;
-
-        if (!!conn->error) {
-            const char *cname = pn_condition_get_name(conn->error);
-            const char *cdesc = pn_condition_get_description(conn->error);
-
-            if (!!cname) {
-                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_RESULT, cname);  // TODO - LSIDE?
-            }
-            if (!!cdesc) {
-                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
-            }
-        }
+        vflow_set_pn_condition_string(conn->common.vflow, VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE, conn->error);
         close_connection_XSIDE_IO(conn);
         return;
     }
@@ -2003,18 +1992,7 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
         SET_ATOMIC_FLAG(&conn->raw_opened);
     } else if (etype == PN_RAW_CONNECTION_DISCONNECTED) {
         conn->error = !!conn->raw_conn ? pn_raw_connection_condition(conn->raw_conn) : 0;
-
-        if (!!conn->error) {
-            const char *cname = pn_condition_get_name(conn->error);
-            const char *cdesc = pn_condition_get_description(conn->error);
-
-            if (!!cname) {
-                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_RESULT, cname);
-            }
-            if (!!cdesc) {
-                vflow_set_string(conn->common.vflow, VFLOW_ATTRIBUTE_REASON, cdesc);
-            }
-        }
+        vflow_set_pn_condition_string(conn->common.vflow, VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE, conn->error);
         close_connection_XSIDE_IO(conn);
         return;
     }
@@ -2053,7 +2031,7 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
     vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
     vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
-    vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
+    //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;
     conn->context.handler = on_connection_event_LSIDE_IO;
@@ -2266,7 +2244,7 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
                                dstate->section_offset,
                                (conn->inbound_octets - dstate->section_offset));
                         conn->window.last_update = dstate->section_offset;
-                        vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, conn->inbound_octets - dstate->section_offset);
+                        //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_UNACKED, conn->inbound_octets - dstate->section_offset);
 
                         qd_delivery_state_free(dstate);
                     }

@@ -336,7 +336,7 @@ void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_
     const pn_netaddr_t *na =
         ingress ? pn_raw_connection_remote_addr(pn_raw_conn) : pn_raw_connection_local_addr(pn_raw_conn);
     if (pn_netaddr_host_port(na, remote_host, 200, remote_port, 50) == 0) {
-        vflow_set_string(vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, remote_host);
-        vflow_set_string(vflow, VFLOW_ATTRIBUTE_SOURCE_PORT, remote_port);
+        vflow_set_string(vflow, ingress ? VFLOW_ATTRIBUTE_SOURCE_HOST : VFLOW_ATTRIBUTE_PROXY_HOST, remote_host);
+        vflow_set_string(vflow, ingress ? VFLOW_ATTRIBUTE_SOURCE_PORT : VFLOW_ATTRIBUTE_PROXY_PORT, remote_port);
     }
 }
