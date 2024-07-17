@@ -20,7 +20,7 @@
 from http1_tests import wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest
 from system_test import TestTimeout, retry, Logger
-from vanflow_snooper import VFlowSnooperThread
+from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
@@ -326,18 +326,6 @@ class VFlowEventsGrabber(MessagingHandler):
         Container(self).run()
 
 
-class RecordCounter(dict):
-    """
-    Counts the total number of each record type present in the list of records
-    """
-    def __init__(self, records):
-        super(dict, self).__init__()
-        for record in records:
-            if 'RECORD_TYPE' in record:
-                rtype = record['RECORD_TYPE']
-                self[rtype] = self.get(rtype, 0) + 1
-
-
 class VFlowInterRouterTest(TestCase):
     """
     Verify that a multi-hop router network generates the proper Vanflow records
@@ -356,6 +344,7 @@ class VFlowInterRouterTest(TestCase):
         cls.tcp_listener_port = cls.tester.get_port()
         cls.tcp_connector_port = cls.tester.get_port()
         cls.tcp_noproc_port = cls.tester.get_port()
+        cls.connector_down_port = cls.tester.get_port()
 
         configs = [
             # Router INTA
@@ -376,13 +365,15 @@ class VFlowInterRouterTest(TestCase):
                                   'address': 'noProcessAddress'}),
                 # a dummy connector which never connects (operStatus == down)
                 ('connector', {'role': 'inter-router',
-                               'port': cls.tester.get_port()}),
-                # health-check listener
+                               'port': cls.connector_down_port,
+                               'name': 'IAmDown'}),
+                # health-check listener, this MUST NOT generate a ROUTER_ACCESS
                 ('listener', {'role': 'normal',
                               'host': '0.0.0.0',
                               'port': cls.tester.get_port(),
                               'http': 'true',
-                              'healthz': 'true'})
+                              'healthz': 'true',
+                              'name': "IgnoreMe"})
             ],
             # Router INTB
             [
@@ -413,7 +404,8 @@ class VFlowInterRouterTest(TestCase):
                               'host': '0.0.0.0',
                               'port': cls.tester.get_port(),
                               'http': 'true',
-                              'metrics': 'true'})
+                              'metrics': 'true',
+                              'name': 'IgnoreMeToo'})
             ]
         ]
 
@@ -438,87 +430,53 @@ class VFlowInterRouterTest(TestCase):
 
         cls.snooper_thread = VFlowSnooperThread(cls.inta.addresses[0])
 
-    def _inta_check(self, records):
-        # Verify the expected records are present for router inta's configuration
-
-        # Check that the connector has the expected process reference
-        for record in records:
-            if record['RECORD_TYPE'] == 'CONNECTOR' and record['VAN_ADDRESS'] == 'tcpServiceAddress':
-                if 'PROCESS' in record:
-                    if record['PROCESS'] != 'abcde:1':
-                        return False
-            elif record['RECORD_TYPE'] == 'CONNECTOR' and record['VAN_ADDRESS'] == 'noProcessAddress':
-                if 'PROCESS' in record:
-                    return False
-
-        # Check the record counts
-        counts = RecordCounter(records)
-        return counts.get('ROUTER') == 1 and \
-            counts.get('SITE') is None and \
-            counts.get('CONNECTOR') == 2 and \
-            counts.get('LISTENER') is None and \
-            counts.get('LINK') == 2 and \
-            counts.get('ROUTER_ACCESS') is None
-
-    def _intb_check(self, records):
-        # Verify the expected records are present for router intb's configuration
-
-        # Check that each ROUTER_ACCESS record has a link-count of 1
-        for record in records:
-            if record['RECORD_TYPE'] == 'ROUTER_ACCESS':
-                if record['LINK_COUNT'] != 1:
-                    return False
-
-        # Check the record counts
-        counts = RecordCounter(records)
-        return counts.get('ROUTER') == 1 and \
-            counts.get('SITE') is None and \
-            counts.get('CONNECTOR') is None and \
-            counts.get('LISTENER') is None and \
-            counts.get('LINK') is None and \
-            counts.get('ROUTER_ACCESS') == 2
-
-    def _edgeb_check(self, records):
-        # Verify the expected records are present for router edgeb's configuration
-        counts = RecordCounter(records)
-        return counts.get('ROUTER') == 1 and \
-            counts.get('SITE') == 1 and \
-            counts.get('CONNECTOR') is None and \
-            counts.get('LISTENER') == 1 and \
-            counts.get('LINK') == 1 and \
-            counts.get('ROUTER_ACCESS') is None
-
-    def _check_routers(self):
-        """
-        Check the database of received events for each router to verify that
-        the expected records for that router are present
-        """
-        inta_ok = False
-        intb_ok = False
-        edgeb_ok = False
-        if self.snooper_thread.sources_ready == 3:
-            results = self.snooper_thread.get_results()
-            for router, records in results.items():
-                for record in records:
-                    rtype = record.get('RECORD_TYPE')
-                    if rtype == 'ROUTER':
-                        name = record.get('NAME')
-                        if 'INTA' in name:
-                            inta_ok = self._inta_check(records)
-                        elif 'INTB' in name:
-                            intb_ok = self._intb_check(records)
-                        elif 'EdgeB' in name:
-                            edgeb_ok = self._edgeb_check(records)
-        return inta_ok and intb_ok and edgeb_ok
-
     def test_01_check_topology(self):
         """
         Verify the records related to the router configuration and topology are
         present and correct
         """
-        success = retry(self._check_routers, delay=1.0)
-        self.assertTrue(success,
-                        f"Failed record check: {self.snooper_thread.get_results()}")
+        expected = {
+            "INTA": [('CONNECTOR', {'VAN_ADDRESS': 'tcpServiceAddress',
+                                    'PROCESS': 'abcde:1',
+                                    'PROTOCOL': 'tcp'}),
+                     ('CONNECTOR', {'VAN_ADDRESS': 'noProcessAddress',
+                                    'PROTOCOL': 'tcp'}),
+                     ('LINK', {'NAME': 'IAmDown',
+                               'ROLE': 'inter-router',
+                               'OPER_STATUS': 'down',
+                               'REASON': ANY_VALUE}),
+                     ('LINK', {'OPER_STATUS': 'up',
+                               'ROLE': 'inter-router',
+                               'DESTINATION_PORT': str(self.inter_router_port)})
+                     ],
+            "INTB": [('ROUTER_ACCESS', {'LINK_COUNT': 1,
+                                        'ROLE': 'inter-router'}),
+                     ('ROUTER_ACCESS', {'LINK_COUNT': 1,
+                                        'ROLE': 'edge'})],
+            "EdgeB": [('LINK', {'ROLE': 'edge',
+                                'OPER_STATUS': 'up'}),
+                      ('SITE', {'PLATFORM': 'skrouter-system-tests',
+                                'NAME': 'edge-b'}),
+                      ('LISTENER', {'PROTOCOL': 'tcp',
+                                    'VAN_ADDRESS': 'tcpServiceAddress'})]
+        }
+        success = retry(lambda: self.snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
+
+        # verify that the "PROCESS" attribute does not appear in the
+        # 'noProcessAddress' connector on INTA
+        a_recs = self.snooper_thread.get_router_records("INTA", "CONNECTOR")
+        self.assertIsNotNone(a_recs, f"No CONNECTOR records? {self.snooper_thread.get_router_records('INTA')}")
+        for record in a_recs:
+            if record.get("VAN_ADDRESS") == "noProcessAddress":
+                self.assertIsNone(record.get('PROCESS'),
+                                  f"Unexpected PROCESS: {record.get('PROCESS')}")
+                break
+
+        # verify that the 'normal' and metrics listener do not generate
+        # ROUTER_ACCESS records
+        self.assertIsNone(self.snooper_thread.get_router_records("INTA", "ROUTER_ACCESS"))
+        self.assertIsNone(self.snooper_thread.get_router_records("EdgeB", "ROUTER_ACCESS"))
 
     @classmethod
     def tearDownClass(cls):

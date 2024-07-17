@@ -32,7 +32,7 @@ from system_test import nginx_available, NginxServer, current_dir
 from system_test import Http1Server, retry, TIMEOUT
 from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY
 from system_test import SERVER_PRIVATE_KEY_PASSWORD
-from vanflow_snooper import VFlowSnooperThread
+from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
 
 def spawn_nginx(port, tester):
@@ -149,8 +149,14 @@ class Http1ObserverTest(TestCase):
         router = self.router("test_01", l_port, self.nginx_port)
 
         snooper_thread = VFlowSnooperThread(router.addresses[0])
-        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
-        self.assertEqual(1, snooper_thread.sources_ready, "timed out waiting for router beacon")
+
+        # wait for the TCP Listener/Connector
+        expected = {
+            "test_01": [('LISTENER', {'VAN_ADDRESS': 'Http1ObserverTest'}),
+                        ('CONNECTOR', {'VAN_ADDRESS': 'Http1ObserverTest'})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         curl_args = [
             '--http1.1',
@@ -163,39 +169,43 @@ class Http1ObserverTest(TestCase):
         (rc, out, err) = run_curl(args=curl_args)
         self.assertEqual(0, rc, f"curl failed: {rc}, {err}, {out}")
 
-        # Expect at least 8 records:
-        # 1 - Listener
-        # 1 - Connector
-        # 1 - TCP Flow
-        # 1 - TCP Counter-flow
-        # 4 - HTTP requests
-
-        retry(lambda: snooper_thread.total_records > 7, delay=0.25)
-        self.assertLess(7, snooper_thread.total_records, f"{snooper_thread.total_records}")
-
+        #
+        # Expect a Flow/Counter-flow and 4 HTTP Requests
+        #
+        expected = {
+            "test_01": [
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                # List after COUNTER_FLOW since COUNTER_FLOW also has SOURCE_HOST
+                # and HTTP flows do not have SOURCE_HOST
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {"METHOD": "GET",
+                          "RESULT": "200",
+                          "REASON": "OK",
+                          "PROTOCOL": "HTTP/1.1",
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {"METHOD": "GET",
+                          "RESULT": "200",
+                          "REASON": "OK",
+                          "PROTOCOL": "HTTP/1.1",
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {"METHOD": "GET",
+                          "RESULT": "200",
+                          "REASON": "OK",
+                          "PROTOCOL": "HTTP/1.1",
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'METHOD': "GET",
+                          'RESULT': "200",
+                          'REASON': "OK",
+                          'PROTOCOL': 'HTTP/1.1',
+                          'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=1)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
         router.teardown()
         snooper_thread.join(timeout=TIMEOUT)
-        results = snooper_thread.get_results()
-
-        #
-        # Expect 4 'GET' requests with 200 (OK) status
-        #
-
-        matches = 0
-        self.assertEqual(1, len(results), f"Expected one router entry: {results}")
-        records = results.popitem()[1]
-        for record in records:
-            if 'METHOD' in record:
-                self.assertEqual('GET', record['METHOD'])
-                self.assertIn('RESULT', record)
-                self.assertEqual('200', record['RESULT'])
-                self.assertIn('REASON', record)
-                self.assertEqual('OK', record['REASON'])
-                self.assertIn('PROTOCOL', record)
-                self.assertEqual('HTTP/1.1', record['PROTOCOL'])
-                matches += 1
-
-        self.assertEqual(len(pages), matches, f"unexpected results {results}")
 
     @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
     def test_02_post(self):
@@ -210,8 +220,14 @@ class Http1ObserverTest(TestCase):
         router = self.router("test_02", l_port, self.http1_port)
 
         snooper_thread = VFlowSnooperThread(router.addresses[0])
-        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
-        self.assertEqual(1, snooper_thread.sources_ready, "timed out waiting for router beacon")
+
+        # wait for the TCP Listener/Connector
+        expected = {
+            "test_02": [('LISTENER', {'VAN_ADDRESS': 'Http1ObserverTest'}),
+                        ('CONNECTOR', {'VAN_ADDRESS': 'Http1ObserverTest'})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         curl_args = [
             '--http1.1',
@@ -235,42 +251,43 @@ class Http1ObserverTest(TestCase):
         (rc, out, err) = run_curl(args=curl_args)
         self.assertEqual(0, rc, f"curl get failed: {rc}, {err}, {out}")
 
-        # Expect at least 10 records: listener, connector, two tcp flows, two
-        # counter flows, and 4 HTTP requests:
-        retry(lambda: snooper_thread.total_records > 9, delay=0.25)
-        self.assertLess(9, snooper_thread.total_records, f"{snooper_thread.total_records}")
+        #
+        # Expect 2 TCP flows, 2 Counter-flows, and 4 HTTP requests (3 GET, 1
+        # POST):
+        #
+        expected = {
+            "test_02": [
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                # List after COUNTER_FLOW since COUNTER_FLOW also has SOURCE_HOST
+                # and HTTP flows do not have SOURCE_HOST
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+
+                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
+                          'METHOD': 'GET',
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
+                          'METHOD': 'GET',
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
+                          'METHOD': 'GET',
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
+                          'METHOD': 'POST',
+                          'REASON': ANY_VALUE,
+                          'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=1)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         router.teardown()
         snooper_thread.join(timeout=TIMEOUT)
-        results = snooper_thread.get_results()
-
-        get_count = 0
-        post_count = 0
-        self.assertEqual(1, len(results), f"Expected one router entry: {results}")
-        records = results.popitem()[1]
-        for record in records:
-            if 'METHOD' in record:
-                if record['METHOD'] == 'GET':
-                    self.assertIn('RESULT', record)
-                    self.assertEqual('200', record['RESULT'])
-                    self.assertIn('REASON', record)
-                    self.assertEqual('OK', record['REASON'])
-                    self.assertIn('PROTOCOL', record)
-                    self.assertEqual('HTTP/1.1', record['PROTOCOL'])
-                    get_count += 1
-                else:
-                    self.assertEqual('POST', record['METHOD'])
-                    self.assertIn('RESULT', record)
-                    self.assertEqual('200', record['RESULT'])
-                    self.assertIn('PROTOCOL', record)
-                    self.assertEqual('HTTP/1.1', record['PROTOCOL'])
-                    # reason is hardcoded by Python Http server:
-                    self.assertIn('REASON', record)
-                    self.assertEqual('Script output follows', record['REASON'])
-                    post_count += 1
-
-        self.assertEqual(3, get_count, f"{results}")
-        self.assertEqual(1, post_count, f"{results}")
 
     @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
     def test_03_encrypted(self):
@@ -298,10 +315,17 @@ class Http1ObserverTest(TestCase):
         router = self.router("test_03", l_port, s_port)
 
         snooper_thread = VFlowSnooperThread(router.addresses[0])
-        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
-        self.assertEqual(1, snooper_thread.sources_ready, "timed out waiting for router beacon")
+
+        # wait for the TCP Listener/Connector
+        expected = {
+            "test_03": [('LISTENER', {'VAN_ADDRESS': 'Http1ObserverTest'}),
+                        ('CONNECTOR', {'VAN_ADDRESS': 'Http1ObserverTest'})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         # Transfer encrypted data across the router
+
         client_ssl_cfg = dict()
         client_ssl_cfg['CA_CERT'] = CA_CERT
         out, error = self.opensslclient(port=l_port, ssl_info=client_ssl_cfg,
@@ -310,23 +334,27 @@ class Http1ObserverTest(TestCase):
         self.assertIn(b"Verification: OK", out)
         self.assertIn(b"Verify return code: 0 (ok)", out)
 
-        # Wait for at least 5 flows: Connector, Listener, TCP flow,
-        # counterflow, and router
-        retry(lambda: snooper_thread.total_records > 4, delay=0.25)
-        self.assertLess(4, snooper_thread.total_records, f"{snooper_thread.total_records}")
+        # Wait until the FLOW records show up and are closed
+
+        expected = {
+            "test_03": [
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Verify there are NO HTTP flows since the data is encrypted, only the
+        # two flows checked above
+
+        flow_recs = snooper_thread.get_router_records("test_03", record_type='FLOW')
+        self.assertEqual(2, len(flow_recs), f"Too many flows: {flow_recs}")
 
         router.teardown()
         snooper_thread.join(timeout=TIMEOUT)
-        results = snooper_thread.get_results()
-
-        # Ensure no HTTP/1.x related record attributes
-
-        self.assertEqual(1, len(results), f"Expected one router entry: {results}")
-        records = results.popitem()[1]
-        for record in records:
-            if 'RECORD_TYPE' in record and record['RECORD_TYPE'] == "FLOW":
-                self.assertNotIn('RESULT', record)
-                self.assertNotIn('METHOD', record)
 
     @unittest.skipUnless(sys.version_info >= (3, 11), "Requires HTTP/1.1 support")
     def test_999_vanflow_snooper(self):

@@ -31,6 +31,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
 
+ANY_VALUE = object()  # marker object for attribute 'wildcard value' filter
 
 # These mappings come directly from the vanflow.h source. They will need to be
 # updated as new records/attributes/etc are added
@@ -370,7 +371,6 @@ class VFlowSnooperThread:
         self._thread.start()
 
     def _run(self):
-        self._snooper = VFlowSnooper(self.address)
         cid = f"vanflow-snooper-{self.address}"
         try:
             Container(self._snooper, container_id=cid).run()
@@ -402,6 +402,104 @@ class VFlowSnooperThread:
     @property
     def error(self):
         return self._snooper.error
+
+    def get_router_records(self, rname, record_type=None):
+        """
+        Get all the current records available for router named rname.
+        If record_type is given only return records of that type
+        """
+        results = self.get_results()
+        for src, records in results.items():
+            for rec in records:
+                if rec.get("RECORD_TYPE") == "ROUTER":
+                    if "NAME" in rec and rec["NAME"].endswith(f"/{rname}"):
+                        # found router records!
+                        if record_type is None:
+                            # print(f"get_router_records for {rname} return: {records}", flush=True)
+                            return records
+                        # filter based on record type
+                        subset = [rr for rr in records if rr.get("RECORD_TYPE") == record_type]
+                        if len(subset) != 0:
+                            # print(f"get_router_records for {rname} {record_type}: {subset}", flush=True)
+                            return subset
+                        return None
+        return None
+
+    def match_records(self, expected):
+        """
+        Return True if the expected set of VanFlow records have been received.
+        `expected` is a map keyed by router name (str). The value is a list of
+        tuples for matching records emitted by that router. The first tuple
+        element is the record type and the second element is an attribute
+        filter. The attribute filter is matched against the record's attribute
+        values.
+
+        The attribute filter is a map keyed by attribute name. The map value
+        is expected to match the corresponding attribute value in the record.
+
+        An empty attribute filter map acts like an attribute wildcard: it
+        simply matches the first record of the desired type irrespective of the
+        record's attributes.
+
+        There is a special wildcard attribute value ANY_VALUE. This attribute
+        value will simply ensure that the attribute is present in the record
+        regardless of the attribute's value.
+
+        Note that tuples are match in order with the first tuple in the list
+        having the highest "precedence". Once a record is matched it is removed
+        from futher consideration (it will not be matched again). Therefore
+        when matching multiple records of the same type the tuples must be
+        listed starting with the most detailed attribute filter to the least.
+
+        Example:
+
+        match_records({"RouterA":
+                        [("CONNECTOR", {"NAME"="C1"}),
+                         ("CONNECTOR", {}],
+                       "RouterB":
+                        [("FLOW", {"PROTOCOL"="HTTP/1.x", "METHOD"="GET"}),
+                         ("FLOW", {"PROTOCOL"="HTTP/2", "METHOD"=ANY_VALUE})]}
+
+        Will return True if RouterA has issued at least two different connector
+        records, one of which must be named "C1", AND "RouterB" has issued at
+        least two flows, one of which is an HTTP/1.x GET request and the other
+        is an HTTP/2 flow with any "METHOD" value.
+        """
+        def _match_record(record, target_type, attr_filters):
+            # Does this record match any of the attribute filters?
+            if record.get("RECORD_TYPE") != target_type:
+                return False
+            for attr_key, attr_value in attr_filters.items():
+                if attr_key not in record:
+                    return False
+                if attr_value is ANY_VALUE:
+                    # wildcard match
+                    continue
+                if record[attr_key] != attr_value:
+                    return False
+            return True
+
+        def _find_match(rlist, target_type, attr_filters):
+            # return matched record from rlist or None if no records match
+            for record in rlist:
+                if _match_record(record, target_type, attr_filters):
+                    # print(f"Record match! r={record} tt={target_type} f={attr_filters}", flush=True)
+                    return record
+
+            # print(f"No record match! r={rlist} tt={target_type} f={attr_filters}", flush=True)
+            return None
+
+        for router, filters in expected.items():
+            # print(f"Matching records for router {router}", flush=True)
+            records = self.get_router_records(router)
+            if records is None:
+                return False
+            for filt in filters:
+                record = _find_match(records, filt[0], filt[1])
+                if record is None:
+                    return False
+                records.remove(record)  # do not match same record again
+        return True
 
 
 def main():

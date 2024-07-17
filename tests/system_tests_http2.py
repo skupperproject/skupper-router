@@ -24,7 +24,7 @@ import unittest
 from subprocess import PIPE
 from time import sleep
 from typing import Mapping
-from vanflow_snooper import VFlowSnooperThread
+from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
 import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
@@ -442,29 +442,56 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
     def test_01_head_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge --head
         snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0], verbose=True)
-        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
+
+        # wait for the TCP Listener/Connector records
+        expected = {
+            "QDR": [
+                ('LISTENER', {'VAN_ADDRESS': 'examples'}),
+                ('CONNECTOR', {'VAN_ADDRESS': 'examples'})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Pass traffic:
+
         _, out, _ = self.run_curl(get_address(self.router_qdra), args=self.get_all_curl_args(['--head']))
         self.assertIn('HTTP/2 200', out)
         self.assertIn('content-type: text/html', out)
 
-        def check_head_method_in_record():
-            results = snooper_thread.get_results()
-            records = results.popitem()[1]
-            self.assertTrue(len(records) > 0)
-            for record in records:
-                if 'METHOD' in record:
-                    self.assertEqual('HEAD', record['METHOD'])
-                    self.assertIn('RESULT', record)
-                    self.assertEqual('200', record['RESULT'])
-                    self.assertIn('PROTOCOL', record)
-                    self.assertEqual('HTTP/2', record['PROTOCOL'])
-
-        retry_assertion(check_head_method_in_record, delay=2)
+        # Expect a TCP flow/counter-flow and one HTTP/2 flow
+        expected = {
+            "QDR": [
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'PROTOCOL': 'HTTP/2',
+                          'METHOD': 'HEAD',
+                          'RESULT': '200',
+                          'STREAM_ID': ANY_VALUE,
+                          'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
     def test_02_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
-        snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0], verbose=True)
-        retry(lambda: snooper_thread.sources_ready == 1, delay=0.25)
+        snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0],
+                                            verbose=True)
+        # wait for the TCP Listener/Connector records
+        expected = {
+            "QDR": [
+                ('LISTENER', {'VAN_ADDRESS': 'examples'}),
+                ('CONNECTOR', {'VAN_ADDRESS': 'examples'})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Pass traffic
+
         image_file_name = '/test.jpg'
         address = get_address(self.router_qdra) + "/images" + image_file_name
         self.run_curl(address, args=self.get_all_curl_args(['--output', self.router_qdra.outdir + image_file_name]))
@@ -472,19 +499,23 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         digest_of_response_file = get_digest(self.router_qdra.outdir + image_file_name)
         self.assertEqual(digest_of_server_file, digest_of_response_file)
 
-        def check_get_method_in_record():
-            results = snooper_thread.get_results()
-            records = results.popitem()[1]
-            self.assertTrue(len(records) > 0)
-            for record in records:
-                if 'METHOD' in record:
-                    self.assertEqual('GET', record['METHOD'])
-                    self.assertIn('RESULT', record)
-                    self.assertEqual('200', record['RESULT'])
-                    self.assertIn('PROTOCOL', record)
-                    self.assertEqual('HTTP/2', record['PROTOCOL'])
+        # Expect a TCP flow/counter-flow and one HTTP/2 flow
 
-        retry_assertion(check_get_method_in_record, delay=2)
+        expected = {
+            "QDR": [
+                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
+                          'END_TIME': ANY_VALUE}),
+                ('FLOW', {'PROTOCOL': 'HTTP/2',
+                          'METHOD': 'GET',
+                          'RESULT': '200',
+                          'STREAM_ID': ANY_VALUE,
+                          'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
 
 class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
