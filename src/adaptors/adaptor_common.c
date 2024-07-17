@@ -67,6 +67,8 @@ qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config,
     config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
     config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
     config->verify_host_name  = qd_entity_opt_bool(entity, "verifyHostname", false);   CHECK();
+    config->terminate_conns   = qd_entity_opt_bool(entity, "closeConnectionsOnDelete", false);
+    CHECK();
 
     config->backlog = qd_entity_opt_long(entity, "backlog", 0);
     CHECK();

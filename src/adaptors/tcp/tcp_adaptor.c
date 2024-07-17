@@ -2387,6 +2387,17 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
             listener->common.vflow = 0;
         }
         //
+        // Initiate termination of existing connections
+        //
+        if (listener->adaptor_config->terminate_conns) {
+            qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
+            while (conn) {
+                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+                qdr_core_close_connection(conn->core_conn);
+                conn = next_conn;
+            }
+        }
+        //
         // If all the connections associated with this listener has been closed, this call to
         // qd_tcp_listener_decref should free the listener
         //
@@ -2412,6 +2423,17 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         qdr_connection_closed(connector->core_conn);
         connector->core_conn = 0;
         qd_connection_counter_dec(QD_PROTOCOL_TCP);
+        //
+        // Initiate termination of existing connections
+        //
+        if (connector->adaptor_config->terminate_conns) {
+            qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
+            while (conn) {
+                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+                qdr_core_close_connection(conn->core_conn);
+                conn = next_conn;
+            }
+        }
         //
         // If all the connections associated with this listener has been closed, this call to
         // qd_tcp_listener_decref should free the listener
