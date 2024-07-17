@@ -141,12 +141,6 @@ typedef enum vflow_attribute {
 } vflow_attribute_t;
 // clang-format on
 
-#define VALID_REF_ATTRS     0x10006000000000e6
-#define VALID_UINT_ATTRS    0x2f999ffa07800119
-#define VALID_COUNTER_ATTRS 0x0610035000800000
-#define VALID_STRING_ATTRS  0x00660005787ffe00
-#define VALID_TRACE_ATTRS   0x0000000080000000
-
 typedef enum vflow_log_severity {
     // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
     // control plane component!

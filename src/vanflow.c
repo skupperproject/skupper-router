@@ -182,6 +182,32 @@ static vflow_state_t *state;
 static void _vflow_set_string_TH(vflow_work_t *work, bool discard);
 static void _vflow_set_int_TH(vflow_work_t *work, bool discard);
 
+#define ATTR_REF      1
+#define ATTR_UINT     2
+#define ATTR_COUNTER  4
+#define ATTR_STRING   8
+#define ATTR_TRACE    16
+#define ATTR_UCOUNT   ATTR_UINT | ATTR_COUNTER
+
+static uint8_t valid_attributes[] = {
+    ATTR_UINT,   ATTR_REF,    ATTR_REF,    ATTR_UINT,
+    ATTR_UINT,   ATTR_REF,    ATTR_REF,    ATTR_REF,
+    ATTR_UINT,   ATTR_STRING, ATTR_STRING, ATTR_STRING,
+    ATTR_STRING, ATTR_STRING, ATTR_STRING, ATTR_STRING,
+    ATTR_STRING, ATTR_STRING, ATTR_STRING, ATTR_STRING,
+    ATTR_STRING, ATTR_STRING, ATTR_STRING, ATTR_UCOUNT,
+    ATTR_UINT,   ATTR_UINT,   ATTR_UINT,   ATTR_STRING,
+    ATTR_STRING, ATTR_STRING, ATTR_STRING, ATTR_TRACE,
+    ATTR_STRING, ATTR_UINT,   ATTR_STRING, ATTR_UINT,
+    ATTR_UCOUNT, ATTR_UINT,   ATTR_UCOUNT, ATTR_UINT,
+    ATTR_UCOUNT, ATTR_UCOUNT, ATTR_UINT,   ATTR_UINT,
+    ATTR_UINT,   ATTR_REF,    ATTR_REF,    ATTR_UINT,
+    ATTR_UINT,   ATTR_STRING, ATTR_STRING, ATTR_UINT,
+    ATTR_UCOUNT, ATTR_STRING, ATTR_STRING, ATTR_UINT,
+    ATTR_UINT,   ATTR_UCOUNT, ATTR_UCOUNT, ATTR_UINT,
+    ATTR_REF,    ATTR_UINT,
+};
+
 /**
  * @brief Return the current timestamp in microseconds
  *
@@ -317,9 +343,9 @@ static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribu
 
     text[0] = '\0';
 
-    if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
+    if (valid_attributes[data->attribute_type] & ATTR_UINT) {
         sprintf(text, "%"PRIu64, data->value.uint_val);
-    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
+    } else if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
         text_ptr = data->value.string_val;
     }
 
@@ -329,9 +355,9 @@ static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribu
 
 static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_attribute_data_t *data)
 {
-    if ((uint64_t) 1 << data->attribute_type & VALID_UINT_ATTRS) {
+    if (valid_attributes[data->attribute_type] & ATTR_UINT) {
         qd_compose_insert_ulong(field, data->value.uint_val);
-    } else if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
+    } else if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
         qd_compose_insert_string(field, data->value.string_val);
     }
 }
@@ -781,7 +807,7 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     vflow_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (!!data) {
         DEQ_REMOVE_HEAD(record->attributes);
-        if ((uint64_t) 1 << data->attribute_type & (VALID_STRING_ATTRS | VALID_TRACE_ATTRS | VALID_REF_ATTRS)) {
+        if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
             free(data->value.string_val);
         }
         free_vflow_attribute_data_t(data);
@@ -1662,7 +1688,7 @@ void vflow_serialize_identity_pn(const vflow_record_t *record, pn_data_t *data)
 void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribute_type, vflow_record_t *referenced_record)
 {
     if (!!record && !!referenced_record) {
-        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
@@ -1675,7 +1701,7 @@ void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribu
 void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribute_type, qd_parsed_field_t *field)
 {
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1695,7 +1721,7 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
 void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter)
 {
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1715,7 +1741,7 @@ void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute
 void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data)
 {
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_REF_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1740,7 +1766,7 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
 {
 #define MAX_STRING_VALUE 300
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & (VALID_STRING_ATTRS | VALID_REF_ATTRS));
+        assert(valid_attributes[attribute_type] & (ATTR_REF | ATTR_STRING));
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
@@ -1753,7 +1779,7 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
 void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t value)
 {
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_UINT_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_UINT);
         vflow_work_t *work = _vflow_work(_vflow_set_int_TH);
         work->record        = record;
         work->attribute     = attribute_type;
@@ -1766,7 +1792,7 @@ void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, 
 void vflow_inc_counter(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t addend)
 {
     if (!!record) {
-        assert((uint64_t) 1 << attribute_type & VALID_COUNTER_ATTRS);
+        assert(valid_attributes[attribute_type] & ATTR_COUNTER);
         vflow_work_t *work = _vflow_work(_vflow_inc_int_TH);
         work->record        = record;
         work->attribute     = attribute_type;
@@ -1841,8 +1867,8 @@ void vflow_latency_end(vflow_record_t *record, vflow_attribute_t attribute_type)
 void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, vflow_attribute_t rate_attribute)
 {
     if (!!record) {
-        assert((uint64_t) 1 << count_attribute & VALID_COUNTER_ATTRS);
-        assert((uint64_t) 1 << rate_attribute & VALID_UINT_ATTRS);
+        assert(valid_attributes[count_attribute] & ATTR_COUNTER);
+        assert(valid_attributes[rate_attribute] & ATTR_UINT);
         vflow_work_t *work = _vflow_work(_vflow_add_rate_TH);
         work->record        = record;
         work->attribute     = count_attribute;
