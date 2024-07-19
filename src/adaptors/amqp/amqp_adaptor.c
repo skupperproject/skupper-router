@@ -35,6 +35,7 @@
 #include <qpid/dispatch/protocols.h>
 #include <qpid/dispatch/connection_counters.h>
 #include <qpid/dispatch/amqp_adaptor.h>
+#include <qpid/dispatch/tls_amqp.h>
 
 #include <proton/sasl.h>
 
@@ -1377,7 +1378,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     pn_connection_t       *pn_conn = qd_connection_pn(conn);
     pn_transport_t *tport = 0;
     pn_sasl_t      *sasl  = 0;
-    pn_ssl_t       *ssl   = 0;
     const char     *mech  = 0;
     const char     *user  = 0;
     const char *container = conn->pn_conn ? pn_connection_remote_container(conn->pn_conn) : 0;
@@ -1387,7 +1387,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     conn->strip_annotations_out = false;
     if (conn->pn_conn) {
         tport = pn_connection_transport(conn->pn_conn);
-        ssl   = conn->ssl;
     }
     if (tport) {
         sasl = pn_sasl(tport);
@@ -1537,21 +1536,15 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         }
     }
 
-    char proto[50];
-    memset(proto, 0, 50);
-    char cipher[50];
-    memset(cipher, 0, 50);
-
+    char *proto = 0;
+    char *cipher = 0;
     int ssl_ssf = 0;
-    bool is_ssl = false;
 
-    if (ssl) {
-        pn_ssl_get_protocol_name(ssl, proto, 50);
-        pn_ssl_get_cipher_name(ssl, cipher, 50);
-        ssl_ssf = pn_ssl_get_ssf(ssl);
-        is_ssl = true;
+    if (conn->ssl) {
+        proto = qd_tls_session_get_protocol_version(conn->ssl);
+        cipher = qd_tls_session_get_protocol_ciphers(conn->ssl);
+        ssl_ssf = qd_tls_session_get_ssf(conn->ssl);
     }
-
 
     bool encrypted     = tport && pn_transport_is_encrypted(tport);
     bool authenticated = tport && pn_transport_is_authenticated(tport);
@@ -1568,7 +1561,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  container,
                                                                  props,
                                                                  ssl_ssf,
-                                                                 is_ssl,
+                                                                 !!conn->ssl,
                                                                  rversion,
                                                                  streaming_links,
                                                                  connection_trunking);
@@ -1611,6 +1604,9 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                          authenticated ? mech : "no", (char*) user, container);
         sys_mutex_unlock(&conn->connector->lock);
     }
+
+    free(proto);
+    free(cipher);
 }
 
 
@@ -2394,8 +2390,7 @@ static void qd_amqp_adaptor_final(void *adaptor_context)
             pn_connection_set_context(ctx->pn_conn, 0);
         }
         qd_connection_invoke_deferred_calls(ctx, true);  // Discard any pending deferred calls
-        if (ctx->free_user_id)
-            free((char*)ctx->user_id);
+        free(ctx->user_id);
         sys_mutex_free(&ctx->deferred_call_lock);
         free(ctx->name);
         free(ctx->role);
@@ -2409,6 +2404,7 @@ static void qd_amqp_adaptor_final(void *adaptor_context)
             qd_listener_remove_connection(ctx->listener, ctx);
             ctx->listener = 0;
         }
+        qd_tls_session_free(ctx->ssl);
         sys_atomic_destroy(&ctx->wake_core);
         sys_atomic_destroy(&ctx->wake_cutthrough_inbound);
         sys_atomic_destroy(&ctx->wake_cutthrough_outbound);

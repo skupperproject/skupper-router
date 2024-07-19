@@ -221,7 +221,7 @@ class SkmanageTest(TestCase):
     def test_get_operations(self):
         out = json.loads(self.run_skmanage("get-operations"))
         self.assertEqual(len(out), TOTAL_ENTITIES)
-        self.assertEqual(out[SSL_PROFILE_TYPE], ['CREATE', 'DELETE', 'READ'])
+        self.assertEqual(out[SSL_PROFILE_TYPE], ['CREATE', 'UPDATE', 'DELETE', 'READ'])
 
     def test_get_types_with_ssl_profile_type(self):
         out = json.loads(self.run_skmanage(f"get-types --type={SSL_PROFILE_TYPE}"))
@@ -230,22 +230,52 @@ class SkmanageTest(TestCase):
     def test_get_ssl_profile_type_attributes(self):
         out = json.loads(self.run_skmanage(f'get-attributes --type={SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 11)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 13)
 
     def test_get_ssl_profile_attributes(self):
         out = json.loads(self.run_skmanage(f'get-attributes {SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 11)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 13)
 
     def test_get_ssl_profile_type_operations(self):
         out = json.loads(self.run_skmanage(f'get-operations --type={SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 3)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 4)
 
     def test_get_ssl_profile_operations(self):
         out = json.loads(self.run_skmanage(f'get-operations {SSL_PROFILE_TYPE}'))
         self.assertEqual(len(out), 1)
-        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 3)
+        self.assertEqual(len(out[SSL_PROFILE_TYPE]), 4)
+
+    def test_create_update_delete_ssl_profile(self):
+        cmd = f'CREATE --type={SSL_PROFILE_TYPE} --name=testSslProfile'
+        cmd += f' caCertFile={CA_CERT}'
+        cmd += f' certFile={SERVER_CERTIFICATE}'
+        cmd += f' privateKeyFile={SERVER_PRIVATE_KEY}'
+        cmd += f' password={SERVER_PRIVATE_KEY_PASSWORD}'
+        out = json.loads(self.run_skmanage(cmd))
+        self.assertEqual(CA_CERT, out['caCertFile'])
+        self.assertEqual(SERVER_CERTIFICATE, out['certFile'])
+        self.assertEqual(SERVER_PRIVATE_KEY, out['privateKeyFile'])
+        self.assertEqual(SERVER_PRIVATE_KEY_PASSWORD, out['password'])
+        identity = out['identity']
+
+        cmd = f'UPDATE --type={SSL_PROFILE_TYPE} --identity={identity}'
+        cmd += f' certFile={CLIENT_CERTIFICATE}'
+        cmd += f' privateKeyFile={CLIENT_PRIVATE_KEY}'
+        cmd += f' password={CLIENT_PASSWORD_FILE}'
+        out = json.loads(self.run_skmanage(cmd))
+        self.assertEqual(CA_CERT, out['caCertFile'])
+        self.assertEqual(CLIENT_CERTIFICATE, out['certFile'])
+        self.assertEqual(CLIENT_PRIVATE_KEY, out['privateKeyFile'])
+        self.assertEqual(CLIENT_PASSWORD_FILE, out['password'])
+
+        cmd = f'DELETE --type={SSL_PROFILE_TYPE} --identity={identity}'
+        self.run_skmanage(cmd)
+
+        out = json.loads(self.run_skmanage(f'QUERY --type={SSL_PROFILE_TYPE}'))
+        self.assertEqual(1, len(out))
+        self.assertNotEqual(out[0]['name'], 'testSslProfile')
 
     def test_get_log(self):
         logs = json.loads(self.run_skmanage("get-log limit=20"))

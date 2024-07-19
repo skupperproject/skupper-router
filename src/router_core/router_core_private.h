@@ -639,8 +639,8 @@ struct qdr_connection_info_t {
     char                  *container;
     char                  *sasl_mechanisms;
     char                  *host;
-    char                  *ssl_proto;
-    char                  *ssl_cipher;
+    char                  *tls_proto;
+    char                  *tls_cipher;
     char                  *user;
     bool                   is_authenticated;
     bool                   is_encrypted;
@@ -650,8 +650,8 @@ struct qdr_connection_info_t {
     qd_direction_t         dir;
     qdr_connection_role_t  role;
     pn_data_t             *connection_properties;
-    bool                   ssl;
-    int                    ssl_ssf; //ssl strength factor
+    bool                   tls;
+    int                    tls_ssf; // TLS strength factor
     char                  *version; // if role is router or edge
     sys_mutex_t            connection_info_lock;
     char                   group_correlator[QD_DISCRIMINATOR_SIZE];  // Used to associate inter-router-data connections to their inter-router connection

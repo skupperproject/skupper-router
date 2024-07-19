@@ -20,7 +20,7 @@
 #include "python_private.h"
 
 #include "adaptors/adaptor_common.h"
-#include "adaptors/adaptor_tls.h"
+#include "adaptors/legacy_tls.h"
 #include "http1_private.h"
 
 #include "qpid/dispatch/protocol_adaptor.h"

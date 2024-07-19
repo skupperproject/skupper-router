@@ -35,12 +35,12 @@
 #define QDR_CONNECTION_IS_AUTHENTICATED       8
 #define QDR_CONNECTION_USER                   9
 #define QDR_CONNECTION_IS_ENCRYPTED          10
-#define QDR_CONNECTION_SSLPROTO              11
-#define QDR_CONNECTION_SSLCIPHER             12
+#define QDR_CONNECTION_TLSPROTO              11
+#define QDR_CONNECTION_TLSCIPHER             12
 #define QDR_CONNECTION_PROPERTIES            13
-#define QDR_CONNECTION_SSLSSF                14
+#define QDR_CONNECTION_TLSSSF                14
 #define QDR_CONNECTION_TYPE                  15
-#define QDR_CONNECTION_SSL                   16
+#define QDR_CONNECTION_TLS                   16
 #define QDR_CONNECTION_OPENED                17
 #define QDR_CONNECTION_ACTIVE                18
 #define QDR_CONNECTION_ADMIN_STATUS          19
@@ -195,30 +195,30 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         qd_compose_insert_bool(body, conn->connection_info->is_encrypted);
         break;
 
-    case QDR_CONNECTION_SSLPROTO:
-        if (conn->connection_info->ssl_proto[0] != '\0')
-            qd_compose_insert_string(body, conn->connection_info->ssl_proto);
+    case QDR_CONNECTION_TLSPROTO:
+        if (conn->connection_info->tls_proto && conn->connection_info->tls_proto[0] != '\0')
+            qd_compose_insert_string(body, conn->connection_info->tls_proto);
         else
             qd_compose_insert_null(body);
         break;
 
-    case QDR_CONNECTION_SSLCIPHER:
-        if (conn->connection_info->ssl_cipher[0] != '\0')
-            qd_compose_insert_string(body, conn->connection_info->ssl_cipher);
+    case QDR_CONNECTION_TLSCIPHER:
+        if (conn->connection_info->tls_cipher && conn->connection_info->tls_cipher[0] != '\0')
+            qd_compose_insert_string(body, conn->connection_info->tls_cipher);
         else
             qd_compose_insert_null(body);
         break;
 
-    case QDR_CONNECTION_SSLSSF:
-        qd_compose_insert_long(body, conn->connection_info->ssl_ssf);
+    case QDR_CONNECTION_TLSSSF:
+        qd_compose_insert_long(body, conn->connection_info->tls_ssf);
         break;
 
     case QDR_CONNECTION_TYPE:
         qd_compose_insert_string(body, CONNECTION_TYPE);
         break;
 
-    case QDR_CONNECTION_SSL:
-        qd_compose_insert_bool(body, conn->connection_info->ssl);
+    case QDR_CONNECTION_TLS:
+        qd_compose_insert_bool(body, conn->connection_info->tls);
         break;
 
     case QDR_CONNECTION_OPENED:

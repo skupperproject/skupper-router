@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "adaptor_tls.h"
+#include "legacy_tls.h"
 
 #include "router_core_private.h"
 
@@ -25,6 +25,7 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
+#include "qpid/dispatch/tls.h"
 
 #include <proton/tls.h>
 
@@ -229,12 +230,12 @@ qd_tls_domain_t *qd_tls_domain_clone(const qd_tls_domain_t *src)
 static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
 {
     const char *role = tls_domain->is_listener ? "listener" : "connector";
+    qd_ssl2_profile_t tmp = {0};
+    qd_ssl2_profile_t *config_ssl_profile = 0;
 
     do {
         // find the ssl profile
-        qd_connection_manager_t *cm = qd_dispatch_connection_manager(tls_domain->qd_dispatch);
-        assert(cm);
-        qd_config_ssl_profile_t *config_ssl_profile = qd_find_ssl_profile(cm, tls_domain->ssl_profile_name);
+        config_ssl_profile = qd_tls_read_ssl_profile(tls_domain->ssl_profile_name, &tmp);
         if (!config_ssl_profile) {
             qd_log(tls_domain->log_module,
                    QD_LOG_ERROR,
@@ -258,9 +259,9 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
             break;
         }
 
-        if (config_ssl_profile->ssl_trusted_certificate_db) {
+        if (config_ssl_profile->trusted_certificate_db) {
             res = pn_tls_config_set_trusted_certs(tls_domain->pn_tls_config,
-                                                  config_ssl_profile->ssl_trusted_certificate_db);
+                                                  config_ssl_profile->trusted_certificate_db);
             if (res != 0) {
                 qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
@@ -268,18 +269,18 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
                        role,
                        tls_domain->name,
                        tls_domain->ssl_profile_name,
-                       config_ssl_profile->ssl_trusted_certificate_db,
+                       config_ssl_profile->trusted_certificate_db,
                        res);
                 break;
             }
         }
 
         // Call pn_tls_config_set_credentials only if "certFile" is provided.
-        if (config_ssl_profile->ssl_certificate_file) {
+        if (config_ssl_profile->certificate_file) {
             res = pn_tls_config_set_credentials(tls_domain->pn_tls_config,
-                                                config_ssl_profile->ssl_certificate_file,
-                                                config_ssl_profile->ssl_private_key_file,
-                                                config_ssl_profile->ssl_password);
+                                                config_ssl_profile->certificate_file,
+                                                config_ssl_profile->private_key_file,
+                                                config_ssl_profile->password);
             if (res != 0) {
                 qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
@@ -287,7 +288,7 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
                        role,
                        tls_domain->name,
                        tls_domain->ssl_profile_name,
-                       config_ssl_profile->ssl_certificate_file,
+                       config_ssl_profile->certificate_file,
                        res);
                 break;
             }
@@ -300,8 +301,8 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
                    tls_domain->ssl_profile_name);
         }
 
-        if (!!config_ssl_profile->ssl_ciphers) {
-            res = pn_tls_config_set_impl_ciphers(tls_domain->pn_tls_config, config_ssl_profile->ssl_ciphers);
+        if (!!config_ssl_profile->ciphers) {
+            res = pn_tls_config_set_impl_ciphers(tls_domain->pn_tls_config, config_ssl_profile->ciphers);
             if (res != 0) {
                 qd_log(tls_domain->log_module,
                        QD_LOG_ERROR,
@@ -309,7 +310,7 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
                        role,
                        tls_domain->name,
                        tls_domain->ssl_profile_name,
-                       config_ssl_profile->ssl_ciphers,
+                       config_ssl_profile->ciphers,
                        res);
                 break;
             }
@@ -318,7 +319,7 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
         if (tls_domain->is_listener) {
             if (tls_domain->authenticate_peer) {
                 res = pn_tls_config_set_peer_authentication(
-                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->ssl_trusted_certificate_db);
+                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->trusted_certificate_db);
             } else {
                 res = pn_tls_config_set_peer_authentication(tls_domain->pn_tls_config, PN_TLS_ANONYMOUS_PEER, 0);
             }
@@ -326,10 +327,10 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
             // Connector.
             if (tls_domain->verify_host_name) {
                 res = pn_tls_config_set_peer_authentication(
-                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER_NAME, config_ssl_profile->ssl_trusted_certificate_db);
+                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER_NAME, config_ssl_profile->trusted_certificate_db);
             } else {
                 res = pn_tls_config_set_peer_authentication(
-                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->ssl_trusted_certificate_db);
+                    tls_domain->pn_tls_config, PN_TLS_VERIFY_PEER, config_ssl_profile->trusted_certificate_db);
             }
         }
 
@@ -363,6 +364,8 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
             }
         }
 
+        qd_tls_cleanup_ssl_profile(config_ssl_profile);
+
         qd_log(tls_domain->log_module,
                QD_LOG_INFO,
                "Adaptor %s %s successfully configured sslProfile %s",
@@ -375,6 +378,7 @@ static qd_tls_domain_t *_tls_domain_init(qd_tls_domain_t *tls_domain)
 
     // If we get here, the configuration setup failed
 
+    qd_tls_cleanup_ssl_profile(config_ssl_profile);
     qd_tls_domain_decref(tls_domain);
     return 0;
 }
@@ -423,17 +427,17 @@ void qd_tls_update_connection_info(qd_tls_t *tls, qdr_connection_info_t *conn_in
     // connection_info. This same lock is being used in the agent_connection.c's qdr_connection_insert_column_CT
     //
     sys_mutex_lock(&conn_info->connection_info_lock);
-    free(conn_info->ssl_cipher);
-    conn_info->ssl_cipher = 0;
-    free(conn_info->ssl_proto);
-    conn_info->ssl_proto    = 0;
-    conn_info->ssl          = true;
+    free(conn_info->tls_cipher);
+    conn_info->tls_cipher = 0;
+    free(conn_info->tls_proto);
+    conn_info->tls_proto    = 0;
+    conn_info->tls          = true;
     conn_info->is_encrypted = true;
     if (protocol_cipher) {
-        conn_info->ssl_cipher = protocol_cipher;
+        conn_info->tls_cipher = protocol_cipher;
     }
     if (protocol_ver) {
-        conn_info->ssl_proto = protocol_ver;
+        conn_info->tls_proto = protocol_ver;
     }
 
     sys_mutex_unlock(&conn_info->connection_info_lock);

@@ -17,17 +17,22 @@
 # under the License.
 #
 import os
-import shutil
 from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl, \
     CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
     SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT, \
     CHAINED_CERT
+from system_test import CA2_CERT
+from system_test import CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD
+from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD
+from system_test import SSL_PROFILE_TYPE
+from system_test import is_pattern_present
 from system_tests_ssl import RouterTestSslBase
 from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available
 from http1_tests import wait_tcp_listeners_up
 from system_tests_http2 import get_address, get_digest, image_file
 from system_tests_http2 import skip_nginx_test
 from TCP_echo_server import TcpEchoServer
+from TCP_echo_client import TcpEchoClient
 
 
 class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
@@ -112,7 +117,7 @@ class TcpTlsBadConfigTests(TestCase):
                            'port': port,
                            'sslProfile': "NotFound"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
-        self.assertIn("Invalid tcpConnector configuration", mgmt.stdout)
+        self.assertIn("sslProfile 'NotFound' not found", mgmt.stdout)
 
     def test_connector_mgmt_missing_ca_file(self):
         """Attempt to create a connector with an invalid CA file"""
@@ -127,7 +132,7 @@ class TcpTlsBadConfigTests(TestCase):
                            'port': port,
                            'sslProfile': "BadCAFile"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
-        self.assertIn("Invalid tcpConnector configuration", mgmt.stdout)
+        self.assertIn("Failed to configure TLS caCertFile", mgmt.stdout)
         mgmt.delete("sslProfile", name='BadCAFile')
 
     def test_listener_mgmt_missing_ssl_profile(self):
@@ -140,7 +145,7 @@ class TcpTlsBadConfigTests(TestCase):
                            'port': port,
                            'sslProfile': "NotFound"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
-        self.assertIn("Invalid tcpListener configuration", mgmt.stdout)
+        self.assertIn("sslProfile 'NotFound' not found", mgmt.stdout)
 
     def test_listener_mgmt_missing_ca_file(self):
         """Attempt to create a listener with an invalid CA file"""
@@ -148,14 +153,35 @@ class TcpTlsBadConfigTests(TestCase):
         mgmt = self.router.sk_manager
         mgmt.create("sslProfile",
                     {'name': 'BadCAFile',
-                     'caCertFile': '/bad/path/CA.pem'})
+                     'caCertFile': '/bad/path/CA.pem',
+                     'certFile': SERVER_CERTIFICATE,
+                     'privateKeyFile': SERVER_PRIVATE_KEY,
+                     'password': 'server-password'})
         self.assertRaises(Exception, mgmt.create, "tcpListener",
                           {'address': 'foo',
                            'host': '0.0.0.0',
                            'port': port,
                            'sslProfile': "BadCAFile"})
         self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
-        self.assertIn("Invalid tcpListener configuration", mgmt.stdout)
+        self.assertIn("Failed to configure TLS caCertFile", mgmt.stdout)
+        mgmt.delete("sslProfile", name='BadCAFile')
+
+    def test_listener_mgmt_missing_private_key(self):
+        """Attempt to create a listener without a proper private key"""
+        port = self.tester.get_port()
+        mgmt = self.router.sk_manager
+        mgmt.create("sslProfile",
+                    {'name': 'BadCAFile',
+                     'caCertFile': CA_CERT,
+                     'certFile': SERVER_CERTIFICATE,
+                     'password': 'server-password'})
+        self.assertRaises(Exception, mgmt.create, "tcpListener",
+                          {'address': 'foo',
+                           'host': '0.0.0.0',
+                           'port': port,
+                           'sslProfile': "BadCAFile"})
+        self.assertEqual(1, mgmt.returncode, "Unexpected returncode from skmanage")
+        self.assertIn("Missing Private Keyfile (sslProfile: BadCAFile)", mgmt.stdout)
         mgmt.delete("sslProfile", name='BadCAFile')
 
 
@@ -735,59 +761,64 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         self.assertEqual(digest_of_server_file, digest_of_response_file)
 
 
-class TcpAdaptorCertCorruptionTests(TestCase):
+class TcpAdaptorSslProfileUpdateTests(TestCase):
     """
-    The TCP adaptor re-loads the certificate files every time a new client or
-    server TCP connection is created. This test verifies that the router can
-    handle the case where the certificate files are removed or corrupted while
-    new connections are created.
+    Verify that management updates to a tcpListener/Connector's sslProfile are
+    adopted for new connections.
     """
     @classmethod
     def setUpClass(cls):
-        super(TcpAdaptorCertCorruptionTests, cls).setUpClass()
+        super(TcpAdaptorSslProfileUpdateTests, cls).setUpClass()
         cls.openssl_server_listening_port = cls.tester.get_port()
         cls.router_listener_port = cls.tester.get_port()
 
-        # make a local copy of the client and server certificates. This test
-        # destroys these files, so we do not want to destroy the originals!
+        cls.listener_profile_cfg = {
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': SERVER_PRIVATE_KEY_PASSWORD
+        }
 
-        cls.server_cert_file = shutil.copy(SERVER_CERTIFICATE,
-                                           os.path.dirname(os.getcwd()))
-        cls.client_cert_file = shutil.copy(CLIENT_CERTIFICATE,
-                                           os.path.dirname(os.getcwd()))
+        cls.connector_profile_cfg = {
+            'caCertFile': CA_CERT,
+            'certFile': CLIENT_CERTIFICATE,
+            'privateKeyFile': CLIENT_PRIVATE_KEY,
+            'password': CLIENT_PRIVATE_KEY_PASSWORD
+        }
+
+        # default extra arguments for the openssl test client and server
+
+        cls.s_server_args = ['-Verify', '1', '-verify_return_error']
+        cls.s_client_args = ['-verify', '10', '-verify_return_error', '-nocommands']
 
         # Set up two routers, TCP listener on one, connector on another
 
         inter_router_port = cls.tester.get_port()
 
+        ssl_profile = {'name': 'listener-ssl-profile'}
+        ssl_profile.update(cls.listener_profile_cfg)
         config_qdra = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR.A'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port}),
-            ('sslProfile', {'name': 'listener-ssl-profile',
-                            'caCertFile': CA_CERT,
-                            'certFile': cls.server_cert_file,
-                            'privateKeyFile': SERVER_PRIVATE_KEY,
-                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('sslProfile', ssl_profile,),
             ('tcpListener', {'port': cls.router_listener_port,
-                             'address': 'corrupt/me',
+                             'address': 'update/me',
                              'host': 'localhost',
                              'authenticatePeer': 'yes',
                              'sslProfile': 'listener-ssl-profile'})
         ])
 
+        ssl_profile = {'name': 'connector-ssl-profile'}
+        ssl_profile.update(cls.connector_profile_cfg)
         config_qdrb = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR.B'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
             ('connector', {'name': 'connectorToA', 'role': 'inter-router',
                            'port': inter_router_port}),
-            ('sslProfile', {'name': 'connector-ssl-profile',
-                            'caCertFile': CA_CERT,
-                            'certFile': cls.client_cert_file,
-                            'privateKeyFile': CLIENT_PRIVATE_KEY,
-                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
+            ('sslProfile', ssl_profile),
             ('tcpConnector', {'port': cls.openssl_server_listening_port,
-                              'address': 'corrupt/me',
+                              'address': 'update/me',
                               'host': 'localhost',
                               'verifyHostname': 'yes',
                               'sslProfile': 'connector-ssl-profile'}),
@@ -799,22 +830,23 @@ class TcpAdaptorCertCorruptionTests(TestCase):
         cls.router_qdrb.wait_router_connected('QDR.A')
         wait_tcp_listeners_up(cls.router_qdra.addresses[0])
 
-    def test_cert_corruption(self):
-        # Note we do not want to corrupt the certs held by the ssl server or
-        # client. We need them to be valid so the test client/server do not
-        # fail themselves. We only want the router to be affected!
-
+    def test_ssl_profile_update(self):
+        """
+        Test management updates to the listener and connector sslProfile
+        configurations
+        """
+        payload = b'?' * 1024 * 65
         server_ssl_info = dict()
         server_ssl_info['CA_CERT'] = CA_CERT
         server_ssl_info['SERVER_CERTIFICATE'] = SERVER_CERTIFICATE
         server_ssl_info['SERVER_PRIVATE_KEY'] = SERVER_PRIVATE_KEY
         server_ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = SERVER_PRIVATE_KEY_PASSWORD
 
-        openssl_server = self.tester.openssl_server
-        self.openssl_server = openssl_server(listening_port=self.openssl_server_listening_port,
-                                             ssl_info=server_ssl_info,
-                                             name="OpenSSLServerAuthPeer",
-                                             cl_args=['-Verify', '1'])
+        server_create = self.tester.openssl_server
+        openssl_server = server_create(listening_port=self.openssl_server_listening_port,
+                                       ssl_info=server_ssl_info,
+                                       name="OpenSSLServerAuthPeer",
+                                       cl_args=self.s_server_args)
 
         client_ssl_info = dict()
         client_ssl_info['CA_CERT'] = CA_CERT
@@ -824,50 +856,344 @@ class TcpAdaptorCertCorruptionTests(TestCase):
 
         out, error = self.opensslclient(port=self.router_listener_port,
                                         ssl_info=client_ssl_info,
-                                        data=b"Sanity Check the Configuration!")
-        self.assertIn(b"Verification: OK", out)
-        self.assertIn(b"Verify return code: 0 (ok)", out)
+                                        data=b"Sanity Check the Configuration!" + payload,
+                                        cl_args=self.s_client_args)
+        self.assertIn(b"Verification: OK", out, f"{error}")
+        self.assertIn(b"Verify return code: 0 (ok)", out, f"{error}")
 
-        self.openssl_server.wait_out_message("Sanity Check the Configuration!")
-
-        #
-        # Phase 1: corrupt the server-facing certificate
-        #
-
-        with open(self.client_cert_file, mode="w") as clientf:
-            clientf.write("Oh mercy! I'm corrupt!")
-
-        _, _ = self.opensslclient(port=self.router_listener_port,
-                                  ssl_info=client_ssl_info,
-                                  data=b"Phase 1")
-        self.router_qdrb.wait_log_message(r'failed to set TLS certificate')
+        openssl_server.wait_out_message("Sanity Check the Configuration!")
 
         #
-        # Phase 2: corrupt the client-facing certificate
+        # Attempt to update the listener-side sslProfile with a bad
+        # CA cert file. Verify that the management operation fails
+        # the configuration error.
         #
 
-        with open(self.server_cert_file, mode="w") as serverf:
-            serverf.write("Alas! I too have been rendered corrupt!")
+        skmgr_a = self.router_qdra.sk_manager
 
-        _, _ = self.opensslclient(port=self.router_listener_port,
-                                  ssl_info=client_ssl_info,
-                                  data=b"Phase 2",
-                                  expect=Process.EXIT_FAIL)
-        self.router_qdra.wait_log_message(r'failed to set TLS certificate')
+        with self.assertRaises(Exception) as emgr:
+            skmgr_a.update(SSL_PROFILE_TYPE,
+                           {'caCertFile': '/this/file/does/not/exist.pem'},
+                           name='listener-ssl-profile')
+
+        self.assertIn('Failed to configure TLS caCertFile', str(emgr.exception))
 
         #
-        # Phase 3: Restore the files and verify all is well
+        # Restore the proper password and verify clients can connect
         #
 
-        self.server_cert_file = shutil.copy(SERVER_CERTIFICATE,
-                                            os.path.dirname(os.getcwd()))
-        self.client_cert_file = shutil.copy(CLIENT_CERTIFICATE,
-                                            os.path.dirname(os.getcwd()))
+        skmgr_a.update(SSL_PROFILE_TYPE, {'caCertFile': CA_CERT},
+                       name='listener-ssl-profile')
+
+        out = skmgr_a.read(name='listener-ssl-profile')
+        self.assertEqual(SERVER_PRIVATE_KEY_PASSWORD, out['password'])
 
         out, error = self.opensslclient(port=self.router_listener_port,
                                         ssl_info=client_ssl_info,
-                                        data=b"Hey we recovered!")
-        self.assertIn(b"Verification: OK", out)
-        self.assertIn(b"Verify return code: 0 (ok)", out)
+                                        data=b"Hey password is good!" + payload,
+                                        cl_args=self.s_client_args)
+        self.assertIn(b"Verification: OK", out, f"{error}")
+        self.assertIn(b"Verify return code: 0 (ok)", out, f"{error}")
 
-        self.openssl_server.wait_out_message("Hey we recovered!")
+        openssl_server.wait_out_message("Hey password is good!")
+
+        #
+        # Now update the listener sslProfile with a valid config, but one that
+        # will not allow the client to connect
+        #
+        new_cfg = {'caCertFile': CA2_CERT,
+                   'certFile': SERVER2_CERTIFICATE,
+                   'privateKeyFile': SERVER2_PRIVATE_KEY,
+                   'password': SERVER2_PRIVATE_KEY_PASSWORD}
+        skmgr_a.update(SSL_PROFILE_TYPE, new_cfg, name='listener-ssl-profile')
+
+        out, error = self.opensslclient(port=self.router_listener_port,
+                                        ssl_info=client_ssl_info,
+                                        data=b"The CA will not allow this!" + payload,
+                                        expect=Process.EXIT_FAIL,
+                                        cl_args=self.s_client_args)
+        self.router_qdra.wait_log_message(r'TLS connection failed')
+
+        #
+        # Update the client ssl_info to use a compatible client cert and verify
+        # all is well:
+        #
+
+        client_ssl_info = dict()
+        client_ssl_info['CA_CERT'] = CA2_CERT
+        client_ssl_info['CLIENT_CERTIFICATE'] = CLIENT2_CERTIFICATE
+        client_ssl_info['CLIENT_PRIVATE_KEY'] = CLIENT2_PRIVATE_KEY
+        client_ssl_info['CLIENT_PRIVATE_KEY_PASSWORD'] = CLIENT2_PRIVATE_KEY_PASSWORD
+        out, error = self.opensslclient(port=self.router_listener_port,
+                                        ssl_info=client_ssl_info,
+                                        data=b"Hey we recovered!" + payload,
+                                        cl_args=self.s_client_args)
+        self.assertIn(b"Verification: OK", out, f"{error}")
+        self.assertIn(b"Verify return code: 0 (ok)", out, f"{error}")
+
+        openssl_server.wait_out_message("Hey we recovered!")
+
+        #
+        # Test updates on the connector sslProfile
+        #
+
+        #
+        # start a new ssl server that uses an incompatible TLS configuration
+        # The connection should fail when router QDR.B attempts to connect to
+        # it
+        #
+
+        openssl_server.teardown()
+        server_ssl_info = dict()
+        server_ssl_info['CA_CERT'] = CA2_CERT
+        server_ssl_info['SERVER_CERTIFICATE'] = SERVER2_CERTIFICATE
+        server_ssl_info['SERVER_PRIVATE_KEY'] = SERVER2_PRIVATE_KEY
+        server_ssl_info['SERVER_PRIVATE_KEY_PASSWORD'] = SERVER2_PRIVATE_KEY_PASSWORD
+        openssl_server = server_create(listening_port=self.openssl_server_listening_port,
+                                       ssl_info=server_ssl_info,
+                                       name="OpenSSLServerAuthPeer2",
+                                       cl_args=self.s_server_args)
+
+        out, error = self.opensslclient(port=self.router_listener_port,
+                                        ssl_info=client_ssl_info,
+                                        data=b"The server conn must fail" + payload,
+                                        cl_args=self.s_client_args)
+        self.router_qdrb.wait_log_message(r'TLS connection failed')
+        with open(openssl_server.outfile_path, 'rt') as out_file:
+            self.assertFalse(is_pattern_present(out_file,
+                                                "The server conn must fail"),
+                             "TLS connection did not fail")
+
+        # Now update the connectors sslProfile with a compatible client cert
+        # and verify a new connection succeeds
+
+        new_cfg = {'caCertFile': CA2_CERT,
+                   'certFile': CLIENT2_CERTIFICATE,
+                   'privateKeyFile': CLIENT2_PRIVATE_KEY,
+                   'password': CLIENT2_PRIVATE_KEY_PASSWORD}
+        skmgr_b = self.router_qdrb.sk_manager
+        skmgr_b.update(SSL_PROFILE_TYPE, new_cfg, name='connector-ssl-profile')
+        out, error = self.opensslclient(port=self.router_listener_port,
+                                        ssl_info=client_ssl_info,
+                                        data=b"The server conn must succeed!" + payload,
+                                        cl_args=self.s_client_args)
+        self.assertIn(b"Verification: OK", out, f"{error}")
+        self.assertIn(b"Verify return code: 0 (ok)", out, f"{error}")
+        openssl_server.wait_out_message("The server conn must succeed!")
+        openssl_server.teardown()
+
+        # Restore the original sslProfile configuration
+        skmgr_a.update(SSL_PROFILE_TYPE, self.listener_profile_cfg, name='listener-ssl-profile')
+        skmgr_b.update(SSL_PROFILE_TYPE, self.connector_profile_cfg, name='connector-ssl-profile')
+
+    def test_ssl_profile_update_load(self):
+        """
+        Test sslProfile updates while under client load
+        """
+
+        skmgr_a = self.router_qdra.sk_manager
+        skmgr_a.update(SSL_PROFILE_TYPE, self.listener_profile_cfg, name='listener-ssl-profile')
+
+        skmgr_b = self.router_qdrb.sk_manager
+        skmgr_b.update(SSL_PROFILE_TYPE, self.connector_profile_cfg, name='connector-ssl-profile')
+
+        server_ssl_info = {'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                           'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                           'CA_CERT': CA_CERT}
+        client_ssl_info = {'CLIENT_CERTIFICATE': CLIENT_CERTIFICATE,
+                           'CLIENT_PRIVATE_KEY': CLIENT_PRIVATE_KEY,
+                           'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT_PRIVATE_KEY_PASSWORD,
+                           'CA_CERT': CA_CERT}
+
+        server_name = "SslProfileEchoLoadServer"
+        server_logger = Logger(title=server_name,
+                               print_to_console=False,
+                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                      f"{server_name}.log"))
+        echo_server = TcpEchoServer(prefix="SslProfileEchoServer",
+                                    port=self.openssl_server_listening_port,
+                                    logger=server_logger,
+                                    ssl_info=server_ssl_info)
+        if echo_server.is_running is False:
+            echo_server.logger.dump()
+            self.assertTrue(echo_server.is_running, "Echo Server failed to start")
+
+        # Negative test - expect failure
+
+        bad_ssl_info = {'CLIENT_CERTIFICATE': CLIENT2_CERTIFICATE,
+                        'CLIENT_PRIVATE_KEY': CLIENT2_PRIVATE_KEY,
+                        'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT2_PRIVATE_KEY_PASSWORD,
+                        'CA_CERT': CA2_CERT}
+
+        client_name = "SslProfileEchoClientBAD"
+        client_logger = Logger(title=client_name,
+                               print_to_console=False,
+                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                      f"{client_name}.log"))
+        with self.assertRaises(Exception) as exc:
+            bad_client = TcpEchoClient(prefix=client_name,
+                                       host='localhost',
+                                       port=self.router_listener_port,
+                                       size=5000,
+                                       count=10,
+                                       logger=client_logger,
+                                       ssl_info=bad_ssl_info)
+            bad_client.wait()
+
+        # now test multiple simultaineous clients while updating the sslProfile
+
+        clients = []
+
+        for test in range(10):
+            for c_index in range(4):
+                client_name = f"SslProfileEchoClient-{test}-{c_index}-A"
+                client_logger = Logger(title=client_name,
+                                       print_to_console=False,
+                                       ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                              f"{client_name}.log"))
+                echo_client = TcpEchoClient(prefix=client_name,
+                                            host='localhost',
+                                            port=self.router_listener_port,
+                                            size=5000,
+                                            count=10,
+                                            logger=client_logger,
+                                            ssl_info=client_ssl_info)
+                clients.append(echo_client)
+
+            skmgr_a.update(SSL_PROFILE_TYPE, self.listener_profile_cfg, name='listener-ssl-profile')
+            skmgr_b.update(SSL_PROFILE_TYPE, self.connector_profile_cfg, name='connector-ssl-profile')
+
+        for client in clients:
+            try:
+                # expect no failures
+                client.wait()
+            except Exception:
+                client.logger.dump()
+                raise
+
+        try:
+            echo_server.wait()
+        except Exception:
+            echo_server.logger.dump()
+            raise
+
+
+class TcpAdaptorSslProfileDeleteTests(TestCase):
+    """
+    Verify deleting an sslProfile does not effect existing clients
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorSslProfileDeleteTests, cls).setUpClass()
+        cls.server_listening_port = cls.tester.get_port()
+        cls.router_listener_port = cls.tester.get_port()
+
+        cls.listener_profile_cfg = {
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': SERVER_PRIVATE_KEY_PASSWORD
+        }
+
+        cls.connector_profile_cfg = {
+            'caCertFile': CA_CERT,
+            'certFile': CLIENT_CERTIFICATE,
+            'privateKeyFile': CLIENT_PRIVATE_KEY,
+            'password': CLIENT_PRIVATE_KEY_PASSWORD
+        }
+
+        ssl_listener_profile = {'name': 'listener-ssl-profile'}
+        ssl_listener_profile.update(cls.listener_profile_cfg)
+
+        ssl_connector_profile = {'name': 'connector-ssl-profile'}
+        ssl_connector_profile.update(cls.connector_profile_cfg)
+
+        config_qdra = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': 'QDR.A'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+            ('sslProfile', ssl_listener_profile,),
+            ('sslProfile', ssl_connector_profile,),
+            ('tcpListener', {'port': cls.router_listener_port,
+                             'address': 'update/me',
+                             'host': 'localhost',
+                             'authenticatePeer': 'yes',
+                             'sslProfile': 'listener-ssl-profile'}),
+            ('tcpConnector', {'port': cls.server_listening_port,
+                              'address': 'update/me',
+                              'host': 'localhost',
+                              'verifyHostname': 'yes',
+                              'sslProfile': 'connector-ssl-profile'}),
+        ])
+
+        cls.router_qdra = cls.tester.qdrouterd("QDR.A", config_qdra, wait=True)
+        wait_tcp_listeners_up(cls.router_qdra.addresses[0])
+
+    def test_ssl_profile_delete(self):
+        """
+        Test sslProfile delete while under client load
+        """
+
+        skmgr_a = self.router_qdra.sk_manager
+
+        server_ssl_info = {'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                           'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                           'CA_CERT': CA_CERT}
+        client_ssl_info = {'CLIENT_CERTIFICATE': CLIENT_CERTIFICATE,
+                           'CLIENT_PRIVATE_KEY': CLIENT_PRIVATE_KEY,
+                           'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT_PRIVATE_KEY_PASSWORD,
+                           'CA_CERT': CA_CERT}
+
+        server_name = "SslProfileDeleteEchoServer"
+        server_logger = Logger(title=server_name,
+                               print_to_console=False,
+                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                      f"{server_name}.log"))
+        echo_server = TcpEchoServer(prefix=server_name,
+                                    port=self.server_listening_port,
+                                    logger=server_logger,
+                                    ssl_info=server_ssl_info)
+        if echo_server.is_running is False:
+            echo_server.logger.dump()
+            self.assertTrue(echo_server.is_running, "Echo Server failed to start")
+
+        # Test the configuration
+
+        client_name = "SslProfileEchoClient-1"
+        client_logger = Logger(title=client_name,
+                               print_to_console=False,
+                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                      f"{client_name}.log"))
+        echo_client = TcpEchoClient(prefix=client_name,
+                                    host='localhost',
+                                    port=self.router_listener_port,
+                                    size=5000,
+                                    count=10,
+                                    logger=client_logger,
+                                    ssl_info=client_ssl_info)
+        echo_client.wait()
+
+        # now delete the sslProfile. Since the connector stores the sslProfile
+        # configuration new connections should not be affected
+
+        skmgr_a.delete(SSL_PROFILE_TYPE, name='connector-ssl-profile')
+
+        # Expect this to pass
+
+        client_name = "SslProfileEchoClient-2"
+        client_logger = Logger(title=client_name,
+                               print_to_console=False,
+                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                      f"{client_name}.log"))
+        echo_client = TcpEchoClient(prefix=client_name,
+                                    host='localhost',
+                                    port=self.router_listener_port,
+                                    size=5000,
+                                    count=10,
+                                    logger=client_logger,
+                                    ssl_info=client_ssl_info)
+        try:
+            # expect no failures
+            echo_client.wait()
+        except Exception:
+            echo_client.logger.dump()
+            raise

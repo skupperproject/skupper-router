@@ -145,7 +145,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
            "] Connection Opened: dir=%s host=%s encrypted=%s"
            " auth=%s user=%s container_id=%s props=%s",
            management_id, incoming ? "in" : "out", connection_info->host,
-           connection_info->is_encrypted ? connection_info->ssl_proto : "no",
+           connection_info->is_encrypted ? connection_info->tls_proto : "no",
            connection_info->is_authenticated ? connection_info->sasl_mechanisms : "no", connection_info->user,
            connection_info->container, props_str);
 
@@ -186,13 +186,13 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            char            *sasl_mechanisms,
                                            qd_direction_t   dir,
                                            const char      *host,
-                                           const char      *ssl_proto,
-                                           const char      *ssl_cipher,
+                                           const char      *tls_proto,
+                                           const char      *tls_cipher,
                                            const char      *user,
                                            const char      *container,
                                            pn_data_t       *connection_properties,
-                                           int              ssl_ssf,
-                                           bool             ssl,
+                                           int              tls_ssf,
+                                           bool             tls,
                                            const char      *version,
                                            bool             streaming_links,
                                            bool             connection_trunking)
@@ -210,10 +210,10 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
     connection_info->dir = dir;
     if (host)
         connection_info->host = strdup(host);
-    if (ssl_proto)
-        connection_info->ssl_proto = strdup(ssl_proto);
-    if (ssl_cipher)
-        connection_info->ssl_cipher = strdup(ssl_cipher);
+    if (tls_proto)
+        connection_info->tls_proto = strdup(tls_proto);
+    if (tls_cipher)
+        connection_info->tls_cipher = strdup(tls_cipher);
     if (user)
         connection_info->user = strdup(user);
     if (version)
@@ -224,8 +224,8 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
         pn_data_copy(qdr_conn_properties, connection_properties);
 
     connection_info->connection_properties = qdr_conn_properties;
-    connection_info->ssl_ssf = ssl_ssf;
-    connection_info->ssl     = ssl;
+    connection_info->tls_ssf = tls_ssf;
+    connection_info->tls     = tls;
     connection_info->streaming_links = streaming_links;
     connection_info->connection_trunking = connection_trunking;
     sys_mutex_init(&connection_info->connection_info_lock);
@@ -239,13 +239,38 @@ void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, const
 }
 
 
+void qdr_connection_info_set_tls(qdr_connection_info_t *conn_info, bool enabled, char *version, char *ciphers, int ssf)
+{
+    //
+    // Lock using the connection_info_lock before setting the values on the
+    // connection_info. This same lock is being used in the agent_connection.c's qdr_connection_insert_column_CT
+    //
+    sys_mutex_lock(&conn_info->connection_info_lock);
+    free(conn_info->tls_cipher);
+    free(conn_info->tls_proto);
+    conn_info->tls = enabled;
+    conn_info->is_encrypted = enabled;
+    if (enabled) {
+        conn_info->tls_proto  = version;
+        conn_info->tls_cipher = ciphers;
+        conn_info->tls_ssf    = ssf;
+    } else {
+        assert(!version && !ciphers);
+        conn_info->tls_cipher = 0;
+        conn_info->tls_proto  = 0;
+        conn_info->tls_ssf    = 0;
+    }
+    sys_mutex_unlock(&conn_info->connection_info_lock);
+}
+
+
 static void qdr_connection_info_free(qdr_connection_info_t *ci)
 {
     free(ci->container);
     free(ci->sasl_mechanisms);
     free(ci->host);
-    free(ci->ssl_proto);
-    free(ci->ssl_cipher);
+    free(ci->tls_proto);
+    free(ci->tls_cipher);
     free(ci->user);
     free(ci->version);
     sys_mutex_free(&ci->connection_info_lock);

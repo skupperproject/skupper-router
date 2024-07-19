@@ -26,6 +26,7 @@
 #include "entity.h"
 
 #include <qpid/dispatch/log.h>
+#include <qpid/dispatch/tls.h>
 
 #include <proton/codec.h>
 
@@ -37,7 +38,7 @@
 
 // FIXME: I cannot justify this - never call goto from a MACRO!
 #define CHECK() if (qd_error_code()) goto error
-#define SSTRDUP(S) ((S) ? strdup(S) : NULL)
+#define CHECKED_STRDUP(S) ((S) ? qd_strdup(S) : NULL)
 
 
 /**
@@ -143,7 +144,7 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     config->sasl_username        = qd_entity_opt_string(entity, "saslUsername", 0);   CHECK();
     config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
     config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
-    config->ssl_profile          = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
+    config->ssl_profile_name     = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
     config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
@@ -249,23 +250,10 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     config->requireAuthentication = authenticatePeer;
     config->requireEncryption     = requireEncryption || requireSsl;
 
-    if (config->ssl_profile) {
+    if (config->ssl_profile_name) {
         config->ssl_required = requireSsl;
         config->ssl_require_peer_authentication = config->sasl_mechanisms &&
             strstr(config->sasl_mechanisms, "EXTERNAL") != 0;
-
-        qd_config_ssl_profile_t *ssl_profile =
-            qd_find_ssl_profile(qd->connection_manager, config->ssl_profile);
-        if (ssl_profile) {
-            config->ssl_certificate_file = SSTRDUP(ssl_profile->ssl_certificate_file);
-            config->ssl_private_key_file = SSTRDUP(ssl_profile->ssl_private_key_file);
-            config->ssl_ciphers = SSTRDUP(ssl_profile->ssl_ciphers);
-            config->ssl_protocols = SSTRDUP(ssl_profile->ssl_protocols);
-            config->ssl_password = SSTRDUP(ssl_profile->ssl_password);
-            config->ssl_trusted_certificate_db = SSTRDUP(ssl_profile->ssl_trusted_certificate_db);
-            config->ssl_uid_format = SSTRDUP(ssl_profile->ssl_uid_format);
-            config->ssl_uid_name_mapping_file = SSTRDUP(ssl_profile->uid_name_mapping_file);
-        }
     }
 
     return QD_ERROR_NONE;
@@ -289,19 +277,11 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->sasl_username)         free(cf->sasl_username);
     if (cf->sasl_password)         free(cf->sasl_password);
     if (cf->sasl_mechanisms)       free(cf->sasl_mechanisms);
-    if (cf->ssl_profile)           free(cf->ssl_profile);
+    if (cf->ssl_profile_name)      free(cf->ssl_profile_name);
     if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
     if (cf->log_message)           free(cf->log_message);
     if (cf->policy_vhost)          free(cf->policy_vhost);
 
-    if (cf->ssl_certificate_file)       free(cf->ssl_certificate_file);
-    if (cf->ssl_private_key_file)       free(cf->ssl_private_key_file);
-    if (cf->ssl_ciphers)                free(cf->ssl_ciphers);
-    if (cf->ssl_protocols)              free(cf->ssl_protocols);
-    if (cf->ssl_password)               free(cf->ssl_password);
-    if (cf->ssl_trusted_certificate_db) free(cf->ssl_trusted_certificate_db);
-    if (cf->ssl_uid_format)             free(cf->ssl_uid_format);
-    if (cf->ssl_uid_name_mapping_file)  free(cf->ssl_uid_name_mapping_file);
     free(cf->data_connection_count);
     if (cf->conn_props) pn_data_free(cf->conn_props);
 

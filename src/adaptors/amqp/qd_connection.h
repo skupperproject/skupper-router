@@ -44,8 +44,8 @@ typedef struct qd_connector_t       qd_connector_t;
 typedef struct qd_policy_settings_t qd_policy_settings_t;
 typedef struct pn_connection_t      pn_connection_t;
 typedef struct pn_session_t         pn_session_t;
-typedef struct pn_ssl_t             pn_ssl_t;
 typedef struct qd_timer_t           qd_timer_t;
+typedef struct qd_tls_session_t     qd_tls_session_t;
 
 
 // defer a function call to be invoked on the connections proactor thread at
@@ -79,15 +79,14 @@ struct qd_connection_t {
     qd_timer_t                      *timer;   // Timer for initial-setup
     pn_connection_t                 *pn_conn;
     pn_session_t                    *pn_sessions[QD_SSN_CLASS_COUNT];
-    pn_ssl_t                        *ssl;
+    qd_tls_session_t                *ssl;
     qd_listener_t                   *listener;
     qd_connector_t                  *connector;
     void                            *context; // context from listener or connector
     void                            *user_context;
     void                            *link_context; // Context shared by this connection's links
     uint64_t                        connection_id; // A unique identifier for the qd_connection_t. The underlying pn_connection already has one but it is long and clunky.
-    const char                      *user_id; // A unique identifier for the user on the connection. This is currently populated  from the client ssl cert. See ssl_uid_format in server.h for more info
-    bool                            free_user_id;
+    char                            *user_id; // A unique identifier for the user on the connection. This is currently populated from the client ssl cert. See sslProfile.uidFormat for more info
     qd_policy_settings_t            *policy_settings;
     int                             n_sessions;
     int                             n_senders;

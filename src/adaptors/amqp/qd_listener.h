@@ -31,6 +31,7 @@ typedef struct qd_server_t       qd_server_t;
 typedef struct pn_listener_t     pn_listener_t;
 typedef struct vflow_record_t    vflow_record_t;
 typedef struct qd_connection_t   qd_connection_t;
+typedef struct qd_tls_config_t   qd_tls_config_t;
 
 /**
  * Listener objects represent the desire to accept incoming AMQP transport connections.
@@ -48,6 +49,7 @@ struct qd_listener_t {
     DEQ_LINKS(qd_listener_t);
     bool                      exit_on_error;
     vflow_record_t           *vflow_record;
+    qd_tls_config_t          *tls_config;
 };
 
 DEQ_DECLARE(qd_listener_t, qd_listener_list_t);

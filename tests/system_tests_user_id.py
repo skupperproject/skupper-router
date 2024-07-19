@@ -241,64 +241,70 @@ class QdSSLUseridTest(TestCase):
         ssl_opts['ssl-key'] = CLIENT_PRIVATE_KEY
         ssl_opts['ssl-password'] = CLIENT_PRIVATE_KEY_PASSWORD
 
+        # from pn_transport_get_user() if no uidFormat given
+        DEFAULT_UID = 'CN=127.0.0.1,O=Client,OU=Dev,L=San Francisco,ST=CA,C=US'
+
         # create the SSL domain object
         domain = self.create_ssl_domain(ssl_opts)
 
+        # SHA1 fingerprint of client-certificate.pem:
         addr = self.address(0).replace("amqp", "amqps")
-
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
         user_id = node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[0][0]
-        self.assertEqual("3eccbf1a2f3e46da823c63a9da9158983cb495a3", user_id)
+        self.assertEqual("789d81777d7426286656747bb21310d5cb54e91e", user_id)
 
+        # sha256 fingerprint of client-certificate.pem:
         addr = self.address(1).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("72d543690cb0a8fc2d0f4c704c65411b9ee8ad53839fced4c720d73e58e4f0d7",
+        self.assertEqual("6cea7256e7d65c16a5c9d34036ede844e45e77a3271bcc7ec43badeb0550fd46",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[1][0])
 
+        # sha512 fingerprint of client-certificate.pem:
         addr = self.address(2).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("c6de3a340014b0f8a1d2b41d22e414fc5756494ffa3c8760bbff56f3aa9f179a5a6eae09413fd7a6afbf36b5fb4bad8795c2836774acfe00a701797cc2a3a9ab",
-                         node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[2][0])
+        fp = "9d7be15953e46b55b9c132156bc4d1dac9463382600f12002ad62f5b71207c4445cf907421d8ac8aba00a9316496d5b3b902655ba6ec0cdc0410ffa4c8de89fe"
+        self.assertEqual(fp, node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[2][0])
 
+        # uidFormat 2noucs
         addr = self.address(3).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("72d543690cb0a8fc2d0f4c704c65411b9ee8ad53839fced4c720d73e58e4f0d7;127.0.0.1;Client;Dev;US;NC",
+        self.assertEqual("6cea7256e7d65c16a5c9d34036ede844e45e77a3271bcc7ec43badeb0550fd46;127.0.0.1;Client;Dev;US;CA",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[3][0])
 
         addr = self.address(4).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("3eccbf1a2f3e46da823c63a9da9158983cb495a3;US;NC",
+        self.assertEqual("789d81777d7426286656747bb21310d5cb54e91e;US;CA",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[4][0])
 
         addr = self.address(5).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("US;NC;c6de3a340014b0f8a1d2b41d22e414fc5756494ffa3c8760bbff56f3aa9f179a5a6eae09413fd7a6afbf36b5fb4bad8795c2836774acfe00a701797cc2a3a9ab",
+        self.assertEqual("US;CA;9d7be15953e46b55b9c132156bc4d1dac9463382600f12002ad62f5b71207c4445cf907421d8ac8aba00a9316496d5b3b902655ba6ec0cdc0410ffa4c8de89fe",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[5][0])
 
         addr = self.address(6).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("127.0.0.1;NC;Dev;US;Client",
+        self.assertEqual("127.0.0.1;CA;Dev;US;Client",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[6][0])
 
         addr = self.address(7).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("NC;US;Client;Dev;127.0.0.1;Raleigh",
+        self.assertEqual("CA;US;Client;Dev;127.0.0.1;San Francisco",
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[7][0])
 
         addr = self.address(8).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("C=US,ST=NC,L=Raleigh,OU=Dev,O=Client,CN=127.0.0.1",
+        self.assertEqual(DEFAULT_UID,
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[8][0])
 
         addr = self.address(9).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
-        self.assertEqual("C=US,ST=NC,L=Raleigh,OU=Dev,O=Client,CN=127.0.0.1",
+        self.assertEqual(DEFAULT_UID,
                          node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[9][0])
 
         addr = self.address(10).replace("amqp", "amqps")
         node = Node.connect(addr, timeout=TIMEOUT, ssl_domain=domain)
         user = node.query(type=CONNECTION_TYPE, attribute_names=['user']).results[10][0]
-        self.assertEqual("C=US,ST=NC,L=Raleigh,OU=Dev,O=Client,CN=127.0.0.1", str(user))
+        self.assertEqual(DEFAULT_UID, str(user))
 
         # authenticatePeer is set to 'no' in this listener, the user should anonymous on the connection.
         addr = self.address(11).replace("amqp", "amqps")
@@ -317,6 +323,13 @@ class QdSSLUseridTest(TestCase):
         self.assertEqual("user13", user_id)
 
         node.close()
+
+        # verify that the two invalid uidFormat fields were detected:
+
+        m1 = r"Invalid format for uidFormat field in sslProfile 'server-ssl10': 1x"
+        m2 = r"Invalid format for uidFormat field in sslProfile 'server-ssl11': abxd"
+        self.router.wait_log_message(m1)
+        self.router.wait_log_message(m2)
 
 
 if __name__ == '__main__':

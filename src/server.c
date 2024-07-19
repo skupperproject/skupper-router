@@ -70,32 +70,10 @@ struct qd_server_t {
     int                       pause_next_sequence;
     int                       pause_now_serving;
     uint64_t                  next_connection_id;
-    void                     *py_displayname_obj;
     qd_http_server_t         *http;
     sys_mutex_t               conn_activation_lock;
 };
 
-
-/**
- * Save displayNameService object instance and ImportModule address
- * Called with qd_python_lock held
- */
-qd_error_t qd_register_display_name_service(qd_dispatch_t *qd, void *displaynameservice)
-{
-    if (displaynameservice) {
-        qd->server->py_displayname_obj = displaynameservice;
-        Py_XINCREF((PyObject *)qd->server->py_displayname_obj);
-        return QD_ERROR_NONE;
-    }
-    else {
-        return qd_error(QD_ERROR_VALUE, "displaynameservice is not set");
-    }
-}
-
-QD_EXPORT qd_error_t qd_entity_refresh_sslProfile(qd_entity_t* entity, void *impl)
-{
-    return QD_ERROR_NONE;
-}
 
 //
 // Proactor event handlers
@@ -230,7 +208,6 @@ qd_server_t *qd_server(qd_dispatch_t *qd, int thread_count, const char *containe
     qd_server->pause_next_sequence    = 0;
     qd_server->pause_now_serving      = 0;
     qd_server->next_connection_id     = 1;
-    qd_server->py_displayname_obj     = 0;
 
     if (qd_server->sasl_config_path)
         pn_sasl_config_path(0, qd_server->sasl_config_path);
@@ -258,9 +235,6 @@ void qd_server_free(qd_server_t *qd_server)
     sys_mutex_free(&qd_server->lock);
     sys_mutex_free(&qd_server->conn_activation_lock);
     sys_cond_free(&qd_server->cond);
-    qd_python_lock_state_t ls = qd_python_lock();
-    Py_XDECREF((PyObject *)qd_server->py_displayname_obj);
-    qd_python_unlock(ls);
     free(qd_server);
 }
 
@@ -334,32 +308,6 @@ uint64_t qd_server_allocate_connection_id(qd_server_t *server)
 sys_mutex_t *qd_server_get_activation_lock(qd_server_t * server)
 {
     return &server->conn_activation_lock;
-}
-
-/**
- * Query DisplayNameServer for user name.
- *
- * Returns string containing user name if query succeeds else 0.
- * Caller must free() returned user name string when no longer used.
- */
-char *qd_server_query_user_name(const qd_server_t *server, const char *ssl_profile, const char *user_id)
-{
-    char *user_name = 0;
-
-    // Translate extracted id into display name
-    qd_python_lock_state_t lock_state = qd_python_lock();
-    PyObject *result = PyObject_CallMethod((PyObject *)server->py_displayname_obj, "query", "(ss)", ssl_profile, user_id );
-    if (result) {
-        user_name = py_string_2_c(result);
-        Py_XDECREF(result);
-    } else {
-        qd_log(LOG_SERVER, QD_LOG_DEBUG,
-               "Internal: failed to read displaynameservice query result (%s)",
-               user_id);
-    }
-    qd_python_unlock(lock_state);
-
-    return user_name;
 }
 
 const char *qd_server_get_container_name(const qd_server_t *server)

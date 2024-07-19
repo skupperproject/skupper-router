@@ -24,7 +24,6 @@
 
 #include <proton/engine.h>
 #include <proton/event.h>
-#include <proton/ssl.h>
 
 typedef struct qd_server_t      qd_server_t;
 typedef struct qd_container_t   qd_container_t;
@@ -108,14 +107,6 @@ typedef enum {
  */
 void qd_server_set_container(qd_dispatch_t *qd, struct qd_container_t *container);
 
-/**
- * Store address of display name service py object for C code use
- *
- * @param qd The dispatch handle returned by qd_dispatch.
- * @param display_name_service address of python object
- */
-qd_error_t qd_register_display_name_service(qd_dispatch_t *qd, void *display_name_service);
-
 pn_proactor_t *qd_server_proactor(const qd_server_t *qd_server);
 qd_http_server_t *qd_server_http(const qd_server_t *qd_server);
 uint64_t qd_server_allocate_connection_id(qd_server_t *server);
@@ -130,8 +121,7 @@ typedef struct qd_handler_context_t {
     qd_server_event_handler_t  handler;
 } qd_handler_context_t;
 
-// Use displayName lookup to translate user_id to user name
-char *qd_server_query_user_name(const qd_server_t *server, const char *ssl_profile, const char *user_id);
+
 const char *qd_server_get_container_name(const qd_server_t *server);
 sys_mutex_t *qd_server_get_activation_lock(qd_server_t *server);
 

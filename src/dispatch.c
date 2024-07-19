@@ -37,6 +37,7 @@
 #include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/static_assert.h"
+#include "qpid/dispatch/tls.h"
 
 #include <dlfcn.h>
 #include <inttypes.h>
@@ -116,6 +117,7 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     qd_entity_cache_initialize();   /* Must be first */
     qd_alloc_initialize();
     qd_log_initialize();
+    qd_tls_initialize();
     qd_error_initialize();
     if (qd_error_code()) { qd_dispatch_free(qd); return 0; }
 
@@ -290,11 +292,6 @@ QD_EXPORT qd_error_t qd_dispatch_register_policy_manager(qd_dispatch_t *qd, qd_e
 }
 
 
-QD_EXPORT qd_error_t qd_dispatch_register_display_name_service(qd_dispatch_t *qd, void *object)
-{
-    return qd_register_display_name_service(qd, object);
-}
-
 QD_EXPORT PyObject *qd_dispatch_policy_c_counts_alloc(void)
 {
     return PyCapsule_New(qd_policy_c_counts_alloc(), "qd_policy_c_counts", qd_dispatch_policy_c_counts_free);
@@ -395,6 +392,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     Py_XDECREF((PyObject*) qd->agent);
     qd_router_free(qd->router);
     qd_server_free(qd->server);
+    qd_tls_finalize();
     qd_log_finalize();
     qd_alloc_finalize();
     qd_python_finalize();

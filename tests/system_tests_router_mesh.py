@@ -166,7 +166,7 @@ class ThreeRouterTest(TestCase):
             ats.wait()
             self.assertTrue(False)  # expect exception
         except AsyncTestSender.TestSenderException as exc:
-            self.assertIn("link error", ats.error)
+            self.assertIn("Link Error", ats.error)
 
     def test_04_unavailable_anonymous_link_attach(self):
         """
