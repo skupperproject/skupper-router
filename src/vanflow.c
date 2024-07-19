@@ -108,13 +108,14 @@ struct vflow_work_t {
     DEQ_LINKS(vflow_work_t);
     vflow_work_handler_t  handler;
     vflow_record_t       *record;
-    uint64_t              timestamp;
+    uint64_t              value64;
     vflow_attribute_t     attribute;
     union {
-        char     *string_val;
-        uint64_t  int_val;
-        void     *pointer;
-        bool      bool_val;
+        char                        *string_val;
+        uint64_t                     int_val;
+        void                        *pointer;
+        bool                         bool_val;
+        vflow_attribute_data_list_t  attributes;
     } value;
 };
 
@@ -125,6 +126,7 @@ DEQ_DECLARE(vflow_work_t, vflow_work_list_t);
 static const char *event_address_all           = "mc/sfe.all";
 static const char *event_address_my_prefix     = "mc/sfe.";
 static const char *command_address_prefix      = "sfe.";
+static const char *co_record_address_prefix    = "vfcr.";
 static const int   heartbeat_interval_sec      = 2;
 static const int   heartbeats_per_beacon       = 5;
 static const int   flush_interval_msec         = 200;
@@ -144,6 +146,7 @@ typedef struct {
     char                *event_address_my_flow;
     char                *event_address_my_log;
     char                *command_address;
+    char                *co_record_address;
     char                *router_mode;
     bool                 sleeping;
     vflow_work_list_t    work_list;
@@ -155,6 +158,7 @@ typedef struct {
     vflow_record_list_t  unflushed_flow_records[FLUSH_SLOT_COUNT];
     vflow_record_list_t  unflushed_log_records[FLUSH_SLOT_COUNT];
     vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];  // not flow or log records
+    vflow_record_list_t  unflushed_co_records[FLUSH_SLOT_COUNT];
     vflow_rate_list_t    rate_trackers;
     int                  current_flush_slot;
     char                *site_id;
@@ -168,6 +172,7 @@ typedef struct {
     qdr_watch_handle_t   my_flow_address_watch_handle;
     qdr_watch_handle_t   my_log_address_watch_handle;
     qdr_subscription_t  *command_subscription;
+    qdr_subscription_t  *co_record_subscription;
     bool                 all_address_usable;
     bool                 my_address_usable;
     bool                 my_flow_address_usable;
@@ -187,9 +192,9 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard);
 #define ATTR_COUNTER  4
 #define ATTR_STRING   8
 #define ATTR_TRACE    16
-#define ATTR_UCOUNT   ATTR_UINT | ATTR_COUNTER
+#define ATTR_UCOUNT   (ATTR_UINT | ATTR_COUNTER)
 
-static uint8_t valid_attributes[] = {
+static uint8_t valid_attribute_types[] = {
     ATTR_UINT,   ATTR_REF,    ATTR_REF,    ATTR_UINT,
     ATTR_UINT,   ATTR_REF,    ATTR_REF,    ATTR_REF,
     ATTR_UINT,   ATTR_STRING, ATTR_STRING, ATTR_STRING,
@@ -344,9 +349,9 @@ static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribu
 
     text[0] = '\0';
 
-    if (valid_attributes[data->attribute_type] & ATTR_UINT) {
+    if (valid_attribute_types[data->attribute_type] & ATTR_UINT) {
         sprintf(text, "%"PRIu64, data->value.uint_val);
-    } else if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
+    } else if (valid_attribute_types[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
         text_ptr = data->value.string_val;
     }
 
@@ -356,9 +361,9 @@ static void _vflow_strncat_attribute(char *buffer, size_t n, const vflow_attribu
 
 static void _vflow_compose_attribute(qd_composed_field_t *field, const vflow_attribute_data_t *data)
 {
-    if (valid_attributes[data->attribute_type] & ATTR_UINT) {
+    if (valid_attribute_types[data->attribute_type] & ATTR_UINT) {
         qd_compose_insert_ulong(field, data->value.uint_val);
-    } else if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
+    } else if (valid_attribute_types[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
         qd_compose_insert_string(field, data->value.string_val);
     }
 }
@@ -380,18 +385,22 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
 
     if (record->flush_slot == -1) {
         record->flush_slot = state->current_flush_slot;
-        switch (record->record_type) {
-            case VFLOW_RECORD_FLOW:
-            case VFLOW_RECORD_BIFLOW_APP:
-            case VFLOW_RECORD_BIFLOW_TPORT:
-                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
-                break;
-            case VFLOW_RECORD_LOG:
-                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
-                break;
-            default:
-                DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
-                break;
+        if (record->co_record) {
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_co_records[state->current_flush_slot], record);
+        } else {
+            switch (record->record_type) {
+                case VFLOW_RECORD_FLOW:
+                case VFLOW_RECORD_BIFLOW_APP:
+                case VFLOW_RECORD_BIFLOW_TPORT:
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
+                    break;
+                case VFLOW_RECORD_LOG:
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                    break;
+                default:
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
+                    break;
+            }
         }
     }
 }
@@ -445,7 +454,7 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
             vflow_work_t sub_work;
             sub_work.attribute = VFLOW_ATTRIBUTE_START_TIME;
             sub_work.record    = record;
-            sub_work.value.int_val = work->timestamp;
+            sub_work.value.int_val = work->value64;
             _vflow_set_int_TH(&sub_work, false);
         }
 
@@ -501,7 +510,7 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
         vflow_work_t sub_work;
         sub_work.attribute = VFLOW_ATTRIBUTE_END_TIME;
         sub_work.record    = record;
-        sub_work.value.int_val = work->timestamp;
+        sub_work.value.int_val = work->value64;
         _vflow_set_int_TH(&sub_work, false);
     }
 
@@ -768,18 +777,22 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     // Remove the record from the unflushed list if needed
     //
     if (record->flush_slot >= 0) {
-        switch (record->record_type) {
-            case VFLOW_RECORD_FLOW:
-            case VFLOW_RECORD_BIFLOW_APP:
-            case VFLOW_RECORD_BIFLOW_TPORT:
-                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
-                break;
-            case VFLOW_RECORD_LOG:
-                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
-                break;
-            default:
-                DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
-                break;
+        if (record->co_record) {
+            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_co_records[record->flush_slot], record);
+        } else {
+            switch (record->record_type) {
+                case VFLOW_RECORD_FLOW:
+                case VFLOW_RECORD_BIFLOW_APP:
+                case VFLOW_RECORD_BIFLOW_TPORT:
+                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
+                    break;
+                case VFLOW_RECORD_LOG:
+                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                    break;
+                default:
+                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
+                    break;
+            }
         }
         record->flush_slot = -1;
     }
@@ -808,7 +821,7 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
     vflow_attribute_data_t *data = DEQ_HEAD(record->attributes);
     while (!!data) {
         DEQ_REMOVE_HEAD(record->attributes);
-        if (valid_attributes[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
+        if (valid_attribute_types[data->attribute_type] & (ATTR_STRING | ATTR_TRACE | ATTR_REF)) {
             free(data->value.string_val);
         }
         free_vflow_attribute_data_t(data);
@@ -1080,7 +1093,6 @@ static void _vflow_emit_unflushed_as_events_TH(qdr_core_t *core, vflow_record_li
 
         record = DEQ_NEXT_N(UNFLUSHED, record);
     }
-
 }
 
 
@@ -1105,6 +1117,45 @@ static void _vflow_clean_unflushed_TH(vflow_record_list_t *unflushed_records)
             _vflow_free_record_TH(record, false);
         }
         record = DEQ_HEAD(*unflushed_records);
+    }
+}
+
+
+//
+// Co-records are emitted in the same format as base records, except that they are sent directly to the base router.
+// This means that the unflushed co-records must be sorted by base router and then sent in batches to each router.
+//
+static void _vflow_emit_co_records_TH(qdr_core_t *core, vflow_record_list_t *unflushed_records)
+{
+    vflow_record_list_t working_list;
+
+    while (!DEQ_IS_EMPTY(*unflushed_records)) {
+        vflow_record_t *start_record   = DEQ_HEAD(*unflushed_records);
+        const char     *base_source_id = start_record->identity.source_id;
+
+        //
+        // Build a working list of unflushed co-records that belong to the same base source.
+        //
+        DEQ_INIT(working_list);
+        vflow_record_t *record = start_record;
+        vflow_record_t *next_record;
+        do {
+            next_record = DEQ_NEXT_N(UNFLUSHED, record);
+            if (strncmp(base_source_id, record->identity.source_id, ROUTER_ID_SIZE) == 0) {
+                DEQ_REMOVE_N(UNFLUSHED, *unflushed_records, record);
+                DEQ_INSERT_TAIL_N(UNFLUSHED, working_list, record);
+            }
+            record = next_record;
+        } while (!!next_record);
+
+        //
+        // Emit the working list to the base source
+        //
+        const size_t address_length = ROUTER_ID_SIZE + 7;
+        char base_source_address[address_length];
+        snprintf(base_source_address, address_length, "vfcr.%s:0", base_source_id);
+        _vflow_emit_unflushed_as_events_TH(core, &working_list, base_source_address);
+        _vflow_clean_unflushed_TH(&working_list);
     }
 }
 
@@ -1135,9 +1186,12 @@ static void _vflow_flush_TH(qdr_core_t *core)
                                            state->event_address_my_log);
     }
 
+    _vflow_emit_co_records_TH(core, &state->unflushed_co_records[state->current_flush_slot]);
+
     _vflow_clean_unflushed_TH(&state->unflushed_records[state->current_flush_slot]);
     _vflow_clean_unflushed_TH(&state->unflushed_flow_records[state->current_flush_slot]);
     _vflow_clean_unflushed_TH(&state->unflushed_log_records[state->current_flush_slot]);
+    _vflow_clean_unflushed_TH(&state->unflushed_co_records[state->current_flush_slot]);
 }
 
 
@@ -1618,7 +1672,7 @@ vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record
     record->ended         = false;
 
     work->record    = record;
-    work->timestamp = _now_in_usec();
+    work->value64 = _now_in_usec();
 
     //
     // Assign a unique identity to the new record
@@ -1650,7 +1704,7 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
 
     vflow_work_t *work = _vflow_work(_vflow_start_record_TH);
     work->record    = record;
-    work->timestamp = _now_in_usec();
+    work->value64 = _now_in_usec();
 
     _vflow_post_work(work);
     return record;
@@ -1662,7 +1716,7 @@ void vflow_end_record(vflow_record_t *record)
     if (!!record) {
         vflow_work_t *work = _vflow_work(_vflow_end_record_TH);
         work->record    = record;
-        work->timestamp = _now_in_usec();
+        work->value64 = _now_in_usec();
         _vflow_post_work(work);
     }
 }
@@ -1693,7 +1747,7 @@ void vflow_serialize_identity_pn(const vflow_record_t *record, pn_data_t *data)
 void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribute_type, vflow_record_t *referenced_record)
 {
     if (!!record && !!referenced_record) {
-        assert(valid_attributes[attribute_type] & ATTR_REF);
+        assert(valid_attribute_types[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
@@ -1706,7 +1760,7 @@ void vflow_set_ref_from_record(vflow_record_t *record, vflow_attribute_t attribu
 void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribute_type, qd_parsed_field_t *field)
 {
     if (!!record) {
-        assert(valid_attributes[attribute_type] & ATTR_REF);
+        assert(valid_attribute_types[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1726,7 +1780,7 @@ void vflow_set_ref_from_parsed(vflow_record_t *record, vflow_attribute_t attribu
 void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute_type, qd_iterator_t *iter)
 {
     if (!!record) {
-        assert(valid_attributes[attribute_type] & ATTR_REF);
+        assert(valid_attribute_types[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1746,7 +1800,7 @@ void vflow_set_ref_from_iter(vflow_record_t *record, vflow_attribute_t attribute
 void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_type, pn_data_t *data)
 {
     if (!!record) {
-        assert(valid_attributes[attribute_type] & ATTR_REF);
+        assert(valid_attribute_types[attribute_type] & ATTR_REF);
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record    = record;
         work->attribute = attribute_type;
@@ -1771,7 +1825,7 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
 {
 #define MAX_STRING_VALUE 300
     if (!!record) {
-        assert(valid_attributes[attribute_type] & (ATTR_REF | ATTR_STRING));
+        assert(valid_attribute_types[attribute_type] & (ATTR_REF | ATTR_STRING));
         vflow_work_t *work = _vflow_work(_vflow_set_string_TH);
         work->record           = record;
         work->attribute        = attribute_type;
@@ -1783,7 +1837,7 @@ void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, 
 void vflow_set_pn_condition_string(vflow_record_t *record, vflow_attribute_t attribute_type, pn_condition_t *cond)
 {
     if (!!record && !!cond) {
-        assert(valid_attributes[attribute_type] & ATTR_STRING);
+        assert(valid_attribute_types[attribute_type] & ATTR_STRING);
         const char *cname = pn_condition_get_name(cond);
         const char *cdesc = pn_condition_get_description(cond);
 
@@ -1805,7 +1859,7 @@ void vflow_set_pn_condition_string(vflow_record_t *record, vflow_attribute_t att
 void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t value)
 {
     if (!!record) {
-        assert(valid_attributes[attribute_type] & ATTR_UINT);
+        assert(valid_attribute_types[attribute_type] & ATTR_UINT);
         vflow_work_t *work = _vflow_work(_vflow_set_int_TH);
         work->record        = record;
         work->attribute     = attribute_type;
@@ -1818,7 +1872,7 @@ void vflow_set_uint64(vflow_record_t *record, vflow_attribute_t attribute_type, 
 void vflow_inc_counter(vflow_record_t *record, vflow_attribute_t attribute_type, uint64_t addend)
 {
     if (!!record) {
-        assert(valid_attributes[attribute_type] & ATTR_COUNTER);
+        assert(valid_attribute_types[attribute_type] & ATTR_COUNTER);
         vflow_work_t *work = _vflow_work(_vflow_inc_int_TH);
         work->record        = record;
         work->attribute     = attribute_type;
@@ -1893,8 +1947,8 @@ void vflow_latency_end(vflow_record_t *record, vflow_attribute_t attribute_type)
 void vflow_add_rate(vflow_record_t *record, vflow_attribute_t count_attribute, vflow_attribute_t rate_attribute)
 {
     if (!!record) {
-        assert(valid_attributes[count_attribute] & ATTR_COUNTER);
-        assert(valid_attributes[rate_attribute] & ATTR_UINT);
+        assert(valid_attribute_types[count_attribute] & ATTR_COUNTER);
+        assert(valid_attribute_types[rate_attribute] & ATTR_UINT);
         vflow_work_t *work = _vflow_work(_vflow_add_rate_TH);
         work->record        = record;
         work->attribute     = count_attribute;
@@ -1938,13 +1992,13 @@ QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *
 // IO Module Callbacks
 //=====================================================================================
 
-static uint64_t _vflow_on_message(void                    *context,
-                                  qd_message_t            *msg,
-                                  int                      link_maskbit,
-                                  int                      inter_router_cost,
-                                  uint64_t                 conn_id,
-                                  const qd_policy_spec_t  *policy,
-                                  qdr_error_t            **error)
+static uint64_t _vflow_on_command_message(void                    *context,
+                                          qd_message_t            *msg,
+                                          int                      link_maskbit,
+                                          int                      inter_router_cost,
+                                          uint64_t                 conn_id,
+                                          const qd_policy_spec_t  *policy,
+                                          qdr_error_t            **error)
 {
     if (qd_message_check_depth(msg, QD_DEPTH_PROPERTIES) == QD_MESSAGE_DEPTH_OK) {
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
@@ -1952,6 +2006,170 @@ static uint64_t _vflow_on_message(void                    *context,
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
                 qd_log(LOG_FLOW_LOG, QD_LOG_DEBUG, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
+            }
+            qd_iterator_free(subject_iter);
+        }
+    }
+    return PN_ACCEPTED;
+}
+
+
+static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
+{
+    //
+    // Note that this algorithm is optimized to assume that the only record type for which we will receive
+    // co-records is BIFLOW_TPORT.  If, in the future, additional types of co-record are introduced, these
+    // search alrorithms will need to be modified and made more general (possibly less efficient).
+    //
+
+    if (!discard) {
+        vflow_record_t *router = state->local_router;
+        vflow_record_t *biflow = 0;
+        vflow_record_t *tier_one = DEQ_HEAD(router->children);
+        while (!!tier_one && !biflow) {
+            if (tier_one->record_type == VFLOW_RECORD_LISTENER) {
+                biflow = DEQ_HEAD(tier_one->children);
+                while (!!biflow) {
+                    if (biflow->identity.record_id == work->value64) {
+                        break;
+                    }
+                    biflow = DEQ_NEXT(biflow);
+                }
+            }
+            tier_one = DEQ_NEXT(tier_one);
+        }
+
+        if (!!biflow) {
+            vflow_attribute_data_t *attribute = DEQ_HEAD(work->value.attributes);
+            while (!!attribute) {
+                vflow_work_t sub_work;
+                ZERO(&sub_work);
+                sub_work.attribute = attribute->attribute_type;
+                sub_work.record    = biflow;
+                if (valid_attribute_types[attribute->attribute_type] & ATTR_UCOUNT) {
+                    sub_work.value.int_val = attribute->value.uint_val;
+                    _vflow_set_int_TH(&sub_work, false);
+                } else {
+                    sub_work.value.string_val = attribute->value.string_val;
+                    _vflow_set_string_TH(&sub_work, false);
+                }
+                attribute = DEQ_NEXT(attribute);
+            }
+        }
+    }
+
+    vflow_attribute_data_t *clean_attribute = DEQ_HEAD(work->value.attributes);
+    while (!!clean_attribute) {
+        DEQ_REMOVE_HEAD(work->value.attributes);
+        free_vflow_attribute_data_t(clean_attribute);
+        clean_attribute = DEQ_HEAD(work->value.attributes);
+    }
+}
+
+
+static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
+{
+    vflow_record_type_t          record_type;
+    vflow_identity_t             identity;
+    vflow_attribute_data_list_t  attributes;
+    uint32_t                     item_count = qd_parse_sub_count(co_record);
+
+    DEQ_INIT(attributes);
+    for (uint32_t i = 0; i < item_count; i++) {
+        qd_parsed_field_t *key   = qd_parse_sub_key(co_record, i);
+        qd_parsed_field_t *value = qd_parse_sub_value(co_record, i);
+        if (qd_parse_is_scalar(key) && qd_parse_is_scalar(value)) {
+            uint32_t attribute_ordinal = qd_parse_as_uint(key);
+            if (attribute_ordinal >= sizeof(valid_attribute_types)) {
+                //
+                // Invalid attribute ordinal
+                //
+                return;
+            }
+            if (attribute_ordinal == VFLOW_ATTRIBUTE_RECORD_TYPE) {
+                record_type = (vflow_record_type_t) qd_parse_as_uint(value);
+            } else if (attribute_ordinal == VFLOW_ATTRIBUTE_IDENTITY) {
+                bool valid_id = _vflow_parse_id_iter(&identity, qd_parse_raw(value));
+                if (!valid_id) {
+                    return;
+                }
+            } else {
+                vflow_attribute_data_t *attribute = new_vflow_attribute_data_t();
+                ZERO(attribute);
+                attribute->attribute_type = attribute_ordinal;
+                uint8_t tag = qd_parse_tag(value);
+                if ((valid_attribute_types[attribute_ordinal] & ATTR_UCOUNT) && (tag == QD_AMQP_ULONG0 || tag == QD_AMQP_SMALLULONG || tag == QD_AMQP_ULONG)) {
+                    attribute->value.uint_val = qd_parse_as_ulong(value);
+                } else if ((valid_attribute_types[attribute_ordinal] & (ATTR_STRING | ATTR_REF | ATTR_TRACE)) && (tag == QD_AMQP_STR8_UTF8 || tag == QD_AMQP_STR32_UTF8)) {
+                    attribute->value.string_val = (char*) qd_iterator_copy(qd_parse_raw(value));
+                } else {
+                    //
+                    // Invalid type tag for the value
+                    //
+                    return;
+                }
+                DEQ_INSERT_TAIL(attributes, attribute);
+            }
+        } else {
+            //
+            // A non-scalar key or value is invalid.  Don't take any action.
+            //
+            return;
+        }
+    }
+
+    if (DEQ_IS_EMPTY(attributes)) {
+        return;
+    }
+
+    if (strncmp(identity.source_id, state->router_id, ROUTER_ID_SIZE) != 0) {
+        return;
+    }
+
+    if (record_type != VFLOW_RECORD_BIFLOW_TPORT) {
+        return;
+    }
+
+    //
+    // Post the update for handling within the thread
+    //
+    vflow_work_t *work = _vflow_work(_vflow_process_co_record_TH);
+    work->value64 = identity.record_id;
+    DEQ_MOVE(attributes, work->value.attributes);
+    _vflow_post_work(work);
+}
+
+
+static uint64_t _vflow_on_co_record_message(void                    *context,
+                                            qd_message_t            *msg,
+                                            int                      link_maskbit,
+                                            int                      inter_router_cost,
+                                            uint64_t                 conn_id,
+                                            const qd_policy_spec_t  *policy,
+                                            qdr_error_t            **error)
+{
+    if (qd_message_check_depth(msg, QD_DEPTH_BODY) == QD_MESSAGE_DEPTH_OK) {
+        qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
+        if (!!subject_iter) {
+            if (qd_iterator_equal(subject_iter, (const unsigned char*) "RECORD")) {
+                qd_log(LOG_FLOW_LOG, QD_LOG_DEBUG, "Co-Record update received");
+                qd_iterator_t *body_iter = qd_message_field_iterator(msg, QD_FIELD_BODY);
+                if (!!body_iter) {
+                    qd_parsed_field_t *body = qd_parse(body_iter);
+                    if (qd_parse_ok(body)) {
+                        if (qd_parse_is_list(body)) {
+                            qd_parsed_field_t *item = qd_field_first_child(body);
+                            while (!!item) {
+                                if (qd_parse_is_map(item)) {
+                                    _vflow_on_co_record_map(item);
+                                }
+                                item = qd_field_next_child(item);
+                            }
+                        }
+                    }
+                    qd_parse_free(body);
+                    qd_iterator_free(body_iter);
+                }
             }
             qd_iterator_free(subject_iter);
         }
@@ -1982,6 +2200,10 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
         strcpy(state->command_address, command_address_prefix);
         _vflow_strncat_id(state->command_address, 70, &state->local_router->identity);
 
+        state->co_record_address = (char*) malloc(71);
+        strcpy(state->co_record_address, co_record_address_prefix);
+        _vflow_strncat_id(state->co_record_address, 70, &state->local_router->identity);
+
         // clang-format off
         state->all_address_watch_handle = qdr_core_watch_address(core, event_address_all, 'M',
                                                                  QD_TREATMENT_MULTICAST_ONCE, _vflow_on_all_address_watch, 0, core);
@@ -1991,9 +2213,10 @@ static void _vflow_init_address_watch_TH(vflow_work_t *work, bool discard)
                                                                      QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_flow_address_watch, 0, core);
         state->my_log_address_watch_handle  = qdr_core_watch_address(core, state->event_address_my_log,  'M',
                                                                      QD_TREATMENT_MULTICAST_ONCE, _vflow_on_my_log_address_watch, 0, core);
-        // clang-format on
 
-        state->command_subscription = qdr_core_subscribe(core, state->command_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_message, core);
+        state->command_subscription   = qdr_core_subscribe(core, state->command_address,   'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_command_message, core);
+        state->co_record_subscription = qdr_core_subscribe(core, state->co_record_address, 'M', QD_TREATMENT_ANYCAST_CLOSEST, false, true, _vflow_on_co_record_message, core);
+        // clang-format on
     }
 }
 
@@ -2052,6 +2275,7 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
         DEQ_INIT(state->unflushed_flow_records[slot]);
         DEQ_INIT(state->unflushed_log_records[slot]);
         DEQ_INIT(state->unflushed_records[slot]);
+        DEQ_INIT(state->unflushed_co_records[slot]);
     }
 
     sys_mutex_init(&state->lock);
@@ -2100,9 +2324,10 @@ static void _vflow_final(void *adaptor_context)
     qdr_core_unwatch_address(core, state->my_address_watch_handle);
 
     //
-    // Unsubscribe for command messages
+    // Unsubscribe for command and co-record messages
     //
     qdr_core_unsubscribe(state->command_subscription);
+    qdr_core_unsubscribe(state->co_record_subscription);
 
     //
     // Signal the thread to exit by posting a NULL work pointer
@@ -2122,6 +2347,7 @@ static void _vflow_final(void *adaptor_context)
     free(state->event_address_my_flow);
     free(state->event_address_my_log);
     free(state->command_address);
+    free(state->co_record_address);
     free(state->local_router_id);
 
     //
