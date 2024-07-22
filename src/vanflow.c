@@ -2028,7 +2028,6 @@ static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
     // co-records is BIFLOW_TPORT.  If, in the future, additional types of co-record are introduced, these
     // search alrorithms will need to be modified and made more general (possibly less efficient).
     //
-
     if (!discard) {
         vflow_record_t *router = state->local_router;
         vflow_record_t *biflow = 0;
@@ -2058,6 +2057,7 @@ static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
                     _vflow_set_int_TH(&sub_work, false);
                 } else {
                     sub_work.value.string_val = attribute->value.string_val;
+                    attribute->value.string_val = 0;
                     _vflow_set_string_TH(&sub_work, false);
                 }
                 attribute = DEQ_NEXT(attribute);
@@ -2068,6 +2068,9 @@ static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
     vflow_attribute_data_t *clean_attribute = DEQ_HEAD(work->value.attributes);
     while (!!clean_attribute) {
         DEQ_REMOVE_HEAD(work->value.attributes);
+        if (valid_attribute_types[clean_attribute->attribute_type] & (ATTR_STRING | ATTR_REF | ATTR_TRACE)) {
+            free(clean_attribute->value.string_val);
+        }
         free_vflow_attribute_data_t(clean_attribute);
         clean_attribute = DEQ_HEAD(work->value.attributes);
     }
@@ -2084,9 +2087,6 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
 
     DEQ_INIT(attributes);
     for (uint32_t i = 0; i < item_count; i++) {
-        if (input_error) {
-            break;
-        }
         qd_parsed_field_t *key   = qd_parse_sub_key(co_record, i);
         qd_parsed_field_t *value = qd_parse_sub_value(co_record, i);
         if (qd_parse_is_scalar(key) && qd_parse_is_scalar(value)) {
@@ -2096,6 +2096,7 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
                 // Invalid attribute ordinal
                 //
                 input_error = true;
+                break;
             }
             if (attribute_ordinal == VFLOW_ATTRIBUTE_RECORD_TYPE) {
                 record_type = (vflow_record_type_t) qd_parse_as_uint(value);
@@ -2103,6 +2104,7 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
                 bool valid_id = _vflow_parse_id_iter(&identity, qd_parse_raw(value));
                 if (!valid_id) {
                     input_error = true;
+                    break;
                 }
             } else {
                 vflow_attribute_data_t *attribute = new_vflow_attribute_data_t();
@@ -2118,6 +2120,7 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
                     // Invalid type tag for the value
                     //
                     input_error = true;
+                    break;
                 }
                 DEQ_INSERT_TAIL(attributes, attribute);
             }
@@ -2126,6 +2129,7 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
             // A non-scalar key or value is invalid.  Don't take any action.
             //
             input_error = true;
+            break;
         }
     }
 
@@ -2153,6 +2157,9 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
         vflow_attribute_data_t *clean_attribute = DEQ_HEAD(attributes);
         while (!!clean_attribute) {
             DEQ_REMOVE_HEAD(attributes);
+            if (valid_attribute_types[clean_attribute->attribute_type] & (ATTR_STRING | ATTR_REF | ATTR_TRACE)) {
+                free(clean_attribute->value.string_val);
+            }
             free_vflow_attribute_data_t(clean_attribute);
             clean_attribute = DEQ_HEAD(attributes);
         }
