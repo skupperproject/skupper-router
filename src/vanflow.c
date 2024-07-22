@@ -84,6 +84,7 @@ struct vflow_record_t {
     DEQ_LINKS_N(UNFLUSHED, vflow_record_t);
     vflow_record_type_t          record_type;
     vflow_record_t              *parent;
+    vflow_record_t              *co_record_peer;  // Only used then record and co-record are on the same source
     vflow_record_list_t          children;
     vflow_identity_t             identity;
     vflow_attribute_data_list_t  attributes;
@@ -406,6 +407,28 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
 }
 
 
+static vflow_record_t *_vflow_find_biflow_TH(uint64_t record_id)
+{
+    vflow_record_t *router = state->local_router;
+    vflow_record_t *biflow = 0;
+    vflow_record_t *tier_one = DEQ_HEAD(router->children);
+    while (!!tier_one && !biflow) {
+        if (tier_one->record_type == VFLOW_RECORD_LISTENER) {
+            biflow = DEQ_HEAD(tier_one->children);
+            while (!!biflow) {
+                if (biflow->identity.record_id == record_id) {
+                    return biflow;
+                }
+                biflow = DEQ_NEXT(biflow);
+            }
+        }
+        tier_one = DEQ_NEXT(tier_one);
+    }
+
+    return 0;
+}
+
+
 /**
  * @brief Work handler for vflow_start_record
  * 
@@ -480,6 +503,18 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
         // It's a co-record.  Store it in the co-record list.
         //
         DEQ_INSERT_TAIL(state->co_records, record);
+
+        //
+        // Check to see if this co-record's base record is from the same source.  If so,
+        // we must find the base record and link it to the co-record for local processing.
+        //
+        if (strncmp(record->identity.source_id, state->router_id, ROUTER_ID_SIZE) == 0) {
+            vflow_record_t *base_record = _vflow_find_biflow_TH(record->identity.record_id);
+            if (!!base_record) {
+                base_record->co_record_peer = record;
+                record->co_record_peer      = base_record;
+            }
+        }
     }
 
     //
@@ -502,6 +537,14 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
     }
 
     vflow_record_t *record = work->record;
+
+    //
+    // Remove any co-record linkage
+    //
+    if (!!record->co_record_peer) {
+        record->co_record_peer->co_record_peer = 0;
+        record->co_record_peer = 0;
+    }
 
     //
     // Record the deletion timestamp in the record. Log records provide their own end timestamp
@@ -538,6 +581,24 @@ static void _vflow_end_record_TH(vflow_work_t *work, bool discard)
 
 
 /**
+ * @brief When writing to a record, it is sometimes appropriate to write a different record than
+ * was requested.  This is true in the case where a co-record's base record is in the same source.
+ * When this happens, we wish to simply update the attributes of the base record.
+ *
+ * @param record Requested record
+ * @return vflow_record_t* Actual record to modify
+ */
+static vflow_record_t *_vflow_record_to_use_TH(vflow_record_t *record)
+{
+    if (record->co_record && !!record->co_record_peer) {
+        return record->co_record_peer;
+    }
+
+    return record;
+}
+
+
+/**
  * @brief Work handler for vflow_set_string
  * 
  * @param work Pointer to work context
@@ -550,7 +611,7 @@ static void _vflow_set_string_TH(vflow_work_t *work, bool discard)
         return;
     }
 
-    vflow_record_t         *record = work->record;
+    vflow_record_t         *record = _vflow_record_to_use_TH(work->record);
     vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
     vflow_attribute_data_t *data;
 
@@ -596,7 +657,7 @@ static void _vflow_set_int_TH(vflow_work_t *work, bool discard)
         return;
     }
 
-    vflow_record_t         *record = work->record;
+    vflow_record_t         *record = _vflow_record_to_use_TH(work->record);
     vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
     vflow_attribute_data_t *data;
     bool                    changed = true;
@@ -645,7 +706,7 @@ static void _vflow_inc_int_TH(vflow_work_t *work, bool discard)
         return;
     }
 
-    vflow_record_t         *record = work->record;
+    vflow_record_t         *record = _vflow_record_to_use_TH(work->record);
     vflow_attribute_data_t *insert = _vflow_find_attribute(record, work->attribute);
     vflow_attribute_data_t *data;
 
@@ -1107,7 +1168,7 @@ static void _vflow_clean_unflushed_TH(vflow_record_list_t *unflushed_records)
         //
         // If this record has been ended, emit the log line.
         //
-        if (record->ended || record->force_log) {
+        if ((record->ended || record->force_log) && !record->co_record) {
             record->force_log = false;
             _vflow_emit_record_as_log_TH(record);
         }
@@ -1149,12 +1210,17 @@ static void _vflow_emit_co_records_TH(qdr_core_t *core, vflow_record_list_t *unf
         } while (!!next_record);
 
         //
-        // Emit the working list to the base source
+        // Only send a message if the co-records have base records on a remote source.
         //
-        const size_t address_length = ROUTER_ID_SIZE + 7;
-        char base_source_address[address_length];
-        snprintf(base_source_address, address_length, "vfcr.%s:0", base_source_id);
-        _vflow_emit_unflushed_as_events_TH(core, &working_list, base_source_address);
+        if (strncmp(base_source_id, state->router_id, ROUTER_ID_SIZE) != 0) {
+            //
+            // Emit the working list to the base source
+            //
+            const size_t address_length = ROUTER_ID_SIZE + 7;
+            char base_source_address[address_length];
+            snprintf(base_source_address, address_length, "vfcr.%s:0", base_source_id);
+            _vflow_emit_unflushed_as_events_TH(core, &working_list, base_source_address);
+        }
         _vflow_clean_unflushed_TH(&working_list);
     }
 }
@@ -1710,7 +1776,7 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
     }
 
     vflow_work_t *work = _vflow_work(_vflow_start_record_TH);
-    work->record    = record;
+    work->record  = record;
     work->value64 = _now_in_usec();
 
     _vflow_post_work(work);
@@ -2029,22 +2095,7 @@ static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
     // search alrorithms will need to be modified and made more general (possibly less efficient).
     //
     if (!discard) {
-        vflow_record_t *router = state->local_router;
-        vflow_record_t *biflow = 0;
-        vflow_record_t *tier_one = DEQ_HEAD(router->children);
-        while (!!tier_one && !biflow) {
-            if (tier_one->record_type == VFLOW_RECORD_LISTENER) {
-                biflow = DEQ_HEAD(tier_one->children);
-                while (!!biflow) {
-                    if (biflow->identity.record_id == work->value64) {
-                        break;
-                    }
-                    biflow = DEQ_NEXT(biflow);
-                }
-            }
-            tier_one = DEQ_NEXT(tier_one);
-        }
-
+        vflow_record_t *biflow = _vflow_find_biflow_TH(work->value64);
         if (!!biflow) {
             vflow_attribute_data_t *attribute = DEQ_HEAD(work->value.attributes);
             while (!!attribute) {
