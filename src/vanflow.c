@@ -1686,6 +1686,13 @@ vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record
 
 vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_iterator_t *identity_iterator)
 {
+    //
+    // Note:  This implementation has been built assuming that the only record-type that will be used for a co-record
+    // will be BIFLOW_TPORT.  The author does not forsee any circumstance in which another record type would need a
+    // co-record.  If the author is wrong and it becomes desirable to use a co-record for a different record-type, the
+    // search/replacement algorithm in _vflow_process_co_record_TH will need to be re-written in a more general way.
+    //
+    assert(record_type == VFLOW_RECORD_BIFLOW_TPORT);
     vflow_record_t *record = new_vflow_record_t();
     ZERO(record);
     record->record_type   = record_type;
@@ -2069,13 +2076,17 @@ static void _vflow_process_co_record_TH(vflow_work_t *work, bool discard)
 
 static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
 {
-    vflow_record_type_t          record_type;
-    vflow_identity_t             identity;
+    vflow_record_type_t          record_type = VFLOW_RECORD_SITE;  // Any value other than BIFLOW_TPORT
+    vflow_identity_t             identity    = {0, ""};
     vflow_attribute_data_list_t  attributes;
     uint32_t                     item_count = qd_parse_sub_count(co_record);
+    bool                         input_error = false;
 
     DEQ_INIT(attributes);
     for (uint32_t i = 0; i < item_count; i++) {
+        if (input_error) {
+            break;
+        }
         qd_parsed_field_t *key   = qd_parse_sub_key(co_record, i);
         qd_parsed_field_t *value = qd_parse_sub_value(co_record, i);
         if (qd_parse_is_scalar(key) && qd_parse_is_scalar(value)) {
@@ -2084,14 +2095,14 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
                 //
                 // Invalid attribute ordinal
                 //
-                return;
+                input_error = true;
             }
             if (attribute_ordinal == VFLOW_ATTRIBUTE_RECORD_TYPE) {
                 record_type = (vflow_record_type_t) qd_parse_as_uint(value);
             } else if (attribute_ordinal == VFLOW_ATTRIBUTE_IDENTITY) {
                 bool valid_id = _vflow_parse_id_iter(&identity, qd_parse_raw(value));
                 if (!valid_id) {
-                    return;
+                    input_error = true;
                 }
             } else {
                 vflow_attribute_data_t *attribute = new_vflow_attribute_data_t();
@@ -2106,7 +2117,7 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
                     //
                     // Invalid type tag for the value
                     //
-                    return;
+                    input_error = true;
                 }
                 DEQ_INSERT_TAIL(attributes, attribute);
             }
@@ -2114,29 +2125,38 @@ static void _vflow_on_co_record_map(qd_parsed_field_t *co_record)
             //
             // A non-scalar key or value is invalid.  Don't take any action.
             //
-            return;
+            input_error = true;
         }
     }
 
     if (DEQ_IS_EMPTY(attributes)) {
-        return;
+        input_error = true;
     }
 
     if (strncmp(identity.source_id, state->router_id, ROUTER_ID_SIZE) != 0) {
-        return;
+        input_error = true;
     }
 
     if (record_type != VFLOW_RECORD_BIFLOW_TPORT) {
-        return;
+        input_error = true;
     }
 
-    //
-    // Post the update for handling within the thread
-    //
-    vflow_work_t *work = _vflow_work(_vflow_process_co_record_TH);
-    work->value64 = identity.record_id;
-    DEQ_MOVE(attributes, work->value.attributes);
-    _vflow_post_work(work);
+    if (!input_error) {
+        //
+        // Post the update for handling within the thread
+        //
+        vflow_work_t *work = _vflow_work(_vflow_process_co_record_TH);
+        work->value64 = identity.record_id;
+        DEQ_MOVE(attributes, work->value.attributes);
+        _vflow_post_work(work);
+    } else {
+        vflow_attribute_data_t *clean_attribute = DEQ_HEAD(attributes);
+        while (!!clean_attribute) {
+            DEQ_REMOVE_HEAD(attributes);
+            free_vflow_attribute_data_t(clean_attribute);
+            clean_attribute = DEQ_HEAD(attributes);
+        }
+    }
 }
 
 
