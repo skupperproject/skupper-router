@@ -680,7 +680,7 @@ class SkstatLinkPriorityTest(SkstatTestBase):
 
     def _test_links_all_routers(self, command):
         out = self.run_skstat(command)
-        self.assertTrue(out.count('UTC') == 1)
+        self.assertEqual(out.count('UTC'), 1)
         self.assertTrue(out.count('Router Links') == 2)
         self.assertTrue(out.count('inter-router') == 40)
         self.assertTrue(out.count('router-control') == 4)
@@ -694,7 +694,7 @@ class SkstatLinkPriorityTest(SkstatTestBase):
     def _test_all_entities(self, command):
         out = self.run_skstat(command)
 
-        self.assertEqual(1, out.count('UTC'))
+        self.assertEqual(2, out.count('UTC'))
         self.assertEqual(1, out.count('Router Links'))
         self.assertEqual(1, out.count('Router Addresses'))
         self.assertEqual(1, out.count('Total Connections'))
@@ -712,7 +712,7 @@ class SkstatLinkPriorityTest(SkstatTestBase):
     def _test_all_entities_all_routers(self, command):
         out = self.run_skstat(command)
 
-        self.assertEqual(1, out.count('UTC'))
+        self.assertEqual(3, out.count('UTC'))
         self.assertEqual(2, out.count('Router Links'))
         self.assertEqual(2, out.count('Router Addresses'))
         self.assertEqual(2, out.count('Total Connections'))

@@ -96,6 +96,7 @@ ROUTER_ADDRESS_TYPE = 'io.skupper.router.router.address'
 ROUTER_LINK_TYPE = 'io.skupper.router.router.link'
 ROUTER_NODE_TYPE = 'io.skupper.router.router.node'
 ROUTER_TYPE = 'io.skupper.router.router'
+ROUTER_STATS_TYPE = 'io.skupper.router.routerStats'
 SSL_PROFILE_TYPE = 'io.skupper.router.sslProfile'
 TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
@@ -1860,7 +1861,7 @@ class MgmtMsgProxy:
         return self._Response(ap['statusCode'], ap['statusDescription'], msg.body)
 
     def query_router(self):
-        ap = {'operation': 'QUERY', 'type': ROUTER_TYPE}
+        ap = {'operation': 'QUERY', 'type': ROUTER_STATS_TYPE}
         return Message(properties=ap, reply_to=self.reply_addr)
 
     def query_connections(self):

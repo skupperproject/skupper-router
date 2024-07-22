@@ -28,7 +28,7 @@ from proton.reactor import Container
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
 from system_test import unittest
 from system_test import QdManager
-from system_test import retry_assertion, CONFIG_AUTOLINK_TYPE, ROUTER_TYPE
+from system_test import retry_assertion, CONFIG_AUTOLINK_TYPE, ROUTER_STATS_TYPE
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
 
@@ -363,7 +363,7 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
-        query_command = 'QUERY --type=' + ROUTER_TYPE
+        query_command = 'QUERY --type=' + ROUTER_STATS_TYPE
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
         self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 0)

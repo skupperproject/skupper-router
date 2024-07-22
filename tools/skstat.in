@@ -131,7 +131,7 @@ class BusManager:
         return text
 
     def displayRouterId(self):
-        objects = self.query('io.skupper.router.router')
+        objects = self.query('io.skupper.router.routerStats')
         router = objects[0]
         if router:
             print(router.id)
@@ -325,16 +325,35 @@ class BusManager:
         heads.append(Header("value"))
         rows = []
 
-        objects = self.query('io.skupper.router.router')
+        router_objects = self.query('io.skupper.router.router')
+        router_stats_objects = self.query('io.skupper.router.routerStats')
 
-        router = objects[0]
+        router = router_objects[0]
+        router_stats = router_stats_objects[0]
 
         if show_date_id:
             self.display_datetime_router_id()
 
-        rows.append(('Version',        router.version))
-        rows.append(('Mode',           router.mode))
-        rows.append(('Router Id',      router.id))
+        rows.append(('Version',                   router_stats.version))
+        rows.append(('Mode',                      router.mode))
+        rows.append(('Router Id',                 router_stats.id))
+        rows.append(('Host Name',                 router.hostName))
+        rows.append(('Hello Interval Seconds',    PlainNum(router.helloIntervalSeconds)))
+        rows.append(('Hello Max Age Seconds',     PlainNum(router.helloMaxAgeSeconds)))
+        rows.append(('RA Interval Seconds',       PlainNum(router.raIntervalSeconds)))
+        rows.append(('RA Interval Flux Seconds',  PlainNum(router.raIntervalFluxSeconds)))
+        rows.append(('Remote Ls Max Age Seconds', PlainNum(router.remoteLsMaxAgeSeconds)))
+        rows.append(('Debug Dump File',           router.debugDumpFile))
+        rows.append(('Sasl Config Dir',           router.saslConfigDir))
+        rows.append(('Sasl Config Name',          router.saslConfigName))
+        if router.timestampsInUTC:
+            rows.append(('Timestamps In UTC',         "yes"))
+        else:
+            rows.append(('Timestamps In UTC',         "no"))
+        rows.append(('Timestamp Format',          router.timestampFormat))
+        rows.append(('Default Distribution',      router.defaultDistribution))
+        rows.append(('Metadata',                  router.metadata))
+        rows.append(('Data Connection Count',     router.dataConnectionCount))
         if router.vanId is not None:
             rows.append(('Van Id', router.vanId))
         try:
@@ -343,60 +362,56 @@ class BusManager:
             pass
 
         try:
-            rows.append(('Uptime',        TimeLong(router.uptimeSeconds)))
+            rows.append(('Uptime',        TimeLong(router_stats.uptimeSeconds)))
         except:
             pass
 
         try:
             if router.memoryUsage is not None:
-                rows.append(('VmSize', NumKMG(router.memoryUsage,
+                rows.append(('VmSize', NumKMG(router_stats.memoryUsage,
                                               base=1024)))
         except Exception:
             pass
         try:
             if router.residentMemoryUsage is not None:
-                rows.append(('RSS', NumKMG(router.residentMemoryUsage,
+                rows.append(('RSS', NumKMG(router_stats.residentMemoryUsage,
                                            base=1024)))
         except Exception:
             pass
         rows.append(('Area',          router.area))
-        rows.append(('Auto Links',    PlainNum(router.autoLinkCount)))
-        rows.append(('Links',         PlainNum(router.linkCount)))
-        rows.append(('Nodes',         PlainNum(router.nodeCount)))
-        rows.append(('Addresses',     PlainNum(router.addrCount)))
-        rows.append(('Total Connections',   PlainNum(router.connectionCount)))
+        rows.append(('Auto Links',    PlainNum(router_stats.autoLinkCount)))
+        rows.append(('Links',         PlainNum(router_stats.linkCount)))
+        rows.append(('Nodes',         PlainNum(router_stats.nodeCount)))
+        rows.append(('Addresses',     PlainNum(router_stats.addrCount)))
+        rows.append(('Total Connections',   PlainNum(router_stats.connectionCount)))
 
         # Overall delivery related counts.
         # These overall statistics were introduced in 1.1 version.
         # Wrap these in a try except so that newer versions of skstat works with older version of router
         try:
-            rows.append(('Presettled Count', PlainNum(router.presettledDeliveries)))
-            rows.append(('Dropped Presettled Count', PlainNum(router.droppedPresettledDeliveries)))
-            rows.append(('Accepted Count', PlainNum(router.acceptedDeliveries)))
-            rows.append(('Rejected Count', PlainNum(router.rejectedDeliveries)))
-            rows.append(('Released Count', PlainNum(router.releasedDeliveries)))
-            rows.append(('Modified Count', PlainNum(router.modifiedDeliveries)))
+            rows.append(('Presettled Count', PlainNum(router_stats.presettledDeliveries)))
+            rows.append(('Dropped Presettled Count', PlainNum(router_stats.droppedPresettledDeliveries)))
+            rows.append(('Accepted Count', PlainNum(router_stats.acceptedDeliveries)))
+            rows.append(('Rejected Count', PlainNum(router_stats.rejectedDeliveries)))
+            rows.append(('Released Count', PlainNum(router_stats.releasedDeliveries)))
+            rows.append(('Modified Count', PlainNum(router_stats.modifiedDeliveries)))
             try:
-                rows.append(('Deliveries Delayed > 1sec',  PlainNum(router.deliveriesDelayed1Sec)))
-                rows.append(('Deliveries Delayed > 10sec', PlainNum(router.deliveriesDelayed10Sec)))
-                rows.append(('Deliveries Stuck > 10sec',   PlainNum(router.deliveriesStuck)))
-                try:
-                    rows.append(('Links Blocked', PlainNum(router.linksBlocked)))
-                except:
-                    pass
+                rows.append(('Deliveries Delayed > 1sec',  PlainNum(router_stats.deliveriesDelayed1Sec)))
+                rows.append(('Deliveries Delayed > 10sec', PlainNum(router_stats.deliveriesDelayed10Sec)))
+                rows.append(('Deliveries Stuck > 10sec',   PlainNum(router_stats.deliveriesStuck)))
             except:
                 pass
-            rows.append(('Ingress Count', PlainNum(router.deliveriesIngress)))
-            rows.append(('Egress Count', PlainNum(router.deliveriesEgress)))
-            rows.append(('Transit Count', PlainNum(router.deliveriesTransit)))
-            rows.append(('Deliveries from Route Container', PlainNum(router.deliveriesIngressRouteContainer)))
-            rows.append(('Deliveries to Route Container', PlainNum(router.deliveriesEgressRouteContainer)))
+            rows.append(('Ingress Count', PlainNum(router_stats.deliveriesIngress)))
+            rows.append(('Egress Count', PlainNum(router_stats.deliveriesEgress)))
+            rows.append(('Transit Count', PlainNum(router_stats.deliveriesTransit)))
+            rows.append(('Deliveries from Route Container', PlainNum(router_stats.deliveriesIngressRouteContainer)))
+            rows.append(('Deliveries to Route Container', PlainNum(router_stats.deliveriesEgressRouteContainer)))
         except:
             pass
 
         # per-protocol user connection counts
         try:
-            for proto, count in router.connectionCounters.items():
+            for proto, count in router_stats.connectionCounters.items():
                 rows.append((f"{proto.upper()} Service Connections", PlainNum(count)))
         except:
             pass

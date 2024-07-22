@@ -368,6 +368,143 @@
             "attributes": {}
         },
 
+        "routerStats": {
+            "description": "Overall router statistics.",
+            "extends": "operationalEntity",
+            "attributes": {
+                "id": {
+                    "description": "Router's unique identity. The router will fail to start without id.",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
+                "version": {
+                    "type": "string",
+                    "description": "Software Version"
+                },
+                "addrCount": {
+                    "type": "integer",
+                    "description": "Number of addresses known to the router.",
+                    "graph": true
+                },
+                "linkCount": {
+                    "type": "integer",
+                    "description": "Number of links attached to the router node.",
+                    "graph": true
+                },
+                "nodeCount": {
+                    "type": "integer",
+                    "description": "Number of known peer router nodes.",
+                    "graph": true
+                },
+                "linkRouteCount": {
+                    "type": "integer",
+                    "description": "Number of link routes attached to the router node.",
+                    "graph": true
+                },
+                "autoLinkCount": {
+                    "type": "integer",
+                    "description": "Number of auto links attached to the router node.",
+                    "graph": true
+                },
+                "connectionCount": {
+                    "type": "integer",
+                    "description": "Number of open connections to the router node.",
+                    "graph": true
+                },
+                "presettledDeliveries": {
+                    "type": "integer",
+                    "description": "Number of presettled deliveries handled by the router.",
+                    "graph": true
+                },
+                "droppedPresettledDeliveries": {
+                    "type": "integer",
+                    "description": "Number of presettled deliveries that were dropped by the router.",
+                    "graph": true
+                },
+                "acceptedDeliveries": {
+                    "type": "integer",
+                    "description": "Number of deliveries whose delivery state was set to ACCEPTED by the router. These deliveries were successfully processed by the router.",
+                    "graph": true
+                },
+                "rejectedDeliveries": {
+                    "type": "integer",
+                    "description": "Number of deliveries whose delivery state was set to REJECTED by the router. These deliveries were Invalid and unprocessable.",
+                    "graph": true
+                },
+                "releasedDeliveries": {
+                    "type": "integer",
+                    "description": "Number of deliveries whose delivery state was set to RELEASED by the router. These deliveries was not (and will not be) processed",
+                    "graph": true
+                },
+                "modifiedDeliveries": {
+                    "type": "integer",
+                    "description": "Number of deliveries whose delivery state was set to MODIFIED by the router. These deliveries were modified but not processed.",
+                    "graph": true
+                },
+                "deliveriesIngress": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to it by a sender that is directly attached to the router.",
+                    "graph": true
+                },
+                "deliveriesEgress": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent by the router to a receiver that is directly attached to the router.",
+                    "graph": true
+                },
+                "deliveriesTransit": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to another router in the network.",
+                    "graph": true
+                },
+                "deliveriesIngressRouteContainer": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were received from router container connections.",
+                    "graph": true
+                },
+                "deliveriesEgressRouteContainer": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to route container connections.",
+                    "graph": true
+                },
+                "residentMemoryUsage": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The current amount of system memory in use by the router process in bytes (RSS: Resident Set Size). This is the portion of the process memory space that currently resides in RAM. This value is set to Null if the platform does not provide access to the process resident memory size."
+                },
+                "memoryUsage": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The current amount of virtual memory (VmSize) in use by the router process in bytes. This includes memory provisioned for stack, data, and code.  This value is set to Null if the platform does not provide access to the process virtual memory size."
+                },
+                "uptimeSeconds": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The number of seconds since the router was started."
+                },
+                "deliveriesStuck": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The current number of deliveries that are unsettled and have been held in the router for more than 10 seconds."
+                },
+                "deliveriesDelayed10Sec": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The total number of settled deliveries that were held in the router for more than 10 seconds."
+                },
+                "deliveriesDelayed1Sec": {
+                    "type": "integer",
+                    "graph": true,
+                    "description": "The total number of settled deliveries that were held in the router for 1 to 10 seconds."
+                },
+                "connectionCounters": {
+                    "type": "map",
+                    "description": "A map keyed by network protocol name with a value of the count of active service connections using that protocol at this router node. Currently defined key values are: amqp, http1, http2, and tcp"
+                }
+            }
+        },
+
+
         "router": {
             "description":"Tracks peer routers and computes routes to destinations. This entity is mandatory. The router will not start without this entity.",
             "extends": "configurationEntity",
@@ -485,130 +622,6 @@
                     "create": true,
                     "required": false
                 },
-	            "addrCount": {
-	                "type": "integer",
-	                "description":"Number of addresses known to the router.",
-	                "graph": true
-	            },
-	            "linkCount": {
-	                "type": "integer",
-	                "description":"Number of links attached to the router node.",
-	                "graph": true
-	            },
-                "blockedLinkCount": {
-                    "type": "integer",
-                    "description": "The number of links that are flagged as blocked.  A blocked link is one in which the available credit has remained zero for more than 10 seconds.",
-                    "graph": true
-                },
-	            "nodeCount": {
-	                "type": "integer",
-	                "description":"Number of known peer router nodes.",
-	                "graph": true
-	            },
-	            "autoLinkCount": {
-	                "type": "integer",
-	                "description":"Number of auto links attached to the router node.",
-	                "graph": true
-	            },
-	            "connectionCount": {
-	                "type": "integer",
-	                "description":"Number of open connections to the router node.",
-	                "graph": true
-	            },
-	            "tcpConnectionCount": {
-	                "type": "integer",
-	                "description":"Number of open tcp connections at this router node.",
-	                "graph": true
-	            },
-                "presettledDeliveries": {
-                    "type": "integer",
-                    "description":"Number of presettled deliveries handled by the router.",
-                    "graph": true
-                },
-                "droppedPresettledDeliveries": {
-                    "type": "integer",
-                    "description":"Number of presettled deliveries that were dropped by the router.",
-                    "graph": true
-                },
-                "acceptedDeliveries": {
-                    "type": "integer",
-                    "description":"Number of deliveries whose delivery state was set to ACCEPTED by the router. These deliveries were successfully processed by the router.",
-                    "graph": true
-                },
-                "rejectedDeliveries": {
-                    "type": "integer",
-                    "description":"Number of deliveries whose delivery state was set to REJECTED by the router. These deliveries were Invalid and unprocessable.",
-                    "graph": true
-                },
-                "releasedDeliveries": {
-                    "type": "integer",
-                    "description":"Number of deliveries whose delivery state was set to RELEASED by the router. These deliveries was not (and will not be) processed",
-                    "graph": true
-                },
-                "modifiedDeliveries": {
-                    "type": "integer",
-                    "description":"Number of deliveries whose delivery state was set to MODIFIED by the router. These deliveries were modified but not processed.",
-                    "graph": true
-                },
-                "deliveriesDelayed1Sec": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The total number of settled deliveries that were held in the router for 1 to 10 seconds."
-                },
-                "deliveriesDelayed10Sec": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The total number of settled deliveries that were held in the router for more than 10 seconds."
-                },
-                "deliveriesStuck": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The current number of deliveries that are unsettled and have been held in the router for more than 10 seconds."
-                },
-                "deliveriesIngress": {
-                    "type": "integer",
-                    "description":"Number of deliveries that were sent to it by a sender that is directly attached to the router.",
-                    "graph": true
-                },
-                "deliveriesEgress": {
-                    "type": "integer",
-                    "description":"Number of deliveries that were sent by the router to a receiver that is directly attached to the router.",
-                    "graph": true
-                },
-                "deliveriesTransit": {
-                    "type": "integer",
-                    "description":"Number of deliveries that were sent to another router in the network.",
-                    "graph": true
-                },
-                "deliveriesIngressRouteContainer": {
-                    "type": "integer",
-                    "description":"Number of deliveries that were received from router container connections.",
-                    "graph": true
-                },
-                "deliveriesEgressRouteContainer": {
-                    "type": "integer",
-                    "description":"Number of deliveries that were sent to route container connections.",
-                    "graph": true
-                },
-                "uptimeSeconds": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The number of seconds since the router was started."
-                },
-                "memoryUsage": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The current amount of virtual memory (VmSize) in use by the router process in bytes. This includes memory provisioned for stack, data, and code.  This value is set to Null if the platform does not provide access to the process virtual memory size."
-                },
-                "residentMemoryUsage": {
-                    "type": "integer",
-                    "graph": true,
-                    "description": "The current amount of system memory in use by the router process in bytes (RSS: Resident Set Size). This is the portion of the process memory space that currently resides in RAM. This value is set to Null if the platform does not provide access to the process resident memory size."
-                },
-                "connectionCounters": {
-                    "type": "map",
-                    "description": "A map keyed by network protocol name with a value of the count of active service connections using that protocol at this router node. Currently defined key values are: amqp, http1, http2, and tcp"
-                },
                 "dataConnectionCount": {
                     "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers",
                     "type": "string",
@@ -618,6 +631,7 @@
                 }
             }
         },
+
         "site": {
             "description":"Optional.  If present, this entity causes the router to emit a SITE record for VanFLow in the case that there is not an external controller to emit this record.",
             "extends": "configurationEntity",

@@ -31,14 +31,14 @@ from system_test import unittest, retry_assertion
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT
 from system_test import QdManager, DUMMY_TYPE, SSL_PROFILE_TYPE, LOG_STATS_TYPE
 from system_test import CONFIG_ADDRESS_TYPE, ROUTER_ADDRESS_TYPE
-from system_test import AMQP_LISTENER_TYPE, LOG_TYPE, ROUTER_TYPE
+from system_test import AMQP_LISTENER_TYPE, LOG_TYPE, ROUTER_TYPE, ROUTER_STATS_TYPE
 from system_test import CONFIG_ENTITY_TYPE, ENTITY_TYPE, CONFIG_AUTOLINK_TYPE
 from system_test import AMQP_CONNECTOR_TYPE, ROUTER_LINK_TYPE, CONNECTION_TYPE
 from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, \
     CLIENT_CERTIFICATE, CLIENT_PASSWORD_FILE, CLIENT_PRIVATE_KEY
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
-TOTAL_ENTITIES = 30   # for tests that check the total # of entities
+TOTAL_ENTITIES = 31   # for tests that check the total # of entities
 
 
 class SkmanageTest(TestCase):
@@ -592,7 +592,7 @@ class SkmanageTest(TestCase):
         Verify that the process memory usage is present. Non-Linux platforms
         may return zero, so accept that as a valid value.
         """
-        query_command = f'QUERY --type={ROUTER_TYPE}'
+        query_command = f'QUERY --type={ROUTER_STATS_TYPE}'
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 1)
         mem = output[0].get('memoryUsage')

@@ -40,7 +40,7 @@ from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
 from system_test import openssl_available, is_pattern_present
-from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE, ROUTER_TYPE
+from system_test import HTTP_CONNECTOR_TYPE, HTTP_LISTENER_TYPE, ROUTER_STATS_TYPE
 from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_LINK_TYPE
 from system_test import Logger
 from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, \
@@ -3308,7 +3308,7 @@ class Http1AdaptorConnCounter(TestCase):
 
     def _get_conn_counters(self) -> Mapping[str, int]:
         attributes = ["connectionCounters"]
-        rc = self.router.management.query(type=ROUTER_TYPE,
+        rc = self.router.management.query(type=ROUTER_STATS_TYPE,
                                           attribute_names=attributes)
         self.assertIsNotNone(rc, "unexpected query failure")
         self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")

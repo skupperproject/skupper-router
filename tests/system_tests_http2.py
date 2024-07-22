@@ -32,7 +32,7 @@ from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
 from system_test import curl_available, nginx_available, TIMEOUT, Http2Server
 from system_test import get_digest, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
 from system_test import HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE
-from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_TYPE
+from system_test import CONNECTION_TYPE, HTTP_REQ_INFO_TYPE, ROUTER_STATS_TYPE
 from system_test import retry, retry_exception
 
 h2hyper_installed = True
@@ -1260,7 +1260,7 @@ class Http2AdaptorConnCounter(TestCase):
 
     def _get_conn_counters(self) -> Mapping[str, int]:
         attributes = ["connectionCounters"]
-        rc = self.router.management.query(type=ROUTER_TYPE,
+        rc = self.router.management.query(type=ROUTER_STATS_TYPE,
                                           attribute_names=attributes)
         self.assertIsNotNone(rc, "unexpected query failure")
         self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")

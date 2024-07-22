@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "agent_router.h"
+#include "agent_router_stats.h"
 #include "config.h"
 #include "qpid/dispatch/protocols.h"
 #include "qpid/dispatch/connection_counters.h"
@@ -25,52 +25,40 @@
 #include <inttypes.h>
 
 
-#define QDR_ROUTER_NAME                                0
-#define QDR_ROUTER_IDENTITY                            1
+#define QDR_ROUTER_IDENTITY                            0
+#define QDR_ROUTER_STATS_TYPE                          1
 #define QDR_ROUTER_ID                                  2
-#define QDR_ROUTER_TYPE                                3
-#define QDR_ROUTER_MODE                                4
-#define QDR_ROUTER_AREA                                5
-#define QDR_ROUTER_VAN_ID                              6
-#define QDR_ROUTER_VERSION                             7
-#define QDR_ROUTER_METADATA                            8
-#define QDR_ROUTER_ADDR_COUNT                          9
-#define QDR_ROUTER_LINK_COUNT                          10
-#define QDR_ROUTER_NODE_COUNT                          11
-#define QDR_ROUTER_AUTO_LINK_COUNT                     12
-#define QDR_ROUTER_CONNECTION_COUNT                    13
-#define QDR_ROUTER_PRESETTLED_DELIVERIES               14
-#define QDR_ROUTER_DROPPED_PRESETTLED_DELIVERIES       15
-#define QDR_ROUTER_ACCEPTED_DELIVERIES                 16
-#define QDR_ROUTER_REJECTED_DELIVERIES                 17
-#define QDR_ROUTER_RELEASED_DELIVERIES                 18
-#define QDR_ROUTER_MODIFIED_DELIVERIES                 19
-#define QDR_ROUTER_DELAYED_1SEC                        20
-#define QDR_ROUTER_DELAYED_10SEC                       21
-#define QDR_ROUTER_DELIVERIES_STUCK                    22
-#define QDR_ROUTER_DELIVERIES_INGRESS                  23
-#define QDR_ROUTER_DELIVERIES_EGRESS                   24
-#define QDR_ROUTER_DELIVERIES_TRANSIT                  25
-#define QDR_ROUTER_DELIVERIES_INGRESS_ROUTE_CONTAINER  26
-#define QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER   27
-#define QDR_ROUTER_DELIVERIES_REDIRECTED               28
-#define QDR_ROUTER_LINKS_BLOCKED                       29
-#define QDR_ROUTER_UPTIME_SECONDS                      30
-#define QDR_ROUTER_MEMORY_USAGE                        31
-#define QDR_ROUTER_WORKER_THREADS                      32
-#define QDR_ROUTER_RSS_USAGE                           33
-#define QDR_ROUTER_CONNECTION_COUNTERS                 34
+#define QDR_ROUTER_ADDR_COUNT                          3
+#define QDR_ROUTER_LINK_COUNT                          4
+#define QDR_ROUTER_NODE_COUNT                          5
+#define QDR_ROUTER_AUTO_LINK_COUNT                     6
+#define QDR_ROUTER_CONNECTION_COUNT                    7
+#define QDR_ROUTER_PRESETTLED_DELIVERIES               8
+#define QDR_ROUTER_DROPPED_PRESETTLED_DELIVERIES       9
+#define QDR_ROUTER_ACCEPTED_DELIVERIES                 10
+#define QDR_ROUTER_REJECTED_DELIVERIES                 11
+#define QDR_ROUTER_RELEASED_DELIVERIES                 12
+#define QDR_ROUTER_MODIFIED_DELIVERIES                 13
+#define QDR_ROUTER_DELAYED_1SEC                        14
+#define QDR_ROUTER_DELAYED_10SEC                       15
+#define QDR_ROUTER_DELIVERIES_STUCK                    16
+#define QDR_ROUTER_DELIVERIES_INGRESS                  17
+#define QDR_ROUTER_DELIVERIES_EGRESS                   18
+#define QDR_ROUTER_DELIVERIES_TRANSIT                  19
+#define QDR_ROUTER_DELIVERIES_INGRESS_ROUTE_CONTAINER  20
+#define QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER   21
+#define QDR_ROUTER_DELIVERIES_REDIRECTED               22
+#define QDR_ROUTER_LINKS_BLOCKED                       23
+#define QDR_ROUTER_UPTIME_SECONDS                      24
+#define QDR_ROUTER_MEMORY_USAGE                        25
+#define QDR_ROUTER_RSS_USAGE                           26
+#define QDR_ROUTER_CONNECTION_COUNTERS                 27
+#define QDR_ROUTER_VERSION                             28
 
 const char *qdr_router_columns[] =
-    {"name",
-     "identity",
-     "id",
+    {"identity",
      "type",
-     "mode",
-     "area",
-     "vanId",
-     "version",
-     "metadata",
+     "id",
      "addrCount",
      "linkCount",
      "nodeCount",
@@ -94,63 +82,17 @@ const char *qdr_router_columns[] =
      "linksBlocked",
      "uptimeSeconds",
      "memoryUsage",
-     "workerThreads",
      "residentMemoryUsage",
      "connectionCounters",
+     "version",
      0};
-
-
-static const char *qd_router_mode_names[] = {
-    "standalone",
-    "interior",
-    "edge",
-    "endpoint"
-};
-
-static const char *router_mode(qd_router_mode_t router_mode)
-{
-    return qd_router_mode_names[(int)router_mode];
-
-}
 
 static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_core_t *core)
 {
     switch(col) {
     case QDR_ROUTER_IDENTITY:
-        // There is only one instance of router. Just give it an identity of 1
+        // There is only one instance of router stats. Just give it an identity of 1
         qd_compose_insert_string(body, "1");
-        break;
-    case QDR_ROUTER_TYPE:
-        qd_compose_insert_string(body, "io.skupper.router.router");
-        break;
-
-    case QDR_ROUTER_MODE:
-        qd_compose_insert_string(body, router_mode(core->router_mode));
-        break;
-
-    case QDR_ROUTER_AREA:
-        if (core->router_area)
-            qd_compose_insert_string(body, core->router_area);
-        else
-            qd_compose_insert_null(body);
-        break;
-
-    case QDR_ROUTER_VAN_ID:
-        if (core->van_id)
-            qd_compose_insert_string(body, core->van_id);
-        else
-            qd_compose_insert_null(body);
-        break;
-
-    case QDR_ROUTER_VERSION:
-        qd_compose_insert_string(body, QPID_DISPATCH_VERSION);
-        break;
-
-    case QDR_ROUTER_METADATA:
-        if (core->qd->metadata)
-            qd_compose_insert_string(body, core->qd->metadata);
-        else
-            qd_compose_insert_null(body);
         break;
 
     case QDR_ROUTER_ADDR_COUNT:
@@ -169,16 +111,22 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         qd_compose_insert_ulong(body, DEQ_SIZE(core->open_connections));
         break;
 
+    case QDR_ROUTER_STATS_TYPE:
+        qd_compose_insert_string(body, "org.apache.qpid.dispatch.routerStats");
+        break;
+
     case QDR_ROUTER_AUTO_LINK_COUNT:
         qd_compose_insert_ulong(body, DEQ_SIZE(core->auto_links));
         break;
 
     case QDR_ROUTER_ID:
-    case QDR_ROUTER_NAME:
         if (core->router_id)
             qd_compose_insert_string(body, core->router_id);
         else
             qd_compose_insert_null(body);
+        break;
+    case QDR_ROUTER_VERSION:
+        qd_compose_insert_string(body, QPID_DISPATCH_VERSION);
         break;
 
     case QDR_ROUTER_PRESETTLED_DELIVERIES:
@@ -245,9 +193,6 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         qd_compose_insert_uint(body, core->links_blocked);
         break;
 
-    case QDR_ROUTER_WORKER_THREADS:
-        qd_compose_insert_int(body, core->worker_thread_count);
-        break;
 
     case QDR_ROUTER_UPTIME_SECONDS:
         qd_compose_insert_uint(body, qdr_core_uptime_ticks(core));
@@ -300,7 +245,7 @@ static void qdr_agent_write_router_CT(qdr_query_t *query,  qdr_core_t *core)
     qd_compose_end_list(body);
 }
 
-void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
+void qdra_router_stats_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
 {
     //
     // Queries that get this far will always succeed.
@@ -324,8 +269,8 @@ void qdra_router_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
     qdr_agent_enqueue_response_CT(core, query);
 }
 
-// Nothing to do here. The router has only one entry.
-void qdra_router_get_next_CT(qdr_core_t *core, qdr_query_t *query)
+// Nothing to do here. The router stats has only one entry.
+void qdra_router_stats_get_next_CT(qdr_core_t *core, qdr_query_t *query)
 {
 
 }
