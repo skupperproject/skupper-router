@@ -23,7 +23,6 @@
 
 pre-commit
 
-setuptools
 virtualenv
 wheel
 

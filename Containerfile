@@ -28,7 +28,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     rpm-build \
     gcc gcc-c++ make cmake pkgconfig \
     cyrus-sasl-devel openssl-devel libuuid-devel \
-    python3-devel python3-pip \
+    python3-devel python3-pip python3-wheel \
     libnghttp2-devel \
     wget tar patch findutils git \
     libtool \
