@@ -24,8 +24,8 @@ from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
-from TCP_echo_server import TcpEchoServer
 from system_tests_tcp_adaptor import EchoClientRunner
+from TCP_echo_server import TcpEchoServer
 
 
 #
@@ -502,36 +502,9 @@ class VFlowInterRouterTest(TestCase):
         client_eb = EchoClientRunner(test_name, 0, None, None, None, 700, 1, port_override=self.tcp_listener_port_eb, delay_close=True)
 
         expected = {
-            "INTA": [('BIFLOW_TPORT', {
-                        'SOURCE_HOST'     : ANY_VALUE,
-                        'SOURCE_PORT'     : ANY_VALUE,
-                        'PROXY_HOST'      : ANY_VALUE,
-                        'PROXY_PORT'      : ANY_VALUE,
-                        'PROCESS_LATENCY' : ANY_VALUE,
-                        'OCTETS'          : 500,
-                        'OCTETS_REVERSE'  : 500,
-                        }),
-                    ],
-            "INTB": [('BIFLOW_TPORT', {
-                        'SOURCE_HOST'     : ANY_VALUE,
-                        'SOURCE_PORT'     : ANY_VALUE,
-                        'PROXY_HOST'      : ANY_VALUE,
-                        'PROXY_PORT'      : ANY_VALUE,
-                        'PROCESS_LATENCY' : ANY_VALUE,
-                        'OCTETS'          : 600,
-                        'OCTETS_REVERSE'  : 600,
-                        }),
-                    ],
-            "EdgeB": [('BIFLOW_TPORT', {
-                        'SOURCE_HOST'     : ANY_VALUE,
-                        'SOURCE_PORT'     : ANY_VALUE,
-                        'PROXY_HOST'      : ANY_VALUE,
-                        'PROXY_PORT'      : ANY_VALUE,
-                        'PROCESS_LATENCY' : ANY_VALUE,
-                        'OCTETS'          : 700,
-                        'OCTETS_REVERSE'  : 700,
-                        }),
-                    ],
+            "INTA": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 500, 'OCTETS_REVERSE' : 500})],
+            "INTB": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 600, 'OCTETS_REVERSE' : 600})],
+            "EdgeB": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 700, 'OCTETS_REVERSE' : 700})],
         }
         success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
