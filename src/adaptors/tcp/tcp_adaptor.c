@@ -548,6 +548,7 @@ static void close_raw_connection(qd_tcp_connection_t *conn, const char *conditio
         }
     }
 
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] close_raw_connection: %s (%s)", conn->conn_id, condition, description);
     CLEAR_ATOMIC_FLAG(&conn->raw_opened);
     pn_raw_connection_close(conn->raw_conn);
 
@@ -562,6 +563,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
 
     if (!!conn->raw_conn) {
         CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] close_connection_XSIDE_IO", conn->conn_id);
         pn_raw_connection_close(conn->raw_conn);
         drain_read_buffers_XSIDE_IO(conn->raw_conn);
         drain_write_buffers_XSIDE_IO(conn->raw_conn);

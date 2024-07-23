@@ -53,7 +53,9 @@ record_types = {
     12: "PROCESS_GROUP",
     13: "HOST",
     14: "LOG",
-    15: "ROUTER_ACCESS"
+    15: "ROUTER_ACCESS",
+    16: "BIFLOW_TPORT",
+    17: "BIFLOW_APP"
 }
 
 RECORD_TYPE = 0
@@ -117,7 +119,15 @@ attribute_types = {
     54: "ROLE",
     55: "UP_TIMESTAMP",
     56: "DOWN_TIMESTAMP",
-    57: "DOWN_COUNT"
+    57: "DOWN_COUNT",
+    58: "OCTETS_REVERSE",
+    59: "OCTET_RATE_REVERSE",
+    60: "CONNECTOR",
+    61: "PROCESS_LATENCY",
+    62: "PROXY_HOST",
+    63: "PROXY_PORT",
+    64: "ERROR_LISTENER_SIDE",
+    65: "ERROR_CONNECTOR_SIDE"
 }
 
 
