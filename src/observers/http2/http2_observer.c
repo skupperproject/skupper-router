@@ -101,7 +101,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
             ZERO(stream_info);
             DEQ_INSERT_TAIL(transport_handle->http2.streams, stream_info);
             // This is the first header frame in a particular stream.
-            stream_info->vflow = vflow_start_record(VFLOW_RECORD_FLOW, transport_handle->vflow);
+            stream_info->vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_APP, transport_handle->vflow);
             vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "HTTP/2");
             stream_info->stream_id = stream_id;
             vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_info->stream_id);

@@ -174,26 +174,26 @@ class Http1ObserverTest(TestCase):
         #
         expected = {
             "test_01": [
-                ('FLOW', {"METHOD": "GET",
-                          "RESULT": "200",
-                          "REASON": "OK",
-                          "PROTOCOL": "HTTP/1.1",
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {"METHOD": "GET",
-                          "RESULT": "200",
-                          "REASON": "OK",
-                          "PROTOCOL": "HTTP/1.1",
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {"METHOD": "GET",
-                          "RESULT": "200",
-                          "REASON": "OK",
-                          "PROTOCOL": "HTTP/1.1",
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'METHOD': "GET",
-                          'RESULT': "200",
-                          'REASON': "OK",
-                          'PROTOCOL': 'HTTP/1.1',
-                          'END_TIME': ANY_VALUE})
+                ('BIFLOW_APP', {"METHOD": "GET",
+                                "RESULT": "200",
+                                "REASON": "OK",
+                                "PROTOCOL": "HTTP/1.1",
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {"METHOD": "GET",
+                                "RESULT": "200",
+                                "REASON": "OK",
+                                "PROTOCOL": "HTTP/1.1",
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {"METHOD": "GET",
+                                "RESULT": "200",
+                                "REASON": "OK",
+                                "PROTOCOL": "HTTP/1.1",
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {'METHOD': "GET",
+                                'RESULT': "200",
+                                'REASON': "OK",
+                                'PROTOCOL': 'HTTP/1.1',
+                                'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected), delay=1)
@@ -251,19 +251,19 @@ class Http1ObserverTest(TestCase):
         #
         expected = {
             "test_02": [
-                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
-                          'METHOD': 'GET',
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
-                          'METHOD': 'GET',
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
-                          'METHOD': 'GET',
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'PROTOCOL': 'HTTP/1.1',
-                          'METHOD': 'POST',
-                          'REASON': ANY_VALUE,
-                          'END_TIME': ANY_VALUE})
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/1.1',
+                                'METHOD': 'GET',
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/1.1',
+                                'METHOD': 'GET',
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/1.1',
+                                'METHOD': 'GET',
+                                'END_TIME': ANY_VALUE}),
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/1.1',
+                                'METHOD': 'POST',
+                                'REASON': ANY_VALUE,
+                                'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected), delay=1)

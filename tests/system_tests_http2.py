@@ -462,11 +462,11 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         # Expect a TCP flow/counter-flow and one HTTP/2 flow
         expected = {
             "QDR": [
-                ('FLOW', {'PROTOCOL': 'HTTP/2',
-                          'METHOD': 'HEAD',
-                          'RESULT': '200',
-                          'STREAM_ID': ANY_VALUE,
-                          'END_TIME': ANY_VALUE})
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
+                                'METHOD': 'HEAD',
+                                'RESULT': '200',
+                                'STREAM_ID': ANY_VALUE,
+                                'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected))
@@ -499,11 +499,11 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
 
         expected = {
             "QDR": [
-                ('FLOW', {'PROTOCOL': 'HTTP/2',
-                          'METHOD': 'GET',
-                          'RESULT': '200',
-                          'STREAM_ID': ANY_VALUE,
-                          'END_TIME': ANY_VALUE})
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
+                                'METHOD': 'GET',
+                                'RESULT': '200',
+                                'STREAM_ID': ANY_VALUE,
+                                'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected))
