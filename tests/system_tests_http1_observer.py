@@ -321,18 +321,17 @@ class Http1ObserverTest(TestCase):
 
         expected = {
             "test_03": [
-                ('BIFLOW', {'SOURCE_HOST': ANY_VALUE,
-                            'END_TIME': ANY_VALUE})
+                ('BIFLOW_TPORT', {'SOURCE_HOST': ANY_VALUE, 'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         # Verify there are NO HTTP flows since the data is encrypted, only the
-        # two flows checked above
+        # one flow checked above
 
-        flow_recs = snooper_thread.get_router_records("test_03", record_type='FLOW')
-        self.assertEqual(2, len(flow_recs), f"Too many flows: {flow_recs}")
+        flow_recs = snooper_thread.get_router_records("test_03", record_type='BIFLOW_TPORT')
+        self.assertEqual(1, len(flow_recs), f"Too many flows: {flow_recs}")
 
         router.teardown()
         snooper_thread.join(timeout=TIMEOUT)
