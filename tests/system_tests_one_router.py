@@ -34,7 +34,7 @@ from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import Process, unittest, QdManager, TestTimeout
 from system_test import AMQP_CONNECTOR_TYPE, AMQP_LISTENER_TYPE
 from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE, ROUTER_LINK_TYPE
-from system_test import ROUTER_TYPE, ROUTER_STATS_TYPE
+from system_test import ROUTER_TYPE, ROUTER_METRICS_TYPE
 from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
@@ -940,7 +940,7 @@ class OneRouterTest(TestCase):
 
     def test_43_dropped_presettled_receiver_stops(self):
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        res = local_node.query(ROUTER_STATS_TYPE)
+        res = local_node.query(ROUTER_METRICS_TYPE)
         presettled_dropped_count_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count = res.results[0][presettled_dropped_count_index]
         test = DroppedPresettledTest(self.address, 200, presettled_dropped_count)
@@ -1731,7 +1731,7 @@ class PresettledCustomTimeout:
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query(ROUTER_STATS_TYPE)
+        res = local_node.query(ROUTER_METRICS_TYPE)
         presettled_deliveries_dropped_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count =  res.results[0][presettled_deliveries_dropped_index]
 
@@ -2816,7 +2816,7 @@ class ReleasedVsModifiedTest(MessagingHandler):
 
     def get_modified_deliveries(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type=ROUTER_STATS_TYPE)
+        outs = local_node.query(type=ROUTER_METRICS_TYPE)
         pos = outs.attribute_names.index("modifiedDeliveries")
         results = outs.results[0]
         n_modified_deliveries = results[pos]
@@ -2940,7 +2940,7 @@ class BatchedSettlementTest(MessagingHandler):
     def check_if_done(self):
         if self.n_settled == self.count:
             local_node = Node.connect(self.address, timeout=TIMEOUT)
-            outs = local_node.query(type=ROUTER_STATS_TYPE)
+            outs = local_node.query(type=ROUTER_METRICS_TYPE)
             pos = outs.attribute_names.index("acceptedDeliveries")
             results = outs.results[0]
             if results[pos] >= self.count:
@@ -3000,7 +3000,7 @@ class RejectDispositionTest(MessagingHandler):
 
     def count_rejects(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type=ROUTER_STATS_TYPE)
+        outs = local_node.query(type=ROUTER_METRICS_TYPE)
         pos = outs.attribute_names.index("rejectedDeliveries")
         results = outs.results[0]
         return results[pos]

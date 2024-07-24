@@ -21,12 +21,12 @@
 
 #include "router_core_private.h"
 
-#define QDR_ROUTER_STATS_COLUMN_COUNT  29
+#define QDR_ROUTER_METRICS_COLUMN_COUNT  29
 
-extern const char *qdr_router_columns[QDR_ROUTER_STATS_COLUMN_COUNT + 1];
+extern const char *qdr_router_columns[QDR_ROUTER_METRICS_COLUMN_COUNT + 1];
 
-void qdra_router_stats_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
-void qdra_router_stats_get_next_CT(qdr_core_t *core, qdr_query_t *query);
-void qdra_router_stats_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qdra_router_metrics_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
+void qdra_router_metrics_get_next_CT(qdr_core_t *core, qdr_query_t *query);
+void qdra_router_metrics_get_next_CT(qdr_core_t *core, qdr_query_t *query);
 
 #endif

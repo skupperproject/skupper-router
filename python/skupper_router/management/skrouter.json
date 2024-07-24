@@ -368,7 +368,7 @@
             "attributes": {}
         },
 
-        "routerStats": {
+        "routerMetrics": {
             "description": "Overall router statistics.",
             "extends": "operationalEntity",
             "attributes": {
@@ -395,11 +395,6 @@
                 "nodeCount": {
                     "type": "integer",
                     "description": "Number of known peer router nodes.",
-                    "graph": true
-                },
-                "linkRouteCount": {
-                    "type": "integer",
-                    "description": "Number of link routes attached to the router node.",
                     "graph": true
                 },
                 "autoLinkCount": {

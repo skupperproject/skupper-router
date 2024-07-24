@@ -35,7 +35,7 @@ from system_test import TestCase, Process, Qdrouterd, main_module, TIMEOUT, Test
 from system_test import AsyncTestReceiver, retry
 from system_test import AsyncTestSender
 from system_test import get_inter_router_links
-from system_test import unittest, ROUTER_STATS_TYPE, CONNECTION_TYPE
+from system_test import unittest, ROUTER_METRICS_TYPE, CONNECTION_TYPE
 from system_test import ROUTER_ADDRESS_TYPE, AMQP_CONNECTOR_TYPE
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
@@ -117,7 +117,7 @@ class TwoRouterTest(TestCase):
         self.assertIsNone(test.error)
 
         local_node = Node.connect(self.routers[0].addresses[0], timeout=TIMEOUT)
-        outs = local_node.query(type=ROUTER_STATS_TYPE)
+        outs = local_node.query(type=ROUTER_METRICS_TYPE)
 
         # deliveriesTransit must most surely be greater than num_msgs
         pos = outs.attribute_names.index("deliveriesTransit")

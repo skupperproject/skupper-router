@@ -17,7 +17,8 @@
  * under the License.
  */
 
-#include "agent_router_stats.h"
+#include "agent_router_metrics.h"
+
 #include "config.h"
 #include "qpid/dispatch/protocols.h"
 #include "qpid/dispatch/connection_counters.h"
@@ -26,7 +27,7 @@
 
 
 #define QDR_ROUTER_IDENTITY                            0
-#define QDR_ROUTER_STATS_TYPE                          1
+#define QDR_ROUTER_METRICS_TYPE                        1
 #define QDR_ROUTER_ID                                  2
 #define QDR_ROUTER_ADDR_COUNT                          3
 #define QDR_ROUTER_LINK_COUNT                          4
@@ -91,7 +92,7 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
 {
     switch(col) {
     case QDR_ROUTER_IDENTITY:
-        // There is only one instance of router stats. Just give it an identity of 1
+        // There is only one instance of router metrics. Just give it an identity of 1
         qd_compose_insert_string(body, "1");
         break;
 
@@ -111,8 +112,8 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
         qd_compose_insert_ulong(body, DEQ_SIZE(core->open_connections));
         break;
 
-    case QDR_ROUTER_STATS_TYPE:
-        qd_compose_insert_string(body, "org.apache.qpid.dispatch.routerStats");
+    case QDR_ROUTER_METRICS_TYPE:
+        qd_compose_insert_string(body, "org.apache.qpid.dispatch.routerMetrics");
         break;
 
     case QDR_ROUTER_AUTO_LINK_COUNT:
@@ -245,7 +246,7 @@ static void qdr_agent_write_router_CT(qdr_query_t *query,  qdr_core_t *core)
     qd_compose_end_list(body);
 }
 
-void qdra_router_stats_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
+void qdra_router_metrics_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset)
 {
     //
     // Queries that get this far will always succeed.
@@ -269,8 +270,8 @@ void qdra_router_stats_get_first_CT(qdr_core_t *core, qdr_query_t *query, int of
     qdr_agent_enqueue_response_CT(core, query);
 }
 
-// Nothing to do here. The router stats has only one entry.
-void qdra_router_stats_get_next_CT(qdr_core_t *core, qdr_query_t *query)
+// Nothing to do here. The router metrics has only one entry.
+void qdra_router_metrics_get_next_CT(qdr_core_t *core, qdr_query_t *query)
 {
 
 }

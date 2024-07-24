@@ -46,7 +46,7 @@ from system_test import main_module
 from system_test import unittest
 from system_test import retry
 from system_test import CONNECTION_TYPE, TCP_CONNECTOR_TYPE, TCP_LISTENER_TYPE
-from system_test import ROUTER_LINK_TYPE, ROUTER_STATS_TYPE
+from system_test import ROUTER_LINK_TYPE, ROUTER_METRICS_TYPE
 from system_test import retry_assertion
 from system_test import retry_exception
 from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
@@ -2397,7 +2397,7 @@ class TcpAdaptorConnCounter(TestCase):
 
     def _get_conn_counters(self) -> Mapping[str, int]:
         attributes = ["connectionCounters"]
-        rc = self.router.management.query(type=ROUTER_STATS_TYPE,
+        rc = self.router.management.query(type=ROUTER_METRICS_TYPE,
                                           attribute_names=attributes)
         self.assertIsNotNone(rc, "unexpected query failure")
         self.assertEqual(1, len(rc.get_dicts()), "expected one attribute!")
@@ -2514,7 +2514,7 @@ class TcpAdaptorNoDelayedDelivery(TestCase):
 
     def _get_delayed_counters(self) -> Tuple[int, int]:
         attributes = ["deliveriesDelayed1Sec", "deliveriesDelayed10Sec"]
-        rc = self.router.management.query(type=ROUTER_STATS_TYPE,
+        rc = self.router.management.query(type=ROUTER_METRICS_TYPE,
                                           attribute_names=attributes)
         self.assertIsNotNone(rc, "unexpected query failure")
         result = rc.get_dicts()[0]

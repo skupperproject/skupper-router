@@ -47,7 +47,7 @@ const unsigned char *config_address_entity_type    = (unsigned char*) "io.skuppe
 const unsigned char *auto_link_entity_type         = (unsigned char*) "io.skupper.router.router.config.autoLink";
 const unsigned char *address_entity_type           = (unsigned char*) "io.skupper.router.router.address";
 const unsigned char *link_entity_type              = (unsigned char*) "io.skupper.router.router.link";
-const unsigned char *router_stats_entity_type      = (unsigned char*) "io.skupper.router.routerStats";
+const unsigned char *router_metrics_entity_type      = (unsigned char*) "io.skupper.router.routerMetrics";
 const unsigned char *connection_entity_type        = (unsigned char*) "io.skupper.router.connection";
 const unsigned char *http_request_info_entity_type = (unsigned char*) "io.skupper.router.httpRequestInfo";
 
@@ -431,8 +431,8 @@ static bool qd_can_handle_request(qd_parsed_field_t           *properties_fld,
         *entity_type = QD_ROUTER_CONFIG_ADDRESS;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), auto_link_entity_type))
         *entity_type = QD_ROUTER_CONFIG_AUTO_LINK;
-    else if (qd_iterator_equal(qd_parse_raw(parsed_field), router_stats_entity_type))
-        *entity_type = QD_ROUTER_ROUTER_STATS;
+    else if (qd_iterator_equal(qd_parse_raw(parsed_field), router_metrics_entity_type))
+        *entity_type = QD_ROUTER_ROUTER_METRICS;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), connection_entity_type))
         *entity_type = QD_ROUTER_CONNECTION;
     else if (qd_iterator_equal(qd_parse_raw(parsed_field), http_request_info_entity_type))
