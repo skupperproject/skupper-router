@@ -1852,7 +1852,7 @@ uint64_t qdr_http1_client_core_link_deliver(qdr_http1_adaptor_t    *adaptor,
             // vflow latency is calculated on the first call to vflow_latency_end()
             // Subsequent calls to vflow_latency_end() on the same vflow are ignored.
             //
-            vflow_latency_end(hreq->base.vflow);
+            vflow_latency_end(hreq->base.vflow, VFLOW_ATTRIBUTE_LATENCY);
 
             // link request state and delivery
             _client_response_msg_t *rmsg = new__client_response_msg_t();

@@ -19,11 +19,12 @@
 
 from http1_tests import wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, unittest
-from system_test import TestTimeout, retry, Logger
+from system_test import TestTimeout, retry, Logger, wait_port
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from proton import Message
+from system_tests_tcp_adaptor import EchoClientRunner
 from TCP_echo_server import TcpEchoServer
 
 
@@ -341,7 +342,9 @@ class VFlowInterRouterTest(TestCase):
 
         cls.inter_router_port = cls.tester.get_port()
         cls.edge_router_port = cls.tester.get_port()
-        cls.tcp_listener_port = cls.tester.get_port()
+        cls.tcp_listener_port_ia = cls.tester.get_port()
+        cls.tcp_listener_port_ib = cls.tester.get_port()
+        cls.tcp_listener_port_eb = cls.tester.get_port()
         cls.tcp_connector_port = cls.tester.get_port()
         cls.tcp_noproc_port = cls.tester.get_port()
         cls.connector_down_port = cls.tester.get_port()
@@ -363,6 +366,9 @@ class VFlowInterRouterTest(TestCase):
                 ('tcpConnector', {'host': '127.0.0.1',
                                   'port': cls.tcp_noproc_port,
                                   'address': 'noProcessAddress'}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_listener_port_ia,
+                                 'address': 'tcpServiceAddress'}),
                 # a dummy connector which never connects (operStatus == down)
                 ('connector', {'role': 'inter-router',
                                'port': cls.connector_down_port,
@@ -386,6 +392,9 @@ class VFlowInterRouterTest(TestCase):
                               'port': cls.inter_router_port}),
                 ('listener', {'role': 'edge',
                               'port': cls.edge_router_port}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_listener_port_ib,
+                                 'address': 'tcpServiceAddress'}),
             ],
             # Router EdgeB
             [
@@ -397,7 +406,7 @@ class VFlowInterRouterTest(TestCase):
                 ('connector', {'role': 'edge',
                                'port': cls.edge_router_port}),
                 ('tcpListener', {'host': '0.0.0.0',
-                                 'port': cls.tcp_listener_port,
+                                 'port': cls.tcp_listener_port_eb,
                                  'address': 'tcpServiceAddress'}),
                 # metrics listener
                 ('listener', {'role': 'normal',
@@ -411,7 +420,7 @@ class VFlowInterRouterTest(TestCase):
 
         # fire up the TCP echo server
 
-        logger = Logger(title="VFlowEchoServer")
+        logger = Logger(title="VFlowEchoServer", print_to_console=False)
         cls.echo_server = TcpEchoServer(port=cls.tcp_connector_port, logger=logger)
         assert cls.echo_server.is_running
 
@@ -424,11 +433,14 @@ class VFlowInterRouterTest(TestCase):
         cls.intb.wait_router_connected('INTA')
         cls.intb.is_edge_routers_connected()
         cls.edgeb.wait_ports()
+        wait_tcp_listeners_up(cls.inta.addresses[0])
+        wait_tcp_listeners_up(cls.intb.addresses[0])
         wait_tcp_listeners_up(cls.edgeb.addresses[0])
+        wait_port(cls.tcp_connector_port)
 
         # start the vanflow event collector thread
 
-        cls.snooper_thread = VFlowSnooperThread(cls.inta.addresses[0])
+        cls.snooper_thread = VFlowSnooperThread(cls.inta.addresses[0], verbose=False)
 
     def test_01_check_topology(self):
         """
@@ -477,6 +489,28 @@ class VFlowInterRouterTest(TestCase):
         # ROUTER_ACCESS records
         self.assertIsNone(self.snooper_thread.get_router_records("INTA", "ROUTER_ACCESS"))
         self.assertIsNone(self.snooper_thread.get_router_records("EdgeB", "ROUTER_ACCESS"))
+
+    def test_02_check_biflows(self):
+        """
+        Generate service traffic from multiple sources (including the router local to the connector)
+        and verify that BIFLOW records are generated with the expected attributes.
+        """
+        test_name = 'test_02_check_biflows'
+
+        client_ia = EchoClientRunner(test_name, 0, None, None, None, 500, 1, port_override=self.tcp_listener_port_ia, delay_close=True)
+        client_ib = EchoClientRunner(test_name, 0, None, None, None, 600, 1, port_override=self.tcp_listener_port_ib, delay_close=True)
+        client_eb = EchoClientRunner(test_name, 0, None, None, None, 700, 1, port_override=self.tcp_listener_port_eb, delay_close=True)
+
+        expected = {
+            "INTA": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 500, 'OCTETS_REVERSE' : 500})],
+            "INTB": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 600, 'OCTETS_REVERSE' : 600})],
+            "EdgeB": [('BIFLOW_TPORT', {'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'PROXY_HOST' : ANY_VALUE, 'PROXY_PORT' : ANY_VALUE, 'PROCESS_LATENCY' : ANY_VALUE, 'OCTETS' : 700, 'OCTETS_REVERSE' : 700})],
+        }
+        success = retry(lambda: self.snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
+        client_ia.wait()
+        client_ib.wait()
+        client_eb.wait()
 
     @classmethod
     def tearDownClass(cls):

@@ -119,7 +119,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
 
     } else { // from_client
         if (error != QD_ERROR_NOT_FOUND && stream_info) {
-            vflow_latency_end(stream_info->vflow);
+            vflow_latency_end(stream_info->vflow, VFLOW_ATTRIBUTE_LATENCY);
         }
     }
     return 0;

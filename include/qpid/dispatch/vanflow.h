@@ -53,6 +53,8 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_HOST          = 0x0d,  // Host (or Kubernetes Node) on which a process runs
     VFLOW_RECORD_LOG           = 0x0e,  // A notable router log event such as an error or warning
     VFLOW_RECORD_ROUTER_ACCESS = 0x0f,  // An access point for inter-router connections
+    VFLOW_RECORD_BIFLOW_TPORT  = 0x10,  // Bidirectional Transport (L4) flow
+    VFLOW_RECORD_BIFLOW_APP    = 0x11,  // Bidirectional Application (L7) flow
 } vflow_record_type_t;
 
 // clang-format off
@@ -129,16 +131,20 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_ROLE             = 54,  // String
     VFLOW_ATTRIBUTE_UP_TIMESTAMP     = 55,  // uint          Timestamp of last transition to oper-status up
 
-    VFLOW_ATTRIBUTE_DOWN_TIMESTAMP   = 56,  // uint          Timestamp of last transition to oper-status down
-    VFLOW_ATTRIBUTE_DOWN_COUNT       = 57,  // uint/counter  Number of transitions to oper-status down
+    VFLOW_ATTRIBUTE_DOWN_TIMESTAMP     = 56,  // uint          Timestamp of last transition to oper-status down
+    VFLOW_ATTRIBUTE_DOWN_COUNT         = 57,  // uint/counter  Number of transitions to oper-status down
+    VFLOW_ATTRIBUTE_OCTETS_REVERSE     = 58,  // uint/counter  Octet count in reverse direction
+    VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE = 59,  // uint          Octet rate in reverse direction
+
+    VFLOW_ATTRIBUTE_CONNECTOR        = 60,  // Reference     Reference to a CONNECTOR for a BIFLOW_TPORT
+    VFLOW_ATTRIBUTE_PROCESS_LATENCY  = 61,  // uint          Latency of workload measured from connector (first octet to first octet)
+    VFLOW_ATTRIBUTE_PROXY_HOST       = 62,  // String
+    VFLOW_ATTRIBUTE_PROXY_PORT       = 63,  // String
+
+    VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  = 64,  // String
+    VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE = 65,  // String
 } vflow_attribute_t;
 // clang-format on
-
-#define VALID_REF_ATTRS     0x00006000000000e6
-#define VALID_UINT_ATTRS    0x03999ffa07800119
-#define VALID_COUNTER_ATTRS 0x0210035000800000
-#define VALID_STRING_ATTRS  0x00660005787ffe00
-#define VALID_TRACE_ATTRS   0x0000000080000000
 
 typedef enum vflow_log_severity {
     // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
@@ -163,9 +169,26 @@ typedef enum vflow_log_severity {
 vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record_t *parent);
 
 /**
+ * vflow_start_co_record
+ *
+ * Open a co-record for a base-record that is owned by a different router.  Co-records function like normal records
+ * with the following exceptions:
+ *
+ *  - Lifecycle is not tracked and start/end timestamps are not emitted.
+ *  - They are not part of the local record hierarchy.  They are stored separately.
+ *  - They are not refreshed by a FLUSH request
+ *  - They are refreshed by a source-id-specific CO-FLUSH request from another router.
+ *
+ * @param record_type The type for the newly opened record
+ * @param identity_iter Iterator containing the identity of the base record
+ * @return Pointer to the new record or NULL if the identity didn't parse properly
+ */
+vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_iterator_t *identity_iter);
+
+/**
  * vflow_end_record
  * 
- * Close a record when it is no longer needed.  After a record is closed, it cannot be referenced
+ * Close a record (or co-record) when it is no longer needed.  After a record is closed, it cannot be referenced
  * or accessed in any way thereafter.
  * 
  * @param record The record pointer returned by vflow_start_record
@@ -246,6 +269,17 @@ void vflow_set_ref_from_pn(vflow_record_t *record, vflow_attribute_t attribute_t
 void vflow_set_string(vflow_record_t *record, vflow_attribute_t attribute_type, const char *value);
 
 /**
+ * vflow_set_pn_condition_string
+ *
+ * Set a string attribute with the condition name and description.
+ *
+ * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The type of the attribute (see enumerated above) to be set
+ * @param cond Pointer to a proton condition object
+ */
+void vflow_set_pn_condition_string(vflow_record_t *record, vflow_attribute_t attribute_type, pn_condition_t *cond);
+
+/**
  * vflow_set_timestamp_now
  *
  * Set an integer attribute to the current timestamp.
@@ -301,10 +335,13 @@ void vflow_set_trace(vflow_record_t *record, qd_message_t *msg);
  *
  * If vflow_latency_end is called without a prior call to vflow_latency_start, the call will do nothing.
  *
+ * Note that a record can only track one latency measurement at a time.
+ *
  * @param record The record pointer returned by vflow_start_record
+ * @param attribute_type The attribute into which to store the latency
  */
 void vflow_latency_start(vflow_record_t *record);
-void vflow_latency_end(vflow_record_t *record);
+void vflow_latency_end(vflow_record_t *record, vflow_attribute_t attribute_type);
 
 /**
  * @brief Request that the rate of change of a counter attribute be stored in a rate attribute.
