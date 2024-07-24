@@ -52,7 +52,7 @@ static int rx_request(qd_http1_decoder_connection_t *hconn, const char *method, 
     http1_request_state_t *hreq = new_http1_request_state_t();
     ZERO(hreq);
     DEQ_ITEM_INIT(hreq);
-    hreq->vflow = vflow_start_record(VFLOW_RECORD_FLOW, th->vflow);
+    hreq->vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_APP, th->vflow);
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_PROTOCOL, version_minor == 1 ? "HTTP/1.1" : "HTTP/1.0");
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_METHOD, method);
     vflow_latency_start(hreq->vflow);
