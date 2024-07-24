@@ -174,12 +174,6 @@ class Http1ObserverTest(TestCase):
         #
         expected = {
             "test_01": [
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                # List after COUNTER_FLOW since COUNTER_FLOW also has SOURCE_HOST
-                # and HTTP flows do not have SOURCE_HOST
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
                 ('FLOW', {"METHOD": "GET",
                           "RESULT": "200",
                           "REASON": "OK",
@@ -257,17 +251,6 @@ class Http1ObserverTest(TestCase):
         #
         expected = {
             "test_02": [
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                # List after COUNTER_FLOW since COUNTER_FLOW also has SOURCE_HOST
-                # and HTTP flows do not have SOURCE_HOST
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-
                 ('FLOW', {'PROTOCOL': 'HTTP/1.1',
                           'METHOD': 'GET',
                           'END_TIME': ANY_VALUE}),
@@ -334,14 +317,12 @@ class Http1ObserverTest(TestCase):
         self.assertIn(b"Verification: OK", out)
         self.assertIn(b"Verify return code: 0 (ok)", out)
 
-        # Wait until the FLOW records show up and are closed
+        # Wait until the BIFLOW records show up and are closed
 
         expected = {
             "test_03": [
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE})
+                ('BIFLOW', {'SOURCE_HOST': ANY_VALUE,
+                            'END_TIME': ANY_VALUE})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected))

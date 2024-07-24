@@ -441,7 +441,7 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
 
     def test_01_head_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge --head
-        snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0], verbose=True)
+        snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0], verbose=False)
 
         # wait for the TCP Listener/Connector records
         expected = {
@@ -462,10 +462,6 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
         # Expect a TCP flow/counter-flow and one HTTP/2 flow
         expected = {
             "QDR": [
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
                 ('FLOW', {'PROTOCOL': 'HTTP/2',
                           'METHOD': 'HEAD',
                           'RESULT': '200',
@@ -479,7 +475,7 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
     def test_02_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
         snooper_thread = VFlowSnooperThread(self.router_qdra.addresses[0],
-                                            verbose=True)
+                                            verbose=False)
         # wait for the TCP Listener/Connector records
         expected = {
             "QDR": [
@@ -503,10 +499,6 @@ class Http2TestOneStandaloneRouterNginx(Http2TestBase):
 
         expected = {
             "QDR": [
-                ('FLOW', {'COUNTERFLOW': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
-                ('FLOW', {'SOURCE_HOST': ANY_VALUE,
-                          'END_TIME': ANY_VALUE}),
                 ('FLOW', {'PROTOCOL': 'HTTP/2',
                           'METHOD': 'GET',
                           'RESULT': '200',
