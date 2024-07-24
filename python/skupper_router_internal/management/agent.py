@@ -242,6 +242,14 @@ class EntityAdapter(SchemaEntity):
         return "Entity(%s)" % ", ".join("%s=%s" % (k, '*******' if self.entity_type.attribute(k).hidden else self.attributes[k]) for k in keys)
 
 
+class RouterMetricsEntity(EntityAdapter):
+    def _identifier(self):
+        return self.attributes.get('identity')
+
+    def __str__(self):
+        return super(RouterMetricsEntity, self).__str__().replace("Entity(", "RouterMetricsEntity(")
+
+
 class RouterEntity(EntityAdapter):
     def __init__(self, agent, entity_type, attributes=None):
         super(RouterEntity, self).__init__(agent, entity_type, attributes, validate=False)

@@ -39,7 +39,7 @@ from system_test import Qdrouterd, Process
 from system_test import unittest
 from system_test import MANAGEMENT_TYPE, CONFIG_ENTITY_TYPE, OPER_ENTITY_TYPE
 from system_test import AMQP_LISTENER_TYPE, AMQP_CONNECTOR_TYPE, DUMMY_TYPE
-from system_test import ROUTER_TYPE, ROUTER_LINK_TYPE, ROUTER_ADDRESS_TYPE
+from system_test import ROUTER_TYPE, ROUTER_LINK_TYPE
 from system_test import ROUTER_NODE_TYPE, CONFIG_ADDRESS_TYPE, LOG_TYPE, CONNECTION_TYPE
 
 
@@ -376,9 +376,6 @@ class ManagementTest(system_test.TestCase):
         entities = self.node.query().get_entities()
         routers = [e for e in entities if e.type == ROUTER_TYPE]
         self.assertEqual(1, len(routers))
-        router = routers[0]
-        self.assertEqual(router.linkCount, len([e for e in entities if e.type == ROUTER_LINK_TYPE]))
-        self.assertEqual(router.addrCount, len([e for e in entities if e.type == ROUTER_ADDRESS_TYPE]))
 
     def test_router_node(self):
         """Test node entity in a trio of linked routers"""

@@ -24,9 +24,9 @@
 #include "agent_config_auto_link.h"
 #include "agent_connection.h"
 #include "agent_link.h"
-#include "agent_router.h"
+#include "agent_router_metrics.h"
+#include "agent_router_metrics.h"
 #include "router_core_private.h"
-
 #include "qpid/dispatch/amqp.h"
 
 static void qdr_manage_read_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
@@ -255,9 +255,9 @@ qdr_query_t *qdr_manage_query(qdr_core_t              *core,
     switch (query->entity_type) {
     case QD_ROUTER_CONFIG_ADDRESS:    qdr_agent_set_columns(query, attribute_names, qdr_config_address_columns, QDR_CONFIG_ADDRESS_COLUMN_COUNT);  break;
     case QD_ROUTER_CONFIG_AUTO_LINK:  qdr_agent_set_columns(query, attribute_names, qdr_config_auto_link_columns, QDR_CONFIG_AUTO_LINK_COLUMN_COUNT);  break;
-    case QD_ROUTER_ROUTER:            qdr_agent_set_columns(query, attribute_names, qdr_router_columns, QDR_ROUTER_COLUMN_COUNT);  break;
+    case QD_ROUTER_ROUTER_METRICS:    qdr_agent_set_columns(query, attribute_names, qdr_router_columns, QDR_ROUTER_METRICS_COLUMN_COUNT);  break;
     case QD_ROUTER_CONNECTION:        qdr_agent_set_columns(query, attribute_names, qdr_connection_columns, QDR_CONNECTION_COLUMN_COUNT);  break;
-    case QD_ROUTER_HTTP_REQUEST_INFO:    qdr_agent_set_columns(query, attribute_names, qdr_http_request_info_columns, QDR_HTTP_REQUEST_INFO_COLUMN_COUNT);  break;
+    case QD_ROUTER_HTTP_REQUEST_INFO: qdr_agent_set_columns(query, attribute_names, qdr_http_request_info_columns, QDR_HTTP_REQUEST_INFO_COLUMN_COUNT);  break;
     case QD_ROUTER_LINK:              qdr_agent_set_columns(query, attribute_names, qdr_link_columns, QDR_LINK_COLUMN_COUNT);  break;
     case QD_ROUTER_ADDRESS:           qdr_agent_set_columns(query, attribute_names, qdr_address_columns, QDR_ADDRESS_COLUMN_COUNT); break;
     case QD_ROUTER_FORBIDDEN:         break;
@@ -272,9 +272,9 @@ void qdr_query_add_attribute_names(qdr_query_t *query)
     switch (query->entity_type) {
     case QD_ROUTER_CONFIG_ADDRESS:    qdr_agent_emit_columns(query, qdr_config_address_columns, QDR_CONFIG_ADDRESS_COLUMN_COUNT); break;
     case QD_ROUTER_CONFIG_AUTO_LINK:  qdr_agent_emit_columns(query, qdr_config_auto_link_columns, QDR_CONFIG_AUTO_LINK_COLUMN_COUNT); break;
-    case QD_ROUTER_ROUTER:            qdr_agent_emit_columns(query, qdr_router_columns, QDR_ROUTER_COLUMN_COUNT); break;
+    case QD_ROUTER_ROUTER_METRICS:    qdr_agent_emit_columns(query, qdr_router_columns, QDR_ROUTER_METRICS_COLUMN_COUNT); break;
     case QD_ROUTER_CONNECTION:        qdr_agent_emit_columns(query, qdr_connection_columns, QDR_CONNECTION_COLUMN_COUNT); break;
-    case QD_ROUTER_HTTP_REQUEST_INFO:    qdr_agent_emit_columns(query, qdr_http_request_info_columns, QDR_HTTP_REQUEST_INFO_COLUMN_COUNT); break;
+    case QD_ROUTER_HTTP_REQUEST_INFO: qdr_agent_emit_columns(query, qdr_http_request_info_columns, QDR_HTTP_REQUEST_INFO_COLUMN_COUNT); break;
     case QD_ROUTER_LINK:              qdr_agent_emit_columns(query, qdr_link_columns, QDR_LINK_COLUMN_COUNT); break;
     case QD_ROUTER_ADDRESS:           qdr_agent_emit_columns(query, qdr_address_columns, QDR_ADDRESS_COLUMN_COUNT); break;
     case QD_ROUTER_FORBIDDEN:         qd_compose_empty_list(query->body); break;
@@ -404,9 +404,9 @@ static void qdr_manage_read_CT(qdr_core_t *core, qdr_action_t *action, bool disc
         switch (query->entity_type) {
         case QD_ROUTER_CONFIG_ADDRESS:    qdra_config_address_get_CT(core, name, identity, query, qdr_config_address_columns); break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_get_CT(core, name, identity, query, qdr_config_auto_link_columns); break;
-        case QD_ROUTER_ROUTER:            qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_CONNECTION:        qdra_connection_get_CT(core, name, identity, query, qdr_connection_columns); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: qdra_http_request_info_get_CT(core, name, identity, query, qdr_http_request_info_columns); break;
+        case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_LINK:              break;
         case QD_ROUTER_ADDRESS:           qdra_address_get_CT(core, name, identity, query, qdr_address_columns); break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
@@ -430,8 +430,8 @@ static void qdr_manage_create_CT(qdr_core_t *core, qdr_action_t *action, bool di
         case QD_ROUTER_CONFIG_ADDRESS:    qdra_config_address_create_CT(core, name, query, in_body); break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_create_CT(core, name, query, in_body); break;
         case QD_ROUTER_CONNECTION:        break;
+        case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: break;
-        case QD_ROUTER_ROUTER:            qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_LINK:              break;
         case QD_ROUTER_ADDRESS:           break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
@@ -455,8 +455,8 @@ static void qdr_manage_delete_CT(qdr_core_t *core, qdr_action_t *action, bool di
         case QD_ROUTER_CONFIG_ADDRESS:    qdra_config_address_delete_CT(core, query, name, identity); break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_delete_CT(core, query, name, identity); break;
         case QD_ROUTER_CONNECTION:        qdr_agent_forbidden(core, query, false); break;
+        case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: break;
-        case QD_ROUTER_ROUTER:            qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_LINK:              break;
         case QD_ROUTER_ADDRESS:           break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
@@ -480,9 +480,9 @@ static void qdr_manage_update_CT(qdr_core_t *core, qdr_action_t *action, bool di
         case QD_ROUTER_CONFIG_AUTO_LINK:  break;
         case QD_ROUTER_CONNECTION:        qdra_connection_update_CT(core, name, identity, query, in_body); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: break;
-        case QD_ROUTER_ROUTER:            break;
         case QD_ROUTER_LINK:              qdra_link_update_CT(core, name, identity, query, in_body); break;
         case QD_ROUTER_ADDRESS:           break;
+        case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
        }
     }
@@ -504,7 +504,7 @@ static void qdrh_query_get_first_CT(qdr_core_t *core, qdr_action_t *action, bool
         switch (query->entity_type) {
         case QD_ROUTER_CONFIG_ADDRESS:    qdra_config_address_get_first_CT(core, query, offset); break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_get_first_CT(core, query, offset); break;
-        case QD_ROUTER_ROUTER:            qdra_router_get_first_CT(core, query, offset); break;
+        case QD_ROUTER_ROUTER_METRICS:    qdra_router_metrics_get_first_CT(core, query, offset); break;
         case QD_ROUTER_CONNECTION:        qdra_connection_get_first_CT(core, query, offset); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: qdra_http_request_info_get_first_CT(core, query, offset); break;
         case QD_ROUTER_LINK:              qdra_link_get_first_CT(core, query, offset); break;
@@ -523,7 +523,7 @@ static void qdrh_query_get_next_CT(qdr_core_t *core, qdr_action_t *action, bool 
         switch (query->entity_type) {
         case QD_ROUTER_CONFIG_ADDRESS:    qdra_config_address_get_next_CT(core, query); break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_get_next_CT(core, query); break;
-        case QD_ROUTER_ROUTER:      qdra_router_get_next_CT(core, query); break;
+        case QD_ROUTER_ROUTER_METRICS:    qdra_router_metrics_get_next_CT(core, query); break;
         case QD_ROUTER_CONNECTION:        qdra_connection_get_next_CT(core, query); break;
         case QD_ROUTER_HTTP_REQUEST_INFO: qdra_http_request_info_get_next_CT(core, query); break;
         case QD_ROUTER_LINK:              qdra_link_get_next_CT(core, query); break;

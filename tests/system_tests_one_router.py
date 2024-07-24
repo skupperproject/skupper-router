@@ -34,7 +34,7 @@ from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR
 from system_test import Process, unittest, QdManager, TestTimeout
 from system_test import AMQP_CONNECTOR_TYPE, AMQP_LISTENER_TYPE
 from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE, ROUTER_LINK_TYPE
-from system_test import ROUTER_TYPE
+from system_test import ROUTER_TYPE, ROUTER_METRICS_TYPE
 from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
@@ -654,7 +654,7 @@ class OneRouterTest(TestCase):
         policy_config_path = os.path.join(DIR, 'one-router-policy')
         OneRouterTest.listen_port = cls.tester.get_port()
         config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': 'QDR'}),
+            ('router', {'mode': 'standalone', 'id': 'QDR', 'debugDumpFile': 'debug.txt', "metadata": "hahaha"}),
             ('policy', {'policyDir': policy_config_path,
                         'enableVhostPolicy': 'true'}),
 
@@ -745,6 +745,40 @@ class OneRouterTest(TestCase):
         test = ThreeAck(addr, n_messages=10)
         test.run()
         self.assertIsNone(test.error)
+
+    def test_query_router(self):
+        """
+        Query the router with type='org.apache.qpid.dispatch.router' and make sure everything matches up as expected.
+        """
+        local_node = Node.connect(self.address, timeout=TIMEOUT)
+        outs = local_node.query(type=ROUTER_TYPE)
+        debug_dump_file = outs.attribute_names.index('debugDumpFile')
+        ra_interval_flux = outs.attribute_names.index('raIntervalFluxSeconds')
+        worker_threads = outs.attribute_names.index('workerThreads')
+        name = outs.attribute_names.index('name')
+        hello_interbval = outs.attribute_names.index('helloIntervalSeconds')
+        area = outs.attribute_names.index('area')
+        hello_max_age = outs.attribute_names.index('helloMaxAgeSeconds')
+        sasl_config_name = outs.attribute_names.index('saslConfigName')
+        remote_ls_max_age = outs.attribute_names.index('remoteLsMaxAgeSeconds')
+        default_distribution = outs.attribute_names.index('defaultDistribution')
+        ra_interval = outs.attribute_names.index('raIntervalSeconds')
+        mode = outs.attribute_names.index('mode')
+        metadata = outs.attribute_names.index('metadata')
+
+        self.assertIn('debug.txt', outs.results[0][debug_dump_file])
+        self.assertEqual(outs.results[0][ra_interval_flux], 4)
+        self.assertEqual(outs.results[0][worker_threads], 4)
+        self.assertEqual(outs.results[0][name], 'router/QDR')
+        self.assertEqual(outs.results[0][hello_interbval], 1)
+        self.assertEqual(outs.results[0][area], '0')
+        self.assertEqual(outs.results[0][hello_max_age], 3)
+        self.assertEqual(outs.results[0][sasl_config_name], 'skrouterd')
+        self.assertEqual(outs.results[0][remote_ls_max_age], 60)
+        self.assertEqual(outs.results[0][default_distribution], 'balanced')
+        self.assertEqual(outs.results[0][ra_interval], 30)
+        self.assertEqual(outs.results[0][mode], 'standalone')
+        self.assertEqual(outs.results[0][metadata], 'hahaha')
 
     def test_16_management(self):
         test = ManagementTest(self.address)
@@ -906,7 +940,7 @@ class OneRouterTest(TestCase):
 
     def test_43_dropped_presettled_receiver_stops(self):
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        res = local_node.query(ROUTER_TYPE)
+        res = local_node.query(ROUTER_METRICS_TYPE)
         presettled_dropped_count_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count = res.results[0][presettled_dropped_count_index]
         test = DroppedPresettledTest(self.address, 200, presettled_dropped_count)
@@ -1697,7 +1731,7 @@ class PresettledCustomTimeout:
     def on_timer_task(self, event):
         self.num_tries += 1
         local_node = Node.connect(self.parent.addr, timeout=TIMEOUT)
-        res = local_node.query(ROUTER_TYPE)
+        res = local_node.query(ROUTER_METRICS_TYPE)
         presettled_deliveries_dropped_index = res.attribute_names.index('droppedPresettledDeliveries')
         presettled_dropped_count =  res.results[0][presettled_deliveries_dropped_index]
 
@@ -2782,7 +2816,7 @@ class ReleasedVsModifiedTest(MessagingHandler):
 
     def get_modified_deliveries(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type=ROUTER_TYPE)
+        outs = local_node.query(type=ROUTER_METRICS_TYPE)
         pos = outs.attribute_names.index("modifiedDeliveries")
         results = outs.results[0]
         n_modified_deliveries = results[pos]
@@ -2906,7 +2940,7 @@ class BatchedSettlementTest(MessagingHandler):
     def check_if_done(self):
         if self.n_settled == self.count:
             local_node = Node.connect(self.address, timeout=TIMEOUT)
-            outs = local_node.query(type=ROUTER_TYPE)
+            outs = local_node.query(type=ROUTER_METRICS_TYPE)
             pos = outs.attribute_names.index("acceptedDeliveries")
             results = outs.results[0]
             if results[pos] >= self.count:
@@ -2966,7 +3000,7 @@ class RejectDispositionTest(MessagingHandler):
 
     def count_rejects(self) :
         local_node = Node.connect(self.address, timeout=TIMEOUT)
-        outs = local_node.query(type=ROUTER_TYPE)
+        outs = local_node.query(type=ROUTER_METRICS_TYPE)
         pos = outs.attribute_names.index("rejectedDeliveries")
         results = outs.results[0]
         return results[pos]
