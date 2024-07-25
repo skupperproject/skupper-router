@@ -35,7 +35,7 @@ from typing import Mapping
 from email.parser import BytesParser
 
 from proton import Message
-from system_test import TestCase, unittest, main_module, Qdrouterd, QdManager
+from system_test import TestCase, unittest, main_module, Qdrouterd, SkManager
 from system_test import TIMEOUT, AsyncTestSender, AsyncTestReceiver
 from system_test import retry_exception, curl_available, run_curl, retry
 from system_test import nginx_available, get_digest, NginxServer, Process
@@ -420,8 +420,8 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
 
-        qd_manager = QdManager(address=self.INT_A.listener)
-        stats = qd_manager.query(HTTP_REQ_INFO_TYPE)
+        sk_manager = SkManager(address=self.INT_A.listener)
+        stats = sk_manager.query(HTTP_REQ_INFO_TYPE)
         self.assertEqual(len(stats), 2)
         for s in stats:
             self.assertEqual(s.get('requests'), 10)
@@ -677,8 +677,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             + b'\r\n' \
             + b'I like cereal...'
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("", self.server11_port))
@@ -828,8 +828,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             + b'\r\n' \
             + b'I like potatoes...'
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
@@ -974,8 +974,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             + 'client%d'
         response_length = len(response_template) - 1
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
@@ -1061,8 +1061,8 @@ class Http1AdaptorEdge2EdgeTest(Http1Edge2EdgeTestBase,
             + b'\r\n' \
             + b'client1'
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.server11_host, self.server11_port))
@@ -1329,8 +1329,8 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             + b'\r\n' \
             + b'client'
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
             raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             raw_listener.settimeout(TIMEOUT)
@@ -1382,8 +1382,8 @@ class Http1AdaptorEdge2EdgeTLSTest(Http1Edge2EdgeTestBase,
             + b'\r\n' \
             + b'unterminated response'
 
-        EA1_mgmt = self.EA1.qd_manager
-        EA2_mgmt = self.EA2.qd_manager
+        EA1_mgmt = self.EA1.sk_manager
+        EA2_mgmt = self.EA2.sk_manager
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw_listener:
             raw_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             raw_listener.settimeout(TIMEOUT)
@@ -2661,7 +2661,7 @@ class Http1TLSConnectorErrorTests(TestCase):
         r_config = Qdrouterd.Config(r_config)
         with self.tester.qdrouterd('HTTP1ConnectorErrorTests001', r_config,
                                    wait=True) as router:
-            mgmt = router.qd_manager
+            mgmt = router.sk_manager
 
             server_port = self.tester.get_port()
             mgmt.create("sslProfile",
@@ -2730,7 +2730,7 @@ class Http1TLSConnectorErrorTests(TestCase):
         r_config = Qdrouterd.Config(r_config)
         with self.tester.qdrouterd('HTTP1ConnectorErrorTests002', r_config,
                                    wait=True) as router:
-            mgmt = router.qd_manager
+            mgmt = router.sk_manager
             server_port = self.tester.get_port()
 
             # this profile does not provide a client cert

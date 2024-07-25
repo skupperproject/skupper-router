@@ -21,7 +21,7 @@ from time import sleep
 import os
 from subprocess import PIPE, Popen
 from system_test import TestCase, Qdrouterd, main_module, DIR, TIMEOUT, retry_assertion
-from system_test import unittest, QdManager, Process, CONNECTION_TYPE
+from system_test import unittest, SkManager, Process, CONNECTION_TYPE
 from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, CA_CERT, CLIENT_CERTIFICATE, \
     CLIENT_PRIVATE_KEY_PASSWORD, CLIENT_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
 from skupper_router.management.client import Node
@@ -141,8 +141,8 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
     @unittest.skipIf(not SASL.extended(), "Cyrus library not available. skipping test")
     def test_inter_router_sasl_fail(self):
         passed = False
-        qd_manager = QdManager(address=self.routers[1].addresses[0])
-        connections = qd_manager.query(CONNECTION_TYPE)
+        sk_manager = SkManager(address=self.routers[1].addresses[0])
+        connections = sk_manager.query(CONNECTION_TYPE)
         for connection in connections:
             if connection['role'] == 'inter-router':
                 passed = True
@@ -150,10 +150,10 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
 
         # There was no inter-router connection established.
         self.assertFalse(passed)
-        qd_manager = QdManager(address=self.routers[1].addresses[0])
+        sk_manager = SkManager(address=self.routers[1].addresses[0])
 
         def check_sasl_failed():
-            logs = qd_manager.get_log()
+            logs = sk_manager.get_log()
             sasl_failed = False
             for log in logs:
                 if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:
@@ -162,7 +162,7 @@ class RouterTestPlainSaslFailure(RouterTestPlainSaslCommon):
             self.assertTrue(sasl_failed)
 
         def check_file_open_failed():
-            logs = qd_manager.get_log()
+            logs = sk_manager.get_log()
             file_open_failed = False
             for log in logs:
                 if log[0] == "CONN_MGR" and log[1] == "error" and "Unable to open password file" in log[2] and "error: No such file or directory" in log[2]:
@@ -243,8 +243,8 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
     def test_inter_router_sasl_fail(self):
         passed = False
 
-        qd_manager = QdManager(address=self.routers[1].addresses[0])
-        connections = qd_manager.query(CONNECTION_TYPE)
+        sk_manager = SkManager(address=self.routers[1].addresses[0])
+        connections = sk_manager.query(CONNECTION_TYPE)
 
         for connection in connections:
             if connection['role'] == 'inter-router':
@@ -255,7 +255,7 @@ class RouterTestPlainSaslFailureUsingLiteral(RouterTestPlainSaslCommon):
         self.assertFalse(passed)
 
         def check_sasl_failed():
-            logs = qd_manager.get_log()
+            logs = sk_manager.get_log()
             sasl_failed = False
             for log in logs:
                 if log[0] == 'SERVER' and log[1] == "error" and "amqp:unauthorized-access Authentication failed [mech=PLAIN]" in log[2]:

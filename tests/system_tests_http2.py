@@ -28,7 +28,7 @@ from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
 import system_test
 from http1_tests import wait_http_listeners_up, HttpAdaptorListenerConnectTestBase, wait_tcp_listeners_up
-from system_test import TestCase, Qdrouterd, QdManager, Process, retry_assertion
+from system_test import TestCase, Qdrouterd, SkManager, Process, retry_assertion
 from system_test import curl_available, nginx_available, TIMEOUT, Http2Server
 from system_test import get_digest, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
 from system_test import HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE
@@ -263,19 +263,19 @@ class CommonHttp2Tests:
             i += 1
         self.assertIn(ret_string, out)
 
-        qd_manager = QdManager(address=server_addr)
+        sk_manager = SkManager(address=server_addr)
         if tcp_listener:
             entity_name = TCP_LISTENER_TYPE
         else:
             entity_name = HTTP_LISTENER_TYPE
-        listeners = qd_manager.query(entity_name)
+        listeners = sk_manager.query(entity_name)
         self.assertEqual(len(listeners), 1)
 
         # Run a skmanage DELETE on the httpListener
-        qd_manager.delete(entity_name, name=self.listener_name)
+        sk_manager.delete(entity_name, name=self.listener_name)
 
         # Make sure the listener is gone
-        listeners  = qd_manager.query(entity_name)
+        listeners  = sk_manager.query(entity_name)
         self.assertEqual(len(listeners), 0)
 
         # Try running a curl command against the listener to make sure it times out
@@ -288,7 +288,7 @@ class CommonHttp2Tests:
 
         # Add back the listener and run a curl command to make sure that the newly added listener is
         # back up and running.
-        create_result = qd_manager.create(entity_name,
+        create_result = sk_manager.create(entity_name,
                                           self.tcp_listener_props if tcp_listener else self.http_listener_props)
         if tcp_listener:
             wait_tcp_listeners_up(server_addr)
@@ -310,8 +310,8 @@ class CommonHttp2Tests:
 
         # Run a skmanage query on connections to see how many qdr_connections are
         # there on the egress router
-        qd_manager = QdManager(address=server_addr)
-        connections = qd_manager.query(CONNECTION_TYPE)
+        sk_manager = SkManager(address=server_addr)
+        connections = sk_manager.query(CONNECTION_TYPE)
         self.assertGreaterEqual(len(connections), 2)
 
         if not tcp_connector:
@@ -327,19 +327,19 @@ class CommonHttp2Tests:
             connector_type = TCP_CONNECTOR_TYPE
         else:
             connector_type = HTTP_CONNECTOR_TYPE
-        connectors  = qd_manager.query(connector_type)
+        connectors  = sk_manager.query(connector_type)
         self.assertEqual(len(connectors), 1)
 
         # Delete the httpConnector
-        qd_manager.delete(connector_type, name=self.connector_name)
+        sk_manager.delete(connector_type, name=self.connector_name)
 
         # Make sure the connector is gone
-        connectors  = qd_manager.query(connector_type)
+        connectors  = sk_manager.query(connector_type)
         self.assertEqual(len(connectors), 0)
 
         # Deleting the connector must have taken out the connection to the server.
         def query_connections():
-            conns = qd_manager.query(CONNECTION_TYPE)
+            conns = sk_manager.query(CONNECTION_TYPE)
             server_connection_found = False
             for conn in conns:
                 if str(server_port) in conn['name']:
@@ -360,12 +360,12 @@ class CommonHttp2Tests:
 
         # Add back the httpConnector
         # skmanage CREATE type=httpConnector address=examples.com host=127.0.0.1 port=80 protocolVersion=HTTP2
-        qd_manager.create(connector_type, self.connector_props)
+        sk_manager.create(connector_type, self.connector_props)
         num_tries = 2
         tries = 0
         conn_present = False
         while tries < num_tries:
-            connections = qd_manager.query(CONNECTION_TYPE)
+            connections = sk_manager.query(CONNECTION_TYPE)
             tries += 1
             if len(connections) < 2:
                 sleep(2)
@@ -556,7 +556,7 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
     def test_000_stats(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0]
-        qd_manager = QdManager(address=self.router_qdra.addresses[0])
+        sk_manager = SkManager(address=self.router_qdra.addresses[0])
 
         # First request
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args())
@@ -573,11 +573,11 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         _, out, _ = self.run_curl(address, args=self.get_all_curl_args(['-d', 'fname=Mickey&lname=Mouse', '-X', 'POST']))
         self.assertIn('Success! Your first name is Mickey, last name is Mouse', out)
 
-        stats = qd_manager.query(HTTP_REQ_INFO_TYPE)
+        stats = sk_manager.query(HTTP_REQ_INFO_TYPE)
         self.assertEqual(len(stats), 2)
 
         def check_num_requests():
-            statistics = qd_manager.query(HTTP_REQ_INFO_TYPE)
+            statistics = sk_manager.query(HTTP_REQ_INFO_TYPE)
             for stat in statistics:
                 self.assertEqual(stat.get('requests'), 2)
 
@@ -589,7 +589,7 @@ class Http2TestOneStandaloneRouter(Http2TestBase, CommonHttp2Tests):
         # in more detail.
         retry_assertion(check_num_requests)
 
-        stats = qd_manager.query(HTTP_REQ_INFO_TYPE)
+        stats = sk_manager.query(HTTP_REQ_INFO_TYPE)
 
         for s in stats:
             self.assertEqual(s.get('requests'), 2)
@@ -762,9 +762,9 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
     def test_000_stats(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge
         address = self.router_qdra.http_addresses[0]
-        qd_manager_a = QdManager(address=self.router_qdra.addresses[0])
-        qd_manager_b = QdManager(address=self.router_qdrb.addresses[0])
-        stats_a = qd_manager_a.query(HTTP_REQ_INFO_TYPE)
+        sk_manager_a = SkManager(address=self.router_qdra.addresses[0])
+        sk_manager_b = SkManager(address=self.router_qdrb.addresses[0])
+        stats_a = sk_manager_a.query(HTTP_REQ_INFO_TYPE)
 
         # First request
         self.run_curl(address, args=self.get_all_curl_args())
@@ -775,9 +775,9 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         self.assertIn('Success! Your first name is Mickey, last name is Mouse', out)
 
         def check_num_requests():
-            stats = qd_manager_a.query(HTTP_REQ_INFO_TYPE)
+            stats = sk_manager_a.query(HTTP_REQ_INFO_TYPE)
             self.assertEqual(stats[0].get('requests'), 2)
-            stats = qd_manager_b.query(HTTP_REQ_INFO_TYPE)
+            stats = sk_manager_b.query(HTTP_REQ_INFO_TYPE)
             self.assertEqual(stats[0].get('requests'), 2)
 
         # This test intermittently fails with the following error -
@@ -788,7 +788,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         # in more detail.
         retry_assertion(check_num_requests)
 
-        stats_a = qd_manager_a.query(HTTP_REQ_INFO_TYPE)
+        stats_a = sk_manager_a.query(HTTP_REQ_INFO_TYPE)
 
         self.assertEqual(len(stats_a), 1)
         self.assertEqual(stats_a[0].get('requests'), 2)
@@ -796,7 +796,7 @@ class Http2TestTwoRouter(Http2TestBase, CommonHttp2Tests):
         self.assertEqual(stats_a[0].get('bytesOut'), 3944)
         self.assertEqual(stats_a[0].get('bytesIn'), 24)
 
-        stats_b = qd_manager_b.query(HTTP_REQ_INFO_TYPE)
+        stats_b = sk_manager_b.query(HTTP_REQ_INFO_TYPE)
         self.assertEqual(len(stats_b), 1)
 
         self.assertEqual(stats_b[0].get('requests'), 2)
@@ -1006,8 +1006,8 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         self.assertIn('content-type: text/html; charset=utf-8', out)
 
         # Now delete the httpConnector on the edge router config_edgea
-        qd_manager = QdManager(address=self.router_qdra.addresses[0])
-        qd_manager.delete(HTTP_CONNECTOR_TYPE, name=self.edge_a_http_connector_name)
+        sk_manager = SkManager(address=self.router_qdra.addresses[0])
+        sk_manager.delete(HTTP_CONNECTOR_TYPE, name=self.edge_a_http_connector_name)
         sleep(2)
 
         # now check the interior router for the examples address. Since the httpConnector on one of the
@@ -1024,8 +1024,8 @@ class Http2TestDoubleEdgeInteriorRouter(Http2TestBase):
         self.assertIn('content-type: text/html; charset=utf-8', out)
 
         # Now delete the httpConnector on the edge router config_edgeb
-        qd_manager = QdManager(address=self.router_qdrb.addresses[0])
-        qd_manager.delete(HTTP_CONNECTOR_TYPE, name=self.edge_b_http_connector_name)
+        sk_manager = SkManager(address=self.router_qdrb.addresses[0])
+        sk_manager.delete(HTTP_CONNECTOR_TYPE, name=self.edge_b_http_connector_name)
         sleep(2)
 
         # Now, run a curl client GET request with a timeout.

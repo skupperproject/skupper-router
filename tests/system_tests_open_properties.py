@@ -23,7 +23,7 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from test_broker import FakeBroker
 from system_test import TestCase, unittest, main_module, Qdrouterd
-from system_test import retry, TIMEOUT, wait_port, QdManager, Process
+from system_test import retry, TIMEOUT, wait_port, SkManager, Process
 from system_test import CONNECTION_TYPE
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
@@ -267,7 +267,7 @@ class OpenPropertiesQdManageTest(TestCase):
                                 op})
 
             cmd = "CREATE --type=io.skupper.router.%s --stdin" % client_class.entity
-            output = QdManager()(cmd=cmd,
+            output = SkManager()(cmd=cmd,
                                  address=router.addresses[0],
                                  input=input,
                                  timeout=TIMEOUT)

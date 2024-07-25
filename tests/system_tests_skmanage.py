@@ -29,7 +29,7 @@ from skupper_router_internal.management.qdrouter import QdSchema
 
 from system_test import unittest, retry_assertion
 from system_test import Logger, TestCase, Process, Qdrouterd, main_module, TIMEOUT
-from system_test import QdManager, DUMMY_TYPE, SSL_PROFILE_TYPE, LOG_STATS_TYPE
+from system_test import SkManager, DUMMY_TYPE, SSL_PROFILE_TYPE, LOG_STATS_TYPE
 from system_test import CONFIG_ADDRESS_TYPE, ROUTER_ADDRESS_TYPE
 from system_test import AMQP_LISTENER_TYPE, LOG_TYPE, ROUTER_TYPE, ROUTER_METRICS_TYPE
 from system_test import CONFIG_ENTITY_TYPE, ENTITY_TYPE, CONFIG_AUTOLINK_TYPE
@@ -583,8 +583,8 @@ class SkmanageTest(TestCase):
         self.assertEqual(in_links, COUNT)
 
     def test_worker_threads(self):
-        qd_manager = QdManager(address=self.address())
-        output = qd_manager.query(ROUTER_TYPE)
+        sk_manager = SkManager(address=self.address())
+        output = sk_manager.query(ROUTER_TYPE)
         self.assertEqual(output[0]['workerThreads'], 4)
 
     def test_check_memory_usage(self):

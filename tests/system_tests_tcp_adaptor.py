@@ -38,7 +38,7 @@ from skupper_router.management.error import ForbiddenStatus
 from system_test import Logger
 from system_test import Process
 from system_test import Qdrouterd
-from system_test import QdManager
+from system_test import SkManager
 from system_test import TIMEOUT
 from system_test import TestCase
 from system_test import TestTimeout
@@ -2191,21 +2191,21 @@ class TcpDeleteConnectionTest(TestCase):
         client_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_conn.settimeout(TIMEOUT)
         client_conn.connect(('127.0.0.1', self.good_listener_port))
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
         conn_id = None
-        results = qd_manager.query(CONNECTION_TYPE)
+        results = sk_manager.query(CONNECTION_TYPE)
         for result in results:
             conn_direction = result['dir']
             # Find the id of the tcp connection we want to delete.
             if conn_direction == 'out' and result['host'] != 'egress-dispatch':
                 # Delete the connection by updating the adminStatus to deleted.
-                qd_manager.update(CONNECTION_TYPE, {"adminStatus": "deleted"}, identity=result['identity'])
+                sk_manager.update(CONNECTION_TYPE, {"adminStatus": "deleted"}, identity=result['identity'])
                 conn_id = result['identity']
                 break
         self.assertIsNotNone(conn_id, "Expected connection id to be not None")
 
         def check_connection_deleted():
-            outs = qd_manager.query(CONNECTION_TYPE)
+            outs = sk_manager.query(CONNECTION_TYPE)
             is_conn_present = False
             for out in outs:
                 if out['identity'] == conn_id:

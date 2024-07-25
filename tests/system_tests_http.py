@@ -25,7 +25,7 @@ import ssl
 from urllib.request import urlopen, build_opener, HTTPSHandler
 from urllib.error import HTTPError, URLError
 from skupper_router._skupper_router_site import SKIP_DELETE_HTTP_LISTENER
-from system_test import Process, QdManager, retry
+from system_test import Process, SkManager, retry
 from system_test import TestCase, Qdrouterd, main_module
 from system_test import unittest, AMQP_LISTENER_TYPE, ALLOCATOR_TYPE
 from system_test import CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
@@ -128,7 +128,7 @@ class RouterTestHttp(TestCase):
         # are working.
 
         # Delete the listener on port http_delete_listen_port_1
-        mgmt = QdManager(address=address())
+        mgmt = SkManager(address=address())
 
         if self.skip_delete_http_listener_test:
             # You are not allowed to delete a http:yes listener
@@ -373,7 +373,7 @@ class RouterTestHttp(TestCase):
 
         if not self.skip_delete_http_listener_test:
             # Delete the listener with name 'delete-me'
-            mgmt = QdManager(address=address())
+            mgmt = SkManager(address=address())
             mgmt.delete(AMQP_LISTENER_TYPE, name=name)
 
             # Make sure that the listener got deleted.

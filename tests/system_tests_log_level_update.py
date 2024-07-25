@@ -25,7 +25,7 @@ from proton.reactor import AtMostOnce
 from proton.reactor import Container
 
 from system_test import TestCase, Qdrouterd
-from system_test import QdManager, LOG_TYPE
+from system_test import SkManager, LOG_TYPE
 from system_test import CONNECTION_TYPE
 from system_test import retry_assertion
 
@@ -158,7 +158,7 @@ class LogModuleProtocolTest(TestCase):
 
     def test_turn_on_protocol_trace(self):
         hello_world_0 = "Hello World_0!"
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
         blocking_connection = BlockingConnection(self.address)
 
         TEST_ADDR = "moduletest0"
@@ -166,7 +166,7 @@ class LogModuleProtocolTest(TestCase):
 
         def check_num_attaches(attaches):
             num_attaches = 0
-            logs = qd_manager.get_log()
+            logs = sk_manager.get_log()
             for log in logs:
                 if 'PROTOCOL' in log[0]:
                     if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -179,13 +179,13 @@ class LogModuleProtocolTest(TestCase):
         retry_assertion(lambda: check_num_attaches(attaches=4), delay=2)
 
         # Turn off trace logging using skmanage
-        qd_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
+        sk_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
 
         # Turn on trace (not debug+) level logging for the PROTOCOL module. After doing
         # this we will create a sender and a receiver and make sure that the PROTOCOL module
         # is emitting proton frame trace messages.
 
-        qd_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/PROTOCOL")
+        sk_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/PROTOCOL")
         TEST_ADDR = "moduletest1"
         hello_world_1 = "Hello World_1!"
         self.create_sender_receiver(TEST_ADDR, hello_world_1, blocking_connection)
@@ -194,7 +194,7 @@ class LogModuleProtocolTest(TestCase):
 
         # Now turn off trace logging for the PROTOCOL module and make sure
         # that there is no more proton frame trace messages appearing in the log
-        qd_manager.update(LOG_TYPE,
+        sk_manager.update(LOG_TYPE,
                           {"enable": "info+"}, name="log/PROTOCOL")
 
         TEST_ADDR = "moduletest2"
@@ -251,11 +251,11 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
         return num_transfers
 
     def test_inter_router_protocol_trace(self):
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
 
         # The router already has trace logging turned on for all connections.
         # Get the connection id of the inter-router connection
-        results = qd_manager.query(CONNECTION_TYPE)
+        results = sk_manager.query(CONNECTION_TYPE)
         conn_id = None
         for result in results:
             if result['role'] == 'inter-router':
@@ -263,7 +263,7 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
 
         # Turn off trace logging for the inter-router connection. This update command is run async by the router
         # so we need to sleep a bit before the operation is actually completed.
-        qd_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "false"}, identity=conn_id)
+        sk_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "false"}, identity=conn_id)
         time.sleep(1)
 
         num_transfers = self._get_transfer_frame_count(conn_id)
@@ -282,7 +282,7 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
         self.assertEqual(num_transfers_after_update, num_transfers)
 
         # Turn on trace logging for the inter-router connection
-        qd_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "yes"}, identity=conn_id)
+        sk_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "yes"}, identity=conn_id)
 
         # Create a receiver and make sure the MAU update is NOT seen on the inter-router connection log
         TEST_ADDR_2 = "EnableConnectionLevelProtocolTraceTest2"
@@ -316,13 +316,13 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         cls.address = cls.router.addresses[0]
 
     def test_enable_protocol_trace_on_non_existent_connection(self):
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
 
         bad_request = False
 
         try:
             # Turn on trace logging for connection with invalid or non-existent identity
-            outs = qd_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "true"}, identity='G10000')
+            outs = sk_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "true"}, identity='G10000')
         except Exception as e:
             if "BadRequestStatus" in str(e):
                 bad_request = True
@@ -330,10 +330,10 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         self.assertTrue(bad_request)
 
     def test_single_connection_protocol_trace(self):
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
 
         # Turn off trace logging on all connections.
-        qd_manager.update(LOG_TYPE, {"enable": "info+"},
+        sk_manager.update(LOG_TYPE, {"enable": "info+"},
                           name="log/DEFAULT")
 
         TEST_ADDR_1 = "EnableConnectionLevelProtocolTraceTest1"
@@ -349,14 +349,14 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         container_2.container_id = CONTAINER_ID_2
         conn_2 = BlockingConnection(self.address, container=container_2)
 
-        results = qd_manager.query(CONNECTION_TYPE)
+        results = sk_manager.query(CONNECTION_TYPE)
         conn_id = None
         for result in results:
             if result['container'] == CONTAINER_ID_1:
                 conn_id = result['identity']
 
         # Turn on trace logging for connection with identity conn_id
-        qd_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "true"}, identity=conn_id)
+        sk_manager.update(CONNECTION_TYPE, {"enableProtocolTrace": "true"}, identity=conn_id)
 
         blocking_receiver_1 = conn_1.create_receiver(address=TEST_ADDR_1)
         blocking_sender_1 = conn_1.create_sender(address=TEST_ADDR_1, options=apply_options)
@@ -366,7 +366,7 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
 
         num_attaches_1 = 0
         num_attaches_2 = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR_1 in log[2]:
@@ -382,14 +382,14 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         self.assertTrue(num_attaches_2 == 0)
 
         # Now turn off the connection tracing on that connection
-        qd_manager.update(CONNECTION_TYPE,
+        sk_manager.update(CONNECTION_TYPE,
                           {"enableProtocolTrace": "off"},
                           identity=conn_id)
         blocking_receiver_1.close()
         blocking_sender_1.close()
 
         # Since tracing was turned off, there should be no detaches
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         num_detaches = 0
         for log in logs:
             if 'PROTOCOL' in log[0]:
@@ -436,7 +436,7 @@ class LogLevelUpdateTest(TestCase):
         hello_world_2 = "Hello World_2!"
         hello_world_3 = "Hello World_3!"
         hello_world_4 = "Hello World_4!"
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
 
         blocking_connection = BlockingConnection(self.address)
         TEST_ADDR = "apachetest1"
@@ -445,7 +445,7 @@ class LogLevelUpdateTest(TestCase):
         # STEP 1: Make sure that proton trace logging is turned on already.
         # Search for attach frames in the log for address TEST_ADDR. There should be 4 attaches
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -454,7 +454,7 @@ class LogLevelUpdateTest(TestCase):
         self.assertTrue(num_attaches == 4)
 
         # STEP 2: Turn off trace logging using skmanage
-        qd_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
+        sk_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
 
         # Step 3: Now, router trace logging is turned off (has been set to info+)
         # Create the sender and receiver again on a different address and make
@@ -465,7 +465,7 @@ class LogLevelUpdateTest(TestCase):
 
         # STEP 3: Count the nimber of attaches for address TEST_ADDR, there should be none
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -476,12 +476,12 @@ class LogLevelUpdateTest(TestCase):
 
         # STEP 4: Tuen trace logging back on again and make sure num_attaches = 4
         TEST_ADDR = "apachetest3"
-        qd_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/DEFAULT")
+        sk_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/DEFAULT")
         self.create_sender_receiver(TEST_ADDR, hello_world_3, blocking_connection)
 
         # STEP 3: Count the number of attaches for address TEST_ADDR, there should be 4
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -496,7 +496,7 @@ class LogLevelUpdateTest(TestCase):
         TEST_ADDR = "apachetest4"
         self.create_sender_receiver(TEST_ADDR, hello_world_4)
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -516,18 +516,18 @@ class LogLevelUpdateTest(TestCase):
 
         # Step 1. Turn off trace logging for module DEFAULT and enable trace logging
         #         for the PROTOCOL module and make sure it works.
-        qd_manager = QdManager(self.address)
+        sk_manager = SkManager(self.address)
         # Set log level to info+ on the DEFAULT module
-        qd_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
+        sk_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/DEFAULT")
         # Set log level to debug+ on the PROTOCOL module
-        qd_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/PROTOCOL")
+        sk_manager.update(LOG_TYPE, {"enable": "debug+"}, name="log/PROTOCOL")
         blocking_connection = BlockingConnection(self.address)
 
         self.create_sender_receiver(TEST_ADDR, hello_world_5,
                                     blocking_connection)
         # Count the number of attaches for address TEST_ADDR, there should be 4
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -537,13 +537,13 @@ class LogLevelUpdateTest(TestCase):
         self.assertTrue(num_attaches == 4)
 
         TEST_ADDR = "apachetest6"
-        qd_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/PROTOCOL")
+        sk_manager.update(LOG_TYPE, {"enable": "info+"}, name="log/PROTOCOL")
 
         self.create_sender_receiver(TEST_ADDR, hello_world_6, blocking_connection)
 
         # Count the number of attaches for address TEST_ADDR, there should be 0
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -555,7 +555,7 @@ class LogLevelUpdateTest(TestCase):
         TEST_ADDR = "apachetest7"
         self.create_sender_receiver(TEST_ADDR, hello_world_7)
         num_attaches = 0
-        logs = qd_manager.get_log()
+        logs = sk_manager.get_log()
         for log in logs:
             if 'PROTOCOL' in log[0]:
                 if "@attach" in log[2] and TEST_ADDR in log[2]:
@@ -599,8 +599,8 @@ class RouterCoreModuleLogTest(TestCase):
         blocking_sender.send(msg)
         received_message = blocking_receiver.receive()
         self.assertEqual(TEST_MSG_BODY, received_message.body)
-        qd_manager = QdManager(self.address)
-        logs = qd_manager.get_log()
+        sk_manager = SkManager(self.address)
+        logs = sk_manager.get_log()
 
         router_core_found = False
         for log in logs:

@@ -105,7 +105,7 @@ class TcpTlsBadConfigTests(TestCase):
     def test_connector_mgmt_missing_ssl_profile(self):
         """Attempt to create a connector with a bad sslProfile"""
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         self.assertRaises(Exception, mgmt.create, "tcpConnector",
                           {'address': 'foo',
                            'host': '127.0.0.1',
@@ -117,7 +117,7 @@ class TcpTlsBadConfigTests(TestCase):
     def test_connector_mgmt_missing_ca_file(self):
         """Attempt to create a connector with an invalid CA file"""
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         mgmt.create("sslProfile",
                     {'name': 'BadCAFile',
                      'caCertFile': '/bad/path/CA.pem'})
@@ -133,7 +133,7 @@ class TcpTlsBadConfigTests(TestCase):
     def test_listener_mgmt_missing_ssl_profile(self):
         """Attempt to create a listener with a bad sslProfile"""
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         self.assertRaises(Exception, mgmt.create, "tcpListener",
                           {'address': 'foo',
                            'host': '0.0.0.0',
@@ -145,7 +145,7 @@ class TcpTlsBadConfigTests(TestCase):
     def test_listener_mgmt_missing_ca_file(self):
         """Attempt to create a listener with an invalid CA file"""
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         mgmt.create("sslProfile",
                     {'name': 'BadCAFile',
                      'caCertFile': '/bad/path/CA.pem'})

@@ -773,7 +773,7 @@ class Qdrouterd(Process):
         args = shlex.split(os.environ.get('QPID_DISPATCH_RUNNER', '')) + args
         super(Qdrouterd, self).__init__(args, name=name, expect=expect)
         self._management = None
-        self._qd_manager = None
+        self._sk_manager = None
         self._wait_ready = False
         if wait:
             self.wait_ready()
@@ -786,10 +786,10 @@ class Qdrouterd(Process):
         self.teardown()
 
     @property
-    def qd_manager(self):
-        if not self._qd_manager:
+    def sk_manager(self):
+        if not self._sk_manager:
             try:
-                self._qd_manager = QdManager(address=self.addresses[0])
+                self._sk_manager = SkManager(address=self.addresses[0])
             except Exception as e:
                 # As it stands now, not all router configs are expected to have a valid amqp listening
                 # port on self.addresses[0]. So for now, it is ok to return None
@@ -797,7 +797,7 @@ class Qdrouterd(Process):
                 # on self.addresses[0] at which point, we should remove this except clause and
                 # force a failure if there is no self.addresses[0]
                 return None
-        return self._qd_manager
+        return self._sk_manager
 
     @property
     def management(self):
@@ -817,18 +817,18 @@ class Qdrouterd(Process):
         teardown_exc = None
 
         try:
-            if self.qd_manager:
+            if self.sk_manager:
                 # Delete all adaptor connectors and listeners before shutting down the router
                 long_types = [HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
                 for long_type in long_types:
-                    self.qd_manager.delete_all_entities(long_type)
-                retry_assertion(self.qd_manager.delete_adaptor_connections)
+                    self.sk_manager.delete_all_entities(long_type)
+                retry_assertion(self.sk_manager.delete_adaptor_connections)
         except (IndexError, TypeError, BadRequestStatus):
             # The router might not have any amqp listeners at all
             # These are known exceptions we can ignore.
             pass
         except Exception as e:
-            # QdManager class wraps all exceptions in Exception.
+            # SkManager class wraps all exceptions in Exception.
             # BadRequestStatus happens when you are trying to delete a connection that is already deleted.
             # The delete of the connector might delete the connection and we might try to delete that connection
             # again and that is ok.
@@ -1731,7 +1731,7 @@ class AsyncTestSender(MessagingHandler):
         self._logger.dump()
 
 
-class QdManager:
+class SkManager:
     """
     A means to invoke skmanage during a testcase
     """
@@ -1922,8 +1922,8 @@ def get_link_info(name, address):
     """
     Query the router at address for the status and statistics of the named link
     """
-    qdm = QdManager(address=address)
-    rc = qdm.query(ROUTER_LINK_TYPE)
+    skm = SkManager(address=address)
+    rc = skm.query(ROUTER_LINK_TYPE)
     for item in rc:
         if item.get('name') == name:
             return item
@@ -1931,8 +1931,8 @@ def get_link_info(name, address):
 
 
 def has_mobile_dest_in_address_table(address, dest):
-    qdm = QdManager(address=address)
-    rc = qdm.query(ROUTER_ADDRESS_TYPE)
+    skm = SkManager(address=address)
+    rc = skm.query(ROUTER_ADDRESS_TYPE)
     has_dest = False
     for item in rc:
         if dest in item.get("name"):
@@ -1948,12 +1948,12 @@ def get_inter_router_links(address):
     """
     inter_router_links = []
     inter_router_data_ids = []
-    qdm = QdManager(address=address)
-    conns = qdm.query(CONNECTION_TYPE)
+    skm = SkManager(address=address)
+    conns = skm.query(CONNECTION_TYPE)
     for item in conns:
         if item.get("role") == "inter-router-data":
             inter_router_data_ids.append(item.get("identity"))
-    rc = qdm.query(ROUTER_LINK_TYPE)
+    rc = skm.query(ROUTER_LINK_TYPE)
     for item in rc:
         if item.get("linkType") == "inter-router" or item.get("connectionId") in inter_router_data_ids:
             inter_router_links.append(item)
