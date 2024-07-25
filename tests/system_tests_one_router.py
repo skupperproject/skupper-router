@@ -31,7 +31,7 @@ from proton.reactor import Container, AtMostOnce, AtLeastOnce
 from skupper_router.management.client import Node
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR
-from system_test import Process, unittest, QdManager, TestTimeout
+from system_test import Process, unittest, SkManager, TestTimeout
 from system_test import AMQP_CONNECTOR_TYPE, AMQP_LISTENER_TYPE
 from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE, ROUTER_LINK_TYPE
 from system_test import ROUTER_TYPE, ROUTER_METRICS_TYPE
@@ -61,7 +61,7 @@ class StandaloneRouterQdManageTest(TestCase):
         but never an inter-router connector. Inter router connectors
         are allowed only with interior routers.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_CONNECTOR_TYPE,
@@ -80,7 +80,7 @@ class StandaloneRouterQdManageTest(TestCase):
         Since this is a standalone router, other routers (interior or edge routers)
         cannot connect to this router.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_LISTENER_TYPE,
@@ -100,7 +100,7 @@ class StandaloneRouterQdManageTest(TestCase):
         Since this is a standalone router, other routers (interior or edge routers)
         cannot connect to this router.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_LISTENER_TYPE,
@@ -133,7 +133,7 @@ class EdgeRouterQdManageTest(TestCase):
         but never an inter-router connector. Inter router connectors
         are allowed only with interior routers.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_CONNECTOR_TYPE,
@@ -152,7 +152,7 @@ class EdgeRouterQdManageTest(TestCase):
         an edge router can connect to another edge router and that is not
         allowed.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_LISTENER_TYPE,
@@ -172,7 +172,7 @@ class EdgeRouterQdManageTest(TestCase):
         an edge router can connect to another edge router and that is not
         allowed.
         """
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             out = mgmt.create(AMQP_LISTENER_TYPE,

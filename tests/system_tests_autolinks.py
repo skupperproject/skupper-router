@@ -27,7 +27,7 @@ from proton.reactor import Container
 
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, Process, TestTimeout
 from system_test import unittest
-from system_test import QdManager
+from system_test import SkManager
 from system_test import retry_assertion, CONFIG_AUTOLINK_TYPE, ROUTER_METRICS_TYPE
 
 CONNECTION_PROPERTIES = {'connection': 'properties', 'int_property': 6451}
@@ -115,7 +115,7 @@ class NameCollisionTest(TestCase):
     def test_name_collision(self):
         args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "direction": "in"}
         # Add autoLink with the same name as the one already present.
-        mgmt = QdManager(address=self.router.addresses[0])
+        mgmt = SkManager(address=self.router.addresses[0])
         test_pass = False
         try:
             mgmt.create(CONFIG_AUTOLINK_TYPE, args)

@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from system_test import TestCase, Qdrouterd, QdManager, TIMEOUT
+from system_test import TestCase, Qdrouterd, SkManager, TIMEOUT
 
 from proton import Message
 from proton import Endpoint
@@ -78,8 +78,8 @@ class CoreClientAPITest(TestCase):
         self.assertTrue(ts.accepted)
 
     def test_call_timeout(self):
-        qm = QdManager(self.router.addresses[0])
-        ts = TestCallTimeout(self.router.addresses[0], qm)
+        sm = SkManager(self.router.addresses[0])
+        ts = TestCallTimeout(self.router.addresses[0], sm)
         ts.run()
         self.assertEqual("TIMED OUT!", ts.error)
 

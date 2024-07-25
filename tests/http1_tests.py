@@ -2019,7 +2019,7 @@ class HttpTlsBadConfigTestsBase(TestCase):
         """Attempt to create a connector with a bad sslProfile"""
         assert self.PROTOCOL_VERSION is not None
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         self.assertRaises(Exception, mgmt.create, "httpConnector",
                           {'address': 'foo',
                            'host': '127.0.0.1',
@@ -2033,7 +2033,7 @@ class HttpTlsBadConfigTestsBase(TestCase):
         """Attempt to create a connector with an invalid CA file"""
         assert self.PROTOCOL_VERSION is not None
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
 
         mgmt.create("sslProfile",
                     {'name': 'BadCAFile',
@@ -2052,7 +2052,7 @@ class HttpTlsBadConfigTestsBase(TestCase):
         """Attempt to create a listener with a bad sslProfile"""
         assert self.PROTOCOL_VERSION is not None
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
         self.assertRaises(Exception, mgmt.create, "httpListener",
                           {'address': 'foo',
                            'host': '0.0.0.0',
@@ -2066,7 +2066,7 @@ class HttpTlsBadConfigTestsBase(TestCase):
         """Attempt to create a listener with an invalid CA file"""
         assert self.PROTOCOL_VERSION is not None
         port = self.tester.get_port()
-        mgmt = self.router.qd_manager
+        mgmt = self.router.sk_manager
 
         mgmt.create("sslProfile",
                     {'name': 'BadCAFile',

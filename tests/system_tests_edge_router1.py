@@ -25,7 +25,7 @@ from threading import Timer
 
 from system_test import TestCase, Qdrouterd, TIMEOUT
 from system_test import Process
-from system_test import QdManager, unittest, main_module
+from system_test import SkManager, unittest, main_module
 from system_test import CONNECTION_TYPE, ROUTER_ADDRESS_TYPE
 
 from test_broker import FakeBroker
@@ -628,7 +628,7 @@ class EdgeRouterTest1(EdgeBase):
     def test_71_skmanage_edge_router_option(self):
         # Makes a connection to an interior router INT.A and runs skstat
         # asking for all connections of an edge router EA1
-        mgmt = QdManager(address=self.routers[0].addresses[0],
+        mgmt = SkManager(address=self.routers[0].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
         outs = mgmt.query(CONNECTION_TYPE)
@@ -640,7 +640,7 @@ class EdgeRouterTest1(EdgeBase):
 
         # Makes a connection to an edge router and runs skstat
         # asking for all connections of an edge router EA1
-        mgmt = QdManager(address=self.routers[2].addresses[0],
+        mgmt = SkManager(address=self.routers[2].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
         outs = mgmt.query(CONNECTION_TYPE)
@@ -655,7 +655,7 @@ class EdgeRouterTest1(EdgeBase):
         # asking for all connections of an edge router EA1. The interior
         # router INT.B is connected to edge router EA1 indirectly via
         # interior router INT.A
-        mgmt = QdManager(address=self.routers[1].addresses[0],
+        mgmt = SkManager(address=self.routers[1].addresses[0],
                          edge_router_id='EA1')
         conn_found = False
         outs = mgmt.query(CONNECTION_TYPE)
@@ -717,7 +717,7 @@ class EdgeRouterTest1(EdgeBase):
         # EA1 and EA2 and is also connected to another interior router INT.B
         # We will connect to edge router EA1 (which has an edge
         # uplink to INT.A) and query for connections on INT.A
-        mgmt = QdManager(address=self.routers[2].addresses[0],
+        mgmt = SkManager(address=self.routers[2].addresses[0],
                          router_id='INT.A')
         outs = mgmt.query(CONNECTION_TYPE)
         ea1_conn_found = False
@@ -737,7 +737,7 @@ class EdgeRouterTest1(EdgeBase):
         # EA1 via INT.A
         # We will connect to edge router EA1 (which has an edge
         # uplink to INT.A) and query for connections on INT.B
-        mgmt = QdManager(address=self.routers[2].addresses[0],
+        mgmt = SkManager(address=self.routers[2].addresses[0],
                          router_id='INT.B')
         outs = mgmt.query(CONNECTION_TYPE)
         eb1_conn_found = False
