@@ -17,12 +17,17 @@
 # under the License
 #
 
+import unittest
 import json
 import os
 from subprocess import PIPE, STDOUT
 
 from system_test import TestCase, Qdrouterd, retry, retry_assertion
 from system_test import Logger, TIMEOUT, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
+from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY_NO_PASS, CA_CERT
+from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY
+from system_test import SERVER_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
+from system_test import  SERVER_PRIVATE_KEY_PASSWORD
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 from TCP_echo_client import TcpEchoClient
 from TCP_echo_server import TcpEchoServer
@@ -53,31 +58,58 @@ class TerminateTcpConnectionsTest(TestCase):
 
         cls.test_name = 'TerminateTcpConnectionsTest'
 
+        # SSL info
+        cls.ssl_info = {'SERVER_CERTIFICATE': SERVER_CERTIFICATE,
+                        'SERVER_PRIVATE_KEY': SERVER_PRIVATE_KEY_NO_PASS,
+                        'CA_CERT': CA_CERT}
+        cls.client_ssl_info = {'CLIENT_CERTIFICATE': CLIENT_CERTIFICATE,
+                               'CLIENT_PRIVATE_KEY': CLIENT_PRIVATE_KEY,
+                               'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT_PRIVATE_KEY_PASSWORD,
+                               'CA_CERT': CA_CERT}
+        tcp_listener_ssl_profile_name = 'tcp-listener-ssl-profile'
+
+        # VAN addresses to use with config flag 'closeConnectionsOnDelete' is set
+        cls.address_terminate = cls.test_name + '_terminate'
+        cls.address_terminate_ssl = cls.test_name + '_terminate_ssl'
+
+        # VAN addresses to use with config flag 'closeConnectionsOnDelete' is
+        # unset (the default behavour)
+        cls.address_default = cls.test_name + '_default'
+        cls.address_default_ssl = cls.test_name + '_default_ssl'
+
         # Launch TCP echo server
+        echo_servers = {}
         server_logger = Logger(title=cls.test_name,
                                print_to_console=True,
                                save_for_dump=False,
                                ofilename=os.path.join(os.path.dirname(os.getcwd()),
                                                       f"{cls.test_name}_echo_server.log"))
-        server_prefix = f"{cls.test_name} ECHO_SERVER_1"
-        echo_server_1 = TcpEchoServer(prefix=server_prefix,
-                                      port=0,
-                                      logger=server_logger)
-        assert echo_server_1.is_running
-
-        server_prefix = f"{cls.test_name} ECHO_SERVER_2"
-        echo_server_2 = TcpEchoServer(prefix=server_prefix,
-                                      port=0,
-                                      logger=server_logger)
-        assert echo_server_2.is_running
+        server_prefix = f"{cls.test_name} ECHO_SERVER_address_default"
+        echo_servers[cls.address_default] = TcpEchoServer(prefix=server_prefix,
+                                                          port=0,
+                                                          logger=server_logger)
+        assert echo_servers[cls.address_default].is_running
+        server_prefix = f"{cls.test_name} ECHO_SERVER_address_terminate"
+        echo_servers[cls.address_terminate] = TcpEchoServer(prefix=server_prefix,
+                                                            port=0,
+                                                            logger=server_logger)
+        assert echo_servers[cls.address_terminate].is_running
+        server_prefix = f"{cls.test_name} ECHO_SERVER_address_default_ssl"
+        echo_servers[cls.address_default_ssl] = TcpEchoServer(prefix=server_prefix,
+                                                              port=0,
+                                                              ssl_info=cls.ssl_info,
+                                                              logger=server_logger)
+        assert echo_servers[cls.address_default_ssl].is_running
+        server_prefix = f"{cls.test_name} ECHO_SERVER_address_termnate_ssl"
+        echo_servers[cls.address_terminate_ssl] = TcpEchoServer(prefix=server_prefix,
+                                                                port=0,
+                                                                ssl_info=cls.ssl_info,
+                                                                logger=server_logger)
+        assert echo_servers[cls.address_terminate_ssl].is_running
+        cls.echo_servers = echo_servers
 
         router_1_id = 'R1'
         router_2_id = 'R2'
-
-        # VAN address to test config flag 'closeConnectionsOnDelete' is set
-        cls.address_terminate = cls.test_name + '_terminate'
-        # VAN address to test config flag 'closeConnectionsOnDelete' is unset (the default behavour)
-        cls.address_default = cls.test_name + '_default'
 
         # Create listener ports, 1 port for each VAN address for each router
         cls.listener_ports = dict()
@@ -85,12 +117,24 @@ class TerminateTcpConnectionsTest(TestCase):
             cls.listener_ports[r] = {
                 cls.address_default: cls.tester.get_port(),
                 cls.address_terminate: cls.tester.get_port(),
+                cls.address_default_ssl: cls.tester.get_port(),
+                cls.address_terminate_ssl: cls.tester.get_port(),
             }
 
         # Launch routers
         inter_router_port = cls.tester.get_port()
         config_1 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': router_1_id}),
+            ('sslProfile', {'name': 'tcp-listener-ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('sslProfile', {'name': 'tcp-connector-ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
             ('listener', {'port': cls.tester.get_port()}),
             ('connector', {'role': 'inter-router', 'port': inter_router_port}),
             ('tcpListener', {'host': "0.0.0.0",
@@ -100,25 +144,61 @@ class TerminateTcpConnectionsTest(TestCase):
                              'port': cls.listener_ports[router_1_id][cls.address_terminate],
                              'address': cls.address_terminate,
                              "closeConnectionsOnDelete": True}),
-
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_ports[router_1_id][cls.address_default_ssl],
+                             'sslProfile': tcp_listener_ssl_profile_name,
+                             'address': cls.address_default_ssl}),
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_ports[router_1_id][cls.address_terminate_ssl],
+                             'sslProfile': tcp_listener_ssl_profile_name,
+                             'address': cls.address_terminate_ssl,
+                             "closeConnectionsOnDelete": True}),
         ])
         config_2 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': router_2_id}),
+            ('sslProfile', {'name': 'tcp-listener-ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('sslProfile', {'name': 'tcp-connector-ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
             ('listener', {'port': cls.tester.get_port()}),
             ('listener', {'role': 'inter-router', 'port': inter_router_port}),
             ('tcpConnector', {'host': "localhost",
-                              'port': echo_server_1.port,
+                              'port': echo_servers[cls.address_default].port,
                               'address': cls.address_default}),
             ('tcpListener', {'host': "0.0.0.0",
                              'port': cls.listener_ports[router_2_id][cls.address_default],
                              'address': cls.address_default}),
             ('tcpConnector', {'host': "localhost",
-                              'port': echo_server_2.port,
+                              'port': echo_servers[cls.address_terminate].port,
                               'address': cls.address_terminate,
                               "closeConnectionsOnDelete": True}),
             ('tcpListener', {'host': "0.0.0.0",
                              'port': cls.listener_ports[router_2_id][cls.address_terminate],
                              'address': cls.address_terminate,
+                             "closeConnectionsOnDelete": True}),
+            ('tcpConnector', {'host': "localhost",
+                              'port': echo_servers[cls.address_default_ssl].port,
+                              'sslProfile': 'tcp-connector-ssl-profile',
+                              'address': cls.address_default_ssl}),
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_ports[router_2_id][cls.address_default_ssl],
+                             'sslProfile': tcp_listener_ssl_profile_name,
+                             'address': cls.address_default_ssl}),
+            ('tcpConnector', {'host': "localhost",
+                              'port': echo_servers[cls.address_terminate_ssl].port,
+                              'sslProfile': 'tcp-connector-ssl-profile',
+                              'address': cls.address_terminate_ssl,
+                              "closeConnectionsOnDelete": True}),
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_ports[router_2_id][cls.address_terminate_ssl],
+                             'address': cls.address_terminate_ssl,
+                             'sslProfile': tcp_listener_ssl_profile_name,
                              "closeConnectionsOnDelete": True}),
         ])
 
@@ -134,20 +214,26 @@ class TerminateTcpConnectionsTest(TestCase):
         expected = {
             router_1_id : [
                 ('LISTENER', {'VAN_ADDRESS': cls.address_terminate}),
-                ('LISTENER', {'VAN_ADDRESS': cls.address_default})
+                ('LISTENER', {'VAN_ADDRESS': cls.address_default}),
+                ('LISTENER', {'VAN_ADDRESS': cls.address_terminate_ssl}),
+                ('LISTENER', {'VAN_ADDRESS': cls.address_default_ssl})
             ],
             router_2_id : [
                 ('LISTENER', {'VAN_ADDRESS': cls.address_terminate}),
                 ('CONNECTOR', {'VAN_ADDRESS': cls.address_terminate}),
                 ('LISTENER', {'VAN_ADDRESS': cls.address_default}),
-                ('CONNECTOR', {'VAN_ADDRESS': cls.address_default})
+                ('CONNECTOR', {'VAN_ADDRESS': cls.address_default}),
+                ('LISTENER', {'VAN_ADDRESS': cls.address_terminate_ssl}),
+                ('CONNECTOR', {'VAN_ADDRESS': cls.address_terminate_ssl}),
+                ('LISTENER', {'VAN_ADDRESS': cls.address_default_ssl}),
+                ('CONNECTOR', {'VAN_ADDRESS': cls.address_default_ssl})
             ]
         }
         success = retry(lambda: cls.snooper_thread.match_records(expected))
         result = cls.snooper_thread.get_results()
         cls.assertTrue(success, f"Failed to match records {result}")
 
-        # vflow ids are necessary to relate flows to tcp listeners and connectors
+        # vflow ids are necessary to relate flows to tcp listeners
         cls.router_1_vflow_id = None
         cls.router_2_vflow_id = None
         for router_key, router_attrs in result.items():
@@ -160,10 +246,20 @@ class TerminateTcpConnectionsTest(TestCase):
 
         # retry() parameters for VanFlowSnooper.match_record() tests where we
         # expect failure. E.g. we try to match the 'END_TIME' attribute in the
-        # 'FLOW' record - and expect failure - in order to check that a flow
+        # 'BIFLOW_TPORT' record - and expect failure - in order to check that a flow
         # is still acive.
         cls.timeout = 1
         cls.delay = 0.5
+
+    @classmethod
+    def tearDownClass(cls):
+        # stop echo servers
+        #try:
+        for _, server in cls.echo_servers.items():
+            server.wait()
+        #except Exception:
+        #    pass
+        super(TerminateTcpConnectionsTest, cls).tearDownClass()
 
     def get_tcp_entity_vflow_id(self, router_vflow_id, record_type, address):
         res = self.snooper_thread.get_results()
@@ -207,11 +303,14 @@ class TerminateTcpConnectionsTest(TestCase):
         retry_assertion(lambda: find_entity(address, entity_type, router, expected=False),
                         timeout=2, delay=1)
 
-    def create_echo_clients(self, client_prefix, client_port):
+    def create_echo_clients(self, client_prefix, client_port, ssl=False):
         # We use the delay_close flag to keep the connections open
         echo_clients = []
         client_logger = Logger(title=client_prefix,
                                print_to_console=True)
+
+        ssl_info = self.client_ssl_info if ssl else None
+
         for i in [1, 2]:
             echo_clients.append(TcpEchoClient(client_prefix + '_' + str(i),
                                               host='localhost',
@@ -219,6 +318,7 @@ class TerminateTcpConnectionsTest(TestCase):
                                               size=1,
                                               count=1,
                                               logger=client_logger,
+                                              ssl_info=ssl_info,
                                               delay_close=True))
         return echo_clients
 
@@ -226,7 +326,7 @@ class TerminateTcpConnectionsTest(TestCase):
         for e in echo_clients:
             e.wait()
 
-    def setup_flows(self, address):
+    def setup_flows(self, address, ssl=False):
         """
         Setup tcp flows via the tcpListeners and the tcpConnector which have
         the particular VAN address. Two flows are created for each tcpListener.
@@ -236,23 +336,23 @@ class TerminateTcpConnectionsTest(TestCase):
 
         # vflow Ids are used to associate flows with tcpListeners and tcpConnectors
         vflow_ids = {}
-        self.assertTrue(self.router_1_vflow_id is not None)
-        self.assertTrue(self.router_2_vflow_id is not None)
+        self.assertIsNotNone(self.router_1_vflow_id)
+        self.assertIsNotNone(self.router_2_vflow_id)
         vflow_ids['listener_1'] = self.get_tcp_entity_vflow_id(self.router_1_vflow_id,
                                                                'LISTENER', address)
         vflow_ids['listener_2'] = self.get_tcp_entity_vflow_id(self.router_2_vflow_id,
                                                                'LISTENER', address)
-        self.assertTrue(vflow_ids['listener_1'] is not None)
-        self.assertTrue(vflow_ids['listener_2'] is not None)
+        self.assertIsNotNone(vflow_ids['listener_1'])
+        self.assertIsNotNone(vflow_ids['listener_2'])
 
         # Create two flows from router_1:tcpListener to router_2:tcpConnector
         client_prefix = self.test_name + " ECHO_CLIENT"
         client_port = self.listener_ports[router_1_id][address]
-        echo_clients = self.create_echo_clients(client_prefix, client_port)
+        echo_clients = self.create_echo_clients(client_prefix, client_port, ssl)
 
         # Create another two flows from router_2:tcpListener to router_2:tcpConnector
         client_port = self.listener_ports[router_2_id][address]
-        echo_clients.extend(self.create_echo_clients(client_prefix, client_port))
+        echo_clients.extend(self.create_echo_clients(client_prefix, client_port, ssl))
 
         # Check if all  vflows are created
         expected = {
@@ -381,6 +481,43 @@ class TerminateTcpConnectionsTest(TestCase):
 
         # Delete tcpConnector
         self.delete_tcp_entity(self.address_terminate, TCP_CONNECTOR_TYPE, self.router_2)
+        # all flows must be terminated
+        self.check_all_vflows_terminated(vflow_ids)
+
+        self.clean_up_echo_clients(echo_clients)
+
+    def test_delete_tcp_entities_without_terminate_conns_ssl(self):
+        vflow_ids, echo_clients = self.setup_flows(self.address_default_ssl, ssl=True)
+        self.assertTrue(len(echo_clients) == 4)
+        self.check_all_vflows_active(vflow_ids)
+
+        # Delete router_1:tcpListener.
+        self.delete_tcp_entity(self.address_default_ssl, TCP_LISTENER_TYPE, self.router_1)
+        # All flows should be still actve (i.e. default behaviour)
+        self.check_all_vflows_active(vflow_ids, timeout=self.timeout)
+
+        # Delete tcpConnector
+        self.delete_tcp_entity(self.address_default_ssl, TCP_CONNECTOR_TYPE, self.router_2)
+        # All flows should be still actve (i.e. default behaviour)
+        self.check_all_vflows_active(vflow_ids, timeout=self.timeout)
+
+        self.clean_up_echo_clients(echo_clients)
+
+    def test_delete_tcp_entities_with_terminate_conns_ssl(self):
+        vflow_ids, echo_clients = self.setup_flows(self.address_terminate_ssl, ssl=True)
+        self.assertTrue(len(echo_clients) == 4)
+        self.check_all_vflows_active(vflow_ids)
+
+        # Delete router_1:tcpListener.
+        self.delete_tcp_entity(self.address_terminate_ssl, TCP_LISTENER_TYPE, self.router_1)
+        # flows from router_1:tcpListener to router_2:tcpConnector must be terminated
+        self.check_listener_1_vflows_terminated(vflow_ids)
+
+        # flows from router_2:tcpListener to router_2:tcpConector must be still active
+        self.check_listener_2_vflows_active(vflow_ids)
+
+        # Delete tcpConnector
+        self.delete_tcp_entity(self.address_terminate_ssl, TCP_CONNECTOR_TYPE, self.router_2)
         # all flows must be terminated
         self.check_all_vflows_terminated(vflow_ids)
 
