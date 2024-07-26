@@ -2390,12 +2390,14 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         // Initiate termination of existing connections
         //
         if (listener->adaptor_config->terminate_conns) {
+            sys_mutex_lock(&listener->lock);
             qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
             while (conn) {
                 qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
                 qdr_core_close_connection(conn->core_conn);
                 conn = next_conn;
             }
+            sys_mutex_unlock(&listener->lock);
         }
         //
         // If all the connections associated with this listener has been closed, this call to
@@ -2427,12 +2429,14 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         // Initiate termination of existing connections
         //
         if (connector->adaptor_config->terminate_conns) {
+            sys_mutex_lock(&connector->lock);
             qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
             while (conn) {
                 qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
                 qdr_core_close_connection(conn->core_conn);
                 conn = next_conn;
             }
+            sys_mutex_unlock(&connector->lock);
         }
         //
         // If all the connections associated with this listener has been closed, this call to
