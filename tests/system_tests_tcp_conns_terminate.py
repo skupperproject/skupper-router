@@ -271,22 +271,10 @@ class TerminateTcpConnectionsTest(TestCase):
             pass
         return None
 
-    def run_skmanage(self, cmd, router):
-        p = self.popen(
-            ['skmanage'] + cmd.split(' ') + ['--bus', router.addresses[0],
-                                             '--indent=-1', '--timeout', str(TIMEOUT)],
-            stdin=PIPE, stdout=PIPE, stderr=STDOUT, universal_newlines=True)
-        out = p.communicate()[0]
-        try:
-            p.teardown()
-        except Exception as e:
-            raise Exception(out if out else str(e))
-        return out
-
     def delete_tcp_entity(self, address, entity_type, router):
         def find_entity(address, entity_type, router, expected=True):
             query_cmd = f'QUERY --type={entity_type}'
-            output = json.loads(self.run_skmanage(query_cmd, router))
+            output = json.loads(router.sk_manager(query_cmd))
             res = [e for e in output if e['address'] == address]
             if expected:
                 self.assertTrue(len(res) == 1)
@@ -298,7 +286,7 @@ class TerminateTcpConnectionsTest(TestCase):
         e = find_entity(address, entity_type, router)
         name = e['name']
         delete_cmd = 'DELETE --type=' + entity_type + ' --name=' + name
-        self.run_skmanage(delete_cmd, router)
+        router.sk_manager(delete_cmd)
         # check that rthe entity has been deleted
         retry_assertion(lambda: find_entity(address, entity_type, router, expected=False),
                         timeout=2, delay=1)
