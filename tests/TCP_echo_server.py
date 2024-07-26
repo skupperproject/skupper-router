@@ -86,6 +86,7 @@ class TcpEchoServerHandler(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.logger.log(f' {self.name}: Connection to {self.peername} lost, exception={exc}')
+        self.transport.abort()
 
     def eof_received(self):
         self.logger.log(f' {self.name}: EOF received from peer {self.peername}')
