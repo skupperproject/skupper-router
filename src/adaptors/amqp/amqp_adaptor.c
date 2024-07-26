@@ -454,7 +454,8 @@ static int AMQP_conn_wake_handler(qd_router_t *router, qd_connection_t *conn, vo
                 // while delivery->in_message_activation is true!
                 //
                 assert(pnd);
-                qd_message_receive(pnd);
+                ssize_t unused;
+                qd_message_receive(pnd, &unused);
 
                 //
                 // If the stream is receive complete, we don't need to be activated any more.  Cancel the activation on
@@ -579,8 +580,16 @@ static bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
     //
     // Receive the message into a local representation.
     //
-    qd_message_t   *msg   = qd_message_receive(pnd);
+    ssize_t octets_received;
+    qd_message_t   *msg   = qd_message_receive(pnd, &octets_received);
     bool receive_complete = qd_message_receive_complete(msg);
+
+    //
+    // Bump LINK metrics if appropriate
+    //
+    if (!!conn->connector && !!conn->connector->vflow_record) {
+        vflow_inc_counter(conn->connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, (uint64_t) octets_received);
+    }
 
     // check if cut-through can be enabled or disabled
     //
@@ -2067,6 +2076,7 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
     qd_router_t *router = (qd_router_t*) context;
     qd_link_t   *qlink  = (qd_link_t*) qdr_link_get_context(link);
     qd_connection_t *qconn = qd_link_connection(qlink);
+    ssize_t octets_sent = 0;
 
     uint64_t update = 0;
 
@@ -2135,8 +2145,15 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
         : router->router_mode == QD_ROUTER_MODE_EDGE ? (QD_MESSAGE_RA_STRIP_INGRESS | QD_MESSAGE_RA_STRIP_TRACE)
         : QD_MESSAGE_RA_STRIP_NONE;
 
-    qd_message_send(msg_out, qlink, ra_flags, &q3_stalled);
+    octets_sent = qd_message_send(msg_out, qlink, ra_flags, &q3_stalled);
     bool send_complete = qdr_delivery_send_complete(dlv);
+
+    //
+    // Bump LINK metrics if appropriate
+    //
+    if (!!qconn->connector && !!qconn->connector->vflow_record) {
+        vflow_inc_counter(qconn->connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS, (uint64_t) octets_sent);
+    }
 
     //
     // If this message content has cut-through enabled, set consumer activation in the message.

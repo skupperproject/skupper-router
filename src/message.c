@@ -1703,8 +1703,9 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
 }
 
 
-qd_message_t *qd_message_receive(pn_delivery_t *delivery)
+qd_message_t *qd_message_receive(pn_delivery_t *delivery, ssize_t *octets_received)
 {
+    *octets_received = 0;
     if (!delivery) {
         return 0;
     }
@@ -1862,6 +1863,7 @@ qd_message_t *qd_message_receive(pn_delivery_t *delivery)
             // We have received a positive number of bytes for the message.
             // Advance the cursor in the buffer.
             //
+            *octets_received += rc;
             qd_buffer_insert(content->pending, rc);
 
             // Handle maxMessageSize violations
@@ -2024,15 +2026,16 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
 }
 
 
-void qd_message_send(qd_message_t *in_msg,
-                     qd_link_t    *link,
-                     unsigned int  ra_flags,
-                     bool         *q3_stalled)
+ssize_t qd_message_send(qd_message_t *in_msg,
+                        qd_link_t    *link,
+                        unsigned int  ra_flags,
+                        bool         *q3_stalled)
 {
     qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
     qd_message_content_t *content = msg->content;
     pn_link_t            *pnl     = qd_link_pn(link);
     pn_session_t         *pns     = pn_link_session(pnl);
+    ssize_t bytes_sent = 0;
 
     *q3_stalled = false;
 
@@ -2041,7 +2044,7 @@ void qd_message_send(qd_message_t *in_msg,
         // Perform the cut-through transfer from the message content to the outbound link
         //
         qd_message_send_cut_through(msg, content, pnl, pns, q3_stalled);
-        return;
+        return 0;
     }
 
     if (!msg->ra_sent) {
@@ -2057,7 +2060,7 @@ void qd_message_send(qd_message_t *in_msg,
             if (!pn_delivery_aborted(pn_link_current(pnl))) {
                 pn_delivery_abort(pn_link_current(pnl));
             }
-            return;
+            return 0;
         }
 
         msg->cursor.buffer = DEQ_HEAD(content->buffers);
@@ -2111,7 +2114,6 @@ void qd_message_send(qd_message_t *in_msg,
         //
         size_t buf_size = qd_buffer_size(buf);
         int num_bytes_to_send = buf_size - (msg->cursor.cursor - qd_buffer_base(buf));
-        ssize_t bytes_sent = 0;
         if (num_bytes_to_send > 0) {
             bytes_sent = pn_link_send(pnl, (const char*)msg->cursor.cursor, num_bytes_to_send);
         }
@@ -2220,6 +2222,8 @@ void qd_message_send(qd_message_t *in_msg,
     } else {
         *q3_stalled = (pn_session_outgoing_bytes(pns) >= q3_upper);
     }
+
+    return bytes_sent;
 }
 
 
