@@ -17,17 +17,15 @@
 # under the License
 #
 
-import unittest
 import json
 import os
-from subprocess import PIPE, STDOUT
 
 from system_test import TestCase, Qdrouterd, retry, retry_assertion
-from system_test import Logger, TIMEOUT, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
+from system_test import Logger, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE
 from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY_NO_PASS, CA_CERT
 from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY
 from system_test import SERVER_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
-from system_test import  SERVER_PRIVATE_KEY_PASSWORD
+from system_test import SERVER_PRIVATE_KEY_PASSWORD
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 from TCP_echo_client import TcpEchoClient
 from TCP_echo_server import TcpEchoServer
