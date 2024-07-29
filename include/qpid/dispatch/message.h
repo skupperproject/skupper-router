@@ -260,9 +260,10 @@ void qd_message_disable_router_annotations(qd_message_t *in_msg);
  * The buffer keeps filling up on successive calls to this function.
  *
  * @param delivery An incoming delivery from a link
+ * @param octes_received Output of the number of octets received from the delivery.
  * @return A pointer to the complete message or 0 if the message is not yet complete.
  */
-qd_message_t *qd_message_receive(pn_delivery_t *delivery);
+qd_message_t *qd_message_receive(pn_delivery_t *delivery, ssize_t *octets_received);
 
 /**
  * Returns the PN_DELIVERY_CTX record from the attachments
@@ -292,7 +293,7 @@ bool qd_message_has_data_in_content_or_pending_buffers(qd_message_t   *msg);
 #define QD_MESSAGE_RA_STRIP_INGRESS 0x01
 #define QD_MESSAGE_RA_STRIP_TRACE   0x02
 #define QD_MESSAGE_RA_STRIP_ALL     0xFF  // no router annotations section sent
-void qd_message_send(qd_message_t *msg, qd_link_t *link, unsigned int ra_flags, bool *q3_stalled);
+ssize_t qd_message_send(qd_message_t *msg, qd_link_t *link, unsigned int ra_flags, bool *q3_stalled);
 
 /**
  * Check that the message is well-formed up to a certain depth.  Any part of the message that is

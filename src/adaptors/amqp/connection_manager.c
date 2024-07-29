@@ -445,6 +445,10 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
+            vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
+            vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+            vflow_add_rate(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+            vflow_add_rate(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
         }
 
         DEQ_INSERT_TAIL(ct->conn_info_list, item);
