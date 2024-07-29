@@ -848,7 +848,7 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
                     DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
                     break;
                 case VFLOW_RECORD_LOG:
-                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[record->flush_slot], record);
                     break;
                 default:
                     DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
