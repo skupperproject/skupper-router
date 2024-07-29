@@ -92,6 +92,7 @@ struct vflow_record_t {
     uint64_t                     latency_start;
     uint32_t                     emit_ordinal;
     int                          flush_slot;
+    int                          default_flush_slot;
     bool                         never_logged;
     bool                         force_log;
     bool                         ended;
@@ -385,21 +386,24 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
     }
 
     if (record->flush_slot == -1) {
-        record->flush_slot = state->current_flush_slot;
+        if (record->default_flush_slot == -1) {
+            record->default_flush_slot = state->current_flush_slot;
+        }
+        record->flush_slot = record->default_flush_slot;
         if (record->co_record) {
-            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_co_records[state->current_flush_slot], record);
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_co_records[record->flush_slot], record);
         } else {
             switch (record->record_type) {
                 case VFLOW_RECORD_FLOW:
                 case VFLOW_RECORD_BIFLOW_APP:
                 case VFLOW_RECORD_BIFLOW_TPORT:
-                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[state->current_flush_slot], record);
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
                     break;
                 case VFLOW_RECORD_LOG:
-                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_log_records[record->flush_slot], record);
                     break;
                 default:
-                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[state->current_flush_slot], record);
+                    DEQ_INSERT_TAIL_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
                     break;
             }
         }
@@ -848,7 +852,7 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
                     DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
                     break;
                 case VFLOW_RECORD_LOG:
-                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[state->current_flush_slot], record);
+                    DEQ_REMOVE_N(UNFLUSHED, state->unflushed_log_records[record->flush_slot], record);
                     break;
                 default:
                     DEQ_REMOVE_N(UNFLUSHED, state->unflushed_records[record->flush_slot], record);
@@ -1761,13 +1765,14 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
     assert(record_type == VFLOW_RECORD_BIFLOW_TPORT);
     vflow_record_t *record = new_vflow_record_t();
     ZERO(record);
-    record->record_type   = record_type;
-    record->parent        = 0;
-    record->flush_slot    = -1;
-    record->never_logged  = true;
-    record->force_log     = false;
-    record->ended         = false;
-    record->co_record     = true;
+    record->record_type        = record_type;
+    record->parent             = 0;
+    record->flush_slot         = -1;
+    record->default_flush_slot = -1;
+    record->never_logged       = true;
+    record->force_log          = false;
+    record->ended              = false;
+    record->co_record          = true;
 
     bool parse_success = _vflow_parse_id_iter(&record->identity, identity_iterator);
     if (!parse_success) {
