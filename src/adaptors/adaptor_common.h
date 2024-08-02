@@ -56,7 +56,6 @@ struct qd_adaptor_config_t
     char              *site_id;
     char              *host_port;
     int                backlog;
-    bool               terminate_conns;
 
     //TLS related info
     char              *ssl_profile_name;

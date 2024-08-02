@@ -58,6 +58,7 @@ struct qd_dispatch_t {
     char  *metadata;
     bool   timestamps_in_utc;
     char  *data_connection_count;
+    bool             terminate_tcp_conns;
 };
 
 qd_dispatch_t *qd_dispatch_get_dispatch(void);
