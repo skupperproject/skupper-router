@@ -1321,13 +1321,6 @@
                     "type": ["up", "down"],
                     "description": "The operational status of TCP socket listener: up - the service is active and incoming connections are permitted; down - the service is not active and incoming connection attempts will be refused.",
                     "create": false
-                },
-                "closeConnectionsOnDelete": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Terminate existing connections when the tcpListener is deleted.",
-                    "required": false,
-                    "create": true
                 }
             }
         },
@@ -1394,13 +1387,6 @@
                     "type": "boolean",
                     "default": true,
                     "description": "yes: Ensures that when initiating a connection (as a client) the host name in the URL to which this connector connects to matches the host name in the digital certificate that the peer sends back as part of the TLS connection; no: Does not perform host name verification",
-                    "create": true
-                },
-                "closeConnectionsOnDelete": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Terminate existing connections when the tcpConnector is deleted.",
-                    "required": false,
                     "create": true
                 }
             }
