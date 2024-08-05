@@ -376,7 +376,7 @@ class TerminateTcpConnectionsTest(TestCase):
         self.check_vflows_active(self.router_2.config.router_id, vflow_ids['listener_2'])
 
     def delete_tcp_entities_conns_terminate(self, address, ssl=False):
-        # router_1 has the "closeTcpConnsOnDelete" config flag turned on
+        # router_1 has the "dropTcpConnections" config flag turned on
         # This test deletes tcpListener and tcpconnector at router_1
         router_1_id = self.router_1.config.router_id
         router_2_id = self.router_2.config.router_id
@@ -401,7 +401,7 @@ class TerminateTcpConnectionsTest(TestCase):
         self.clean_up_echo_clients(echo_clients)
 
     def delete_tcp_entities_conns_active(self, address, ssl=False):
-        # router_2 does not have the "closeTcpConnsOnDelete" config flag turned on
+        # router_2 does not have the "dropTcpConnections" config flag turned on
         # This test we deletes tcpListener and tcpconnector at router_2
 
         router_1_id = self.router_1.config.router_id
