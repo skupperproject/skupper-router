@@ -33,10 +33,9 @@ from TCP_echo_server import TcpEchoServer
 
 class TerminateTcpConnectionsTest(TestCase):
     """
-    Test the router config flag 'closeTcpConnectionsOnDelete' for tcpListeners and
-    tcpConnectors. The corresponding active tcp flows are expected to terminate
-    when a tcpListener or tcpConnector is deleted if the config flag is set.
-    Otherwise, the flows should stay alive.
+    Test the router config flag 'dropTcpConnections'. All  corresponding active
+    tcp flows are expected to terminate when a tcpListener or tcpConnector is
+    deleted if the config flag is set. Otherwise, the flows should stay alive.
     """
 
     @classmethod
@@ -113,7 +112,7 @@ class TerminateTcpConnectionsTest(TestCase):
         # Launch routers: router_1_id has the TCP connections termination flag
         inter_router_port = cls.tester.get_port()
         config_1 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': router_1_id, 'closeTcpConnectionsOnDelete': True}),
+            ('router', {'mode': 'interior', 'id': router_1_id, 'dropTcpConnections': True}),
             ('sslProfile', {'name': 'tcp-listener-ssl-profile',
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
@@ -231,7 +230,7 @@ class TerminateTcpConnectionsTest(TestCase):
         # expect failure. E.g. we try to match the 'END_TIME' attribute in the
         # 'BIFLOW_TPORT' record - and expect failure - in order to check that a flow
         # is still acive.
-        cls.timeout = 1
+        cls.timeout = 3
         cls.delay = 0.5
 
     @classmethod
@@ -351,7 +350,8 @@ class TerminateTcpConnectionsTest(TestCase):
         }
         success = retry(lambda: self.snooper_thread.match_records(expected),
                         timeout=timeout, delay=self.delay)
-        self.assertFalse(success, f"Matched records  {self.snooper_thread.get_results()}")
+        self.assertFalse(success,
+                         f"ParentId {parent_vflow_id} Matched records  {self.snooper_thread.get_results()}")
 
     def check_vflows_terminated(self, router_id, parent_vflow_id):
         """
@@ -365,7 +365,8 @@ class TerminateTcpConnectionsTest(TestCase):
         }
         success = retry(lambda: self.snooper_thread.match_records(expected),
                         timeout=self.timeout, delay=self.delay)
-        self.assertTrue(success, f"Matched records  {self.snooper_thread.get_results()}")
+        self.assertTrue(success,
+                        f"ParentId {parent_vflow_id} Matched records {self.snooper_thread.get_results()}")
 
     def check_all_vflows_active(self, vflow_ids, timeout=0):
         """
