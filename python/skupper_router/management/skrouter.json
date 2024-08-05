@@ -624,7 +624,7 @@
                     "default": "auto",
                     "create": true
                 },
-                "closeTcpConnectionsOnDelete": {
+                "dropTcpConnections": {
                     "type": "boolean",
                     "default": false,
                     "description": "Terminate corresponding TCP connections when a tcpListener or a tcpConnector is deleted.",
