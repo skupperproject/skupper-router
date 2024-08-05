@@ -109,10 +109,11 @@ class TerminateTcpConnectionsTest(TestCase):
             for addr in cls.address_no_ssl + cls.address_ssl:
                 cls.listener_ports[rtr][addr] = cls.tester.get_port()
 
-        # Launch routers: router_1_id has the TCP connections termination flag
+        # Launch routers: router_1 has the TCP connections termination flag turned on (by default),
+        # router_2 has the flag turned off explicitly
         inter_router_port = cls.tester.get_port()
         config_1 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': router_1_id, 'dropTcpConnections': True}),
+            ('router', {'mode': 'interior', 'id': router_1_id}),
             ('sslProfile', {'name': 'tcp-listener-ssl-profile',
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
@@ -148,7 +149,7 @@ class TerminateTcpConnectionsTest(TestCase):
                               'port': echo_servers[cls.address_ssl[0]].port})
         ])
         config_2 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': router_2_id}),
+            ('router', {'mode': 'interior', 'id': router_2_id, 'dropTcpConnections': False}),
             ('sslProfile', {'name': 'tcp-listener-ssl-profile',
                             'caCertFile': CA_CERT,
                             'certFile': SERVER_CERTIFICATE,
