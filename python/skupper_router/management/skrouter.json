@@ -626,7 +626,7 @@
                 },
                 "dropTcpConnections": {
                     "type": "boolean",
-                    "default": false,
+                    "default": true,
                     "description": "Terminate corresponding TCP connections when a tcpListener or a tcpConnector is deleted.",
                     "required": false,
                     "create": true
