@@ -22,7 +22,7 @@
 # No test cases shall be poaced in this file.
 #
 
-from proton import Message
+from proton import Message, Delivery
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from system_test import TestTimeout, Logger
@@ -189,12 +189,12 @@ class MobileAddressAnonymousTest(MessagingHandler):
                 self.n_sent += 1
 
     def on_settled(self, event):
-        rdisp = str(event.delivery.remote_state)
-        if rdisp == "RELEASED" and not self.ready:
+        rdisp = event.delivery.remote_state
+        if rdisp == Delivery.RELEASED and not self.ready:
             if self.num_attempts < self.max_attempts:
                 self.custom_timer = event.reactor.schedule(1, CustomTimeout(self))
                 self.num_attempts += 1
-        elif rdisp == "ACCEPTED" and not self.ready:
+        elif rdisp == Delivery.ACCEPTED and not self.ready:
             self.ready = True
             for i in range(self.num_msgs):
                 if self.large_msg:
@@ -204,14 +204,14 @@ class MobileAddressAnonymousTest(MessagingHandler):
                 message.address = self.address
                 self.sender.send(message)
                 self.n_sent += 1
-        elif rdisp == "ACCEPTED" and self.ready:
+        elif rdisp == Delivery.ACCEPTED and self.ready:
             self.n_accepted += 1
             if self.n_accepted == self.num_msgs:
                 # Close the receiver after sending 300 messages
                 self.receiver.close()
-        elif rdisp == "RELEASED" and self.ready:
+        elif rdisp == Delivery.RELEASED and self.ready:
             self.n_released += 1
-        elif rdisp == "MODIFIED" and self.ready:
+        elif rdisp == Delivery.MODIFIED and self.ready:
             self.n_modified += 1
 
         if self.num_msgs == self.n_accepted and self.extra_msgs == self.n_released + self.n_modified:
@@ -306,16 +306,16 @@ class MobileAddressTest(MessagingHandler):
     def on_settled(self, event):
         # Expect all settlement events at sender as remote state
         self.logger.log("on_settled")
-        rdisp = str(event.delivery.remote_state)
-        ldisp = str(event.delivery.local_state)
+        rdisp = event.delivery.remote_state
+        ldisp = event.delivery.local_state
         if event.sender == self.sender:
             if rdisp is None:
                 self.logger.log("on_settled: WARNING: sender remote delivery state is None. Local state = %s." % ldisp)
-            elif rdisp == "ACCEPTED":
+            elif rdisp == Delivery.ACCEPTED:
                 self.n_accepted += 1
                 self.logger.log("on_settled sender: ACCEPTED %d (of %d)" %
                                 (self.n_accepted, self.normal_count))
-            elif rdisp in ('RELEASED', 'MODIFIED'):
+            elif rdisp in (Delivery.RELEASED, Delivery.MODIFIED):
                 self.n_rel_or_mod += 1
                 self.logger.log("on_settled sender: %s %d (of %d)" %
                                 (rdisp, self.n_rel_or_mod, self.extra_count))
