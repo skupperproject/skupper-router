@@ -2394,7 +2394,14 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
             qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
             while (conn) {
                 qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                qdr_core_close_connection(conn->core_conn);
+                // note: an IO thread might have executred (or is being executed) close_connection_XSIDE_IO()
+                // for this conn which sets 'conn->core_conn = 0'. We take the acivation_lock and check
+                // the atomic raw_opened flag to ensure that the value of core_conn cannot change while
+                // enqueing the 'close' action for the core thread.
+                sys_mutex_lock(&conn->activation_lock);
+                if (IS_ATOMIC_FLAG_SET(&conn->raw_opened))
+                    qdr_core_close_connection(conn->core_conn);
+                sys_mutex_unlock(&conn->activation_lock);
                 conn = next_conn;
             }
             sys_mutex_unlock(&listener->lock);
@@ -2433,7 +2440,14 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
             qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
             while (conn) {
                 qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                qdr_core_close_connection(conn->core_conn);
+                // note: an IO thread might have executred (or is being executed) close_connection_XSIDE_IO()
+                // for this conn which sets 'conn->core_conn = 0'. We take the acivation_lock and check
+                // the atomic raw_opened flag to ensure that the value of core_conn cannot change while
+                // enqueing the 'close' action for the core thread.
+                sys_mutex_lock(&conn->activation_lock);
+                if (IS_ATOMIC_FLAG_SET(&conn->raw_opened))
+                    qdr_core_close_connection(conn->core_conn);
+                sys_mutex_unlock(&conn->activation_lock);
                 conn = next_conn;
             }
             sys_mutex_unlock(&connector->lock);
