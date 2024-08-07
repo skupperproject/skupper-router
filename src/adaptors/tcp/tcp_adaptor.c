@@ -455,7 +455,7 @@ static void terminate_connections(qd_tcp_connection_list_t *connections)
         // will trigger the closing at link setup in the PN_RAW_CONNECTION_CONNECTED
         // event handler.
         sys_mutex_lock(&conn->activation_lock);
-        if (!!conn->core_conn && IS_ATOMIC_FLAG_SET(&conn->raw_opened))
+        if (IS_ATOMIC_FLAG_SET(&conn->raw_opened) && !!conn->core_conn)
             qdr_core_close_connection(conn->core_conn);
         else
             conn->pending_close = true;
