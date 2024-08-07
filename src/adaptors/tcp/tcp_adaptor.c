@@ -440,6 +440,30 @@ static void set_state_XSIDE_IO(qd_tcp_connection_t *conn, qd_tcp_connection_stat
     conn->state = new_state;
 }
 
+
+static void terminate_connections(qd_tcp_connection_list_t *connections)
+{
+    qd_tcp_connection_t *conn = DEQ_HEAD(*connections);
+    while (conn) {
+        qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+        // Note: PN_RAW_CONNECTION_CONNECTED event or PN_RAW_CONNECTION_DISCONNECTED event
+        // could come upon any of the connections.
+        // We take the acivation_lock and check the atomic raw_opened flag to ensure
+        // that the value of core_conn cannot change while enqueing the 'close' action
+        // for the core thread (in case of PN_RAW_CONNECTION_DISCONNECTED event).
+        // We set conn->pending close if we cannot enqueue a 'close' action. This flag
+        // will trigger the closing at link setup in the PN_RAW_CONNECTION_CONNECTED
+        // event handler.
+        sys_mutex_lock(&conn->activation_lock);
+        if (!!conn->core_conn && IS_ATOMIC_FLAG_SET(&conn->raw_opened))
+            qdr_core_close_connection(conn->core_conn);
+        else
+            conn->pending_close = true;
+        sys_mutex_unlock(&conn->activation_lock);
+        conn = next_conn;
+    }
+}
+
 //
 // Connector/Connection cleanup
 //
@@ -915,19 +939,27 @@ static uint64_t consume_message_body_XSIDE_IO(qd_tcp_connection_t *conn, qd_mess
 }
 
 
-static void link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
+static bool link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
 {
     ASSERT_RAW_IO;
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) conn->common.parent;
     qdr_terminus_t *target = qdr_terminus(0);
     qdr_terminus_t *source = qdr_terminus(0);
     char host[64];  // for numeric remote client IP:port address
+    bool               pending_close;
 
     qdr_terminus_set_address(target, li->adaptor_config->address);
     qdr_terminus_set_dynamic(source);
 
     qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
+
+    // management thread might be trying to access conn->core_conn
+    // if tcpListener is being deleted
+    sys_mutex_lock(&conn->activation_lock);
     conn->core_conn = TL_open_core_connection(conn->conn_id, true, host);
+    pending_close   = conn->pending_close;  // if tcpListener is being deleted
+    sys_mutex_unlock(&conn->activation_lock);
+
     qdr_connection_set_context(conn->core_conn, conn);
 
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.lside.in", 0, false, 0, &conn->inbound_link_id);
@@ -936,16 +968,26 @@ static void link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
     qdr_link_set_context(conn->outbound_link, conn);
     qdr_link_set_user_streaming(conn->outbound_link);
     qdr_link_flow(tcp_context->core, conn->outbound_link, 1, false);
+
+    return pending_close;
 }
 
 
-static void link_setup_CSIDE_IO(qd_tcp_connection_t *conn, qdr_delivery_t *delivery)
+static bool link_setup_CSIDE_IO(qd_tcp_connection_t *conn, qdr_delivery_t *delivery)
 {
     ASSERT_RAW_IO;
 
     assert(conn->common.parent->context_type == TL_CONNECTOR);
     const char *host = ((qd_tcp_connector_t *)conn->common.parent)->adaptor_config->host_port;
+    bool        pending_close;
+
+    // management thread might be trying to access conn->core_conn
+    // if tcpConnector is being deleted
+    sys_mutex_lock(&conn->activation_lock);
     conn->core_conn  = TL_open_core_connection(conn->conn_id, false, host);
+    pending_close    = conn->pending_close;  // if tcpListener is being deleted
+    sys_mutex_unlock(&conn->activation_lock);
+
     qdr_connection_set_context(conn->core_conn, conn);
 
     // use an anonymous inbound link in order to ensure credit arrives otherwise if the client has dropped the state machine will stall waiting for credit
@@ -964,6 +1006,8 @@ static void link_setup_CSIDE_IO(qd_tcp_connection_t *conn, qdr_delivery_t *deliv
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP enabling consumer activation", DLV_ARGS(delivery));
     qd_message_set_consumer_activation(conn->outbound_stream, &activation);
     qd_message_start_unicast_cutthrough(conn->outbound_stream);
+
+    return pending_close;
 }
 
 
@@ -1241,8 +1285,15 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
     DEQ_INSERT_TAIL(connector->connections, conn);
 
     connector->connections_opened++;
+
     vflow_set_uint64(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, connector->connections_opened);
     vflow_set_ref_from_record(conn->common.vflow, VFLOW_ATTRIBUTE_CONNECTOR, connector->common.vflow);
+
+    if (connector->closing) {
+        // Management thread triggered deletion of tcpConnector and closing all coresponding
+        // connections. This conn was skipped due to not in the connections list yet.
+        conn->pending_close = true;
+    }
     sys_mutex_unlock(&connector->lock);
 
     conn->raw_conn = pn_raw_connection();
@@ -1662,8 +1713,13 @@ static void connection_run_LSIDE_IO(qd_tcp_connection_t *conn)
                         repeat = true;
                     }
                 } else {
-                    link_setup_LSIDE_IO(conn);
-                    set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+                    bool pending_close = link_setup_LSIDE_IO(conn);
+                    if (pending_close) {
+                        close_raw_connection(conn, "TCP-listener-deleted", "Forced termination");
+                        set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
+                    } else {
+                        set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+                    }
                 }
             }
             break;
@@ -1689,8 +1745,13 @@ static void connection_run_LSIDE_IO(qd_tcp_connection_t *conn)
                     //
                     // Handshake completed, begin the setup of the inbound and outbound links for this connection.
                     //
-                    link_setup_LSIDE_IO(conn);
-                    set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+                    bool pending_close = link_setup_LSIDE_IO(conn);
+                    if (pending_close) {
+                        close_raw_connection(conn, "TCP-listener-deleted", "Forced termination");
+                        set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
+                    } else {
+                        set_state_XSIDE_IO(conn, LSIDE_LINK_SETUP);
+                    }
                 }
             }
             break;
@@ -1771,8 +1832,13 @@ static void connection_run_CSIDE_IO(qd_tcp_connection_t *conn)
                         break;
                     }
                 }
-                link_setup_CSIDE_IO(conn, conn->outbound_delivery);
-                set_state_XSIDE_IO(conn, CSIDE_LINK_SETUP);
+                bool pending_close = link_setup_CSIDE_IO(conn, conn->outbound_delivery);
+                if (pending_close) {
+                    close_raw_connection(conn, "TCP-connector-deleted", "Forced termination");
+                    set_state_XSIDE_IO(conn, XSIDE_CLOSING);  // prevent further connection I/O
+                } else {
+                    set_state_XSIDE_IO(conn, CSIDE_LINK_SETUP);
+                }
             }
             break;
 
@@ -2043,6 +2109,12 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
 
     listener->connections_opened++;
     vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
+
+    if (listener->closing) {
+        // Management thread triggered deletion of tcpListener and closing all coresponding
+        // connections. This conn was skipped due to not in the connections list yet.
+        conn->pending_close = true;
+    }
     sys_mutex_unlock(&listener->lock);
 
     if (listener->protocol_observer) {
@@ -2391,21 +2463,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         //
         if (tcp_context->qd->terminate_tcp_conns) {
             sys_mutex_lock(&listener->lock);
-            qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
-            while (conn) {
-                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                // note: an IO thread might have executed (or is being executed) close_connection_XSIDE_IO()
-                // for this conn which sets 'conn->core_conn = 0'. We take the acivation_lock and check
-                // the atomic raw_opened flag to ensure that the value of core_conn cannot change while
-                // enqueing the 'close' action for the core thread.
-                // note: core_conn can also be zero because link is not setup yet.
-                // TODO: how to trigger closing the conn if the link is not setup yet?????
-                sys_mutex_lock(&conn->activation_lock);
-                if (!!conn->core_conn && IS_ATOMIC_FLAG_SET(&conn->raw_opened))
-                    qdr_core_close_connection(conn->core_conn);
-                sys_mutex_unlock(&conn->activation_lock);
-                conn = next_conn;
-            }
+            listener->closing = true;
+            terminate_connections(&listener->connections);
             sys_mutex_unlock(&listener->lock);
         }
         //
@@ -2439,21 +2498,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         //
         if (tcp_context->qd->terminate_tcp_conns) {
             sys_mutex_lock(&connector->lock);
-            qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
-            while (conn) {
-                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                // note: an IO thread might have executred (or is being executed) close_connection_XSIDE_IO()
-                // for this conn which sets 'conn->core_conn = 0'. We take the acivation_lock and check
-                // the atomic raw_opened flag to ensure that the value of core_conn cannot change while
-                // enqueing the 'close' action for the core thread.
-                // note: core_conn can also be zero because link is not setup yet.
-                // TODO: how to trigger closing the conn if the link is not setup yet?????
-                sys_mutex_lock(&conn->activation_lock);
-                if (!!conn->core_conn && IS_ATOMIC_FLAG_SET(&conn->raw_opened))
-                    qdr_core_close_connection(conn->core_conn);
-                sys_mutex_unlock(&conn->activation_lock);
-                conn = next_conn;
-            }
+            connector->closing = true;
+            terminate_connections(&connector->connections);
             sys_mutex_unlock(&connector->lock);
         }
         //
