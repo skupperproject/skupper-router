@@ -347,6 +347,9 @@ class VFlowInterRouterTest(TestCase):
         cls.tcp_listener_port_eb = cls.tester.get_port()
         cls.tcp_connector_port = cls.tester.get_port()
         cls.tcp_noproc_port = cls.tester.get_port()
+        cls.tcp_noproc_port_ia = cls.tester.get_port()
+        cls.tcp_noproc_port_ib = cls.tester.get_port()
+        cls.tcp_noproc_port_eb = cls.tester.get_port()
         cls.connector_down_port = cls.tester.get_port()
 
         configs = [
@@ -369,6 +372,9 @@ class VFlowInterRouterTest(TestCase):
                 ('tcpListener', {'host': '0.0.0.0',
                                  'port': cls.tcp_listener_port_ia,
                                  'address': 'tcpServiceAddress'}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_noproc_port_ia,
+                                 'address': 'noProcessAddress'}),
                 # a dummy connector which never connects (operStatus == down)
                 ('connector', {'role': 'inter-router',
                                'port': cls.connector_down_port,
@@ -395,6 +401,9 @@ class VFlowInterRouterTest(TestCase):
                 ('tcpListener', {'host': '0.0.0.0',
                                  'port': cls.tcp_listener_port_ib,
                                  'address': 'tcpServiceAddress'}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_noproc_port_ib,
+                                 'address': 'noProcessAddress'}),
             ],
             # Router EdgeB
             [
@@ -408,6 +417,9 @@ class VFlowInterRouterTest(TestCase):
                 ('tcpListener', {'host': '0.0.0.0',
                                  'port': cls.tcp_listener_port_eb,
                                  'address': 'tcpServiceAddress'}),
+                ('tcpListener', {'host': '0.0.0.0',
+                                 'port': cls.tcp_noproc_port_eb,
+                                 'address': 'noProcessAddress'}),
                 # metrics listener
                 ('listener', {'role': 'normal',
                               'host': '0.0.0.0',
@@ -511,6 +523,29 @@ class VFlowInterRouterTest(TestCase):
         client_ia.wait()
         client_ib.wait()
         client_eb.wait()
+
+    def test_03_short_connections(self):
+        """
+        Generate service traffic from multiple sources (including the router local to the connector)
+        and verify that BIFLOW records are generated with the expected attributes.
+        """
+        success = retry(lambda: self.snooper_thread.match_records({'INTA': [('CONNECTOR', {'START_TIME': ANY_VALUE})]}))
+        self.assertTrue(success, f"Failed to find baseline connector {self.snooper_thread.get_results()}")
+
+        test_name = 'test_03_short_connections'
+        flow_count = 100
+        clients = []
+        expected = {'EdgeB': []}
+
+        for i in range(flow_count):
+            clients.append(EchoClientRunner(test_name, 2, None, None, None, i + 5, 1, port_override=self.tcp_noproc_port_eb, delay_close=False))
+            expected['EdgeB'].append(('BIFLOW_TPORT', {'END_TIME' : ANY_VALUE, 'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'CONNECTOR' : ANY_VALUE, 'ERROR_CONNECTOR_SIDE' : ANY_VALUE}))
+
+        success = retry(lambda: self.snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
+
+        for i in range(flow_count):
+            clients[i].wait()
 
     @classmethod
     def tearDownClass(cls):
