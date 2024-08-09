@@ -162,6 +162,7 @@ typedef struct qd_tcp_connection_t {
     bool                        inbound_first_octet;
     bool                        outbound_first_octet;
     bool                        outbound_body_complete;
+    bool                        pending_close;
 } qd_tcp_connection_t;
 
 
