@@ -43,6 +43,7 @@
 #define FLUSH_SLOT_COUNT 5
 #define RATE_SLOT_COUNT 5
 #define IDENTITY_MAX 27
+#define DEFERRED_DELETION_TICKS 25  // Five seconds
 
 typedef struct vflow_identity_t {
     uint64_t record_id;
@@ -84,13 +85,14 @@ struct vflow_record_t {
     DEQ_LINKS_N(UNFLUSHED, vflow_record_t);
     vflow_record_type_t          record_type;
     vflow_record_t              *parent;
-    vflow_record_t              *co_record_peer;  // Only used then record and co-record are on the same source
+    vflow_record_t              *co_record_peer;  // Only used when record and co-record are on the same source
     vflow_record_list_t          children;
     vflow_identity_t             identity;
     vflow_attribute_data_list_t  attributes;
     vflow_rate_list_t            rates;
     uint64_t                     latency_start;
     uint32_t                     emit_ordinal;
+    uint32_t                     delete_tick;
     int                          flush_slot;
     int                          default_flush_slot;
     bool                         never_logged;
@@ -161,7 +163,9 @@ typedef struct {
     vflow_record_list_t  unflushed_log_records[FLUSH_SLOT_COUNT];
     vflow_record_list_t  unflushed_records[FLUSH_SLOT_COUNT];  // not flow or log records
     vflow_record_list_t  unflushed_co_records[FLUSH_SLOT_COUNT];
+    vflow_record_list_t  to_delete_records;
     vflow_rate_list_t    rate_trackers;
+    uint32_t             current_tick;
     int                  current_flush_slot;
     char                *site_id;
     char                *hostname;
@@ -385,7 +389,24 @@ static void _vflow_post_flush_record_TH(vflow_record_t *record)
         }
     }
 
-    if (record->flush_slot == -1) {
+    //
+    // Check for deferred deletion.  This happens if the record is a BIFLOW_TPORT and is not a co-record.
+    // The deferral is used to improve the probability that co-record updates will arrive before the record's
+    // last update is emitted.
+    //
+    if (record->ended && record->record_type == VFLOW_RECORD_BIFLOW_TPORT && !record->co_record) {
+        if (record->flush_slot != -1) {
+            DEQ_REMOVE_N(UNFLUSHED, state->unflushed_flow_records[record->flush_slot], record);
+            record->flush_slot = -1;
+        }
+
+        if (record->delete_tick == 0) {
+            record->delete_tick = state->current_tick + DEFERRED_DELETION_TICKS;
+            DEQ_INSERT_TAIL_N(UNFLUSHED, state->to_delete_records, record);
+        }
+    }
+    
+    else if (record->flush_slot == -1) {
         if (record->default_flush_slot == -1) {
             record->default_flush_slot = state->current_flush_slot;
         }
@@ -860,6 +881,9 @@ static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
             }
         }
         record->flush_slot = -1;
+    } else if (record->delete_tick > 0) {
+        DEQ_REMOVE_N(UNFLUSHED, state->to_delete_records, record);
+        record->delete_tick = 0;
     }
 
     if (recursive) {
@@ -1166,8 +1190,9 @@ static void _vflow_clean_unflushed_TH(vflow_record_list_t *unflushed_records)
     vflow_record_t *record = DEQ_HEAD(*unflushed_records);
     while (!!record) {
         DEQ_REMOVE_HEAD_N(UNFLUSHED, *unflushed_records);
-        assert(record->flush_slot >= 0);
+        assert(record->flush_slot >= 0 || record->delete_tick > 0);
         record->flush_slot = -1;
+        record->delete_tick = 0;
 
         //
         // If this record has been ended, emit the log line.
@@ -1235,7 +1260,7 @@ static void _vflow_emit_co_records_TH(qdr_core_t *core, vflow_record_list_t *unf
  * 
  * @param core Pointer to the core module
  */
-static void _vflow_flush_TH(qdr_core_t *core)
+static void _vflow_flush_TH(qdr_core_t *core, bool no_defer)
 {
     //
     // If there is at least one collector for this router, batch up the
@@ -1262,6 +1287,28 @@ static void _vflow_flush_TH(qdr_core_t *core)
     _vflow_clean_unflushed_TH(&state->unflushed_flow_records[state->current_flush_slot]);
     _vflow_clean_unflushed_TH(&state->unflushed_log_records[state->current_flush_slot]);
     _vflow_clean_unflushed_TH(&state->unflushed_co_records[state->current_flush_slot]);
+
+    //
+    // Flush records on the deferred-delete list
+    //
+    vflow_record_list_t delete_list;
+    DEQ_INIT(delete_list);
+    vflow_record_t *record = DEQ_HEAD(state->to_delete_records);
+    while (!!record && (record->delete_tick <= state->current_tick || no_defer)) {
+        assert(record->delete_tick > 0);
+        DEQ_REMOVE_HEAD_N(UNFLUSHED, state->to_delete_records);
+        DEQ_INSERT_TAIL_N(UNFLUSHED, delete_list, record);
+        record = DEQ_HEAD(state->to_delete_records);
+    }
+
+    //
+    // Note that we only use the flow_address for event generation.  Only flow records are delete-deferred.
+    //
+    if (state->my_flow_address_usable) {
+        _vflow_emit_unflushed_as_events_TH(core, &delete_list, state->event_address_my_flow);
+    }
+
+    _vflow_clean_unflushed_TH(&delete_list);
 }
 
 
@@ -1440,7 +1487,8 @@ static void _vflow_tick_TH(vflow_work_t *work, bool discard)
 {
     static int tick_ordinal = 0;
     if (!discard) {
-        _vflow_flush_TH(state->router_core);
+        state->current_tick++;
+        _vflow_flush_TH(state->router_core, false);
         state->current_flush_slot = (state->current_flush_slot + 1) % FLUSH_SLOT_COUNT;
 
         tick_ordinal = (tick_ordinal + 1) % rate_slot_flush_intervals;
@@ -1629,7 +1677,7 @@ static void *_vflow_thread_TH(void *context)
     // Flush out all of the slots
     //
     for (int i = 0; i < FLUSH_SLOT_COUNT; i++) {
-        _vflow_flush_TH(core);
+        _vflow_flush_TH(core, true);
         state->current_flush_slot = (state->current_flush_slot + 1) % FLUSH_SLOT_COUNT;
     }
 
@@ -2360,6 +2408,8 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
         DEQ_INIT(state->unflushed_records[slot]);
         DEQ_INIT(state->unflushed_co_records[slot]);
     }
+
+    DEQ_INIT(state->to_delete_records);
 
     sys_mutex_init(&state->lock);
     sys_mutex_init(&state->id_lock);
