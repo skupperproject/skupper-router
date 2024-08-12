@@ -500,8 +500,9 @@ static void free_connection_IO(void *context)
             qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
             sys_mutex_lock(&listener->lock);
             listener->connections_closed++;
-            DEQ_REMOVE(listener->connections, conn);
             if (!!conn->core_conn) {
+                // conn is not in the connections list if conn->core_conn is zero
+                DEQ_REMOVE(listener->connections, conn);
                 // Note: core_conn can be accessed when management thread is deleting the listener
                 // and initiates closing the TCP connections. We need to hold the listener->lock when
                 // removing core_conn.
@@ -519,8 +520,9 @@ static void free_connection_IO(void *context)
             qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
             sys_mutex_lock(&connector->lock);
             connector->connections_closed++;
-            DEQ_REMOVE(connector->connections, conn);
             if (!!conn->core_conn) {
+                // conn is not in the connections list if conn->core_conn is zero
+                DEQ_REMOVE(connector->connections, conn);
                 // Note: core_conn can be accessed when management thread is deleting the connector
                 // and initiates closing the TCP connections. We need to hold the connector->lock when
                 // removing core_conn.
