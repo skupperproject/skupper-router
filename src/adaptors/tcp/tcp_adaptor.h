@@ -68,7 +68,6 @@ struct qd_tcp_listener_t {
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
     sys_atomic_t               ref_count;
-    bool                       closing;
 };
 
 
@@ -162,6 +161,7 @@ typedef struct qd_tcp_connection_t {
     bool                        inbound_first_octet;
     bool                        outbound_first_octet;
     bool                        outbound_body_complete;
+    bool                        management_close;
 } qd_tcp_connection_t;
 
 

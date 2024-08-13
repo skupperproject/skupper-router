@@ -481,69 +481,6 @@ static void free_tcp_resource(qd_tcp_common_t *resource)
     qdr_action_enqueue(tcp_context->core, action);
 }
 
-static void free_connection_IO(void *context)
-{
-    // No thread assertion here - can be RAW_IO or TIMER_IO
-    qd_tcp_connection_t *conn = (qd_tcp_connection_t*) context;
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Cleaning up resources", conn->conn_id);
-
-    // Disable activation via Core thread. The lock needs to be taken to ensure the core thread is not currently
-    // attempting to activate the connection: after the mutex is unlocked we're guaranteed no further activations can
-    // take place.
-    sys_mutex_lock(&conn->activation_lock);
-    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
-    sys_mutex_unlock(&conn->activation_lock);
-    // Do NOT free the core_activation lock since the core may be holding it
-
-    if (conn->common.parent) {
-        if (conn->common.parent->context_type == TL_LISTENER) {
-            qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
-            sys_mutex_lock(&listener->lock);
-            listener->connections_closed++;
-            if (!!conn->core_conn) {
-                // conn is not in the connections list if conn->core_conn is zero
-                DEQ_REMOVE(listener->connections, conn);
-                // Note: core_conn can be accessed when management thread is deleting the listener
-                // and initiates closing the TCP connections. We need to hold the listener->lock when
-                // removing core_conn.
-                qdr_connection_closed(conn->core_conn);
-                conn->core_conn = 0;
-                qd_connection_counter_dec(QD_PROTOCOL_TCP);
-            }
-            sys_mutex_unlock(&listener->lock);
-            //
-            // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
-            //
-            conn->common.parent = 0;
-            qd_tcp_listener_decref(listener);
-        } else {
-            qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
-            sys_mutex_lock(&connector->lock);
-            connector->connections_closed++;
-            if (!!conn->core_conn) {
-                // conn is not in the connections list if conn->core_conn is zero
-                DEQ_REMOVE(connector->connections, conn);
-                // Note: core_conn can be accessed when management thread is deleting the connector
-                // and initiates closing the TCP connections. We need to hold the connector->lock when
-                // removing core_conn.
-                qdr_connection_closed(conn->core_conn);
-                conn->core_conn = 0;
-                qd_connection_counter_dec(QD_PROTOCOL_TCP);
-            }
-            sys_mutex_unlock(&connector->lock);
-            //
-            // Call connector decref when a connection associated with the connector is removed (DEQ_REMOVE(connector->connections, conn))
-            //
-            conn->common.parent = 0;
-            qd_tcp_connector_decref(connector);
-        }
-    }
-
-    // Pass connection to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
-    // qdr_core_free_tcp_resource_CT()
-    free_tcp_resource(&conn->common);
-}
-
 // Initate close of the raw connection.
 //
 // The close will be complete when the PN_RAW_CONNECTION_DISCONNECTED event is handled. At that point any associated
@@ -578,6 +515,44 @@ static void close_raw_connection(qd_tcp_connection_t *conn, const char *conditio
 static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
 {
     ASSERT_RAW_IO;
+
+    if (!!conn->common.vflow) {
+        if (conn->listener_side) {
+            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
+        }
+        vflow_end_record(conn->common.vflow);
+    }
+
+    qdr_connection_t *local_conn = conn->core_conn;
+    if (conn->common.parent) {
+        if (conn->common.parent->context_type == TL_LISTENER) {
+            qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
+            sys_mutex_lock(&listener->lock);
+            listener->connections_closed++;
+            // conn is not in the connections list if conn->core_conn is zero
+            DEQ_REMOVE(listener->connections, conn);
+            conn->core_conn = 0;
+            sys_mutex_unlock(&listener->lock);
+            //
+            // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
+            //
+            qd_tcp_listener_decref(listener);
+        } else {
+            qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
+            sys_mutex_lock(&connector->lock);
+            connector->connections_closed++;
+            // conn is not in the connections list if conn->core_conn is zero
+            DEQ_REMOVE(connector->connections, conn);
+            conn->core_conn = 0;
+            sys_mutex_unlock(&connector->lock);
+            //
+            // Call connector decref when a connection associated with the connector is removed (DEQ_REMOVE(connector->connections, conn))
+            //
+            qd_tcp_connector_decref(connector);
+        }
+        conn->common.parent = 0;
+    }
+
     if (conn->state != XSIDE_CLOSING)
         set_state_XSIDE_IO(conn, XSIDE_CLOSING);
 
@@ -595,8 +570,6 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
         conn->raw_conn = 0;
         sys_mutex_unlock(&conn->activation_lock);
     }
-
-    free(conn->reply_to);
 
     if (!!conn->inbound_stream) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP cancel producer activation", DLV_ARGS(conn->inbound_delivery));
@@ -637,17 +610,10 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
         qdpo_end(conn->observer_handle);
     }
 
-    if (!!conn->common.vflow) {
-        if (conn->listener_side) {
-            vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, conn->inbound_octets);
-        }
-        vflow_end_record(conn->common.vflow);
-    }
-
     qd_tls_free2(conn->tls);
     qd_tls_domain_decref(conn->tls_domain);
     free(conn->alpn_protocol);
-
+    free(conn->reply_to);
     conn->reply_to          = 0;
     conn->inbound_link      = 0;
     conn->inbound_stream    = 0;
@@ -660,7 +626,25 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     conn->tls               = 0;
     conn->tls_domain        = 0;
 
-    free_connection_IO(conn);
+    // No thread assertion here - can be RAW_IO or TIMER_IO
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Cleaning up resources", conn->conn_id);
+
+    // Disable activation via Core thread. The lock needs to be taken to ensure the core thread is not currently
+    // attempting to activate the connection: after the mutex is unlocked we're guaranteed no further activations can
+    // take place.
+    sys_mutex_lock(&conn->activation_lock);
+    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+    sys_mutex_unlock(&conn->activation_lock);
+    // Do NOT free the core_activation lock since the core may be holding it
+
+    if (local_conn) {
+        qdr_connection_closed(local_conn);
+        qd_connection_counter_dec(QD_PROTOCOL_TCP);
+    }
+
+    // Pass connection to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
+    // qdr_core_free_tcp_resource_CT()
+    free_tcp_resource(&conn->common);
 }
 
 
@@ -927,15 +911,8 @@ static void link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
 
     qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
 
-    sys_mutex_lock(&li->lock);
     conn->core_conn = TL_open_core_connection(conn->conn_id, true, host);
     qdr_connection_set_context(conn->core_conn, conn);
-    // Add the tcp conn to the listener list only when core_conn is setup
-    DEQ_INSERT_TAIL(li->connections, conn);
-    if (li->closing)
-        // listener is being deleted and all connections must be closed
-        qdr_core_close_connection(conn->core_conn);
-    sys_mutex_unlock(&li->lock);
 
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), target, "tcp.lside.in", 0, false, 0, &conn->inbound_link_id);
     qdr_link_set_context(conn->inbound_link, conn);
@@ -954,15 +931,8 @@ static void link_setup_CSIDE_IO(qd_tcp_connection_t *conn, qdr_delivery_t *deliv
     qd_tcp_connector_t *connector = (qd_tcp_connector_t *) conn->common.parent;
     const char         *host      = connector->adaptor_config->host_port;
 
-    sys_mutex_lock(&connector->lock);
     conn->core_conn = TL_open_core_connection(conn->conn_id, false, host);
     qdr_connection_set_context(conn->core_conn, conn);
-    // Add the tcp conn to the connector list only when core_conn is setup
-    DEQ_INSERT_TAIL(connector->connections, conn);
-    if (connector->closing)
-        // connector is being deleted and all connections must be closed
-        qdr_core_close_connection(conn->core_conn);
-    sys_mutex_unlock(&connector->lock);
 
     // use an anonymous inbound link in order to ensure credit arrives otherwise if the client has dropped the state machine will stall waiting for credit
     conn->inbound_link = qdr_link_first_attach(conn->core_conn, QD_INCOMING, qdr_terminus(0), qdr_terminus(0), "tcp.cside.in", 0, false, 0, &conn->inbound_link_id);
@@ -1254,6 +1224,7 @@ static uint64_t handle_first_outbound_delivery_CSIDE(qd_tcp_connector_t *connect
     conn->context.handler = on_connection_event_CSIDE_IO;
 
     sys_mutex_lock(&connector->lock);
+    DEQ_INSERT_TAIL(connector->connections, conn);
     connector->connections_opened++;
     vflow_set_uint64(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, connector->connections_opened);
     vflow_set_ref_from_record(conn->common.vflow, VFLOW_ATTRIBUTE_CONNECTOR, connector->common.vflow);
@@ -1990,6 +1961,18 @@ static void on_connection_event_LSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
     }
 
     connection_run_LSIDE_IO(conn);
+
+    qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
+    sys_mutex_lock(&listener->lock);
+    if(conn->management_close) {
+        if (!!conn->core_conn) {
+            qdr_core_close_connection(conn->core_conn);
+        } else if (conn->raw_conn){
+            pn_raw_connection_close(conn->raw_conn);
+        }
+        conn->management_close = false;
+    }
+    sys_mutex_unlock(&listener->lock);
 }
 
 
@@ -2017,6 +2000,18 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
     }
 
     connection_run_CSIDE_IO(conn);
+
+    qd_tcp_listener_t *connector = (qd_tcp_listener_t*) conn->common.parent;
+    sys_mutex_lock(&connector->lock);
+    if(conn->management_close) {
+        if (!!conn->core_conn) {
+            qdr_core_close_connection(conn->core_conn);
+        } else if (conn->raw_conn){
+            pn_raw_connection_close(conn->raw_conn);
+        }
+        conn->management_close = false;
+    }
+    sys_mutex_unlock(&connector->lock);
 }
 
 
@@ -2051,17 +2046,19 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     conn->context.context = conn;
     conn->context.handler = on_connection_event_LSIDE_IO;
 
-    sys_mutex_lock(&listener->lock);
-    listener->connections_opened++;
-    vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
-    sys_mutex_unlock(&listener->lock);
-
+    conn->raw_conn = pn_raw_connection();
+    pn_raw_connection_set_context(conn->raw_conn, &conn->context);
     if (listener->protocol_observer) {
         conn->observer_handle = qdpo_begin(listener->protocol_observer, conn->common.vflow, conn, conn->conn_id);
     }
 
-    conn->raw_conn = pn_raw_connection();
-    pn_raw_connection_set_context(conn->raw_conn, &conn->context);
+    sys_mutex_lock(&listener->lock);
+    DEQ_INSERT_TAIL(listener->connections, conn);
+    listener->connections_opened++;
+    vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
+    sys_mutex_unlock(&listener->lock);
+
+
     // Note: this will trigger the connection's event handler on another thread:
     pn_listener_raw_accept(pn_listener, conn->raw_conn);
 }
@@ -2405,11 +2402,10 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
             // could come upon any of the connections. We need to hold the listener->lock
             // to prevent any modification of the connections list while it is being traversed.
             sys_mutex_lock(&listener->lock);
-            listener->closing         = true;
             qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
             while (conn) {
-                assert(conn->core_conn != 0);
-                qdr_core_close_connection(conn->core_conn);
+                conn->management_close = true;
+                pn_raw_connection_wake(conn->raw_conn);
                 conn = DEQ_NEXT(conn);
             }
             sys_mutex_unlock(&listener->lock);
@@ -2448,11 +2444,10 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
             // could come upon any of the connections. We need to hold the connector->lock
             // to prevent any modification of the connections list while it is being traversed.
             sys_mutex_lock(&connector->lock);
-            connector->closing        = true;
             qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
             while (conn) {
-                assert(conn->core_conn != 0);
-                qdr_core_close_connection(conn->core_conn);
+                conn->management_close = true;
+                pn_raw_connection_wake(conn->raw_conn);
                 conn = DEQ_NEXT(conn);
             }
             sys_mutex_unlock(&connector->lock);

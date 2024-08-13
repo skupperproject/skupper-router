@@ -334,7 +334,7 @@ class TerminateTcpConnectionsTest(TestCase):
                 ('BIFLOW_TPORT', {'PARENT': vflow_ids['listener_2']}),
             ]
         }
-        success = retry(lambda: self.snooper_thread.match_records(expected), delay=1)
+        success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
 
         return vflow_ids, echo_clients
@@ -349,8 +349,7 @@ class TerminateTcpConnectionsTest(TestCase):
                 ('BIFLOW_TPORT', {'PARENT': parent_vflow_id, 'END_TIME': ANY_VALUE}),
             ]
         }
-        success = retry(lambda: self.snooper_thread.match_records(expected),
-                        timeout=timeout, delay=self.delay)
+        success = retry(lambda: self.snooper_thread.match_records(expected), timeout=self.timeout)
         self.assertFalse(success,
                          f"ParentId {parent_vflow_id} Matched records  {self.snooper_thread.get_results()}")
 
@@ -364,8 +363,7 @@ class TerminateTcpConnectionsTest(TestCase):
                 ('BIFLOW_TPORT', {'PARENT': parent_vflow_id, 'END_TIME': ANY_VALUE}),
             ]
         }
-        success = retry(lambda: self.snooper_thread.match_records(expected),
-                        timeout=self.timeout, delay=self.delay)
+        success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success,
                         f"ParentId {parent_vflow_id} Matched records {self.snooper_thread.get_results()}")
 
@@ -405,9 +403,6 @@ class TerminateTcpConnectionsTest(TestCase):
         # router_2 does not have the "dropTcpConnections" config flag turned on
         # This test we deletes tcpListener and tcpconnector at router_2
 
-        router_1_id = self.router_1.config.router_id
-        router_2_id = self.router_2.config.router_id
-
         vflow_ids, echo_clients = self.setup_flows(address, ssl)
         self.assertTrue(len(echo_clients) == 4)
         self.check_all_vflows_active(vflow_ids)
@@ -421,7 +416,6 @@ class TerminateTcpConnectionsTest(TestCase):
         self.delete_tcp_entity(address, TCP_CONNECTOR_TYPE, self.router_2)
         # All flows should stay active
         self.check_all_vflows_active(vflow_ids, timeout=self.timeout)
-
         self.clean_up_echo_clients(echo_clients)
 
     def test_delete_tcp_entities_conns_terminate(self):
