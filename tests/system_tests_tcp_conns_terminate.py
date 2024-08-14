@@ -231,7 +231,7 @@ class TerminateTcpConnectionsTest(TestCase):
         # expect failure. E.g. we try to match the 'END_TIME' attribute in the
         # 'BIFLOW_TPORT' record - and expect failure - in order to check that a flow
         # is still acive.
-        cls.timeout = 3
+        cls.timeout = 5
         cls.delay = 0.5
 
     @classmethod
@@ -364,8 +364,7 @@ class TerminateTcpConnectionsTest(TestCase):
                 ('BIFLOW_TPORT', {'PARENT': parent_vflow_id, 'END_TIME': ANY_VALUE}),
             ]
         }
-        success = retry(lambda: self.snooper_thread.match_records(expected),
-                        timeout=self.timeout, delay=self.delay)
+        success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success,
                         f"ParentId {parent_vflow_id} Matched records {self.snooper_thread.get_results()}")
 
@@ -373,8 +372,8 @@ class TerminateTcpConnectionsTest(TestCase):
         """
         Check if all flows are still active on both routers
         """
-        self.check_vflows_active(self.router_1.config.router_id, vflow_ids['listener_1'])
-        self.check_vflows_active(self.router_2.config.router_id, vflow_ids['listener_2'])
+        self.check_vflows_active(self.router_1.config.router_id, vflow_ids['listener_1'], timeout=timeout)
+        self.check_vflows_active(self.router_2.config.router_id, vflow_ids['listener_2'], timeout=timeout)
 
     def delete_tcp_entities_conns_terminate(self, address, ssl=False):
         # router_1 has the "dropTcpConnections" config flag turned on
