@@ -68,7 +68,7 @@ struct qd_tcp_listener_t {
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
     sys_atomic_t               ref_count;
-    bool                       closing;
+    sys_atomic_t               closing;
 };
 
 
@@ -88,7 +88,7 @@ typedef struct qd_tcp_connector_t {
     uint64_t                   connections_opened;
     uint64_t                   connections_closed;
     sys_atomic_t               ref_count;
-    bool                       closing;
+    sys_atomic_t               closing;
 } qd_tcp_connector_t;
 
 
