@@ -1735,7 +1735,6 @@ class TwoRouterExtensionStateTest(TestCase):
         Verify that disposition state set by the publisher is available to all
         consumers
         """
-        self.skipTest("Temporarily disabled, see Issue #1573")
         rxs = [MyExtendedReceiver(self.RouterA.addresses[0],
                                   "multicast/thingy")
                for x in range(3)]
