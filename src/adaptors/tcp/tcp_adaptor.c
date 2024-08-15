@@ -447,7 +447,7 @@ static void set_state_XSIDE_IO(qd_tcp_connection_t *conn, qd_tcp_connection_stat
 // thread for activation (see CORE_activate()).  During cleanup of these objects we need to ensure that both the I/O and
 // Core threads do not reference them after they have been deallocated. To do this we use a two-phase approach to
 // freeing these objects. In the first phase all non-activation-related resources are released by the I/O thread (see
-// qd_tcp_connector_decref(), free_connection_IO). Then the object is passed to the Core thread for cleanup of the activation
+// qd_tcp_connector_decref()). Then the object is passed to the Core thread for cleanup of the activation
 // resources and freeing the base object (see free_tcp_resource(), qdr_core_free_tcp_resource_CT()).
 //
 // tcp_listener_t does not use a qdr_connection_t so this process does not apply to it.
@@ -479,63 +479,6 @@ static void free_tcp_resource(qd_tcp_common_t *resource)
     qdr_action_t *action           = qdr_action(qdr_core_free_tcp_resource_CT, "core free tcp resource");
     action->args.general.context_1 = resource;
     qdr_action_enqueue(tcp_context->core, action);
-}
-
-static void free_connection_IO(void *context)
-{
-    // No thread assertion here - can be RAW_IO or TIMER_IO
-    qd_tcp_connection_t *conn = (qd_tcp_connection_t*) context;
-    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Cleaning up resources", conn->conn_id);
-
-    // Disable activation via Core thread. The lock needs to be taken to ensure the core thread is not currently
-    // attempting to activate the connection: after the mutex is unlocked we're guaranteed no further activations can
-    // take place.
-    sys_mutex_lock(&conn->activation_lock);
-    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
-    sys_mutex_unlock(&conn->activation_lock);
-    // Do NOT free the core_activation lock since the core may be holding it
-
-    if (conn->common.parent) {
-        if (conn->common.parent->context_type == TL_LISTENER) {
-            qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
-            sys_mutex_lock(&listener->lock);
-            listener->connections_closed++;
-            if (IS_ATOMIC_FLAG_SET(&listener->closing)) {
-                // Wake up the next conn on the list to get it closed
-                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                if (!!next_conn)
-                    pn_raw_connection_wake(next_conn->raw_conn);
-            }
-            DEQ_REMOVE(listener->connections, conn);
-            sys_mutex_unlock(&listener->lock);
-            //
-            // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
-            //
-            conn->common.parent = 0;
-            qd_tcp_listener_decref(listener);
-        } else {
-            qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
-            sys_mutex_lock(&connector->lock);
-            connector->connections_closed++;
-            if (IS_ATOMIC_FLAG_SET(&connector->closing)) {
-                // Wake up the next conn on the list to get it closed
-                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
-                if (!!next_conn)
-                    pn_raw_connection_wake(next_conn->raw_conn);
-            }
-            DEQ_REMOVE(connector->connections, conn);
-            sys_mutex_unlock(&connector->lock);
-            //
-            // Call connector decref when a connection associated with the connector is removed (DEQ_REMOVE(connector->connections, conn))
-            //
-            conn->common.parent = 0;
-            qd_tcp_connector_decref(connector);
-        }
-    }
-
-    // Pass connection to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
-    // qdr_core_free_tcp_resource_CT()
-    free_tcp_resource(&conn->common);
 }
 
 // Initate close of the raw connection.
@@ -574,6 +517,46 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     ASSERT_RAW_IO;
     if (conn->state != XSIDE_CLOSING)
         set_state_XSIDE_IO(conn, XSIDE_CLOSING);
+
+    if (conn->common.parent) {
+        if (conn->common.parent->context_type == TL_LISTENER) {
+            qd_tcp_listener_t *listener = (qd_tcp_listener_t*) conn->common.parent;
+            sys_mutex_lock(&listener->lock);
+            listener->connections_closed++;
+            if (IS_ATOMIC_FLAG_SET(&listener->closing)) {
+                // Wake up the next conn on the list to get it closed
+                // See qd_dispatch_delete_tcp_listener() where the head connection is woken up.
+                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+                if (!!next_conn)
+                    pn_raw_connection_wake(next_conn->raw_conn);
+            }
+            DEQ_REMOVE(listener->connections, conn);
+            sys_mutex_unlock(&listener->lock);
+            //
+            // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
+            //
+            conn->common.parent = 0;
+            qd_tcp_listener_decref(listener);
+        } else {
+            qd_tcp_connector_t *connector = (qd_tcp_connector_t*) conn->common.parent;
+            sys_mutex_lock(&connector->lock);
+            connector->connections_closed++;
+            if (IS_ATOMIC_FLAG_SET(&connector->closing)) {
+                // Wake up the next conn on the list to get it closed
+                // See qd_dispatch_delete_tcp_connector() where the head connection is woken up.
+                qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+                if (!!next_conn)
+                    pn_raw_connection_wake(next_conn->raw_conn);
+            }
+            DEQ_REMOVE(connector->connections, conn);
+            sys_mutex_unlock(&connector->lock);
+            //
+            // Call connector decref when a connection associated with the connector is removed (DEQ_REMOVE(connector->connections, conn))
+            //
+            conn->common.parent = 0;
+            qd_tcp_connector_decref(connector);
+        }
+    }
 
     if (!!conn->raw_conn) {
         CLEAR_ATOMIC_FLAG(&conn->raw_opened);
@@ -645,8 +628,8 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     qd_tls_free2(conn->tls);
     qd_tls_domain_decref(conn->tls_domain);
     free(conn->alpn_protocol);
-
     free(conn->reply_to);
+
     conn->reply_to          = 0;
     conn->inbound_link      = 0;
     conn->inbound_stream    = 0;
@@ -659,7 +642,20 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     conn->tls               = 0;
     conn->tls_domain        = 0;
 
-    free_connection_IO(conn);
+    // No thread assertion here - can be RAW_IO or TIMER_IO
+    qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] Cleaning up resources", conn->conn_id);
+
+    // Disable activation via Core thread. The lock needs to be taken to ensure the core thread is not currently
+    // attempting to activate the connection: after the mutex is unlocked we're guaranteed no further activations can
+    // take place.
+    sys_mutex_lock(&conn->activation_lock);
+    CLEAR_ATOMIC_FLAG(&conn->raw_opened);
+    sys_mutex_unlock(&conn->activation_lock);
+    // Do NOT free the core_activation lock since the core may be holding it
+
+    // Pass connection to Core for final deallocation. The Core will free the activation_lock and the related flags.  See
+    // qdr_core_free_tcp_resource_CT()
+    free_tcp_resource(&conn->common);
 }
 
 
@@ -1733,7 +1729,6 @@ static void connection_run_LSIDE_IO(qd_tcp_connection_t *conn)
             // Don't do anything
             //
             return;
-            break;
 
         default:
             assert(false);
@@ -1814,7 +1809,6 @@ static void connection_run_CSIDE_IO(qd_tcp_connection_t *conn)
             // Don't do anything
             //
             return;
-            break;
 
         default:
             assert(false);
@@ -2295,7 +2289,6 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
 
 static void CORE_connection_close(void *context, qdr_connection_t *conn, qdr_error_t *error)
 {
-    // hahaha
     qd_tcp_common_t *common = (qd_tcp_common_t*) qdr_connection_get_context(conn);
     qd_tcp_connection_t *tcp_conn = (qd_tcp_connection_t*) common;
     if (tcp_conn) {
@@ -2417,6 +2410,13 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
             // to prevent any modification of the connections list while it is being traversed.
             sys_mutex_lock(&listener->lock);
             SET_ATOMIC_FLAG(&listener->closing);
+
+            //
+            // Only the head connection is woken when holding the lock.
+            // This is an optimization. The next connection in the list is woken up in the handler of the PN_RAW_DISCONNECTED
+            // event of this connection (See close_connection_XSIDE_IO() to see where the next connection in the list is woken up).
+            // That way, we don't have to wake all the connections when holding the lock.
+            //
             qd_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
             if (conn)
                 pn_raw_connection_wake(conn->raw_conn);
@@ -2457,6 +2457,12 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
             // to prevent any modification of the connections list while it is being traversed.
             sys_mutex_lock(&connector->lock);
             SET_ATOMIC_FLAG(&connector->closing);
+            //
+            // Only the head connection is woken when holding the lock.
+            // This is an optimization. The next connection in the list is woken up in the handler of the PN_RAW_DISCONNECTED
+            // event of this connection (See close_connection_XSIDE_IO() to see where the next connection in the list is woken up).
+            // That way, we don't have to wake all the connections when holding the lock.
+            //
             qd_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
             if (conn)
                 pn_raw_connection_wake(conn->raw_conn);
