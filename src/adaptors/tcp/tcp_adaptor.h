@@ -37,19 +37,23 @@
 #include <proton/event.h>
 #include <proton/ssl.h>
 
-typedef struct qd_tcp_listener_t qd_tcp_listener_t;
-typedef struct qd_tcp_connector_t qd_tcp_connector_t;
-typedef struct qdr_tcp_stats_t qdr_tcp_stats_t;
-typedef struct qd_tcp_adaptor_config_t qd_tcp_adaptor_config_t;
-typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
-typedef struct qd_tls_domain_t         qd_tls_domain_t;
-
+typedef struct qd_tcp_listener_t        qd_tcp_listener_t;
+typedef struct qd_tcp_connector_t       qd_tcp_connector_t;
+typedef struct qdr_tcp_stats_t          qdr_tcp_stats_t;
+typedef struct qd_tcp_adaptor_config_t  qd_tcp_adaptor_config_t;
+typedef struct qd_adaptor_listener_t    qd_adaptor_listener_t;
+typedef struct qd_tls_domain_t          qd_tls_domain_t;
+typedef struct qdr_tcp_connection_t     qdr_tcp_connection_t;
+typedef struct qdr_tcp_connection_ref_t qdr_tcp_connection_ref_t;
 struct qd_tcp_adaptor_config_t {
     qd_adaptor_config_t *adaptor_config; // Pointer to the common adaptor config used by all adaptors.
     sys_atomic_t         ref_count;
 };
 
 ALLOC_DECLARE(qd_tcp_adaptor_config_t);
+ALLOC_DECLARE_SAFE(qdr_tcp_connection_t);
+ALLOC_DECLARE(qdr_tcp_connection_ref_t);
+DEQ_DECLARE(qdr_tcp_connection_t, qdr_tcp_connection_list_t);
 
 struct qdr_tcp_stats_t {
     // run time statistics updated by connections
@@ -72,7 +76,9 @@ struct qd_tcp_listener_t
     qdr_tcp_stats_t          *tcp_stats;
     qd_adaptor_listener_t    *adaptor_listener;
     qd_tls_domain_t          *tls_domain;
-
+    sys_mutex_t               lock;
+    qdr_tcp_connection_list_t connections;
+    sys_atomic_t              closing;
     // must hold tcp_adaptor->listener_lock during list operations:
     DEQ_LINKS(qd_tcp_listener_t);
 };
@@ -90,11 +96,20 @@ struct qd_tcp_connector_t
     vflow_record_t           *vflow;
     qdr_tcp_stats_t          *tcp_stats;
     qd_tls_domain_t          *tls_domain;
+    sys_mutex_t               lock;
+    qdr_tcp_connection_list_t connections;
+    sys_atomic_t              closing;
     DEQ_LINKS(qd_tcp_connector_t);
 };
 
 DEQ_DECLARE(qd_tcp_connector_t, qd_tcp_connector_list_t);
 ALLOC_DECLARE(qd_tcp_connector_t);
+
+struct qdr_tcp_connection_ref_t {
+    DEQ_LINKS(qdr_tcp_connection_ref_t);
+    qdr_tcp_connection_t *conn;
+};
+DEQ_DECLARE(qdr_tcp_connection_ref_t, qdr_tcp_connection_ref_list_t);
 
 void qdra_tcp_connection_get_first_CT(qdr_core_t *core, qdr_query_t *query, int offset);
 void qdra_tcp_connection_get_next_CT(qdr_core_t *core, qdr_query_t *query);

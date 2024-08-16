@@ -615,6 +615,13 @@
                     "required": false,
                     "default": "auto",
                     "create": true
+                },
+                "dropTcpConnections": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Terminate corresponding TCP connections when a tcpListener or a tcpConnector is deleted.",
+                    "required": false,
+                    "create": true
                 }
             }
         },

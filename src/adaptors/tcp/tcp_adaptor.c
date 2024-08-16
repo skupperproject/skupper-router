@@ -75,6 +75,7 @@ static qd_duration_t half_closed_idle_timeout = 0;  // 0 = disabled
 ALLOC_DEFINE(qdr_tcp_stats_t);
 ALLOC_DEFINE(qd_tcp_listener_t);
 ALLOC_DEFINE(qd_tcp_connector_t);
+ALLOC_DEFINE(qdr_tcp_connection_ref_t);
 
 #define WRITE_BUFFERS 64
 
@@ -85,21 +86,19 @@ ALLOC_DEFINE(qd_tcp_connector_t);
 // const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"h2", "http/1.1", "http/1.0"};
 const char *tcp_alpn_protocols[TCP_NUM_ALPN_PROTOCOLS] = {"http/1.1", "h2"};
 
-typedef struct qdr_tcp_connection_t qdr_tcp_connection_t;
-
 struct qdr_tcp_connection_t {
     qd_handler_context_t  context;
     qd_tcp_connector_t   *connector;
     qd_tcp_listener_t    *listener;
     vflow_record_t        *vflow;
     char                 *reply_to;
-    char                     *alpn_protocol;  // The negotiated ALPN protocol. Used only in the case of TLS connections.
+    char                 *alpn_protocol;  // The negotiated ALPN protocol. Used only in the case of TLS connections.
     qdr_connection_t     *qdr_conn;
     uint64_t              conn_id;
     qdr_link_t           *incoming_link;
-    uint64_t                  incoming_link_id;
+    uint64_t              incoming_link_id;
     qdr_link_t           *outgoing_link;
-    uint64_t                  outgoing_link_id;
+    uint64_t              outgoing_link_id;
     pn_raw_connection_t  *pn_raw_conn;
     sys_mutex_t           activation_lock;
     qdr_delivery_t       *in_dlv_stream;
@@ -108,32 +107,25 @@ struct qdr_tcp_connection_t {
     bool                  flow_enabled;
     bool                  is_egress_dispatcher_conn;
     bool                  connector_closed;//only used if egress_dispatcher=true
-    bool                      in_list;         // This connection is in the adaptor's connections list
+    bool                  in_list;         // This connection is in the adaptor's connections list
     bool                  raw_read_shutdown; // stream closed
     bool                  read_eos_seen;
     bool                  window_disabled;   // true: ignore unacked byte window
-    sys_atomic_t              raw_closed_read;   // proton event seen
-    sys_atomic_t              raw_closed_write;  // proton event seen or write_close called
+    sys_atomic_t          raw_closed_read;   // proton event seen
+    sys_atomic_t          raw_closed_write;  // proton event seen or write_close called
     qdr_delivery_t       *initial_delivery;
     qd_timer_t           *activate_timer;
     qd_tcp_adaptor_config_t  *config;         // config
     qd_server_t          *server;
-    qd_tls_t                 *tls;
+    qd_tls_t             *tls;
     char                 *remote_address;
     char                 *global_id;
-    uint64_t bytes_in;   // if this is TLS connection, the decrypted bytes read from raw conn, else just raw bytes read
-                         // from the raw conn
-    uint64_t bytes_out;  // if this is TLS conn, the unencrypted bytes before writing to raw connection, else just raw
-                         // bytes written to raw conn
-    uint64_t encrypted_bytes_in;  // If this is a TLS connection, the total encrypted bytes received on this connection,
-                                  // zero otherwise
-    uint64_t encrypted_bytes_out;  // If this is a TLS connection, the total encrypted bytes sent on this connection,
-                                   // zero otherwise
-
-    // bytes_unacked (read side): the count of bytes read that have yet to be acked by adaptor
-    uint64_t              bytes_unacked;
-    // bytes_since_last_ack (write side): the count of bytes since last PN_RECEIVED update was sent
-    uint64_t              bytes_since_last_ack;
+    uint64_t              bytes_in;   // if this is TLS connection, the decrypted bytes read from raw conn, else just raw bytes read from the raw conn
+    uint64_t              bytes_out;  // if this is TLS conn, the unencrypted bytes before writing to raw connection, else just raw bytes written to raw conn
+    uint64_t              encrypted_bytes_in;  // If this is a TLS connection, the total encrypted bytes received on this connection, zero otherwise
+    uint64_t              encrypted_bytes_out;  // If this is a TLS connection, the total encrypted bytes sent on this connection,  zero otherwise
+    uint64_t              bytes_unacked; // bytes_unacked (read side): the count of bytes read that have yet to be acked by adaptor
+    uint64_t              bytes_since_last_ack;  // bytes_since_last_ack (write side): the count of bytes since last PN_RECEIVED update was sent
     uint64_t              window_closed_count;
 
     uint64_t              opened_time;
@@ -143,32 +135,30 @@ struct qdr_tcp_connection_t {
     sys_atomic_t          half_closed_expired;  // check for idle connection
     qd_timer_t           *half_closed_timer;
 
-    qd_adaptor_buffer_list_t out_buffs;           // Buffers for writing
-
+    qd_adaptor_buffer_list_t  out_buffs;           // Buffers for writing
     qd_message_stream_data_t *previous_stream_data; // previous segment (received in full)
     qd_message_stream_data_t *outgoing_stream_data; // current segment
     qd_message_stream_data_t *release_up_to;
-    size_t                  outgoing_body_bytes;  // bytes received from current segment
+    size_t                    outgoing_body_bytes;  // bytes received from current segment
     int                       outgoing_body_offset;  // buffer offset into current segment
-    int                     outgoing_buff_count;  // number of buffers with data
+    int                       outgoing_buff_count;  // number of buffers with data
     pn_raw_buffer_t           outgoing_buffs[WRITE_BUFFERS];
-    int                     outgoing_buff_idx;    // first buffer with data
-    bool                    require_tls;     // Is TLS required on this connection ?
+    int                       outgoing_buff_idx;    // first buffer with data
+    bool                      require_tls;     // Is TLS required on this connection ?
     DEQ_LINKS(qdr_tcp_connection_t);
 };
 
-DEQ_DECLARE(qdr_tcp_connection_t, qdr_tcp_connection_list_t);
 ALLOC_DECLARE_SAFE(qdr_tcp_connection_t);
 ALLOC_DEFINE_SAFE(qdr_tcp_connection_t);
 ALLOC_DEFINE(qd_tcp_adaptor_config_t);
 
 typedef struct qdr_tcp_adaptor_t {
-    qdr_core_t               *core;
-    qdr_protocol_adaptor_t   *adaptor;
-    qd_tcp_listener_list_t    listeners;
-    qd_tcp_connector_list_t   connectors;
-    qdr_tcp_connection_list_t connections;
-    sys_mutex_t               listener_lock;  // protect listeners list
+    qdr_core_t                    *core;
+    qdr_protocol_adaptor_t        *adaptor;
+    qd_tcp_listener_list_t         listeners;
+    qd_tcp_connector_list_t        connectors;
+    qdr_tcp_connection_ref_list_t  tcp_connections;
+    sys_mutex_t                    listener_lock;  // protect listeners list
 } qdr_tcp_adaptor_t;
 
 static qdr_tcp_adaptor_t *tcp_adaptor;
@@ -181,6 +171,8 @@ static void handle_disconnected(qdr_tcp_connection_t* conn);
 static void free_qdr_tcp_connection(qdr_tcp_connection_t* conn);
 static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc);
 static void detach_links(qdr_tcp_connection_t *tc);
+static void qd_tcp_listener_incref(qd_tcp_listener_t *listener);
+static void qd_tcp_connector_incref(qd_tcp_connector_t *connector);
 static void qd_tcp_connector_decref(qd_tcp_connector_t* c);
 static void qd_tcp_listener_decref(qd_tcp_listener_t* li);
 static void qdr_process_app_properties(qdr_tcp_connection_t *tc, qd_message_t *msg);
@@ -190,6 +182,28 @@ static void encrypt_outgoing_tls(qdr_tcp_connection_t *conn, qd_adaptor_buffer_t
 static void start_half_closed_monitoring(qdr_tcp_connection_t *conn);
 static void stop_half_closed_monitoring(qdr_tcp_connection_t *conn);
 static bool check_half_closed_timeout(qdr_tcp_connection_t *conn);
+
+void qdr_add_tcp_connection_ref(qdr_tcp_connection_ref_list_t *ref_list, qdr_tcp_connection_t *conn)
+{
+    qdr_tcp_connection_ref_t *ref = new_qdr_tcp_connection_ref_t();
+    DEQ_ITEM_INIT(ref);
+    ref->conn = conn;
+    DEQ_INSERT_TAIL(*ref_list, ref);
+}
+
+
+void qdr_del_tcp_connection_ref(qdr_tcp_connection_ref_list_t *ref_list, qdr_tcp_connection_t *conn)
+{
+    qdr_tcp_connection_ref_t *ref = DEQ_HEAD(*ref_list);
+    while (ref) {
+        if (ref->conn == conn) {
+            DEQ_REMOVE(*ref_list, ref);
+            free_qdr_tcp_connection_ref_t(ref);
+            break;
+        }
+        ref = DEQ_NEXT(ref);
+    }
+}
 
 // is the connection in half-closed state?
 //
@@ -638,6 +652,40 @@ static void free_qdr_tcp_connection(qdr_tcp_connection_t *tc)
 
 static void handle_disconnected(qdr_tcp_connection_t* conn)
 {
+    if (conn->listener) {
+        qd_tcp_listener_t *listener = conn->listener;
+        sys_mutex_lock(&listener->lock);
+        if (IS_ATOMIC_FLAG_SET(&listener->closing)) {
+            // Wake up the next conn on the list to get it closed
+            // See qd_dispatch_delete_tcp_listener() where the head connection is woken up.
+            qdr_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            if (!!next_conn)
+                pn_raw_connection_wake(next_conn->pn_raw_conn);
+        }
+        DEQ_REMOVE(listener->connections, conn);
+        sys_mutex_unlock(&listener->lock);
+    }
+    else {
+        qd_tcp_connector_t *connector = conn->connector;
+        sys_mutex_lock(&connector->lock);
+        if (IS_ATOMIC_FLAG_SET(&connector->closing)) {
+            // Wake up the next conn on the list to get it closed
+            // See qd_dispatch_delete_tcp_connector() where the head connection is woken up.
+            qdr_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            if (!!next_conn)
+                pn_raw_connection_wake(next_conn->pn_raw_conn);
+        }
+        DEQ_REMOVE(connector->connections, conn);
+        sys_mutex_unlock(&connector->lock);
+    }
+
+    LOCK(&conn->activation_lock);
+    if(conn->pn_raw_conn) {
+        pn_raw_connection_set_context(conn->pn_raw_conn, 0);
+        conn->pn_raw_conn = 0;
+    }
+    UNLOCK(&conn->activation_lock);
+
     // release all referenced message buffers since the deliveries will free
     // the message once we decref them. Note the order: outgoing_stream_data
     // comes after previous_stream_data, so previous_stream_data is
@@ -684,6 +732,7 @@ static void handle_disconnected(qdr_tcp_connection_t* conn)
         qdr_delivery_decref(tcp_adaptor->core, conn->initial_delivery, "tcp-adaptor.handle_disconnected - initial_delivery");
         conn->initial_delivery = 0;
     }
+
     if (conn->qdr_conn) {
         qdr_connection_set_context(conn->qdr_conn, 0);
         qdr_connection_closed(conn->qdr_conn);
@@ -1118,11 +1167,6 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                qdr_tcp_connection_role_name(conn), drained_buffers);
 
         stop_half_closed_monitoring(conn);
-
-        LOCK(&conn->activation_lock);
-        pn_raw_connection_set_context(conn->pn_raw_conn, 0);
-        conn->pn_raw_conn = 0;
-        UNLOCK(&conn->activation_lock);
         handle_disconnected(conn);
         break;
     }
@@ -1156,6 +1200,15 @@ static void handle_connection_event(pn_event_t *e, qd_server_t *qd_server, void 
                 (void) pn_condition_set_description(cond, "connection closed due to half-closed idle timeout");
             }
             pn_raw_connection_close(conn->pn_raw_conn);
+        }
+
+        bool closing = conn->listener ? IS_ATOMIC_FLAG_SET(&conn->listener->closing) : IS_ATOMIC_FLAG_SET(&conn->connector->closing);
+        if (closing) {
+            if (!!conn->qdr_conn) {
+                qdr_core_close_connection(conn->qdr_conn);
+            } else if (!!conn->pn_raw_conn){
+                pn_raw_connection_close(conn->pn_raw_conn);
+            }
         }
         break;
     }
@@ -1268,13 +1321,19 @@ static qdr_tcp_connection_t *qdr_tcp_connection(qd_tcp_listener_t *listener, qd_
         tc->config   = listener->config;
         tcp_stats    = listener->tcp_stats;
         server       = listener->server;
-        sys_atomic_inc(&listener->ref_count);
+        sys_mutex_lock(&listener->lock);
+        DEQ_INSERT_TAIL(listener->connections, tc);
+        sys_mutex_unlock(&listener->lock);
+        qd_tcp_listener_incref(listener);
     } else if (connector) {
         tc->connector = connector;
         tc->config    = connector->config;
         tcp_stats     = connector->tcp_stats;
         server        = connector->server;
-        sys_atomic_inc(&connector->ref_count);
+        sys_mutex_lock(&connector->lock);
+        DEQ_INSERT_TAIL(connector->connections, tc);
+        sys_mutex_unlock(&connector->lock);
+        qd_tcp_connector_incref(connector);
     }
     assert(tc->config);
     assert(tcp_stats);
@@ -1547,16 +1606,33 @@ static void log_tcp_adaptor_config(qd_tcp_adaptor_config_t *c, const char *what)
            c->adaptor_config->host, c->adaptor_config->port);
 }
 
-static void qd_tcp_listener_decref(qd_tcp_listener_t *li)
+static void qd_tcp_listener_free(qd_tcp_listener_t *listener)
 {
-    if (li && sys_atomic_dec(&li->ref_count) == 1) {
-        vflow_end_record(li->vflow);
-        sys_atomic_destroy(&li->ref_count);
-        qd_tls_domain_decref(li->tls_domain);
-        qd_free_tcp_adaptor_config(li->config);
-        sys_mutex_free(&li->tcp_stats->stats_lock);
-        free_qdr_tcp_stats_t(li->tcp_stats);
-        free_qd_tcp_listener_t(li);
+    vflow_end_record(listener->vflow);
+    qd_tls_domain_decref(listener->tls_domain);
+    qd_free_tcp_adaptor_config(listener->config);
+    free_qdr_tcp_stats_t(listener->tcp_stats);
+
+    sys_atomic_destroy(&listener->ref_count);
+    sys_mutex_free(&listener->tcp_stats->stats_lock);
+    sys_mutex_free(&listener->lock);
+    free_qd_tcp_listener_t(listener);
+}
+
+static void qd_tcp_listener_incref(qd_tcp_listener_t *listener)
+{
+    sys_atomic_inc(&listener->ref_count);
+}
+
+static void qd_tcp_connector_incref(qd_tcp_connector_t *connector)
+{
+    sys_atomic_inc(&connector->ref_count);
+}
+
+static void qd_tcp_listener_decref(qd_tcp_listener_t *listener)
+{
+    if (listener && sys_atomic_dec(&listener->ref_count) == 1) {
+        qd_tcp_listener_free(listener);
     }
 }
 
@@ -1569,6 +1645,9 @@ static qd_tcp_listener_t *qd_tcp_listener(qd_server_t *server)
     li->server = server;
     li->config = qd_tcp_adaptor_config();
     li->tcp_stats = new_qdr_tcp_stats_t();
+    sys_mutex_init(&li->lock);
+    sys_atomic_init(&li->closing, 0);
+    DEQ_INIT(li->connections);
     ZERO(li->tcp_stats);
     sys_mutex_init(&li->tcp_stats->stats_lock);
 
@@ -1652,6 +1731,26 @@ void qd_dispatch_delete_tcp_listener_legacy(qd_dispatch_t *qd, qd_tcp_listener_t
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Deleted TcpListener for %s, %s:%s",
                li->config->adaptor_config->address, li->config->adaptor_config->host, li->config->adaptor_config->port);
 
+        // Initiate termination of existing connections
+        //
+        if (qd->terminate_tcp_conns) {
+            // Note: PN_RAW_CONNECTION_CONNECTED event or PN_RAW_CONNECTION_DISCONNECTED event
+            // could come upon any of the connections. We need to hold the listener->lock
+            // to prevent any modification of the connections list while it is being traversed.
+            sys_mutex_lock(&li->lock);
+            SET_ATOMIC_FLAG(&li->closing);
+            //
+            // Only the head connection is woken when holding the lock.
+            // This is an optimization. The next connection in the list is woken up in the handler of the PN_RAW_DISCONNECTED
+            // event of this connection (See close_connection_XSIDE_IO() to see where the next connection in the list is woken up).
+            // That way, we don't have to wake all the connections when holding the lock.
+            //
+            qdr_tcp_connection_t *conn = DEQ_HEAD(li->connections);
+            if (conn)
+                pn_raw_connection_wake(conn->pn_raw_conn);
+            sys_mutex_unlock(&li->lock);
+        }
+
         qd_tcp_listener_decref(li);  // drop reference held by listeners list
     }
 }
@@ -1687,7 +1786,10 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     c->server = server;
     c->config = qd_tcp_adaptor_config();
     c->tcp_stats = new_qdr_tcp_stats_t();
+    sys_mutex_init(&c->lock);
+    sys_atomic_init(&c->closing, 0);
     ZERO(c->tcp_stats);
+    DEQ_INIT(c->connections);
     sys_mutex_init(&c->tcp_stats->stats_lock);
     //
     // Create a vflow record for this connector
@@ -1698,16 +1800,23 @@ static qd_tcp_connector_t *qd_tcp_connector(qd_server_t *server)
     return c;
 }
 
-static void qd_tcp_connector_decref(qd_tcp_connector_t* c)
+static void qd_tcp_connector_free(qd_tcp_connector_t *connector)
 {
-    if (c && sys_atomic_dec(&c->ref_count) == 1) {
-        vflow_end_record(c->vflow);
-        sys_atomic_destroy(&c->ref_count);
-        qd_tls_domain_decref(c->tls_domain);
-        sys_mutex_free(&c->tcp_stats->stats_lock);
-        free_qdr_tcp_stats_t(c->tcp_stats);
-        qd_free_tcp_adaptor_config(c->config);
-        free_qd_tcp_connector_t(c);
+    vflow_end_record(connector->vflow);
+    qd_tls_domain_decref(connector->tls_domain);
+    free_qdr_tcp_stats_t(connector->tcp_stats);
+    qd_free_tcp_adaptor_config(connector->config);
+
+    sys_atomic_destroy(&connector->ref_count);
+    sys_mutex_free(&connector->lock);
+    sys_mutex_free(&connector->tcp_stats->stats_lock);
+    free_qd_tcp_connector_t(connector);
+}
+
+static void qd_tcp_connector_decref(qd_tcp_connector_t* connector)
+{
+    if (connector && sys_atomic_dec(&connector->ref_count) == 1) {
+        qd_tcp_connector_free(connector);
     }
 }
 
@@ -1761,6 +1870,28 @@ void qd_dispatch_delete_tcp_connector_legacy(qd_dispatch_t *qd, qd_tcp_connector
         handle_disconnected((qdr_tcp_connection_t*) ct->dispatcher_conn);
         ct->dispatcher_conn = 0;
         DEQ_REMOVE(tcp_adaptor->connectors, ct);
+
+        //
+        // Initiate termination of existing connections
+        //
+        if (qd->terminate_tcp_conns) {
+            // Note: PN_RAW_CONNECTION_CONNECTED event or PN_RAW_CONNECTION_DISCONNECTED event
+            // could come upon any of the connections. We need to hold the connector->lock
+            // to prevent any modification of the connections list while it is being traversed.
+            sys_mutex_lock(&ct->lock);
+            SET_ATOMIC_FLAG(&ct->closing);
+            //
+            // Only the head connection is woken when holding the lock.
+            // This is an optimization. The next connection in the list is woken up in the handler of the PN_RAW_DISCONNECTED
+            // event of this connection (See close_connection_XSIDE_IO() to see where the next connection in the list is woken up).
+            // That way, we don't have to wake all the connections when holding the lock.
+            //
+            qdr_tcp_connection_t *conn = DEQ_HEAD(ct->connections);
+            if (conn)
+                pn_raw_connection_wake(conn->pn_raw_conn);
+            sys_mutex_unlock(&ct->lock);
+        }
+
         qd_tcp_connector_decref(ct);
     }
 }
@@ -2341,7 +2472,7 @@ static void qdr_tcp_adaptor_init(qdr_core_t *core, void **adaptor_context)
                                             qdr_tcp_conn_trace);
     DEQ_INIT(adaptor->listeners);
     DEQ_INIT(adaptor->connectors);
-    DEQ_INIT(adaptor->connections);
+    DEQ_INIT(adaptor->tcp_connections);
     sys_mutex_init(&adaptor->listener_lock);
     *adaptor_context = adaptor;
 
@@ -2368,27 +2499,45 @@ static void qdr_tcp_adaptor_final(void *adaptor_context)
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Shutting down TCP protocol adaptor");
     qdr_tcp_adaptor_t *adaptor = (qdr_tcp_adaptor_t*) adaptor_context;
 
-    qdr_tcp_connection_t *tc = DEQ_HEAD(adaptor->connections);
-    while (tc) {
-        qdr_tcp_connection_t *next = DEQ_NEXT(tc);
-        free_qdr_tcp_connection(tc);
-        tc = next;
+    while (!DEQ_IS_EMPTY(adaptor->tcp_connections)) {
+        qdr_tcp_connection_ref_t *conn_ref = DEQ_HEAD(adaptor->tcp_connections);
+        DEQ_REMOVE_HEAD(adaptor->tcp_connections);
+        free_qdr_tcp_connection_ref_t(conn_ref);
     }
 
-    qd_tcp_listener_t *tl = DEQ_HEAD(adaptor->listeners);
-    while (tl) {
-        qd_tcp_listener_t *next = DEQ_NEXT(tl);
-        assert(sys_atomic_get(&tl->ref_count) == 1);  // leak check
-        qd_tcp_listener_decref(tl);
-        tl = next;
+    qd_tcp_listener_t *listener = DEQ_HEAD(adaptor->listeners);
+    while (listener) {
+        qd_tcp_listener_t *next = DEQ_NEXT(listener);
+        //
+        // Deliberately call qd_tcp_listener_incref() to make sure that freeing the connections, don't
+        // free the listener. Then we call qd_tcp_listener_free() to forcefully free the listener without checking the listener->ref_count
+        //
+        qd_tcp_listener_incref(listener);
+        qdr_tcp_connection_t *conn = DEQ_HEAD(listener->connections);
+        while (conn) {
+            qdr_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            free_qdr_tcp_connection(conn);
+            conn = next_conn;
+        }
+        qd_tcp_listener_free(listener);
+        listener = next;
     }
 
     qd_tcp_connector_t *connector = DEQ_HEAD(adaptor->connectors);
     while (connector) {
         qd_tcp_connector_t *next = DEQ_NEXT(connector);
-        free_qdr_tcp_connection((qdr_tcp_connection_t *) connector->dispatcher_conn);
-        assert(sys_atomic_get(&connector->ref_count) == 1);  // leak check
-        qd_tcp_connector_decref(connector);
+        //
+        // Deliberately call qd_tcp_connector_incref() to make sure that freeing the connections, don't
+        // free the listener. Then we call qd_tcp_listener_free() to forcefully free the listener without checking the listener->ref_count
+        //
+        qd_tcp_connector_incref(connector);
+        qdr_tcp_connection_t *conn = DEQ_HEAD(connector->connections);
+        while (conn) {
+            qdr_tcp_connection_t *next_conn = DEQ_NEXT(conn);
+            free_qdr_tcp_connection(conn);
+            conn = next_conn;
+        }
+        qd_tcp_connector_free(connector);
         connector = next;
     }
 
@@ -2528,12 +2677,12 @@ static void write_map(qdr_core_t           *core,
     qd_compose_end_map(body);
 }
 
-static void advance(qdr_query_t *query, qdr_tcp_connection_t *conn)
+static void advance(qdr_query_t *query, qdr_tcp_connection_ref_t *conn_ref)
 {
-    if (conn) {
+    if (conn_ref) {
         query->next_offset++;
-        conn = DEQ_NEXT(conn);
-        query->more = !!conn;
+        conn_ref = DEQ_NEXT(conn_ref);
+        query->more = !!conn_ref;
     }
     else {
         query->more = false;
@@ -2545,17 +2694,17 @@ static qdr_tcp_connection_t *find_by_identity(qdr_core_t *core, qd_iterator_t *i
     if (!identity)
         return 0;
 
-    qdr_tcp_connection_t *conn = DEQ_HEAD(tcp_adaptor->connections);
-    while (conn) {
+    qdr_tcp_connection_ref_t *conn_ref = DEQ_HEAD(tcp_adaptor->tcp_connections);
+    while (conn_ref) {
         // Convert the passed in identity to a char*
         char id[100];
-        snprintf(id, 100, "%"PRId64, conn->conn_id);
+        snprintf(id, 100, "%"PRId64, conn_ref->conn->conn_id);
         if (qd_iterator_equal(identity, (const unsigned char*) id))
             break;
-        conn = DEQ_NEXT(conn);
+        conn_ref = DEQ_NEXT(conn_ref);
     }
 
-    return conn;
+    return conn_ref->conn;
 
 }
 
@@ -2564,21 +2713,21 @@ void qdra_tcp_connection_get_first_CT(qdr_core_t *core, qdr_query_t *query, int 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "query for first tcp connection (%i)", offset);
     query->status = QD_AMQP_OK;
 
-    if (offset >= DEQ_SIZE(tcp_adaptor->connections)) {
+    if (offset >= DEQ_SIZE(tcp_adaptor->tcp_connections)) {
         query->more = false;
         qdr_agent_enqueue_response_CT(core, query);
         return;
     }
 
-    qdr_tcp_connection_t *conn = DEQ_HEAD(tcp_adaptor->connections);
-    for (int i = 0; i < offset && conn; i++)
-        conn = DEQ_NEXT(conn);
-    assert(conn);
+    qdr_tcp_connection_ref_t *conn_ref = DEQ_HEAD(tcp_adaptor->tcp_connections);
+    for (int i = 0; i < offset && conn_ref; i++)
+        conn_ref = DEQ_NEXT(conn_ref);
+    assert(conn_ref);
 
-    if (conn) {
-        write_list(core, query, conn);
+    if (conn_ref) {
+        write_list(core, query, conn_ref->conn);
         query->next_offset = offset;
-        advance(query, conn);
+        advance(query, conn_ref);
     } else {
         query->more = false;
     }
@@ -2588,24 +2737,24 @@ void qdra_tcp_connection_get_first_CT(qdr_core_t *core, qdr_query_t *query, int 
 
 void qdra_tcp_connection_get_next_CT(qdr_core_t *core, qdr_query_t *query)
 {
-    qdr_tcp_connection_t *conn = 0;
+    qdr_tcp_connection_ref_t *conn_ref = 0;
 
-    if (query->next_offset < DEQ_SIZE(tcp_adaptor->connections)) {
-        conn = DEQ_HEAD(tcp_adaptor->connections);
-        for (int i = 0; i < query->next_offset && conn; i++)
-            conn = DEQ_NEXT(conn);
+    if (query->next_offset < DEQ_SIZE(tcp_adaptor->tcp_connections)) {
+        conn_ref = DEQ_HEAD(tcp_adaptor->tcp_connections);
+        for (int i = 0; i < query->next_offset && conn_ref; i++)
+            conn_ref = DEQ_NEXT(conn_ref);
     }
 
-    if (conn) {
-        write_list(core, query, conn);
-        advance(query, conn);
+    if (conn_ref) {
+        write_list(core, query, conn_ref->conn);
+        advance(query, conn_ref);
     } else {
         query->more = false;
     }
     qdr_agent_enqueue_response_CT(core, query);
 }
 
-void qdra_tcp_connection_get_CT(qdr_core_t          *core,
+void qdra_tcp_connection_get_CT(qdr_core_t         *core,
                                qd_iterator_t       *name,
                                qd_iterator_t       *identity,
                                qdr_query_t         *query,
@@ -2635,10 +2784,10 @@ static void qdr_add_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bo
 {
     if (!discard) {
         qdr_tcp_connection_t *conn = (qdr_tcp_connection_t*) action->args.general.context_1;
-        DEQ_INSERT_TAIL(tcp_adaptor->connections, conn);
+        qdr_add_tcp_connection_ref(&tcp_adaptor->tcp_connections, conn);
         conn->in_list = true;
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%" PRIu64 "] qdr_add_tcp_connection_CT %s (%zu)",
-               conn->conn_id, conn->config->adaptor_config->host_port, DEQ_SIZE(tcp_adaptor->connections));
+               conn->conn_id, conn->config->adaptor_config->host_port, DEQ_SIZE(tcp_adaptor->tcp_connections));
     }
 }
 
@@ -2647,14 +2796,14 @@ static void qdr_del_tcp_connection_CT(qdr_core_t *core, qdr_action_t *action, bo
     if (!discard) {
         qdr_tcp_connection_t *conn = (qdr_tcp_connection_t*) action->args.general.context_1;
         if (conn->in_list) {
-            DEQ_REMOVE(tcp_adaptor->connections, conn);
+            qdr_del_tcp_connection_ref(&tcp_adaptor->tcp_connections, conn);
             qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG,
                    "[C%" PRIu64 "] qdr_del_tcp_connection_CT %s deleted. bytes_in=%" PRIu64 ", bytes_out=%" PRId64
                    ", "
                    "opened_time=%" PRId64 ", last_in_time=%" PRId64 ", last_out_time=%" PRId64
                    ". Connections remaining %zu",
                    conn->conn_id, conn->config->adaptor_config->host_port, conn->bytes_in, conn->bytes_out,
-                   conn->opened_time, conn->last_in_time, conn->last_out_time, DEQ_SIZE(tcp_adaptor->connections));
+                   conn->opened_time, conn->last_in_time, conn->last_out_time, DEQ_SIZE(tcp_adaptor->tcp_connections));
         }
         free_qdr_tcp_connection(conn);
     }
