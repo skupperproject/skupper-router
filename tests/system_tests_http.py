@@ -47,7 +47,9 @@ class RouterTestHttp(TestCase):
     @classmethod
     def get(cls, url, use_ca=True):
         if use_ca:
-            http_data = urlopen(url, cafile=CA_CERT)
+            sctxt = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+            sctxt.load_verify_locations(cafile=CA_CERT)
+            http_data = urlopen(url, context=sctxt)
         else:
             http_data = urlopen(url)
         return http_data.read().decode('utf-8')
@@ -226,7 +228,9 @@ class RouterTestHttp(TestCase):
 
         def _test(stat_names, port):
             # sanity check that all expected stats are reported
-            resp = urlopen(f"http://localhost:{port}/metrics", cafile=CA_CERT)
+            sctxt = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+            sctxt.load_verify_locations(cafile=CA_CERT)
+            resp = urlopen(f"http://localhost:{port}/metrics", context=sctxt)
             self.assertEqual(200, resp.getcode())
             metrics = [x for x in resp.read().decode('utf-8').splitlines() if not x.startswith("#")]
 
@@ -284,7 +288,9 @@ class RouterTestHttp(TestCase):
         r = self.qdrouterd('metrics-test-router', config)
 
         def test(port):
-            result = urlopen("http://localhost:%d/healthz" % port, cafile=CA_CERT)
+            sctxt = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+            sctxt.load_verify_locations(cafile=CA_CERT)
+            result = urlopen("http://localhost:%d/healthz" % port, context=sctxt)
             self.assertEqual(200, result.getcode())
 
         # Sequential calls on multiple ports
