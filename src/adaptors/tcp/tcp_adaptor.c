@@ -72,6 +72,11 @@ ENUM_DEFINE(qd_tcp_connection_state, state_names);
 #define CONNECTION_CLOSE_TIME 10000
 #define RAW_BUFFER_BATCH_SIZE 16
 
+// AMQP Message Application Properties
+//
+#define MAPPING_VERSION_KEY "V"   // ISSUE-1602: AMQP mapping version
+#define MAPPING_VERSION     1
+
 //
 // Global Adaptor State
 //
@@ -991,15 +996,17 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(qd_tcp_connection_t *con
         //qd_compose_insert_null(message);                              // reply-to-group-id
         qd_compose_end_list(message);
 
+        message = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, message);
+        qd_compose_start_map(message);
+        qd_compose_insert_string(message, MAPPING_VERSION_KEY);
+        qd_compose_insert_uint(message, MAPPING_VERSION);
         if (conn->alpn_protocol) {
             // add the ALPN protocol as negotiated with the remote via TLS.
-            message = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, message);
-            qd_compose_start_map(message);
             qd_compose_insert_string_n(message, (const char *) QD_TLS_ALPN_KEY, QD_TLS_ALPN_KEY_LEN);
             qd_compose_insert_string_n(message, (const char *) conn->alpn_protocol,
                                        strlen(conn->alpn_protocol));
-            qd_compose_end_map(message);
         }
+        qd_compose_end_map(message);
 
         message = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, message);
         qd_compose_insert_null(message);
@@ -1074,6 +1081,12 @@ static void compose_and_send_server_stream_CSIDE_IO(qd_tcp_connection_t *conn)
     //qd_compose_insert_uint(message, 0);                           // group-sequence
     //qd_compose_insert_null(message);                              // reply-to-group-id
     qd_compose_end_list(message);
+
+    message = qd_compose(QD_PERFORMATIVE_APPLICATION_PROPERTIES, message);
+    qd_compose_start_map(message);
+    qd_compose_insert_string(message, MAPPING_VERSION_KEY);
+    qd_compose_insert_uint(message, MAPPING_VERSION);
+    qd_compose_end_map(message);
 
     message = qd_compose(QD_PERFORMATIVE_BODY_AMQP_VALUE, message);
     qd_compose_insert_null(message);
@@ -1925,6 +1938,7 @@ static char *get_tls_negotiated_alpn(qd_message_t *msg)
                 qd_parsed_field_t *alpn_field = qd_parse_sub_value(ap, i);
                 qd_iterator_t     *alpn_iter  = qd_parse_raw(alpn_field);
                 alpn_protocol                 = (char *) qd_iterator_copy(alpn_iter);
+                break;
             }
         }
     }

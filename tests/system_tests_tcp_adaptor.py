@@ -29,7 +29,7 @@ from subprocess import PIPE
 from subprocess import STDOUT
 from typing import List, Optional, Mapping, Tuple
 
-from proton import Message, Disposition
+from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
@@ -2135,15 +2135,6 @@ class TcpAdaptorListenerConnectTest(TestCase):
         self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
 
 
-class TcpAdaptorListenerConnectLiteTest(TestCase):
-    """
-    Test client connecting to TcpListeners in various scenarios
-    """
-    @classmethod
-    def setUpClass(cls):
-        super(TcpAdaptorListenerConnectLiteTest, cls).setUpClass()
-
-
 class TcpDeleteConnectionTest(TestCase):
     @classmethod
     def setUpClass(cls, test_name="TcpDeleteConnectionTest"):
@@ -2216,164 +2207,6 @@ class TcpDeleteConnectionTest(TestCase):
         # Keep retrying until the connection is gone from the connection table.
         retry_assertion(check_connection_deleted, delay=2)
         client_conn.close()
-
-
-class InvalidClientSendRequest(MessagingHandler):
-    """
-    Builds a legacy TCP adaptor client request message with an incompatible
-    encapsulation format. Expect the TCP adaptor connector to release the
-    message so it can be re-delivered to another (compatible) connector.
-    """
-    def __init__(self, msg, address, destination):
-        super(InvalidClientSendRequest, self).__init__(auto_settle=False)
-        self.msg = msg
-        self.address = address
-        self.destination = destination
-        self.error = None
-        self.sent = False
-        self.timer = None
-        self.conn = None
-        self.sender = None
-
-    def done(self, error=None):
-        self.error = error
-        self.timer.cancel()
-        self.conn.close()
-
-    def timeout(self):
-        self.error = f"Timeout Expired: sent={self.sent}"
-        self.conn.close()
-
-    def on_start(self, event):
-        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.conn = event.container.connect(self.address)
-        self.sender = event.container.create_sender(self.conn, self.destination)
-
-    def on_sendable(self, event):
-        if not self.sent:
-            event.sender.send(self.msg)
-            self.sent = True
-
-    def on_released(self, event):
-        self.done()
-
-    def on_accepted(self, event):
-        self.done("Test Failed: message ACCEPTED (expected RELEASED)")
-
-    def on_rejected(self, event):
-        self.done("Test Failed: message REJECTED (expected RELEASED)")
-
-    def run(self):
-        Container(self).run()
-
-
-class InvalidServerSendReply(MessagingHandler):
-    """
-    Simulate via AMQP a TCP client/server flow and have the fake server send
-    "msg" as the TCP adaptor reply message to the client. Expect the client to
-    set the reply messages disposition to "dispo".
-    """
-    def __init__(self, msg, server_address, listener_address, service_address, dispo):
-        super(InvalidServerSendReply, self).__init__(auto_settle=False)
-        self.msg = msg
-        self.service_address = service_address
-        self.error = None
-        self.timer = None
-        self.expected_dispo = dispo
-
-        # fake server connection, receive link for request, send link for reply-to
-        self.server_address = server_address
-        self.server_conn = None
-        self.server_sender = None
-        self.server_receiver = None
-        self.server_sent = False
-
-        # The request message that arrives at the "server" is streaming. Proton
-        # does not give us an "on_message" callback since it never
-        # completes. Wait long enough for the headers to arrive so we can
-        # extract the reply-to
-        self.request_dlv = None
-        self.dlv_drain_timer = None
-
-        # fake tcp client, just opens an AMQP connection to the TCP
-        # listener. This initiates the ingress streaming request message.
-        self.listener_address = listener_address
-        self.client_conn = None
-
-    def done(self, error=None):
-        self.error = error
-        if self.timer:
-            self.timer.cancel()
-        self.server_conn.close()
-        if self.client_conn is not None:
-            self.client_conn.close()
-        if self.dlv_drain_timer:
-            self.dlv_drain_timer.cancel()
-
-    def timeout(self):
-        self.timer = None
-        self.done(error=f"Timeout Expired: server_sent={self.server_sent}")
-
-    def on_start(self, event):
-        # Create an AMQP receiver for the service address. This will simulate a
-        # fake server and activate the TCP adaptor listener port
-        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.server_conn = event.container.connect(self.server_address)
-        self.server_receiver = event.container.create_receiver(self.server_conn,
-                                                               self.service_address)
-
-    def on_timer_task(self, event):
-        # At this point we expect the reply-to header to have arrived. Use the
-        # reply-to address to send the 'msg' parameter to the client as the
-        # response streaming message.
-        try:
-            data = self.server_receiver.recv(self.request_dlv.pending)
-            msg = Message()
-            msg.decode(data)
-            self.server_sender = event.container.create_sender(self.server_conn,
-                                                               msg.reply_to)
-        except Exception as exc:
-            self.bail(error=f"Incomplete request msg headers {data}")
-
-        self.request_dlv.settle()
-
-    def on_delivery(self, event):
-        # We've received the start of the client request message. In order to
-        # set up a reply-to link wait until the message's reply-to field has
-        # arrived.
-        if event.receiver == self.server_receiver:
-            if self.request_dlv is None and event.delivery.readable:
-                # sleep a bit to allow all the header data to arrive on the
-                # delivery
-                self.request_dlv = event.delivery
-                self.dlv_drain_timer = event.reactor.schedule(1.0, self)
-
-    def on_link_opened(self, event):
-        if event.receiver == self.server_receiver:
-            # "server" ready to take requests, fire up the "client". All we
-            # need is to connect since that will activate the tcp adaptor
-            # client-side due to the AMQP @open handshake.
-            self.client_conn = event.container.connect(self.listener_address)
-
-    def on_sendable(self, event):
-        # Have the fake server send 'msg' to the reply-to of the fake client
-        if event.sender == self.server_sender:
-            if not self.server_sent:
-                # send the invalid reply
-                self.server_sender.send(self.msg)
-                self.server_sent = True
-
-    def on_released(self, event):
-        self.done(None if self.expected_dispo == Disposition.RELEASED else "Unexpected PN_RELEASED")
-
-    def on_accepted(self, event):
-        self.done(None if self.expected_dispo == Disposition.ACCEPTED else "Unexpected PN_ACCEPTED")
-
-    def on_rejected(self, event):
-        self.done(None if self.expected_dispo == Disposition.REJECTED else "Unexpected PN_REJECTED")
-
-    def run(self):
-        Container(self).run()
 
 
 class TcpAdaptorConnCounter(TestCase):
@@ -2687,6 +2520,7 @@ class FakeClientStreamAborter(MessagingHandler):
                 msg.reply_to = self.reply_to
                 msg.correlation_id = "A0Z_P:1"
                 msg.content_type = "application/octet-stream"
+                msg.properties = {"V": 1}  # version
                 encoded = msg.encode()
                 # add body value null terminator
                 encoded += b'\x00\x53\x77\x40'
@@ -2721,6 +2555,290 @@ class FakeClientStreamAborter(MessagingHandler):
                 dlv.update(dlv.ACCEPTED)
                 dlv.settle()
                 self.done()
+
+    def run(self):
+        Container(self).run()
+
+
+class TcpAdaptorVersionTest(TestCase):
+    """
+    Ensure the correct protocol mapping version is advertised in the
+    AMQP message properties
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TcpAdaptorVersionTest, cls).setUpClass()
+
+        cls.listener_port = cls.tester.get_port()
+        cls.connector_port = cls.tester.get_port()
+
+        config = [
+            ('router', {'mode': 'interior',
+                        'id': 'TCPVersionTest'}),
+            ('listener', {'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            ('tcpListener', {'host': "0.0.0.0", 'port': cls.listener_port,
+                             'address': 'Listener/Addr'}),
+
+            ('tcpConnector', {'host': "127.0.0.1", 'port': cls.connector_port,
+                              'address': 'Connector/Addr'})
+        ]
+        config = Qdrouterd.Config(config)
+        cls.router = cls.tester.qdrouterd('TCPVersionTest', config)
+
+    def test_01_check_client_version(self):
+        """
+        Verify the proper version is added by the listener-facing TCP Adaptor
+        """
+        tester = ServerVersionTest(server_address=self.router.addresses[0],
+                                   listener_port=self.listener_port)
+        tester.run()
+        self.assertIsNone(tester.error, f"Error: {tester.error}")
+
+    def test_01_check_server_version(self):
+        """
+        Verify the proper version is added by the connector-facing TCP Adaptor
+        """
+        logger = Logger(title="VersionChecker")
+        echo_server = TcpEchoServer(port=self.connector_port,
+                                    logger=logger)
+        assert echo_server.is_running
+        tester = ClientVersionTest(router_address=self.router.addresses[0])
+        tester.run()
+        echo_server.wait()
+        self.assertIsNone(tester.error, f"Error: {tester.error}")
+
+
+class ServerVersionTest(MessagingHandler):
+    """
+    Verify that the Listener-facing TCP adaptor adds the correct version to the
+    internal application properties field in the streaming message
+
+    This creates an AMQP receiver for "Listener/Addr" and then attempts to
+    connect and AMQP client to the router's tcpListener. When the streaming
+    message arrives as the AMQP receiver it checks the version in the
+    application properties header field.
+    """
+    def __init__(self, server_address, listener_port):
+        super(ServerVersionTest, self).__init__()
+        self.service_address = "Listener/Addr"
+        self.error = None
+        self.timer = None
+
+        # fake server connection, receive link for Listener adaptor message,
+        # send link for reply-to
+        self.server_address = server_address
+        self.server_conn = None
+        self.server_sender = None
+        self.server_receiver = None
+        self.server_sent = False
+
+        # The "client" message that arrives at the "server" is
+        # streaming. Proton does not give us an "on_message" callback since it
+        # never completes. Wait long enough for the headers to arrive so we can
+        # extract the application properties
+        self.request_dlv = None
+        self.dlv_drain_timer = None
+
+        # tcp client, just opens a socket to the TCP listener. This initiates
+        # the ingress streaming request message.
+        self.listener_port = listener_port
+        self.client_socket = None
+
+    def done(self, error=None):
+        # print(f"DONE error={error}", flush=True)
+        self.error = error
+        if self.timer:
+            self.timer.cancel()
+        self.server_conn.close()
+        if self.client_socket is not None:
+            self.client_socket.close()
+        if self.dlv_drain_timer:
+            self.dlv_drain_timer.cancel()
+
+    def timeout(self):
+        self.timer = None
+        self.done(error=f"Timeout Expired: server_sent={self.server_sent}")
+
+    def connect_client(self):
+        while True:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.settimeout(TIMEOUT)
+            try:
+                client.connect(('127.0.0.1', self.listener_port))
+                return client
+            except ConnectionRefusedError:
+                # keep retrying until the router listener is opened
+                client.close()
+                print("client connection refused, retrying...", flush=True)
+                time.sleep(0.5)
+                continue
+
+    def on_start(self, event):
+        # Create an AMQP receiver for the service address. This will simulate a
+        # fake server and activate the TCP adaptor listener port
+        # print("ON START", flush=True)
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.server_conn = event.container.connect(self.server_address)
+        self.server_receiver = event.container.create_receiver(self.server_conn,
+                                                               self.service_address)
+
+    def on_timer_task(self, event):
+        # At this point we expect the reply-to header to have arrived. Use the
+        # reply-to address to send the 'msg' parameter to the client as the
+        # response streaming message.
+        # print("ON TIMER", flush=True)
+        data = self.server_receiver.recv(self.request_dlv.pending)
+        msg = Message()
+        try:
+            msg.decode(data)
+        except Exception as exc:
+            self.done(error=f"Incomplete request msg headers {data}")
+            return
+
+        if "V" not in msg.properties:
+            self.done(error=f"No 'V' key: {msg.properties}")
+            return
+
+        version = msg.properties['V']
+        if version != 1:
+            self.done(error=f"Expected version of 1: {msg.properties}")
+            return
+
+        self.request_dlv.settle()
+        self.done(error=None)
+
+    def on_delivery(self, event):
+        # We've received the start of the client request message. In order to
+        # ensure the properties field has arrive wait a bit
+        # print("ON DLV", flush=True)
+        if event.receiver == self.server_receiver:
+            if self.request_dlv is None and event.delivery.readable:
+                # sleep a bit to allow all the header data to arrive on the
+                # delivery
+                self.request_dlv = event.delivery
+                self.dlv_drain_timer = event.reactor.schedule(1.0, self)
+
+    def on_link_opened(self, event):
+        # print("ON link opened", flush=True)
+        if event.receiver == self.server_receiver:
+            # "server" ready to take requests, fire up the "client". All we
+            # need is to connect since that will activate the tcp adaptor
+            # client-side due to the AMQP @open handshake.
+            self.client_socket = self.connect_client()
+
+    def run(self):
+        Container(self).run()
+
+
+class ClientVersionTest(MessagingHandler):
+    """
+    Simulate a tcpListener by creating an inbound AMQP link to the service
+    address and a reply-to. Initiate a streaming message to the service. Once
+    the reply message arrives from the connector side TCP Adaptor verify the
+    version.
+    """
+    def __init__(self, router_address):
+        super(ClientVersionTest, self).__init__()
+        self.service_address = "Connector/Addr"
+        self.router_address = router_address
+        self.error = None
+        self.timer = None
+
+        self.client_conn = None
+        self.client_receiver = None
+        self.client_sender = None
+        self.reply_to = None
+        self.message_sent = False
+
+        # Reply from server. Since it is streaming Proton will not give us an
+        # "on_message" callback. Wait long enough for all message headers to
+        # arrive before attempting to extract the application properties
+        self.reply_dlv = None
+        self.dlv_drain_timer = None
+
+    def done(self, error=None):
+        # print(f"DONE error={error}", flush=True)
+        self.error = error
+        if self.timer:
+            self.timer.cancel()
+        self.client_conn.close()
+        if self.dlv_drain_timer is not None:
+            self.dlv_drain_timer.cancel()
+
+    def timeout(self):
+        self.timer = None
+        self.done(error="Timeout Expired")
+
+    def on_start(self, event):
+        # print("ONE START", flush=True)
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.client_conn = event.container.connect(self.router_address)
+        self.client_receiver = event.container.create_receiver(self.client_conn,
+                                                               dynamic=True)
+
+    def on_timer_task(self, event):
+        # At this point we expect the reply message header is completely
+        # received and we can extract the properties
+        # print("ON TIMER", flush=True)
+        data = self.client_receiver.recv(self.reply_dlv.pending)
+        msg = Message()
+        try:
+            msg.decode(data)
+        except Exception as exc:
+            self.done(error=f"Incomplete request msg headers {data}")
+            return
+
+        if "V" not in msg.properties:
+            self.done(error=f"No 'V' key: {msg.properties}")
+            return
+
+        version = msg.properties['V']
+        if version != 1:
+            self.done(error=f"Expected version of 1: {msg.properties}")
+            return
+
+        self.reply_dlv.settle()
+        self.done(error=None)
+
+    def on_link_opened(self, event):
+        # print("on_link_opened", flush=True)
+        if event.receiver == self.client_receiver:
+            self.reply_to = self.client_receiver.remote_source.address
+            # print(f"dynamic reply-to {self.reply_to}, attaching sender...", flush=True)
+            self.client_sender = event.container.create_sender(self.client_conn,
+                                                               self.service_address)
+
+    def on_sendable(self, event):
+        # print("on_sendable", flush=True)
+        if event.sender == self.client_sender:
+            if self.message_sent is False:
+                # print("generating inbound message", flush=True)
+                self.message_sent = True
+                assert self.reply_to is not None
+                dlv = self.client_sender.delivery("INBOUND-DELIVERY")
+                msg = Message()
+                msg.address = self.service_address
+                msg.reply_to = self.reply_to
+                msg.correlation_id = "A0Z_P:1"
+                msg.content_type = "application/octet-stream"
+                msg.properties = {"V": 1}  # version
+                encoded = msg.encode()
+                # add body value null terminator
+                encoded += b'\x00\x53\x77\x40'
+                # and enough content to classify this message as streaming...
+                self.payload_tx = 100000
+                encoded += b'ABC' * self.payload_tx
+                self.client_sender.stream(encoded)
+
+    def on_delivery(self, event):
+        # Reply returned from connector TCP adaptor
+        # print("on_delivery", flush=True)
+        if event.receiver == self.client_receiver:
+            if self.reply_dlv is None and event.delivery.readable:
+                self.reply_dlv = event.delivery
+                self.dlv_drain_timer = event.reactor.schedule(1.0, self)
 
     def run(self):
         Container(self).run()
