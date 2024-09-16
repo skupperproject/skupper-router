@@ -126,6 +126,12 @@ qd_http2_frame_type get_frame_type(const uint8_t frame_type)
     return FRAME_TYPE_OTHER;
 }
 
+uint8_t get_pad_length(const uint8_t *data)
+{
+    uint8_t pad_length = (uint8_t) ((data)[0]);
+    return pad_length;
+}
+
 uint32_t get_stream_identifier(const uint8_t *data)
 {
     uint32_t stream_id = (((uint32_t) (data)[0]) << 24) | (((uint32_t) (data)[1]) << 16) | (((uint32_t) (data)[2]) << 8) | ((uint32_t) (data)[3]);
@@ -321,8 +327,9 @@ bool get_request_headers(qd_http2_decoder_t *decoder)
     qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - end_stream=%i, end_headers=%i, is_padded=%i, has_priority=%i, stream_id=%" PRIu32, decoder->conn_state->conn_id, end_stream, end_headers, is_padded, has_priority, stream_id);
     scratch_buffer->offset += HTTP2_FRAME_STREAM_ID_LENGTH;
     decoder->frame_length_processed += HTTP2_FRAME_STREAM_ID_LENGTH;
-
+    uint8_t pad_length = 0;
     if(is_padded) {
+        pad_length = get_pad_length(scratch_buffer->bytes + scratch_buffer->offset);
         // Move one byte to account for pad length
         scratch_buffer->offset += 1;
         decoder->frame_length_processed += 1;
@@ -330,6 +337,7 @@ bool get_request_headers(qd_http2_decoder_t *decoder)
 
     if(has_priority) {
         // Skip the Stream Dependency field if the priority flag is set
+        // Stream Dependency field is 4 octets.
         scratch_buffer->offset += 4;
         decoder->frame_length_processed += 4;
 
@@ -337,6 +345,29 @@ bool get_request_headers(qd_http2_decoder_t *decoder)
         scratch_buffer->offset += 1;
         decoder->frame_length_processed += 1;
     }
+
+    //
+    // Before the call to decompress_headers(), we need to make sure that there is some data left in the scratch buffer before we decompress it.
+    //
+    int buffer_data_size = scratch_buffer->size - scratch_buffer->offset;
+    printf("get_request_headers buffer_data_size=%i\n", buffer_data_size);
+    int contains_pad_length = scratch_buffer->size - pad_length;
+    int pad_length_offset = scratch_buffer->size - pad_length - scratch_buffer->offset;
+    bool valid_pad_length = contains_pad_length > 0;
+    bool valid_buffer_data = buffer_data_size > 0;
+    bool valid_pad_length_offset = pad_length_offset > 0;
+    if(decoder->frame_payload_length == 0 || !valid_buffer_data || !valid_pad_length || !valid_pad_length_offset) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - failure, moving decoder state to HTTP2_DECODE_ERROR", decoder->conn_state->conn_id);
+        static char error[130];
+        snprintf(error, sizeof(error), "get_request_headers - either request or response header was received with zero payload or contains bogus data, stopping decoder");
+        reset_decoder_frame_info(decoder);
+        reset_scratch_buffer(&decoder->scratch_buffer);
+        parser_error(decoder, error);
+        return false;
+    }
+
+    // Take out the padding bytes from the end of the scratch buffer
+    scratch_buffer->size = scratch_buffer->size - pad_length;
 
     // We are now finally at a place which matters to us - The Header block fragment. We will look thru and decompress it so we can get the request/response headers.
     int rv = decompress_headers(decoder, stream_id, scratch_buffer->bytes + scratch_buffer->offset, scratch_buffer->size - scratch_buffer->offset);
@@ -380,11 +411,12 @@ static bool parse_request_header(qd_http2_decoder_t *decoder, const uint8_t **da
             parser_error(decoder, "scratch buffer size exceeded 65535 bytes, stopping decoder");
             return false;
         }
-        decoder->frame_length_processed += bytes_to_copy;
         *data += bytes_to_copy;
         *length -= bytes_to_copy;
-        if(decoder->frame_length_processed == decoder->frame_length) {
-            get_request_headers(decoder);
+        if((decoder->frame_length_processed + bytes_to_copy) == decoder->frame_length) {
+            bool header_success = get_request_headers(decoder);
+            if(!header_success)
+                return false;
         }
         if (*length > 0) {
             return true; // More bytes remain to be processed, continue processing.

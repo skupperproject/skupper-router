@@ -108,6 +108,9 @@
                       <exclude>share/index.html</exclude>
                       <exclude>scripts/git-clang-format</exclude>
                       <exclude>tests/nginx/**</exclude>
+                      <exclude>tests/fuzz/fuzz_http2_decoder/**</exclude>
+                      <exclude>tests/fuzz/fuzz_http1_decoder/**</exclude>
+                      <exclude>**/README.md</exclude>
                 </excludes>
         </configuration>
             </plugin>

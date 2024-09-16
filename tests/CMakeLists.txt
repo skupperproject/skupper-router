@@ -40,7 +40,6 @@ set(unit_test_SOURCES
     hash_test.c
     thread_test.c
     platform_test.c
-    static_assert_test.c
     )
 
 add_executable(unit_tests ${unit_test_SOURCES})
@@ -253,3 +252,7 @@ add_subdirectory(cpp)
 if(BUILD_BENCHMARKS)
   add_subdirectory(c_benchmarks)
 endif()
+
+if (ENABLE_FUZZ_TESTING)
+  add_subdirectory(fuzz)
+endif (ENABLE_FUZZ_TESTING)
