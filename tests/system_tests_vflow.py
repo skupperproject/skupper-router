@@ -360,7 +360,7 @@ class VFlowInterRouterTest(TestCase):
                             'dataConnectionCount': 4}),
                 ('listener', {'role': 'normal',
                               'port': cls.tester.get_port()}),
-                ('connector', {'role': 'inter-router',
+                ('connector', {'role': 'inter-router', 'cost': 23,
                                'port': cls.inter_router_port}),
                 ('tcpConnector', {'host': '127.0.0.1',
                                   'port': cls.tcp_connector_port,
@@ -471,6 +471,7 @@ class VFlowInterRouterTest(TestCase):
                                'REASON': ANY_VALUE}),
                      ('LINK', {'OPER_STATUS': 'up',
                                'ROLE': 'inter-router',
+                               'LINK_COST': 23,
                                'DESTINATION_PORT': str(self.inter_router_port)})
                      ],
             "INTB": [('ROUTER_ACCESS', {'LINK_COUNT': 1,
