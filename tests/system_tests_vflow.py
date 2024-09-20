@@ -545,8 +545,13 @@ class VFlowInterRouterTest(TestCase):
         success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
 
+        # there is no service present and the connector-side connection attempt
+        # will fail. This will cause the clients to fail since data cannot be
+        # transferred successfully. Ignore these errors:
+
         for i in range(flow_count):
-            clients[i].wait()
+            with self.assertRaises(Exception):
+                clients[i].wait()
 
     @classmethod
     def tearDownClass(cls):
