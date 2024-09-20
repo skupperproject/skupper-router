@@ -25,7 +25,7 @@ import signal
 import socket
 import ssl
 import sys
-from threading import Thread, Condition, Lock
+from threading import Thread, Event
 import time
 import traceback
 from system_test import Logger
@@ -63,7 +63,8 @@ class TcpEchoClient:
                  timeout=TIMEOUT,
                  logger=None,
                  ssl_info=None,
-                 delay_close=False):
+                 delay_close=False,
+                 wait_connected=True):
         """
         :param host: connect to this host
         :param port: connect to this port
@@ -73,7 +74,10 @@ class TcpEchoClient:
                              Recv one payload
         :param logger: Logger() object
         :param ssl_info: optional SSL information for the connection
-        :param delay_close: if True, hold the connection open until the call to 'wait'
+        :param delay_close: by default the connection is closed after all data
+        has been passed. If delay_close=True, hold the connection open after
+        passing all data until the call to 'wait'
+        :param wait_connected: block the caller until the socket has connected (or failed)
         :return:
         """
         # Start up
@@ -87,23 +91,27 @@ class TcpEchoClient:
         self.timeout = timeout
         self.logger = logger
         self.keep_running = True
-        self.is_running = False
-        self.is_waiting_to_close = False
         self.exit_status = None
         self.error = None
         self.ssl_info = ssl_info
         self.delay_close = delay_close
-        self._lock = Lock()
-        self._cond = Condition(self._lock)
         self._thread = Thread(target=self.run)
+        self._done = Event()  # set when all data passed (or error)
+        self._connected = Event()  # set when TCP connection up (or error)
+        self._delay_waiting = Event()  # set when delay_close blocking for wait()
         self._thread.daemon = True
         self._thread.start()
+        if wait_connected:
+            connected = self._connected.wait(timeout=TIMEOUT)
+            if connected is False:
+                raise Exception("Connection failed")
+            if self.error is not None:
+                raise Exception(self.error)
 
     def run(self):
         self.logger.log("%s Client is starting up" % self.prefix)
         try:
             start_time = time.time()
-            self.is_running = True
             self.logger.log('%s Connecting to host:%s, port:%d, size:%d, count:%d' %
                             (self.prefix, self.host, self.port, self.size, self.count))
             total_sent = 0
@@ -172,8 +180,8 @@ class TcpEchoClient:
                     break
                 except ConnectionRefusedError as err:
                     if time.time() > conn_timeout:
-                        self.logger.log('%s Failed to connect to host:%s port:%d - Connection Refused!'
-                                        % (self.prefix, self.host, self.port))
+                        self.error = f'ERROR: {self.prefix} Failed to connect to {self.host}:{self.port} - Connection Refused!'
+                        self.logger.log(self.error)
                         raise
                     time.sleep(0.1)
                     self.logger.log('%s Failed to connect to host:%s port:%d - Retrying...'
@@ -187,6 +195,9 @@ class TcpEchoClient:
             sel = selectors.DefaultSelector()
             sel.register(self.sock,
                          selectors.EVENT_READ | selectors.EVENT_WRITE)
+
+            # connection complete, unblock caller
+            self._connected.set()
 
             # event loop
             while self.keep_running:
@@ -233,6 +244,7 @@ class TcpEchoClient:
                                 in_list_idx += 1
                                 if in_list_idx == self.count:
                                     # Received all bytes of all chunks - done.
+                                    self.logger.log(f"{self.prefix} Received {self.count} messages, done!")
                                     self.keep_running = False
                                     # Verify the received data
                                     if payload_in != payload_out:
@@ -286,33 +298,39 @@ class TcpEchoClient:
                         else:
                             pass  # logger.log("DEBUG: ignoring EVENT_WRITE")
 
-            # delay the close if necessary
-            while self.delay_close:
+            # If delaying the close of the connection block until wait is
+            # called
+            if self.delay_close:
                 self.logger.log("%s Delayed closing wait..." % self.prefix)
-                self.is_waiting_to_close = True
-                self._lock.acquire()
-                self._cond.wait(self.timeout)
-                self._lock.release()
+                while self._delay_waiting.wait(timeout=TIMEOUT) is False:
+                    pass
                 self.logger.log("%s Delayed closing signaled" % self.prefix)
 
             # shut down
             sel.unregister(self.sock)
             self.sock.close()
+            self.sock = None
 
         except Exception:
-            self.error = "ERROR: exception : '%s'" % traceback.format_exc()
-            self.sock.close()
+            if self.error is None:
+                self.error = "ERROR: exception : '%s'" % traceback.format_exc()
+            if self.sock is not None:
+                self.sock.close()
 
-        self.is_running = False
+        self._connected.set()  # Ensure the caller has been unblocked
+        self._done.set()
 
     def wait(self, timeout=TIMEOUT):
-        self.logger.log("%s Client is shutting down" % self.prefix)
-        self.keep_running = False
-        self.delay_close  = False
-        self._lock.acquire()
-        self._cond.notify_all()
-        self._lock.release()
+        self.logger.log(f"{self.prefix} Shutting down the client")
+        self._delay_waiting.set()
+        if self._done.wait(timeout=timeout) is False:
+            raise Exception(f"{self.prefix} Client failed to shut down")
         self._thread.join(timeout)
+        if self._thread.is_alive():
+            raise Exception(f"{self.prefix} Client thread failed to join")
+        if self.error:
+            raise Exception(self.error)
+        self.logger.log("%s Client shutdown" % self.prefix)
 
 
 def main(argv):

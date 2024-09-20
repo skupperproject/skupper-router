@@ -86,20 +86,6 @@ except ImportError:
 CONN_STALL_DELAY_SECONDS = 1.0
 
 
-def check_runners(dup_runners):
-    finished_runners = []
-    for dup_runner in dup_runners:
-        # Gather only the clients that have already finished running.
-        # Once the echo client receives all bytes from the echo server, keep_running is set
-        # to False by the echo client.
-        if not dup_runner.e_client.keep_running:
-            finished_runners.append(dup_runner)
-    print("len(finished_runners)=", len(finished_runners))
-    for finished_runner in finished_runners:
-        dup_runners.remove(finished_runner)
-    return len(dup_runners) == 0
-
-
 def ncat_available():
     try:
         return 0 == subprocess.check_call(['ncat', '--version'],
@@ -114,9 +100,8 @@ def ncat_available():
 #
 class EchoClientRunner:
     """
-    Launch an echo client upon construction.
-    Provide poll interface for checking done/error.
-    Provide wait/join to shut down.
+    Wrapper for a TcpEchoClient. Provides automatic port assignment and client
+    TLS configuration.
     """
 
     def __init__(self, test_name, client_n, logger, client, server, size,
@@ -127,7 +112,7 @@ class EchoClientRunner:
                  test_ssl=False,
                  delay_close=False):
         """
-        Launch an echo client upon construction.
+        Launch an echo client thread.  Raises an exception if the client fails.
 
         :param test_name: Unique name for log file prefix
         :param client_n: Client number for differentiating otherwise identical clients
@@ -137,7 +122,9 @@ class EchoClientRunner:
         :param size: length of messages in bytes
         :param count: number of messages to be sent/verified
         :param print_client_logs: verbosity switch
-        :return Null if success else string describing error
+        :param port_override: TCP port to use otherwise use the test client ports
+        :param test_ssl: if True use TLS on the connection
+        :param delay_close: if True keep connection open after all data transfered
         """
         self.test_name = test_name
         self.client_n = str(client_n)
@@ -148,7 +135,6 @@ class EchoClientRunner:
         self.count = count
         self.timeout = timeout
         self.print_client_logs = print_client_logs
-        self.client_final = False
 
         # Each router has a listener for the echo server attached to every router
         self.listener_port = TcpAdaptor.tcp_client_listener_ports[self.client][self.server] if port_override is None else port_override
@@ -186,31 +172,12 @@ class EchoClientRunner:
             self.logger.log(self.e_client.error)
             raise Exception(self.e_client.error)
 
-    def client_error(self):
-        return self.e_client.error
-
-    def client_exit_status(self):
-        return self.e_client.exit_status
-
-    def client_running(self):
-        return self.e_client.is_running
-
-    def client_waiting_to_close(self):
-        return self.e_client.is_waiting_to_close
-
     def wait(self):
-        # wait for client to exit
-        # Return None if successful wait/join/exit/close else error message
-        result = None
-        try:
-            self.e_client.wait()
-
-        except Exception as exc:
-            self.e_client.error = "TCP_TEST EchoClient %s failed. Exception: %s" % \
-                                  (self.name, traceback.format_exc())
-            self.logger.log(self.e_client.error)
-            result = self.e_client.error
-        return result
+        """
+        Block until the client completes. An exception is raised if the client
+        failed.
+        """
+        self.e_client.wait()
 
 
 class TcpAdaptorBase(TestCase):
@@ -816,15 +783,14 @@ class CommonTcpTests:
         """
         Launch all the echo pairs defined in the list
         Wait for completion.
+        Raise an Exception on failure
+
         :param test_name test name
         :param echo_pair_list list of EchoPair objects describing the test
         :param test_ssl should this function use ssl ?
-        :return: None if success else error message for ctest
         """
         self.logger.log("TCP_TEST %s Start do_tcp_echo_n_routers" % (test_name))
-        result = None
         runners = []
-        dup_runners = []
         client_num = 0
 
         try:
@@ -843,162 +809,27 @@ class CommonTcpTests:
                                                   client, server, size, count,
                                                   self.print_logs_client,
                                                   test_ssl=test_ssl)
-                        dup_runners.append(runner)
                         runners.append(runner)
                         client_num += 1
 
-            # check if every echo runner has completed and allow TIMEOUT
-            # seconds for the operation to complete.
-            retry(lambda: check_runners(dup_runners))
+            # Wait for the clients to finish transferring data.
+            # This will raise an exception (fail the test) if any client fails
 
-            # Loop until timeout, error, or completion
-            while result is None:
-                # Make sure servers are still up
-                for rtr in TcpAdaptor.router_order:
-                    es = TcpAdaptor.echo_servers[rtr]
-                    if es.error is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
-                                        (test_name, es.prefix, es.error))
-                        result = es.error
-                        break
-                if result is not None:
-                    break
-
-                # Check for completion or runner error
-                complete = True
-                for runner in runners:
-                    if not runner.client_final:
-                        error = runner.client_error()
-                        if error is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with error: %s" %
-                                            (test_name, runner.name, error))
-                            result = error
-                            runner.client_final = True
-                            break
-                        status = runner.client_exit_status()
-                        if status is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with status: %s" %
-                                            (test_name, runner.name, status))
-                            result = status
-                            runner.client_final = True
-                            break
-                        running = runner.client_running()
-                        if running:
-                            complete = False
-                        else:
-                            self.logger.log("TCP_TEST %s Client %s exited normally" %
-                                            (test_name, runner.name))
-                            runner.client_final = True
-                if complete and result is None:
-                    break
-
-            # Wait/join all the runners
             for runner in runners:
                 runner.wait()
 
-            if result is not None:
-                self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
-            else:
-                self.logger.log(("TCP_TEST %s SUCCESS " + over_tls) % test_name)
+            # Make sure servers are still up and did not fail
+            for rtr in TcpAdaptor.router_order:
+                es = TcpAdaptor.echo_servers[rtr]
+                if es.error is not None:
+                    error = f"TCP_TEST {test_name} Server {es.prefix} stopped with error: {es.error}"
+                    self.logger.log(error)
+                    raise Exception(error)
 
         except Exception as exc:
-            result = "TCP_TEST %s failed. Exception: %s" % \
-                (test_name, traceback.format_exc())
-
-        return result
-
-    def do_tcp_echo_singleton(self, test_name, client, server, size, count, echo_port):
-        """
-        Launch a single echo client to the echo_port
-        Wait for completion.
-        Note that client and server do not define the port that the echo client
-        must connect to. That is overridden by echo_port. Still client and server
-        are passed to the EchoClientRunner
-        :param test_name test name
-        :param client router to which echo client attaches
-        :param server router that has the connector to the echo server
-        :param size size of message to be echoed
-        :param count number of messages to be echoed
-        :param echo_port the router network listener port
-        :return: None if success else error message for ctest
-        """
-        self.logger.log("TCP_TEST %s Start do_tcp_echo_singleton" % test_name)
-        result = None
-        runners = []
-        dup_runners = []
-        client_num = 0
-        start_time = time.time()
-
-        try:
-            # Launch the runner
-            log_msg = "TCP_TEST %s Running singleton %d %s->%s port %d, size=%d count=%d" % \
-                      (test_name, client_num, client.name, server.name, echo_port, size, count)
-            self.logger.log(log_msg)
-            runner = EchoClientRunner(test_name, client_num, self.logger,
-                                      client.name, server.name, size, count,
-                                      self.print_logs_client,
-                                      port_override=echo_port)
-            dup_runners.append(runner)
-            runners.append(runner)
-            client_num += 1
-
-            retry(lambda: check_runners(dup_runners))
-
-            # Loop until timeout, error, or completion
-            while result is None:
-                # Make sure servers are still up
-                for rtr in TcpAdaptor.router_order:
-                    es = TcpAdaptor.echo_servers[rtr]
-                    if es.error is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
-                                        (test_name, es.prefix, es.error))
-                        result = es.error
-                        break
-                if result is not None:
-                    break
-
-                # Check for completion or runner error
-                complete = True
-                for runner in runners:
-                    if not runner.client_final:
-                        error = runner.client_error()
-                        if error is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with error: %s" %
-                                            (test_name, runner.name, error))
-                            result = error
-                            runner.client_final = True
-                            break
-                        status = runner.client_exit_status()
-                        if status is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with status: %s" %
-                                            (test_name, runner.name, status))
-                            result = status
-                            runner.client_final = True
-                            break
-                        running = runner.client_running()
-                        if running:
-                            complete = False
-                        else:
-                            self.logger.log("TCP_TEST %s Client %s exited normally" %
-                                            (test_name, runner.name))
-                            runner.client_final = True
-                if complete and result is None:
-                    self.logger.log("TCP_TEST %s SUCCESS" %
-                                    test_name)
-                    break
-
-            # Wait/join all the runners
-            for runner in runners:
-                runner.wait()
-
-            if result is not None:
-                self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
-
-        except Exception as exc:
-            result = "TCP_TEST %s failed. Exception: %s" % \
-                (test_name, traceback.format_exc())
-
-        return result
+            self.logger.log("TCP_TEST %s failed. Exception: %s" %
+                            (test_name, traceback.format_exc()))
+            raise
 
     def all_balanced_connector_stats(self, iter_num):
         """
@@ -1016,19 +847,18 @@ class CommonTcpTests:
 
     def do_tcp_balance_test(self, test_name, client, count, iter_num, test_ssl=False):
         """
-        Launch 'count' connections from a single location.
-        Wait for stability (all connections established)
-        Test that every instance of the echo server has at least one connection open.
-        Close the connections
+        Launch 'count' echo client connected to single Router.
+        Wait for data to be passed.
+        Test that every instance of the echo server has seen least one connection opened.
+        Raise an Exception on failure
+
         :param test_name test name
         :param client router to which echo clients attach
         :param count number of connections to be established
         :return: None if success else error message for ctest
         """
         self.logger.log("TCP_TEST %s do_tcp_balance_test (ingress: %s connections: %d)" % (test_name, client, count))
-        result = None
         runners = []
-        dup_runners = []
 
         # Collect a baseline of the connection counts for the balanced connectors
         baseline = self.all_balanced_connector_stats(iter_num)
@@ -1051,81 +881,41 @@ class CommonTcpTests:
                                           port_override=listener_port,
                                           test_ssl=test_ssl,
                                           delay_close=True)
-                dup_runners.append(runner)
                 runners.append(runner)
 
-            retry(lambda: check_runners(dup_runners))
-
-            # Loop until timeout, error, or completion
-            while result is None:
-                # Make sure servers are still up
-                for rtr in TcpAdaptor.router_order:
-                    es = TcpAdaptor.echo_servers[rtr]
-                    if es.error is not None:
-                        self.logger.log("TCP_TEST %s Server %s stopped with error: %s" %
-                                        (test_name, es.prefix, es.error))
-                        result = es.error
-                        break
-                if result is not None:
-                    break
-
-                # Check for completion or runner error
-                complete = True
-                for runner in runners:
-                    if not runner.client_final:
-                        error = runner.client_error()
-                        if error is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with error: %s" %
-                                            (test_name, runner.name, error))
-                            result = error
-                            runner.client_final = True
-                            break
-                        status = runner.client_exit_status()
-                        if status is not None:
-                            self.logger.log("TCP_TEST %s Client %s stopped with status: %s" %
-                                            (test_name, runner.name, status))
-                            result = status
-                            runner.client_final = True
-                            break
-                        running = runner.client_running() and not runner.client_waiting_to_close()
-                        if running:
-                            complete = False
-                        else:
-                            self.logger.log("TCP_TEST %s Client %s exited normally" %
-                                            (test_name, runner.name))
-                            runner.client_final = True
-                if complete and result is None:
-                    break
-
-            # Wait/join all the runners
+            # Wait for the runners to complete. An Exception is raised should a
+            # runner fail
             for runner in runners:
                 runner.wait()
 
-            # Verify that all balanced connectors saw at least one new connection
-            if result is None:
-                metrics = self.all_balanced_connector_stats(iter_num)
-                diffs = {}
-                fail = False
-                for i in range(len(metrics)):
-                    diff = metrics[i] - baseline[i]
-                    diffs[self.router_order[i]] = diff
-                    if diff == 0:
-                        fail = True
-                if fail:
-                    result = "At least one server did not receive a connection: origin=%s: counts=%s" % (client, diffs)
-                else:
-                    self.logger.log("TCP_TEST origin=%s: counts=%s" % (client, diffs))
+            # Check for errors on the echo servers
+            for rtr in TcpAdaptor.router_order:
+                es = TcpAdaptor.echo_servers[rtr]
+                if es.error is not None:
+                    error = f"TCP_TEST {test_name} Server {es.prefix} stopped with error: {es.error}"
+                    self.logger.log(error)
+                    raise Exception(error)
 
-            if result is not None:
-                self.logger.log("TCP_TEST %s failed: %s" % (test_name, result))
-            else:
-                self.logger.log(("TCP_TEST %s SUCCESS " + over_tls) % test_name)
+            # Verify that all balanced connectors saw at least one new connection
+
+            metrics = self.all_balanced_connector_stats(iter_num)
+            diffs = {}
+            fail = False
+            for i in range(len(metrics)):
+                diff = metrics[i] - baseline[i]
+                diffs[self.router_order[i]] = diff
+                if diff == 0:
+                    fail = True
+            if fail:
+                error = "At least one server did not receive a connection: origin=%s: counts=%s" % (client, diffs)
+                self.logger.log(error)
+                raise Exception(error)
+            self.logger.log(f"TCP_TEST {test_name} SUCCESS: origin={client} counts={diffs} " + over_tls)
 
         except Exception as exc:
-            result = "TCP_TEST %s failed. Exception: %s" % \
-                (test_name, traceback.format_exc())
-
-        return result
+            self.logger.log("TCP_TEST %s failed. Exception: %s" %
+                            (test_name, traceback.format_exc()))
+            raise
 
     #
     # Tests run by ctest
@@ -1142,10 +932,7 @@ class CommonTcpTests:
                 name = "test_01_tcp_%s_%s" % (l_rtr, s_rtr)
                 self.logger.log("TCP_TEST test_01_tcp_basic_connectivity Start %s" % name)
                 pairs = [self.EchoPair(self.router_dict[l_rtr], self.router_dict[s_rtr])]
-                result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-                if result is not None:
-                    print(result)
-                assert result is None, "TCP_TEST test_01_tcp_basic_connectivity Stop %s FAIL: %s" % (name, result)
+                self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
                 self.logger.log("TCP_TEST test_01_tcp_basic_connectivity Stop %s SUCCESS" % name)
 
     # larger messages
@@ -1154,10 +941,7 @@ class CommonTcpTests:
         name = "test_10_tcp_INTA_INTA_100"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[100])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -1165,10 +949,7 @@ class CommonTcpTests:
         name = "test_11_tcp_INTA_INTA_1000"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[1000])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -1176,10 +957,7 @@ class CommonTcpTests:
         name = "test_12_tcp_INTA_INTA_500000"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[500000])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -1187,10 +965,7 @@ class CommonTcpTests:
         name = "test_13_tcp_EA1_EC2_500000"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.EA1, self.EC2, sizes=[500000])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
     # This test sends and receives 2 million bytes from edge router to edge router
@@ -1199,10 +974,8 @@ class CommonTcpTests:
         name = "test_14_tcp_EA2_EC1_2000000"
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.EA2, self.EC1, sizes=[2000000])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
+        self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
     def test_20_tcp_connect_disconnect(self):
@@ -1218,10 +991,7 @@ class CommonTcpTests:
         # server side connection was created or not.
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA, sizes=[0])]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         # TODO: This test passes but in passing router INTA crashes undetected.
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
@@ -1232,10 +1002,7 @@ class CommonTcpTests:
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.INTA, self.INTA),
                  self.EchoPair(self.INTB, self.INTB)]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     @unittest.skipIf(DISABLE_SELECTOR_TESTS, DISABLE_SELECTOR_REASON)
@@ -1244,10 +1011,7 @@ class CommonTcpTests:
         self.logger.log("TCP_TEST Start %s" % name)
         pairs = [self.EchoPair(self.EA1, self.EA2),
                  self.EchoPair(self.EA2, self.EC2)]
-        result = self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
-        if result is not None:
-            print(result)
-        assert result is None, "TCP_TEST Stop %s FAIL: %s" % (name, result)
+        self.do_tcp_echo_n_routers(name, pairs, test_ssl=self.test_ssl)
         self.logger.log("TCP_TEST Stop %s SUCCESS" % name)
 
     def _ncat_runner(self, name, client, server, data=b'abcd', port=None, ssl_info=None):
@@ -1351,9 +1115,8 @@ class CommonTcpTests:
         iterations = [('EA1', 94), ('INTA', 63), ('EB2', 28), ('INTB', 18)]
         iter_num = 0
         for p in iterations:
-            result = self.do_tcp_balance_test(tname, p[0], p[1], iter_num, test_ssl=self.test_ssl)
+            self.do_tcp_balance_test(tname, p[0], p[1], iter_num, test_ssl=self.test_ssl)
             iter_num = iter_num + 1
-            self.assertIsNone(result)
         self.logger.log(tname + " SUCCESS")
 
     # connector/listener stats
