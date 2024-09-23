@@ -52,7 +52,7 @@ class log_record:
         self.performative = perf.strip()
         self.router_line = router_line.strip()  # diag
         self.peer_log_rec = None
-        dir_out = (direction == '->')  # name_left -> name_right
+        dir_out = direction == '->'  # name_left -> name_right
         self.sentby = name_left.strip() if dir_out else name_right.strip()
         self.rcvdby = name_right.strip() if dir_out else name_left.strip()
 
