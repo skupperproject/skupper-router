@@ -98,7 +98,7 @@ def pre_exec() -> int:
 def handle_signal(sig_number: int, stackframe):
     """Forward the signal we got to the grandchildren"""
     del stackframe  # unused
-    logging.debug(f"Sigforwarder got signal: {sig_number}")
+    logging.debug("Sigforwarder got signal: %s", sig_number)
 
     if not P:
         return
@@ -106,13 +106,14 @@ def handle_signal(sig_number: int, stackframe):
 
     for prc in psutil.process_iter(attrs=('pid', 'ppid')):
         if prc.ppid() == P.pid:
-            logging.debug(f"Grandchild pid: {prc.pid}, sending signal: {sig_number} to it")
+            logging.debug("Grandchild pid: %s, sending signal: %s to it", prc.pid, sig_number)
             os.kill(prc.pid, sig_number)
 
 
 def sigforwarder(program: str, program_args: List[str]) -> int:
     global P
 
+    # pylint: disable=subprocess-popen-preexec-fn
     P = subprocess.Popen(
         args=(program, *program_args),
         preexec_fn=pre_exec
@@ -124,7 +125,7 @@ def sigforwarder(program: str, program_args: List[str]) -> int:
         signal.signal(s, handle_signal)
 
     # rr will propagate exit code from skrouterd, so we only need to propagate from rr
-    logging.debug(f"Sigforwarder running {program}, waiting for status")
+    logging.debug("Sigforwarder running %s, waiting for status", program)
     return P.wait()
 
 
@@ -161,7 +162,7 @@ class SigforwarderTests(unittest.TestCase):
 
 def main():
     if len(sys.argv) < 2:
-        RuntimeError("At least one argument is required")
+        raise RuntimeError("At least one argument is required")
 
     argv0, program, *program_args = sys.argv
 

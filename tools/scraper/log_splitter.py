@@ -473,7 +473,7 @@ function show_node(node)
 
         os.makedirs(odir)
         for i in range(1, self.hist_max):
-            nrange = ("10e%d" % (i))
+            nrange = "10e%d" % (i)
             ndir = os.path.join(odir, nrange)
             os.makedirs(ndir)
             odirs.append(ndir)

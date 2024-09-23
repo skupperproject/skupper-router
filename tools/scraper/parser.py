@@ -32,7 +32,9 @@ from datetime import datetime
 import test_data as td
 import common
 import text
-import router
+from router import Router
+from router import RestartRecord
+from router import which_router_tod
 
 SEQUENCE_TRANSFER_SIZE = 50
 """
@@ -954,7 +956,7 @@ class ParsedLogLine:
         self.line = self.line.lstrip()
 
         # cover for traces that don't get any better
-        self.data.web_show_str = ("<strong>%s</strong>" % self.line)
+        self.data.web_show_str = "<strong>%s</strong>" % self.line
 
         # policy lines have no direction and described type fields
         if self.data.is_policy_trace or self.data.is_server_info:
@@ -964,7 +966,7 @@ class ParsedLogLine:
         if self.line.startswith('<') or self.line.startswith('-'):
             self.data.direction = self.line[:2]
             self.line = self.line[3:]
-            self.data.web_show_str = ("<strong>%s</strong>" % self.line)
+            self.data.web_show_str = "<strong>%s</strong>" % self.line
 
         # The log line is now reduced to a described type:
         #  @describedtypename(num) [key=val [, key=val ...]]
@@ -1032,10 +1034,10 @@ def parse_log_file(fn, log_index, comn):
                 # Any key or AMQP line indicates a router in-progress
                 if any(s in line for s in keys) or ("[" in line and "]" in line):
                     assert rtr is None
-                    rtr = router.Router(fn, log_index, instance)
+                    rtr = Router(fn, log_index, instance)
                     rtrs.append(rtr)
                     search_for_in_progress = False
-                    rtr.restart_rec = router.RestartRecord(rtr, line, lineno + 1)
+                    rtr.restart_rec = RestartRecord(rtr, line, lineno + 1)
             lineno += 1
             verbatim_module = None
             if len(comn.verbatim_include_list) > 0:
@@ -1047,9 +1049,9 @@ def parse_log_file(fn, log_index, comn):
                 # This line closes the current router, if any, and opens a new one
                 if rtr is not None:
                     instance += 1
-                rtr = router.Router(fn, log_index, instance)
+                rtr = Router(fn, log_index, instance)
                 rtrs.append(rtr)
-                rtr.restart_rec = router.RestartRecord(rtr, line, lineno)
+                rtr.restart_rec = RestartRecord(rtr, line, lineno)
                 search_for_in_progress = False
                 rtr.container_name = line[(line.find(key2) + len(key2)):].strip().split()[0]
             elif key3 in line:
@@ -1154,13 +1156,13 @@ if __name__ == "__main__":
     t_in_1 = datetime.strptime('2018-10-15 10:59:07.584498', '%Y-%m-%d %H:%M:%S.%f')
     t_af_1 = datetime.strptime('2019-10-15 10:59:07.584498', '%Y-%m-%d %H:%M:%S.%f')
 
-    rtr, idx = router.which_router_tod(routers, t_b4_0)
+    rtr, idx = which_router_tod(routers, t_b4_0)
     assert rtr is routers[0] and idx == 0
-    rtr, idx = router.which_router_tod(routers, t_in_0)
+    rtr, idx = which_router_tod(routers, t_in_0)
     assert rtr is routers[0] and idx == 0
-    rtr, idx = router.which_router_tod(routers, t_in_1)
+    rtr, idx = which_router_tod(routers, t_in_1)
     assert rtr is routers[1] and idx == 1
-    rtr, idx = router.which_router_tod(routers, t_af_1)
+    rtr, idx = which_router_tod(routers, t_af_1)
     assert rtr is routers[1] and idx == 1
 
     pass
