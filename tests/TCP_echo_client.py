@@ -63,22 +63,22 @@ class TcpEchoClient:
                  timeout=TIMEOUT,
                  logger=None,
                  ssl_info=None,
-                 delay_close=False,
-                 wait_connected=True):
+                 delay_close=False):
         """
+        Spawn an echo client in a background thread. On return the echo client
+        is running in the background. Raises an exception if the client fails
+        to connect.
+
         :param host: connect to this host
         :param port: connect to this port
         :param size: size of individual payload chunks in bytes
         :param count: number of payload chunks
-        :param strategy: "1" Send one payload;  # TODO more strategies
-                             Recv one payload
+        :param timeout: return after transferring for timeout seconds
         :param logger: Logger() object
         :param ssl_info: optional SSL information for the connection
         :param delay_close: by default the connection is closed after all data
         has been passed. If delay_close=True, hold the connection open after
         passing all data until the call to 'wait'
-        :param wait_connected: block the caller until the socket has connected (or failed)
-        :return:
         """
         # Start up
         self.sock = None
@@ -101,17 +101,17 @@ class TcpEchoClient:
         self._delay_waiting = Event()  # set when delay_close blocking for wait()
         self._thread.daemon = True
         self._thread.start()
-        if wait_connected:
-            connected = self._connected.wait(timeout=TIMEOUT)
-            if connected is False:
-                raise Exception("Connection failed")
-            if self.error is not None:
-                raise Exception(self.error)
+
+        # wait for the socket to connect before returning to avoid races with
+        # the caller.
+
+        self._connected.wait()
+        if self.error is not None:
+            raise Exception(self.error)
 
     def run(self):
         self.logger.log("%s Client is starting up" % self.prefix)
         try:
-            start_time = time.time()
             self.logger.log('%s Connecting to host:%s, port:%d, size:%d, count:%d' %
                             (self.prefix, self.host, self.port, self.size, self.count))
             total_sent = 0
@@ -200,6 +200,7 @@ class TcpEchoClient:
             self._connected.set()
 
             # event loop
+            start_time = time.time()
             while self.keep_running:
                 if self.timeout > 0.0:
                     elapsed = time.time() - start_time
@@ -302,8 +303,7 @@ class TcpEchoClient:
             # called
             if self.delay_close:
                 self.logger.log("%s Delayed closing wait..." % self.prefix)
-                while self._delay_waiting.wait(timeout=TIMEOUT) is False:
-                    pass
+                self._delay_waiting.wait()
                 self.logger.log("%s Delayed closing signaled" % self.prefix)
 
             # shut down
@@ -317,8 +317,9 @@ class TcpEchoClient:
             if self.sock is not None:
                 self.sock.close()
 
-        self._connected.set()  # Ensure the caller has been unblocked
-        self._done.set()
+        finally:
+            self._connected.set()  # Ensure the caller has been unblocked
+            self._done.set()
 
     def wait(self, timeout=TIMEOUT):
         self.logger.log(f"{self.prefix} Shutting down the client")
