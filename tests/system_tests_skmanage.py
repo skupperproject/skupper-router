@@ -38,7 +38,7 @@ from system_test import CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_
     CLIENT_CERTIFICATE, CLIENT_PASSWORD_FILE, CLIENT_PRIVATE_KEY
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
 
-TOTAL_ENTITIES = 31   # for tests that check the total # of entities
+TOTAL_ENTITIES = 28   # for tests that check the total # of entities
 
 
 class SkmanageTest(TestCase):

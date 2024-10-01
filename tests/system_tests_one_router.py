@@ -201,11 +201,11 @@ class RouterConfigTest(TestCase):
         cls.routers: Sequence[Qdrouterd] = []
 
         # A standalone router cannot have an edge listener because it cannot accept edge connections.
-        config = Qdrouterd.Config([
+        config_0 = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'edge', 'host': '0.0.0.0'})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, config, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_0  , wait=False, expect=Process.EXIT_FAIL))
 
         # A standalone router cannot have inter-router connectors.
         name = "test-router-1"
@@ -302,101 +302,31 @@ class RouterConfigTest(TestCase):
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_11, wait=False, expect=Process.EXIT_FAIL))
 
-        # An httpListener must supply a valid 'protocolVersion' value
+        # tcpConnector with a missing sslProfile: bad!
         name = "test-router-12"
         config_12 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': name}),
-            ('httpListener', {'port': cls.tester.get_port(),
-                              'host': '0.0.0.0',
-                              'address': 'myAddress',
-                              'protocolVersion': 'bad-version'})
-        ])
-        cls.routers.append(cls.tester.qdrouterd(name, config_12, wait=False, expect=Process.EXIT_FAIL))
-
-        # An httpConnector must supply a valid 'protocolVersion' value
-        name = "test-router-13"
-        config_13 = Qdrouterd.Config([
-            ('router', {'mode': 'interior', 'id': name}),
-            ('httpListener', {'port': cls.tester.get_port(),
-                              'host': '0.0.0.0',
-                              'address': 'myAddress',
-                              'protocolVersion': 'bad-version'})
-        ])
-        cls.routers.append(cls.tester.qdrouterd(name, config_13, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpConnector must supply an 'address' value
-        for index in [(14, 'HTTP1'), (15, 'HTTP2')]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpConnector', {'host': '127.0.0.1',
-                                   'port': 9999,
-                                   'protocolVersion': index[1]})
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpListener must supply an 'address' value
-        for index in [(16, 'HTTP1'), (17, 'HTTP2')]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpListener', {'host': '0.0.0.0',
-                                  'port': 9999,
-                                  'protocolVersion': index[1]})
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # tcpConnector with a missing sslProfile: bad!
-        name = "test-router-18"
-        config_18 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpConnector', {'port': 9999,
                               'host': '127.0.0.1',
                               'address': 'myAddress',
                               'sslProfile': "DoesNotExist"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, config_18, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_12, wait=False, expect=Process.EXIT_FAIL))
 
         # tcpListener with a missing sslProfile: bad!
-        name = "test-router-19"
-        config_19 = Qdrouterd.Config([
+        name = "test-router-13"
+        config_13 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'port': 9999,
                              'host': '0.0.0.0',
                              'address': 'myAddress',
                              'sslProfile': "DoesNotExist"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, config_19, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpConnector with a missing sslProfile: bad!
-        for index in [(20, 'HTTP1'), (21, 'HTTP2')]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpConnector', {'address': 'foo',
-                                   'host': '127.0.0.1',
-                                   'port': 9999,
-                                   'protocolVersion': index[1],
-                                   'sslProfile': "DoesNotExist"})
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpListener with a missing sslProfile: bad!
-        for index in [(22, 'HTTP1'), (23, 'HTTP2')]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpListener', {'address': 'foo',
-                                  'host': '0.0.0.0',
-                                  'port': 9999,
-                                  'protocolVersion': index[1],
-                                  'sslProfile': "DoesNotExist"}),
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_13, wait=False, expect=Process.EXIT_FAIL))
 
         # tcpListener with a bad path for CA Certificate file
-        name = "test-router-24"
-        cfg = Qdrouterd.Config([
+        name = "test-router-14"
+        config_14 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'address': 'foo',
                              'host': '0.0.0.0',
@@ -408,27 +338,11 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': SERVER_PRIVATE_KEY,
                             'password': "server-password"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpListener with a bad path for CA Certificate file
-        for index in [(25, "HTTP1"), (26, "HTTP2")]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpListener', {'address': 'foo',
-                                  'host': '0.0.0.0',
-                                  'port': 9999,
-                                  'protocolVersion': index[1],
-                                  'sslProfile': "BrokenProfile"}),
-                ('sslProfile', {'name': "BrokenProfile",
-                                'caCertFile': "/does/not/exist.pem"}),
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
-                                                    expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_14, wait=False, expect=Process.EXIT_FAIL))
 
         # tcpConnector with a bad path for self identifying certificate file
-        name = "test-router-27"
-        cfg = Qdrouterd.Config([
+        name = "test-router-15"
+        config_15 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpConnector', {'address': 'foo',
                               'host': '127.0.0.1',
@@ -440,27 +354,12 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'password': "client-password"}),
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
+        cls.routers.append(cls.tester.qdrouterd(name, config_15, wait=False,
                                                 expect=Process.EXIT_FAIL))
-        # httpConnector with a bad path for self identifying certificate file
-        for index in [(28, "HTTP1"), (29, "HTTP2")]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpConnector', {'address': 'foo',
-                                   'host': '127.0.0.1',
-                                   'port': 9999,
-                                   'protocolVersion': index[1],
-                                   'sslProfile': "BrokenProfile"}),
-                ('sslProfile', {'name': "BrokenProfile",
-                                'certFile': "/certfile/does/not/exist.pem"}),
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
-                                                    expect=Process.EXIT_FAIL))
 
         # tcpConnector with invalid password
-        name = "test-router-30"
-        cfg = Qdrouterd.Config([
+        name = "test-router-16"
+        config_16 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpConnector', {'address': 'foo',
                               'host': '127.0.0.1',
@@ -472,30 +371,11 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'password': "invalid-password"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpConnector with invalid password
-        for index in [(31, "HTTP1"), (32, "HTTP2")]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpConnector', {'address': 'foo',
-                                   'host': '127.0.0.1',
-                                   'port': 9999,
-                                   'protocolVersion': index[1],
-                                   'sslProfile': "BrokenProfile"}),
-                ('sslProfile', {'name': "BrokenProfile",
-                                'caCertFile': CA_CERT,
-                                'certFile': CLIENT_CERTIFICATE,
-                                'privateKeyFile': CLIENT_PRIVATE_KEY,
-                                'password': "invalid-password"})
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
-                                                    expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_16, wait=False, expect=Process.EXIT_FAIL))
 
         # tcpListener with invalid ciphers
-        name = "test-router-33"
-        cfg = Qdrouterd.Config([
+        name = "test-router-17"
+        config_17 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'address': 'foo',
                              'host': '0.0.0.0',
@@ -508,28 +388,11 @@ class RouterConfigTest(TestCase):
                             'password': "server-password",
                             'ciphers': "Blah-Blah-Blabbity-Blab"}),
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
-
-        # httpListener with invalid ciphers
-        for index in [(34, "HTTP1"), (35, "HTTP2")]:
-            name = f"test-router-{index[0]}"
-            cfg = Qdrouterd.Config([
-                ('router', {'mode': 'interior', 'id': name}),
-                ('httpListener', {'address': 'foo',
-                                  'host': '0.0.0.0',
-                                  'port': 9999,
-                                  'protocolVersion': index[1],
-                                  'sslProfile': "BadCipherProfile"}),
-                ('sslProfile', {'name': "BadCipherProfile",
-                                'caCertFile': CA_CERT,
-                                'ciphers': "Blah-Blah-Blabbity-Blab"}),
-            ])
-            cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
-                                                    expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_17, wait=False, expect=Process.EXIT_FAIL))
 
         # tcpListener with an invalid private key file
-        name = "test-router-36"
-        cfg = Qdrouterd.Config([
+        name = "test-router-18"
+        config_18 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'address': 'foo',
                              'host': '0.0.0.0',
@@ -541,12 +404,12 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': "/file/not/found.pem",
                             'password': "server-password"}),
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
+        cls.routers.append(cls.tester.qdrouterd(name, config_18, wait=False,
                                                 expect=Process.EXIT_FAIL))
 
         # AMQP listener with bad path to CA Certificate file
-        name = "test-router-37"
-        cfg = Qdrouterd.Config([
+        name = "test-router-19"
+        config_19 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('listener', {'host': '0.0.0.0',
                           'port': 9999,
@@ -558,11 +421,11 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': SERVER_PRIVATE_KEY,
                             'password': "server-password"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_19, wait=False, expect=Process.EXIT_FAIL))
 
         # AMQP connector with a bad path for self identifying certificate file
-        name = "test-router-38"
-        cfg = Qdrouterd.Config([
+        name = "test-router-20"
+        config_20 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('connector', {'host': '127.0.0.1',
                            'port': 9999,
@@ -574,12 +437,12 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'password': "client-password"}),
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
+        cls.routers.append(cls.tester.qdrouterd(name, config_20, wait=False,
                                                 expect=Process.EXIT_FAIL))
 
         # AMQP onnector with invalid password
-        name = "test-router-39"
-        cfg = Qdrouterd.Config([
+        name = "test-router-21"
+        config_21 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('connector', {'host': '127.0.0.1',
                            'port': 9999,
@@ -591,11 +454,11 @@ class RouterConfigTest(TestCase):
                             'privateKeyFile': CLIENT_PRIVATE_KEY,
                             'password': "invalid-password"})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_21, wait=False, expect=Process.EXIT_FAIL))
 
         # AMQP listener with invalid ciphers
-        name = "test-router-40"
-        cfg = Qdrouterd.Config([
+        name = "test-router-22"
+        config_22 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('listener', {'host': '0.0.0.0',
                           'port': 9999,
@@ -608,12 +471,12 @@ class RouterConfigTest(TestCase):
                             'password': "server-password",
                             'ciphers': "Blah-Blah-Blabbity-Blab"}),
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False,
+        cls.routers.append(cls.tester.qdrouterd(name, config_22, wait=False,
                                                 expect=Process.EXIT_FAIL))
 
         # tcpListener with invalid values for sslProfile versions
-        name = "test-router-41"
-        cfg = Qdrouterd.Config([
+        name = "test-router-23"
+        config_23 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'address': 'foo',
                              'host': '0.0.0.0',
@@ -626,11 +489,11 @@ class RouterConfigTest(TestCase):
                             'password': "server-password",
                             'version': -1})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_23, wait=False, expect=Process.EXIT_FAIL))
 
         # sslProfile with oldestValidVersion > version
-        name = "test-router-42"
-        cfg = Qdrouterd.Config([
+        name = "test-router-24"
+        config_24 = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': name}),
             ('tcpListener', {'address': 'foo',
                              'host': '0.0.0.0',
@@ -644,7 +507,7 @@ class RouterConfigTest(TestCase):
                             'version': 1,
                             'oldestValidVersion': 42})
         ])
-        cls.routers.append(cls.tester.qdrouterd(name, cfg, wait=False, expect=Process.EXIT_FAIL))
+        cls.routers.append(cls.tester.qdrouterd(name, config_24, wait=False, expect=Process.EXIT_FAIL))
 
         # Give some time for the test to write to the .out file. Without this, the tests execute too
         # fast and find that nothing has yet been written to the .out files.
@@ -739,71 +602,47 @@ class RouterConfigTest(TestCase):
         # completely written!
 
         err = r"Router start-up failed: Python: .* KeyError: \(?'address'"
-        for index in [10, 11, 14, 15, 16, 17]:
+        for index in [10, 11]:
             self.routers[index].wait_log_message(err, timeout=1.0)
 
-        err = r"Invalid value for enum\['HTTP1', 'HTTP2'\]: 'bad-version'"
-        self.routers[12].wait_log_message(err, self.routers[12].outfile + '.out', timeout=1.0)
-        self.routers[13].wait_log_message(err, self.routers[13].outfile + '.out', timeout=1.0)
+        err = "sslProfile 'DoesNotExist' not found"
+        self.routers[12].wait_log_message(err, timeout=1.0)
 
         err = "sslProfile 'DoesNotExist' not found"
-        self.routers[18].wait_log_message(err, timeout=1.0)
-
-        err = "sslProfile 'DoesNotExist' not found"
-        self.routers[19].wait_log_message(err, timeout=1.0)
-
-        err = "Adaptor connector httpConnector/127.0.0.1:9999 configuration error: failed to find sslProfile 'DoesNotExist'"
-        self.routers[20].wait_log_message(err, timeout=1.0)
-        self.routers[21].wait_log_message(err, timeout=1.0)
-
-        err = "Adaptor listener httpListener/0.0.0.0:9999 configuration error: failed to find sslProfile 'DoesNotExist'"
-        self.routers[22].wait_log_message(err, timeout=1.0)
-        self.routers[23].wait_log_message(err, timeout=1.0)
+        self.routers[13].wait_log_message(err, timeout=1.0)
 
         err = r"Failed to configure TLS caCertFile /does/not/exist.pem for sslProfile 'BrokenProfile'"
-        self.routers[24].wait_log_message(err, timeout=1.0)
-
-        err = "sslProfile BrokenProfile: failed to set TLS caCertFile"
-        for index in [25, 26]:
-            self.routers[index].wait_log_message(err, timeout=1.0)
+        self.routers[14].wait_log_message(err, timeout=1.0)
 
         err = "Failed to set TLS certFile '/does/not/exist.pem' for sslProfile 'BrokenProfile'"
-        self.routers[27].wait_log_message(err, timeout=1.0)
+        self.routers[15].wait_log_message(err, timeout=1.0)
 
         err = f"Failed to set TLS certFile '{CLIENT_CERTIFICATE}' for sslProfile 'BrokenProfile'"
-        self.routers[30].wait_log_message(err, timeout=1.0)
-
-        err = "sslProfile BrokenProfile: failed to set TLS certificate configuration"
-        for index in [28, 29, 31, 32]:
-            self.routers[index].wait_log_message(err, timeout=1.0)
+        self.routers[16].wait_log_message(err, timeout=1.0)
 
         err = "Failed to configure TLS Ciphers 'Blah-Blah-Blabbity-Blab' for sslProfile 'BadCipherProfile'"
-        self.routers[33].wait_log_message(err, timeout=1.0)
-
-        err = "sslProfile BadCipherProfile: failed to configure ciphers Blah-Blah-Blabbity-Blab"
-        for index in [34, 35]:
-            self.routers[index].wait_log_message(err, timeout=1.0)
+        self.routers[17].wait_log_message(err, timeout=1.0)
 
         err = f"Failed to set TLS certFile '{SERVER_CERTIFICATE}' for sslProfile 'BadProfile'"
-        self.routers[36].wait_log_message(err, timeout=1.0)
+        self.routers[18].wait_log_message(err, timeout=1.0)
 
         err = "Failed to configure TLS caCertFile '/does/not/exist.pem' from sslProfile 'BrokenProfile'"
-        self.routers[37].wait_log_message(err, timeout=1.0)
+        self.routers[19].wait_log_message(err, timeout=1.0)
 
         err = "Failed to configure TLS certFile '/does/not/exist.pem' from sslProfile 'BrokenProfile'"
-        self.routers[38].wait_log_message(err, timeout=1.0)
+        self.routers[20].wait_log_message(err, timeout=1.0)
 
         err = f"Failed to configure TLS certFile '{CLIENT_CERTIFICATE}' from sslProfile 'BrokenProfile'"
-        self.routers[39].wait_log_message(err, timeout=1.0)
+        self.routers[21].wait_log_message(err, timeout=1.0)
 
         err = "Failed to configure TLS Ciphers 'Blah-Blah-Blabbity-Blab' for sslProfile 'BadCipherProfile'"
-        self.routers[40].wait_log_message(err, timeout=1.0)
+        self.routers[22].wait_log_message(err, timeout=1.0)
 
         err = "Negative version field values are invalid"
-        self.routers[41].wait_log_message(err, timeout=1.0)
+        self.routers[23].wait_log_message(err, timeout=1.0)
 
         err = "version must be >= oldestValidVersion"
-        self.routers[42].wait_log_message(err, timeout=1.0)
+        self.routers[24].wait_log_message(err, timeout=1.0)
 
 
 class OneRouterTest(TestCase):

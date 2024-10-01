@@ -45,18 +45,16 @@ listener {
     authenticatePeer: no
 }
 
-httpListener {
+tcpListener {
     port: 24162
     address: examples
     host: 0.0.0.0
-    protocolVersion: HTTP2
 }
 
-httpConnector {
+tcpConnector {
     port: 8888
     address: examples
     host: nghttpd
-    protocolVersion: HTTP2
     name: grpc-server
 }
 

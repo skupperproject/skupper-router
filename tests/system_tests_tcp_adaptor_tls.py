@@ -16,23 +16,39 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
+#
 import os
-from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl, \
+import system_test
+from system_test import unittest, TestCase, Qdrouterd, NcatException, Logger, Process, run_curl, get_digest, \
     CA_CERT, CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, \
     SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_NO_PASS, BAD_CA_CERT, \
-    CHAINED_CERT
-from system_test import CA2_CERT
-from system_test import CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD
-from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD
-from system_test import SSL_PROFILE_TYPE
-from system_test import is_pattern_present
+    CHAINED_CERT, curl_available, nginx_available, CA2_CERT, CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, \
+    CLIENT2_PRIVATE_KEY_PASSWORD, SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD, \
+    SSL_PROFILE_TYPE, is_pattern_present
 from system_tests_ssl import RouterTestSslBase
 from system_tests_tcp_adaptor import TcpAdaptorBase, CommonTcpTests, ncat_available
 from http1_tests import wait_tcp_listeners_up
-from system_tests_http2 import get_address, get_digest, image_file
-from system_tests_http2 import skip_nginx_test
 from TCP_echo_server import TcpEchoServer
 from TCP_echo_client import TcpEchoClient
+
+
+def skip_nginx_test():
+    if nginx_available() and curl_available():
+        return False
+    return True
+
+
+def get_address(router):
+    address = None
+    tcp_address = router.tcp_addresses
+    if tcp_address:
+        address = router.tcp_addresses[0]
+    return address
+
+
+def image_file(name):
+    return os.path.join(system_test.DIR, 'images', name)
 
 
 class TcpTlsAdaptor(TcpAdaptorBase, CommonTcpTests):
@@ -697,7 +713,6 @@ class HttpOverTcpTestTlsTwoRouterNginx(RouterTestSslBase):
         config_qdra = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'QDR.A'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
-            # curl will connect to this httpListener and run the tests.
             ('tcpListener', cls.http_listener_props),
             ('sslProfile', {'name': 'http-listener-ssl-profile',
                             'caCertFile': CA_CERT,
