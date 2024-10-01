@@ -69,7 +69,6 @@ pn_proactor_t   *proactor;
 pn_connection_t *pn_conn;
 pn_session_t    *pn_ssn;
 pn_link_t       *pn_link;
-pn_delivery_t   *pn_dlv;       // current in-flight delivery
 uint32_t         bytes_sent;   // number of body data bytes written out link
 uint32_t         remote_max_frame = DEFAULT_MAX_FRAME;  // used to limit amount written
 
@@ -123,14 +122,17 @@ void start_message(void)
     static long tag = 0;  // a simple tag generator
 
     if (!pn_link || !pn_conn) return;
-    if (pn_dlv) {
+    if (pn_link_current(pn_link)) {
         debug("Cannot create delivery - in process\n");
         abort();
     }
 
     debug("start message #%"PRIu64"!\n", sent);
 
-    pn_dlv = pn_delivery(pn_link, pn_dtag((const char *)&tag, sizeof(tag)));
+    if (pn_delivery(pn_link, pn_dtag((const char *)&tag, sizeof(tag))) == NULL) {
+        fprintf(stderr, "Failed to create a delivery\n");
+        abort();
+    }
     ++tag;
 
     bytes_sent = 0;
@@ -157,7 +159,8 @@ bool send_message_data(void)
 {
     static const char zero_block[DEFAULT_MAX_FRAME] = {0};
 
-    if (!pn_dlv) return true;  // not sending
+    pn_delivery_t *dlv = pn_link_current(pn_link);
+    if (!dlv) return true;  // not sending yet
 
     if (bytes_sent < body_length) {
 
@@ -181,8 +184,7 @@ bool send_message_data(void)
         sent += 1;
 
         if (presettle) {
-            pn_delivery_settle(pn_dlv);
-            pn_dlv = 0;
+            pn_delivery_settle(dlv);
             if (limit && sent == limit) {
                 // no need to wait for acks
                 debug("stopping (presettled)...\n");
@@ -190,7 +192,6 @@ bool send_message_data(void)
                 pn_connection_wake(pn_conn);
             }
         }
-        pn_dlv = 0;
         return true;
     }
 
@@ -232,7 +233,7 @@ static bool event_handler(pn_event_t *event)
         //
         if (limit == 0 || sent < limit) {
             if (pn_link_credit(pn_link) > 0) {
-                if (!pn_dlv) {
+                if (!pn_link_current(pn_link)) {
                     start_message();
                     pn_proactor_set_timeout(proactor, pause_msec);   // send body after pause
                 }
@@ -246,10 +247,10 @@ static bool event_handler(pn_event_t *event)
     } break;
 
     case PN_DELIVERY: {
-        assert(pn_event_delivery(event) == pn_dlv);
-        if (pn_delivery_updated(pn_dlv)) {
-            uint64_t rs = pn_delivery_remote_state(pn_dlv);
-            pn_delivery_clear(pn_dlv);
+        pn_delivery_t *dlv = pn_event_delivery(event);
+        if (pn_delivery_updated(dlv)) {
+            uint64_t rs = pn_delivery_remote_state(dlv);
+            pn_delivery_clear(dlv);
 
             switch (rs) {
             case PN_RECEIVED:
@@ -261,8 +262,7 @@ static bool event_handler(pn_event_t *event)
                 debug("PN_DELIVERY: accept\n");
                 ++acked;
                 ++accepted;
-                pn_delivery_settle(pn_dlv);
-                pn_dlv = 0;
+                pn_delivery_settle(dlv);
                 break;
             case PN_REJECTED:
             case PN_RELEASED:
@@ -270,8 +270,7 @@ static bool event_handler(pn_event_t *event)
             default:
                 ++acked;
                 ++not_accepted;
-                pn_delivery_settle(pn_dlv);
-                pn_dlv = 0;
+                pn_delivery_settle(dlv);
                 debug("Message not accepted - code: 0x%lX\n", (unsigned long)rs);
                 break;
             }
@@ -337,7 +336,7 @@ static void usage(const char *prog)
     printf("-t      \tTarget address [%s]\n", target_address);
     printf("-u      \tSend all messages presettled [%s]\n", BOOL2STR(presettle));
     printf("-D      \tPrint debug info [off]\n");
-    printf("-P      \tPause between sending frames [%"PRIu32"]\n", pause_msec);
+    printf("-P      \tPause between sending frames (msecs) [%"PRIu32"]\n", pause_msec);
     exit(1);
 }
 
