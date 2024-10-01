@@ -37,7 +37,7 @@
 #include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/static_assert.h"
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 
 #include <dlfcn.h>
 #include <inttypes.h>

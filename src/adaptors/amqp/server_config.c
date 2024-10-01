@@ -26,7 +26,7 @@
 #include "entity.h"
 
 #include <qpid/dispatch/log.h>
-#include <qpid/dispatch/tls.h>
+#include <qpid/dispatch/tls_common.h>
 
 #include <proton/codec.h>
 

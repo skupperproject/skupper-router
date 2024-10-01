@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 #include "private.h"
 
 #include "qpid/dispatch/alloc_pool.h"

@@ -1,5 +1,5 @@
-#ifndef __tls_h__
-#define __tls_h__ 1
+#ifndef __tls_common_h__
+#define __tls_common_h__ 1
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file

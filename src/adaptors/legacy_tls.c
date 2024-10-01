@@ -25,7 +25,7 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/connection_manager.h"
 #include "qpid/dispatch/ctools.h"
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 
 #include <proton/tls.h>
 

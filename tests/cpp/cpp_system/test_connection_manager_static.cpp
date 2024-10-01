@@ -24,7 +24,7 @@
 
 extern "C" {
 #include "entity.h"
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 #include "qpid/dispatch/threading.h"
 }
 

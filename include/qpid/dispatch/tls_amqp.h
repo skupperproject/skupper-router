@@ -19,7 +19,7 @@
  * under the License.
  */
 
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 
 typedef struct pn_transport_t pn_transport_t;
 

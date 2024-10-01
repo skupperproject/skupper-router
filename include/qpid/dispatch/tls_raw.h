@@ -19,7 +19,7 @@
  * under the License.
  */
 
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 #include "qpid/dispatch/buffer.h"
 
 typedef struct pn_raw_connection_t pn_raw_connection_t;

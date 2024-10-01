@@ -33,7 +33,7 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/connection_counters.h"
-#include "qpid/dispatch/tls.h"
+#include "qpid/dispatch/tls_common.h"
 
 #include <proton/connection_driver.h>
 #include <proton/object.h>
