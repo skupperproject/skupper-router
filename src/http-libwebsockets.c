@@ -33,6 +33,7 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/connection_counters.h"
+#include "qpid/dispatch/tls_common.h"
 
 #include <proton/connection_driver.h>
 #include <proton/object.h>
@@ -281,6 +282,7 @@ static work_t work_pop(qd_http_server_t *hs) {
 struct qd_lws_listener_t {
     qd_listener_t *listener;
     qd_http_server_t *server;
+    qd_ssl2_profile_t ssl_config;
     struct lws_vhost *vhost;
     struct lws_http_mount mount;
     struct lws_http_mount metrics;
@@ -293,6 +295,7 @@ void qd_lws_listener_free(qd_lws_listener_t *hl) {
         hl->listener->http = NULL;
         qd_listener_decref(hl->listener);
     }
+    qd_tls_cleanup_ssl_profile(&hl->ssl_config);
     free(hl);
 }
 
@@ -303,6 +306,15 @@ static qd_lws_listener_t *qd_lws_listener(qd_http_server_t *hs, qd_listener_t *l
         hl->listener = li;
         li->http = hl;
         sys_atomic_inc(&li->ref_count); /* Keep it around till qd_http_server_free() */
+        if (li->config.ssl_profile_name) {
+            if (!qd_tls_read_ssl_profile(li->config.ssl_profile_name, &hl->ssl_config)) {
+                qd_log(LOG_HTTP, QD_LOG_CRITICAL, "Invalid SSL configuration for HTTP listener %s on %s",
+                       li->config.name, li->config.host_port);
+                qd_lws_listener_free(hl);
+                return 0;
+            }
+        }
+
     } else {
         qd_log(LOG_HTTP, QD_LOG_CRITICAL, "No memory for HTTP listen on %s", li->config.host_port);
     }
@@ -384,13 +396,12 @@ static void listener_start(qd_lws_listener_t *hl, qd_http_server_t *hs) {
         qd_log(LOG_HTTP, QD_LOG_INFO, "Disabling ipv6 on %s", config->host_port);
         info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
     }
-    if (config->ssl_profile) {
-        info.ssl_cert_filepath = config->ssl_certificate_file;
-        info.ssl_private_key_filepath = config->ssl_private_key_file;
-        info.ssl_private_key_password = config->ssl_password;
-        info.ssl_ca_filepath = config->ssl_trusted_certificate_db;
-        info.ssl_cipher_list = config->ssl_ciphers;
-
+    if (config->ssl_profile_name) {
+        info.ssl_cert_filepath = hl->ssl_config.certificate_file;
+        info.ssl_private_key_filepath = hl->ssl_config.private_key_file;
+        info.ssl_private_key_password = hl->ssl_config.password;
+        info.ssl_ca_filepath = hl->ssl_config.trusted_certificate_db;
+        info.ssl_cipher_list = hl->ssl_config.ciphers;
         info.options |=
             LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
             (config->ssl_required ? 0 : LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT | LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER) |

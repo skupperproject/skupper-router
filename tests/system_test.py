@@ -123,6 +123,17 @@ CLIENT_PASSWORD_FILE = ssl_file('client-password-file.txt')
 SERVER_PASSWORD_FILE = ssl_file('server-password-file.txt')
 CHAINED_CERT = ssl_file('chained.pem')
 
+# Alternate CA and certs
+CA2_CERT = ssl_file('ca2-certificate.pem')
+SERVER2_CERTIFICATE = ssl_file('server2-certificate.pem')
+SERVER2_PRIVATE_KEY = ssl_file('server2-private-key.pem')
+SERVER2_PRIVATE_KEY_NO_PASS = ssl_file('server2-private-key-no-pass.pem')
+SERVER2_PRIVATE_KEY_PASSWORD = 'server2-password'
+CLIENT2_CERTIFICATE = ssl_file('client2-certificate.pem')
+CLIENT2_PRIVATE_KEY = ssl_file('client2-private-key.pem')
+CLIENT2_PRIVATE_KEY_NO_PASS = ssl_file('client2-private-key-no-pass.pem')
+CLIENT2_PRIVATE_KEY_PASSWORD = 'client2-password'
+
 
 try:
     import qpidtoollibs  # pylint: disable=unused-import
@@ -653,7 +664,12 @@ class OpenSSLServer(Process):
             self.openssl_server_cmd.append("pass:" + server_private_key_password)
         if cl_args:
             self.openssl_server_cmd += cl_args
-        super(OpenSSLServer, self).__init__(self.openssl_server_cmd, name=name, expect=expect, **kwargs)
+        super(OpenSSLServer, self).__init__(self.openssl_server_cmd, name=name,
+                                            expect=expect, **kwargs)
+        # avoid startup races: wait until the server prints "ACCEPT" to stdout
+        # before returning in order to ensure the server is ready for
+        # inbound connections
+        wait_message(r'ACCEPT', file_path=self.outfile_path)
 
 
 class Qdrouterd(Process):
@@ -1480,6 +1496,10 @@ class AsyncTestReceiver(MessagingHandler):
     """
     Empty = Queue.Empty
 
+    class TestReceiverException(Exception):
+        def __init__(self, error=None):
+            super(AsyncTestReceiver.TestReceiverException, self).__init__(error)
+
     class MyQueue(Queue.Queue):
         def __init__(self, receiver):
             self._async_receiver = receiver
@@ -1521,8 +1541,13 @@ class AsyncTestReceiver(MessagingHandler):
         self._thread.start()
         self.num_queue_puts = 0
         self.num_queue_gets = 0
-        if wait and self._ready.wait(timeout=TIMEOUT) is False:
-            raise Exception("Timed out waiting for receiver start")
+        self._error = None
+        if wait:
+            ready = self._ready.wait(timeout=TIMEOUT)
+            if ready is False:
+                raise AsyncTestReceiver.TestReceiverException("Timed out waiting for receiver start")
+            elif self._error is not None:
+                raise AsyncTestReceiver.TestReceiverException(self._error)
         self.queue_stats = "self.num_queue_puts=%d, self.num_queue_gets=%d"
 
     def get_queue_stats(self):
@@ -1537,23 +1562,34 @@ class AsyncTestReceiver(MessagingHandler):
                 if self._conn:
                     self._conn.close()
                     self._conn = None
+        self._ready.set()
         self._logger.log("AsyncTestReceiver reactor thread done")
+
+    def on_transport_error(self, event):
+        self._logger.log("AsyncTestReceiver on_transport_error=%s" % event.transport.condition.description)
+        self._error = f"Connection Error: {event.transport.condition.description}"
+        self._stop_thread = True
 
     def on_connection_error(self, event):
         self._logger.log("AsyncTestReceiver on_connection_error=%s" % event.connection.remote_condition.description)
+        self._error = f"Connection Error: {event.connection.remote_condition.description}"
+        self._stop_thread = True
 
     def on_link_error(self, event):
         self._logger.log("AsyncTestReceiver on_link_error=%s" % event.link.remote_condition.description)
+        self._error = f"Link Error: {event.link.remote_condition.description}"
+        self._stop_thread = True
 
     def stop(self, timeout=TIMEOUT):
         self._stop_thread = True
         self._container.wakeup()
         self._thread.join(timeout=TIMEOUT)
-        self._logger.log("thread done")
         if self._thread.is_alive():
-            raise Exception("AsyncTestReceiver did not exit")
+            raise AsyncTestReceiver.TestReceiverException("AsyncTestReceiver did not exit")
         del self._conn
         del self._container
+        if self._error is not None:
+            raise AsyncTestReceiver.TestReceiverException(self._error)
 
     def on_start(self, event):
         kwargs = {'url': self.address}
@@ -1607,7 +1643,8 @@ class AsyncTestSender(MessagingHandler):
             super(AsyncTestSender.TestSenderException, self).__init__(error)
 
     def __init__(self, address, target, count=1, message=None,
-                 container_id=None, presettle=False, print_to_console=False):
+                 container_id=None, presettle=False, print_to_console=False,
+                 conn_args=None, get_link_info=True):
         super(AsyncTestSender, self).__init__(auto_accept=False,
                                               auto_settle=False)
         self.address = address
@@ -1622,6 +1659,8 @@ class AsyncTestSender(MessagingHandler):
         self.error = None
         self.link_stats = None
         self._conn = None
+        self.conn_args = conn_args
+        self._get_link_info = get_link_info
         self._sender = None
         self._message = message or Message(body="test")
         self._container = Container(self)
@@ -1651,7 +1690,7 @@ class AsyncTestSender(MessagingHandler):
         self._thread.join(timeout=TIMEOUT)
         self._logger.log("AsyncTestSender wait: thread done")
         assert not self._thread.is_alive(), "sender did not complete"
-        if self.error:
+        if self.error is not None:
             raise AsyncTestSender.TestSenderException(self.error)
         del self._sender
         del self._conn
@@ -1659,7 +1698,22 @@ class AsyncTestSender(MessagingHandler):
         self._logger.log("AsyncTestSender wait: no errors in wait")
 
     def on_start(self, event):
-        self._conn = self._container.connect(self.address)
+        kwargs = {'url': self.address}
+        if self.conn_args is not None:
+            kwargs.update(self.conn_args)
+        self._conn = self._container.connect(**kwargs)
+
+    def on_transport_error(self, event):
+        self._logger.log("AsyncTestSender on_transport_error=%s" % event.transport.condition.description)
+        self.error = f"Connection Error: {event.transport.condition.description}"
+
+    def on_connection_error(self, event):
+        self._logger.log("AsyncTestSender on_connection_error=%s" % event.connection.remote_condition.description)
+        self.error = f"Connection Error: {event.connection.remote_condition.description}"
+
+    def on_link_error(self, event):
+        self._logger.log("AsyncTestSender on_link_error=%s" % event.link.remote_condition.description)
+        self.error = f"Link Error: {event.link.remote_condition.description}"
 
     def on_connection_opened(self, event):
         self._logger.log("Connection opened")
@@ -1680,9 +1734,11 @@ class AsyncTestSender(MessagingHandler):
                 and (self.presettle
                      or (self.accepted + self.released + self.modified
                          + self.rejected == self.sent)))
+        done = done or self.error is not None
         if done and self._conn:
-            self.link_stats = get_link_info(self._link_name,
-                                            self.address)
+            if self._get_link_info:
+                self.link_stats = get_link_info(self._link_name,
+                                                self.address)
             self._conn.close()
             self._conn = None
             self._logger.log("Connection closed")
@@ -1710,13 +1766,6 @@ class AsyncTestSender(MessagingHandler):
         self.rejected += 1
         event.delivery.settle()
         self._logger.log("message %d rejected" % self.rejected)
-
-    def on_link_error(self, event):
-        self.error = "link error:%s" % str(event.link.remote_condition)
-        self._logger.log(self.error)
-        if self._conn:
-            self._conn.close()
-            self._conn = None
 
     def on_disconnected(self, event):
         # if remote terminates the connection kill the thread else it will spin

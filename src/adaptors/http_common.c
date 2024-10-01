@@ -20,7 +20,7 @@
 #include "http_common.h"
 
 #include "adaptor_common.h"
-#include "adaptor_tls.h"
+#include "legacy_tls.h"
 
 #include <proton/listener.h>
 #include <proton/tls.h>

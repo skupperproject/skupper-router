@@ -310,7 +310,7 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
 
     from skupper_router_internal.display_name.display_name import DisplayNameService
     displayname_service = DisplayNameService()
-    qd.qd_dispatch_register_display_name_service(dispatch, displayname_service)
+    qd.qd_tls_register_display_name_service(displayname_service)
 
     # Configure policy and policy manager before vhosts
     policyDir           = config.by_type('policy')[0]['policyDir']

@@ -24,6 +24,7 @@
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/tls_amqp.h"
 
 #include <proton/event.h>
 #include <proton/listener.h>
@@ -162,7 +163,7 @@ bool qd_listener_listen(qd_listener_t *li)
 }
 
 
-void qd_listener_decref(qd_listener_t* li)
+void qd_listener_decref(qd_listener_t *li)
 {
     if (li && sys_atomic_dec(&li->ref_count) == 1) {
         if (!!li->vflow_record) {
@@ -170,6 +171,8 @@ void qd_listener_decref(qd_listener_t* li)
             li->vflow_record = 0;
         }
         qd_server_config_free(&li->config);
+        qd_tls_config_decref(li->tls_config);
+
         free_qd_listener_t(li);
     }
 }

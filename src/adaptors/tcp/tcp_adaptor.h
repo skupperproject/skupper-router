@@ -23,7 +23,6 @@
 #include "delivery.h"
 #include "adaptors/adaptor_common.h"
 #include "adaptors/adaptor_listener.h"
-#include "adaptors/adaptor_tls.h"
 #include <qpid/dispatch/protocol_observer.h>
 
 
@@ -31,6 +30,8 @@ typedef struct qd_tcp_common_t     qd_tcp_common_t;
 typedef struct qd_tcp_listener_t   qd_tcp_listener_t;
 typedef struct qd_tcp_connector_t  qd_tcp_connector_t;
 typedef struct qd_tcp_connection_t qd_tcp_connection_t;
+typedef struct qd_tls_config_t     qd_tls_config_t;
+typedef struct qd_tls_session_t    qd_tls_session_t;
 
 ALLOC_DECLARE(qd_tcp_listener_t);
 ALLOC_DECLARE(qd_tcp_connector_t);
@@ -60,7 +61,7 @@ struct qd_tcp_listener_t {
     DEQ_LINKS(qd_tcp_listener_t);
     sys_mutex_t                lock;
     qd_adaptor_config_t       *adaptor_config;
-    qd_tls_domain_t           *tls_domain;
+    qd_tls_config_t           *tls_config;
     qd_adaptor_listener_t     *adaptor_listener;
     qd_tcp_connection_list_t   connections;
     qdpo_config_t             *protocol_observer_config;
@@ -78,7 +79,7 @@ typedef struct qd_tcp_connector_t {
     sys_mutex_t                lock;
     qd_timer_t                *activate_timer;
     qd_adaptor_config_t       *adaptor_config;
-    qd_tls_domain_t           *tls_domain;
+    qd_tls_config_t           *tls_config;
     qdr_connection_t          *core_conn;  // dispatcher conn and link
     char                      *process_ref;  // VanFlow Process ID
     uint64_t                   conn_id;
@@ -145,8 +146,7 @@ typedef struct qd_tcp_connection_t {
     qd_buffer_t                *outbound_body;
     pn_condition_t             *error;
     char                       *reply_to;
-    qd_tls_domain_t            *tls_domain;    // if configured, owned by this connection
-    qd_tls_t                   *tls;           // tls session if configured
+    qd_tls_session_t           *tls_session;   // tls session if configured for TLS
     char                       *alpn_protocol; // negotiated by TLS else 0
     qd_handler_context_t        context;
     qd_tcp_connection_state_t  state;

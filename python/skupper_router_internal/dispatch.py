@@ -108,7 +108,6 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_prepare, None, [self.qd_dispatch_p])
         self._prototype(self.qd_dispatch_configure_listener, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_tcp_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_http_listener, c_void_p, [self.qd_dispatch_p, py_object])
@@ -119,7 +118,11 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_delete_http_connector, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, c_void_p])
-        self._prototype(self.qd_connection_manager_delete_ssl_profile, c_bool, [self.qd_dispatch_p, c_void_p])
+
+        self._prototype(self.qd_tls_configure_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_tls_update_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object, c_void_p])
+        self._prototype(self.qd_tls_delete_ssl_profile, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_tls_register_display_name_service, None, [py_object])
 
         self._prototype(self.qd_dispatch_configure_address, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_auto_link, None, [self.qd_dispatch_p, py_object])
@@ -131,8 +134,6 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_policy_host_pattern_add, c_bool, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_remove, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_lookup, c_char_p, [self.qd_dispatch_p, py_object])
-
-        self._prototype(self.qd_dispatch_register_display_name_service, None, [self.qd_dispatch_p, py_object])
 
         self._prototype(self.qd_dispatch_set_agent, None, [self.qd_dispatch_p, py_object])
 

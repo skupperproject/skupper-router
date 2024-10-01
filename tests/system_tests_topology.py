@@ -764,7 +764,10 @@ class RouterFluxTest(TestCase):
         # stop consumers so INT_A's route table will be different when it comes
         # back online so it will require an immediate sync
         for c in consumers:
-            c.stop()
+            with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
+                c.stop()
+            # expect that the connection failed due to the teardown of INT_A
+            self.assertIn("connection aborted", str(exc.exception), f"{exc.exception}")
 
         time.sleep(1.0)
         INT_A = self._create_router('INT.A',
@@ -808,7 +811,10 @@ class RouterFluxTest(TestCase):
         # propagated to INT_C.  Now remove INT_A
         INT_A.teardown()
         for c in consumers:
-            c.stop()
+            with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
+                c.stop()
+            # expect that the connection failed due to the teardown of INT_A
+            self.assertIn("connection aborted", str(exc.exception), f"{exc.exception}")
 
         start = time.time()
 

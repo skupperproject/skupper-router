@@ -31,8 +31,9 @@
 
 typedef struct qd_timer_t  qd_timer_t;
 typedef struct qd_server_t qd_server_t;
-typedef struct qd_connection_t qd_connection_t;
-typedef struct vflow_record_t  vflow_record_t;
+typedef struct qd_connection_t  qd_connection_t;
+typedef struct vflow_record_t   vflow_record_t;
+typedef struct qd_tls_config_t  qd_tls_config_t;
 
 typedef enum {
     CXTR_STATE_INIT = 0,
@@ -65,9 +66,8 @@ typedef struct qd_connector_t {
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
     qd_failover_item_list_t   conn_info_list;
     int                       conn_index; // Which connection in the connection list to connect to next.
-
-    /* Optional policy vhost name */
-    char                     *policy_vhost;
+    char                     *policy_vhost;  /* Optional policy vhost name */
+    qd_tls_config_t          *tls_config;
 
     /* Connection group state */
     bool is_data_connector;

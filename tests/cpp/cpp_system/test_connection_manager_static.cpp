@@ -24,8 +24,8 @@
 
 extern "C" {
 #include "entity.h"
-
-#include "qpid/dispatch/connection_manager.h"
+#include "qpid/dispatch/tls_common.h"
+#include "qpid/dispatch/threading.h"
 }
 
 #include <Python.h>
@@ -38,8 +38,8 @@ extern "C" {
 using std::string_literals::operator""s;
 
 extern "C" {
-QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity);
-QD_EXPORT void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl);
+QD_EXPORT void *qd_tls_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity);
+QD_EXPORT void qd_tls_delete_ssl_profile(qd_dispatch_t *qd, void *impl);
 }
 
 // uses the python-exposed api to run the code; hopefully this is robust enough
@@ -47,18 +47,30 @@ static void check_password(qd_dispatch_t *qd, const char *password, const char *
 {
     PyObject *pyObject = PyDict_New();
     PyObject *item     = PyUnicode_FromString(password);
+    PyObject *name     = PyUnicode_FromString("profileName");
+
+    PyDict_SetItemString(pyObject, "name", name);
     PyDict_SetItemString(pyObject, "password", item);
-    qd_entity_t *entity              = reinterpret_cast<qd_entity_t *>(pyObject);
-    qd_config_ssl_profile_t *profile = qd_dispatch_configure_ssl_profile(qd, entity);
+
+    sys_thread_proactor_mode_t old_mode = sys_thread_proactor_set_mode(SYS_THREAD_PROACTOR_MODE_TIMER, 0);
+
+    qd_entity_t *entity = reinterpret_cast<qd_entity_t *>(pyObject);
+    void *phandle       = qd_tls_configure_ssl_profile(qd, entity);
     if (expect_success) {
-        REQUIRE(profile != nullptr);
-        CHECK(profile->ssl_password == std::string{expected});
-        qd_connection_manager_delete_ssl_profile(qd, profile);
+        qd_ssl2_profile_t profile;
+        REQUIRE(phandle != nullptr);
+        CHECK(qd_tls_read_ssl_profile("profileName", &profile) != nullptr);
+        CHECK(profile.password == std::string{expected});
+        qd_tls_cleanup_ssl_profile(&profile);
+        qd_tls_delete_ssl_profile(qd, phandle);
     } else {
-        REQUIRE(profile == nullptr);
+        REQUIRE(phandle == nullptr);
     }
+    Py_DECREF(name);
     Py_DECREF(item);
     Py_DECREF(pyObject);
+
+    (void) sys_thread_proactor_set_mode(old_mode, 0);
 }
 
 TEST_CASE("qd_dispatch_configure_ssl_profile")

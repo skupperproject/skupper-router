@@ -27,13 +27,17 @@ from subprocess import Popen, PIPE
 
 import cproton
 from proton import SASL, Url, SSLDomain, SSLUnavailable, ConnectionException
+from proton import Message
 from proton.utils import BlockingConnection
 
-from skupper_router.management.client import Node
-from system_test import TIMEOUT, TestCase, main_module, Qdrouterd
+from system_test import TIMEOUT, TestCase, main_module, Qdrouterd, Process
 from system_test import unittest, retry, CONNECTION_TYPE, ROUTER_NODE_TYPE, ssl_file
-from system_test import CA_CERT, BAD_CA_CERT, CLIENT_CERTIFICATE, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, \
-    CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
+from system_test import CA_CERT, BAD_CA_CERT, CA2_CERT, SSL_PROFILE_TYPE
+from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
+from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
+from system_test import CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD
+from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD
+from system_test import AsyncTestSender, AsyncTestReceiver
 
 
 def protocol_name(proto):
@@ -42,6 +46,14 @@ def protocol_name(proto):
     if proto.endswith(".0"):
         proto = proto[:-2]
     return proto
+
+
+def get_router_nodes(router):
+    """
+    Retrieves the router-ids of all nodes connected to router.
+    """
+    response = router.management.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
+    return [resp['id'] for resp in response.get_dicts()]
 
 
 class RouterTestSslBase(TestCase):
@@ -204,7 +216,7 @@ class RouterTestSslClient(RouterTestSslBase):
         If sasl_enabled is true use client authentication via SASL.
         """
         ATTR_NAMES = ['ssl', 'sslProto', 'sasl', 'isAuthenticated',
-                      'isEncrypted', 'user']
+                      'isEncrypted', 'user', 'sslCipher', 'sslSsf']
 
         # Management address to connect using the given TLS protocol
         url = Url("amqps://0.0.0.0:%d/$management" % listener_port)
@@ -329,6 +341,10 @@ class RouterTestSslClient(RouterTestSslBase):
             self.assertTrue(result['isAuthenticated'], "SASL not authenticated properly")
             self.assertEqual('test@domain.com', result['user'],
                              "Unexpected SASL user")
+            self.assertNotEqual(0, result['sslSsf'], f"expected non-zero ssf: {result}")
+            self.assertIsNotNone(result['sslCipher'], f"expected a cipher: {result}")
+            self.assertNotEqual(0, len(result['sslCipher']),
+                                f"Expected non-empty cipher: {result}")
 
         # ensure that the connection fails if client attempts non-SSL connection
 
@@ -516,23 +532,6 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         cls.bad_router = cls.tester.qdrouterd("BAD-ROUTER", conf, wait=False)
         cls.bad_router.wait_ports()
 
-    def get_router_nodes(self):
-        """
-        Retrieves connected router nodes.
-        :return:
-        """
-        if not SASL.extended():
-            self.skipTest("Cyrus library not available. skipping test")
-
-        url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
-        node = Node.connect(url)
-        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
-        router_nodes = []
-        for resp in response.get_dicts():
-            router_nodes.append(resp['id'])
-        node.close()
-        return router_nodes
-
     def test_connected_tls_sasl_routers(self):
         """
         Validates if all expected routers are connected in the network with the
@@ -551,6 +550,8 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                                attribute_names=['role',
                                                 'ssl',
                                                 'sslProto',
+                                                'sslCipher',
+                                                'sslSsf',
                                                 'sasl',
                                                 'isAuthenticated',
                                                 'isEncrypted',
@@ -570,6 +571,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
             self.assertTrue(c['isAuthenticated'], f"Not authed {c}")
             self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
             self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
+            self.assertNotEqual(0, c['sslSsf'], f"expected non-zero ssf: {c}")
+            self.assertIsNotNone(c['sslCipher'], f"expected a cipher: {c}")
+            self.assertNotEqual(0, len(c['sslCipher']),
+                                f"Expected non-empty cipher: {c}")
 
         router = None
         for version, router in self.routers_any.items():
@@ -582,6 +587,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                 self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
                 self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
                 self.assertEqual(version, c['sslProto'], f"wrong proto {c}")
+                self.assertNotEqual(0, c['sslSsf'], f"expected non-zero ssf: {c}")
+                self.assertIsNotNone(c['sslCipher'], f"expected a cipher: {c}")
+                self.assertNotEqual(0, len(c['sslCipher']),
+                                    f"Expected non-empty cipher: {c}")
 
         for version, router in self.routers_only.items():
             router.wait_router_connected("QDR.A")
@@ -593,6 +602,10 @@ class RouterTestSslInterRouter(RouterTestSslBase):
                 self.assertEqual('PLAIN', c['sasl'], f"bad mech {c}")
                 self.assertEqual('test@domain.com', c['user'], f"bad user {c}")
                 self.assertEqual(version, c['sslProto'], f"wrong proto {c}")
+                self.assertNotEqual(0, c['sslSsf'], f"expected non-zero ssf: {c}")
+                self.assertIsNotNone(c['sslCipher'], f"expected a cipher: {c}")
+                self.assertNotEqual(0, len(c['sslCipher']),
+                                    f"Expected non-empty cipher: {c}")
 
         # wait for the bad router to log that the connection to QDR.A has
         # failed
@@ -601,16 +614,13 @@ class RouterTestSslInterRouter(RouterTestSslBase):
         self.router_a.wait_log_message("Connection from .* failed: amqp:connection:policy-error Client connection unencrypted")
 
 
-class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
+class RouterTestSslInterRouterWithInvalidCertPaths(RouterTestSslBase):
     """
     DISPATCH-1762
-    Starts 2 routers:
-       Router A two listeners serve a normal, good certificate
-       Router B two connectors configured with an invalid CA file path in its profile
-          - one sets verifyHostname true, the other false.
-    Test proves:
-       Router B must not connect to A with mis-configured CA file path regardless of
-       verifyHostname setting.
+    Attempt to start two routers with invalid SSL configurations: one with an
+    invalid self-identifying certificate and another with an invalid CA file.
+
+    Expect neither router to start successfully.
     """
     # Listener ports for each TLS protocol definition
     PORT_NO_SSL  = 0
@@ -621,7 +631,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
         """
         Prepares 2 routers to form a network.
         """
-        super(RouterTestSslInterRouterWithInvalidPathToCA, cls).setUpClass()
+        super(RouterTestSslInterRouterWithInvalidCertPaths, cls).setUpClass()
 
         if not SASL.extended():
             return
@@ -629,7 +639,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
         os.environ["ENV_SASL_PASSWORD"] = "password"
 
         # Generate authentication DB
-        super(RouterTestSslInterRouterWithInvalidPathToCA, cls).create_sasl_files()
+        super(RouterTestSslInterRouterWithInvalidCertPaths, cls).create_sasl_files()
 
         # Router expected to be connected
         cls.connected_tls_sasl_routers = []
@@ -638,9 +648,7 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
         cls.routers = []
 
         # Saving listener ports for each TLS definition
-        cls.PORT_NO_SSL = cls.tester.get_port()
-        cls.PORT_TLS_ALL_1 = cls.tester.get_port()
-        cls.PORT_TLS_ALL_2 = cls.tester.get_port()
+        inter_router_port = cls.tester.get_port()
 
         # Configured connector host
         cls.CONNECTOR_HOST = "localhost"
@@ -651,129 +659,64 @@ class RouterTestSslInterRouterWithInvalidPathToCA(RouterTestSslBase):
                         'saslConfigName': 'tests-mech-PLAIN',
                         'saslConfigDir': os.getcwd()}),
             # No auth and no SSL for management access
-            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.PORT_NO_SSL}),
-            # All TLS versions and normal, good sslProfile config
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL_1,
-                          'saslMechanisms': 'PLAIN',
-                          'requireEncryption': 'yes', 'requireSsl': 'yes',
-                          'sslProfile': 'ssl-profile-tls-all'}),
-            # All TLS versions and normal, good sslProfile config
-            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': cls.PORT_TLS_ALL_2,
-                          'saslMechanisms': 'PLAIN',
-                          'requireEncryption': 'yes', 'requireSsl': 'yes',
-                          'sslProfile': 'ssl-profile-tls-all'}),
-            # SSL Profile for all TLS versions (protocols element not defined)
-            ('sslProfile', {'name': 'ssl-profile-tls-all',
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port()}),
+
+            # SSL Profile with non-existing certFile
+            ('sslProfile', {'name': 'bogus-certfile',
                             'caCertFile': CA_CERT,
-                            'certFile': SERVER_CERTIFICATE,
+                            'certFile': ssl_file('nonexisting_certfile.pem'),
                             'privateKeyFile': SERVER_PRIVATE_KEY,
                             'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
                                        'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS',
-                            'password': SERVER_PRIVATE_KEY_PASSWORD})
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('listener', {'host': '0.0.0.0', 'role': 'inter-router', 'port': inter_router_port,
+                          'saslMechanisms': 'PLAIN',
+                          'requireEncryption': 'yes', 'requireSsl': 'yes',
+                          'sslProfile': 'bogus-certfile'}),
         ])
 
-        # Router B has a connector to listener that allows all protocols but will not verify hostname.
-        # The sslProfile has a bad caCertFile name and this router should not connect.
         config_b = Qdrouterd.Config([
             ('router', {'id': 'QDR.B',
                         'mode': 'interior', 'dataConnectionCount': '2'}),
-            # Connector to All TLS versions allowed listener
+            # No auth and no SSL for management access
+            ('listener', {'host': '0.0.0.0', 'role': 'normal', 'port': cls.tester.get_port()}),
+
+            # SSL Profile with an invalid caCertFile file path.
+            ('sslProfile', {'name': 'bogus-caCertFile',
+                            'caCertFile': ssl_file('nonexisting_cacertfile.pem'),
+                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
+                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'}),
             ('connector', {'name': 'connector1',
                            'host': cls.CONNECTOR_HOST, 'role': 'inter-router',
-                           'port': cls.PORT_TLS_ALL_1,
+                           'port': inter_router_port,
                            'verifyHostname': 'no', 'saslMechanisms': 'PLAIN',
                            'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
-            # Connector to All TLS versions allowed listener
-            ('connector', {'name': 'connector2',
-                           'host': cls.CONNECTOR_HOST, 'role': 'inter-router',
-                           'port': cls.PORT_TLS_ALL_2,
-                           'verifyHostname': 'yes', 'saslMechanisms': 'PLAIN',
-                           'saslUsername': 'test@domain.com', 'saslPassword': 'pass:password',
-                           'sslProfile': 'ssl-profile-tls-all'}),
-
-            # SSL Profile with an invalid caCertFile file path. The correct file path here would allow this
-            # router to connect. The object is to trigger a specific failure in the ssl
-            # setup chain of calls to pn_ssl_domain_* functions.
-            ('sslProfile', {'name': 'ssl-profile-tls-all',
-                            'caCertFile': ssl_file('ca-certificate-INVALID-FILENAME.pem'),
-                            'ciphers': 'ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:'
-                                       'DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS'})
+                           'sslProfile': 'bogus-caCertFile'}),
         ])
 
-        cls.routers.append(cls.tester.qdrouterd("A", config_a, wait=False))
-        cls.routers.append(cls.tester.qdrouterd("B", config_b, wait=False))
+        cls.routers.append(cls.tester.qdrouterd("A", config_a,
+                                                expect=Process.EXIT_FAIL, wait=False))
+        cls.routers.append(cls.tester.qdrouterd("B", config_b,
+                                                expect=Process.EXIT_FAIL, wait=False))
 
-        # Wait until A is running
-        cls.routers[0].wait_ports()
-
-        # Can't wait until B is connected because it's not supposed to connect.
-
-    def get_router_nodes(self):
+    def test_invalid_cert_paths(self):
         """
-        Retrieves connected router nodes from QDR.A
-        :return: list of connected router id's
+        Verify the routers have indeed exited due to the invalid configurations
         """
         if not SASL.extended():
             self.skipTest("Cyrus library not available. skipping test")
 
-        url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
-        node = Node.connect(url)
-        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
-        router_nodes = []
-        for resp in response.get_dicts():
-            router_nodes.append(resp['id'])
-        node.close()
-        return router_nodes
+        self.routers[0].wait_log_message(r"\(critical\) Router start-up failed:")
+        self.routers[0].wait_log_message("Failed to configure TLS certFile")
+        self.routers[1].wait_log_message(r"\(critical\) Router start-up failed:")
+        self.routers[1].wait_log_message("Failed to configure TLS caCertFile")
 
-    def test_invalid_ca_path(self):
-        """
-        Prove sslProfile with invalid path to CA prevents the router from joining the network
-        """
-        if not SASL.extended():
-            self.skipTest("Cyrus library not available. skipping test")
-
-        # Poll for a while until the connector error shows up in router B's log
-        pattern = " SERVER (error) SSL CA configuration failed"
-        host_port_1 = self.CONNECTOR_HOST + ":" + str(self.PORT_TLS_ALL_1)
-        host_port_2 = self.CONNECTOR_HOST + ":" + str(self.PORT_TLS_ALL_2)
-        sleep_time = 0.1  # seconds
-        poll_duration = 60.0  # seconds
-        verified = False
-        for tries in range(int(poll_duration / sleep_time)):
-            logfile = os.path.join(self.routers[1].outdir, self.routers[1].logfile)
-            if os.path.exists(logfile):
-                with open(logfile, 'r') as router_log:
-                    log_lines = router_log.read().split("\n")
-                e1_lines = [s for s in log_lines if pattern in s and host_port_1 in s]
-                e2_lines = [s for s in log_lines if pattern in s and host_port_2 in s]
-                verified = len(e1_lines) > 0 and len(e2_lines) > 0
-                if verified:
-                    break
-            time.sleep(sleep_time)
-        self.assertTrue(verified, "Log line containing '%s' not seen for both connectors in QDR.B log" % pattern)
-
-        verified = False
-        pattern1 = "Connection to %s failed:" % host_port_1
-        pattern2 = "Connection to %s failed:" % host_port_2
-        for tries in range(int(poll_duration / sleep_time)):
-            logfile = os.path.join(self.routers[1].outdir, self.routers[1].logfile)
-            if os.path.exists(logfile):
-                with open(logfile, 'r') as router_log:
-                    log_lines = router_log.read().split("\n")
-                e1_lines = [s for s in log_lines if pattern1 in s]
-                e2_lines = [s for s in log_lines if pattern2 in s]
-                verified = len(e1_lines) > 0 and len(e2_lines) > 0
-                if verified:
-                    break
-            time.sleep(sleep_time)
-        self.assertTrue(verified, "Log line containing '%s' or '%s' not seen in QDR.B log" % (pattern1, pattern2))
-
-        # Show that router A does not have router B in its network
-        router_nodes = self.get_router_nodes()
-        self.assertTrue(router_nodes)
-        node = "QDR.B"
-        self.assertNotIn(node, router_nodes, msg="%s should not be connected" % node)
+        # race fix: on slow CI systems the test will exit before the routers
+        # have cleanly shutdown - this will cause the test to fail. Manually
+        # wait for the router processes to compile (raise Timeout error if they
+        # do not)
+        self.routers[0].wait(TIMEOUT)
+        self.routers[1].wait(TIMEOUT)
 
 
 class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterTestSslBase):
@@ -862,23 +805,6 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
 
         # Can't wait until B is connected because it's not supposed to connect.
 
-    def get_router_nodes(self):
-        """
-        Retrieves connected router nodes from QDR.A
-        :return: list of connected router id's
-        """
-        if not SASL.extended():
-            self.skipTest("Cyrus library not available. skipping test")
-
-        url = Url("amqp://0.0.0.0:%d/$management" % self.PORT_NO_SSL)
-        node = Node.connect(url)
-        response = node.query(type=ROUTER_NODE_TYPE, attribute_names=["id"])
-        router_nodes = []
-        for resp in response.get_dicts():
-            router_nodes.append(resp['id'])
-        node.close()
-        return router_nodes
-
     def test_mismatched_ca_and_no_hostname_verification(self):
         """
         Prove that improperly configured ssl-enabled connector prevents the router
@@ -905,10 +831,609 @@ class RouterTestSslInterRouterWithoutHostnameVerificationAndMismatchedCA(RouterT
         self.assertTrue(verified, "Log line containing '%s' not seen in QDR.B log" % pattern)
 
         # Show that router A does not have router B in its network
-        router_nodes = self.get_router_nodes()
-        self.assertTrue(router_nodes)
-        node = "QDR.B"
-        self.assertNotIn(node, router_nodes, msg="%s should not be connected" % node)
+        router_nodes = get_router_nodes(self.routers[0])
+        self.assertNotIn("QDR.B", router_nodes, msg="QDR.B should not be connected")
+
+
+class RouterTestSslProfileUpdate(RouterTestSslBase):
+    """
+    Verify updates to the sslProfile configurations for inter-router connections.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(RouterTestSslProfileUpdate, cls).setUpClass()
+        if cls.DISABLE_SSL_TESTING:
+            cls.skipTest(cls.DISABLE_REASON)
+        if not SASL.extended():
+            cls.skipTest("Cyrus library not available. skipping test")
+
+        cls.main_listener1_port = cls.tester.get_port()
+        cls.main_listener2_port = cls.tester.get_port()
+
+        main_cfg = Qdrouterd.Config([
+            ('router', {'id': 'main',
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            # SSL profile for two inter-router listeners.
+            # This will be updated by test case
+            ('sslProfile', {'name': 'ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('listener', {'name': 'Listener1',
+                          'host': 'localhost',
+                          'role': 'inter-router',
+                          'port': cls.main_listener1_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'true',
+                          'saslMechanisms': 'EXTERNAL',
+                          'sslProfile': 'ssl-profile'}),
+            ('listener', {'name': 'Listener2',
+                          'host': 'localhost',
+                          'role': 'inter-router',
+                          'port': cls.main_listener2_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'false',
+                          'saslMechanisms': 'ANONYMOUS',
+                          'sslProfile': 'ssl-profile'})
+        ])
+        cls.main_router = cls.tester.qdrouterd("main", main_cfg, wait=True)
+
+        # two test routers that should remain connected to the main router
+        # after the sslProfile has been modified (existing connections are not
+        # dropped by design).
+
+        a_cfg = Qdrouterd.Config([
+            ('router', {'id': 'QDR.A',
+                        'dataConnectionCount': 2,
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('sslProfile', {'name': 'ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
+            ('connector', {'name': 'AConn1',
+                           'host': 'localhost',
+                           'role': 'inter-router',
+                           'port': cls.main_listener1_port,
+                           'verifyHostname': 'true',
+                           'saslMechanisms': 'EXTERNAL',
+                           'sslProfile': 'ssl-profile'})
+        ])
+        cls.a_router = cls.tester.qdrouterd("QDR.A", a_cfg, wait=True)
+
+        b_cfg = Qdrouterd.Config([
+            ('router', {'id': 'QDR.B',
+                        'dataConnectionCount': 2,
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': cls.tester.get_port()}),
+            ('sslProfile', {'name': 'ssl-profile',
+                            'caCertFile': CA_CERT,
+                            # listener2 does not request a client cert
+                            # so no self identifying cert is necessary
+                            }),
+            ('connector', {'name': 'BConn1',
+                           'host': 'localhost',
+                           'role': 'inter-router',
+                           'port': cls.main_listener2_port,
+                           'verifyHostname': 'true',
+                           'saslMechanisms': 'ANONYMOUS',
+                           'sslProfile': 'ssl-profile'})
+        ])
+        cls.b_router = cls.tester.qdrouterd("QDR.B", b_cfg, wait=True)
+
+        cls.main_router.wait_router_connected("QDR.A")
+        cls.main_router.wait_router_connected("QDR.B")
+        cls.a_router.wait_router_connected("QDR.B")
+        cls.b_router.wait_router_connected("QDR.A")
+
+    def test_ssl_profile_update(self):
+        # update sslProfile on main router to use new certs. These certs are
+        # incompatible with the existing configuration
+
+        new_cfg = {'caCertFile': CA2_CERT,
+                   'certFile': SERVER2_CERTIFICATE,
+                   'privateKeyFile': SERVER2_PRIVATE_KEY,
+                   'password': SERVER2_PRIVATE_KEY_PASSWORD}
+        self.main_router.sk_manager.update(SSL_PROFILE_TYPE, new_cfg, name='ssl-profile')
+
+        # Attempt to attach a router using the old client configuration, expect
+        # it to never connect
+
+        bad_cfg = Qdrouterd.Config([
+            ('router', {'id': 'QDR.BAD',
+                        'dataConnectionCount': 2,
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': self.tester.get_port()}),
+            ('sslProfile', {'name': 'ssl-profile',
+                            'caCertFile': CA_CERT,
+                            'certFile': CLIENT_CERTIFICATE,
+                            'privateKeyFile': CLIENT_PRIVATE_KEY,
+                            'password': CLIENT_PRIVATE_KEY_PASSWORD}),
+            ('connector', {'name': 'BadConn1',
+                           'host': 'localhost',
+                           'role': 'inter-router',
+                           'port': self.main_listener1_port,
+                           'verifyHostname': 'true',
+                           'saslMechanisms': 'EXTERNAL',
+                           'sslProfile': 'ssl-profile'})
+        ])
+        bad_router = self.tester.qdrouterd("QDR.BAD", bad_cfg, wait=False)
+        bad_router.wait_ports()  # wait for mgmt interface port to activate
+        bad_router.wait_log_message("SSL Failure")
+        bad_router.wait_log_message("certificate verify failed")
+
+        # Attempt to attach a router using the new client configuration. It
+        # should succeed.
+
+        good_cfg = Qdrouterd.Config([
+            ('router', {'id': 'QDR.GOOD',
+                        'dataConnectionCount': 2,
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': self.tester.get_port()}),
+            ('sslProfile', {'name': 'ssl-profile',
+                            'caCertFile': CA2_CERT,
+                            'certFile': CLIENT2_CERTIFICATE,
+                            'privateKeyFile': CLIENT2_PRIVATE_KEY,
+                            'password': CLIENT2_PRIVATE_KEY_PASSWORD}),
+            ('connector', {'name': 'GoodConn1',
+                           'host': 'localhost',
+                           'role': 'inter-router',
+                           'port': self.main_listener1_port,
+                           'verifyHostname': 'true',
+                           'saslMechanisms': 'EXTERNAL',
+                           'sslProfile': 'ssl-profile'})
+        ])
+        good_router = self.tester.qdrouterd("QDR.GOOD", good_cfg, wait=True)
+        self.main_router.wait_router_connected("QDR.GOOD")
+
+        # Verify that only A, B, and Good are present in main's routing table
+
+        def check_nodes():
+            routers = get_router_nodes(self.main_router)
+            if 'QDR.A' in routers \
+               and 'QDR.B' in routers \
+               and 'QDR.GOOD' in routers \
+               and 'QDR.BAD' not in routers:
+                return True
+            return False
+
+        ok = retry(check_nodes)
+        self.assertTrue(ok, f"Unexpected routers found: {get_router_nodes(self.main_router)}")
+
+
+class RouterTestSslProfileUpdateClients(RouterTestSslBase):
+    """
+    Verify updates to the sslProfile configurations for client connections
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(RouterTestSslProfileUpdateClients, cls).setUpClass()
+        if cls.DISABLE_SSL_TESTING:
+            cls.skipTest(cls.DISABLE_REASON)
+        if not SASL.extended():
+            cls.skipTest("Cyrus library not available. skipping test")
+
+        cls.listener1_port = cls.tester.get_port()
+        cls.listener2_port = cls.tester.get_port()
+
+        # default TLS configurations
+        cls.profile_L1_cfg = {
+            'caCertFile': CA_CERT,
+            'certFile': SERVER_CERTIFICATE,
+            'privateKeyFile': SERVER_PRIVATE_KEY,
+            'password': SERVER_PRIVATE_KEY_PASSWORD
+        }
+        cls.profile_L2_cfg = {
+            'caCertFile': CA2_CERT,
+            'certFile': SERVER2_CERTIFICATE,
+            'privateKeyFile': SERVER2_PRIVATE_KEY,
+            'password': SERVER2_PRIVATE_KEY_PASSWORD
+        }
+
+        ssl_profile_L1 = {'name': 'ssl-profile-L1'}
+        ssl_profile_L1.update(cls.profile_L1_cfg)
+        ssl_profile_L2 = {'name': 'ssl-profile-L2'}
+        ssl_profile_L2.update(cls.profile_L2_cfg)
+
+        router_cfg = Qdrouterd.Config([
+            ('router', {'id': 'Router1',
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            # Listener1
+            ('sslProfile', ssl_profile_L1),
+            ('listener', {'name': 'Listener1',
+                          'host': 'localhost',
+                          'role': 'normal',
+                          'port': cls.listener1_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'true',
+                          'saslMechanisms': 'EXTERNAL',
+                          'requireEncryption': 'yes',
+                          'sslProfile': 'ssl-profile-L1'}),
+
+            # Listener2
+            ('sslProfile', ssl_profile_L2),
+            ('listener', {'name': 'Listener2',
+                          'host': 'localhost',
+                          'role': 'normal',
+                          'port': cls.listener2_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'true',
+                          'saslMechanisms': 'EXTERNAL',
+                          'requireEncryption': 'yes',
+                          'sslProfile': 'ssl-profile-L2'})
+        ])
+        cls.router1 = cls.tester.qdrouterd("router1", router_cfg, wait=True)
+
+    def test_ssl_client_profile_update(self):
+        """
+        Verify updates to the sslProfiles for client connections
+        """
+
+        payload = "?" * 1024 * 65
+        payload += "TLS Message!"
+        message = Message(body=payload)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_rx = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                    source="test/addr",
+                                    container_id="FooRx",
+                                    conn_args=conn_args)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                  target="test/addr",
+                                  message=message,
+                                  container_id="FooTx",
+                                  conn_args=conn_args,
+                                  get_link_info=False)
+        test_tx.wait()
+        test_rx.stop()
+        self.assertEqual(1, test_rx.num_queue_puts, "expected 1 message")
+        msg = test_rx.queue.get()
+        self.assertIn("TLS Message!", msg.body, "missing payload")
+
+        #
+        # Now update the listeners certificates and test that clients using the
+        # old certs fail with verification errors
+        #
+
+        new_cfg = {'caCertFile': CA2_CERT,
+                   'certFile': SERVER2_CERTIFICATE,
+                   'privateKeyFile': SERVER2_PRIVATE_KEY,
+                   'password': SERVER2_PRIVATE_KEY_PASSWORD}
+        self.router1.sk_manager.update(SSL_PROFILE_TYPE, new_cfg, name='ssl-profile-L1')
+
+        new_cfg = {'caCertFile': CA_CERT,
+                   'certFile': SERVER_CERTIFICATE,
+                   'privateKeyFile': SERVER_PRIVATE_KEY,
+                   'password': SERVER_PRIVATE_KEY_PASSWORD}
+        self.router1.sk_manager.update(SSL_PROFILE_TYPE, new_cfg, name='ssl-profile-L2')
+
+        #
+        # Expect TLS connection failures:
+        #
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
+            AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                              source="test/addr",
+                              container_id="FooRx2",
+                              conn_args=conn_args)
+        self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
+            AsyncTestReceiver(f"amqps://localhost:{self.listener2_port}",
+                              source="test/addr",
+                              container_id="FooRx3",
+                              conn_args=conn_args)
+        self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
+
+        #
+        # Now verify clients can connect with the proper certifcates
+        #
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_rx = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                    source="test/addr",
+                                    container_id="FooRxOk",
+                                    conn_args=conn_args)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                  target="test/addr",
+                                  message=message,
+                                  container_id="FooTxOk",
+                                  conn_args=conn_args,
+                                  get_link_info=False)
+        test_tx.wait()
+        test_rx.stop()
+        self.assertEqual(1, test_rx.num_queue_puts, "expected 1 message")
+        msg = test_rx.queue.get()
+        self.assertIn("TLS Message!", msg.body, "missing payload")
+
+        # restore original sslProfile configurations
+        self.router1.sk_manager.update(SSL_PROFILE_TYPE, self.profile_L1_cfg, name='ssl-profile-L1')
+        self.router1.sk_manager.update(SSL_PROFILE_TYPE, self.profile_L2_cfg, name='ssl-profile-L2')
+
+    def test_ssl_client_profile_update_load(self):
+        """
+        Test sslProfile updates while under client load
+        """
+
+        payload = "?" * 1024 * 65
+        payload += "TLS Message!"
+        message = Message(body=payload)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_rx = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                    source="test/addr",
+                                    container_id="FooRx",
+                                    conn_args=conn_args)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+
+        clients = []
+        for test in range(10):
+
+            # Expect failure
+            bad_ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+            bad_ssl_domain.set_trusted_ca_db(CA_CERT)
+            bad_ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+            bad_ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+            bad_conn_args = {'sasl_enabled': True,
+                             'allowed_mechs': "EXTERNAL",
+                             'ssl_domain': bad_ssl_domain}
+
+            with self.assertRaises(Exception) as exc:
+                test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                          target="test/addr",
+                                          message=message,
+                                          container_id=f"BADTX{test}",
+                                          conn_args=bad_conn_args,
+                                          get_link_info=False)
+                test_tx.wait()
+
+            for c_index in range(4):
+                c_id = f"FooTx-{c_index}"
+                test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                          target="test/addr",
+                                          message=message,
+                                          container_id=c_id,
+                                          conn_args=conn_args,
+                                          get_link_info=False)
+                clients.append(test_tx)
+
+            self.router1.sk_manager.update(SSL_PROFILE_TYPE, self.profile_L2_cfg, name='ssl-profile-L2')
+
+        for client in clients:
+            client.wait()
+
+        test_rx.stop()
+        self.assertEqual(40, test_rx.num_queue_puts, "expected 40 messages")
+        for count in range(40):
+            msg = test_rx.queue.get()
+            self.assertIn("TLS Message!", msg.body, "missing payload")
+
+
+class RouterTestSslProfileDeleteClients(RouterTestSslBase):
+    """
+    Verify deleting an sslProfile does not effect existing clients
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(RouterTestSslProfileDeleteClients, cls).setUpClass()
+        if cls.DISABLE_SSL_TESTING:
+            cls.skipTest(cls.DISABLE_REASON)
+        if not SASL.extended():
+            cls.skipTest("Cyrus library not available. skipping test")
+
+        cls.listener1_port = cls.tester.get_port()
+        cls.listener2_port = cls.tester.get_port()
+
+        router_cfg = Qdrouterd.Config([
+            ('router', {'id': 'Router1',
+                        'mode': 'interior'}),
+            ('listener', {'host': '0.0.0.0',
+                          'role': 'normal',
+                          'port': cls.tester.get_port()}),
+
+            # Listener1 - for receiver clients
+            ('sslProfile', {'name': 'ssl-profile-L1',
+                            'caCertFile': CA_CERT,
+                            'certFile': SERVER_CERTIFICATE,
+                            'privateKeyFile': SERVER_PRIVATE_KEY,
+                            'password': SERVER_PRIVATE_KEY_PASSWORD}),
+            ('listener', {'name': 'Listener1',
+                          'host': 'localhost',
+                          'role': 'normal',
+                          'port': cls.listener1_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'true',
+                          'saslMechanisms': 'EXTERNAL',
+                          'requireEncryption': 'yes',
+                          'sslProfile': 'ssl-profile-L1'}),
+
+            # Listener2 - for sender client
+            ('sslProfile', {'name': 'ssl-profile-L2',
+                            'caCertFile': CA2_CERT,
+                            'certFile': SERVER2_CERTIFICATE,
+                            'privateKeyFile': SERVER2_PRIVATE_KEY,
+                            'password': SERVER2_PRIVATE_KEY_PASSWORD}),
+            ('listener', {'name': 'Listener2',
+                          'host': 'localhost',
+                          'role': 'normal',
+                          'port': cls.listener2_port,
+                          'requireSsl': 'true',
+                          'authenticatePeer': 'true',
+                          'saslMechanisms': 'EXTERNAL',
+                          'requireEncryption': 'yes',
+                          'sslProfile': 'ssl-profile-L2'})
+        ])
+        cls.router1 = cls.tester.qdrouterd("router1", router_cfg, wait=True)
+
+    def test_ssl_client_profile_delete(self):
+        """
+        Attach two receivers then delete the associated sslProfile
+        """
+
+        payload = "?" * 1024 * 65
+        payload += "TLS Message!"
+        message = Message(body=payload)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_rx1 = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                     source="test/addr1",
+                                     container_id="FooRx1",
+                                     conn_args=conn_args)
+        test_rx2 = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                     source="test/addr2",
+                                     container_id="FooRx2",
+                                     conn_args=conn_args)
+
+        # the receiver connections have been established, delete the sslProfile
+
+        mgmt = self.router1.sk_manager
+        mgmt.delete(SSL_PROFILE_TYPE, name='ssl-profile-L1')
+
+        # now verify the existing connections are not affected
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                  target="test/addr1",
+                                  message=message,
+                                  container_id="FooTx1",
+                                  conn_args=conn_args,
+                                  get_link_info=False)
+        test_tx.wait()
+        test_rx1.stop()
+        self.assertEqual(1, test_rx1.num_queue_puts, "expected 1 message")
+        msg = test_rx1.queue.get()
+        self.assertIn("TLS Message!", msg.body, "missing payload")
+
+        test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                  target="test/addr2",
+                                  message=message,
+                                  container_id="FooTx2",
+                                  conn_args=conn_args,
+                                  get_link_info=False)
+        test_tx.wait()
+        test_rx2.stop()
+        self.assertEqual(1, test_rx2.num_queue_puts, "expected 1 message")
+        msg = test_rx2.queue.get()
+        self.assertIn("TLS Message!", msg.body, "missing payload")
+
+        # Create a new connection. Since the listener still exists and has a
+        # copy of the now deleted sslProfile config this should succeed
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA_CERT)
+        ssl_domain.set_credentials(CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_rx3 = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                     source="test/addr3",
+                                     container_id="FooRx3",
+                                     conn_args=conn_args)
+
+        ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
+        ssl_domain.set_trusted_ca_db(CA2_CERT)
+        ssl_domain.set_peer_authentication(SSLDomain.VERIFY_PEER_NAME, CA2_CERT)
+        ssl_domain.set_credentials(CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD)
+        conn_args = {'sasl_enabled': True,
+                     'allowed_mechs': "EXTERNAL",
+                     'ssl_domain': ssl_domain}
+        test_tx = AsyncTestSender(f"amqps://localhost:{self.listener2_port}",
+                                  target="test/addr3",
+                                  message=message,
+                                  container_id="FooTx3",
+                                  conn_args=conn_args,
+                                  get_link_info=False)
+        test_tx.wait()
+        test_rx3.stop()
+        self.assertEqual(1, test_rx3.num_queue_puts, "expected 1 message")
+        msg = test_rx3.queue.get()
+        self.assertIn("TLS Message!", msg.body, "missing payload")
 
 
 if __name__ == '__main__':

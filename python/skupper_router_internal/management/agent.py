@@ -379,10 +379,18 @@ def _host_port_name_identifier(entity):
 
 class SslProfileEntity(EntityAdapter):
     def create(self):
-        return self._qd.qd_dispatch_configure_ssl_profile(self._dispatch, self)
+        ssl_profile = self._qd.qd_tls_configure_ssl_profile(self._dispatch, self)
+        if ssl_profile is None:
+            raise ValidationError("Invalid sslProfile configuration: see logs for details.")
+        return ssl_profile
 
     def _delete(self):
-        self._qd.qd_connection_manager_delete_ssl_profile(self._dispatch, self._implementations[0].key)
+        self._qd.qd_tls_delete_ssl_profile(self._dispatch, self._implementations[0].key)
+
+    def _update(self):
+        tmp = self._qd.qd_tls_update_ssl_profile(self._dispatch, self, self._implementations[0].key)
+        if tmp is None:
+            raise ValidationError("sslProfile configuration update failed: see logs for details.")
 
     def _identifier(self):
         return self.name

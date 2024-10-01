@@ -34,7 +34,6 @@
 
 #include <proton/engine.h>
 #include <proton/event.h>
-#include <proton/ssl.h>
 
 
 qd_dispatch_t* qd_server_dispatch(qd_server_t *server);

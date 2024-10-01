@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include "adaptors/adaptor_tls.h"
+#include "adaptors/legacy_tls.h"
 #include "http1_private.h"
 
 #include <inttypes.h>

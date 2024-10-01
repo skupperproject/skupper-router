@@ -21,7 +21,7 @@
  */
 #include "adaptors/adaptor_buffer.h"
 #include "adaptors/adaptor_common.h"
-#include "adaptors/adaptor_tls.h"
+#include "adaptors/legacy_tls.h"
 #include "adaptors/http_common.h"
 #include "server_private.h"
 

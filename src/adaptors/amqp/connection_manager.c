@@ -31,6 +31,7 @@
 #include "qpid/dispatch/failoverlist.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/tls_amqp.h"
 
 #include <proton/listener.h>
 
@@ -41,107 +42,20 @@
 
 #define CHECK() if (qd_error_code()) goto error
 
-DEQ_DECLARE(qd_config_ssl_profile_t, qd_config_ssl_profile_list_t);
-
 struct qd_connection_manager_t {
     qd_server_t                  *server;
     qd_listener_list_t            listeners;
     qd_connector_list_t           connectors;
     qd_connector_list_t           data_connectors;
-    qd_config_ssl_profile_list_t  config_ssl_profiles;
 };
 
-
-/**
- * Search the list of config_ssl_profiles for an ssl-profile that matches the passed in name
- */
-qd_config_ssl_profile_t *qd_find_ssl_profile(const qd_connection_manager_t *cm, const char *ssl_profile_name)
-{
-    qd_config_ssl_profile_t *ssl_profile = DEQ_HEAD(cm->config_ssl_profiles);
-    while (ssl_profile) {
-        if (strcmp(ssl_profile->name, ssl_profile_name) == 0)
-            return ssl_profile;
-        ssl_profile = DEQ_NEXT(ssl_profile);
-    }
-
-    return 0;
-}
-
-
-static bool config_ssl_profile_free(qd_connection_manager_t *cm, qd_config_ssl_profile_t *ssl_profile)
-{
-    DEQ_REMOVE(cm->config_ssl_profiles, ssl_profile);
-
-    free(ssl_profile->name);
-    free(ssl_profile->ssl_password);
-    free(ssl_profile->ssl_trusted_certificate_db);
-    free(ssl_profile->ssl_uid_format);
-    free(ssl_profile->uid_name_mapping_file);
-    free(ssl_profile->ssl_certificate_file);
-    free(ssl_profile->ssl_private_key_file);
-    free(ssl_profile->ssl_ciphers);
-    free(ssl_profile->ssl_protocols);
-    free(ssl_profile);
-    return true;
-
-}
-
-
-QD_EXPORT qd_config_ssl_profile_t *qd_dispatch_configure_ssl_profile(qd_dispatch_t *qd, qd_entity_t *entity)
-{
-    qd_error_clear();
-    qd_connection_manager_t *cm = qd->connection_manager;
-
-    qd_config_ssl_profile_t *ssl_profile = NEW(qd_config_ssl_profile_t);
-    ZERO(ssl_profile);
-    DEQ_ITEM_INIT(ssl_profile);
-    DEQ_INSERT_TAIL(cm->config_ssl_profiles, ssl_profile);
-    ssl_profile->name                       = qd_entity_opt_string(entity, "name", 0); CHECK();
-    ssl_profile->ssl_certificate_file       = qd_entity_opt_string(entity, "certFile", 0); CHECK();
-    ssl_profile->ssl_private_key_file       = qd_entity_opt_string(entity, "privateKeyFile", 0); CHECK();
-    ssl_profile->ssl_password               = qd_entity_opt_string(entity, "password", 0); CHECK();
-
-    if (ssl_profile->ssl_password) {
-        //
-        // Process the password to handle any modifications or lookups needed
-        //
-        char *actual_pass = 0;
-        bool is_file_path = 0;
-        qd_server_config_process_password(&actual_pass, ssl_profile->ssl_password, &is_file_path, true);
-        CHECK();
-        if (actual_pass) {
-            if (is_file_path) {
-                qd_set_password_from_file(actual_pass, &ssl_profile->ssl_password);
-                free(actual_pass);
-            }
-            else {
-                free(ssl_profile->ssl_password);
-                ssl_profile->ssl_password = actual_pass;
-            }
-        }
-    }
-
-    ssl_profile->ssl_ciphers   = qd_entity_opt_string(entity, "ciphers", 0);                   CHECK();
-    ssl_profile->ssl_protocols = qd_entity_opt_string(entity, "protocols", 0);                 CHECK();
-    ssl_profile->ssl_trusted_certificate_db = qd_entity_opt_string(entity, "caCertFile", 0);   CHECK();
-    ssl_profile->ssl_uid_format             = qd_entity_opt_string(entity, "uidFormat", 0);          CHECK();
-    ssl_profile->uid_name_mapping_file      = qd_entity_opt_string(entity, "uidNameMappingFile", 0); CHECK();
-
-    qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Created SSL Profile with name %s ", ssl_profile->name);
-    return ssl_profile;
-
-    error:
-    qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create ssl profile: %s", qd_error_message());
-    config_ssl_profile_free(cm, ssl_profile);
-    return 0;
-}
 
 static void log_config(qd_server_config_t *c, const char *what, bool create)
 {
     // Log creation/deletion of config objects at INFO level.
     qd_log(LOG_CONN_MGR, QD_LOG_INFO, "%s %s: %s proto=%s, role=%s%s%s%s", create ? "Configured ": "Deleted ", what, c->host_port,
            c->socket_address_family ? c->socket_address_family : "any", c->role, c->http ? ", http" : "",
-           c->ssl_profile ? ", sslProfile=" : "", c->ssl_profile ? c->ssl_profile : "");
+           c->ssl_profile_name ? ", sslProfile=" : "", c->ssl_profile_name ? c->ssl_profile_name : "");
 }
 
 
@@ -154,6 +68,22 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
         qd_listener_decref(li);
         return 0;
     }
+
+    if (li->config.ssl_profile_name) {
+        li->tls_config = qd_tls_config(li->config.ssl_profile_name,
+                                       QD_TLS_TYPE_PROTON_AMQP,
+                                       QD_TLS_CONFIG_SERVER_MODE,
+                                       li->config.verify_host_name,
+                                       li->config.ssl_require_peer_authentication);
+        if (!li->tls_config) {
+            // qd_tls_config() sets qd_error_message():
+            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Failed to configure TLS for Listener %s: %s",
+                   li->config.name, qd_error_message());
+            qd_listener_decref(li);
+            return 0;
+        }
+    }
+
     char *fol = qd_entity_opt_string(entity, "failoverUrls", 0);
     if (fol) {
         li->config.failover_list = qd_failover_list(fol);
@@ -350,14 +280,34 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
 {
     qd_connection_manager_t *cm = qd->connection_manager;
     qd_connector_t *ct = qd_server_connector(qd->server);
+    qd_connector_list_t data_connectors = DEQ_EMPTY;
 
     qd_error_clear();
 
-    if (ct && qd_server_config_load(qd, &ct->config, entity, false, 0) == QD_ERROR_NONE) {
+    if (!ct) {
+        char *name = qd_entity_opt_string(entity, "name", "UNKNOWN");
+        qd_error(QD_ERROR_CONFIG, "Failed to create Connector %s: resource allocation failed", name);
+        free(name);
+        return 0;
+    }
+
+    if (qd_server_config_load(qd, &ct->config, entity, false, 0) == QD_ERROR_NONE) {
         ct->policy_vhost = qd_entity_opt_string(entity, "policyVhost", 0); CHECK();
-        DEQ_ITEM_INIT(ct);
-        DEQ_INSERT_TAIL(cm->connectors, ct);
-        log_config(&ct->config, "Connector", true);
+
+        //
+        // If an sslProfile is configured allocate a TLS config for this connector's connections
+        //
+        if (ct->config.ssl_profile_name) {
+            ct->tls_config = qd_tls_config(ct->config.ssl_profile_name,
+                                           QD_TLS_TYPE_PROTON_AMQP,
+                                           QD_TLS_CONFIG_CLIENT_MODE,
+                                           ct->config.verify_host_name,
+                                           ct->config.ssl_require_peer_authentication);
+            if (!ct->tls_config) {
+                // qd_tls2_config() has set the qd_error_message(), which is logged below
+                goto error;
+            }
+        }
 
         uint32_t connection_count = 0;
         //
@@ -392,23 +342,46 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             qd_generate_discriminator(ct->group_correlator);
             for (uint32_t i = 0; i < connection_count; i++) {
                 qd_connector_t *dc = qd_server_connector(qd->server);
-                if (dc && qd_server_config_load(qd, &dc->config, entity, false, "inter-router-data") == QD_ERROR_NONE) {
-                    strncpy(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE);
-                    dc->is_data_connector = true;
-                    DEQ_INSERT_TAIL(cm->data_connectors, dc);
-                    qd_failover_item_t *item = NEW(qd_failover_item_t);
-                    ZERO(item);
-                    if (dc->config.ssl_required)
-                        item->scheme = strdup("amqps");
-                    else
-                        item->scheme = strdup("amqp");
-                    item->host = strdup(dc->config.host);
-                    item->port = strdup(dc->config.port);
-                    int hplen = strlen(item->host) + strlen(item->port) + 2;
-                    item->host_port = malloc(hplen);
-                    snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
-                    DEQ_INSERT_TAIL(dc->conn_info_list, item);
+                if (!dc) {
+                    qd_error(QD_ERROR_CONFIG, "Failed to create data Connector %s: resource allocation failed", ct->config.name);
+                    goto error;
                 }
+
+                if (qd_server_config_load(qd, &dc->config, entity, false, "inter-router-data") != QD_ERROR_NONE) {
+                    // qd_server_config_load will set qd_error()
+                    qd_connector_decref(dc);
+                    goto error;
+                }
+
+                if (ct->tls_config) {
+                    dc->tls_config = qd_tls_config(ct->config.ssl_profile_name,
+                                                   QD_TLS_TYPE_PROTON_AMQP,
+                                                   QD_TLS_CONFIG_CLIENT_MODE,
+                                                   ct->config.verify_host_name,
+                                                   ct->config.ssl_require_peer_authentication);
+                    if (!dc->tls_config) {
+                        // qd_tls2_config() has set the qd_error_message(), which is logged below
+                        qd_connector_decref(dc);
+                        goto error;
+                    }
+                }
+
+                strncpy(dc->group_correlator, ct->group_correlator, QD_DISCRIMINATOR_SIZE);
+                dc->is_data_connector = true;
+                qd_failover_item_t *item = NEW(qd_failover_item_t);
+                ZERO(item);
+                if (dc->config.ssl_required)
+                    item->scheme = strdup("amqps");
+                else
+                    item->scheme = strdup("amqp");
+                item->host = strdup(dc->config.host);
+                item->port = strdup(dc->config.port);
+                int hplen = strlen(item->host) + strlen(item->port) + 2;
+                item->host_port = malloc(hplen);
+                snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
+                DEQ_INSERT_TAIL(dc->conn_info_list, item);
+
+                DEQ_INSERT_TAIL(data_connectors, dc);
             }
         }
 
@@ -429,6 +402,7 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
         int hplen = strlen(item->host) + strlen(item->port) + 2;
         item->host_port = malloc(hplen);
         snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
+        DEQ_INSERT_TAIL(ct->conn_info_list, item);
 
         //
         // Set up the vanflow record for this connector (LINK)
@@ -452,12 +426,19 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             vflow_add_rate(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
         }
 
-        DEQ_INSERT_TAIL(ct->conn_info_list, item);
+        DEQ_APPEND(cm->data_connectors, data_connectors);
+        DEQ_INSERT_TAIL(cm->connectors, ct);
+        log_config(&ct->config, "Connector", true);
         return ct;
     }
 
   error:
     qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create connector: %s", qd_error_message());
+    for (qd_connector_t *dc = DEQ_HEAD(data_connectors); dc; dc = DEQ_HEAD(data_connectors)) {
+        DEQ_REMOVE_HEAD(data_connectors);
+        dc->state = CXTR_STATE_DELETED;
+        qd_connector_decref(dc);
+    }
     ct->state = CXTR_STATE_DELETED;
     qd_connector_decref(ct);
     return 0;
@@ -474,7 +455,6 @@ qd_connection_manager_t *qd_connection_manager(qd_dispatch_t *qd)
     DEQ_INIT(cm->listeners);
     DEQ_INIT(cm->connectors);
     DEQ_INIT(cm->data_connectors);
-    DEQ_INIT(cm->config_ssl_profiles);
 
     return cm;
 }
@@ -522,13 +502,6 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
 
         connector = DEQ_HEAD(to_free);
     }
-
-    qd_config_ssl_profile_t *sslp = DEQ_HEAD(cm->config_ssl_profiles);
-    while (sslp) {
-        config_ssl_profile_free(cm, sslp);
-        sslp = DEQ_HEAD(cm->config_ssl_profiles);
-    }
-
 
     free(cm);
 }
@@ -599,15 +572,6 @@ QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *im
     }
 }
 
-
-QD_EXPORT void qd_connection_manager_delete_ssl_profile(qd_dispatch_t *qd, void *impl)
-{
-    qd_config_ssl_profile_t *ssl_profile = (qd_config_ssl_profile_t*) impl;
-
-    qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Deleted SSL Profile with name %s ", ssl_profile->name);
-
-    config_ssl_profile_free(qd->connection_manager, ssl_profile);
-}
 
 static void deferred_close(void *context, bool discard) {
     if (!discard) {

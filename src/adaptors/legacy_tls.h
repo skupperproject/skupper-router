@@ -1,5 +1,5 @@
-#ifndef __adaptor_tls_h__
-#define __adaptor_tls_h__ 1
+#ifndef __legacy_tls_h__
+#define __legacy_tls_h__ 1
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -26,16 +26,12 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #define QD_TLS_ERROR -1
+#define QD_IO_EOS     -2  // I/O layer: signal clean end-of-output stream
+#define QD_IO_EOS_ERR -3  // I/O layer: signal error end-of-output stream
 
 typedef struct qd_tls_domain_t qd_tls_domain_t;
 typedef struct qd_tls_t qd_tls_t;
-
-// ALPN Protocol Property Map Key
-// When ALPN is negotiated with a TLS client the agreed upon value needs to be proxied to the server facing end of the
-// connection. The server-facing handshake will use that negotiated ALPN value. Typically the negotiated ALPN value is
-// added to the message application property map. This defines the map key used.
-#define QD_TLS_ALPN_KEY     "alpn"
-#define QD_TLS_ALPN_KEY_LEN 4
+typedef struct pn_tls_t pn_tls_t;
 
 
 /**
@@ -273,4 +269,4 @@ int qd_tls_do_io2(qd_tls_t                      *tls,
 
 void qd_tls_free2(qd_tls_t *tls);
 
-#endif  // __adaptor_tls_h__
+#endif  // __legacy_tls_h__

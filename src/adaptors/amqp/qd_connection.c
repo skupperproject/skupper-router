@@ -28,6 +28,7 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/tls_amqp.h"
 
 #include <proton/proactor.h>
 #include <proton/sasl.h>
@@ -40,18 +41,6 @@ ALLOC_DEFINE(qd_deferred_call_t);
 ALLOC_DEFINE_SAFE(qd_connection_t);
 
 const char *MECH_EXTERNAL = "EXTERNAL";
-
-//Allowed uidFormat fields.
-const char CERT_COUNTRY_CODE = 'c';
-const char CERT_STATE = 's';
-const char CERT_CITY_LOCALITY = 'l';
-const char CERT_ORGANIZATION_NAME = 'o';
-const char CERT_ORGANIZATION_UNIT = 'u';
-const char CERT_COMMON_NAME = 'n';
-const char CERT_FINGERPRINT_SHA1 = '1';
-const char CERT_FINGERPRINT_SHA256 = '2';
-const char CERT_FINGERPRINT_SHA512 = '5';
-const char *COMPONENT_SEPARATOR = ";";
 
 
 /**
@@ -74,206 +63,6 @@ void qd_connection_transport_tracer(pn_transport_t *transport, const char *messa
         qd_log_impl_v1(LOG_PROTOCOL, QD_LOG_DEBUG, __FILE__, __LINE__, "[C%" PRIu64 "]:%s",
                        ctx->connection_id, message);
     }
-}
-
-/**
- * Returns a char pointer to a user id which is constructed from components specified in the config->ssl_uid_format.
- * Parses through each component and builds a semi-colon delimited string which is returned as the user id.
- */
-static const char *transport_get_user(qd_connection_t *conn, pn_transport_t *tport)
-{
-    const qd_server_config_t *config =
-            conn->connector ? &conn->connector->config : &conn->listener->config;
-
-    if (config->ssl_uid_format) {
-        // The ssl_uid_format length cannot be greater that 7
-        assert(strlen(config->ssl_uid_format) < 8);
-
-        //
-        // The tokens in the uidFormat strings are delimited by comma. Load the individual components of the uidFormat
-        // into the components[] array. The maximum number of components that are allowed are 7 namely, c, s, l, o, u, n, (1 or 2 or 5)
-        //
-        char components[8];
-
-        //The strcpy() function copies the string pointed to by src, including the terminating null byte ('\0'), to the buffer pointed to by dest.
-        strncpy(components, config->ssl_uid_format, 7);
-
-        const char *country_code = 0;
-        const char *state = 0;
-        const char *locality_city = 0;
-        const char *organization = 0;
-        const char *org_unit = 0;
-        const char *common_name = 0;
-        //
-        // SHA1 is 20 octets (40 hex characters); SHA256 is 32 octets (64 hex characters).
-        // SHA512 is 64 octets (128 hex characters)
-        //
-        char fingerprint[129] = "\0";
-
-        int uid_length = 0;
-        int semi_colon_count = -1;
-
-        int component_count = strlen(components);
-
-        for (int x = 0; x < component_count ; x++) {
-            // accumulate the length into uid_length on each pass so we definitively know the number of octets to malloc.
-            if (components[x] == CERT_COUNTRY_CODE) {
-                country_code =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_COUNTRY_NAME);
-                if (country_code) {
-                    uid_length += strlen((const char *)country_code);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_STATE) {
-                state =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_STATE_OR_PROVINCE);
-                if (state) {
-                    uid_length += strlen((const char *)state);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_CITY_LOCALITY) {
-                locality_city =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_CITY_OR_LOCALITY);
-                if (locality_city) {
-                    uid_length += strlen((const char *)locality_city);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_ORGANIZATION_NAME) {
-                organization =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_ORGANIZATION_NAME);
-                if(organization) {
-                    uid_length += strlen((const char *)organization);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_ORGANIZATION_UNIT) {
-                org_unit =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_ORGANIZATION_UNIT);
-                if(org_unit) {
-                    uid_length += strlen((const char *)org_unit);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_COMMON_NAME) {
-                common_name =  pn_ssl_get_remote_subject_subfield(pn_ssl(tport), PN_SSL_CERT_SUBJECT_COMMON_NAME);
-                if(common_name) {
-                    uid_length += strlen((const char *)common_name);
-                    semi_colon_count++;
-                }
-            }
-            else if (components[x] == CERT_FINGERPRINT_SHA1 || components[x] == CERT_FINGERPRINT_SHA256 || components[x] == CERT_FINGERPRINT_SHA512) {
-                // Allocate the memory for message digest
-                int out = 0;
-
-                int fingerprint_length = 0;
-                if(components[x] == CERT_FINGERPRINT_SHA1) {
-                    fingerprint_length = 40;
-                    out = pn_ssl_get_cert_fingerprint(pn_ssl(tport), fingerprint, fingerprint_length + 1, PN_SSL_SHA1);
-                }
-                else if (components[x] == CERT_FINGERPRINT_SHA256) {
-                    fingerprint_length = 64;
-                    out = pn_ssl_get_cert_fingerprint(pn_ssl(tport), fingerprint, fingerprint_length + 1, PN_SSL_SHA256);
-                }
-                else if (components[x] == CERT_FINGERPRINT_SHA512) {
-                    fingerprint_length = 128;
-                    out = pn_ssl_get_cert_fingerprint(pn_ssl(tport), fingerprint, fingerprint_length + 1, PN_SSL_SHA512);
-                }
-
-                (void) out;  // avoid 'out unused' compiler warnings if NDEBUG undef'ed
-                assert (out != PN_ERR);
-
-                uid_length += fingerprint_length;
-                semi_colon_count++;
-            }
-            else {
-                // This is an unrecognized component. log a critical error
-                qd_log(LOG_SERVER, QD_LOG_CRITICAL,
-                       "[C%" PRIu64 "] Unrecognized component '%c' in uidFormat ", conn->connection_id, components[x]);
-                return 0;
-            }
-        }
-
-        if(uid_length > 0) {
-            char *user_id = malloc((uid_length + semi_colon_count + 1) * sizeof(char)); // the +1 is for the '\0' character
-            //
-            // We have allocated memory for user_id. We are responsible for freeing this memory. Set conn->free_user_id
-            // to true so that we know that we have to free the user_id
-            //
-            conn->free_user_id = true;
-            memset(user_id, 0, uid_length + semi_colon_count + 1);
-
-            // The components in the user id string must appear in the same order as it appears in the component string. that is
-            // why we have this loop
-            for (int x=0; x < component_count ; x++) {
-                if (components[x] == CERT_COUNTRY_CODE) {
-                    if (country_code) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) country_code);
-                    }
-                }
-                else if (components[x] == CERT_STATE) {
-                    if (state) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) state);
-                    }
-                }
-                else if (components[x] == CERT_CITY_LOCALITY) {
-                    if (locality_city) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) locality_city);
-                    }
-                }
-                else if (components[x] == CERT_ORGANIZATION_NAME) {
-                    if (organization) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) organization);
-                    }
-                }
-                else if (components[x] == CERT_ORGANIZATION_UNIT) {
-                    if (org_unit) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) org_unit);
-                    }
-                }
-                else if (components[x] == CERT_COMMON_NAME) {
-                    if (common_name) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) common_name);
-                    }
-                }
-                else if (components[x] == CERT_FINGERPRINT_SHA1 || components[x] == CERT_FINGERPRINT_SHA256 || components[x] == CERT_FINGERPRINT_SHA512) {
-                    if (strlen((char *) fingerprint) > 0) {
-                        if(*user_id != '\0')
-                            strcat(user_id, COMPONENT_SEPARATOR);
-                        strcat(user_id, (char *) fingerprint);
-                    }
-                }
-            }
-            if (config->ssl_uid_name_mapping_file) {
-                // Translate extracted id into display name if possible:
-                char *result = qd_server_query_user_name(conn->server, config->ssl_profile, user_id);
-                if (result) {
-                    free(user_id);
-                    user_id = result;
-                } else {
-                    qd_log(LOG_SERVER, QD_LOG_DEBUG,
-                           "[C%" PRIu64 "] Internal: failed to read displaynameservice query result",
-                           conn->connection_id);
-                    // use original user_id instead...
-                }
-            }
-            qd_log(LOG_SERVER, QD_LOG_DEBUG, "User id is '%s' ", user_id);
-            return user_id;
-        }
-    }
-    else //config->ssl_uid_format not specified, just return the username provided by the proton transport.
-        return pn_transport_get_user(tport);
-
-    return 0;
 }
 
 
@@ -539,13 +328,25 @@ void qd_connection_set_user(qd_connection_t *conn)
     pn_transport_t *tport = pn_connection_transport(conn->pn_conn);
     pn_sasl_t      *sasl  = pn_sasl(tport);
     if (sasl) {
+        char *user_id = 0;
         const char *mech = pn_sasl_get_mech(sasl);
-        conn->user_id = pn_transport_get_user(tport);
+
         // We want to set the user name only if it is not already set and the selected sasl mechanism is EXTERNAL
-        if (mech && strcmp(mech, MECH_EXTERNAL) == 0) {
-            const char *user_id = transport_get_user(conn, tport);
-            if (user_id)
-                conn->user_id = user_id;
+        if (mech && strcmp(mech, MECH_EXTERNAL) == 0 && conn->ssl) {
+            user_id = qd_tls_session_get_user_id(conn->ssl);
+        }
+
+        if (!user_id) {
+            const char *tuid = pn_transport_get_user(tport);
+            if (tuid) {
+                user_id = qd_strdup(tuid);
+            }
+        }
+
+        assert(!conn->user_id);
+        conn->user_id = user_id;
+        if (conn->user_id) {
+            qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] User id is '%s'", conn->connection_id, conn->user_id);
         }
     }
 }
@@ -576,10 +377,11 @@ static void qd_connection_free(qd_connection_t *qd_conn, const char *condition_n
     qd_connection_invoke_deferred_calls(qd_conn, true);  // Discard any pending deferred calls
     sys_mutex_free(&qd_conn->deferred_call_lock);
     qd_policy_settings_free(qd_conn->policy_settings);
-    if (qd_conn->free_user_id) free((char*)qd_conn->user_id);
+    free(qd_conn->user_id);
     if (qd_conn->timer) qd_timer_free(qd_conn->timer);
     free(qd_conn->name);
     free(qd_conn->role);
+    qd_tls_session_free(qd_conn->ssl);
     sys_atomic_destroy(&qd_conn->wake_core);
     sys_atomic_destroy(&qd_conn->wake_cutthrough_inbound);
     sys_atomic_destroy(&qd_conn->wake_cutthrough_outbound);
@@ -743,67 +545,6 @@ uint64_t qd_connection_max_message_size(const qd_connection_t *c)
 }
 
 
-static qd_error_t listener_setup_ssl(qd_connection_t *ctx, const qd_server_config_t *config, pn_transport_t *tport)
-{
-    pn_ssl_domain_t *domain = pn_ssl_domain(PN_SSL_MODE_SERVER);
-    if (!domain) return qd_error(QD_ERROR_RUNTIME, "No SSL support");
-
-    // setup my identifying cert:
-    if (pn_ssl_domain_set_credentials(domain,
-                                      config->ssl_certificate_file,
-                                      config->ssl_private_key_file,
-                                      config->ssl_password)) {
-        pn_ssl_domain_free(domain);
-        return qd_error(QD_ERROR_RUNTIME, "Cannot set SSL credentials");
-    }
-
-    // for peer authentication:
-    if (config->ssl_trusted_certificate_db) {
-        if (pn_ssl_domain_set_trusted_ca_db(domain, config->ssl_trusted_certificate_db)) {
-            pn_ssl_domain_free(domain);
-            return qd_error(QD_ERROR_RUNTIME, "Cannot set trusted SSL CA" );
-        }
-    }
-
-    if (config->ssl_ciphers) {
-        if (pn_ssl_domain_set_ciphers(domain, config->ssl_ciphers)) {
-            pn_ssl_domain_free(domain);
-            return qd_error(QD_ERROR_RUNTIME, "Cannot set ciphers. The ciphers string might be invalid. Use openssl ciphers -v <ciphers> to validate");
-        }
-    }
-
-    if (config->ssl_protocols) {
-        if (pn_ssl_domain_set_protocols(domain, config->ssl_protocols)) {
-            pn_ssl_domain_free(domain);
-            return qd_error(QD_ERROR_RUNTIME, "Cannot set protocols. The protocols string might be invalid. This list is a space separated string of the allowed TLS protocols (TLSv1 TLSv1.1 TLSv1.2)");
-        }
-    }
-
-    const char *trusted = config->ssl_trusted_certificate_db;
-
-    // do we force the peer to send a cert?
-    if (config->ssl_require_peer_authentication) {
-        if (!trusted || pn_ssl_domain_set_peer_authentication(domain, PN_SSL_VERIFY_PEER, trusted)) {
-            pn_ssl_domain_free(domain);
-            return qd_error(QD_ERROR_RUNTIME, "Cannot set peer authentication");
-        }
-    }
-
-    ctx->ssl = pn_ssl(tport);
-    if (!ctx->ssl || pn_ssl_init(ctx->ssl, domain, 0)) {
-        pn_ssl_domain_free(domain);
-        return qd_error(QD_ERROR_RUNTIME, "Cannot initialize SSL");
-    }
-
-    // By default adding ssl to a transport forces encryption to be required, so if it's not set that here
-    if (!config->ssl_required) {
-        pn_transport_require_encryption(tport, false);
-    }
-
-    pn_ssl_domain_free(domain);
-    return QD_ERROR_NONE;
-}
-
 /* Log the description, set the transport condition (name, description) close the transport tail. */
 void connect_fail(qd_connection_t *ctx, const char *name, const char *description, ...)
      __attribute__((format(printf, 3, 4)));
@@ -853,94 +594,16 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
     pn_transport_t *tport  = pn_connection_transport(ctx->pn_conn);
 
     //
-    // Set up SSL if appropriate
+    // Create an SSL session if required
     //
-    if (config->ssl_profile) {
-        pn_ssl_domain_t *domain = pn_ssl_domain(PN_SSL_MODE_CLIENT);
-
-        if (!domain) {
-            qd_error(QD_ERROR_RUNTIME, "SSL domain allocation failed for connection [C%"PRIu64"] to %s:%s",
-                     ctx->connection_id, config->host, config->port);
-            return false;
-        }
-
-        bool failed = false;
-
-        // set our trusted database for checking the peer's cert:
-        if (config->ssl_trusted_certificate_db) {
-            if (pn_ssl_domain_set_trusted_ca_db(domain, config->ssl_trusted_certificate_db)) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "SSL CA configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
-                       config->host, config->port);
-                failed = true;
-            }
-        }
-
-        // peer must provide a cert
-        if (pn_ssl_domain_set_peer_authentication(domain,
-                                                  PN_SSL_VERIFY_PEER,
-                                                  config->ssl_trusted_certificate_db)) {
+    if (ct->tls_config) {
+        ctx->ssl = qd_tls_session_amqp(ct->tls_config, tport, false);
+        if (!ctx->ssl) {
             qd_log(LOG_SERVER, QD_LOG_ERROR,
-                   "SSL peer auth configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
-                   config->host, config->port);
-            failed = true;
-        }
-
-        // configure our certificate if the peer requests one:
-        if (config->ssl_certificate_file) {
-            if (pn_ssl_domain_set_credentials(domain,
-                                              config->ssl_certificate_file,
-                                              config->ssl_private_key_file,
-                                              config->ssl_password)) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "SSL local certificate configuration failed for connection [C%" PRIu64 "] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
-                failed = true;
-            }
-        }
-
-        if (config->ssl_ciphers) {
-            if (pn_ssl_domain_set_ciphers(domain, config->ssl_ciphers)) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "SSL cipher configuration failed for connection [C%" PRIu64 "] to %s:%s", ctx->connection_id,
-                       config->host, config->port);
-                failed = true;
-            }
-        }
-
-        if (config->ssl_protocols) {
-            if (pn_ssl_domain_set_protocols(domain, config->ssl_protocols)) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "Permitted TLS protocols configuration failed for connection [C%" PRIu64 "] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
-                failed = true;
-            }
-        }
-
-        //If ssl is enabled and verify_host_name is true, instruct proton to verify peer name
-        if (config->verify_host_name) {
-            if (pn_ssl_domain_set_peer_authentication(domain, PN_SSL_VERIFY_PEER_NAME, NULL)) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "SSL peer host name verification configuration failed for connection [C%" PRIu64 "] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
-                failed = true;
-            }
-        }
-
-        if (!failed) {
-            ctx->ssl = pn_ssl(tport);
-            if (pn_ssl_init(ctx->ssl, domain, 0) != 0) {
-                qd_log(LOG_SERVER, QD_LOG_ERROR,
-                       "SSL domain internal initialization failed for connection [C%" PRIu64 "] to %s:%s",
-                       ctx->connection_id, config->host, config->port);
-                failed = true;
-            }
-        }
-        pn_ssl_domain_free(domain);
-        if (failed) {
+                   "Failed to create TLS session for connection [C%" PRIu64 "] to %s:%s (%s)",
+                   ctx->connection_id, config->host, config->port, qd_error_message());
             return false;
         }
-
     }
 
     //
@@ -989,11 +652,12 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
             return;
         }
 
-        // Set up SSL
-        if (config->ssl_profile)  {
-            qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Configuring SSL on %s", ctx->connection_id,
-                   name);
-            if (listener_setup_ssl(ctx, config, tport) != QD_ERROR_NONE) {
+        // Set up TLS
+        if (ctx->listener->tls_config) {
+            qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Configuring SSL on %s", ctx->connection_id, name);
+
+            ctx->ssl = qd_tls_session_amqp(ctx->listener->tls_config, tport, config->ssl_required == false);
+            if (!ctx->ssl) {
                 connect_fail(ctx, QD_AMQP_COND_INTERNAL_ERROR, "%s on %s", qd_error_message(), name);
                 return;
             }

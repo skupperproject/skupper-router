@@ -183,7 +183,8 @@ class TcpEchoServer:
             self.error = ('%s configuring ssl_context for %s:%s exception: %s' %
                           (self.prefix, self.HOST, self.port, traceback.format_exc()))
             self.logger.log(self.error)
-            return 1
+            self.is_running = False
+            return
 
         # run the client socket event loop until it is cancelled
         try:
@@ -219,7 +220,9 @@ class TcpEchoServer:
                 await self.server.serve_forever()
 
         except Exception:
-            self.error = "ERROR: exception : '%s'" % traceback.format_exc()
+            if self.error is None:
+                self.error = "ERROR: exception : '%s'" % traceback.format_exc()
+            self.logger.log(self.error)
 
     def wait(self, timeout=TIMEOUT):
         self.logger.log(" %s Server is shutting down" % self.prefix)
@@ -232,6 +235,8 @@ class TcpEchoServer:
 
             self.loop.call_soon_threadsafe(_cancel_server)
         self._thread.join(timeout)
+        if self.error is not None:
+            raise Exception(self.error)
         self.logger.log(" %s Server shutdown completed" % self.prefix)
 
 

@@ -668,39 +668,45 @@
             "description":"Attributes for setting TLS/SSL configuration for connections.",
             "referential": true,
             "extends": "configurationEntity",
-            "operations": ["CREATE", "DELETE"],
+            "operations": ["CREATE", "UPDATE", "DELETE"],
             "attributes": {
                 "ciphers": {
                     "type": "string",
                     "description": "Specifies the enabled ciphers so the SSL Ciphers can be hardened. In other words, use this field to disable weak ciphers. The ciphers are specified in the format understood by the OpenSSL library. For example, ciphers can be set to ALL:!aNULL:!EXPORT56:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP; -- The full list of allowed ciphers can be viewed using the openssl ciphers command",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
                 "protocols": {
                     "type": "string",
                     "description": "The TLS protocols that this sslProfile can use. You can specify a list of one or more of TLSv1, TLSv1.1, or TLSv1.2. To specify multiple protocols, separate the protocols with a space. For example, to permit the sslProfile to use TLS v1.1 and TLS v1.2 only, you would set the value to TLSv1.1 TLSv1.2. If you do not specify a value, the sslProfile uses the TLS protocol specified by the system-wide configuration.",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
                 "caCertFile": {
                     "type": "path",
                     "description": "The absolute path to the database that contains the public certificates of trusted certificate authorities (CA).",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
                 "certFile": {
                     "type": "path",
                     "description": "The absolute path to the file containing the PEM-formatted public certificate to be used on the local end of any connections using this profile.",
-                    "create": true
+                    "create": true,
+                    "update": true
 
                 },
                 "privateKeyFile": {
                     "type": "path",
                     "description": "The absolute path to the file containing the PEM-formatted private key for the above certificate.",
-                    "create": true
+                    "create": true,
+                    "update": true
 
                 },
                 "password": {
                     "type": "string",
                     "description": "The password that unlocks the certificate key. You can specify the password by specifying an environment variable that stores the password, a file that stores the password, or by entering the password in clear text. To use an environment variable, specify 'password: env:<var>'. Use this option with caution, because the environment of other processes is visible on certain platforms (for example, ps on certain Unix OSs). To use a file, specify 'password: file:<absolute-path-to-file>'. This option is the most secure, because permissions can be set on the file that contains the password. To specify the password in clear text, specify 'password: pass:<password>', or 'password: literal:<password>', or 'password: <password>'. This option is insecure, so it should only be used if security is not a concern.",
-                    "create": true
+                    "create": true,
+                    "update": true
 
                 },
                 "uidFormat": {
@@ -712,6 +718,18 @@
                     "type": "string",
                     "description": "The absolute path to the file containing the unique id to display name mapping",
                     "create": true
+                },
+                "version": {
+                    "type": "integer",
+                    "description": "RESERVED FOR FUTURE USE",
+                    "create": true,
+                    "update": true
+                },
+                "oldestValidVersion": {
+                    "type": "integer",
+                    "description": "RESERVED FOR FUTURE USE",
+                    "create": true,
+                    "update": true
                 }
             }
         },

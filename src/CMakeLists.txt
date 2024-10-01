@@ -38,7 +38,7 @@ add_custom_command (
 
 # Build the skupper-router library.
 set(qpid_dispatch_SOURCES
-  adaptors/adaptor_tls.c
+  adaptors/legacy_tls.c
   adaptors/reference_adaptor.c
   adaptors/adaptor_buffer.c
   adaptors/http_common.c
@@ -138,6 +138,10 @@ set(qpid_dispatch_SOURCES
   router_core/modules/stuck_delivery_detection/delivery_tracker.c
   router_core/modules/mobile_sync/mobile.c
   router_core/modules/streaming_link_scrubber/streaming_link_scrubber.c
+  tls/tls.c
+  tls/tls_raw.c
+  tls/tls_amqp.c
+  tls/display_name.c
   router_pynode.c
   schema_enum.c
   static_assert.c

@@ -19,36 +19,62 @@
 # under the License
 #
 
-rm -f *.pem *.pkcs12 *.p12
+# Creates TLS certificate files for use by the system tests.
 
 export SERVER=localhost
 export CLIENT=127.0.0.1
-export KEYARGS="-storetype pkcs12 -keyalg RSA -keysize 2048 -sigalg sha384WithRSA"
 
-keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass ca-password -genkey -dname "O=Trust Me Inc.,CN=Trusted.CA.com" -validity 99999 -ext bc:c=ca:true,pathlen:0  -startdate -1m
-openssl pkcs12 -nokeys -passin pass:ca-password -in ca.pkcs12 -passout pass:ca-password -out ca-certificate.pem
+# Create a self-signed CA
+openssl genrsa -aes256 -passout pass:ca-password -out ca-private-key.pem 4096
+openssl req -key ca-private-key.pem -new -x509 -days 99999 -out ca-certificate.pem -passin pass:ca-password -subj "/C=US/ST=New York/L=Brooklyn/O=Trust Me Inc./CN=Trusted.CA.com"
 
-keytool $KEYARGS -keystore bad-ca.pkcs12 -storepass bad-ca-password -alias bad-ca -keypass bad-ca-password -genkey -dname "O=Trust Me Inc.,CN=Trusted.CA.com" -validity 99999
-openssl pkcs12 -nokeys -passin pass:bad-ca-password -in bad-ca.pkcs12 -passout pass:bad-ca-password -out bad-ca-certificate.pem
+# Create a server certificate signed by the CA
+openssl genrsa -aes256 -passout pass:server-password -out server-private-key.pem 4096
+openssl req -new -key server-private-key.pem -passin pass:server-password -out server.csr -subj "/C=US/ST=CA/L=San Francisco/O=Server/CN=$SERVER"
+openssl x509 -req -in server.csr -CA ca-certificate.pem -CAkey ca-private-key.pem -CAcreateserial -days 99999 -out server-certificate.pem -passin pass:ca-password
+# strip the password to make a passwordless key for testing
+openssl rsa -in server-private-key.pem -passin pass:server-password -out server-private-key-no-pass.pem
 
-keytool $KEYARGS -keystore server.pkcs12 -storepass server-password -alias server-certificate -keypass server-password -genkey  -dname "O=Server,CN=$SERVER" -validity 99999
-keytool $KEYARGS -keystore server.pkcs12 -storepass server-password -alias server-certificate -keypass server-password -certreq -file server-request.pem
-keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass ca-password -gencert -rfc -validity 99999 -infile server-request.pem -outfile server-certificate.pem
+# Create a client certificate signed by the CA
+openssl genrsa -aes256 -passout pass:client-password -out client-private-key.pem 4096
+openssl req -new -key client-private-key.pem -passin pass:client-password -out client.csr -subj "/C=US/ST=CA/L=San Francisco/OU=Dev/O=Client/CN=$CLIENT"
+openssl x509 -req -in client.csr -CA ca-certificate.pem -CAkey ca-private-key.pem -CAcreateserial -days 99999 -out client-certificate.pem -passin pass:ca-password
+# strip the password to make a passwordless key for testing
+openssl rsa -in client-private-key.pem -passin pass:client-password -out client-private-key-no-pass.pem
 
-# Create a server private key file.
-openssl pkcs12 -nocerts -passin pass:server-password -in server.pkcs12 -passout pass:server-password -out server-private-key.pem
-# Create a server private key without a password
-openssl pkcs12 -nocerts -passin pass:server-password -in server.pkcs12 -nodes -out server-private-key-no-pass.pem
+# Verify the certs:
+openssl verify -verbose -CAfile ca-certificate.pem server-certificate.pem
+openssl verify -verbose -CAfile ca-certificate.pem client-certificate.pem
 
-# Generate a PKCS12 key which will be used for client side cert
-keytool $KEYARGS -keystore client.pkcs12 -storepass client-password -alias client-certificate -keypass client-password -genkey  -dname "C=US,ST=NC,L=Raleigh,OU=Dev,O=Client,CN=$CLIENT" -validity 99999
-# Create a certificate request file
-keytool $KEYARGS -keystore client.pkcs12 -storepass client-password -alias client-certificate -keypass client-password -certreq -file client-request.pem
-# Create a client certificate
-keytool $KEYARGS -keystore ca.pkcs12 -storepass ca-password -alias ca -keypass ca-password -gencert -rfc -validity 99999 -infile client-request.pem -outfile client-certificate.pem
-# Create a client private key file.
-openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -passout pass:client-password -out client-private-key.pem
-# Create a client private key without a password
-openssl pkcs12 -nocerts -passin pass:client-password -in client.pkcs12 -nodes -out client-private-key-no-pass.pem
+#
+# Create a "bad" CA for negative testing
+#
+
+openssl genrsa -aes256 -passout pass:bad-ca-password -out bad-ca-private-key.pem 4096
+openssl req -key bad-ca-private-key.pem -new -x509 -days 99999 -out bad-ca-certificate.pem -passin pass:bad-ca-password -subj "/C=US/ST=New York/L=Brooklyn/O=Do Not Trust Me Inc./CN=Bad.CA.com"
 
 cat server-certificate.pem ca-certificate.pem > chained.pem
+
+#
+# Generate an alternative set of certificats for testing certificate update
+#
+
+openssl genrsa -aes256 -passout pass:ca2-password -out ca2-private-key.pem 4096
+openssl req -key ca2-private-key.pem -new -x509 -days 99999 -out ca2-certificate.pem -passin pass:ca2-password -subj "/C=US/ST=New York/L=Brooklyn/O=Trust Me Too Inc./CN=Trusted.CA2.com"
+
+openssl genrsa -aes256 -passout pass:server2-password -out server2-private-key.pem 4096
+openssl req -new -key server2-private-key.pem -passin pass:server2-password -out server2.csr -subj "/C=US/ST=CA/L=San Francisco/O=Server2/CN=$SERVER"
+openssl x509 -req -in server2.csr -CA ca2-certificate.pem -CAkey ca2-private-key.pem -CAcreateserial -days 99999 -out server2-certificate.pem -passin pass:ca2-password
+openssl rsa -in server2-private-key.pem -passin pass:server2-password -out server2-private-key-no-pass.pem
+
+openssl genrsa -aes256 -passout pass:client2-password -out client2-private-key.pem 4096
+openssl req -new -key client2-private-key.pem -passin pass:client2-password -out client2.csr -subj "/C=US/ST=CA/L=San Francisco/OU=Dev/O=Client2/CN=$CLIENT"
+openssl x509 -req -in client2.csr -CA ca2-certificate.pem -CAkey ca2-private-key.pem -CAcreateserial -days 99999 -out client2-certificate.pem -passin pass:ca2-password
+openssl rsa -in client2-private-key.pem -passin pass:client2-password -out client2-private-key-no-pass.pem
+
+# Verify the certs:
+openssl verify -verbose -CAfile ca2-certificate.pem server2-certificate.pem
+openssl verify -verbose -CAfile ca2-certificate.pem client2-certificate.pem
+
+
+

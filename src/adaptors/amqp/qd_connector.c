@@ -24,6 +24,7 @@
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/vanflow.h"
+#include "qpid/dispatch/tls_amqp.h"
 
 #include <proton/proactor.h>
 
@@ -120,6 +121,7 @@ qd_connector_t *qd_server_connector(qd_server_t *server)
     ZERO(connector);
     sys_atomic_init(&connector->ref_count, 1);
     DEQ_INIT(connector->conn_info_list);
+    DEQ_ITEM_INIT(connector);
 
     sys_mutex_init(&connector->lock);
     connector->timer = qd_timer(amqp_adaptor.dispatch, try_open_cb, connector);
@@ -186,6 +188,8 @@ void qd_connector_decref(qd_connector_t* connector)
             item = DEQ_HEAD(connector->conn_info_list);
         }
         if (connector->policy_vhost) free(connector->policy_vhost);
+        qd_tls_config_decref(connector->tls_config);
+
         free_qd_connector_t(connector);
     }
 }

@@ -157,72 +157,15 @@ typedef struct qd_server_config_t {
     int link_capacity;
 
     /**
-     * Path to the file containing the PEM-formatted public certificate for the local end
-     * of the connection.
+     * The name of the related sslProfile configuration.
      */
-    char *ssl_certificate_file;
-
-    /**
-     * Path to the file containing the PEM-formatted private key for the local end of the
-     * connection.
-     */
-    char *ssl_private_key_file;
-
-    /**
-     * Holds the list of component fields of the client certificate from which a unique identifier is constructed.
-     * For e.g, this field could have the format of 'cou' indicating that the uid will consist of
-     * c - common name concatenated with o - organization-company name concatenated with u - organization unit
-     * Allowed components are
-     * Allowed values can be any combination of comma separated
-     * 'c'( ISO3166 two character country code),
-     * 's'(state or province),
-     * 'l'(Locality; generally - city),
-     * 'o'(Organization - Company Name),
-     * 'u'(Organization Unit - typically certificate type or brand),
-     * 'n'(CommonName - typically a user name for client certificates) and
-     * '1'(sha1 certificate fingerprint, the fingerprint, as displayed in the fingerprints section when looking at a certificate
-     *  with say a web browser is the hash of the entire certificate in DER form)
-     * '2'(sha256 certificate fingerprint)
-     * '5'(sha512 certificate fingerprint)
-     */
-    char *ssl_uid_format;
-
-    /**
-     * The name of the related ssl profile.
-     */
-    char *ssl_profile;
-
-    /**
-     * Full path to the file that contains the uid to display name mapping.
-     */
-    char *ssl_uid_name_mapping_file;
-
-    /**
-     * The password used to sign the private key, or NULL if the key is not protected.
-     */
-    char *ssl_password;
-
-    /**
-     * Path to the file containing the PEM-formatted set of certificates of trusted CAs.
-     */
-    char *ssl_trusted_certificate_db;
+    char *ssl_profile_name;
 
     /**
      * Iff true, require that the peer's certificate be supplied and that it be authentic
      * according to the set of trusted CAs.
      */
     bool ssl_require_peer_authentication;
-
-    /**
-     * Specifies the enabled ciphers so the SSL Ciphers can be hardened.
-     */
-    char *ssl_ciphers;
-
-    /**
-     * This list is a space separated string of the allowed TLS protocols. The current possibilities are TLSv1 TLSv1.1 TLSv1.2.
-     * For example, if you want to permit only TLSv.1.1 and TLSv1.2, your value for the protocols would be TLSv1.1 TLSv1.2. If this attribute is not set, then all the TLS protocols are allowed.
-     */
-    char *ssl_protocols;
 
     /**
      * Allow the connection to be redirected by the peer (via CLOSE->Redirect).  This is
