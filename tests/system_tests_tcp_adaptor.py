@@ -1874,6 +1874,30 @@ class TcpAdaptorListenerConnectTest(TestCase):
 
         l_mgmt.delete(type=TCP_LISTENER_TYPE, name=listener_name)
 
+    def test_02_listener_interior(self):
+        """
+        Test tcpListener socket lifecycle interior to interior
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.INTB, "test_02_listener_interior")
+
+    def test_03_listener_edge_interior(self):
+        """
+        Test tcpListener socket lifecycle edge to interior
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.INTB, "test_03_listener_edge_interior")
+
+    def test_04_listener_interior_edge(self):
+        """
+        Test tcpListener socket lifecycle interior to edge
+        """
+        self._test_listener_socket_lifecycle(self.INTA, self.EdgeB, "test_04_listener_interior_edge")
+
+    def test_05_listener_edge_edge(self):
+        """
+        Test tcpListener socket lifecycle edge to edge
+        """
+        self._test_listener_socket_lifecycle(self.EdgeA, self.EdgeB, "test_05_listener_edge_edge")
+
 
 class TcpDeleteConnectionTest(TestCase):
     @classmethod
