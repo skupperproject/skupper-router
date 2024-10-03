@@ -52,8 +52,7 @@ from datetime import datetime
 from subprocess import PIPE, STDOUT, TimeoutExpired
 from threading import Event
 from threading import Thread
-from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar, Dict
-
+from typing import Callable, TextIO, List, Optional, Tuple, Union, Type, Set, Any, TypeVar, Dict, Mapping
 import __main__
 
 import proton
@@ -85,8 +84,6 @@ CONFIG_ENTITY_TYPE = 'io.skupper.router.configurationEntity'
 CONNECTION_TYPE = 'io.skupper.router.connection'
 DUMMY_TYPE = 'io.skupper.router.dummy'
 ENTITY_TYPE = 'io.skupper.router.entity'
-HTTP_CONNECTOR_TYPE = 'io.skupper.router.httpConnector'
-HTTP_LISTENER_TYPE = 'io.skupper.router.httpListener'
 HTTP_REQ_INFO_TYPE = 'io.skupper.router.httpRequestInfo'
 LOG_STATS_TYPE = 'io.skupper.router.logStats'
 LOG_TYPE = 'io.skupper.router.log'
@@ -835,7 +832,7 @@ class Qdrouterd(Process):
         try:
             if self.sk_manager:
                 # Delete all adaptor connectors and listeners before shutting down the router
-                long_types = [HTTP_LISTENER_TYPE, HTTP_CONNECTOR_TYPE, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
+                long_types = [TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
                 for long_type in long_types:
                     self.sk_manager.delete_all_entities(long_type)
                 retry_assertion(self.sk_manager.delete_adaptor_connections)
@@ -961,12 +958,6 @@ class Qdrouterd(Process):
             else:
                 ret_val.append("http://%s" % self._cfg_2_host_port(listener))
         return ret_val
-
-    @property
-    def http_addresses(self):
-        """Return http(s)://host:port addresses for all http listeners"""
-        cfg = self.config.sections('httpListener')
-        return self._get_all_addresses(cfg)
 
     @property
     def tcp_addresses(self):
@@ -2151,3 +2142,47 @@ def get_digest(file_path):
             h.update(chunk)
 
     return h.hexdigest()
+
+
+def _wait_adaptor_listeners_oper_status(listener_type,
+                                        mgmt_address: str,
+                                        oper_status: str,
+                                        l_filter: Optional[Mapping[str, Any]] = None,
+                                        timeout: float = TIMEOUT):
+    """
+    Wait until the selected listener socket operStatus has reached 'oper_status'
+    """
+    mgmt = Node.connect(mgmt_address, timeout=timeout)
+    l_filter = l_filter or {}
+    attributes = set(l_filter.keys())
+    attributes.add("name")  # required for query() to work
+    attributes.add("operStatus")
+
+    def _filter_listener(listener):
+        for key, value in l_filter.items():
+            if listener[key] != value:
+                return False
+        return True
+
+    def _check():
+        listeners = mgmt.query(type=listener_type,
+                               attribute_names=list(attributes)).get_dicts()
+        listeners = filter(_filter_listener, listeners)
+        assert listeners, "Filter error: no listeners matched"
+        for listener in listeners:
+            if listener['operStatus'] != oper_status:
+                return False
+        return True
+    assert retry(_check, timeout=timeout, delay=0.25), \
+        f"Timed out waiting for {listener_type} operStatus {oper_status}"
+
+
+def wait_tcp_listeners_up(mgmt_address: str,
+                          l_filter: Optional[Mapping[str, Any]] = None,
+                          timeout: float = TIMEOUT):
+    """
+    Wait until the configured TCP listener sockets have come up. Optionally
+    filter the set of configured listeners using attribute names and values
+    """
+    return _wait_adaptor_listeners_oper_status(TCP_LISTENER_TYPE, mgmt_address,
+                                               'up', l_filter, timeout)

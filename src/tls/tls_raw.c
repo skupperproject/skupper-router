@@ -141,7 +141,6 @@ static inline qd_buffer_t *_pn_buf_desc_take_buffer(pn_raw_buffer_t *pn_desc)
 {
     qd_buffer_t *buffer = (qd_buffer_t *) pn_desc->context;
     assert(buffer);
-    // do not use qd_adaptor_buffer_insert() since it *increments* the size, we need to set it:
     buffer->size = pn_desc->size;
     assert(buffer->size <= QD_BUFFER_SIZE);
     return buffer;

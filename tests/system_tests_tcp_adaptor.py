@@ -126,6 +126,7 @@ class EchoClientRunner:
         :param test_ssl: if True use TLS on the connection
         :param delay_close: if True keep connection open after all data transfered
         """
+        self.e_client = None
         self.test_name = test_name
         self.client_n = str(client_n)
         self.logger = logger

@@ -327,7 +327,7 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
     for t in ("sslProfile",
               "router.config.address", "router.config.autoLink",
               "router.config.exchange", "router.config.binding",
-              "vhost", "httpListener", "httpConnector", "tcpListener", "tcpConnector"):
+              "vhost", "tcpListener", "tcpConnector"):
         for a in config.by_type(t):
             configure(a)
             if t == "sslProfile":

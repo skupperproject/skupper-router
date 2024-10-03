@@ -110,12 +110,8 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_tcp_connector, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_http_listener, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_http_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_delete_tcp_listener, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, c_void_p])
-        self._prototype(self.qd_dispatch_delete_http_listener, None, [self.qd_dispatch_p, c_void_p])
-        self._prototype(self.qd_dispatch_delete_http_connector, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, c_void_p])
 

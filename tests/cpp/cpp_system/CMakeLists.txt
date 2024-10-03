@@ -33,7 +33,6 @@ add_executable(cpp_system
         ../helpers/helpers.hpp
 
         test_connection_manager_static.cpp
-        test_http_listener_connector.cpp
         test_listener_startup.cpp
         test_router_startup.cpp
 )

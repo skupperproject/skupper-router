@@ -69,9 +69,6 @@ target_link_libraries(clogger Proton::qpid-proton)
 add_executable(threaded_timer_test threaded_timer_test.c)
 target_link_libraries(threaded_timer_test skupper-router)
 
-add_executable(adaptor_buffer_test adaptor_buffer_test.c)
-target_link_libraries(adaptor_buffer_test skupper-router)
-
 add_executable(http1-relay http1_relay.c)
 target_link_libraries(http1-relay skupper-router)
 
@@ -89,7 +86,6 @@ add_test(unit_tests            ${TEST_WRAP} unit_tests ${CMAKE_CURRENT_SOURCE_DI
 
 # stand alone tests
 add_test(threaded_timer_test   ${TEST_WRAP} threaded_timer_test ${CMAKE_CURRENT_SOURCE_DIR}/dummy.conf)
-add_test(adaptor_buffer_test  ${TEST_WRAP} adaptor_buffer_test)
 
 # Unit test python modules
 foreach(py_test_module
@@ -165,15 +161,12 @@ foreach(py_test_module
     system_tests_log_level_update
     system_tests_routing_protocol
     system_tests_open_properties
-    system_tests_http2
     system_tests_grpc
-    system_tests_http1_adaptor
     system_tests_http1_over_tcp
     system_tests_http1_observer
     system_tests_tcp_adaptor
     system_tests_tcp_adaptor_tls
     system_tests_tcp_conns_terminate
-    system_tests_http2_tls
     system_tests_address_watch
     system_tests_router_annotations
     system_tests_vflow
