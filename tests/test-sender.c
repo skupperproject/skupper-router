@@ -46,7 +46,7 @@
 #define BODY_SIZE_SMALL  100L
 #define BODY_SIZE_MEDIUM ((long int)((4 * 1024) + 1))
 #define BODY_SIZE_LARGE  ((long int)((65 * 1024) + 1))
-#define BODY_SIZE_HUGE   ((long int)((QD_BUFFER_DEFAULT_SIZE * QD_QLIMIT_Q3_UPPER * 3) + 1))
+#define BODY_SIZE_HUGE   ((long int)((4 * 1024 * 1024) + 1))
 
 #define DEFAULT_PRIORITY 4
 

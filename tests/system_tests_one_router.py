@@ -509,6 +509,36 @@ class RouterConfigTest(TestCase):
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_24, wait=False, expect=Process.EXIT_FAIL))
 
+        # Invalid maxSessions
+        name = "test-router-25"
+        config_25 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('listener', {'host': '0.0.0.0',
+                          'port': 9999,
+                          'maxSessions': 99999})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_25, wait=False, expect=Process.EXIT_FAIL))
+
+        # Invalid maxFrameSize
+        name = "test-router-26"
+        config_26 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('listener', {'host': '0.0.0.0',
+                          'port': 9999,
+                          'maxFrameSize': -1})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_26, wait=False, expect=Process.EXIT_FAIL))
+
+        # Invalid maxSessionFrames
+        name = "test-router-27"
+        config_27 = Qdrouterd.Config([
+            ('router', {'mode': 'interior', 'id': name}),
+            ('listener', {'host': '0.0.0.0',
+                          'port': 9999,
+                          'maxSessionFrames': 1})
+        ])
+        cls.routers.append(cls.tester.qdrouterd(name, config_27, wait=False, expect=Process.EXIT_FAIL))
+
         # Give some time for the test to write to the .out file. Without this, the tests execute too
         # fast and find that nothing has yet been written to the .out files.
         for router in cls.routers:
@@ -643,6 +673,27 @@ class RouterConfigTest(TestCase):
 
         err = "version must be >= oldestValidVersion"
         self.routers[24].wait_log_message(err, timeout=1.0)
+
+        with open(self.routers[25].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if "Invalid maxSessions" in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        with open(self.routers[26].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if "Invalid maxFrameSize" in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        with open(self.routers[27].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if "Invalid maxSessionFrames" in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
 
 
 class OneRouterTest(TestCase):

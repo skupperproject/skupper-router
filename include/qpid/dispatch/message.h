@@ -51,15 +51,6 @@ typedef struct qd_link_t      qd_link_t;
 #define QD_QLIMIT_Q2_LOWER 32                        // Re-enable link receive
 #define QD_QLIMIT_Q2_UPPER (QD_QLIMIT_Q2_LOWER * 2)  // Disable link receive
 
-// Q3 limits the number of bytes allowed to be buffered in an AMQP session's outgoing buffer.  Once the Q3 upper limit
-// is hit (read via pn_session_outgoing_bytes), pn_link_send will no longer be called for ALL outgoing links sharing the
-// session.  When enough outgoing bytes have been drained below the lower limit pn_link_sends will resume. Note that Q3
-// only applies to AMQP links. Non-AMQP (adaptor) link output is limited by the capacity of the raw connection buffer
-// pool.
-
-#define QD_QLIMIT_Q3_LOWER (QD_QLIMIT_Q2_UPPER * 2)  // in qd_buffer_t's
-#define QD_QLIMIT_Q3_UPPER (QD_QLIMIT_Q3_LOWER * 2)
-
 // Callback for status change (confirmed persistent, loaded-in-memory, etc.)
 
 typedef struct qd_message_t             qd_message_t;

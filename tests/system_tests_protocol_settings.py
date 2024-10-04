@@ -96,7 +96,7 @@ class MaxSessionsLargeTest(TestCase):
         config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
 
-            ('listener', {'host': '0.0.0.0', 'port': cls.tester.get_port(), 'maxSessions': '500000'}),
+            ('listener', {'host': '0.0.0.0', 'port': cls.tester.get_port(), 'maxSessions': '32768'}),
         ])
         cls.router = cls.tester.qdrouterd(name, config)
         cls.router.wait_ready()
@@ -105,11 +105,14 @@ class MaxSessionsLargeTest(TestCase):
     def test_max_sessions_large(self):
         sniffer = ProtocolSettingsSniffer(self.router.addresses[0], "xxx")
         sniffer.run()
+        # note: remote_channel_max is the highest channel number supported, so
+        # there are actually [0..remote_channel_max] channels, which is 1
+        # greater than the value of remote_channel_max
         self.assertEqual(32767, sniffer.remote_channel_max)
 
 
 class MaxFrameSmallTest(TestCase):
-    """System tests setting proton max-frame-size"""
+    """System tests setting proton minimum max-frame-size"""
     @classmethod
     def setUpClass(cls):
         """Start a router and a messenger"""
@@ -118,7 +121,7 @@ class MaxFrameSmallTest(TestCase):
         config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
 
-            ('listener', {'host': '0.0.0.0', 'port': cls.tester.get_port(), 'maxFrameSize': '2'}),
+            ('listener', {'host': '0.0.0.0', 'port': cls.tester.get_port(), 'maxFrameSize': '512'}),
         ])
         cls.router = cls.tester.qdrouterd(name, config)
         cls.router.wait_ready()

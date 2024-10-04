@@ -199,7 +199,7 @@ typedef struct qd_server_config_t {
     int inter_router_cost;
 
     /**
-     * The maximum size of an AMQP frame in octets.
+     * The maximum size of an AMQP frame in octets. Frome maxFrameSize configuration attribute.
      */
     uint32_t max_frame_size;
 
@@ -209,12 +209,14 @@ typedef struct qd_server_config_t {
     uint32_t max_sessions;
 
     /**
-     * The incoming capacity value is calculated to be (sessionMaxFrames * maxFrameSize).
-     * In a round about way the calculation forces the AMQP Begin/incoming-capacity value
-     * to equal the specified sessionMaxFrames value measured in units of transfer frames.
-     * This calculation is done to satisfy proton pn_session_set_incoming_capacity().
+     * The session incoming window limit in frames. From maxSessionFrames configuration attribute
+     *
+     * The window indicates the maximum number of incoming *frames* that the session will buffer. This places a limit on
+     * the amount of memory the router needs to reserve to accomodate data arriving from the peer session endpoint.
+     *
+     * The maximum amount of memory is computed as (max_frame_size * session_max_in_window)
      */
-    size_t incoming_capacity;
+    uint32_t session_max_in_window;
 
     /**
      * The idle timeout, in seconds.  If the peer sends no data frames in this many seconds, the
