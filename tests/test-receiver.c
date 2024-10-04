@@ -24,6 +24,8 @@
 #include "proton/message.h"
 #include "proton/session.h"
 #include "proton/proactor.h"
+#include "proton/transport.h"
+#include "proton/version.h"
 
 #include <inttypes.h>
 #include <signal.h>
@@ -39,6 +41,10 @@
 bool stop = false;
 bool verbose = false;
 bool debug_mode = false;
+
+uint32_t  in_session_window = 0;  // 0 == use Proton default (frames)
+uint32_t  in_window_lwm = 0;      // incoming session window low watermark (frames) 0 == use Proton default
+uint32_t  in_max_frame = 0;       // 0 == use Proton default
 
 int  credit_window = 1000;
 char *source_address = "test-address";  // name of the source node to receive from
@@ -88,12 +94,26 @@ static bool event_handler(pn_event_t *event)
     debug("new event=%s\n", pn_event_type_name(type));
     switch (type) {
 
-    case PN_CONNECTION_INIT: {
+    case PN_CONNECTION_BOUND: {
         // Create and open all the endpoints needed to send a message
         //
+        pn_transport_t *tport = pn_connection_transport(pn_conn);
         in_message = pn_message();
+        if (in_max_frame) {
+            pn_transport_set_max_frame(tport, in_max_frame);
+        }
         pn_connection_open(pn_conn);
         pn_ssn = pn_session(pn_conn);
+        if (in_session_window) {
+#if (PN_VERSION_MAJOR > 0) || (PN_VERSION_MINOR > 39)
+            int rc = pn_session_set_incoming_window_and_lwm(pn_ssn, in_session_window, in_window_lwm);
+            if (rc != 0) {
+                fprintf(stderr, "Failed to set incoming window and low watermark\n");
+                fflush(stderr);
+                abort();
+            }
+#endif
+        }
         pn_session_open(pn_ssn);
         pn_link = pn_receiver(pn_ssn, "MyReceiver");
         pn_terminus_set_address(pn_link_source(pn_link), source_address);
@@ -199,6 +219,9 @@ static void usage(void)
     printf("-E      \tExit without cleanly closing the connection [off]\n");
     printf("-d      \tPrint periodic status updates [%s]\n", BOOL2STR(verbose));
     printf("-D      \tPrint debug info [off]\n");
+    printf("-F      \tSet Incoming Max Frame (max 512, 0 == use internal default) [%"PRIu32" bytes]\n", in_max_frame);
+    printf("-W      \tSet Session Incoming Window (min 2, 0 == use internal default) [%"PRIu32" frames]\n", in_session_window);
+    printf("-L      \tSet Session Incoming Window Low Watermark (0 == use internal default) [%"PRIu32" frames]\n", in_window_lwm);
     exit(1);
 }
 
@@ -208,7 +231,7 @@ int main(int argc, char** argv)
     /* command line options */
     opterr = 0;
     int c;
-    while((c = getopt(argc, argv, "i:a:s:hdDw:c:E")) != -1) {
+    while((c = getopt(argc, argv, "i:a:s:hdDw:c:EF:W:L:")) != -1) {
         switch(c) {
         case 'h': usage(); break;
         case 'a': host_address = optarg; break;
@@ -225,6 +248,21 @@ int main(int argc, char** argv)
         case 'E': drop_connection = true;  break;
         case 'd': verbose = true;          break;
         case 'D': debug_mode = true;       break;
+        case 'F':
+            if (sscanf(optarg, "%"SCNu32, &in_max_frame) != 1 || in_max_frame < 512)
+                usage();
+            break;
+        case 'W':
+            if (sscanf(optarg, "%"SCNu32, &in_session_window) != 1 || in_session_window < 2)
+                usage();
+            break;
+        case 'L':
+            if (sscanf(optarg, "%"SCNu32, &in_window_lwm) != 1 || in_window_lwm > in_session_window) {
+                fprintf(stderr, "Session Incoming Window Low Watermark (%"PRIu32") must be <= Session Incoming Window (%"PRIu32")\n",
+                        in_window_lwm, in_session_window);
+                usage();
+            }
+            break;
 
         default:
             usage();

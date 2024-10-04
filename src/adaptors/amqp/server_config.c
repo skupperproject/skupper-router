@@ -25,6 +25,7 @@
 #include "dispatch_private.h"
 #include "entity.h"
 
+#include <qpid/dispatch/amqp_adaptor.h>
 #include <qpid/dispatch/log.h>
 #include <qpid/dispatch/tls_common.h>
 
@@ -134,9 +135,6 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     config->http                 = qd_entity_opt_bool(entity, "http", false);         CHECK();
     config->http_root_dir        = qd_entity_opt_string(entity, "httpRootDir", 0);    CHECK();
     config->http = config->http || config->http_root_dir; /* httpRootDir implies http */
-    config->max_frame_size       = qd_entity_get_long(entity, "maxFrameSize");        CHECK();
-    config->max_sessions         = qd_entity_get_long(entity, "maxSessions");         CHECK();
-    uint64_t ssn_frames          = qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
     config->idle_timeout_seconds = qd_entity_get_long(entity, "idleTimeoutSeconds");  CHECK();
     if (is_listener) {
         config->initial_handshake_timeout_seconds = qd_entity_get_long(entity, "initialHandshakeTimeoutSeconds");  CHECK();
@@ -191,48 +189,49 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     if (config->link_capacity == 0)
         config->link_capacity = 250;
 
-    if (config->max_sessions == 0 || config->max_sessions > 32768)
-        // Proton disallows > 32768
-        config->max_sessions = 32768;
-
-    if (config->max_frame_size < QD_AMQP_MIN_MAX_FRAME_SIZE)
-        // Silently promote the minimum max-frame-size
-        // Proton will do this but the number is needed for the
-        // incoming capacity calculation.
-        config->max_frame_size = QD_AMQP_MIN_MAX_FRAME_SIZE;
-
-    //
-    // Given session frame count and max frame size, compute session incoming_capacity
-    //   On 64-bit systems the capacity has no practical limit.
-    //   On 32-bit systems the largest default capacity is half the process address space.
-    //
-    bool is_64bit = sizeof(size_t) == 8;
-#define MAX_32BIT_CAPACITY ((size_t)(2147483647))
-    if (ssn_frames == 0) {
-        config->incoming_capacity = is_64bit ? MAX_32BIT_CAPACITY * (size_t)config->max_frame_size : MAX_32BIT_CAPACITY;
-    } else {
-        // Limited incoming frames.
-        if (is_64bit) {
-            // Specify this to proton by setting capacity to be
-            // the product (max_frame_size * ssn_frames).
-            config->incoming_capacity = (size_t)config->max_frame_size * (size_t)ssn_frames;
-        } else {
-            // 32-bit systems have an upper bound to the capacity
-            uint64_t max_32bit_capacity = (uint64_t)MAX_32BIT_CAPACITY;
-            uint64_t capacity     = (uint64_t)config->max_frame_size * (uint64_t)ssn_frames;
-            if (capacity <= max_32bit_capacity) {
-                config->incoming_capacity = (size_t)capacity;
-            } else {
-                config->incoming_capacity = MAX_32BIT_CAPACITY;
-                uint64_t actual_frames = max_32bit_capacity / (uint64_t)config->max_frame_size;
-
-                qd_log(LOG_CONN_MGR, QD_LOG_WARNING,
-                       "Server configuration for I/O adapter entity name:'%s', host:'%s', port:'%s', "
-                       "requested maxSessionFrames truncated from %" PRId64 " to %" PRId64,
-                       config->name, config->host, config->port, ssn_frames, actual_frames);
-            }
-        }
+    // Proton does not support maxSessions > 32768
+    int64_t value = (int64_t) qd_entity_get_long(entity, "maxSessions"); CHECK();
+    if (value == 0) {
+        value = 32768;  // default
+    } else if (value < 0 || value > 32768) {
+        (void) qd_error(QD_ERROR_CONFIG,
+                        "Invalid maxSessions specified (%"PRId64"). Minimum value is 1 and maximum value is %i",
+                        value, 32768);
+        goto error;
     }
+    config->max_sessions = (uint32_t) value;
+
+    // Ensure maxFrameSize is at least the minimum value required by the standard,
+    // and it does not exceed the proton APIs max of INT32_MAX
+    value = (int64_t) qd_entity_get_long(entity, "maxFrameSize"); CHECK();
+    if (value == 0) {
+        value = 16384; // default
+    } else if (value < QD_AMQP_MIN_MAX_FRAME_SIZE || value > INT32_MAX) {
+        (void) qd_error(QD_ERROR_CONFIG,
+                        "Invalid maxFrameSize specified (%"PRId64"). Minimum value is %d and maximum value is %"PRIi32,
+                        value, QD_AMQP_MIN_MAX_FRAME_SIZE, INT32_MAX);
+        goto error;
+    }
+    config->max_frame_size = (uint32_t) value;
+
+    // Ensure that maxSessionFrames does not exceed the proton APIs max of INT32_MAX
+    value = (int64_t) qd_entity_opt_long(entity, "maxSessionFrames", 0); CHECK();
+    if (value == 0) {
+        // Use a sane default. Allow router to router links more capacity than AMQP application links
+        if (strcmp(config->role, "normal") == 0) {
+            value = qd_session_max_in_win_user / config->max_frame_size;
+        } else {
+            value = qd_session_max_in_win_trunk / config->max_frame_size;
+        }
+        // Ensure the window is at least 2 frames to allow a non-zero low water mark
+        value = MAX(value, 2);
+    } else if (value < 2 || value > INT32_MAX) {
+        (void) qd_error(QD_ERROR_CONFIG,
+                        "Invalid maxSessionFrames specified (%"PRId64"). Minimum value is 2 and maximum value is %"PRIi32,
+                        value, INT32_MAX);
+        goto error;
+    }
+    config->session_max_in_window = (uint32_t) value;
 
     //
     // For now we are hardwiring this attribute to true.  If there's an outcry from the
