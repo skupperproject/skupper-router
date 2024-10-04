@@ -43,7 +43,7 @@ typedef struct qd_listener_t        qd_listener_t;
 typedef struct qd_connector_t       qd_connector_t;
 typedef struct qd_policy_settings_t qd_policy_settings_t;
 typedef struct pn_connection_t      pn_connection_t;
-typedef struct pn_session_t         pn_session_t;
+typedef struct qd_session_t         qd_session_t;
 typedef struct qd_timer_t           qd_timer_t;
 typedef struct qd_tls_session_t     qd_tls_session_t;
 
@@ -60,8 +60,10 @@ typedef struct qd_deferred_call_t {
 DEQ_DECLARE(qd_deferred_call_t, qd_deferred_call_list_t);
 
 
-typedef struct qd_pn_free_link_session_t qd_pn_free_link_session_t;
-DEQ_DECLARE(qd_pn_free_link_session_t, qd_pn_free_link_session_list_t);
+typedef struct qd_pn_free_link_t qd_pn_free_link_t;
+DEQ_DECLARE(qd_pn_free_link_t, qd_pn_free_link_list_t);
+
+DEQ_DECLARE(qd_session_t, qd_session_list_t);
 
 
 /**
@@ -78,7 +80,8 @@ struct qd_connection_t {
     int                             enqueued;
     qd_timer_t                      *timer;   // Timer for initial-setup
     pn_connection_t                 *pn_conn;
-    pn_session_t                    *pn_sessions[QD_SSN_CLASS_COUNT];
+    qd_session_t                    *qd_sessions[QD_SSN_CLASS_COUNT];  // long lived inter-router sessions
+    qd_session_list_t                child_sessions;  // all active sessions
     qd_tls_session_t                *ssl;
     qd_listener_t                   *listener;
     qd_connector_t                  *connector;
@@ -97,7 +100,7 @@ struct qd_connection_t {
     bool                            policy_counted;
     char                           *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
     char                            group_correlator[QD_DISCRIMINATOR_SIZE];
-    qd_pn_free_link_session_list_t  free_link_session_list;
+    qd_pn_free_link_list_t          free_link_list;
     bool                            strip_annotations_in;
     bool                            strip_annotations_out;
     void (*wake)(qd_connection_t*); /* Wake method, different for libwebsockets vs. proactor */
