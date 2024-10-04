@@ -768,8 +768,9 @@ pn_link_t *qd_link_pn(const qd_link_t *link)
     return link->pn_link;
 }
 
-qd_session_t *qd_link_session(qd_link_t *link)
+qd_session_t *qd_link_get_session(const qd_link_t *link)
 {
+    assert(link);
     return link->qd_session;
 }
 
@@ -890,13 +891,6 @@ uint64_t qd_link_link_id(const qd_link_t *link)
 void qd_link_set_link_id(qd_link_t *link, uint64_t link_id)
 {
     link->link_id = link_id;
-}
-
-
-qd_session_t *qd_link_get_session(const qd_link_t *link)
-{
-    assert(link);
-    return link->qd_session;
 }
 
 
