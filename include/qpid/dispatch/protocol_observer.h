@@ -23,6 +23,13 @@
 #include <qpid/dispatch/protocols.h>
 #include <qpid/dispatch/vanflow.h>
 
+typedef enum {
+    OBSERVER_NONE,  // We will not observe the traffic at all.
+    OBSERVER_AUTO,  // the tcp adaptor will determine if the protocol is http1 or http2
+    OBSERVER_HTTP1, // observer is http1
+    OBSERVER_HTTP2  // observer is http2
+} qd_observer_t;
+
 /**
  * Callback type to indicate VAN address for cross-VAN transport.
  *
@@ -37,10 +44,10 @@ typedef struct qdpo_config_t qdpo_config_t;
  * Create a new protocol observer context
  *
  * @param use_address Callback address for use-address indications.
- * @param allow_all_protocols If true, allow all protocols and deny exceptions.  If false, deny all and allow exceptions.
+ * @param observer - the kind of observer to be associated with the config.
  * @return qdpo_config_t* Newly allocated config record.
  */
-qdpo_config_t *qdpo_config(qdpo_use_address_t use_address, bool allow_all_protocols);
+qdpo_config_t *qdpo_config(qdpo_use_address_t use_address, qd_observer_t observer);
 
 /**
  * Free an allocated protocol observer config.
@@ -116,5 +123,7 @@ void qdpo_data(qdpo_transport_handle_t *transport_handle, bool from_client, cons
  *                          should not be used after making this call.
  */
 void qdpo_end(qdpo_transport_handle_t *transport_handle);
+
+void qdpo_set_observer(qdpo_t *protocol_observer, qd_observer_t observer);
 
 #endif

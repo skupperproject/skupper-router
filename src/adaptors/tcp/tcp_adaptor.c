@@ -29,6 +29,7 @@
 #include <qpid/dispatch/connection_counters.h>
 #include <qpid/dispatch/vanflow.h>
 #include <qpid/dispatch/tls_raw.h>
+#include <qpid/dispatch/threading.h>
 #include <proton/proactor.h>
 #include <proton/raw_connection.h>
 #include <proton/listener.h>
@@ -187,6 +188,22 @@ static void qd_tcp_connector_incref(qd_tcp_connector_t *connector)
     sys_atomic_inc(&connector->ref_count);
 }
 
+/*
+ * Create or free listener->protocol_observer.
+ * listener->protocol_observer is setup when going from a none observer to a non-none observer
+ * listener->protocol_observer is freed when going from a non-one observer to a none observer
+ * This function does not do anything when you are going from a non-none observer to another non-none observer.
+ */
+static void _setup_protocol_observer_LH(qd_tcp_listener_t *listener)
+{
+    if (listener->adaptor_config->observer == OBSERVER_NONE && listener->protocol_observer != 0) {
+        qdpo_free(listener->protocol_observer);
+        listener->protocol_observer = 0;
+    } else if (!listener->protocol_observer) {
+        listener->protocol_observer = protocol_observer(QD_PROTOCOL_TCP, qdpo_config(0, listener->adaptor_config->observer));
+    }
+}
+
 /**
  * NOTE: Do not call this function directly. This function should only be called directly from ADAPTOR_final().
  * To free the listener, call qd_tcp_listener_decref which will check the listener's ref_count before freeing it.
@@ -207,9 +224,8 @@ static void qd_tcp_listener_free(qd_tcp_listener_t *listener)
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Deleted TcpListener for %s, %s:%s",
             listener->adaptor_config->address, listener->adaptor_config->host, listener->adaptor_config->port);
-
-    qdpo_free(listener->protocol_observer);
-    qdpo_config_free(listener->protocol_observer_config);
+    if (listener->protocol_observer)
+        qdpo_free(listener->protocol_observer);
 
     qd_tls_config_decref(listener->tls_config);
     qd_free_adaptor_config(listener->adaptor_config);
@@ -364,10 +380,10 @@ static void TL_setup_listener(qd_tcp_listener_t *li)
     //
     // Set up the protocol observer
     //
-    // TODO - add configuration to the listener to influence whether and how the observer is set up.
     //
-    li->protocol_observer_config = qdpo_config(0, true);
-    li->protocol_observer = protocol_observer(QD_PROTOCOL_TCP, li->protocol_observer_config);
+    sys_mutex_lock(&li->lock);
+    _setup_protocol_observer_LH(li);
+    sys_mutex_unlock(&li->lock);
 
     //
     // Create an adaptor listener. This listener will automatically create a listening socket when there is at least one
@@ -2081,16 +2097,22 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
 
     conn->raw_conn = pn_raw_connection();
     pn_raw_connection_set_context(conn->raw_conn, &conn->context);
-
-    if (listener->protocol_observer) {
-        conn->observer_handle = qdpo_begin(listener->protocol_observer, conn->common.vflow, conn, conn->conn_id);
-    }
+    bool has_protocol_observer = false;
 
     sys_mutex_lock(&listener->lock);
+    _setup_protocol_observer_LH(listener);
+    if (listener->protocol_observer) {
+        has_protocol_observer = true;
+        conn->observer_handle = qdpo_begin(listener->protocol_observer, conn->common.vflow, conn, conn->conn_id);
+    }
     DEQ_INSERT_TAIL(listener->connections, conn);
     listener->connections_opened++;
     vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
     sys_mutex_unlock(&listener->lock);
+
+    if (!has_protocol_observer) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "[C%"PRIu64"] on_accept, no protocol observer setup for this connection", conn->conn_id);
+    }
 
     // Note: this will trigger the connection's event handler on another thread:
     pn_listener_raw_accept(pn_listener, conn->raw_conn);
@@ -2331,10 +2353,6 @@ static void CORE_connection_close(void *context, qdr_connection_t *conn, qdr_err
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "qdr_tcp_conn_trace: no connection context");
         assert(false);
     }
-
-
-
-
 }
 
 
@@ -2394,6 +2412,36 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
 
     TL_setup_listener(listener);
 
+    return listener;
+}
+
+/**
+ * Handles tcpListener record update request from management agent.
+ */
+QD_EXPORT void *qd_dispatch_update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity, void *impl)
+{
+    SET_THREAD_UNKNOWN;
+    qd_error_clear();
+    qd_tcp_listener_t *listener = (qd_tcp_listener_t*) impl;
+    assert(listener);
+    if (listener) {
+        //
+        // The only field that can be updated on the tcpListener is the 'observer' field.
+        //
+        char *observer_string = qd_entity_opt_string(entity, "observer", 0);
+        qd_observer_t  observer = get_listener_observer(observer_string);
+        listener->adaptor_config->observer = observer;
+        sys_mutex_lock(&listener->lock);
+        // Set up or free the listener->protocol_observer pointer.
+        _setup_protocol_observer_LH(listener);
+
+        // If we are moving to a none observer, listener->protocol_observer will be 0.
+        if (listener->protocol_observer) {
+            qdpo_set_observer(listener->protocol_observer, observer);
+        }
+        sys_mutex_unlock(&listener->lock);
+        free(observer_string);
+    }
     return listener;
 }
 

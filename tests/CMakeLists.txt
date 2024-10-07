@@ -163,7 +163,7 @@ foreach(py_test_module
     system_tests_open_properties
     system_tests_grpc
     system_tests_http1_over_tcp
-    system_tests_http1_observer
+    system_tests_http_observer
     system_tests_tcp_adaptor
     system_tests_tcp_adaptor_tls
     system_tests_tcp_conns_terminate
