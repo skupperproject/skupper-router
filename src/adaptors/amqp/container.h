@@ -93,7 +93,6 @@ void policy_notify_opened(void *container, qd_connection_t *conn, void *context)
 qd_direction_t qd_link_direction(const qd_link_t *link);
 void qd_link_set_q2_limit_unbounded(qd_link_t *link, bool q2_limit_unbounded);
 pn_snd_settle_mode_t qd_link_remote_snd_settle_mode(const qd_link_t *link);
-pn_session_t *qd_link_pn_session(qd_link_t *link);
 pn_terminus_t *qd_link_source(qd_link_t *link);
 pn_terminus_t *qd_link_target(qd_link_t *link);
 pn_terminus_t *qd_link_remote_source(qd_link_t *link);
@@ -108,17 +107,16 @@ uint64_t qd_link_link_id(const qd_link_t *link);
 void qd_link_set_link_id(qd_link_t *link, uint64_t link_id);
 struct qd_message_t;
 void qd_link_set_incoming_msg(qd_link_t *link, struct qd_message_t *msg);
+qd_session_t *qd_link_get_session(const qd_link_t *link);
 
-qd_session_t *qd_session(pn_session_t *pn_ssn);
-void qd_session_cleanup(qd_connection_t *qd_conn);
-void qd_session_free(qd_session_t *qd_ssn);
+void qd_session_incref(qd_session_t *qd_ssn);
+void qd_session_decref(qd_session_t *qd_ssn);
 bool qd_session_is_q3_blocked(const qd_session_t *qd_ssn);
 qd_link_list_t *qd_session_q3_blocked_links(qd_session_t *qd_ssn);
+size_t qd_session_get_outgoing_capacity(const qd_session_t *qd_ssn);
+size_t qd_session_get_outgoing_threshold(const qd_session_t *qd_ssn);
 
-static inline qd_session_t *qd_session_from_pn(pn_session_t *pn_ssn)
-{
-    return (qd_session_t *)pn_session_get_context(pn_ssn);
-}
+void qd_connection_release_sessions(qd_connection_t *qd_conn);
 
 ///@}
 #endif

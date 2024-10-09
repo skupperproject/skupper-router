@@ -22,6 +22,7 @@
 #include "qd_connector.h"
 #include "qd_listener.h"
 #include "policy.h"
+#include "container.h"
 
 #include "qpid/dispatch/dispatch.h"
 #include "qpid/dispatch/proton_utils.h"
@@ -258,7 +259,8 @@ void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, qd_server_con
     pn_connection_set_context(ctx->pn_conn, ctx);
     DEQ_ITEM_INIT(ctx);
     DEQ_INIT(ctx->deferred_calls);
-    DEQ_INIT(ctx->free_link_session_list);
+    DEQ_INIT(ctx->free_link_list);
+    DEQ_INIT(ctx->child_sessions);
 
     // note: setup connector or listener before decorating the connection since
     // decoration involves accessing the connection's parent.
@@ -381,6 +383,9 @@ static void qd_connection_free(qd_connection_t *qd_conn, const char *condition_n
     if (qd_conn->timer) qd_timer_free(qd_conn->timer);
     free(qd_conn->name);
     free(qd_conn->role);
+    for (int i = 0; i < QD_SSN_CLASS_COUNT; ++i)
+        qd_session_decref(qd_conn->qd_sessions[i]);
+    qd_connection_release_sessions(qd_conn);
     qd_tls_session_free(qd_conn->ssl);
     sys_atomic_destroy(&qd_conn->wake_core);
     sys_atomic_destroy(&qd_conn->wake_cutthrough_inbound);
