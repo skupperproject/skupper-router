@@ -544,14 +544,19 @@ class TcpListenerEntity(EntityAdapter):
             raise ValidationError("Invalid tcpListener configuration: see logs for details.")
         return config_listener
 
+    def _delete(self):
+        self._qd.qd_dispatch_delete_tcp_listener(self._dispatch, self._implementations[0].key)
+
+    def _update(self):
+        tmp = self._qd.qd_dispatch_update_tcp_listener(self._dispatch, self, self._implementations[0].key)
+        if tmp is None:
+            raise ValidationError("listener configuration update failed: see logs for details.")
+
     def _identifier(self):
         return _host_port_name_identifier(self)
 
     def __str__(self):
         return super(TcpListenerEntity, self).__str__().replace("Entity(", "TcpListenerEntity(")
-
-    def _delete(self):
-        self._qd.qd_dispatch_delete_tcp_listener(self._dispatch, self._implementations[0].key)
 
 
 class TcpConnectorEntity(EntityAdapter):

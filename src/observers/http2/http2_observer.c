@@ -233,7 +233,10 @@ void qdpo_http2_final(qdpo_transport_handle_t *transport_handle)
         transport_handle->observe = 0;
         qd_http2_decoder_connection_free(transport_handle->http2.conn_state);
     }
-    qd_hash_free(transport_handle->http2.stream_id_hash);
+    if (transport_handle->http2.stream_id_hash) {
+        qd_hash_free(transport_handle->http2.stream_id_hash);
+        transport_handle->http2.stream_id_hash = 0;
+    }
     qd_http2_stream_info_t *stream_info = DEQ_HEAD(transport_handle->http2.streams);
     while (stream_info) {
         DEQ_REMOVE_HEAD(transport_handle->http2.streams);

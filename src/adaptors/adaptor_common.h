@@ -29,6 +29,7 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/router_core.h"
+#include <qpid/dispatch/protocol_observer.h>
 
 #include <proton/raw_connection.h>
 
@@ -44,18 +45,18 @@ typedef struct qd_adaptor_config_t qd_adaptor_config_t;
 
 struct qd_adaptor_config_t
 {
-    char              *name;
-    char              *host;
-    char              *port;
-    char              *address;
-    char              *site_id;
-    char              *host_port;
-    int                backlog;
-
+    char                       *name;
+    char                       *host;
+    char                       *port;
+    char                       *address;
+    char                       *site_id;
+    char                       *host_port;
+    int                         backlog;
+    qd_observer_t  observer;
     //TLS related info
-    char              *ssl_profile_name;
-    bool               authenticate_peer;
-    bool               verify_host_name;
+    char                       *ssl_profile_name;
+    bool                        authenticate_peer;
+    bool                        verify_host_name;
 };
 
 
@@ -91,5 +92,7 @@ void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_
  * Usually called from the proton PN_RAW_CONNECTION_DISCONNECTED event handler.
  */
 void qd_set_condition_on_vflow(pn_raw_connection_t *raw_conn, vflow_record_t *vflow);
+
+qd_observer_t get_listener_observer(const char *observer);
 
 #endif // __adaptor_common_h__

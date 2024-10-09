@@ -28,15 +28,19 @@ ALLOC_DECLARE(qdpo_transport_handle_t);
 ALLOC_DEFINE(qdpo_transport_handle_t);
 
 
-qdpo_config_t *qdpo_config(qdpo_use_address_t use_address, bool allow_all_protocols)
+qdpo_config_t *qdpo_config(qdpo_use_address_t use_address, qd_observer_t observer)
 {
     qdpo_config_t *config = new_qdpo_config_t();
     ZERO(config);
 
     config->use_address = use_address;
-    config->allow_all   = allow_all_protocols;
-
+    config->observer    = observer;
     return config;
+}
+
+void qdpo_set_observer(qdpo_t *protocol_observer, qd_observer_t observer)
+{
+    protocol_observer->config->observer = observer;
 }
 
 
@@ -60,18 +64,20 @@ void qdpo_config_add_address(qdpo_config_t *config, const char *field, const cha
 
 qdpo_t *protocol_observer(qd_protocol_t base, qdpo_config_t *config)
 {
-    qdpo_t *observer = new_qdpo_t();
-    ZERO(observer);
+    qdpo_t *protocol_observer = new_qdpo_t();
+    ZERO(protocol_observer);
 
-    observer->base   = base;
-    observer->config = config;
+    protocol_observer->base   = base;
+    protocol_observer->config = config;
 
-    return observer;
+    return protocol_observer;
 }
 
 
 void qdpo_free(qdpo_t *observer)
 {
+    if(observer->config)
+        qdpo_config_free(observer->config);
     free_qdpo_t(observer);
 }
 
@@ -89,21 +95,23 @@ qdpo_transport_handle_t *qdpo_begin(qdpo_t *observer, vflow_record_t *vflow, voi
     th->protocol          = observer->base;
     th->conn_id           = conn_id;
 
-    switch (th->protocol) {
-        case QD_PROTOCOL_TCP:
+    //
+    // Directly call the corresponding init functions based on the observer
+    // specified in the tcp listener.
+    //
+    switch (observer->config->observer) {
+        case OBSERVER_AUTO:
             qdpo_tcp_init(th);
             break;
-        case QD_PROTOCOL_HTTP1:
+        case OBSERVER_HTTP1:
             qdpo_http1_init(th);
             break;
-        case QD_PROTOCOL_HTTP2:
+        case OBSERVER_HTTP2:
             qdpo_http2_init(th);
             break;
         default:
-            assert(false);  // unsupported protocol
             break;
     }
-
     return th;
 }
 

@@ -1064,7 +1064,7 @@
         "tcpListener": {
             "description": "Ingress TCP bridge.",
             "extends": "configurationEntity",
-            "operations": ["CREATE", "DELETE"],
+            "operations": ["CREATE", "UPDATE", "DELETE"],
             "attributes": {
                 "address": {
                     "description":"Address of this bridge",
@@ -1137,6 +1137,13 @@
                     "type": ["up", "down"],
                     "description": "The operational status of TCP socket listener: up - the service is active and incoming connections are permitted; down - the service is not active and incoming connection attempts will be refused.",
                     "create": false
+                },
+                "observer": {
+                    "type": ["none","auto","http1", "http2"],
+                    "default": "auto",
+                    "description": "Specifies the type of observer that has been enabled on the tcpListner. If set to 'auto', the http1 and http2 protocols are auto detected, if set to 'http1', the http1 observer is enabled, if set to 'http2', the http2 observer is enabled. If the specified protocol was not detected on the wire, the observer exits with a warning message.",
+                    "create": true,
+                    "update": true
                 }
             }
         },

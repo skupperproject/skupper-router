@@ -83,9 +83,9 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
            "[C%" PRIu64 "] TCP observer classifying protocol: %zu %s octets", th->conn_id, length, from_client ? "client" : "server");
 
     if (from_client) {
-
+        //
         // fill up the protocol classification prefix buffer
-
+        //
         if (th->tcp.prefix_len < TCP_PREFIX_LEN) {
             size_t to_copy = MIN(length, TCP_PREFIX_LEN - th->tcp.prefix_len);
             memcpy(&th->tcp.prefix[th->tcp.prefix_len], data, to_copy);
@@ -93,9 +93,9 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
             data += to_copy;
             length -= to_copy;
         }
-
+        //
         // Check for HTTP/2.0
-
+        //
         size_t to_match = MIN(HTTP2_PREFIX_LEN, th->tcp.prefix_len);
         if (memcmp(th->tcp.prefix, http2_prefix, to_match) == 0) {
             // did we match the entire http2_prefix?
@@ -107,11 +107,9 @@ static void tcp_observe(qdpo_transport_handle_t *th, bool from_client, const uns
             }
 
         } else {
-
             // HTTP/2.0 check failed. Currently the only other supported protocol is HTTP/1.x so try that
             // unconditionally. If the HTTP/1.x observer fails to find HTTP/1.x traffic it will disable itself without
             // posting an error.
-
             activate_inner(th, QD_PROTOCOL_HTTP1, data, length);
             return;
         }
