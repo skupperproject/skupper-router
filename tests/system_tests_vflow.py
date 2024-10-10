@@ -561,6 +561,7 @@ class VFlowInterRouterTest(TestCase):
         # to exit
         cls.inta.teardown()
         cls.snooper_thread.join(timeout=TIMEOUT)
+        super(VFlowInterRouterTest, cls).tearDownClass()
 
 
 if __name__ == '__main__':
