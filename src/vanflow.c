@@ -2151,32 +2151,36 @@ QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *
     if (configured) {
         return QD_ERROR_ALREADY_EXISTS;
     }
-    
-    const char *name      = qd_entity_opt_string(entity, "name", 0);
-    const char *location  = qd_entity_opt_string(entity, "location", 0);
-    const char *provider  = qd_entity_opt_string(entity, "provider", 0);
-    const char *platform  = qd_entity_opt_string(entity, "platform", 0);
-    const char *namespace = qd_entity_opt_string(entity, "namespace", 0);
 
-    if (qd_error_code()) {
-        return qd_error_code();
+    char *name      = qd_entity_opt_string(entity, "name", 0);
+    char *location  = qd_entity_opt_string(entity, "location", 0);
+    char *provider  = qd_entity_opt_string(entity, "provider", 0);
+    char *platform  = qd_entity_opt_string(entity, "platform", 0);
+    char *namespace = qd_entity_opt_string(entity, "namespace", 0);
+
+    if (qd_error_code() == QD_ERROR_NONE) {
+        vflow_record_t *site;
+
+        if (!!state->site_id) {
+            site = vflow_start_record_custom_id(VFLOW_RECORD_SITE, 0, state->site_id);
+        } else {
+            site = vflow_start_record(VFLOW_RECORD_SITE, 0);
+        }
+
+        if (name)      vflow_set_string(site, VFLOW_ATTRIBUTE_NAME, name);
+        if (location)  vflow_set_string(site, VFLOW_ATTRIBUTE_LOCATION, location);
+        if (provider)  vflow_set_string(site, VFLOW_ATTRIBUTE_PROVIDER, provider);
+        if (platform)  vflow_set_string(site, VFLOW_ATTRIBUTE_PLATFORM, platform);
+        if (namespace) vflow_set_string(site, VFLOW_ATTRIBUTE_NAMESPACE, namespace);
     }
 
-    vflow_record_t *site;
+    free(name);
+    free(location);
+    free(provider);
+    free(platform);
+    free(namespace);
 
-    if (!!state->site_id) {
-        site = vflow_start_record_custom_id(VFLOW_RECORD_SITE, 0, state->site_id);
-    } else {
-        site = vflow_start_record(VFLOW_RECORD_SITE, 0);
-    }
-
-    if (name)      vflow_set_string(site, VFLOW_ATTRIBUTE_NAME, name);
-    if (location)  vflow_set_string(site, VFLOW_ATTRIBUTE_LOCATION, location);
-    if (provider)  vflow_set_string(site, VFLOW_ATTRIBUTE_PROVIDER, provider);
-    if (platform)  vflow_set_string(site, VFLOW_ATTRIBUTE_PLATFORM, platform);
-    if (namespace) vflow_set_string(site, VFLOW_ATTRIBUTE_NAMESPACE, namespace);
-
-    return QD_ERROR_NONE;
+    return qd_error_code();
 }
 
 //=====================================================================================
