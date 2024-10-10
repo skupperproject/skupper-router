@@ -30,37 +30,31 @@ void qd_error_initialize(void);
 void qd_router_id_finalize(void);
 void qd_log_finalize(void);
 
-bool alloc_pool_initialized = false;
-
-void set_alloc_pool_initialized(bool initialized)
+/**
+ * This function is processed on exit
+ */
+void call_on_exit(void)
 {
-    alloc_pool_initialized = initialized;
+    qd_log_finalize();
+    qd_alloc_finalize();
+    qd_router_id_finalize();
 }
 
-bool is_alloc_pool_initialized(void)
+int LLVMFuzzerInitialize(int *argc, char ***argv)
 {
-    return alloc_pool_initialized;
+    atexit(call_on_exit);
+
+    qd_alloc_initialize();
+    qd_log_initialize();
+    qd_error_initialize();
+    return 0;
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-    if (!is_alloc_pool_initialized()) {
-        qd_alloc_initialize();
-        qd_log_initialize();
-        qd_error_initialize();
-        set_alloc_pool_initialized(true);
-    }
-
     qd_http2_decoder_connection_t *conn_state = qd_http2_decoder_connection(0, 0/*user_context*/, 1/*conn_id*/);
     decode(conn_state, true, data, size);
     qd_http2_decoder_connection_free(conn_state);
     //qd_http2_decoder_connection_final();
     return 0;
-}
-
-__attribute__((destructor)) void fuzz_http2_destructor(void)
-{
-  qd_log_finalize();
-  qd_alloc_finalize();
-  qd_router_id_finalize();
 }
 

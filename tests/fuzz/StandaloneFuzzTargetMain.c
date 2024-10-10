@@ -40,7 +40,6 @@
 #include <string.h>
 
 #include "libFuzzingEngine.h"
-#include "fuzz_http2_decoder.h"
 #include <qpid/dispatch/alloc_pool.h>
 #include <qpid/dispatch/log.h>
 
@@ -113,7 +112,6 @@ int ProcessResponseFile(int *argc, char ***argv) {
 int main(int argc, char **argv) {
   fprintf(stderr, "StandaloneFuzzTargetMain: running %d inputs\n", argc - 1);
   LLVMFuzzerInitialize(&argc, &argv);
-  set_alloc_pool_initialized(true);
 
   // Process response file
   ProcessResponseFile(&argc, &argv);

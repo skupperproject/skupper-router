@@ -20,17 +20,8 @@
  */
 #include <qpid/dispatch/alloc_pool.h>
 #include <qpid/dispatch/log.h>
-
-void qd_log_initialize(void);
-void qd_error_initialize(void);
-
 #include "libFuzzingEngine.h"
 
-int LLVMFuzzerInitialize(int *argc, char ***argv)
-{
-    qd_alloc_initialize();
-    qd_log_initialize();
-    qd_error_initialize();
-    return 0;
-}
+
+
 

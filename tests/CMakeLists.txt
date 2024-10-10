@@ -40,6 +40,7 @@ set(unit_test_SOURCES
     hash_test.c
     thread_test.c
     platform_test.c
+    static_assert_test.c
     )
 
 add_executable(unit_tests ${unit_test_SOURCES})
