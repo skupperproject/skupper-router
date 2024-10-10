@@ -70,6 +70,7 @@ env_vars = {
     'PYTHONPATH': os.pathsep.join(python_path),
     'PATH': os.pathsep.join(dedup(["${CMAKE_BINARY_DIR}",
                                    os.path.join("${CMAKE_BINARY_DIR}", 'tests'),
+                                   os.path.join("${CMAKE_BINARY_DIR}", 'tests/fuzz'),
                                    os.path.join("${CMAKE_BINARY_DIR}", 'router'),
                                    os.path.join("${CMAKE_SOURCE_DIR}", 'tools'),
                                    os.path.join("${CMAKE_BINARY_DIR}", 'tools'),

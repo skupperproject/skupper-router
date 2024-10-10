@@ -45,6 +45,7 @@ set(CMAKE_ENABLE_EXPORTS TRUE)
 option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Perform link time optimization" ON)
 option(ENABLE_WARNING_ERROR "Consider compiler warnings to be errors" ON)
 option(ENABLE_PROFILE_GUIDED_OPTIMIZATION "Perform profile guided optimization" OFF)
+option(ENABLE_FUZZ_TESTING "Enable building fuzzers and regression testing with libFuzzer" ON)
 
 # preserve frame pointers for ease of debugging and profiling
 #  see https://fedoraproject.org/wiki/Changes/fno-omit-frame-pointer
