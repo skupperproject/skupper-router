@@ -338,6 +338,7 @@ qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t       *qd,
     li->host_port = qd_strdup(config->host_port);
     li->service_address = qd_strdup(config->address);
     li->backlog         = config->backlog;
+    li->log_module      = module;
 
     sys_mutex_init(&li->lock);
     li->admin_status = QD_LISTENER_ADMIN_ENABLED;
