@@ -432,53 +432,26 @@ static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discar
 
     link->drain_mode = drain;
 
-    //
-    // If the link was stalled due to internal backpressure from the transport, put it
-    // on the links-with-work list and activate the connection to resume sending.
-    //
-    if (link->stalled_outbound) {
-        link->stalled_outbound = false;
-
-        sys_mutex_lock(&link->conn->work_lock);
-
-        if (DEQ_SIZE(link->undelivered) > 0) {
-            qdr_add_link_ref(&link->conn->links_with_work[link->priority], link, QDR_LINK_LIST_CLASS_WORK);
-            activate = true;
-        }
-
-        sys_mutex_unlock(&link->conn->work_lock);
-    }
-
     if (link->core_endpoint) {
         qdrc_endpoint_do_flow_CT(core, link->core_endpoint, credit, drain);
-    } else if (link->connected_link) {
-        //
-        // If this is an attach-routed link, propagate the flow data downrange.
-        // Note that the credit value is incremental.
-        //
-        qdr_link_t *clink = link->connected_link;
+    }
 
-        if (clink->link_direction == QD_INCOMING)
-            qdr_link_issue_credit_CT(core, link->connected_link, credit, drain);
-        else {
-            work        = qdr_link_work(QDR_LINK_WORK_FLOW);
-            work->value = credit;
-            if (drain)
-                work->drain_action = QDR_LINK_WORK_DRAIN_ACTION_DRAINED;
-            qdr_link_enqueue_work_CT(core, clink, work);
-        }
-    } else {
-        if (link->attach_count == 1)
-            //
-            // The link is half-open.  Store the pending credit to be dealt with once the link is
-            // progressed to the next step.
-            //
-            link->credit_stored += credit;
+    if (link->attach_count == 1)
+        //
+        // The link is half-open.  Store the pending credit to be dealt with once the link is
+        // progressed to the next step.
+        //
+        link->credit_stored += credit;
 
+    if (link->link_direction == QD_OUTGOING) {
         //
-        // Handle the replenishing of credit outbound
+        // Schedule the link for output if
+        // - credit has been granted or
+        // - drain mode entered or
+        // - the link was previously blocked waiting on credit or session capacity
         //
-        if (link->link_direction == QD_OUTGOING && (credit > 0 || drain_was_set)) {
+        if (credit > 0 || drain_was_set || link->stalled_outbound) {
+            link->stalled_outbound = false;
             if (drain_was_set) {
                 work               = qdr_link_work(QDR_LINK_WORK_FLOW);
                 work->drain_action = QDR_LINK_WORK_DRAIN_ACTION_DRAINED;
@@ -492,10 +465,10 @@ static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discar
                 activate = true;
             }
             sys_mutex_unlock(&link->conn->work_lock);
-        } else if (link->link_direction == QD_INCOMING) {
-            if (drain) {
-                link->credit_pending = link->capacity;
-            }
+        }
+    } else {  // incoming link
+        if (drain) {
+            link->credit_pending = link->capacity;
         }
     }
 
