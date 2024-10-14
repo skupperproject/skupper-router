@@ -227,7 +227,7 @@ static void qdrc_send_message(qdr_core_t *core, qdr_address_t *addr, qdrc_endpoi
     qd_message_t *msg = qdcm_edge_create_address_dlv(core, addr, insert_addr);
     qdr_delivery_t *dlv = qdrc_endpoint_delivery_CT(core, endpoint, msg);
 
-    qdrc_endpoint_send_CT(core, endpoint, dlv, true);
+    qdrc_endpoint_send_CT(core, endpoint, dlv, false);
 }
 
 
