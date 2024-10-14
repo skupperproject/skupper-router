@@ -246,3 +246,7 @@ add_subdirectory(cpp)
 if(BUILD_BENCHMARKS)
   add_subdirectory(c_benchmarks)
 endif()
+
+if (ENABLE_FUZZ_TESTING)
+  add_subdirectory(fuzz)
+endif (ENABLE_FUZZ_TESTING)
