@@ -18,10 +18,11 @@
  * under the License.
  *
  */
-#include <qpid/dispatch/alloc_pool.h>
-#include <qpid/dispatch/log.h>
+
 #include "libFuzzingEngine.h"
 
-
-
+int LLVMFuzzerInitialize(int *argc, char ***argv)
+{
+  return 0;
+}
 

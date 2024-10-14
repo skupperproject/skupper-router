@@ -33,15 +33,12 @@
 // Use this file to provide reproducers for bugs when linking against libFuzzer
 // or other fuzzing engine is undesirable.
 //===----------------------------------------------------------------------===*/
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "libFuzzingEngine.h"
-#include <qpid/dispatch/alloc_pool.h>
-#include <qpid/dispatch/log.h>
 
 /*
  * Use this to implement response file:
@@ -108,7 +105,6 @@ int ProcessResponseFile(int *argc, char ***argv) {
   return 0;
 }
 
-
 int main(int argc, char **argv) {
   fprintf(stderr, "StandaloneFuzzTargetMain: running %d inputs\n", argc - 1);
   LLVMFuzzerInitialize(&argc, &argv);
@@ -116,10 +112,8 @@ int main(int argc, char **argv) {
   // Process response file
   ProcessResponseFile(&argc, &argv);
 
-
   for (int i = 1; i < argc; i++) {
-    printf("Running: %s\n", argv[i]);
-    fflush(stdout);
+    fprintf(stderr, "Running: %s\n", argv[i]);
     FILE *f = fopen(argv[i], "rb");
     assert(f);
     fseek(f, 0, SEEK_END);
@@ -134,6 +128,4 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Done:    %s: (%zd bytes)\n", argv[i], n_read);
   }
   freeall();
-
-
 }
