@@ -106,23 +106,31 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_configure_router, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_site, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_prepare, None, [self.qd_dispatch_p])
-        self._prototype(self.qd_dispatch_configure_listener, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
+
+        # tcp and amqp listeners
         self._prototype(self.qd_dispatch_configure_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_configure_tcp_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_delete_tcp_listener, None, [self.qd_dispatch_p, c_void_p])
-        self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_update_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object, c_void_p])
+        self._prototype(self.qd_dispatch_configure_listener, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, c_void_p])
+
+        # tcp and amqp connectors
+        self._prototype(self.qd_dispatch_configure_tcp_connector, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, c_void_p])
 
+        #sslProfile and display name service
         self._prototype(self.qd_tls_configure_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_tls_update_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object, c_void_p])
         self._prototype(self.qd_tls_delete_ssl_profile, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_tls_register_display_name_service, None, [py_object])
 
+        # address and autoLink
         self._prototype(self.qd_dispatch_configure_address, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_auto_link, None, [self.qd_dispatch_p, py_object])
 
+        # policy
         self._prototype(self.qd_dispatch_configure_policy, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_register_policy_manager, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_c_counts_alloc, py_object, [], check=False)
@@ -131,17 +139,14 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_policy_host_pattern_remove, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_policy_host_pattern_lookup, c_char_p, [self.qd_dispatch_p, py_object])
 
+        # General router.
         self._prototype(self.qd_dispatch_set_agent, None, [self.qd_dispatch_p, py_object])
-
         self._prototype(self.qd_router_setup_late, None, [self.qd_dispatch_p])
-
         self._prototype(self.qd_dispatch_router_lock, None, [self.qd_dispatch_p])
         self._prototype(self.qd_dispatch_router_unlock, None, [self.qd_dispatch_p])
-
         self._prototype(self.qd_connection_manager_start, None, [self.qd_dispatch_p])
         self._prototype(self.qd_entity_refresh_begin, c_long, [py_object])
         self._prototype(self.qd_entity_refresh_end, None, [])
-
         self._prototype(self.qd_log_recent_py, py_object, [c_long])
 
     def _prototype(self, f, restype, argtypes, check=True):

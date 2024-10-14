@@ -32,6 +32,10 @@
 #include <stdatomic.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
+const char *LISTENER_OBSERVER_AUTO  = "auto";
+const char *LISTENER_OBSERVER_HTTP1 = "http1";
+const char *LISTENER_OBSERVER_HTTP2 = "http2";
+const char *LISTENER_OBSERVER_NONE = "none";
 
 void qd_free_adaptor_config(qd_adaptor_config_t *config)
 {
@@ -49,20 +53,39 @@ void qd_free_adaptor_config(qd_adaptor_config_t *config)
 
 #define CHECK() if (qd_error_code()) goto error
 
+qd_observer_t get_listener_observer(const char *observer)
+{
+    if (strcmp(observer, LISTENER_OBSERVER_NONE) == 0) {
+        return OBSERVER_NONE;
+    }
+
+    if (strcmp(observer, LISTENER_OBSERVER_HTTP1) == 0) {
+        return OBSERVER_HTTP1;
+    }
+
+    if (strcmp(observer, LISTENER_OBSERVER_HTTP2) == 0) {
+        return OBSERVER_HTTP2;
+    }
+
+    return OBSERVER_AUTO;
+}
+
 qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config, qd_entity_t *entity)
 {
     char *config_address;
     qd_error_clear();
-    config->name    = qd_entity_opt_string(entity, "name", 0);                 CHECK();
-    config->host    = qd_entity_get_string(entity, "host");                    CHECK();
-    config->port    = qd_entity_get_string(entity, "port");                    CHECK();
-    config_address  = qd_entity_get_string(entity, "address");                 CHECK();
-    config->site_id = qd_entity_opt_string(entity, "siteId", 0);               CHECK();
-    config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0); CHECK();
+    config->name    = qd_entity_opt_string(entity, "name", 0);                         CHECK();
+    config->host    = qd_entity_get_string(entity, "host");                            CHECK();
+    config->port    = qd_entity_get_string(entity, "port");                            CHECK();
+    config_address  = qd_entity_get_string(entity, "address");                         CHECK();
+    config->site_id = qd_entity_opt_string(entity, "siteId", 0);                       CHECK();
+    config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0);         CHECK();
     config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
     config->verify_host_name  = qd_entity_opt_bool(entity, "verifyHostname", false);   CHECK();
-
-    config->backlog = qd_entity_opt_long(entity, "backlog", 0);
+    char *observer =            qd_entity_opt_string(entity, "observer", "auto");      CHECK();
+    config->observer =          get_listener_observer(observer);
+    free(observer);
+    config->backlog =           qd_entity_opt_long(entity, "backlog", 0);
     CHECK();
     if (config->backlog <= 0 || config->backlog > SOMAXCONN)
         config->backlog = SOMAXCONN;
