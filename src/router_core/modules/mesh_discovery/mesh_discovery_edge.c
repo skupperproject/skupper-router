@@ -95,7 +95,7 @@ static void send_mesh_id_to_interior(void)
         qd_compose_free(content);
         
         qdr_delivery_t *delivery = qdrc_endpoint_delivery_CT(state.core, state.interior_sender, msg);
-        qdrc_endpoint_send_CT(state.core, state.interior_sender, delivery, true);
+        qdrc_endpoint_send_CT(state.core, state.interior_sender, delivery, false);
 
         state.interior_sender_credit--;
         state.interior_needs_update = false;
@@ -127,7 +127,7 @@ static void send_bid(mesh_peer_t *peer)
     qd_compose_free(content);
     
     qdr_delivery_t *delivery = qdrc_endpoint_delivery_CT(state.core, peer->sender, msg);
-    qdrc_endpoint_send_CT(state.core, peer->sender, delivery, true);
+    qdrc_endpoint_send_CT(state.core, peer->sender, delivery, false);
 
     peer->send_credit--;
     peer->needs_update = false;
