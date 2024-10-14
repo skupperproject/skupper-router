@@ -32,10 +32,10 @@
 #include <stdatomic.h>
 
 ALLOC_DEFINE(qd_adaptor_config_t);
-const char* LISTENER_OBSERVER_AUTO  = "auto";
-const char* LISTENER_OBSERVER_HTTP1 = "http1";
-const char* LISTENER_OBSERVER_HTTP2 = "http2";
-const char* LISTENER_OBSERVER_NONE = "none";
+const char *LISTENER_OBSERVER_AUTO  = "auto";
+const char *LISTENER_OBSERVER_HTTP1 = "http1";
+const char *LISTENER_OBSERVER_HTTP2 = "http2";
+const char *LISTENER_OBSERVER_NONE = "none";
 
 void qd_free_adaptor_config(qd_adaptor_config_t *config)
 {
