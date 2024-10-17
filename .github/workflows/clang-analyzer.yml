@@ -74,7 +74,7 @@ jobs:
     # https://clang-analyzer.llvm.org/command-line.html
     - name: Create compilation database
       run: |
-        sudo pip3 install --break-system-packages codechecker
+        PIP_BREAK_SYSTEM_PACKAGES=1 sudo pip3 install codechecker
         # disable IPO to make compilation faster
         cmake -S . -B build -DBUILD_TESTING=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DQD_ENABLE_ASSERTIONS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_WARNING_ERROR=OFF
         # perform build so that generated sources get generated
