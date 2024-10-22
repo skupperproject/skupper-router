@@ -156,29 +156,23 @@ class EchoClientRunner:
                         'CLIENT_PRIVATE_KEY_PASSWORD': CLIENT_PRIVATE_KEY_PASSWORD,
                         'CA_CERT': CA_CERT}
 
-        try:
-            self.e_client = TcpEchoClient(prefix=self.client_prefix,
-                                          host='localhost',
-                                          port=self.listener_port,
-                                          size=self.size,
-                                          count=self.count,
-                                          timeout=self.timeout,
-                                          logger=self.client_logger,
-                                          ssl_info=ssl_info,
-                                          delay_close=delay_close)
-
-        except Exception as exc:
-            self.e_client.error = "TCP_TEST TcpAdaptor_runner_%s failed. Exception: %s" % \
-                                  (self.name, traceback.format_exc())
-            self.logger.log(self.e_client.error)
-            raise Exception(self.e_client.error)
+        self.e_client = TcpEchoClient(prefix=self.client_prefix,
+                                      host='localhost',
+                                      port=self.listener_port,
+                                      size=self.size,
+                                      count=self.count,
+                                      timeout=self.timeout,
+                                      logger=self.client_logger,
+                                      ssl_info=ssl_info,
+                                      delay_close=delay_close)
 
     def wait(self):
         """
         Block until the client completes. An exception is raised if the client
         failed.
         """
-        self.e_client.wait()
+        if self.e_client is not None:
+            self.e_client.wait()
 
 
 class TcpAdaptorBase(TestCase):
