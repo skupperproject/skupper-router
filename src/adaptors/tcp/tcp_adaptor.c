@@ -2534,8 +2534,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         }
         //
         //
-        // If all the connections associated with this listener has been closed, this call to
-        // qd_tcp_listener_decref should free the listener
+        // If all the connections associated with this connector has been closed, this call to
+        // qd_tcp_connector_decref should free the connector
         //
         qd_tcp_connector_decref(connector);
     }
