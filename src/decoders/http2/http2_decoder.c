@@ -149,7 +149,7 @@ qd_http2_frame_type get_frame_payload_length_and_type(qd_http2_decoder_t *decode
 
 static int allocate_move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t capacity)
 {
-    if (capacity > HTTP2_SCRATCH_BUFFER_MAX_SIZE || capacity <= 0) {
+    if (capacity > HTTP2_SCRATCH_BUFFER_MAX_SIZE) {
         return -1;
     }
     scratch_buffer->bytes = qd_malloc(capacity);
@@ -164,7 +164,7 @@ static int allocate_move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer,
 
 static int reallocate_move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t data_length)
 {
-    if (scratch_buffer->size == 0 || data_length <= 0) {
+    if (scratch_buffer->size == 0) {
         return -1;
     }
     size_t old_size = scratch_buffer->size;
@@ -251,8 +251,8 @@ void qd_http2_decoder_connection_free(qd_http2_decoder_connection_t *conn_state)
  */
 static int decompress_headers(qd_http2_decoder_t *decoder, uint32_t stream_id, const uint8_t *data, size_t length)
 {
-    if (length <= 0) {
-        qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] decompress_headers - passed in length < 0", decoder->conn_state->conn_id);
+    if (length == 0) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] decompress_headers - passed in length = 0", decoder->conn_state->conn_id);
         return -1;
     }
     qd_http2_decoder_connection_t *conn_state = decoder->conn_state;
