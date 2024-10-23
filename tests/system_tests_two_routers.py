@@ -1906,5 +1906,75 @@ class ExtensionStateTester(MessagingHandler):
         Container(self).run()
 
 
+class TwoRouterSessionWindowTest(TestCase):
+    """
+    Verify that the session window on the inter-router connection does not
+    stall on large message transfer
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TwoRouterSessionWindowTest, cls).setUpClass()
+
+        # Configure a very small inter-router session window: max_frame * max_session_window
+        cls.max_frame = 512
+        cls.max_session_window = 10
+
+        def router(name, extra_config):
+            config = [
+                ('router', {'mode': 'interior',
+                            'id': name,
+                            'dataConnectionCount': 0}),
+
+                ('listener', {'port': cls.tester.get_port()}),
+
+                ('address', {'prefix': 'closest', 'distribution': 'closest'}),
+                ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
+                ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+            ] + extra_config
+
+            config = Qdrouterd.Config(config)
+            return cls.tester.qdrouterd(name, config, wait=False)
+
+        inter_router_port = cls.tester.get_port()
+
+        cls.RouterA = router('RouterA',
+                             [
+                                 ('listener', {'role': 'inter-router',
+                                               'host': '0.0.0.0',
+                                               'port': inter_router_port,
+                                               'saslMechanisms': 'ANONYMOUS',
+                                               'maxFrameSize': cls.max_frame,
+                                               'maxSessionFrames': cls.max_session_window}),
+                             ])
+
+        cls.RouterB = router('RouterB',
+                             [
+                                 ('connector', {'name': 'toRouterA',
+                                                'role': 'inter-router',
+                                                'port': inter_router_port,
+                                                'maxFrameSize': cls.max_frame,
+                                                'maxSessionFrames': cls.max_session_window}),
+                             ])
+
+        cls.RouterA.wait_router_connected('RouterB')
+        cls.RouterB.wait_router_connected('RouterA')
+
+    def test_large_transfer(self):
+        """
+        Transfer AMQP messages that are much bigger than the session window on
+        the inter-router connection
+        """
+        payload = "?" * (10 * self.max_frame * self.max_session_window)
+        msg = Message(body=payload)
+        rx_client = AsyncTestReceiver(address=self.RouterB.addresses[0], source="test/session")
+        tx_client = AsyncTestSender(address=self.RouterA.addresses[0],
+                                    target="test/session", message=msg,
+                                    count=10)
+        tx_client.wait()  # until all messages are sent
+        for i in range(10):
+            rx_client.queue.get()  # will raise error if no message available
+        rx_client.stop()
+
+
 if __name__ == '__main__':
     unittest.main(main_module())

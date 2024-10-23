@@ -69,15 +69,34 @@ struct qd_session_t {
     sys_atomic_t    ref_count;
     pn_session_t   *pn_session;
     qd_link_list_t  q3_blocked_links;  ///< Q3 blocked if !empty
-
-    // For outgoing session flow control. Never buffer more than out_window_limit bytes of data on the session before
-    // returning control to the proactor. This prevents memory bloat and allows proactor to send buffered data in a
-    // timely manner. The low watermark is used to unblock the session - do not resume writing to the session until the
-    // amount of available capacity has grown to at least the low watermark.
-
-    size_t  out_window_limit;
-    size_t  out_window_low_watermark;
+    uint32_t remote_max_frame;
 };
+
+// Session window limits
+//
+// A session incoming window determines how many incoming frames the session will accept across all incoming links. This
+// places a limit on the number of incoming data bytes that have to be buffered on the session (connection max-frame *
+// max incoming window frames). The local session incoming window configuration is determined by the maxFrameSize and
+// maxSessionFrames configuration attributes of an AMQP listener/connector.
+//
+// The remote peers session window must be honored when writing output to a sending link. In addition we limit the
+// amount of outgoing data that can be buffered on a session before control is returned to Proton. This is necessary to
+// improve latency and allow capacity sharing among all links on the session.
+//
+const size_t   qd_session_max_outgoing_bytes = 1048576;   // max buffered bytes on a session
+const size_t   qd_session_low_outgoing_bytes = 524288;    // low watermark for max buffered bytes
+
+const size_t qd_session_max_in_win_user    = (size_t) 8388608;    // AMQP application in window max bytes 8MB
+const size_t qd_session_max_in_win_trunk   = (size_t) 134217728;  // inter-router in window max bytes 128MB
+
+
+// Can we leverage the new Proton Session Window API?
+//
+#if (PN_VERSION_MAJOR > 0) || (PN_VERSION_MINOR > 39)
+#define USE_PN_SESSION_WINDOWS 1
+#else
+#define USE_PN_SESSION_WINDOWS 0
+#endif
 
 // Bug workaround to free Proton links when we hope they are no longer used!
 // Fingers crossed! :|
@@ -439,7 +458,9 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                     qd_conn->n_sessions++;
                 }
                 DEQ_INSERT_TAIL(qd_conn->child_sessions, qd_ssn);
-                qd_policy_apply_session_settings(qd_ssn->pn_session, qd_conn);
+                uint32_t in_window;
+                qd_policy_get_session_settings(qd_conn, &in_window);
+                qd_session_set_max_in_window(qd_ssn, in_window);
                 pn_session_open(qd_ssn->pn_session);
             }
         }
@@ -700,7 +721,7 @@ qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char* name, 
         DEQ_INSERT_TAIL(conn->child_sessions, qd_ssn);
         conn->qd_sessions[ssn_class] = qd_ssn;
         qd_session_incref(qd_ssn);
-        pn_session_set_incoming_capacity(qd_ssn->pn_session, cf->incoming_capacity);
+        qd_session_set_max_in_window(qd_ssn, cf->session_max_in_window);
         pn_session_open(qd_ssn->pn_session);
     }
 
@@ -897,6 +918,9 @@ void qd_link_set_link_id(qd_link_t *link, uint64_t link_id)
 qd_session_t *qd_session(pn_session_t *pn_ssn)
 {
     assert(pn_ssn && qd_session_from_pn(pn_ssn) == 0);
+    pn_connection_t *pn_conn = pn_session_connection(pn_ssn);
+    pn_transport_t *pn_tport = pn_connection_transport(pn_conn);
+
     qd_session_t *qd_ssn = new_qd_session_t();
     if (qd_ssn) {
         ZERO(qd_ssn);
@@ -905,10 +929,8 @@ qd_session_t *qd_session(pn_session_t *pn_ssn)
         qd_ssn->pn_session = pn_ssn;
         DEQ_INIT(qd_ssn->q3_blocked_links);
         pn_session_set_context(pn_ssn, qd_ssn);
-
-        // @TODO(kgiusti) make these dependent on connection role
-        qd_ssn->out_window_limit = QD_QLIMIT_Q3_UPPER * QD_BUFFER_SIZE;
-        qd_ssn->out_window_low_watermark = QD_QLIMIT_Q3_LOWER * QD_BUFFER_SIZE;
+        qd_ssn->remote_max_frame = pn_transport_get_remote_max_frame(pn_tport);
+        assert(qd_ssn->remote_max_frame != 0);
     }
     return qd_ssn;
 }
@@ -970,22 +992,38 @@ size_t qd_session_get_outgoing_capacity(const qd_session_t *qd_ssn)
 {
     assert(qd_ssn && qd_ssn->pn_session);
 
+    // discount any data already written but not yet sent
     size_t buffered = pn_session_outgoing_bytes(qd_ssn->pn_session);
-    if (buffered < qd_ssn->out_window_limit) {
-        return qd_ssn->out_window_limit - buffered;
-    }
-    return 0;
+    if (buffered >= qd_session_max_outgoing_bytes)
+        return 0;  // exceeded maximum buffered limit
+    size_t avail = qd_session_max_outgoing_bytes - buffered;
+
+#if USE_PN_SESSION_WINDOWS
+    // never exceed the remaining in window of the peer
+    size_t limit = pn_session_remote_incoming_window(qd_ssn->pn_session);
+    limit *= qd_ssn->remote_max_frame;
+    return MIN(avail, limit);
+#else
+    return avail;
+#endif
 }
 
 
-/** Return the session outgoing window low water mark
+/** Configure the sessions incoming window limit
  *
- * Blocked session can resume output once the available outgoing capacity reaches at least this value
+ * @param qd_ssn Session to configure
+ * @param in_window maximum incoming window in frames
  */
-size_t qd_session_get_outgoing_threshold(const qd_session_t *qd_ssn)
+void qd_session_set_max_in_window(qd_session_t *qd_ssn, uint32_t in_window)
 {
-    assert(qd_ssn);
-    return qd_ssn->out_window_low_watermark;
+    // older proton session windowing would stall so do not enable it
+#if USE_PN_SESSION_WINDOWS
+    // Use new window configuration API to set the maximum in window and low water mark
+    assert(in_window >= 2);
+    int rc = pn_session_set_incoming_window_and_lwm(qd_ssn->pn_session, in_window, in_window / 2);
+    (void) rc;
+    assert(rc == 0);
+#endif
 }
 
 
