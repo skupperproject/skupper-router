@@ -126,6 +126,12 @@ qd_http2_frame_type get_frame_type(const uint8_t frame_type)
     return FRAME_TYPE_OTHER;
 }
 
+uint8_t get_pad_length(const uint8_t *data)
+{
+    uint8_t pad_length = (uint8_t) ((data)[0]);
+    return pad_length;
+}
+
 uint32_t get_stream_identifier(const uint8_t *data)
 {
     uint32_t stream_id = (((uint32_t) (data)[0]) << 24) | (((uint32_t) (data)[1]) << 16) | (((uint32_t) (data)[2]) << 8) | ((uint32_t) (data)[3]);
@@ -158,7 +164,9 @@ static int allocate_move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer,
 
 static int reallocate_move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t data_length)
 {
-    assert(scratch_buffer->size != 0);
+    if (scratch_buffer->size == 0) {
+        return -1;
+    }
     size_t old_size = scratch_buffer->size;
     if (old_size + data_length > HTTP2_SCRATCH_BUFFER_MAX_SIZE) {
         return -1;
@@ -181,8 +189,6 @@ void reset_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer)
 
 int move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t data_length)
 {
-    assert(data_length > 0);
-
     if (scratch_buffer->size > 0) {
         return reallocate_move_to_scratch_buffer(scratch_buffer, data, data_length);
     } else {
@@ -192,14 +198,13 @@ int move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *
 
 static bool is_scratch_buffer_empty(qd_decoder_buffer_t *scratch_buffer)
 {
-    if(!scratch_buffer->bytes)
+    if (!scratch_buffer->bytes)
         return true;
     return false;
 }
 
 uintptr_t qd_http2_decoder_connection_get_context(const qd_http2_decoder_connection_t *conn_state)
 {
-    assert(conn_state);
     return conn_state->user_context;
 }
 
@@ -246,7 +251,10 @@ void qd_http2_decoder_connection_free(qd_http2_decoder_connection_t *conn_state)
  */
 static int decompress_headers(qd_http2_decoder_t *decoder, uint32_t stream_id, const uint8_t *data, size_t length)
 {
-    assert(length > 0);
+    if (length == 0) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] decompress_headers - passed in length = 0", decoder->conn_state->conn_id);
+        return -1;
+    }
     qd_http2_decoder_connection_t *conn_state = decoder->conn_state;
     if (conn_state->callbacks && conn_state->callbacks->on_begin_header) {
         conn_state->callbacks->on_begin_header(conn_state,
@@ -297,7 +305,6 @@ static int decompress_headers(qd_http2_decoder_t *decoder, uint32_t stream_id, c
  */
 static bool is_nth_bit_set(const uint8_t data, int bit)
 {
-    assert(bit < 8);
     return ((uint8_t)data) & (uint8_t)(1 << bit);
 }
 
@@ -312,7 +319,15 @@ static void get_header_flags(const uint8_t data, bool *end_stream, bool *end_hea
 bool get_request_headers(qd_http2_decoder_t *decoder)
 {
     qd_decoder_buffer_t *scratch_buffer = &decoder->scratch_buffer;
-    assert(scratch_buffer->size > 0);
+    if (scratch_buffer->size == 0) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - failure due to zero scratch buffer size, moving decoder state to HTTP2_DECODE_ERROR", decoder->conn_state->conn_id);
+        static char error[106];
+        snprintf(error, sizeof(error), "get_request_headers - failure due to zero scratch buffer size, moving decoder state to HTTP2_DECODE_ERROR");
+        reset_decoder_frame_info(decoder);
+        reset_scratch_buffer(&decoder->scratch_buffer);
+        parser_error(decoder, error);
+        return false;
+    }
     bool end_stream, end_headers, is_padded, has_priority;
     get_header_flags(scratch_buffer->bytes[0], &end_stream, &end_headers, &is_padded, &has_priority);
     decoder->frame_length_processed += 1;
@@ -321,15 +336,17 @@ bool get_request_headers(qd_http2_decoder_t *decoder)
     qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - end_stream=%i, end_headers=%i, is_padded=%i, has_priority=%i, stream_id=%" PRIu32, decoder->conn_state->conn_id, end_stream, end_headers, is_padded, has_priority, stream_id);
     scratch_buffer->offset += HTTP2_FRAME_STREAM_ID_LENGTH;
     decoder->frame_length_processed += HTTP2_FRAME_STREAM_ID_LENGTH;
-
-    if(is_padded) {
+    uint8_t pad_length = 0;
+    if (is_padded) {
+        pad_length = get_pad_length(scratch_buffer->bytes + scratch_buffer->offset);
         // Move one byte to account for pad length
         scratch_buffer->offset += 1;
         decoder->frame_length_processed += 1;
     }
 
-    if(has_priority) {
+    if (has_priority) {
         // Skip the Stream Dependency field if the priority flag is set
+        // Stream Dependency field is 4 octets.
         scratch_buffer->offset += 4;
         decoder->frame_length_processed += 4;
 
@@ -338,9 +355,31 @@ bool get_request_headers(qd_http2_decoder_t *decoder)
         decoder->frame_length_processed += 1;
     }
 
+    //
+    // Before the call to decompress_headers(), we need to make sure that there is some data left in the scratch buffer before we decompress it.
+    //
+    int buffer_data_size = scratch_buffer->size - scratch_buffer->offset;
+    int contains_pad_length = scratch_buffer->size - pad_length;
+    int pad_length_offset = scratch_buffer->size - pad_length - scratch_buffer->offset;
+    bool valid_pad_length = contains_pad_length > 0;
+    bool valid_buffer_data = buffer_data_size > 0;
+    bool valid_pad_length_offset = pad_length_offset > 0;
+    if (decoder->frame_payload_length == 0 || !valid_buffer_data || !valid_pad_length || !valid_pad_length_offset) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - failure, moving decoder state to HTTP2_DECODE_ERROR", decoder->conn_state->conn_id);
+        static char error[130];
+        snprintf(error, sizeof(error), "get_request_headers - either request or response header was received with zero payload or contains bogus data, stopping decoder");
+        reset_decoder_frame_info(decoder);
+        reset_scratch_buffer(&decoder->scratch_buffer);
+        parser_error(decoder, error);
+        return false;
+    }
+
+    // Take out the padding bytes from the end of the scratch buffer
+    scratch_buffer->size = scratch_buffer->size - pad_length;
+
     // We are now finally at a place which matters to us - The Header block fragment. We will look thru and decompress it so we can get the request/response headers.
     int rv = decompress_headers(decoder, stream_id, scratch_buffer->bytes + scratch_buffer->offset, scratch_buffer->size - scratch_buffer->offset);
-    if(rv < 0) {
+    if (rv < 0) {
         qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] get_request_headers - failure, moving decoder state to HTTP2_DECODE_ERROR", decoder->conn_state->conn_id);
         static char error[105];
         snprintf(error, sizeof(error), "get_request_headers - failure, moving decoder state to HTTP2_DECODE_ERROR nghttp2 error code=%i", rv);
@@ -364,7 +403,7 @@ static bool parse_request_header(qd_http2_decoder_t *decoder, const uint8_t **da
     if (*length == 0)
         return false;
     size_t bytes_to_copy = decoder->frame_length - decoder->frame_length_processed;
-    if(*length < bytes_to_copy) {
+    if (*length < bytes_to_copy) {
         int allocated = move_to_scratch_buffer(&decoder->scratch_buffer, *data, *length);
         if (allocated == -1) {
             parser_error(decoder, "scratch buffer size exceeded 65535 bytes, stopping decoder");
@@ -380,11 +419,12 @@ static bool parse_request_header(qd_http2_decoder_t *decoder, const uint8_t **da
             parser_error(decoder, "scratch buffer size exceeded 65535 bytes, stopping decoder");
             return false;
         }
-        decoder->frame_length_processed += bytes_to_copy;
         *data += bytes_to_copy;
         *length -= bytes_to_copy;
-        if(decoder->frame_length_processed == decoder->frame_length) {
-            get_request_headers(decoder);
+        if ((decoder->frame_length_processed + bytes_to_copy) == decoder->frame_length) {
+            bool header_success = get_request_headers(decoder);
+            if (!header_success)
+                return false;
         }
         if (*length > 0) {
             return true; // More bytes remain to be processed, continue processing.
@@ -429,7 +469,7 @@ static bool parse_frame_header(qd_http2_decoder_t *decoder, const uint8_t **data
         qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] parse_frame_header - bytes_remaining=%zu", decoder->conn_state->conn_id, bytes_remaining);
 
         if (*length >= bytes_remaining) {
-            if(bytes_remaining > 0) {
+            if (bytes_remaining > 0) {
                 int allocated = move_to_scratch_buffer(&decoder->scratch_buffer, *data, bytes_remaining);
                 if (allocated == -1) {
                     parser_error(decoder, "scratch buffer size exceeded 65535 bytes, stopping decoder");
@@ -493,7 +533,7 @@ static bool parse_frame_header(qd_http2_decoder_t *decoder, const uint8_t **data
 static bool parse_client_magic(qd_http2_decoder_t *decoder, bool from_client, const uint8_t **data, size_t *length)
 {
     if (from_client) {
-        if(is_scratch_buffer_empty(&decoder->scratch_buffer)) {
+        if (is_scratch_buffer_empty(&decoder->scratch_buffer)) {
             if (*length < HTTP2_CLIENT_PREFIX_LEN) {
                 // There is not enough length to check client magic.
                 // Copy the data into the scratch buffer and read it from there next time.
@@ -521,7 +561,7 @@ static bool parse_client_magic(qd_http2_decoder_t *decoder, bool from_client, co
         } else {
 
             // Append this data to the data in the scratch buffer
-            if(decoder->scratch_buffer.size + *length >= HTTP2_CLIENT_PREFIX_LEN) {
+            if (decoder->scratch_buffer.size + *length >= HTTP2_CLIENT_PREFIX_LEN) {
                 // There is already some data in the scratch buffer, there are enough bytes to compare the magic.
                 // Just move the required number of bytes into the scratch buffer
                 size_t num_bytes_to_consume = HTTP2_CLIENT_PREFIX_LEN - decoder->scratch_buffer.size;
