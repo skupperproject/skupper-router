@@ -1151,10 +1151,11 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
                      'allowed_mechs': "EXTERNAL",
                      'ssl_domain': ssl_domain}
         with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
-            AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
-                              source="test/addr",
-                              container_id="FooRx2",
-                              conn_args=conn_args)
+            atr = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
+                                    source="test/addr",
+                                    container_id="FooRx2",
+                                    conn_args=conn_args)
+            atr.stop()
         self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
 
         ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
@@ -1165,10 +1166,11 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
                      'allowed_mechs': "EXTERNAL",
                      'ssl_domain': ssl_domain}
         with self.assertRaises(AsyncTestReceiver.TestReceiverException) as exc:
-            AsyncTestReceiver(f"amqps://localhost:{self.listener2_port}",
-                              source="test/addr",
-                              container_id="FooRx3",
-                              conn_args=conn_args)
+            atr = AsyncTestReceiver(f"amqps://localhost:{self.listener2_port}",
+                                    source="test/addr",
+                                    container_id="FooRx3",
+                                    conn_args=conn_args)
+            atr.stop()
         self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
 
         #
