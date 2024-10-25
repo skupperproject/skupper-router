@@ -2039,7 +2039,7 @@ class Logger:
         if self.save_for_dump:
             self.logs.append((ts, msg))
         if self.print_to_console:
-            print("%s %s" % (ts, msg))
+            print(f"{ts} {self.title}: {msg}")
             sys.stdout.flush()
         if self.python_log_level is not None:
             logline = f"{ts} {self.title}: {msg}"
