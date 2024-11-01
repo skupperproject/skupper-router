@@ -62,19 +62,6 @@ typedef struct {
 } qd_field_location_t;
 
 
-struct qd_message_stream_data_t {
-    DEQ_LINKS(qd_message_stream_data_t);  // Linkage to form a DEQ
-    qd_message_pvt_t    *owning_message;  // Pointer to the owning message
-    qd_field_location_t  section;         // Section descriptor for the field
-    qd_field_location_t  payload;         // Descriptor for the payload of the body data
-    qd_buffer_t         *first_buffer;    // for freeing, may be before section buffer!
-    qd_buffer_t         *last_buffer;     // Pointer to the last buffer in the field
-};
-
-ALLOC_DECLARE(qd_message_stream_data_t);
-DEQ_DECLARE(qd_message_stream_data_t, qd_message_stream_data_list_t);
-
-
 typedef struct {
     qd_message_q2_unblocked_handler_t  handler;
     qd_alloc_safe_ptr_t                context;
@@ -175,11 +162,6 @@ struct qd_message_pvt_t {
     bool                           tag_sent;        // Tags are sent
     bool                           is_fanout;       // Message is an outgoing fanout
     bool                           uct_started;     // Cut-through has been started for this message
-
-    qd_message_stream_data_list_t  stream_data_list;// Stream data parse structure
-                                                    // TODO - move this to the content for one-time parsing (TLR)
-    unsigned char                 *body_cursor;     // Stream: tracks the point in the content buffer chain
-    qd_buffer_t                   *body_buffer;     // Stream: to parse the next body data section, if any
     sys_atomic_t                   send_complete;   // Message has been been completely sent
 };
 

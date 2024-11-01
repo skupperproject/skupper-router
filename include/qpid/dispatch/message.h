@@ -63,7 +63,6 @@ typedef struct qd_link_t      qd_link_t;
 // Callback for status change (confirmed persistent, loaded-in-memory, etc.)
 
 typedef struct qd_message_t             qd_message_t;
-typedef struct qd_message_stream_data_t qd_message_stream_data_t;
 
 /** Amount of message to be parsed.  */
 typedef enum {
@@ -386,130 +385,6 @@ void qd_message_compose_5(qd_message_t *msg, qd_composed_field_t *field1, qd_com
  * @return The number of buffers stored in the message's content
  */
 int qd_message_extend(qd_message_t *msg, qd_composed_field_t *field, bool *q2_blocked);
-
-
-/**
- * qd_message_stream_data_iterator
- *
- * Return an iterator that references the content (not the performative headers)
- * of the entire body-data section.
- *
- * The returned iterator must eventually be freed by the caller.
- *
- * @param stream_data Pointer to a stream_data object produced by qd_message_next_stream_data
- * @return Pointer to an iterator referencing the stream_data content
- */
-qd_iterator_t *qd_message_stream_data_iterator(const qd_message_stream_data_t *stream_data);
-
-
-/**
- * qd_message_stream_data_buffer_count
- *
- * Return the number of buffers that are needed to hold this body-data's content.
- *
- * @param stream_data Pointer to a stream_data object produced by qd_message_next_stream_data
- * @return Number of pn_raw_buffers needed to contain the entire content of this stream_data.
- */
-int qd_message_stream_data_buffer_count(const qd_message_stream_data_t *stream_data);
-
-
-/**
- * qd_message_stream_data_buffers
- *
- * Populate an array of pn_raw_buffer_t objects with references to the stream_data's content.
- *
- * @param stream_data Pointer to a stream_data object produced by qd_message_next_stream_data
- * @param buffers Pointer to an array of pn_raw_buffer_t objects
- * @param offset The offset (in the stream_data's buffer set) from which copying should begin
- * @param count The number of pn_raw_buffer_t objects in the buffers array
- * @return The number of pn_raw_buffer_t objects that were overwritten
- */
-int qd_message_stream_data_buffers(qd_message_stream_data_t *stream_data, pn_raw_buffer_t *buffers, int offset, int count);
-
-/**
- * qd_message_stream_data_payload_length
- *
- * Given a stream_data object, return the length of the payload.
- * This will equal the sum of the length of all qd_buffer_t objects contained in payload portion of the stream_data object
- *
- * @param stream_data Pointer to a stream_data object produced by qd_message_next_stream_data
- * @return The length of the payload of the passed in body data object.
- */
-size_t qd_message_stream_data_payload_length(const qd_message_stream_data_t *stream_data);
-
-
-/**
- * qd_message_stream_data_release
- *
- * Release buffers that were associated with a body-data section.  It is not required that body-data
- * objects be released in the same order in which they were offered.
- *
- * Once this function is called, the caller must drop its reference to the stream_data object
- * and not use it again.
- *
- * @param stream_data Pointer to a body data object returned by qd_message_next_stream_data
- */
-void qd_message_stream_data_release(qd_message_stream_data_t *stream_data);
-
-
-/**
- * qd_message_stream_data_release_up_to
- *
- * Release this stream data and all the previous ones also.
- *
- * @param stream_data Pointer to a body data object returned by qd_message_next_stream_data
- */
-void qd_message_stream_data_release_up_to(qd_message_stream_data_t *stream_data);
-
-
-typedef enum {
-    QD_MESSAGE_STREAM_DATA_BODY_OK,      // A valid body data object has been returned
-    QD_MESSAGE_STREAM_DATA_FOOTER_OK,    // A valid footer has been returned
-    QD_MESSAGE_STREAM_DATA_INCOMPLETE,   // The next body data is incomplete, try again later
-    QD_MESSAGE_STREAM_DATA_NO_MORE,      // There are no more body data objects in this stream
-    QD_MESSAGE_STREAM_DATA_INVALID,      // The next body data is invalid, the stream is corrupted
-    QD_MESSAGE_STREAM_DATA_ABORTED       // sender has terminated the transfer, message is incomplete
-} qd_message_stream_data_result_t;
-
-
-/**
- * qd_message_next_stream_data
- *
- * Get the next body-data section from this streaming message return the result and
- * possibly the valid, completed stream_data object.
- *
- * @param msg Pointer to a message
- * @param stream_data Output pointer to a stream_data object (or 0 if not OK)
- * @return The stream_data_result describing the result of this operation
- */
-qd_message_stream_data_result_t qd_message_next_stream_data(qd_message_t *msg, qd_message_stream_data_t **stream_data);
-
-
-/**
- * qd_message_stream_data_footer_append
- *
- * Constructs a footer field by calling the qd_compose(QD_PERFORMATIVE_FOOTER, field);
- * It then inserts the passed in buffer list to the composed field and proceeds to disable q2 before finally adding the footer
- * field to the message.
- *
- * Use this function if you have the complete footer data available in the passed in buffer list
- */
-int qd_message_stream_data_footer_append(qd_message_t *message, qd_buffer_list_t *footer_props);
-
-
-/**
- * qd_message_stream_data_append
- *
- * Append the buffers in data as a sequence of one or more BODY_DATA sections
- * to the given message.  The buffers in data are moved into the message
- * content by this function.
- *
- * @param msg Pointer to message under construction
- * @param data List of buffers containing body data.
- * @param qd_blocked Set to true if this call caused Q2 to block
- * @return The number of buffers stored in the message's content
- */
-int qd_message_stream_data_append(qd_message_t *msg, qd_buffer_list_t *data, bool *q2_blocked);
 
 
 /** Put string representation of a message suitable for logging in buffer. Note that log message text is limited to
