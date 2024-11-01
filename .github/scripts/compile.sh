@@ -137,7 +137,7 @@ do_patch "patches/proton" "${PROTON_DIR}"
 
 # This is required to install the python packages that the system tests use.
 python3 -m pip install --upgrade -r "${SKUPPER_DIR}"/requirements-dev.txt
-python3 -m pip install --upgrade -r "${PROTON_DIR}"/python/ci_requirements.txt
+#python3 -m pip install --upgrade -r "${PROTON_DIR}"/python/ci_requirements.txt
 
 cmake -S "${PROTON_DIR}" -B "${PROTON_BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
