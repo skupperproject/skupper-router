@@ -341,6 +341,8 @@ void qdr_core_close_connection(qdr_connection_t *conn)
 
 int qdr_connection_process(qdr_connection_t *conn)
 {
+    if (!conn)
+        return 0;
     qdr_connection_work_list_t  work_list;
     qdr_link_ref_list_t         links_with_work[QDR_N_PRIORITIES];
     qdr_core_t                 *core = conn->core;
