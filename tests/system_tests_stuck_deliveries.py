@@ -21,7 +21,7 @@ from proton import Message
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
-from system_test import unittest
+from system_test import unittest, Logger
 from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, MgmtMsgProxy, TestTimeout, PollTimeout
 
 
@@ -76,7 +76,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[0].addresses[0],
                                      self.routers[0].addresses[0],
                                      self.routers[0].addresses[0],
-                                     'dest.01', 10, [2], False)
+                                     'dest.01', 10, [2], False,
+                                     test_name="test_01_delayed_settlement_same_interior",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -84,7 +86,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[2].addresses[0],
-                                     'dest.02', 10, [2, 3, 8], False)
+                                     'dest.02', 10, [2, 3, 8], False,
+                                     test_name="test_02_delayed_settlement_different_edges_check_sender",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -92,7 +96,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[5].addresses[0],
-                                     'dest.03', 10, [2, 4, 9], False)
+                                     'dest.03', 10, [2, 4, 9], False,
+                                     test_name="test_03_delayed_settlement_different_edges_check_receiver",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -100,7 +106,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[0].addresses[0],
-                                     'dest.04', 10, [0, 2, 3, 8], False)
+                                     'dest.04', 10, [0, 2, 3, 8], False,
+                                     test_name="test_04_delayed_settlement_different_edges_check_interior",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -108,7 +116,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[0].addresses[0],
                                      self.routers[0].addresses[0],
                                      self.routers[0].addresses[0],
-                                     'dest.05', 10, [0, 2, 4, 9], True)
+                                     'dest.05', 10, [0, 2, 4, 9], True,
+                                     test_name="test_05_no_settlement_same_interior",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -116,7 +126,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[2].addresses[0],
-                                     'dest.06', 10, [9], True)
+                                     'dest.06', 10, [9], True,
+                                     test_name="test_06_no_settlement_different_edges_check_sender",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -124,7 +136,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[5].addresses[0],
-                                     'dest.07', 10, [0, 9], True)
+                                     'dest.07', 10, [0, 9], True,
+                                     test_name="test_07_no_settlement_different_edges_check_receiver",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -132,7 +146,9 @@ class RouterTest(TestCase):
         test = DelayedSettlementTest(self.routers[2].addresses[0],
                                      self.routers[5].addresses[0],
                                      self.routers[0].addresses[0],
-                                     'dest.08', 10, [1, 2, 3, 4, 5, 6, 7, 8], True)
+                                     'dest.08', 10, [1, 2, 3, 4, 5, 6, 7, 8], True,
+                                     test_name="test_08_no_settlement_different_edges_check_interior",
+                                     print_debug=True)
         test.run()
         self.assertIsNone(test.error)
 
@@ -148,7 +164,8 @@ class RouterTest(TestCase):
 
 
 class DelayedSettlementTest(MessagingHandler):
-    def __init__(self, sender_host, receiver_host, query_host, addr, dlv_count, stuck_list, close_link):
+    def __init__(self, sender_host, receiver_host, query_host, addr, dlv_count, stuck_list, close_link, test_name,
+                 print_debug=False):
         super(DelayedSettlementTest, self).__init__(auto_accept=False)
         self.sender_host   = sender_host
         self.receiver_host = receiver_host
@@ -159,25 +176,35 @@ class DelayedSettlementTest(MessagingHandler):
         self.close_link    = close_link
         self.stuck_dlvs    = []
 
-        self.sender_conn    = None
-        self.receiver_conn  = None
-        self.query_conn     = None
-        self.error          = None
-        self.n_tx           = 0
-        self.n_rx           = 0
-        self.expected_stuck = 0
-        self.last_stuck     = 0
+        self.sender_conn      = None
+        self.receiver_conn    = None
+        self.query_conn       = None
+        self.error            = None
+        self.timer            = None
+        self.poll_timer       = None
+        self.receiver         = None
+        self.reply_receiver   = None
+        self.proxy            = None
+        self.query_sender     = None
+        self.reply_addr       = None
+        self.sender           = None
+        self.link_closed      = False
+        self.n_tx             = 0
+        self.n_rx             = 0
+        self.expected_stuck   = 0
+        self.deliveries_stuck = 0
+        self.logger           =  Logger(title=test_name, print_to_console=print_debug)
 
     def timeout(self):
-        self.error = "Timeout Expired - n_tx=%d, n_rx=%d, expected_stuck=%d last_stuck=%d" %\
-            (self.n_tx, self.n_rx, self.expected_stuck, self.last_stuck)
+        self.error = "Timeout Expired - n_tx=%d, n_rx=%d, expected_stuck=%d deliveries_stuck=%d" %\
+            (self.n_tx, self.n_rx, self.expected_stuck, self.deliveries_stuck)
         self.sender_conn.close()
         self.receiver_conn.close()
         self.query_conn.close()
         if self.poll_timer:
             self.poll_timer.cancel()
 
-    def fail(self, error):
+    def stop_test(self, error):
         self.error = error
         self.sender_conn.close()
         self.receiver_conn.close()
@@ -188,13 +215,11 @@ class DelayedSettlementTest(MessagingHandler):
 
     def on_start(self, event):
         self.timer          = event.reactor.schedule(TIMEOUT, TestTimeout(self))
-        self.poll_timer     = None
-        self.receiver_conn  = event.container.connect(self.receiver_host)
         self.query_conn     = event.container.connect(self.query_host)
-        self.receiver       = event.container.create_receiver(self.receiver_conn, self.addr)
+        self.query_sender = event.container.create_sender(self.query_conn, "$management")
         self.reply_receiver = event.container.create_receiver(self.query_conn, None, dynamic=True)
-        self.query_sender   = event.container.create_sender(self.query_conn, "$management")
-        self.proxy          = None
+        self.receiver_conn  = event.container.connect(self.receiver_host)
+        self.receiver       = event.container.create_receiver(self.receiver_conn, self.addr)
 
     def on_link_opened(self, event):
         if event.receiver == self.reply_receiver:
@@ -209,8 +234,7 @@ class DelayedSettlementTest(MessagingHandler):
             # is caused due to the first test failure, so this fix will
             # fix the second failure
             self.sender_conn = event.container.connect(self.sender_host)
-            self.sender = event.container.create_sender(self.sender_conn,
-                                                        self.addr)
+            self.sender = event.container.create_sender(self.sender_conn, self.addr)
 
     def on_sendable(self, event):
         if event.sender == self.sender:
@@ -230,19 +254,30 @@ class DelayedSettlementTest(MessagingHandler):
         elif event.receiver == self.reply_receiver:
             response = self.proxy.response(event.message)
             self.accept(event.delivery)
-            self.last_stuck = response.results[0].deliveriesStuck
-            if self.last_stuck == self.expected_stuck:
-                if self.close_link:
-                    self.receiver.close()
-                else:
-                    for dlv in self.stuck_dlvs:
-                        self.accept(dlv)
-                    self.stuck_dlvs = []
+            self.deliveries_stuck = response.results[0].deliveriesStuck
+            if self.deliveries_stuck == self.expected_stuck:
+                self.logger.log(
+                    f"self.deliveries_stuck={self.deliveries_stuck}, self.expected_stuck={self.expected_stuck}")
+                # The deliveries stuck queried via management equals what we expected.
+                # The test has passed.
+                if self.expected_stuck != 0:
+                    if self.close_link:
+                        self.receiver.close()
+                    else:
+                        for dlv in self.stuck_dlvs:
+                            self.accept(dlv)
+                # Once the deliveries have been accepted, we want to make sure that the number of stuck deliveries
+                # is back down to zero before we quit this test, so the next test can start
                 if self.expected_stuck > 0:
+                    self.logger.log(f"self.expected_stuck={self.expected_stuck}")
                     self.query_stats(0)
                 else:
-                    self.fail(None)
+                    self.logger.log(f"self.expected_stuck={self.expected_stuck}, stopping test")
+                    self.stop_test(None)
             else:
+                # The deliveries stuck queried via management is not what we expected.
+                # We will keep querying until TIMEOUT seconds to see if our condition comes True.
+                self.logger.log(f"self.deliveries_stuck={self.deliveries_stuck}, self.expected_stuck={self.expected_stuck}, starting poll timer")
                 self.poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
 
     def query_stats(self, expected_stuck):
