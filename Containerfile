@@ -60,7 +60,7 @@ RUN microdnf -y upgrade --refresh --best --nodocs --noplugins --setopt=install_w
 
 RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
-    cyrus-sasl-lib cyrus-sasl-plain cyrus-sasl-gssapi openssl \
+    cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
     gettext hostname iputils \
