@@ -56,7 +56,6 @@ Requires: skupper-router-common == %{version}
 Requires: libwebsockets >= %{libwebsockets_minimum_version}
 Requires: libnghttp2 >= %{libnghttp2_minimum_version}
 Requires: cyrus-sasl-plain
-Requires: cyrus-sasl-gssapi
 Requires: libunwind >= %{libunwind_minimum_version}
 
 BuildRequires: gcc
@@ -169,7 +168,6 @@ Requires: python3
 Requires: python3-qpid-proton >= %{proton_minimum_version}
 Requires: skupper-router-common == %{version}
 Requires: cyrus-sasl-plain
-Requires: cyrus-sasl-gssapi
 
 %description tools
 %{summary}.
