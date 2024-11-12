@@ -112,9 +112,13 @@ void qd_session_incref(qd_session_t *qd_ssn);
 void qd_session_decref(qd_session_t *qd_ssn);
 bool qd_session_is_q3_blocked(const qd_session_t *qd_ssn);
 qd_link_list_t *qd_session_q3_blocked_links(qd_session_t *qd_ssn);
-void qd_session_set_max_in_window(qd_session_t *qd_ssn, uint32_t in_window);
+size_t qd_session_get_outgoing_capacity_low_threshold(const qd_session_t *qd_ssn);
 
 void qd_connection_release_sessions(qd_connection_t *qd_conn);
+
+// Defaults for session incoming window size
+extern const size_t qd_session_incoming_window_normal;
+extern const size_t qd_session_incoming_window_router;
 
 ///@}
 #endif

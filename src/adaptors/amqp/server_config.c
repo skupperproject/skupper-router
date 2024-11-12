@@ -20,7 +20,7 @@
 /*
  * Configuration record for listener and connector entities
  */
-
+#include "container.h"
 #include "server_config.h"
 #include "dispatch_private.h"
 #include "entity.h"
@@ -219,9 +219,9 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     if (value == 0) {
         // Use a sane default. Allow router to router links more capacity than AMQP application links
         if (strcmp(config->role, "normal") == 0) {
-            value = qd_session_max_in_win_user / config->max_frame_size;
+            value = qd_session_incoming_window_normal / config->max_frame_size;
         } else {
-            value = qd_session_max_in_win_trunk / config->max_frame_size;
+            value = qd_session_incoming_window_router / config->max_frame_size;
         }
         // Ensure the window is at least 2 frames to allow a non-zero low water mark
         value = MAX(value, 2);

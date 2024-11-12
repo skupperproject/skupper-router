@@ -36,11 +36,6 @@ typedef struct qd_connection_t qd_connection_t;
 typedef struct qd_link_t       qd_link_t;
 typedef struct qd_session_t    qd_session_t;
 
-// Session windowing limits
-extern const size_t qd_session_max_in_win_user;   // incoming window byte limit for user connections
-extern const size_t qd_session_max_in_win_trunk;  // incoming window byte limit for inter-router connections
-extern const size_t qd_session_max_outgoing_bytes;  // limit to outgoing buffered data
-extern const size_t qd_session_low_outgoing_bytes;  // low water mark to resume buffering outgoing data
 
 // For use by message.c
 
