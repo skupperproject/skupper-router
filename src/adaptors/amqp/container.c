@@ -137,8 +137,11 @@ struct qd_container_t {
 
 qd_session_t *qd_session(pn_session_t *pn_ssn);
 static void qd_session_configure_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
-static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
 
+#if USE_PN_SESSION_WINDOWS
+// Access to the remote incoming window was added to Proton post-0.39.0
+static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
+#endif
 
 static inline qd_session_t *qd_session_from_pn(pn_session_t *pn_ssn)
 {
@@ -1074,30 +1077,33 @@ static void qd_session_configure_incoming_window(qd_session_t *qd_ssn, uint32_t 
 #endif
 }
 
+
 /** Set the session incoming window that was advertised by the remote
  *
- * This is the value for the remotes incoming session window. It arrives in the Begin Performative and may be updated by
- * arriving Flow Performatives.
+ * This is the value for the remotes incoming session window. It arrives in the Begin Performative.
  *
  * @param qd_ssn Session to update
  * @param in_window the incoming window as given by the remote.
  */
+#if USE_PN_SESSION_WINDOWS
 static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window)
 {
-    assert(in_window != 0);
+    // The true window size is given in the Begin Performative. Once frames are transferred the value of the remote
+    // incoming window read from Proton can be less than the full size due to the window being in use. The assert is an
+    // attempt to prevent accidentally calling this function after frame transfer starts:
+    assert(in_window != 0 && in_window >= qd_ssn->remote_max_incoming_window);
 
-    // Record the largest window advertised by the remote.
-    if (in_window > qd_ssn->remote_max_incoming_window) {
-        qd_ssn->remote_max_incoming_window = in_window;
-        // if the remotes max window is smaller than the default outgoing bytes limit then adjust the limits down
-        // otherwise we may never resume sending on blocked links (stall) since the low limit will never be exceeded.
-        size_t window_bytes = in_window * qd_ssn->remote_max_frame;
-        if (window_bytes < qd_ssn->outgoing_bytes_high_threshold) {
-            qd_ssn->outgoing_bytes_high_threshold = window_bytes;
-            qd_ssn->outgoing_bytes_low_threshold = window_bytes / 2;
-        }
+    qd_ssn->remote_max_incoming_window = in_window;
+
+    // if the remotes max window is smaller than the default outgoing bytes limit then adjust the limits down
+    // otherwise we may never resume sending on blocked links (stall) since the low limit will never be exceeded.
+    size_t window_bytes = in_window * qd_ssn->remote_max_frame;
+    if (window_bytes < qd_ssn->outgoing_bytes_high_threshold) {
+        qd_ssn->outgoing_bytes_high_threshold = window_bytes;
+        qd_ssn->outgoing_bytes_low_threshold = window_bytes / 2;
     }
 }
+#endif
 
 
 /** Release all of the connections sessions
