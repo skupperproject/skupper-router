@@ -76,6 +76,8 @@ struct qd_http2_stream_info_t {
     qd_http2_decoder_connection_t *conn_state;             // Reference to the stream's connection state information
     vflow_record_t                *vflow;                  // stream level vanflow. this is a vanflow per request
     uint32_t                       stream_id;              // stream_id of the stream.
+    uint64_t                       bytes_in;
+    uint64_t                       bytes_out;
 
 };
 

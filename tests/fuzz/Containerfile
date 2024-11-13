@@ -48,8 +48,8 @@ RUN echo cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=
 RUN mkdir build
 WORKDIR /src/skupper-router/build
 RUN FUZZING_LANGUAGE='' FUZZING_ENGINE=afl /usr/local/bin/compile
-WORKDIR /src/skupper-router/build/tests/fuzz
-RUN make
+WORKDIR /src/skupper-router/build/
+RUN make install
 
 # Run one of the following commands to run the http1 or http2 fuzzer.
 # Starts the AFL fuzzer that runs in an infinite loop. Let it run for about 30 minutes and press Ctrl + C to kill it.
