@@ -539,19 +539,17 @@ class VFlowInterRouterTest(TestCase):
         expected = {'EdgeB': []}
 
         for i in range(flow_count):
-            clients.append(EchoClientRunner(test_name, 2, None, None, None, i + 5, 1, port_override=self.tcp_noproc_port_eb, delay_close=False))
+            # In this case, the echo clients are not going to send any messages.
+            # The echo clients will simply connect to the router and disconnect immediately.
+            # The router will always accept the connection from the echo clients since there is a
+            # tcpConnector on the other side. The router will terminate the echo client connection
+            # immediately after accepting the connection since there is no echo server on the other side.
+            # The echo clients will terminate (delay_close=False) soon after the router disconnects the connection
+            clients.append(EchoClientRunner(test_name, 2, None, None, None, 0, 0, port_override=self.tcp_noproc_port_eb, delay_close=False))
             expected['EdgeB'].append(('BIFLOW_TPORT', {'END_TIME' : ANY_VALUE, 'SOURCE_HOST' : ANY_VALUE, 'SOURCE_PORT' : ANY_VALUE, 'CONNECTOR' : ANY_VALUE, 'ERROR_CONNECTOR_SIDE' : ANY_VALUE}))
 
         success = retry(lambda: self.snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {self.snooper_thread.get_results()}")
-
-        # there is no service present and the connector-side connection attempt
-        # will fail. This will cause the clients to fail since data cannot be
-        # transferred successfully. Ignore these errors:
-
-        for i in range(flow_count):
-            with self.assertRaises(Exception):
-                clients[i].wait()
 
     @classmethod
     def tearDownClass(cls):
