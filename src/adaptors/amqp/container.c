@@ -1097,7 +1097,7 @@ static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t
 
     // if the remotes max window is smaller than the default outgoing bytes limit then adjust the limits down
     // otherwise we may never resume sending on blocked links (stall) since the low limit will never be exceeded.
-    size_t window_bytes = in_window * qd_ssn->remote_max_frame;
+    size_t window_bytes = (size_t) in_window * qd_ssn->remote_max_frame;
     if (window_bytes < qd_ssn->outgoing_bytes_high_threshold) {
         qd_ssn->outgoing_bytes_high_threshold = window_bytes;
         qd_ssn->outgoing_bytes_low_threshold = window_bytes / 2;
