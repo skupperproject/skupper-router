@@ -1976,30 +1976,35 @@ uint32_t _compose_router_annotations(qd_message_pvt_t *msg, unsigned int ra_flag
 }
 
 
-static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_content_t *content, pn_link_t *pnl, pn_session_t *pns, bool *q3_stalled)
+static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_content_t *content, qd_link_t *link, bool *session_stalled)
 {
-    const size_t q3_upper = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
-    bool notify_consumed  = false;
+    pn_link_t *pnl             = qd_link_pn(link);
+    size_t     session_limit   = qd_session_get_outgoing_capacity(qd_link_get_session(link));
+    bool       notify_consumed = false;
 
-    *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
-    while (!*q3_stalled && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0) {
+    *session_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && session_limit == 0;
+    while (!*session_stalled && (sys_atomic_get(&content->uct_consume_slot) - sys_atomic_get(&content->uct_produce_slot)) % UCT_SLOT_COUNT != 0) {
         uint32_t use_slot = sys_atomic_get(&content->uct_consume_slot);
 
         qd_buffer_t *buf = DEQ_HEAD(content->uct_slots[use_slot]);
-        while (!!buf) {
+        while (!!buf && session_limit > 0) {
             DEQ_REMOVE_HEAD(content->uct_slots[use_slot]);
             if (!IS_ATOMIC_FLAG_SET(&content->aborted)) {
                 ssize_t sent = pn_link_send(pnl, (char*) qd_buffer_base(buf), qd_buffer_size(buf));
                 (void) sent;
                 assert(sent == qd_buffer_size(buf));
+                // (probably) ok to overflow the session limit a bit
+                session_limit = (sent >= session_limit) ? 0 : session_limit - sent;
             }
             qd_buffer_free(buf);
             buf = DEQ_HEAD(content->uct_slots[use_slot]);
         }
 
-        sys_atomic_set(&content->uct_consume_slot, (use_slot + 1) % UCT_SLOT_COUNT);
-        notify_consumed = true;
-        *q3_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && (pn_session_outgoing_bytes(pns) >= q3_upper);
+        if (DEQ_IS_EMPTY(content->uct_slots[use_slot])) {
+            sys_atomic_set(&content->uct_consume_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+            notify_consumed = true;
+        }
+        *session_stalled = !IS_ATOMIC_FLAG_SET(&content->aborted) && session_limit == 0;
     }
 
     if ((IS_ATOMIC_FLAG_SET(&content->aborted) || IS_ATOMIC_FLAG_SET(&content->receive_complete))
@@ -2021,21 +2026,22 @@ static void qd_message_send_cut_through(qd_message_pvt_t *msg, qd_message_conten
 ssize_t qd_message_send(qd_message_t *in_msg,
                         qd_link_t    *link,
                         unsigned int  ra_flags,
-                        bool         *q3_stalled)
+                        bool         *session_stalled)
 {
     qd_message_pvt_t     *msg     = (qd_message_pvt_t*) in_msg;
     qd_message_content_t *content = msg->content;
     pn_link_t            *pnl     = qd_link_pn(link);
-    pn_session_t         *pns     = pn_link_session(pnl);
     ssize_t bytes_sent = 0;
 
-    *q3_stalled = false;
+    CHECK_PROACTOR_CONNECTION(pn_session_connection(pn_link_session(pnl)));
+
+    *session_stalled = false;
 
     if (msg->uct_started) {
         //
         // Perform the cut-through transfer from the message content to the outbound link
         //
-        qd_message_send_cut_through(msg, content, pnl, pns, q3_stalled);
+        qd_message_send_cut_through(msg, content, link, session_stalled);
         return 0;
     }
 
@@ -2091,14 +2097,12 @@ ssize_t qd_message_send(qd_message_t *in_msg,
 
     qd_buffer_t *buf = msg->cursor.buffer;
 
-    qd_message_q2_unblocker_t  q2_unblock = {0};
-    const size_t               q3_upper   = QD_BUFFER_SIZE * QD_QLIMIT_Q3_UPPER;
-
-    CHECK_PROACTOR_CONNECTION(pn_session_connection(pns));
+    qd_message_q2_unblocker_t q2_unblock = {0};
+    size_t session_limit = qd_session_get_outgoing_capacity(qd_link_get_session(link));
 
     while (!IS_ATOMIC_FLAG_SET(&content->aborted)
            && buf
-           && pn_session_outgoing_bytes(pns) < q3_upper) {
+           && session_limit > 0) {
 
         // This will send the remaining data in the buffer if any. There may be
         // zero bytes left to send if we stopped here last time and there was
@@ -2106,6 +2110,7 @@ ssize_t qd_message_send(qd_message_t *in_msg,
         //
         size_t buf_size = qd_buffer_size(buf);
         int num_bytes_to_send = buf_size - (msg->cursor.cursor - qd_buffer_base(buf));
+        num_bytes_to_send = MIN(num_bytes_to_send, session_limit);
         if (num_bytes_to_send > 0) {
             bytes_sent = pn_link_send(pnl, (const char*)msg->cursor.cursor, num_bytes_to_send);
         }
@@ -2129,8 +2134,9 @@ ssize_t qd_message_send(qd_message_t *in_msg,
         } else {
 
             msg->cursor.cursor += bytes_sent;
+            session_limit -= bytes_sent;
 
-            if (bytes_sent == num_bytes_to_send) {
+            if (msg->cursor.cursor == qd_buffer_cursor(buf)) {
                 //
                 // sent the whole buffer.
                 // Can we move to the next buffer?  Only if there is a next buffer
@@ -2210,9 +2216,9 @@ ssize_t qd_message_send(qd_message_t *in_msg,
         && (!msg->cursor.buffer || ((msg->cursor.cursor - qd_buffer_base(msg->cursor.buffer) == qd_buffer_size(msg->cursor.buffer))
                                    && !DEQ_NEXT(msg->cursor.buffer)))) {
         msg->uct_started = true;
-        qd_message_send_cut_through(msg, content, pnl, pns, q3_stalled);
+        qd_message_send_cut_through(msg, content, link, session_stalled);
     } else {
-        *q3_stalled = (pn_session_outgoing_bytes(pns) >= q3_upper);
+        *session_stalled = session_limit == 0;
     }
 
     return bytes_sent;

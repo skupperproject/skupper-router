@@ -652,17 +652,23 @@ bool qd_policy_approve_amqp_session(pn_session_t *ssn, qd_connection_t *qd_conn)
 
 //
 //
-void qd_policy_apply_session_settings(pn_session_t *ssn, qd_connection_t *qd_conn)
+void qd_policy_get_session_settings(qd_connection_t *qd_conn, uint32_t *in_window)
 {
-    size_t capacity;
-    if (qd_conn->policy_settings && qd_conn->policy_settings->spec.maxSessionWindow
-        && !qd_conn->policy_settings->spec.outgoingConnection) {
-        capacity = qd_conn->policy_settings->spec.maxSessionWindow;
-    } else {
-        const qd_server_config_t * cf = qd_connection_config(qd_conn);
-        capacity = cf->incoming_capacity;
+    const qd_server_config_t *cf = qd_connection_config(qd_conn);
+
+    // Assume defaults will be used
+    *in_window = cf->session_max_in_window;
+
+    if (qd_conn->policy_settings) {
+        const qd_policy_spec_t *spec = &qd_conn->policy_settings->spec;
+        if (!spec->outgoingConnection && spec->maxSessionWindow) {
+            // Policy configures the window *in bytes* but Proton uses *frames*.  Convert to frames
+            uint32_t max_frame = spec->maxFrameSize ? spec->maxFrameSize : cf->max_frame_size;
+            *in_window = spec->maxSessionWindow / max_frame;
+            if (*in_window < 2)
+                *in_window = 2;
+        }
     }
-    pn_session_set_incoming_capacity(ssn, capacity);
 }
 
 //

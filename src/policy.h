@@ -143,12 +143,12 @@ bool qd_policy_lookup_vhost_alias(
 bool qd_policy_approve_amqp_session(pn_session_t *ssn, qd_connection_t *qd_conn);
 
 
-/** Apply policy or default settings for a new session.
+/** Retrieve policy or default settings for a new session on the given connection
  *
- * @param[in] ssn proton session being set
  * @param[in] qd_conn dispatch connection with policy settings and counts
+ * @param[out] in_window set the the allowable maximum incoming session window (in frames)
  **/
-void qd_policy_apply_session_settings(pn_session_t *ssn, qd_connection_t *qd_conn);
+void qd_policy_get_session_settings(qd_connection_t *qd_conn, uint32_t *in_window);
 
 
 /** Approve a new sender link based on connection's policy.

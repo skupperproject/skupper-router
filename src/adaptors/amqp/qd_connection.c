@@ -700,8 +700,12 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
     // Common transport configuration.
     //
     pn_transport_set_max_frame(tport, config->max_frame_size);
-    pn_transport_set_channel_max(tport, config->max_sessions - 1);
     pn_transport_set_idle_timeout(tport, config->idle_timeout_seconds * 1000);
+    // pn_transport_set_channel_max sets the maximum session *identifier*, not the total number of sessions. Thus Proton
+    // will allow sessions with identifiers [0..max_sessions], which is one greater than the value we pass to
+    // pn_transport_set_channel_max. So to limit the maximum number of simultaineous sessions to config->max_sessions we
+    // have to decrement it by one for Proton.
+    pn_transport_set_channel_max(tport, config->max_sessions - 1);
 }
 
 void qd_container_handle_event(qd_container_t *container, pn_event_t *event, pn_connection_t *pn_conn, qd_connection_t *qd_conn);

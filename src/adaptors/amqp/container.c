@@ -70,14 +70,44 @@ struct qd_session_t {
     pn_session_t   *pn_session;
     qd_link_list_t  q3_blocked_links;  ///< Q3 blocked if !empty
 
-    // For outgoing session flow control. Never buffer more than out_window_limit bytes of data on the session before
-    // returning control to the proactor. This prevents memory bloat and allows proactor to send buffered data in a
-    // timely manner. The low watermark is used to unblock the session - do not resume writing to the session until the
-    // amount of available capacity has grown to at least the low watermark.
+    // remotes maximum incoming frame size in bytes (see AMQP 1.0 Open Performative)
+    uint32_t remote_max_frame;
 
-    size_t  out_window_limit;
-    size_t  out_window_low_watermark;
+    // remotes incoming window size in frames (see AMQP 1.0 Begin Performative)
+    uint32_t remote_max_incoming_window;
+
+    // Session outgoing flow control: Stop writing outgoing data (calling pn_link_send()) to the session when the total
+    // number of buffered bytes has exceeded the high threshold (see Proton pn_session_outgoing_bytes()). Resume writing
+    // data when the session has sent enough data to reduce the number of buffered output bytes to below the low
+    // threshold. This prevents the router from buffering too much output data before allowing Proton to write it out.
+    // See qd_session_get_outgoing_capacity() for details.
+    size_t outgoing_bytes_high_threshold;
+    size_t outgoing_bytes_low_threshold;
 };
+
+
+// Session window limits (See Section 2.5.6 Session Flow Control in AMQP V1.0 Specification)
+//
+// A session incoming window determines how many incoming frames the session will accept across all incoming links. This
+// places a limit on the number of incoming data bytes that have to be buffered on the session (connection max-frame *
+// max incoming window frames). The local session incoming window configuration is determined by the maxFrameSize and
+// maxSessionFrames configuration attributes of an AMQP listener/connector.
+//
+// The remote peers session window must be honored when writing output to a sending link: we must not send more data
+// than the window allows
+//
+// Default window settings (in bytes not frames). Give inter-router connections a larger window for better performance.
+const size_t qd_session_incoming_window_normal  = (size_t) 8388608;    // window for role=normal connections (8MB)
+const size_t qd_session_incoming_window_router  = (size_t) 134217728;  // window for inter-router connections (128MB)
+
+
+// Can we leverage the new Proton Session Window API?
+//
+#if (PN_VERSION_MAJOR > 0) || (PN_VERSION_MINOR > 39)
+#define USE_PN_SESSION_WINDOWS 1
+#else
+#define USE_PN_SESSION_WINDOWS 0
+#endif
 
 // Bug workaround to free Proton links when we hope they are no longer used!
 // Fingers crossed! :|
@@ -106,6 +136,12 @@ struct qd_container_t {
 };
 
 qd_session_t *qd_session(pn_session_t *pn_ssn);
+static void qd_session_configure_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
+
+#if USE_PN_SESSION_WINDOWS
+// Access to the remote incoming window was added to Proton post-0.39.0
+static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
+#endif
 
 static inline qd_session_t *qd_session_from_pn(pn_session_t *pn_ssn)
 {
@@ -439,9 +475,18 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                     qd_conn->n_sessions++;
                 }
                 DEQ_INSERT_TAIL(qd_conn->child_sessions, qd_ssn);
-                qd_policy_apply_session_settings(qd_ssn->pn_session, qd_conn);
+                uint32_t in_window;
+                qd_policy_get_session_settings(qd_conn, &in_window);
+                qd_session_configure_incoming_window(qd_ssn, in_window);
                 pn_session_open(qd_ssn->pn_session);
             }
+#if USE_PN_SESSION_WINDOWS
+            // Remote has opened, now the remote incoming window is available
+            qd_session_t *qd_ssn = qd_session_from_pn(ssn);
+            assert(qd_ssn);
+            qd_session_set_remote_incoming_window(qd_ssn,
+                                                  pn_session_remote_incoming_window(ssn));
+#endif
         }
         break;
 
@@ -700,7 +745,7 @@ qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char* name, 
         DEQ_INSERT_TAIL(conn->child_sessions, qd_ssn);
         conn->qd_sessions[ssn_class] = qd_ssn;
         qd_session_incref(qd_ssn);
-        pn_session_set_incoming_capacity(qd_ssn->pn_session, cf->incoming_capacity);
+        qd_session_configure_incoming_window(qd_ssn, cf->session_max_in_window);
         pn_session_open(qd_ssn->pn_session);
     }
 
@@ -897,6 +942,9 @@ void qd_link_set_link_id(qd_link_t *link, uint64_t link_id)
 qd_session_t *qd_session(pn_session_t *pn_ssn)
 {
     assert(pn_ssn && qd_session_from_pn(pn_ssn) == 0);
+    pn_connection_t *pn_conn = pn_session_connection(pn_ssn);
+    pn_transport_t *pn_tport = pn_connection_transport(pn_conn);
+
     qd_session_t *qd_ssn = new_qd_session_t();
     if (qd_ssn) {
         ZERO(qd_ssn);
@@ -905,10 +953,12 @@ qd_session_t *qd_session(pn_session_t *pn_ssn)
         qd_ssn->pn_session = pn_ssn;
         DEQ_INIT(qd_ssn->q3_blocked_links);
         pn_session_set_context(pn_ssn, qd_ssn);
+        qd_ssn->remote_max_frame = pn_transport_get_remote_max_frame(pn_tport);
+        assert(qd_ssn->remote_max_frame != 0);
 
-        // @TODO(kgiusti) make these dependent on connection role
-        qd_ssn->out_window_limit = QD_QLIMIT_Q3_UPPER * QD_BUFFER_SIZE;
-        qd_ssn->out_window_low_watermark = QD_QLIMIT_Q3_LOWER * QD_BUFFER_SIZE;
+        // These thresholds come from the old Q3 session byte limits
+        qd_ssn->outgoing_bytes_high_threshold = 1048576;
+        qd_ssn->outgoing_bytes_low_threshold  =  524288;
     }
     return qd_ssn;
 }
@@ -965,28 +1015,95 @@ bool qd_session_is_q3_blocked(const qd_session_t *qd_ssn)
  *
  * Returns the available outgoing data capacity for the session. This capacity must be shared by all sending links on
  * this session.
+ *
+ * The capacity is determined by the remotes current incoming window minus any outgoing bytes already written to the
+ * session. In other words:
+ *
+ * capacity = pn_remote_incoming_window(session) - pn_session_outgoing_bytes(session)
+ *
+ * However we must also prevent the router from buffering too much outgoing data at once. This is especially a problem when
+ * the remote uses an unlimited incoming window (default proton behavior). To prevent this we set an additional limit to
+ * the maximum amount of outgoing data that can be buffered in the session.
  */
 size_t qd_session_get_outgoing_capacity(const qd_session_t *qd_ssn)
 {
     assert(qd_ssn && qd_ssn->pn_session);
 
+    // discount any data already written but not yet sent
     size_t buffered = pn_session_outgoing_bytes(qd_ssn->pn_session);
-    if (buffered < qd_ssn->out_window_limit) {
-        return qd_ssn->out_window_limit - buffered;
-    }
-    return 0;
+    if (buffered >= qd_ssn->outgoing_bytes_high_threshold)
+        return 0;  // exceeded maximum buffered limit
+    size_t avail = qd_ssn->outgoing_bytes_high_threshold - buffered;
+
+#if USE_PN_SESSION_WINDOWS
+    // never exceed the remaining incoming window capacity of the peer
+    size_t limit = pn_session_remote_incoming_window(qd_ssn->pn_session);
+    limit *= qd_ssn->remote_max_frame;
+    return MIN(avail, limit);
+#else
+    return avail;
+#endif
 }
 
 
-/** Return the session outgoing window low water mark
+/** Get the sessions current outgoing capacity low threshold
  *
- * Blocked session can resume output once the available outgoing capacity reaches at least this value
+ * Returns the lower threshold for the sessions outgoing capacity. This threshold is used for resuming blocked output on
+ * the session. Output can resume once the available outgoing capacity increases beyond this threshold.
  */
-size_t qd_session_get_outgoing_threshold(const qd_session_t *qd_ssn)
+size_t qd_session_get_outgoing_capacity_low_threshold(const qd_session_t *qd_ssn)
 {
-    assert(qd_ssn);
-    return qd_ssn->out_window_low_watermark;
+    return qd_ssn->outgoing_bytes_low_threshold;
 }
+
+
+/** Configure the sessions local incoming window limit.
+ *
+ * This sets the value of the incoming window for the session. This value is sent to the remote peer in the Begin
+ * Performative.
+ *
+ * @param qd_ssn Session to configure
+ * @param in_window maximum incoming window in frames
+ */
+static void qd_session_configure_incoming_window(qd_session_t *qd_ssn, uint32_t in_window)
+{
+    // older proton session windowing would stall so do not enable it
+#if USE_PN_SESSION_WINDOWS
+    // Use new window configuration API to set the maximum in window and low water mark
+    assert(in_window >= 2);
+    int rc = pn_session_set_incoming_window_and_lwm(qd_ssn->pn_session, in_window, in_window / 2);
+    (void) rc;
+    assert(rc == 0);
+#endif
+}
+
+
+/** Set the session incoming window that was advertised by the remote
+ *
+ * This is the value for the remotes incoming session window. It arrives in the Begin Performative.
+ *
+ * @param qd_ssn Session to update
+ * @param in_window the incoming window as given by the remote.
+ */
+#if USE_PN_SESSION_WINDOWS
+static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window)
+{
+    // The true window size is given in the Begin Performative. Once frames are transferred the value of the remote
+    // incoming window read from Proton can be less than the full size due to the window being in use. The assert is an
+    // attempt to prevent accidentally calling this function after frame transfer starts:
+    assert(in_window != 0 && in_window >= qd_ssn->remote_max_incoming_window);
+
+    qd_ssn->remote_max_incoming_window = in_window;
+
+    // if the remotes max window is smaller than the default outgoing bytes limit then adjust the limits down
+    // otherwise we may never resume sending on blocked links (stall) since the low limit will never be exceeded.
+    size_t window_bytes = (size_t) in_window * qd_ssn->remote_max_frame;
+    if (window_bytes < qd_ssn->outgoing_bytes_high_threshold) {
+        qd_ssn->outgoing_bytes_high_threshold = window_bytes;
+        qd_ssn->outgoing_bytes_low_threshold = window_bytes / 2;
+    }
+}
+#endif
 
 
 /** Release all of the connections sessions

@@ -107,16 +107,18 @@ uint64_t qd_link_link_id(const qd_link_t *link);
 void qd_link_set_link_id(qd_link_t *link, uint64_t link_id);
 struct qd_message_t;
 void qd_link_set_incoming_msg(qd_link_t *link, struct qd_message_t *msg);
-qd_session_t *qd_link_get_session(const qd_link_t *link);
 
 void qd_session_incref(qd_session_t *qd_ssn);
 void qd_session_decref(qd_session_t *qd_ssn);
 bool qd_session_is_q3_blocked(const qd_session_t *qd_ssn);
 qd_link_list_t *qd_session_q3_blocked_links(qd_session_t *qd_ssn);
-size_t qd_session_get_outgoing_capacity(const qd_session_t *qd_ssn);
-size_t qd_session_get_outgoing_threshold(const qd_session_t *qd_ssn);
+size_t qd_session_get_outgoing_capacity_low_threshold(const qd_session_t *qd_ssn);
 
 void qd_connection_release_sessions(qd_connection_t *qd_conn);
+
+// Defaults for session incoming window size
+extern const size_t qd_session_incoming_window_normal;
+extern const size_t qd_session_incoming_window_router;
 
 ///@}
 #endif

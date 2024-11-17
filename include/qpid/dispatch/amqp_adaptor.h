@@ -34,6 +34,7 @@ typedef struct pn_link_t    pn_link_t;
 // These types are private to the AMQP adaptor:
 typedef struct qd_connection_t qd_connection_t;
 typedef struct qd_link_t       qd_link_t;
+typedef struct qd_session_t    qd_session_t;
 
 
 // For use by message.c
@@ -46,6 +47,8 @@ pn_link_t *qd_link_pn(const qd_link_t *link);
 bool qd_connection_strip_annotations_in(const qd_connection_t *c);
 uint64_t qd_connection_max_message_size(const qd_connection_t *c);
 void qd_connection_log_policy_denial(const qd_link_t *link, const char *text);
+qd_session_t *qd_link_get_session(const qd_link_t *link);
+size_t qd_session_get_outgoing_capacity(const qd_session_t *qd_ssn);
 
 // Used by the log module
 void qd_amqp_connection_set_tracing(bool enabled);
