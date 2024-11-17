@@ -55,7 +55,18 @@ typedef struct qd_decoder_buffer_t {
 } qd_decoder_buffer_t;
 
 struct qd_http2_decoder_callbacks_t {
-    // Invoked for each HTTP header received.
+    //
+    // Invoked on each DATA frame
+    //
+    int (*on_data)(qd_http2_decoder_connection_t *conn_state,
+                   uintptr_t request_context,
+                   bool from_client,
+                   uint32_t stream_id,
+                   bool end_stream,
+                   uint32_t num_bytes);
+
+    //
+    // Invoked when each HEADER is received. Called as many times as there http headers
     // from_client is true if the header was read from the stream sent by the client, false if the stream is sent from the server.
     // The callback must copy the data associated with these values if they need to be saved.
     //
@@ -68,12 +79,22 @@ struct qd_http2_decoder_callbacks_t {
                      const uint8_t *value,
                      size_t valuelen);
 
-    // Invoked when the decoder sees a request header frame.
+    //
+    // Invoked when the decoder sees a request header frame before each header is decoded.
     // It looks up the stream id on the header frame and passes it to the callback.
     int (*on_begin_header)(qd_http2_decoder_connection_t *conn_state,
                            uintptr_t request_context,
                            bool from_client,
                            uint32_t stream_id);
+
+    //
+    // Invoked when the decoder has decoded all request headers.
+    // It looks up the stream id on the header frame and passes it to the callback.
+    int (*on_end_headers)(qd_http2_decoder_connection_t *conn_state,
+                          uintptr_t request_context,
+                          bool from_client,
+                          uint32_t stream_id,
+                          bool end_stream);
 
     //
     // Callback called when the http2 decoder runs into a decoding error.

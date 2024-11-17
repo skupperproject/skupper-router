@@ -27,20 +27,22 @@ const char *HTTP_TEST_PATH = ":path";
 const char *HTTP_TEST_METHOD = ":method";
 const char *HTTP_TEST_STATUS = ":status";
 
+
+bool method_match     = false;
+bool path_match       = false;
+bool streams_2_seen   = false;
+bool streams_3_seen   = false;
+bool data_called_back = false;
+
 /**
  * First send 20 bytes of the client magic and then later send another 4 bytes of the client magic
  * and check decoder state.
  */
-bool method_match = false;
-bool path_match   = false;
-bool streams_2_seen = false;
-bool streams_3_seen = false;
-
 char* test_http2_decode_client_magic_1(void *context)
 {
     qd_http2_decoder_connection_t *conn_state = qd_http2_decoder_connection(0, 0, 1);
 
-    bool check_state = is_client_decoder_state_decode_connection_preface(conn_state);
+    bool check_state = is_decoder_state_decode_connection_preface(conn_state, true);
     if (!check_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_CONNECTION_PREFACE but it is not";
@@ -50,7 +52,7 @@ char* test_http2_decode_client_magic_1(void *context)
         0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32,
         0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d
     };
-    check_state = is_client_decoder_state_decode_connection_preface(conn_state);
+    check_state = is_decoder_state_decode_connection_preface(conn_state, true);
     if (!check_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_CONNECTION_PREFACE but it is not";
@@ -61,7 +63,7 @@ char* test_http2_decode_client_magic_1(void *context)
             0x0d, 0x0a, 0x0d, 0x0a
     };
     decode(conn_state, true, data2, 4);
-    bool decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    bool decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -83,7 +85,7 @@ char* test_http2_decode_client_magic_2(void *context)
     };
 
     decode(conn_state, true, data1, 24);
-    bool decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    bool decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -105,7 +107,7 @@ char* test_http2_decode_client_magic_3(void *context)
     };
 
     decode(conn_state, true, data1, 26);
-    bool decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    bool decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -142,11 +144,74 @@ int on_test_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
     return 0;
 }
 
+static int on_data_recv_callback(qd_http2_decoder_connection_t *conn_state,
+                                 uintptr_t request_context,
+                                 bool from_client,
+                                 uint32_t stream_id,
+                                 bool end_stream,
+                                 uint32_t num_bytes)
+{
+    data_called_back = true;
+    return 0;
+}
+
 qd_http2_decoder_callbacks_t callbacks = {
-    .on_header = on_test_header_recv_callback,
-    .on_begin_header = on_test_begin_header_callback
+    .on_header       = on_test_header_recv_callback,
+    .on_begin_header = on_test_begin_header_callback,
+    .on_data         = on_data_recv_callback,
     //.protocol_error = protocol_error
 };
+
+char* test_http2_decode_data_frame(void *context)
+{
+    qd_http2_decoder_connection_t *conn_state = qd_http2_decoder_connection(&callbacks, 0, 1);
+
+    const uint8_t data1[5] = {
+            0x00, 0x00, 0x1a, 0x00, 0x01
+    };
+    decode(conn_state, false, data1, 5);
+
+    bool decode_frame_state = is_decoder_state_decode_frame_data(conn_state, false);
+    if (!decode_frame_state) {
+        qd_http2_decoder_connection_free(conn_state);
+        return "Expected client decoder state to be HTTP2_DECODE_FRAME_DATA but it is not";
+    }
+
+    const uint8_t data2[4] = {
+            0x00, 0x00, 0x00, 0x10
+    };
+
+    decode(conn_state, false, data2, 4);
+
+    if(!data_called_back) {
+        qd_http2_decoder_connection_free(conn_state);
+        return "Expected on_data_recv_callback to be called but it was not";
+    }
+
+    const uint8_t data3[30] = {
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            /*Start SETTINGS frame*/0x00, 0x00, 0x12, 0x04
+    };
+
+    decode(conn_state, false, data3, 30);
+
+    bool skip_payload = is_decoder_state_skip_frame_payload(conn_state, false);
+    if (!skip_payload) {
+        qd_http2_decoder_connection_free(conn_state);
+        return "Expected client decoder state to be HTTP2_DECODE_SKIP_FRAME_PAYLOAD but it is not";
+    }
+
+    const uint8_t data4[5] = {
+            0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    decode(conn_state, false, data4, 5);
+
+    qd_http2_decoder_connection_free(conn_state);
+
+    return 0;
+}
 
 /**
  * Sends a client magic, SETTINGS and WINDOW_UPDATE frame finally followed by a HEADER frame
@@ -172,7 +237,7 @@ char* test_http2_decode_request_header(void *context)
 
     decode(conn_state, true, data2, 6);
 
-    bool decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    bool decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -184,7 +249,7 @@ char* test_http2_decode_request_header(void *context)
 
     decode(conn_state, true, data3, 9);
 
-    bool skip_frame_skip_payload_state = is_client_decoder_state_skip_frame_payload(conn_state);
+    bool skip_frame_skip_payload_state = is_decoder_state_skip_frame_payload(conn_state, true);
     if (!skip_frame_skip_payload_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_SKIP_FRAME_PAYLOAD but it is not";
@@ -228,7 +293,7 @@ char* test_http2_decode_request_header(void *context)
 
     decode(conn_state, true, data9, 34);
 
-    decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -388,7 +453,7 @@ char* test_http2_decode_request_double_header(void *context)
     };
     decode(conn_state, true, data1, 27);
 
-    bool decode_frame_header_state = is_client_decoder_state_decode_frame_header(conn_state);
+    bool decode_frame_header_state = is_decoder_state_decode_frame_header(conn_state, true);
     if (!decode_frame_header_state) {
         qd_http2_decoder_connection_free(conn_state);
         return "Expected client decoder state to be HTTP2_DECODE_FRAME_HEADER but it is not";
@@ -565,6 +630,7 @@ int http2_decoder_tests(void)
     TEST_CASE(test_http2_decode_response_header, 0);
     TEST_CASE(test_http2_decode_compressed_header_error, 0);
     TEST_CASE(test_http2_decode_request_header_fragmented, 0);
+    TEST_CASE(test_http2_decode_data_frame, 0);
 
     return result;
 }

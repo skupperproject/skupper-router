@@ -540,13 +540,14 @@ class Http2TestAutoRouterNginx(TestCase):
         self.assertEqual(digest_of_server_file, digest_of_response_file)
 
         # Expect a TCP flow/counter-flow and one HTTP/2 flow
-
         expected = {
             "QDR": [
                 ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
                                 'METHOD': 'GET',
                                 'RESULT': '200',
                                 'STREAM_ID': ANY_VALUE,
+                                # 9634665 is the size of the image test.jpg.
+                                'OCTETS_REVERSE': 9634665,
                                 'END_TIME': ANY_VALUE})
             ]
         }

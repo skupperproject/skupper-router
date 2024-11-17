@@ -23,11 +23,13 @@
 #include "http2_decoder.h"
 
 typedef struct qd_decoder_buffer_t   qd_decoder_buffer_t;
-typedef struct qd_http2_decoder_t          qd_http2_decoder_t;
+typedef struct qd_http2_decoder_t    qd_http2_decoder_t;
 
-bool is_client_decoder_state_decode_connection_preface(qd_http2_decoder_connection_t *conn_state);
-bool is_client_decoder_state_decode_frame_header(qd_http2_decoder_connection_t *conn_state);
-bool is_client_decoder_state_skip_frame_payload(qd_http2_decoder_connection_t *conn_state);
+bool is_decoder_state_decode_connection_preface(qd_http2_decoder_connection_t *conn_state, bool is_client);
+bool is_decoder_state_decode_frame_header(qd_http2_decoder_connection_t *conn_state, bool is_client);
+bool is_decoder_state_skip_frame_payload(qd_http2_decoder_connection_t *conn_state, bool is_client);
+bool is_decoder_state_decode_frame_data(qd_http2_decoder_connection_t *conn_state, bool is_client);
+
 void move_to_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer, const uint8_t *data, size_t data_length);
 uint32_t get_stream_identifier(const uint8_t *data);
 void reset_scratch_buffer(qd_decoder_buffer_t  *scratch_buffer);

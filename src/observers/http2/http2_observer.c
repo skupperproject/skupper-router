@@ -79,6 +79,34 @@ static void on_decoder_error(qd_http2_decoder_connection_t *conn_state,
     qd_log(LOG_HTTP2_OBSERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] HTTP/2 observer protocol error: %s", transport_handle->conn_id, reason);
 }
 
+int on_end_headers_callback(qd_http2_decoder_connection_t *conn_state,
+                             uintptr_t request_context,
+                             bool from_client,
+                             uint32_t stream_id,
+                             bool end_stream)
+{
+    qdpo_transport_handle_t *transport_handle = (qdpo_transport_handle_t *) qd_http2_decoder_connection_get_context(conn_state);
+    qd_http2_stream_info_t *stream_info = 0;
+    qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+    if(error == QD_ERROR_NOT_FOUND) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_end_headers_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+    } else {
+        if (!from_client) {
+            if (end_stream) {
+                vflow_end_record(stream_info->vflow);
+                qd_error_t error = delete_stream_info_from_hashtable(transport_handle, stream_id);
+                if (error == QD_ERROR_NOT_FOUND) {
+                    qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+                }
+                DEQ_REMOVE(transport_handle->http2.streams, stream_info);
+                free_qd_http2_stream_info_t(stream_info);
+            }
+        }
+    }
+
+    return 0;
+}
+
 /**
  * This callback is called once on each HEADER frame.
  * It might be called more than once per request since GRPC can contain a
@@ -103,6 +131,8 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
             // This is the first header frame in a particular stream.
             stream_info->vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_APP, transport_handle->vflow);
             vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "HTTP/2");
+            vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+            vflow_add_rate(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
             stream_info->stream_id = stream_id;
             vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_info->stream_id);
             vflow_latency_start(stream_info->vflow);
@@ -120,6 +150,46 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
     } else { // from_client
         if (error != QD_ERROR_NOT_FOUND && stream_info) {
             vflow_latency_end(stream_info->vflow, VFLOW_ATTRIBUTE_LATENCY);
+        }
+    }
+    return 0;
+}
+
+/**
+ * This callback is called once on each HTTP2 DATA frame.
+ * num_bytes is the number of the bytes that the data frame contains.
+ */
+static int on_data_recv_callback(qd_http2_decoder_connection_t *conn_state,
+                                 uintptr_t request_context,
+                                 bool from_client,
+                                 uint32_t stream_id,
+                                 bool end_stream,
+                                 uint32_t num_bytes)
+{
+    qd_http2_stream_info_t *stream_info = 0;
+    qdpo_transport_handle_t *transport_handle = (qdpo_transport_handle_t *) qd_http2_decoder_connection_get_context(conn_state);
+    qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] on_data_recv_callback from_client=%i, end_stream=%i, num_bytes=%"PRIu32" , stream_id=%" PRIu32, transport_handle->conn_id, from_client, end_stream, num_bytes, stream_id);
+    qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+    assert(stream_info != 0);
+    if(error == QD_ERROR_NOT_FOUND) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_data_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+    }
+    else {
+        if (from_client) {
+            stream_info->bytes_in += num_bytes;
+            vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, stream_info->bytes_in);
+        } else {
+            stream_info->bytes_out += num_bytes;
+            vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, stream_info->bytes_out);
+            if (end_stream) {
+                vflow_end_record(stream_info->vflow);
+                qd_error_t error = delete_stream_info_from_hashtable(transport_handle, stream_id);
+                if (error == QD_ERROR_NOT_FOUND) {
+                    qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+                }
+                DEQ_REMOVE(transport_handle->http2.streams, stream_info);
+                free_qd_http2_stream_info_t(stream_info);
+            }
         }
     }
     return 0;
@@ -146,6 +216,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
         // Set the http method (GET, POST, PUT, DELETE etc) on the stream's vflow object.
         qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         assert(stream_info != 0);
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] on_header_recv_callback - HTTP_METHOD=%s, stream_id=%" PRIu32, transport_handle->conn_id, (const char *)value, stream_id);
         //
         // Set the http request method (GET, POST etc) on the stream's vflow object.
         //
@@ -176,16 +247,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 //
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
             }
-            // We have got the response status back, time to end the stream_info->vflow and free the stream
-            vflow_end_record(stream_info->vflow);
-            qd_error_t error = delete_stream_info_from_hashtable(transport_handle, stream_id);
-            if (error == QD_ERROR_NOT_FOUND) {
-                qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
-            }
-            DEQ_REMOVE(transport_handle->http2.streams, stream_info);
-            free_qd_http2_stream_info_t(stream_info);
         }
-
     }
     return 0;
 }
@@ -195,7 +257,9 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
  */
 static qd_http2_decoder_callbacks_t callbacks = {
     .on_header = on_header_recv_callback,
+    .on_data = on_data_recv_callback,
     .on_begin_header = on_begin_header_callback,
+    .on_end_headers = on_end_headers_callback,
     .on_decode_error = on_decoder_error
 };
 
