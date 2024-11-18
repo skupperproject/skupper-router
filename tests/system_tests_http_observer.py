@@ -186,6 +186,7 @@ class Http1AutoObserverTest(TestCase):
             '-G'
         ]
 
+        # Note: the lengths of these files are hardcoded in the expected map below:
         pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
         for page in pages:
             curl_args.append(f"http://localhost:{l_port}/{page}")
@@ -201,21 +202,29 @@ class Http1AutoObserverTest(TestCase):
                                 "RESULT": "200",
                                 "REASON": "OK",
                                 "PROTOCOL": "HTTP/1.1",
+                                "OCTETS": 0,
+                                "OCTETS_REVERSE": 45,  # index.html length
                                 'END_TIME': ANY_VALUE}),
                 ('BIFLOW_APP', {"METHOD": "GET",
                                 "RESULT": "200",
                                 "REASON": "OK",
                                 "PROTOCOL": "HTTP/1.1",
+                                "OCTETS": 0,
+                                "OCTETS_REVERSE": 108803,  # t100K.html length
                                 'END_TIME': ANY_VALUE}),
                 ('BIFLOW_APP', {"METHOD": "GET",
                                 "RESULT": "200",
                                 "REASON": "OK",
+                                "OCTETS": 0,
+                                "OCTETS_REVERSE": 10972,  # t10K.html length
                                 "PROTOCOL": "HTTP/1.1",
                                 'END_TIME': ANY_VALUE}),
                 ('BIFLOW_APP', {'METHOD': "GET",
                                 'RESULT': "200",
                                 'REASON': "OK",
                                 'PROTOCOL': 'HTTP/1.1',
+                                "OCTETS": 0,
+                                "OCTETS_REVERSE": 1188,  # t1K.html length
                                 'END_TIME': ANY_VALUE})
             ]
         }
@@ -286,7 +295,13 @@ class Http1AutoObserverTest(TestCase):
                 ('BIFLOW_APP', {'PROTOCOL': 'HTTP/1.1',
                                 'METHOD': 'POST',
                                 'REASON': ANY_VALUE,
-                                'END_TIME': ANY_VALUE})
+                                'END_TIME': ANY_VALUE,
+                                # curl sends 'Start&End' as the POST request
+                                # message body:
+                                'OCTETS': 9,
+                                # The python HTTP test server replies with
+                                # '<html><h1>Dummy CGI output!</h1></html>'
+                                'OCTETS_REVERSE': 39})
             ]
         }
         success = retry(lambda: snooper_thread.match_records(expected), delay=1)

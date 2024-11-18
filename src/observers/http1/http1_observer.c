@@ -27,7 +27,9 @@
 struct http1_request_state_t {
     DEQ_LINKS(http1_request_state_t);
     vflow_record_t *vflow;
-    bool            latency_done:1;  // true: latency timing complete
+    uint64_t        client_body_octets;  // total bytes received in client request msg body
+    uint64_t        server_body_octets;  // total bytes received in server response msg body
+    bool            latency_done:1;      // true: vflow latency timing complete
 };
 ALLOC_DECLARE(http1_request_state_t);
 ALLOC_DEFINE(http1_request_state_t);
@@ -55,6 +57,10 @@ static int rx_request(qd_http1_decoder_connection_t *hconn, const char *method, 
     hreq->vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_APP, th->vflow);
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_PROTOCOL, version_minor == 1 ? "HTTP/1.1" : "HTTP/1.0");
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_METHOD, method);
+    vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
     vflow_latency_start(hreq->vflow);
     hreq->latency_done = false;
     DEQ_INSERT_TAIL(th->http1.requests, hreq);
@@ -86,6 +92,23 @@ static int rx_response(qd_http1_decoder_connection_t *hconn, uintptr_t request_c
         snprintf(status_code_str, sizeof(status_code_str), "%d", status_code);
         vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
         vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_REASON, reason_phrase);
+    }
+
+    return 0;
+}
+
+
+static int rx_body(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client, const unsigned char *body, size_t length)
+{
+    http1_request_state_t *hreq = (http1_request_state_t *) request_context;
+    assert(hreq);
+
+    if (from_client) {
+        hreq->client_body_octets += length;
+        vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, hreq->client_body_octets);
+    } else {
+        hreq->server_body_octets += length;
+        vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, hreq->server_body_octets);
     }
 
     return 0;
@@ -133,7 +156,7 @@ static qd_http1_decoder_config_t decoder_config = {
     .rx_response = rx_response,
     // .rx_header = rx_header,
     // .rx_headers_done = rx_headers_done,
-    // .rx_body = rx_body,
+    .rx_body = rx_body,
     // .message_done = message_done,
     .transaction_complete = transaction_complete,
     .protocol_error = protocol_error

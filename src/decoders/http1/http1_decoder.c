@@ -111,11 +111,6 @@ struct h1_decode_request_state_t {
     qd_http1_decoder_connection_t *hconn;
     uintptr_t                      user_context;
 
-#if 0  // TBD
-    uint64_t client_octets;  // # total octets arriving from client for this request
-    uint64_t server_octets;  // # total octets arriving from server for this response
-#endif
-
     int32_t response_code;   // sent by server
 
     bool head_request:1;      // HEAD method
