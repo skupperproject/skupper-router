@@ -27,10 +27,26 @@
 struct http1_request_state_t {
     DEQ_LINKS(http1_request_state_t);
     vflow_record_t *vflow;
-    bool            latency_done:1;  // true: latency timing complete
+    char           *response_phrase;     // reason phrase in response msg
+    int             response_status;     // result code in response msg
+    uint64_t        client_body_octets;  // total bytes received in client request msg body
+    uint64_t        server_body_octets;  // total bytes received in server response msg body
+    bool            latency_done:1;      // true: vflow latency timing complete
 };
 ALLOC_DECLARE(http1_request_state_t);
 ALLOC_DEFINE(http1_request_state_t);
+
+
+static void http1_request_state_free(http1_request_state_t *hreq)
+{
+    if (hreq) {
+        if (hreq->vflow) {
+            vflow_end_record(hreq->vflow);
+        }
+        free(hreq->response_phrase);
+        free_http1_request_state_t(hreq);
+    }
+}
 
 
 /*
@@ -55,6 +71,10 @@ static int rx_request(qd_http1_decoder_connection_t *hconn, const char *method, 
     hreq->vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_APP, th->vflow);
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_PROTOCOL, version_minor == 1 ? "HTTP/1.1" : "HTTP/1.0");
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_METHOD, method);
+    vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
+    vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
     vflow_latency_start(hreq->vflow);
     hreq->latency_done = false;
     DEQ_INSERT_TAIL(th->http1.requests, hreq);
@@ -82,10 +102,28 @@ static int rx_response(qd_http1_decoder_connection_t *hconn, uintptr_t request_c
     }
 
     if (status_code / 100 != 1) {  // terminal response code
-        char status_code_str[16];
-        snprintf(status_code_str, sizeof(status_code_str), "%d", status_code);
-        vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
-        vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_REASON, reason_phrase);
+        hreq->response_status = status_code;
+        if (reason_phrase) {
+            assert(!hreq->response_phrase);
+            hreq->response_phrase = qd_strndup(reason_phrase, 256);
+        }
+    }
+
+    return 0;
+}
+
+
+static int rx_body(qd_http1_decoder_connection_t *hconn, uintptr_t request_context, bool from_client, const unsigned char *body, size_t length)
+{
+    http1_request_state_t *hreq = (http1_request_state_t *) request_context;
+    assert(hreq);
+
+    if (from_client) {
+        hreq->client_body_octets += length;
+        vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, hreq->client_body_octets);
+    } else {
+        hreq->server_body_octets += length;
+        vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, hreq->server_body_octets);
     }
 
     return 0;
@@ -94,6 +132,7 @@ static int rx_response(qd_http1_decoder_connection_t *hconn, uintptr_t request_c
 
 static int transaction_complete(qd_http1_decoder_connection_t *hconn, uintptr_t request_context)
 {
+    char status_code_str[16];
     qdpo_transport_handle_t *th = (qdpo_transport_handle_t *) qd_http1_decoder_connection_get_context(hconn);
     assert(th);
 
@@ -102,9 +141,14 @@ static int transaction_complete(qd_http1_decoder_connection_t *hconn, uintptr_t 
     http1_request_state_t *hreq = (http1_request_state_t *) request_context;
     assert(hreq);
 
+    snprintf(status_code_str, sizeof(status_code_str), "%d", hreq->response_status);
+    vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
+    if (hreq->response_phrase)
+        vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_REASON, hreq->response_phrase);
+
+
     DEQ_REMOVE(th->http1.requests, hreq);
-    vflow_end_record(hreq->vflow);
-    free_http1_request_state_t(hreq);
+    http1_request_state_free(hreq);
     return 0;
 }
 
@@ -133,7 +177,7 @@ static qd_http1_decoder_config_t decoder_config = {
     .rx_response = rx_response,
     // .rx_header = rx_header,
     // .rx_headers_done = rx_headers_done,
-    // .rx_body = rx_body,
+    .rx_body = rx_body,
     // .message_done = message_done,
     .transaction_complete = transaction_complete,
     .protocol_error = protocol_error
@@ -180,10 +224,7 @@ void qdpo_http1_final(qdpo_transport_handle_t *th)
         http1_request_state_t *hreq = DEQ_HEAD(th->http1.requests);
         while (hreq) {
             DEQ_REMOVE_HEAD(th->http1.requests);
-            if (hreq->vflow) {
-                vflow_end_record(hreq->vflow);
-            }
-            free_http1_request_state_t(hreq);
+            http1_request_state_free(hreq);
             hreq = DEQ_HEAD(th->http1.requests);
         }
 

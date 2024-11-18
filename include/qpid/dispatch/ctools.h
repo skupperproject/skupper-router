@@ -262,5 +262,15 @@ static inline char *qd_strdup(const char *s)
     return ptr;
 }
 
+static inline char *qd_strndup(const char *s, size_t n)
+{
+    assert(s);
+    char *ptr = strndup(s, n);
+    if (!ptr) {
+        perror("qd_strndup");
+        abort();
+    }
+    return ptr;
+}
 
 #endif
