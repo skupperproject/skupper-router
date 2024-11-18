@@ -133,6 +133,7 @@ int on_begin_header_callback(qd_http2_decoder_connection_t *conn_state,
             vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_PROTOCOL, "HTTP/2");
             vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
             vflow_add_rate(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
+            vflow_add_rate(stream_info->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
             stream_info->stream_id = stream_id;
             vflow_set_uint64(stream_info->vflow, VFLOW_ATTRIBUTE_STREAM_ID, stream_info->stream_id);
             vflow_latency_start(stream_info->vflow);
