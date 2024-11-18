@@ -19,6 +19,7 @@
 
 import os
 import re
+import sys
 import unittest
 from subprocess import PIPE
 from proton import Url, SSLDomain, SSLUnavailable, SASL
@@ -86,6 +87,12 @@ class SkstatTest(SkstatTestBase):
                                  out, flags=re.DOTALL) is not None, out)
         self.assertTrue(re.match(r"(.*)\bMode\b[ \t]+\bstandalone\b(.*)",
                                  out, flags=re.DOTALL) is not None, out)
+        if sys.platform.lower().startswith('linux'):
+            # process memory metrics currently only supported on linux
+            self.assertTrue(re.match(r"(.*)\bVmSize\b[ \t]+\b[0-9]+\b(.*)",
+                                     out, flags=re.DOTALL) is not None, out)
+            self.assertTrue(re.match(r"(.*)\bRSS\b[ \t]+\b[0-9]+\b(.*)",
+                                     out, flags=re.DOTALL) is not None, out)
 
         self.assertEqual(out.count("QDR.A"), 2)
 
@@ -248,7 +255,12 @@ class SkstatTest(SkstatTestBase):
         self.assertIn("QDR.A", out)
         self.assertIn("UTC", out)
         regexp = r'qdr_address_t\s+[0-9]+'
-        assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
+        self.assertIsNotNone(re.search(regexp, out, re.I),
+                             "Can't find '%s' in '%s'" % (regexp, out))
+        if sys.platform.lower().startswith('linux'):
+            # process memory metrics currently only supported on linux
+            m_regexp = r"(.*)\bVmSize\b[ \t]+\bRSS\b[ \t]+\bPooled\b(.*)"
+            self.assertIsNotNone(re.match(m_regexp, out, flags=re.DOTALL), out)
 
     def test_memory_csv(self):
         out = self.run_skstat(['--memory', '--csv'])
