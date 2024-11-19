@@ -106,12 +106,11 @@ qdr_delivery_t *qdr_link_deliver_to(qdr_link_t *link, qd_message_t *msg,
 }
 
 
-qdr_delivery_t *qdr_link_deliver_to_routed_link(qdr_link_t *link, qd_message_t *msg, bool settled,
-                                                const uint8_t *tag, int tag_length,
-                                                uint64_t remote_disposition,
-                                                qd_delivery_state_t* remote_state)
+qdr_delivery_t *qdr_link_deliver_to_core(qdr_link_t *link, qd_message_t *msg, bool settled,
+                                         uint64_t remote_disposition,
+                                         qd_delivery_state_t* remote_state)
 {
-    qdr_action_t   *action = qdr_action(qdr_link_deliver_CT, "link_deliver");
+    qdr_action_t   *action = qdr_action(qdr_link_deliver_CT, "link_deliver_to_core");
     qdr_delivery_t *dlv    = new_qdr_delivery_t();
 
     ZERO(dlv);
@@ -126,19 +125,16 @@ qdr_delivery_t *qdr_link_deliver_to_routed_link(qdr_link_t *link, qd_message_t *
     dlv->conn_id            = link->conn_id;
     sys_mutex_init(&dlv->dispo_lock);
 
-    qd_message_disable_router_annotations(msg);  // routed links do not use router annotations
+    qd_message_disable_router_annotations(msg);  // deliveries to the core do not use router annotations
 
-    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery created qdr_link_deliver_to_routed_link",
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, DLV_FMT " Delivery created qdr_link_deliver_to_core",
            DLV_ARGS(dlv));
 
-    qdr_delivery_incref(dlv, "qdr_link_deliver_to_routed_link - newly created delivery, add to action list");
-    qdr_delivery_incref(dlv, "qdr_link_deliver_to_routed_link - protect returned value");
+    qdr_delivery_incref(dlv, "qdr_link_deliver_to_core - newly created delivery, add to action list");
+    qdr_delivery_incref(dlv, "qdr_link_deliver_to_core - protect returned value");
 
     action->args.delivery.delivery = dlv;
     action->args.delivery.more = !qd_message_receive_complete(msg);
-    action->args.delivery.tag_length = tag_length;
-    assert(tag_length <= QDR_DELIVERY_TAG_MAX);
-    memcpy(action->args.delivery.tag, tag, tag_length);
     qdr_action_enqueue(link->core, action);
     return dlv;
 }
@@ -756,35 +752,6 @@ void qdr_link_deliver_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
     if (!!link->core_endpoint) {
         assert(!dlv->reforwarded);
         qdrc_endpoint_do_deliver_CT(core, link->core_endpoint, dlv);
-        return;
-    }
-
-    if (link->connected_link) {
-        //
-        // If this is an attach-routed link, put the delivery directly onto the peer link
-        //
-        qdr_delivery_t *peer = qdr_forward_new_delivery_CT(core, dlv, link->connected_link, dlv->msg);
-
-        //
-        // Copy the delivery tag.  For link-routing, the delivery tag must be preserved.
-        //
-        peer->tag_length = action->args.delivery.tag_length;
-        memcpy(peer->tag, action->args.delivery.tag, peer->tag_length);
-
-        qdr_forward_deliver_CT(core, link->connected_link, peer);
-
-        if (!dlv->settled) {
-            DEQ_INSERT_TAIL(link->unsettled, dlv);
-            dlv->where = QDR_DELIVERY_IN_UNSETTLED;
-            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
-                   DLV_FMT " Delivery transfer:  qdr_link_deliver_CT: action-list -> unsettled-list", DLV_ARGS(dlv));
-        } else {
-            //
-            // If the delivery is settled, decrement the ref_count on the delivery.
-            // This count was the owned-by-action count.
-            //
-            qdr_delivery_decref_CT(core, dlv, "qdr_link_deliver_CT - removed from action");
-        }
         return;
     }
 

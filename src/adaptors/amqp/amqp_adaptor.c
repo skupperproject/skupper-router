@@ -770,35 +770,17 @@ static bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
         break;
     }
 
-    // Handle the link-routed case
+    // Handle deliveries destined to a core endpoint.
     //
-    if (qdr_link_is_routed(rlink)) {
-        pn_delivery_tag_t dtag = pn_delivery_tag(pnd);
-
-        if (dtag.size > QDR_DELIVERY_TAG_MAX) {
-        qd_log(LOG_ROUTER, QD_LOG_DEBUG, "link route delivery failure: msg tag size exceeded %zd (max=%d)",
-               dtag.size, QDR_DELIVERY_TAG_MAX);
-        qd_message_set_discard(msg, true);
-        pn_link_flow(pn_link, 1);
-        _reject_delivery(pnd, QD_AMQP_COND_INVALID_FIELD, "delivery tag length exceeded");
-        if (receive_complete) {
-                pn_delivery_settle(pnd);
-                qd_message_free(msg);
-            }
-            return next_delivery;
-        }
-
+    if (qdr_link_is_core_endpoint(rlink)) {
         log_link_message(conn, pn_link, msg);
-        delivery = qdr_link_deliver_to_routed_link(rlink,
-                                                   msg,
-                                                   pn_delivery_settled(pnd),
-                                                   (uint8_t*) dtag.start,
-                                                   dtag.size,
-                                                   pn_delivery_remote_state(pnd),
-                                                   qd_delivery_read_remote_state(pnd));
+        delivery = qdr_link_deliver_to_core(rlink, msg,
+                                            pn_delivery_settled(pnd),
+                                            pn_delivery_remote_state(pnd),
+                                            qd_delivery_read_remote_state(pnd));
         qd_link_set_incoming_msg(link, (qd_message_t*) 0);  // msg no longer exclusive to qd_link
         qdr_node_connect_deliveries(link, delivery, pnd);
-        qdr_delivery_decref(router->router_core, delivery, "release protection of return from deliver_to_routed_link");
+        qdr_delivery_decref(router->router_core, delivery, "release protection of return from deliver_to_core");
         return next_delivery;
     }
 

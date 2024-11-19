@@ -346,12 +346,11 @@ bool qdr_delivery_settled_CT(qdr_core_t *core, qdr_delivery_t *dlv) TA_NO_THREAD
     }
 
     //
-    // If this is an incoming link and it is not link-routed or inter-router, issue
-    // one replacement credit on the link.  Note that credit on inter-router links is
-    // issued immediately even for unsettled deliveries.
+    // If this is an incoming link and it is not inter-router or inter-edge, issue one replacement credit on the link.
+    // Note that credit on inter-router links is issued immediately even for unsettled deliveries.
     //
     if (moved && link->link_direction == QD_INCOMING &&
-        link->link_type != QD_LINK_ROUTER && !link->edge && !link->connected_link)
+        link->link_type != QD_LINK_ROUTER && !link->edge)
         qdr_link_issue_credit_CT(core, link, 1, false);
 
     return moved;

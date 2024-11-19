@@ -318,20 +318,6 @@ void qdr_forward_deliver_CT(qdr_core_t *core, qdr_link_t *out_link, qdr_delivery
     sys_mutex_unlock(&out_link->conn->work_lock);
 
     //
-    // We are dealing here only with link routed deliveries
-    // If the out_link has a connected link and if the out_link is an inter-router link, increment the global deliveries_transit
-    // If the out_link is a route container link, add to the global deliveries_egress
-    //
-    if (out_link->connected_link) {
-        if (out_link->conn->role == QDR_ROLE_INTER_ROUTER) {
-            core->deliveries_transit++;
-        }
-        else {
-            core->deliveries_egress++;
-        }
-    }
-
-    //
     // Activate the outgoing connection for later processing.
     //
     qdr_connection_activate_CT(core, out_link->conn);

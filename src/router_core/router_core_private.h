@@ -140,8 +140,6 @@ struct qdr_action_t {
             qdr_delivery_t      *delivery;
             qd_delivery_state_t *dstate;
             uint64_t             disposition;
-            uint8_t              tag[32];
-            int                  tag_length;
             bool                 settled;
             bool                 presettled;  // true if remote settles while msg is in flight
             bool                 more;  // true if there are more frames arriving, false otherwise
@@ -450,7 +448,6 @@ struct qdr_link_t {
     int                      detach_count;       ///< 0, 1, or 2 depending on the state of the lifecycle
     uint32_t                 open_moved_streams; ///< Number of still-open streaming deliveries that were moved from this link
     qdr_address_t           *owning_addr;        ///< [ref] Address record that owns this link
-    qdr_link_t              *connected_link;     ///< [ref] If this is a link-route, reference the connected link
     qdrc_endpoint_t         *core_endpoint;      ///< [ref] Set if this link terminates on an in-core endpoint
     qdr_link_ref_t          *ref[QDR_LINK_LIST_CLASSES];  ///< Pointers to containing reference objects
     qdr_auto_link_t         *auto_link;          ///< [ref] Auto_link that owns this link

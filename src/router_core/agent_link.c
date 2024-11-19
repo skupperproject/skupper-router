@@ -147,8 +147,6 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
     case QDR_LINK_OWNING_ADDR:
         if(link->owning_addr)
             qd_compose_insert_string(body, address_key(link->owning_addr));
-        else if (link->connected_link && link->connected_link->terminus_addr)
-            qd_compose_insert_string(body, link->connected_link->terminus_addr);
         else if (link->terminus_addr)
             qd_compose_insert_string(body, link->terminus_addr);
         else
@@ -159,13 +157,8 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
         qd_compose_insert_uint(body, link->capacity);
         break;
 
-    case QDR_LINK_PEER:
-        if (link->connected_link) {
-            char id[100];
-            snprintf(id, 100, "%"PRId64, link->connected_link->identity);
-            qd_compose_insert_string(body, id);
-        } else
-            qd_compose_insert_null(body);
+    case QDR_LINK_PEER:  // link-routing no longer supported
+        qd_compose_insert_null(body);
         break;
 
     case QDR_LINK_UNDELIVERED_COUNT:
