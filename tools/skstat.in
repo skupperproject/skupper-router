@@ -367,13 +367,13 @@ class BusManager:
             pass
 
         try:
-            if router.memoryUsage is not None:
+            if router_metrics.memoryUsage is not None:
                 rows.append(('VmSize', NumKMG(router_metrics.memoryUsage,
                                               base=1024)))
         except Exception:
             pass
         try:
-            if router.residentMemoryUsage is not None:
+            if router_metrics.residentMemoryUsage is not None:
                 rows.append(('RSS', NumKMG(router_metrics.residentMemoryUsage,
                                            base=1024)))
         except Exception:
@@ -744,13 +744,14 @@ class BusManager:
 
         # attempt to get the qdrouterd process memory usage
         # this may not be present on all platforms
-        router = self.query('io.skupper.router.router')[0]
+        router_metrics = self.query('io.skupper.router.routerMetrics')[0]
+
         try:
-            vm_size = router.memoryUsage
+            vm_size = router_metrics.memoryUsage
         except AttributeError:
             vm_size = None
         try:
-            rss_size = router.residentMemoryUsage
+            rss_size = router_metrics.residentMemoryUsage
         except AttributeError:
             rss_size = None
 

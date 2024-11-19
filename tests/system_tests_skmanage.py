@@ -625,16 +625,20 @@ class SkmanageTest(TestCase):
         query_command = f'QUERY --type={ROUTER_METRICS_TYPE}'
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(len(output), 1)
-        mem = output[0].get('memoryUsage')
+        vmsize = output[0].get('memoryUsage')
+        rss = output[0].get('residentMemoryUsage')
 
         if sys.platform.lower().startswith('linux'):
             # @TODO(kgiusti) - linux only for now
-            self.assertIsNotNone(mem)
-            self.assertGreaterEqual(mem, 0)
+            self.assertIsNotNone(vmsize)
+            self.assertIsNotNone(rss)
+            self.assertGreaterEqual(vmsize, 0)
+            self.assertGreaterEqual(rss, 0)
         else:
             # @TODO(kgiusti) - update test to handle other platforms as support
             # is added
-            self.assertIsNone(mem)
+            self.assertIsNone(vmsize)
+            self.assertIsNone(rss)
 
     def test_ssl_connection(self):
         """Verify skmanage can securely connect via SSL"""
