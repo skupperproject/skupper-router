@@ -59,8 +59,6 @@ static int rx_request(qd_http1_decoder_connection_t *hconn, const char *method, 
     vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_METHOD, method);
     vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
     vflow_set_uint64(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
-    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-    vflow_add_rate(hreq->vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
     vflow_latency_start(hreq->vflow);
     hreq->latency_done = false;
     DEQ_INSERT_TAIL(th->http1.requests, hreq);
