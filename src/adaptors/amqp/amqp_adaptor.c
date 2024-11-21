@@ -770,7 +770,10 @@ static bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
         break;
     }
 
-    // Handle deliveries destined to a core endpoint.
+    // Intercept deliveries destined to a core endpoint and hand them directly to the router core. Incoming links to a
+    // core endpoint address are "attach routed". This means the incoming link is bound directly to the core endpoint
+    // consumer when the first attach arrives. Afterwards deliveries arriving on this link are passed directly to the
+    // core endpoint rather than going through the delivery forwarding logic.
     //
     if (qdr_link_is_core_endpoint(rlink)) {
         log_link_message(conn, pn_link, msg);
