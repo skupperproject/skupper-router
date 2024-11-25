@@ -720,14 +720,15 @@ const char *qdr_link_internal_address(const qdr_link_t *link);
 bool qdr_link_is_anonymous(const qdr_link_t *link);
 
 /**
- * qdr_link_is_routed
+ * qdr_link_is_core_endpoint
  *
- * Indicate whether the link is link-routed.
+ * Indicate whether the link is terminated in the router core. These links are used by the core to send and receive
+ * messages.
  *
  * @param link Link object
- * @return True if the link is link-routed.
+ * @return True if the link is terminated in the core
  */
-bool qdr_link_is_routed(const qdr_link_t *link);
+bool qdr_link_is_core_endpoint(const qdr_link_t *link);
 
 /**
  * qdr_link_strip_annotations_in
@@ -851,10 +852,9 @@ qdr_delivery_t *qdr_link_deliver_to(qdr_link_t *link, qd_message_t *msg,
                                     bool settled, qd_bitmask_t *link_exclusion, int ingress_index,
                                     uint64_t remote_disposition,
                                     qd_delivery_state_t *remote_state);
-qdr_delivery_t *qdr_link_deliver_to_routed_link(qdr_link_t *link, qd_message_t *msg, bool settled,
-                                                const uint8_t *tag, int tag_length,
-                                                uint64_t remote_disposition,
-                                                qd_delivery_state_t *remote_state);
+qdr_delivery_t *qdr_link_deliver_to_core(qdr_link_t *link, qd_message_t *msg, bool settled,
+                                         uint64_t remote_disposition,
+                                         qd_delivery_state_t *remote_state);
 
 /**
  * qdr_link_process_deliveries

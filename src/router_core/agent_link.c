@@ -30,28 +30,27 @@
 #define QDR_LINK_LINK_DIR                 5
 #define QDR_LINK_OWNING_ADDR              6
 #define QDR_LINK_CAPACITY                 7
-#define QDR_LINK_PEER                     8
-#define QDR_LINK_UNDELIVERED_COUNT        9
-#define QDR_LINK_UNSETTLED_COUNT          10
-#define QDR_LINK_DELIVERY_COUNT           11
-#define QDR_LINK_CONNECTION_ID            12
-#define QDR_LINK_ADMIN_STATE              13
-#define QDR_LINK_OPER_STATE               14
-#define QDR_LINK_PRESETTLED_COUNT         15
-#define QDR_LINK_DROPPED_PRESETTLED_COUNT 16
-#define QDR_LINK_ACCEPTED_COUNT           17
-#define QDR_LINK_REJECTED_COUNT           18
-#define QDR_LINK_RELEASED_COUNT           19
-#define QDR_LINK_MODIFIED_COUNT           20
-#define QDR_LINK_DELAYED_1SEC             21
-#define QDR_LINK_DELAYED_10SEC            22
-#define QDR_LINK_DELIVERIES_STUCK         23
-#define QDR_LINK_OPEN_MOVED_STREAMS       24
-#define QDR_LINK_INGRESS_HISTOGRAM        25
-#define QDR_LINK_PRIORITY                 26
-#define QDR_LINK_SETTLE_RATE              27
-#define QDR_LINK_CREDIT_AVAILABLE         28
-#define QDR_LINK_ZERO_CREDIT_SECONDS      29
+#define QDR_LINK_UNDELIVERED_COUNT        8
+#define QDR_LINK_UNSETTLED_COUNT          9
+#define QDR_LINK_DELIVERY_COUNT           10
+#define QDR_LINK_CONNECTION_ID            11
+#define QDR_LINK_ADMIN_STATE              12
+#define QDR_LINK_OPER_STATE               13
+#define QDR_LINK_PRESETTLED_COUNT         14
+#define QDR_LINK_DROPPED_PRESETTLED_COUNT 15
+#define QDR_LINK_ACCEPTED_COUNT           16
+#define QDR_LINK_REJECTED_COUNT           17
+#define QDR_LINK_RELEASED_COUNT           18
+#define QDR_LINK_MODIFIED_COUNT           19
+#define QDR_LINK_DELAYED_1SEC             20
+#define QDR_LINK_DELAYED_10SEC            21
+#define QDR_LINK_DELIVERIES_STUCK         22
+#define QDR_LINK_OPEN_MOVED_STREAMS       23
+#define QDR_LINK_INGRESS_HISTOGRAM        24
+#define QDR_LINK_PRIORITY                 25
+#define QDR_LINK_SETTLE_RATE              26
+#define QDR_LINK_CREDIT_AVAILABLE         27
+#define QDR_LINK_ZERO_CREDIT_SECONDS      28
 
 const char *qdr_link_columns[] =
     {"name",
@@ -62,7 +61,6 @@ const char *qdr_link_columns[] =
      "linkDir",
      "owningAddr",
      "capacity",
-     "peer",
      "undeliveredCount",
      "unsettledCount",
      "deliveryCount",
@@ -147,8 +145,6 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
     case QDR_LINK_OWNING_ADDR:
         if(link->owning_addr)
             qd_compose_insert_string(body, address_key(link->owning_addr));
-        else if (link->connected_link && link->connected_link->terminus_addr)
-            qd_compose_insert_string(body, link->connected_link->terminus_addr);
         else if (link->terminus_addr)
             qd_compose_insert_string(body, link->terminus_addr);
         else
@@ -157,15 +153,6 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
 
     case QDR_LINK_CAPACITY:
         qd_compose_insert_uint(body, link->capacity);
-        break;
-
-    case QDR_LINK_PEER:
-        if (link->connected_link) {
-            char id[100];
-            snprintf(id, 100, "%"PRId64, link->connected_link->identity);
-            qd_compose_insert_string(body, id);
-        } else
-            qd_compose_insert_null(body);
         break;
 
     case QDR_LINK_UNDELIVERED_COUNT:

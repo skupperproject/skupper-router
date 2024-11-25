@@ -611,9 +611,9 @@ bool qdr_link_is_anonymous(const qdr_link_t *link)
 }
 
 
-bool qdr_link_is_routed(const qdr_link_t *link)
+bool qdr_link_is_core_endpoint(const qdr_link_t *link)
 {
-    return link->connected_link != 0 || link->core_endpoint != 0;
+    return link->core_endpoint != 0;
 }
 
 
@@ -1061,23 +1061,6 @@ void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qd
 }
 
 
-static void qdr_link_abort_undelivered_CT(qdr_core_t *core, qdr_link_t *link)
-{
-    assert(link->link_direction == QD_OUTGOING);
-
-    qdr_connection_t *conn = link->conn;
-
-    sys_mutex_lock(&conn->work_lock);
-    qdr_delivery_t *dlv = DEQ_HEAD(link->undelivered);
-    while (dlv) {
-        if (!qdr_delivery_receive_complete(dlv))
-            qdr_delivery_set_aborted(dlv);
-        dlv = DEQ_NEXT(dlv);
-    }
-    sys_mutex_unlock(&conn->work_lock);
-}
-
-
 static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, const char *log_text)
 {
     //
@@ -1092,14 +1075,6 @@ static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_li
     //
     if (link->core_endpoint)
         qdrc_endpoint_do_cleanup_CT(core, link->core_endpoint);
-
-    //
-    // If the link has a connected peer, unlink the peer
-    //
-    if (link->connected_link) {
-        link->connected_link->connected_link = 0;
-        link->connected_link = 0;
-    }
 
     //
     // If this link is involved in inter-router communication, remove its reference
@@ -2240,22 +2215,6 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
         return;
     }
 
-    //
-    // Handle attach-routed links
-    //
-    if (link->connected_link) {
-        qdr_terminus_t *remote_terminus = link->link_direction == QD_OUTGOING ? target : source;
-        if (link->strip_prefix) {
-            qdr_terminus_strip_address_prefix(remote_terminus, link->strip_prefix);
-        }
-        if (link->insert_prefix) {
-            qdr_terminus_insert_address_prefix(remote_terminus, link->insert_prefix);
-        }
-
-        qdr_link_outbound_second_attach_CT(core, link->connected_link, source, target);
-        return;
-    }
-
     if (link->link_direction == QD_INCOMING) {
         //
         // Handle incoming link cases
@@ -2360,34 +2319,6 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
             DEQ_REMOVE_N(STREAMING_POOL, conn->streaming_link_pool, link);
             link->in_streaming_pool = false;
         }
-    }
-
-    //
-    // For routed links, propagate the detach
-    //
-    if (link->connected_link) {
-        //
-        // If the connected link is outgoing and there is a delivery on the connected link's undelivered
-        // list that is not receive-complete, we must flag that delivery as aborted or it will forever
-        // block the propagation of the detach.
-        //
-        if (link->connected_link->link_direction == QD_OUTGOING)
-            qdr_link_abort_undelivered_CT(core, link->connected_link);
-
-        if (dt != QD_LOST)
-            qdr_link_outbound_detach_CT(core, link->connected_link, error, QDR_CONDITION_NONE, dt == QD_CLOSED);
-        else {
-            qdr_link_outbound_detach_CT(core, link->connected_link, 0, QDR_CONDITION_ROUTED_LINK_LOST, !link->terminus_survives_disconnect);
-            qdr_error_free(error);
-        }
-
-        //
-        // If the link is completely detached, release its resources
-        //
-        if (link->detach_send_done)
-            qdr_link_cleanup_protected_CT(core, conn, link, "Link detached");
-
-        return;
     }
 
     //
