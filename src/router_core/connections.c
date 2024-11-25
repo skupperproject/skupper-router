@@ -1063,6 +1063,9 @@ void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qd
 
 static void qdr_link_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn, qdr_link_t *link, const char *log_text)
 {
+    // expect: If this link is owned by an auto_link it should have been released during link detach cleanup
+    assert(link->auto_link == 0);
+
     //
     // Remove the link from the overall list of links and possibly the streaming
     // link pool
@@ -2322,19 +2325,10 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
     }
 
     //
-    // For auto links, switch the auto link to failed state and record the error
+    // Notify the auto-link that the link is coming down so a new link will be initiated.
     //
     if (link->auto_link) {
-        link->auto_link->link  = 0;
-        link->auto_link->state = QDR_AUTO_LINK_STATE_FAILED;
-        free(link->auto_link->last_error);
-        link->auto_link->last_error = qdr_error_description(error);
-
-        //
-        // The auto link has failed. Periodically retry setting up the auto link until
-        // it succeeds.
-        //
-        qdr_route_auto_link_detached_CT(core, link);
+        qdr_route_auto_link_detached_CT(core, link, error);
     }
 
 
