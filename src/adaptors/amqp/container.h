@@ -68,7 +68,6 @@ qd_container_t *qd_container(qd_router_t *router, const qd_node_type_t *node_typ
 void qd_container_free(qd_container_t *container);
 
 qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char *name, qd_session_class_t);
-void qd_link_free(qd_link_t *link);
 
 /**
  * List of reference in the qd_link used to track abandoned deliveries
@@ -98,7 +97,6 @@ pn_terminus_t *qd_link_target(qd_link_t *link);
 pn_terminus_t *qd_link_remote_source(qd_link_t *link);
 pn_terminus_t *qd_link_remote_target(qd_link_t *link);
 void qd_link_close(qd_link_t *link);
-void qd_link_free(qd_link_t *link);
 void qd_link_q2_restart_receive(const qd_alloc_safe_ptr_t context);
 void qd_link_q3_block(qd_link_t *link);
 void qd_link_q3_unblock(qd_link_t *link);

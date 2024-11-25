@@ -91,7 +91,7 @@ static void idle_link_cleanup(qdr_core_t *core, qdr_connection_t *conn)
             qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
                    "[C%" PRIu64 "][L%" PRIu64 "] Streaming link scrubber: closing idle link %s", link->conn->identity,
                    link->identity, (link->name) ? link->name : "");
-            qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NONE, true);
+            qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NONE);
         }
     }
 }

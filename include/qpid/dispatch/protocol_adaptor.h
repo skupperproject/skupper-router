@@ -643,12 +643,6 @@ qd_iterator_t *qdr_terminus_dnp_address(qdr_terminus_t *term);
  ******************************************************************************
  */
 
-typedef enum {
-    QD_DETACHED,  // Protocol detach
-    QD_CLOSED,    // Protocol close
-    QD_LOST       // Connection or session closed
-} qd_detach_type_t;
-
 /**
  * qdr_link_set_context
  *
@@ -800,15 +794,32 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
 void qdr_link_second_attach(qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target);
 
 /**
- * qdr_link_detach
+ * qdr_link_detach_received
  *
- * This function is invoked when a link detach arrives.
+ * This function is invoked when a link detach performative arrives from the remote peer. This may the first detach
+ * (peer-initiated link detach) or in response to a detach sent by the router (second detach).
  *
  * @param link The link pointer returned by qdr_link_first_attach or in a FIRST_ATTACH event.
- * @param dt The type of detach that occurred.
  * @param error The link error from the detach frame or 0 if none.
  */
-void qdr_link_detach(qdr_link_t *link, qd_detach_type_t dt, qdr_error_t *error);
+void qdr_link_detach_received(qdr_link_t *link, qdr_error_t *error);
+
+
+/**
+ * qdr_link_closed
+ *
+ * This function is invoked by the adaptor when the link has fully closed. This will be the last call made by the
+ * adaptor for this link. This may be called as a result of a successful detach handshake or due to link loss. This will
+ * also be called during adaptor shutdown on any outstanding links.
+ *
+ * The core may free the qdr_link_t by this call. The adaptor MUST NOT reference the qdr_link_t on return from this
+ * call.
+ *
+ * @param link The link pointer returned by qdr_link_first_attach or in a FIRST_ATTACH event.
+ * @param forced True if the link was closed due to failure or shutdown. False if closed by clean detach handshake.
+ */
+void qdr_link_closed(qdr_link_t *link, bool forced);
+
 
 /**
  * qdr_link_deliver

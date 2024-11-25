@@ -36,9 +36,8 @@ static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, boo
 static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_detach_sent_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_link_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_detach_sent(qdr_link_t *link);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
 static void qdr_connection_set_tracing_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
@@ -500,7 +499,7 @@ int qdr_connection_process(qdr_connection_t *conn)
                 }
 
                 sys_mutex_lock(&conn->work_lock);
-                if (link_work->work_type == QDR_LINK_WORK_DELIVERY && link_work->value > 0 && !link->detach_received) {
+                if (link_work->work_type == QDR_LINK_WORK_DELIVERY && link_work->value > 0) {
                     // link_work ref transferred from link_work to work_list
                     DEQ_INSERT_HEAD(link->work_list, link_work);
                     link_work->processing = false;
@@ -518,11 +517,9 @@ int qdr_connection_process(qdr_connection_t *conn)
                 event_count++;
             }
 
-            if (detach_sent) {
-                // let the core thread know so it can clean up
-                qdr_link_detach_sent(link);
-            } else
+            if (!detach_sent) {
                 qdr_record_link_credit(core, link);
+            }
 
             ref = DEQ_NEXT(ref);
         }
@@ -697,6 +694,7 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
 
     strcpy(link->name, name);
     link->link_direction = dir;
+    link->state          = QDR_LINK_STATE_UNINIT;  // transition to first attach occurs on core thread
     link->capacity       = conn->link_capacity;
     link->credit_pending = conn->link_capacity;
     link->oper_status    = QDR_LINK_OPER_DOWN;
@@ -762,25 +760,23 @@ void qdr_link_second_attach(qdr_link_t *link, qdr_terminus_t *source, qdr_termin
 }
 
 
-void qdr_link_detach(qdr_link_t *link, qd_detach_type_t dt, qdr_error_t *error)
+void qdr_link_detach_received(qdr_link_t *link, qdr_error_t *error)
 {
-    qdr_action_t *action = qdr_action(qdr_link_inbound_detach_CT, "link_detach");
+    qdr_action_t *action = qdr_action(qdr_link_inbound_detach_CT, "link_detach_received");
 
     set_safe_ptr_qdr_connection_t(link->conn, &action->args.connection.conn);
     set_safe_ptr_qdr_link_t(link, &action->args.connection.link);
     action->args.connection.error  = error;
-    action->args.connection.dt     = dt;
     qdr_action_enqueue(link->core, action);
 }
 
 
-/* let the core thread know that a dispatch has been sent by the I/O thread
- */
-static void qdr_link_detach_sent(qdr_link_t *link)
+void qdr_link_closed(qdr_link_t *link, bool forced)
 {
-    qdr_action_t *action = qdr_action(qdr_link_detach_sent_CT, "link_detach_sent");
+    qdr_action_t *action = qdr_action(qdr_link_closed_CT, "link_closed");
 
     set_safe_ptr_qdr_link_t(link, &action->args.connection.link);
+    action->args.connection.forced_close = forced;
     qdr_action_enqueue(link->core, action);
 }
 
@@ -1211,6 +1207,7 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     link->conn_id        = conn->identity;
     link->link_type      = link_type;
     link->link_direction = dir;
+    link->state          = QDR_LINK_STATE_ATTACH_SENT;
     link->capacity       = conn->link_capacity;
     link->credit_pending = conn->link_capacity;
     link->name           = (char*) malloc(QD_DISCRIMINATOR_SIZE + 8);
@@ -1220,7 +1217,6 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     link->oper_status    = QDR_LINK_OPER_DOWN;
     link->insert_prefix  = 0;
     link->strip_prefix   = 0;
-    link->attach_count   = 1;
     link->core_ticks     = qdr_core_uptime_ticks(core);
     link->zero_credit_time = link->core_ticks;
     link->priority       = priority;
@@ -1264,8 +1260,11 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
 }
 
 
-void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition, bool close)
+void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition)
 {
+    assert((link->state & QDR_LINK_STATE_DETACH_SENT) == 0);
+    link->state |= QDR_LINK_STATE_DETACH_SENT;
+
     //
     // Ensure a pooled link is no longer available for streaming messages
     //
@@ -1280,8 +1279,8 @@ void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t
     // tell the I/O thread to do the detach
     //
 
-    link->detach_count += 1;
-    qdr_link_work_t *work = qdr_link_work(link->detach_count == 1 ? QDR_LINK_WORK_FIRST_DETACH : QDR_LINK_WORK_SECOND_DETACH);
+    bool first_detach = (link->state & QDR_LINK_STATE_DETACH_RECVD) == 0;  // haven't received a detach
+    qdr_link_work_t *work = qdr_link_work(first_detach ? QDR_LINK_WORK_FIRST_DETACH : QDR_LINK_WORK_SECOND_DETACH);
 
     if (error)
         work->error = error;
@@ -2031,12 +2030,13 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
         return;
     }
 
-    qd_direction_t  dir    = action->args.connection.dir;
+    qd_direction_t dir    = action->args.connection.dir;
 
     //
-    // Start the attach count.
+    // Expect this is the initial attach (remote initiated link)
     //
-    link->attach_count = 1;
+    assert((link->state & QDR_LINK_STATE_ATTACH_SENT) == 0);
+    link->state |= QDR_LINK_STATE_ATTACH_RECVD;
 
     //
     // Put the link into the proper lists for tracking.
@@ -2055,7 +2055,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
     if (((link->link_type == QD_LINK_CONTROL || link->link_type == QD_LINK_ROUTER) &&
          conn->role != QDR_ROLE_INTER_ROUTER)) {
         link->link_type = QD_LINK_ENDPOINT; // Demote the link type to endpoint if this is not an inter-router connection
-        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_FORBIDDEN, true);
+        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_FORBIDDEN);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
         qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
@@ -2070,7 +2070,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
     //
     if (conn->role == QDR_ROLE_INTER_ROUTER && link->link_type == QD_LINK_ENDPOINT &&
         core->control_links_by_mask_bit[conn->mask_bit] == 0) {
-        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_WRONG_ROLE, true);
+        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_WRONG_ROLE);
         qdr_terminus_free(source);
         qdr_terminus_free(target);
         qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
@@ -2114,7 +2114,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
                 if (core->addr_lookup_handler)
                     core->addr_lookup_handler(core->addr_lookup_context, conn, link, dir, source, target);
                 else {
-                    qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
+                    qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION);
                     qdr_terminus_free(source);
                     qdr_terminus_free(target);
                     qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
@@ -2153,7 +2153,7 @@ static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *act
             if (core->addr_lookup_handler)
                 core->addr_lookup_handler(core->addr_lookup_context, conn, link, dir, source, target);
             else {
-                qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
+                qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION);
                 qdr_terminus_free(source);
                 qdr_terminus_free(target);
                 qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
@@ -2200,8 +2200,13 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
         return;
     }
 
+    // expect: called due to an attach received as a response to our sent attach
+    //
+    assert(!!(link->state & QDR_LINK_STATE_ATTACH_SENT));
+    link->state |= QDR_LINK_STATE_ATTACH_RECVD;
+
     link->oper_status = QDR_LINK_OPER_UP;
-    link->attach_count++;
+
 
     //
     // Mark the link as an edge link if it's inside an edge connection.
@@ -2286,28 +2291,13 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
 }
 
 
-static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+// Perform all detach-related link processing.
+//
+// error: (optional) error information that arrived in the detach performative
+//
+static void qdr_link_process_detach(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error)
 {
-    qdr_connection_t *conn  = safe_deref_qdr_connection_t(action->args.connection.conn);
-    qdr_link_t       *link  = safe_deref_qdr_link_t(action->args.connection.link);
-    qdr_error_t      *error = action->args.connection.error;
-    qd_detach_type_t  dt    = action->args.connection.dt;
-
-    if (discard || !conn || !link) {
-        qdr_error_free(error);
-        return;
-    }
-
-    if (link->detach_received)
-        return;
-
-    link->detach_received = true;
-    ++link->detach_count;
-
-    if (link->core_endpoint) {
-        qdrc_endpoint_do_detach_CT(core, link->core_endpoint, error, dt);
-        return;
-    }
+    qdr_connection_t *conn = link->conn;
 
     //
     // ensure a pooled link is no longer available for use
@@ -2325,8 +2315,6 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
     if (link->auto_link) {
         qdr_route_auto_link_detached_CT(core, link, error);
     }
-
-
 
     qdr_address_t *addr = link->owning_addr;
     if (addr)
@@ -2401,26 +2389,10 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
 
     link->owning_addr = 0;
 
-    if (link->detach_count == 1) {
-        //
-        // Handle the disposition of any deliveries that remain on the link
-        //
-        qdr_link_cleanup_deliveries_CT(core, conn, link, false);
-
-        //
-        // If the detach occurred via protocol, send a detach back.
-        //
-        if (dt != QD_LOST) {
-            qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NONE, dt == QD_CLOSED);
-        } else {
-            // no detach can be sent out because the connection was lost
-            qdr_link_cleanup_protected_CT(core, conn, link, "Link lost");
-        }
-    } else if (link->detach_send_done) {  // detach count indicates detach has been scheduled
-        // I/O thread is finished sending detach, ok to free link now
-
-        qdr_link_cleanup_protected_CT(core, conn, link, "Link detached");
-    }
+    //
+    // Handle the disposition of any deliveries that remain on the link
+    //
+    qdr_link_cleanup_deliveries_CT(core, link->conn, link, false);
 
     //
     // If there was an address associated with this link, check to see if any address-related
@@ -2430,24 +2402,78 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
         addr->ref_count--;
         qdr_check_addr_CT(core, addr);
     }
+}
+
+
+static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+{
+    qdr_connection_t *conn  = safe_deref_qdr_connection_t(action->args.connection.conn);
+    qdr_link_t       *link  = safe_deref_qdr_link_t(action->args.connection.link);
+    qdr_error_t      *error = action->args.connection.error;
+
+    if (discard || !conn || !link) {
+        qdr_error_free(error);
+        return;
+    }
+
+    if (link->state & QDR_LINK_STATE_DETACH_RECVD)
+        return;
+
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+           "[C%"PRIu64"][L%"PRIu64"] qdr_link_inbound_detach_CT()",
+           conn->identity, link->identity);
+
+    link->state |= QDR_LINK_STATE_DETACH_RECVD;
+
+    const bool first_detach = (link->state & QDR_LINK_STATE_DETACH_SENT) == 0;
+
+    if (link->core_endpoint) {
+        qdrc_endpoint_do_detach_CT(core, link->core_endpoint, error, first_detach);
+        return;
+    }
+
+    qdr_link_process_detach(core, link, error);
+
+    if (first_detach) {
+        // Send response detach
+        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NONE);
+    }
 
     if (error)
         qdr_error_free(error);
 }
 
 
-/* invoked on core thread to signal that the I/O thread has sent the detach
- */
-static void qdr_link_detach_sent_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_link_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
-    qdr_link_t *link = safe_deref_qdr_link_t(action->args.connection.link);
+    qdr_link_t *link  = safe_deref_qdr_link_t(action->args.connection.link);
+    bool forced_close = action->args.connection.forced_close;
 
     if (discard || !link)
         return;
 
-    link->detach_send_done = true;
-    if (link->conn && link->detach_received)
-        qdr_link_cleanup_protected_CT(core, link->conn, link, "Link detached");
+    if (forced_close) {
+        // The link has been forced closed rather than cleanly detached.
+        if ((link->state & QDR_LINK_STATE_DETACH_RECVD) == 0) {
+            // detach-related cleanup was not done - do it now
+            if (link->core_endpoint) {
+                bool first_detach = (link->state & QDR_LINK_STATE_DETACH_SENT) == 0;
+                qdrc_endpoint_do_detach_CT(core, link->core_endpoint, 0, first_detach);
+                return;
+            }
+
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                   "[C%"PRIu64"][L%"PRIu64"] qdr_link_closed_CT(forced=%s) handle %s detach",
+                   link->conn->identity, link->identity, forced_close ? "YES" : "NO",
+                       (link->state & QDR_LINK_STATE_DETACH_SENT) == 0 ? "first" : "second");
+
+            qdr_link_process_detach(core, link, 0);
+        }
+    }
+
+    qdr_link_cleanup_protected_CT(core, link->conn, link,
+                                  action->args.connection.forced_close
+                                  ? "Link forced closed" : "Link closed");
 }
 
 
