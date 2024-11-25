@@ -137,9 +137,8 @@ typedef void (*qdr_link_second_attach_t) (void           *context,
  * @param error Error record if the detach is the result of an error condition, null otherwise
  * @param first True if this is the first detach (i.e. initiated outbound), False if this is the
  *              the response to a remotely initiated detach
- * @param close True if this is a link close, False if this is a link detach
  */
-typedef void (*qdr_link_detach_t) (void *context, qdr_link_t *link, qdr_error_t *error, bool first, bool close);
+typedef void (*qdr_link_detach_t) (void *context, qdr_link_t *link, qdr_error_t *error, bool first);
 
 /**
  * qdr_link_flow_t callback

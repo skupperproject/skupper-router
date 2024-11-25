@@ -2194,7 +2194,7 @@ static void CORE_second_attach(void           *context,
 }
 
 
-static void CORE_detach(void *context, qdr_link_t *link, qdr_error_t *error, bool first, bool close)
+static void CORE_detach(void *context, qdr_link_t *link, qdr_error_t *error, bool first)
 {
 }
 

@@ -911,15 +911,6 @@ void qd_link_close(qd_link_t *link)
 }
 
 
-void qd_link_detach(qd_link_t *link)
-{
-    if (link->pn_link) {
-        pn_link_detach(link->pn_link);
-        pn_link_close(link->pn_link);
-    }
-}
-
-
 /** sending link has entered Q3 flow control */
 void qd_link_q3_block(qd_link_t *link)
 {
