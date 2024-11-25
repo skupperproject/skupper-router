@@ -203,15 +203,19 @@ static void qdr_auto_link_deactivate_CT(qdr_core_t *core, qdr_auto_link_t *al, q
 }
 
 
-void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link)
+void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link, const qdr_error_t *error)
 {
     if (!link->auto_link)
         return;
+
+    link->auto_link->state = QDR_AUTO_LINK_STATE_FAILED;
 
     if (!link->auto_link->retry_timer)
         link->auto_link->retry_timer = qdr_core_timer_CT(core, qdr_route_attempt_auto_link_CT, (void *)link->auto_link);
 
     static char *activation_failed = "Auto Link Activation Failed. ";
+    free(link->auto_link->last_error);
+    link->auto_link->last_error = qdr_error_description(error);
     int error_length = link->auto_link->last_error ? strlen(link->auto_link->last_error) : 0;
     int total_length = strlen(activation_failed) + error_length + 1;
 
@@ -231,6 +235,11 @@ void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link)
     }
 
     qdr_route_log_CT(core, error_msg, link->auto_link->name, link->auto_link->identity, link->conn);
+
+    // link has detached and will be freed so drop all references
+
+    link->auto_link->link = 0;
+    link->auto_link = 0;
     free(error_msg);
 }
 

@@ -47,8 +47,9 @@ void qdr_route_check_id_for_deletion_CT(qdr_core_t *core, qdr_conn_identifier_t 
  *
  * @param core Pointer to the core object returned by qd_core()
  * @param link qdr_link_t reference. The attach on this link for an auto link was rejected.
+ * @param error (optional) error information from the link detach performative
  */
-void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link);
+void qdr_route_auto_link_detached_CT(qdr_core_t *core, qdr_link_t *link, const qdr_error_t *error);
 
 /**
  * Performs actions that need to be taken when an auto link is closed.
