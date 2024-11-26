@@ -1532,14 +1532,17 @@ class AsyncTestReceiver(MessagingHandler):
         self._thread.start()
         self.num_queue_puts = 0
         self.num_queue_gets = 0
+        self.queue_stats = "self.num_queue_puts=%d, self.num_queue_gets=%d"
         self._error = None
         if wait:
             ready = self._ready.wait(timeout=TIMEOUT)
             if ready is False:
+                self._logger.log("AsyncTestReceiver connection attempt timed out")
                 raise AsyncTestReceiver.TestReceiverException("Timed out waiting for receiver start")
             elif self._error is not None:
+                self._logger.log("AsyncTestReceiver connection attempt failed, error=%s" % self._error)
                 raise AsyncTestReceiver.TestReceiverException(self._error)
-        self.queue_stats = "self.num_queue_puts=%d, self.num_queue_gets=%d"
+        self._logger.log("AsyncTestReceiver thread running")
 
     def get_queue_stats(self):
         return self.queue_stats % (self.num_queue_puts, self.num_queue_gets)
@@ -1558,7 +1561,7 @@ class AsyncTestReceiver(MessagingHandler):
 
     def on_transport_error(self, event):
         self._logger.log("AsyncTestReceiver on_transport_error=%s" % event.transport.condition.description)
-        self._error = f"Connection Error: {event.transport.condition.description}"
+        self._error = f"Transport Error: {event.transport.condition.description}"
         self._stop_thread = True
 
     def on_connection_error(self, event):
@@ -1572,15 +1575,19 @@ class AsyncTestReceiver(MessagingHandler):
         self._stop_thread = True
 
     def stop(self, timeout=TIMEOUT):
+        self._logger.log("AsyncTestReceiver stopping")
         self._stop_thread = True
         self._container.wakeup()
         self._thread.join(timeout=TIMEOUT)
         if self._thread.is_alive():
+            self._logger.log("AsyncTestReceiver did not stop!")
             raise AsyncTestReceiver.TestReceiverException("AsyncTestReceiver did not exit")
         del self._conn
         del self._container
         if self._error is not None:
+            self._logger.log("AsyncTestReceiver failed with error=%s" % self._error)
             raise AsyncTestReceiver.TestReceiverException(self._error)
+        self._logger.log("AsyncTestReceiver stopped!")
 
     def on_start(self, event):
         kwargs = {'url': self.address}

@@ -1101,7 +1101,8 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
         test_rx = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
                                     source="test/addr",
                                     container_id="FooRx",
-                                    conn_args=conn_args)
+                                    conn_args=conn_args,
+                                    print_to_console=True)
 
         ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
         ssl_domain.set_trusted_ca_db(CA2_CERT)
@@ -1154,7 +1155,8 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
             atr = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
                                     source="test/addr",
                                     container_id="FooRx2",
-                                    conn_args=conn_args)
+                                    conn_args=conn_args,
+                                    print_to_console=True)
             atr.stop()
         self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
 
@@ -1169,7 +1171,8 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
             atr = AsyncTestReceiver(f"amqps://localhost:{self.listener2_port}",
                                     source="test/addr",
                                     container_id="FooRx3",
-                                    conn_args=conn_args)
+                                    conn_args=conn_args,
+                                    print_to_console=True)
             atr.stop()
         self.assertIn("certificate verify failed", str(exc.exception), f"{exc.exception}")
 
@@ -1187,7 +1190,8 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
         test_rx = AsyncTestReceiver(f"amqps://localhost:{self.listener1_port}",
                                     source="test/addr",
                                     container_id="FooRxOk",
-                                    conn_args=conn_args)
+                                    conn_args=conn_args,
+                                    print_to_console=True)
 
         ssl_domain = SSLDomain(SSLDomain.MODE_CLIENT)
         ssl_domain.set_trusted_ca_db(CA_CERT)
