@@ -631,7 +631,9 @@ int qdr_forward_multicast_CT(qdr_core_t      *core,
 
             // get the inter-router connection associated with path to rnode:
             int conn_bit = (rnode->next_hop) ? rnode->next_hop->conn_mask_bit : rnode->conn_mask_bit;
-            if (conn_bit >= 0 && (!link_exclusion || qd_bitmask_value(link_exclusion, conn_bit) == 0)) {
+
+            if (conn_bit >= 0 && (!link_exclusion || qd_bitmask_value(link_exclusion, conn_bit) == 0) &&
+		(bypass_valid_origins || qd_bitmask_value(rnode->valid_origins, origin))) {
                 qd_bitmask_set_bit(conn_set, conn_bit);
             }
         }
