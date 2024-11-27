@@ -1917,7 +1917,7 @@ static void CORE_close_connection(void *context, qdr_connection_t *qdr_conn, qdr
     }
 }
 
-static void CORE_link_detach(void *context, qdr_link_t *link, qdr_error_t *error, bool first, bool close)
+static void CORE_link_detach(void *context, qdr_link_t *link, qdr_error_t *error, bool first)
 {
     qd_link_t   *qlink  = (qd_link_t*) qdr_link_get_context(link);
     if (!qlink)
@@ -1949,10 +1949,7 @@ static void CORE_link_detach(void *context, qdr_link_t *link, qdr_error_t *error
         }
     }
 
-    if (close)
-        qd_link_close(qlink);
-    else
-        qd_link_detach(qlink);
+    qd_link_close(qlink);
 
     //
     // This is the last event for this link that we are going to send into Proton.

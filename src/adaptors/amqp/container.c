@@ -608,7 +608,6 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         break;
 
-    case PN_LINK_REMOTE_DETACH :
     case PN_LINK_REMOTE_CLOSE :
         if (!(pn_connection_state(conn) & PN_LOCAL_CLOSED)) {
             pn_link = pn_event_link(event);
@@ -642,7 +641,6 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         break;
 
-    case PN_LINK_LOCAL_DETACH:
     case PN_LINK_LOCAL_CLOSE:
         pn_link = pn_event_link(event);
         if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
@@ -650,6 +648,24 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         break;
 
+    case PN_LINK_REMOTE_DETACH:
+    case PN_LINK_LOCAL_DETACH:
+        // The router does not support detaching and reattaching links as described in the AMQP 1.0 Specification
+        // Section 2.6.4 Detaching And Reattaching A Link. If the remote attempts this it is an error - force the
+        // connection closed.
+        if (!(pn_connection_state(conn) & PN_LOCAL_CLOSED)) {
+            pn_condition_t *cond = pn_connection_condition(conn);
+            pn_condition_set_name(cond, QD_AMQP_COND_NOT_IMPLEMENTED);
+            pn_condition_set_description(cond, "Link detach/reattach not supported");
+            pn_connection_close(conn);
+
+            pn_link = pn_event_link(event);
+            qd_link = (qd_link_t*) pn_link_get_context(pn_link);
+            qd_log(LOG_CONTAINER, QD_LOG_ERROR,
+                   "[C%"PRIu64"][L%"PRIu64"] Error: Link detach/reattach not supported, connection closed",
+                   qd_conn->connection_id, qd_link ? qd_link->link_id : 0);
+        }
+        break;
 
     case PN_LINK_FLOW :
         pn_link = pn_event_link(event);
@@ -892,15 +908,6 @@ void qd_link_close(qd_link_t *link)
     if (link->pn_link)
         pn_link_close(link->pn_link);
 
-}
-
-
-void qd_link_detach(qd_link_t *link)
-{
-    if (link->pn_link) {
-        pn_link_detach(link->pn_link);
-        pn_link_close(link->pn_link);
-    }
 }
 
 

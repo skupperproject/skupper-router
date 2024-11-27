@@ -494,8 +494,7 @@ int qdr_connection_process(qdr_connection_t *conn)
                 case QDR_LINK_WORK_FIRST_DETACH :
                 case QDR_LINK_WORK_SECOND_DETACH :
                     conn->protocol_adaptor->detach_handler(conn->protocol_adaptor->user_context, link, link_work->error,
-                                                           link_work->work_type == QDR_LINK_WORK_FIRST_DETACH,
-                                                           link_work->close_link);
+                                                           link_work->work_type == QDR_LINK_WORK_FIRST_DETACH);
                     detach_sent = true;
                     break;
                 }
@@ -1286,7 +1285,6 @@ void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t
 
     link->detach_count += 1;
     qdr_link_work_t *work = qdr_link_work(link->detach_count == 1 ? QDR_LINK_WORK_FIRST_DETACH : QDR_LINK_WORK_SECOND_DETACH);
-    work->close_link = close;
 
     if (error)
         work->error = error;

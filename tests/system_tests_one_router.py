@@ -1083,6 +1083,16 @@ class OneRouterTest(TestCase):
                 self.assertIn(symbol('ANONYMOUS-RELAY'), rc)
                 self.assertIn(symbol('qd.streaming-links'), rc)
 
+    def test_51_unsupported_link_reattach(self):
+        """
+        The router does not support reattaching detached links. Ensure that
+        clients attempting to detach/reattach are detected and handled as an
+        connection error
+        """
+        test = LinkReattachTest(self.address)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class Entity:
     def __init__(self, status_code, status_description, attrs):
@@ -3302,6 +3312,54 @@ class Q2HoldoffDropTest(MessagingHandler):
                 break
             if not clean:
                 sleep(0.1)
+
+
+class LinkReattachTest(MessagingHandler):
+    """
+    The router does not support link detach/re-attach. Attempt to detach a link
+    without closing it as if attempting to do a re-attach. This should cause
+    the router to force close the connection with error.
+    """
+
+    def __init__(self, addr):
+        super(LinkReattachTest, self).__init__()
+        self.address = addr
+        self.error = None
+        self.conn = None
+        self.rx_link = None
+
+    def done(self):
+        if self.timer:
+            self.timer.cancel()
+        if self.conn:
+            self.conn.close()
+
+    def timeout(self):
+        self.error = "Timeout Expired"
+        self.done()
+
+    def on_start(self, event):
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.conn = event.container.connect(self.address)
+        self.rx_link = event.container.create_receiver(self.conn,
+                                                       source="test/reattach",
+                                                       name="ReattachTest")
+
+    def on_link_opened(self, event):
+        if event.receiver == self.rx_link:
+            # Issue a non-close detach. This is the first step in the link
+            # reattach process
+            self.rx_link.detach()
+
+    def on_connection_error(self, event):
+        # Success if the router has force-closed due to the reattach attempt
+        desc = event.connection.remote_condition.description
+        if "reattach not supported" not in desc:
+            self.error = f"Unexpected error: {desc}"
+        self.done()
+
+    def run(self):
+        Container(self).run()
 
 
 class DataConnectionCountTest(TestCase):
