@@ -57,7 +57,7 @@ jobs:
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.39.0
+          - 0.40.0
         exclude:
           - buildType: Debug
             runtimeCheck: tsan
@@ -154,13 +154,8 @@ jobs:
       - name: Zero ccache stats
         run: ccache -z
 
-      - name: Install python package for proton
-        if: ${{ matrix.protonGitRef == 'main' }}
+      - name: Install python packages for proton from ci_requirements.txt
         run: python3 -m pip install --upgrade -r ${{github.workspace}}/qpid-proton/python/ci_requirements.txt
-
-      - name: Install python package for proton 0.39.0
-        if: ${{ matrix.protonGitRef == '0.39.0' }}
-        run: python3 -m pip install setuptools wheel cffi
 
       - name: qpid-proton cmake configure
         working-directory: ${{env.ProtonBuildDir}}
@@ -231,7 +226,7 @@ jobs:
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.39.0
+          - 0.40.0
         shard: [1, 2]
         shards: [2]
         exclude:
@@ -504,7 +499,7 @@ jobs:
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
-          - 0.39.0
+          - 0.40.0
         shard: [ 1, 2 ]
         shards: [ 2 ]
         exclude:
@@ -573,7 +568,7 @@ jobs:
           #   buildType: Coverage
           #   covType: unit
           #   runtimeCheck: OFF
-          #   protonGitRef: 0.39.0
+          #   protonGitRef: 0.40.0
           #   routerCTestExtraArgs: "-R 'unittests|unit_tests|threaded_timer_test|router_engine_test|management_test|router_policy_test|test_command'"
           #   shard: 1
           #   shards: 1
@@ -709,12 +704,7 @@ jobs:
         run: ${PYTHON} -m pip install --upgrade pip
 
       - name: Install python package for qpid-proton
-        if: ${{ matrix.protonGitRef == 'main' }}
         run: ${PYTHON} -m pip install --upgrade -r ${{github.workspace}}/qpid-proton/python/ci_requirements.txt
-
-      - name: Install python package for 0.39.0 qpid-proton
-        if: ${{ matrix.protonGitRef == '0.39.0' }}
-        run: ${PYTHON} -m pip install setuptools wheel cffi
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
