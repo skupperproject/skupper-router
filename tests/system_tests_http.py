@@ -317,15 +317,30 @@ class RouterTestHttp(TestCase):
                 raise t.ex
 
     def test_https_get(self):
+        port_numbers = dict()
+
+        #
+        # Sometimes, the get_port() function in system_test.py returns duplicate port.
+        # See https://github.com/skupperproject/skupper-router/issues/1687
+        # The get_port() function is already optimized.
+        # We store the ports in a local dict so we can avoid duplication.
+        #
+        def get_port_nums():
+            while True:
+                port = self.get_port()
+                if port not in port_numbers:
+                    port_numbers[port] = port
+                    return port
+
         def http_listener(**kwargs):
             args = dict(kwargs)
-            args.update({'port': self.get_port(), 'http': 'yes', 'httpRootDir': os.path.dirname(__file__)})
-            return ('listener', args)
+            args.update({'port': get_port_nums(), 'http': 'yes', 'httpRootDir': os.path.dirname(__file__)})
+            return 'listener', args
 
         def listener(**kwargs):
             args = dict(kwargs)
-            args.update({'port': self.get_port()})
-            return ('listener', args)
+            args.update({'port': get_port_nums()})
+            return 'listener', args
 
         name = 'delete-me'
         config = Qdrouterd.Config([
