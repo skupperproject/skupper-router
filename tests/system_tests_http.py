@@ -330,6 +330,7 @@ class RouterTestHttp(TestCase):
                 port = self.get_port()
                 if port not in port_numbers:
                     port_numbers[port] = port
+                    print(f"Port numbers dict: {port_numbers}")
                     return port
 
         def http_listener(**kwargs):
