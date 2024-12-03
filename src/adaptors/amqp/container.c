@@ -139,7 +139,7 @@ qd_session_t *qd_session(pn_session_t *pn_ssn);
 static void qd_session_configure_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
 
 #if USE_PN_SESSION_WINDOWS
-// Access to the remote incoming window was added to Proton post-0.39.0
+// Access to the remote incoming window was added in Proton 0.40.0
 static void qd_session_set_remote_incoming_window(qd_session_t *qd_ssn, uint32_t in_window);
 #endif
 

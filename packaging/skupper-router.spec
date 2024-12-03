@@ -35,7 +35,7 @@
 
 # This package builds and statically links against its own proton-c library
 # so we can use newest Proton features even before it is packaged for our distro
-%global proton_vendored_version 0.39.0
+%global proton_vendored_version 0.40.0
 %define proton_install_prefix %{_builddir}/qpid-proton-%{proton_vendored_version}/install
 
 %global python_minimum_version 3.9.0

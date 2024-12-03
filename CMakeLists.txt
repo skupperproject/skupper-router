@@ -198,7 +198,7 @@ find_library(rt_lib rt)
 
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development)
 find_package(Threads REQUIRED)
-find_package(Proton 0.39.0 REQUIRED COMPONENTS Core Proactor Tls)
+find_package(Proton 0.40.0 REQUIRED COMPONENTS Core Proactor Tls)
 get_target_property(Proton_LOCATION Proton::qpid-proton LOCATION)
 message(STATUS "Found Proton: ${Proton_LOCATION} (found version \"${Proton_VERSION}\")" )
 
