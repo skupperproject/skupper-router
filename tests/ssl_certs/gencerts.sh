@@ -26,7 +26,7 @@ export CLIENT=127.0.0.1
 
 # Create a self-signed CA
 openssl genrsa -aes256 -passout pass:ca-password -out ca-private-key.pem 4096
-openssl req -key ca-private-key.pem -new -x509 -days 99999 -out ca-certificate.pem -passin pass:ca-password -subj "/C=US/ST=New York/L=Brooklyn/O=Trust Me Inc./CN=Trusted.CA.com"
+openssl req -key ca-private-key.pem -new -x509 -days 99999 -out ca-certificate.pem -passin pass:ca-password -subj "/C=US/ST=New York/L=Brooklyn/O=Trust Me Inc./CN=Trusted.CA.com" -addext "extendedKeyUsage=serverAuth, clientAuth"
 
 # Create a server certificate signed by the CA
 openssl genrsa -aes256 -passout pass:server-password -out server-private-key.pem 4096
