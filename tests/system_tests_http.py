@@ -56,7 +56,7 @@ class RouterTestHttp(TestCase):
 
     @classmethod
     def get_cert(cls, url):
-        context = ssl.create_default_context()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.load_cert_chain(CLIENT_CERTIFICATE,
                                 CLIENT_PRIVATE_KEY,
                                 CLIENT_PRIVATE_KEY_PASSWORD)
