@@ -491,7 +491,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         container: ['fedora']
-        containerTag: ['40']
+        containerTag: ['41']
         cc: [gcc]
         cxx: [g++]
         python: [python3.11]
@@ -561,7 +561,7 @@ jobs:
           # # unittest coverage
           # - os: ubuntu-latest
           #   container: 'fedora'
-          #   containerTag: 40
+          #   containerTag: 41
           #   cc: gcc
           #   cxx: g++
           #   python: python3.12
@@ -575,7 +575,7 @@ jobs:
           # # clang
           #- os: ubuntu-latest
           #  container: 'fedora'
-          #  containerTag: 40
+          #  containerTag: 41
           #  cc: clang
           #  cxx: clang++
           #  python: python3.11
@@ -586,7 +586,7 @@ jobs:
           #  shards: 2
           #- os: ubuntu-latest
           #  container: 'fedora'
-          #  containerTag: 40
+          #  containerTag: 41
           #  cc: clang
           #  cxx: clang++
           #  python: python3.11
