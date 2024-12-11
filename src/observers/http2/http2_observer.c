@@ -25,6 +25,7 @@
 
 const char *HTTP_METHOD = ":method";
 const char *HTTP_STATUS = ":status";
+const char *X_FORWARDED_FOR = "x-forwarded-for";
 
 ALLOC_DEFINE(qd_http2_stream_info_t);
 
@@ -194,6 +195,19 @@ static int on_data_recv_callback(qd_http2_decoder_connection_t *conn_state,
     return 0;
 }
 
+static void set_stream_vflow_attribute(qdpo_transport_handle_t *transport_handle, uint32_t stream_id, vflow_attribute_t attribute_type, const char *string_value)
+{
+    qd_http2_stream_info_t *stream_info = 0;
+    qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
+    assert(stream_info != 0);
+    if(error == QD_ERROR_NOT_FOUND) {
+        qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] set_stream_vflow_attribute could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
+    }
+    else {
+        vflow_set_string(stream_info->vflow, attribute_type, string_value);
+    }
+}
+
 /**
  * This callback is called for every single header.
  * We only care about the http method and the response status code.
@@ -213,19 +227,8 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
 
     if (strcmp(HTTP_METHOD, (const char *)name) == 0) {
         // Set the http method (GET, POST, PUT, DELETE etc) on the stream's vflow object.
-        qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
-        assert(stream_info != 0);
         qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] on_header_recv_callback - HTTP_METHOD=%s, stream_id=%" PRIu32, transport_handle->conn_id, (const char *)value, stream_id);
-        //
-        // Set the http request method (GET, POST etc) on the stream's vflow object.
-        //
-        if(error == QD_ERROR_NOT_FOUND) {
-            qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_METHOD -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
-        }
-        else {
-            vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_METHOD, (const char *)value);
-        }
-
+        set_stream_vflow_attribute(transport_handle, stream_id, VFLOW_ATTRIBUTE_METHOD, (const char *)value);
     } else if (strcmp(HTTP_STATUS, (const char *)name) == 0) {
         qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         assert(stream_info != 0);
@@ -244,9 +247,12 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 //
                 // Set the http response status (200, 404 etc) on the stream's vflow object.
                 //
+                qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] on_header_recv_callback - HTTP_STATUS=%s, stream_id=%" PRIu32, transport_handle->conn_id, (const char *)value, stream_id);
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
             }
         }
+    } else if (strcmp(X_FORWARDED_FOR, (const char *)name) == 0) {
+        set_stream_vflow_attribute(transport_handle, stream_id, VFLOW_ATTRIBUTE_SOURCE_HOST, (const char *)value);
     }
     return 0;
 }
