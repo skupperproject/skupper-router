@@ -375,7 +375,6 @@ static void TL_setup_listener(qd_tcp_listener_t *li)
     vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->adaptor_config->port);
     vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->adaptor_config->address);
     vflow_set_uint64(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
-    vflow_add_rate(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, VFLOW_ATTRIBUTE_FLOW_RATE_L4);
 
     //
     // Set up the protocol observer
@@ -422,7 +421,6 @@ static void TL_setup_connector(qd_tcp_connector_t *connector)
     vflow_set_string(connector->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, connector->adaptor_config->port);
     vflow_set_string(connector->common.vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      connector->adaptor_config->address);
     vflow_set_uint64(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
-    vflow_add_rate(connector->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, VFLOW_ATTRIBUTE_FLOW_RATE_L4);
 
     if (!!connector->process_ref) {
         vflow_set_string(connector->common.vflow, VFLOW_ATTRIBUTE_PROCESS, connector->process_ref);
@@ -2088,8 +2086,6 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     conn->common.vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_TPORT, listener->common.vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
-    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-    vflow_add_rate(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
     //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
 
     conn->context.context = conn;
