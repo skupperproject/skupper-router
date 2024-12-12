@@ -514,7 +514,7 @@ class Http2TestAutoRouterNginx(TestCase):
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         # Pass traffic:
-        _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head'])
+        _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head', '--header', 'X-Forwarded-For: 192.168.0.2'])
         self.assertIn('HTTP/2 200', out)
         self.assertIn('content-type: text/html', out)
 
@@ -524,6 +524,7 @@ class Http2TestAutoRouterNginx(TestCase):
                 ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
                                 'METHOD': 'HEAD',
                                 'RESULT': '200',
+                                'SOURCE_HOST': '192.168.0.2',
                                 'STREAM_ID': ANY_VALUE,
                                 'END_TIME': ANY_VALUE})
             ]
