@@ -89,7 +89,7 @@ int on_end_headers_callback(qd_http2_decoder_connection_t *conn_state,
     qdpo_transport_handle_t *transport_handle = (qdpo_transport_handle_t *) qd_http2_decoder_connection_get_context(conn_state);
     qd_http2_stream_info_t *stream_info = 0;
     qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
-    if(error == QD_ERROR_NOT_FOUND) {
+    if (error == QD_ERROR_NOT_FOUND) {
         qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_end_headers_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
     } else {
         if (!from_client) {
@@ -171,7 +171,7 @@ static int on_data_recv_callback(qd_http2_decoder_connection_t *conn_state,
     qd_log(LOG_HTTP2_DECODER, QD_LOG_DEBUG, "[C%"PRIu64"] on_data_recv_callback from_client=%i, end_stream=%i, num_bytes=%"PRIu32" , stream_id=%" PRIu32, transport_handle->conn_id, from_client, end_stream, num_bytes, stream_id);
     qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
     assert(stream_info != 0);
-    if(error == QD_ERROR_NOT_FOUND) {
+    if (error == QD_ERROR_NOT_FOUND) {
         qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_data_recv_callback - could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
     }
     else {
@@ -200,7 +200,7 @@ static void set_stream_vflow_attribute(qdpo_transport_handle_t *transport_handle
     qd_http2_stream_info_t *stream_info = 0;
     qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
     assert(stream_info != 0);
-    if(error == QD_ERROR_NOT_FOUND) {
+    if (error == QD_ERROR_NOT_FOUND) {
         qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] set_stream_vflow_attribute could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
     }
     else {
@@ -235,7 +235,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
         //
         // We expect that the above call to get_stream_info_from_hashtable() should return a valid stream_info object.
         //
-        if(error == QD_ERROR_NOT_FOUND) {
+        if (error == QD_ERROR_NOT_FOUND) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] on_header_recv_callback - HTTP_STATUS -could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
         }
         else {
