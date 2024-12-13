@@ -422,8 +422,6 @@ QD_EXPORT qd_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_
             vflow_set_string(ct->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
             vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
             vflow_set_uint64(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
-            vflow_add_rate(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS, VFLOW_ATTRIBUTE_OCTET_RATE);
-            vflow_add_rate(ct->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, VFLOW_ATTRIBUTE_OCTET_RATE_REVERSE);
         }
 
         DEQ_APPEND(cm->data_connectors, data_connectors);
