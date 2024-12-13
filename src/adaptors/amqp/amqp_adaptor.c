@@ -1262,19 +1262,15 @@ static int AMQP_link_detach_handler(qd_router_t *router, qd_link_t *link, qd_det
 
     if (rlink) {
         //
-        // This is the last event for this link that we will send into the core.  Remove the
-        // core linkage.  Note that the core->qd linkage is still in place.
-        //
-        qd_link_set_context(link, 0);
+        // If this is the second (response) detach or the link hasn't really detached but is being dropped due to parent
+        // connection/session loss then this is the last proton event that will be generated for this link. The qd_link
+        // will be freed on return from this call so remove the cross linkage between it and the qdr_link peer.
 
-        //
-        // If the link was lost (due to connection drop), or the linkage from the core
-        // object is already gone, finish disconnecting the linkage and free the qd_link
-        // because the core will silently free its own resources.
-        //
         if (dt == QD_LOST || qdr_link_get_context(rlink) == 0) {
+            // note qdr_link context will be zeroed when the core sends the first detach, so if it is zero then this is
+            // the second detach!
+            qd_link_set_context(link, 0);
             qdr_link_set_context(rlink, 0);
-            qd_link_free(link);
         }
 
         qdr_error_t *error = qdr_error_from_pn(cond);
@@ -1949,21 +1945,18 @@ static void CORE_link_detach(void *context, qdr_link_t *link, qdr_error_t *error
         }
     }
 
-    qd_link_close(qlink);
-
     //
-    // This is the last event for this link that we are going to send into Proton.
-    // Remove the core->proton linkage.  Note that the proton->core linkage may still
-    // be intact and needed.
+    // This is the last event for this link that the core is going to send into Proton so remove the core => adaptor
+    // linkage. If this is the response attach then there will be no further proton link events to send to the core so
+    // remove the adaptor => core linkage. If this is the first (request) detach preserve the adaptor => core linkage so
+    // we can notify the core when the second (response) detach arrives
     //
     qdr_link_set_context(link, 0);
-
-    //
-    // If this is the second detach, free the qd_link
-    //
     if (!first) {
-        qd_link_free(qlink);
+        qd_link_set_context(qlink, 0);
     }
+
+    qd_link_close(qlink);
 }
 
 

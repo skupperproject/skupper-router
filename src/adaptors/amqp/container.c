@@ -54,10 +54,11 @@ struct qd_link_t {
     qd_alloc_safe_ptr_t         incoming_msg;  // DISPATCH-1690: for cleanup
     pn_snd_settle_mode_t        remote_snd_settle_mode;
     qd_link_ref_list_t          ref_list;
-    bool                        q2_limit_unbounded;
-    bool                        q3_blocked;
     DEQ_LINKS_N(Q3, qd_link_t); ///< Q3 blocked links
     uint64_t                    link_id;
+    bool                        q2_limit_unbounded;
+    bool                        q3_blocked;
+    bool                        policy_counted;  // has this been counted by policy?
 };
 
 ALLOC_DEFINE_SAFE(qd_link_t);
@@ -83,6 +84,9 @@ struct qd_session_t {
     // See qd_session_get_outgoing_capacity() for details.
     size_t outgoing_bytes_high_threshold;
     size_t outgoing_bytes_low_threshold;
+
+    // Has this session been counted by policy? Only remotely initiated sessions can be counted by policy
+    bool policy_counted;
 };
 
 
@@ -148,7 +152,7 @@ static inline qd_session_t *qd_session_from_pn(pn_session_t *pn_ssn)
     return (qd_session_t *)pn_session_get_context(pn_ssn);
 }
 
-static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
+static qd_link_t *setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
 {
     qd_link_t *link = new_qd_link_t();
     if (!link) {
@@ -156,7 +160,7 @@ static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
         pn_condition_set_name(cond, QD_AMQP_COND_INTERNAL_ERROR);
         pn_condition_set_description(cond, "Insufficient memory");
         pn_link_close(pn_link);
-        return;
+        return 0;
     }
 
     ZERO(link);
@@ -174,10 +178,11 @@ static void setup_outgoing_link(qd_container_t *container, pn_link_t *pn_link)
 
     pn_link_set_context(pn_link, link);
     container->ntype->outgoing_handler(container->qd_router, link);
+    return link;
 }
 
 
-static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, uint64_t max_size)
+static qd_link_t *setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, uint64_t max_size)
 {
     qd_link_t *link = new_qd_link_t();
     if (!link) {
@@ -185,7 +190,7 @@ static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, u
         pn_condition_set_name(cond, QD_AMQP_COND_INTERNAL_ERROR);
         pn_condition_set_description(cond, "Insufficient memory");
         pn_link_close(pn_link);
-        return;
+        return 0;
     }
 
     ZERO(link);
@@ -205,6 +210,7 @@ static void setup_incoming_link(qd_container_t *container, pn_link_t *pn_link, u
     }
     pn_link_set_context(pn_link, link);
     container->ntype->incoming_handler(container->qd_router, link);
+    return link;
 }
 
 
@@ -269,26 +275,25 @@ static void notify_closed(qd_container_t *container, qd_connection_t *conn, void
     container->ntype->conn_closed_handler(container->qd_router, conn, context);
 }
 
+
+// The given connection has dropped. There will be no further link events for this connection so manually clean up all
+// links
 static void close_links(qd_container_t *container, pn_connection_t *conn, bool print_log)
 {
     pn_link_t *pn_link = pn_link_head(conn, 0);
     while (pn_link) {
         qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
-
-        if (qd_link && qd_link_get_context(qd_link) == 0) {
-            pn_link_set_context(pn_link, 0);
-            pn_link = pn_link_next(pn_link, 0);
-            qd_link_free(qd_link);
-            continue;
-        }
+        pn_link_t *next_link = pn_link_next(pn_link, 0);
 
         if (qd_link) {
             if (print_log)
                 qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
                        pn_link_name(pn_link));
             container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
+            qd_link_free(qd_link);
         }
-        pn_link = pn_link_next(pn_link, 0);
+
+        pn_link = next_link;
     }
 }
 
@@ -472,6 +477,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                         qd_session_decref(qd_ssn);
                         break;
                     }
+                    qd_ssn->policy_counted = true;
                     qd_conn->n_sessions++;
                 }
                 DEQ_INSERT_TAIL(qd_conn->child_sessions, qd_ssn);
@@ -490,35 +496,8 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         break;
 
+    case PN_SESSION_REMOTE_CLOSE :  // fallthrough
     case PN_SESSION_LOCAL_CLOSE :
-        ssn = pn_event_session(event);
-        for (int i = 0; i < QD_SSN_CLASS_COUNT; ++i) {
-            if (qd_conn->qd_sessions[i] && ssn == qd_conn->qd_sessions[i]->pn_session) {
-                qd_session_decref(qd_conn->qd_sessions[i]);
-                qd_conn->qd_sessions[i] = 0;
-                break;
-            }
-        }
-        pn_link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
-        while (pn_link) {
-            if (pn_link_session(pn_link) == ssn) {
-                qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
-                if (qd_link)
-                    qd_link->pn_link = 0;
-            }
-            pn_link = pn_link_next(pn_link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
-        }
-
-        if (pn_session_state(ssn) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
-            qd_session_t *qd_ssn = qd_session_from_pn(ssn);
-            if (qd_ssn) {
-                DEQ_REMOVE(qd_conn->child_sessions, qd_ssn);
-                qd_session_decref(qd_ssn);
-            }
-        }
-        break;
-
-    case PN_SESSION_REMOTE_CLOSE :
         ssn = pn_event_session(event);
         for (int i = 0; i < QD_SSN_CLASS_COUNT; ++i) {
             if (qd_conn->qd_sessions[i] && ssn == qd_conn->qd_sessions[i]->pn_session) {
@@ -529,52 +508,43 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         if (!(pn_connection_state(conn) & PN_LOCAL_CLOSED)) {
             if (pn_session_state(ssn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
-
-
-                // remote has nuked our session.  Check for any links that were
+                // Remote has nuked our session.  Check for any links that were
                 // left open and forcibly detach them, since no detaches will
                 // arrive on this session.
-                pn_connection_t *conn = pn_session_connection(ssn);
-
-                //Sweep thru every pn_link in this connection and a matching session and zero out the
-                // qd_link->pn_link reference. We do this in order to not miss any pn_links
                 pn_link = pn_link_head(conn, 0);
                 while (pn_link) {
+                    pn_link_t *next_link = pn_link_next(pn_link, 0);
                     if (pn_link_session(pn_link) == ssn) {
-                        qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
-
-                        if ((pn_link_state(pn_link) == (PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE))) {
-                            if (qd_link) {
-                                if (qd_conn->policy_settings) {
-                                    if (qd_link->direction == QD_OUTGOING) {
-                                        qd_conn->n_receivers--;
-                                        assert(qd_conn->n_receivers >= 0);
-                                    } else {
-                                        qd_conn->n_senders--;
-                                        assert(qd_conn->n_senders >= 0);
-                                    }
+                        qd_link_t *qd_link = (qd_link_t *) pn_link_get_context(pn_link);
+                        if (qd_link) {
+                            if (qd_link->policy_counted) {
+                                qd_link->policy_counted = false;
+                                if (qd_link->direction == QD_OUTGOING) {
+                                    qd_conn->n_receivers--;
+                                    assert(qd_conn->n_receivers >= 0);
+                                } else {
+                                    qd_conn->n_senders--;
+                                    assert(qd_conn->n_senders >= 0);
                                 }
-                                qd_log(LOG_CONTAINER, QD_LOG_DEBUG,
-                                       "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
-                                container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
                             }
+                            qd_log(LOG_CONTAINER, QD_LOG_DEBUG,
+                                   "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
+                            container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
+                            qd_link_free(qd_link);
                         }
-
-                        if (qd_link)
-                            qd_link->pn_link = 0;
                     }
-                    pn_link = pn_link_next(pn_link, 0);
-
+                    pn_link = next_link;
                 }
-                if (qd_conn->policy_settings) {
-                    qd_conn->n_sessions--;
-                }
-
                 pn_session_close(ssn);
             }
             else if (pn_session_state(ssn) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
                 qd_session_t *qd_ssn = qd_session_from_pn(ssn);
                 if (qd_ssn) {
+                    if (qd_ssn->policy_counted) {
+                        qd_ssn->policy_counted = false;
+                        qd_conn->n_sessions--;
+                        assert(qd_conn->n_sessions >= 0);
+                    }
                     DEQ_REMOVE(qd_conn->child_sessions, qd_ssn);
                     qd_session_decref(qd_ssn);
                 }
@@ -586,22 +556,29 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         if (!(pn_connection_state(conn) & PN_LOCAL_CLOSED)) {
             pn_link = pn_event_link(event);
             if (pn_link_state(pn_link) & PN_LOCAL_UNINIT) {
+                bool policy_counted = false;
                 if (pn_link_is_sender(pn_link)) {
                     if (qd_conn->policy_settings) {
                         if (!qd_policy_approve_amqp_receiver_link(pn_link, qd_conn)) {
                             break;
                         }
                         qd_conn->n_receivers++;
+                        policy_counted = true;
                     }
-                    setup_outgoing_link(container, pn_link);
+                    qd_link_t *qd_link = setup_outgoing_link(container, pn_link);
+                    if (qd_link)
+                        qd_link->policy_counted = policy_counted;
                 } else {
                     if (qd_conn->policy_settings) {
                         if (!qd_policy_approve_amqp_sender_link(pn_link, qd_conn)) {
                             break;
                         }
                         qd_conn->n_senders++;
+                        policy_counted = true;
                     }
-                    setup_incoming_link(container, pn_link, qd_connection_max_message_size(qd_conn));
+                    qd_link_t *qd_link = setup_incoming_link(container, pn_link, qd_connection_max_message_size(qd_conn));
+                    if (qd_link)
+                        qd_link->policy_counted = policy_counted;
                 }
             } else if (pn_link_state(pn_link) & PN_LOCAL_ACTIVE)
                 handle_link_open(container, pn_link);
@@ -617,24 +594,29 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                 if (qd_link->pn_link == pn_link) {
                     pn_link_close(pn_link);
                 }
-                if (qd_conn->policy_counted && qd_conn->policy_settings) {
+                if (qd_link->policy_counted) {
+                    qd_link->policy_counted = false;
                     if (pn_link_is_sender(pn_link)) {
                         qd_conn->n_receivers--;
                         qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Closed receiver link %s. n_receivers: %d",
                                pn_link_name(pn_link), qd_conn->n_receivers);
-                        assert (qd_conn->n_receivers >= 0);
+                        assert(qd_conn->n_receivers >= 0);
                     } else {
                         qd_conn->n_senders--;
                         qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Closed sender link %s. n_senders: %d",
                                pn_link_name(pn_link), qd_conn->n_senders);
-                        assert (qd_conn->n_senders >= 0);
+                        assert(qd_conn->n_senders >= 0);
                     }
                 }
 
-                if (pn_link_state(pn_link) & PN_LOCAL_CLOSED) {
-                    add_link_to_free_list(&qd_conn->free_link_list, pn_link);
-                }
                 container->ntype->link_detach_handler(container->qd_router, qd_link, dt);
+
+                if (pn_link_state(pn_link) & PN_LOCAL_CLOSED) {
+                    // link fully closed
+                    add_link_to_free_list(&qd_conn->free_link_list, pn_link);
+                    qd_link_free(qd_link);
+                }
+
             } else {
                 add_link_to_free_list(&qd_conn->free_link_list, pn_link);
             }
@@ -645,6 +627,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         pn_link = pn_event_link(event);
         if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
             add_link_to_free_list(&qd_conn->free_link_list, pn_link);
+            qd_link_free((qd_link_t *) pn_link_get_context(pn_link));
         }
         break;
 
