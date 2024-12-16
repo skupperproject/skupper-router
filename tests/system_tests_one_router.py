@@ -3469,9 +3469,9 @@ class AMQPSessionFlapTest(MessagingHandler):
 
 class AMQPLinkFlapTest(MessagingHandler):
     """
-    This test stresses the creation and deletion of AMQP links.
-    It repeatedly creates links, sends messages, and then tears the links down
-    while the messages are in flight.
+    This test stresses the creation and deletion of AMQP links.  It repeatedly
+    creates links then tears them down while keeping the parent connection
+    alive.
     """
     def __init__(self, router_address):
         super(AMQPLinkFlapTest, self).__init__()
