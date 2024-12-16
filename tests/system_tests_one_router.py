@@ -1093,6 +1093,22 @@ class OneRouterTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_52_amqp_session_flap_test(self):
+        """
+        Test creating and tearing down active sessions
+        """
+        test = AMQPSessionFlapTest(self.address)
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_53_amqp_link_flap_test(self):
+        """
+        Test creating and tearing down active links
+        """
+        test = AMQPLinkFlapTest(self.address)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class Entity:
     def __init__(self, status_code, status_description, attrs):
@@ -3357,6 +3373,173 @@ class LinkReattachTest(MessagingHandler):
         if "reattach not supported" not in desc:
             self.error = f"Unexpected error: {desc}"
         self.done()
+
+    def run(self):
+        Container(self).run()
+
+
+class AMQPSessionFlapTest(MessagingHandler):
+    """
+    This test stresses the creation and deletion of AMQP Sessions.
+    It repeatedly creates sessions then tears them down while links are
+    actively sending messages
+    """
+    def __init__(self, router_address):
+        super(AMQPSessionFlapTest, self).__init__()
+        self.router_address = router_address
+        self.target = "session/flap/test"
+        self.error = None
+        self.rx_conn = None
+        self.receiver = None
+        self.tx_conn = None
+        self.tx_session = None
+
+        # repeat using a new session tx_session_limit iterations
+        self.tx_session_limit = 10
+        self.tx_session_count = 0
+
+        # repeat using a new link tx_link_limit iterations
+        self.tx_link_limit = 100
+        self.tx_links = []
+
+        # count number of messages in flight
+        self.tx_messages = 0
+        self.timer = None
+
+    def done(self, error=None):
+        self.error = error
+        if self.timer:
+            self.timer.cancel()
+        if self.rx_conn:
+            self.rx_conn.close()
+        if self.tx_conn:
+            self.tx_conn.close()
+
+    def timeout(self):
+        self.done(error="Test timed out")
+
+    def on_start(self, event):
+        self.rx_conn = event.container.connect(self.router_address)
+        self.receiver  = event.container.create_receiver(self.rx_conn, self.target)
+        self.timer     = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+
+    def on_link_opened(self, event):
+        if event.receiver:
+            assert self.tx_conn is None
+            self.tx_conn = event.container.connect(self.router_address)
+            self.tx_session = self.tx_conn.session()
+            # open initial session
+            self.tx_session.open()
+
+    def on_session_opened(self, event):
+        if event.session == self.tx_session:
+            self.tx_messages = 0
+            for index in range(self.tx_link_limit):
+                link = self.tx_session.sender(name=f"Link-{self.tx_session_count}-{index}")
+                link.target.address = self.target
+                link.open()
+                self.tx_links.append(link)
+
+    def on_link_flow(self, event):
+        if event.sender and event.sender in self.tx_links:
+            sender = event.sender
+            if sender.current is None and sender.credit > 0:
+                if self.tx_messages < self.tx_link_limit:
+                    sender.delivery(sender.delivery_tag())
+                    sender.stream(b'Mary had a little french bulldog')
+                    self.tx_messages += 1
+                    if self.tx_messages >= self.tx_link_limit:
+                        self.tx_session.close()
+
+    def on_session_closed(self, event):
+        if event.session == self.tx_session:
+            self.tx_session_count += 1
+            self.tx_links.clear()
+            if self.tx_session_count < self.tx_session_limit:
+                # repeat with new session
+                self.tx_session = self.tx_conn.session()
+                self.tx_session.open()
+            else:
+                # done
+                self.done()
+
+    def run(self):
+        Container(self).run()
+
+
+class AMQPLinkFlapTest(MessagingHandler):
+    """
+    This test stresses the creation and deletion of AMQP links.  It repeatedly
+    creates links then tears them down while keeping the parent connection
+    alive.
+    """
+    def __init__(self, router_address):
+        super(AMQPLinkFlapTest, self).__init__()
+        self.router_address = router_address
+        self.target = "link/flap/test"
+        self.error = None
+        self.rx_conn = None
+        self.receivers = []
+        self.tx_conn = None
+        self.senders = []
+        self.timer = None
+
+        # repeat creating a batch of link_limit links
+        self.link_limit = 100
+        self.repeat_count = 10
+
+    def done(self, error=None):
+        self.error = error
+        self.receivers.clear()
+        self.senders.clear()
+        if self.timer:
+            self.timer.cancel()
+        if self.rx_conn:
+            self.rx_conn.close()
+        if self.tx_conn:
+            self.tx_conn.close()
+
+    def timeout(self):
+        self.done(error="Test timed out")
+
+    def on_start(self, event):
+        self.rx_conn = event.container.connect(self.router_address)
+        self.tx_conn = event.container.connect(self.router_address)
+        self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+
+    def on_connection_opened(self, event):
+        # print("on_connection_opened", flush=True)
+        if event.connection == self.rx_conn:
+            for index in range(self.link_limit):
+                self.receivers.append(event.container.create_receiver(self.rx_conn,
+                                                                      self.target,
+                                                                      name=f"RL-{self.repeat_count}-{index}"))
+        elif event.connection == self.tx_conn:
+            for index in range(self.link_limit):
+                self.senders.append(event.container.create_sender(self.tx_conn,
+                                                                  self.target,
+                                                                  name=f"TL-{self.repeat_count}-{index}"))
+
+    def on_link_opened(self, event):
+        event.link.close()
+
+    def on_link_closed(self, event):
+        if event.sender and event.sender in self.senders:
+            self.senders.remove(event.sender)
+        elif event.receiver in self.receivers:
+            self.receivers.remove(event.receiver)
+        if len(self.receivers) == 0 and len(self.senders) == 0:
+            self.repeat_count -= 1
+            if self.repeat_count > 0:
+                for index in range(self.link_limit):
+                    self.receivers.append(event.container.create_receiver(self.rx_conn,
+                                                                          self.target,
+                                                                          name=f"RL-{self.repeat_count}-{index}"))
+                    self.senders.append(event.container.create_sender(self.tx_conn,
+                                                                      self.target,
+                                                                      name=f"TL-{self.repeat_count}-{index}"))
+            else:
+                self.done()
 
     def run(self):
         Container(self).run()
