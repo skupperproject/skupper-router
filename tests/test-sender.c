@@ -88,9 +88,6 @@ char *host_address = _addr;
 char *container_name = "TestSender";
 char proactor_address[1024];
 
-pn_connection_t *pn_conn;
-pn_session_t *pn_ssn;
-pn_link_t *pn_link;
 pn_proactor_t *proactor;
 pn_message_t *out_message;
 
@@ -253,6 +250,7 @@ static bool event_handler(pn_event_t *event)
     case PN_CONNECTION_INIT: {
         // Create and open all the endpoints needed to send a message
         //
+        pn_connection_t *pn_conn = pn_event_connection(event);
         pn_connection_open(pn_conn);
         pn_session_t *pn_ssn = pn_session(pn_conn);
         pn_session_open(pn_ssn);
@@ -267,30 +265,31 @@ static bool event_handler(pn_event_t *event)
 
     } break;
 
-    case PN_CONNECTION_WAKE: {
-        if (stop) {
-            pn_proactor_cancel_timeout(proactor);
-            if (drop_connection) {  // hard stop
-                if (verbose) {
-                    fprintf(stdout,
-                            "Sent:%"PRIu64" Accepted:%"PRIu64" Rejected:%"PRIu64
-                            " Released:%"PRIu64" Modified:%"PRIu64"\n",
-                            count, accepted, rejected, released, modified);
-                    fflush(stdout);
-                }
-                exit(0);
-            }
-            if (pn_conn) {
-                debug("Stop detected - closing connection...\n");
-                if (pn_link) pn_link_close(pn_link);
-                if (pn_ssn) pn_session_close(pn_ssn);
-                pn_connection_close(pn_conn);
-                pn_link = 0;
-                pn_ssn = 0;
-                pn_conn = 0;
-            }
+    case PN_LINK_REMOTE_CLOSE: {
+        pn_link_t *pn_link = pn_event_link(event);
+        if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
+            pn_session_close(pn_link_session(pn_link));
+            pn_link_free(pn_link);
         }
-    } break;
+        break;
+    }
+
+    case PN_SESSION_REMOTE_CLOSE: {
+        pn_session_t *pn_session = pn_event_session(event);
+        if (pn_session_state(pn_session) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
+            pn_connection_close(pn_session_connection(pn_session));
+            pn_session_free(pn_session);
+        }
+        break;
+    }
+
+    case PN_CONNECTION_REMOTE_CLOSE: {
+        pn_connection_t *pn_conn = pn_event_connection(event);
+        if (pn_connection_state(pn_conn) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
+            pn_conn = 0;
+        }
+        break;
+    }
 
     case PN_LINK_FLOW: {
         // the remote has given us some credit, now we can send messages
@@ -315,7 +314,19 @@ static bool event_handler(pn_event_t *event)
                     // no need to wait for acks
                     debug("stopping (presettled)...\n");
                     stop = true;
-                    pn_connection_wake(pn_conn);
+                    pn_proactor_cancel_timeout(proactor);
+                    if (drop_connection) {  // hard stop
+                        if (verbose) {
+                            fprintf(stdout,
+                                    "Sent:%"PRIu64" Accepted:%"PRIu64" Rejected:%"PRIu64
+                                    " Released:%"PRIu64" Modified:%"PRIu64"\n",
+                                    count, accepted, rejected, released, modified);
+                            fflush(stdout);
+                        }
+                        exit(0);
+                    } else {  // graceful stop
+                        pn_link_close(sender);
+                    }
                 }
             }
         }
@@ -357,29 +368,40 @@ static bool event_handler(pn_event_t *event)
 
             if (limit && acked == limit) {
                 // initiate clean shutdown of the endpoints
-                debug("stopping...\n");
+                debug("Done sending\n");
                 stop = true;
-                pn_connection_wake(pn_conn);
+                pn_proactor_cancel_timeout(proactor);
+                if (drop_connection) {  // hard stop
+                    if (verbose) {
+                        fprintf(stdout,
+                                "Sent:%"PRIu64" Accepted:%"PRIu64" Rejected:%"PRIu64
+                                " Released:%"PRIu64" Modified:%"PRIu64"\n",
+                                count, accepted, rejected, released, modified);
+                        fflush(stdout);
+                    }
+                    exit(0);
+                } else {  // graceful stop
+                    pn_link_close(pn_event_link(event));
+                }
             }
         }
     } break;
 
     case PN_PROACTOR_TIMEOUT: {
-        if (verbose) {
-            fprintf(stdout,
-                    "Sent:%"PRIu64" Accepted:%"PRIu64" Rejected:%"PRIu64
-                    " Released:%"PRIu64" Modified:%"PRIu64" Limit:%"PRIu64"\n",
-                    count, accepted, rejected, released, modified, limit);
-            fflush(stdout);
-            if (!stop) {
-                pn_proactor_set_timeout(proactor, 10 * 1000);
+        if (!stop) {
+            if (verbose) {
+                fprintf(stdout,
+                        "Sent:%"PRIu64" Accepted:%"PRIu64" Rejected:%"PRIu64
+                        " Released:%"PRIu64" Modified:%"PRIu64" Limit:%"PRIu64"\n",
+                        count, accepted, rejected, released, modified, limit);
+                fflush(stdout);
             }
+            pn_proactor_set_timeout(proactor, 10 * 1000);
         }
     } break;
 
     case PN_PROACTOR_INACTIVE:
     case PN_PROACTOR_INTERRUPT: {
-        assert(stop);  // expect: due to stopping
         debug("proactor inactive!\n");
         return true;
     } break;
@@ -469,7 +491,7 @@ int main(int argc, char** argv)
         port = "5672";
     }
 
-    pn_conn = pn_connection();
+    pn_connection_t *pn_conn = pn_connection();
     // the container name should be unique for each client
     pn_connection_set_container(pn_conn, container_name);
     pn_connection_set_hostname(pn_conn, host);

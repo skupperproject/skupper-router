@@ -628,7 +628,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->inbound_link) {
-        qdr_link_detach(conn->inbound_link, QD_LOST, 0);
+        qdr_link_closed(conn->inbound_link, true);
     }
 
     if (!!conn->outbound_delivery) {
@@ -638,7 +638,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->outbound_link) {
-        qdr_link_detach(conn->outbound_link, QD_LOST, 0);
+        qdr_link_closed(conn->outbound_link, true);
     }
 
     if (conn->observer_handle) {
@@ -2501,7 +2501,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         //
         if (!!connector->out_link) {
             qdr_link_set_context(connector->out_link, 0);
-            qdr_link_detach(connector->out_link, QD_LOST, 0);
+            qdr_link_closed(connector->out_link, true);
             connector->out_link = 0;
         }
 

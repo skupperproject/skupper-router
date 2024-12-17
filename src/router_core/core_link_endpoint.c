@@ -100,8 +100,8 @@ void qdrc_endpoint_second_attach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_t
 
 void qdrc_endpoint_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error)
 {
-    qdr_link_outbound_detach_CT(core, ep->link, error, QDR_CONDITION_NONE, true);
-    if (ep->link->detach_count == 2) {
+    qdr_link_outbound_detach_CT(core, ep->link, error, QDR_CONDITION_NONE);
+    if (QDR_LINK_STATE_IS_CLOSED(ep->link->state)) {
         qdrc_endpoint_do_cleanup_CT(core, ep);
     }
 }
@@ -213,17 +213,13 @@ void qdrc_endpoint_do_flow_CT(qdr_core_t *core, qdrc_endpoint_t *ep, int credit,
 }
 
 
-void qdrc_endpoint_do_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error, qd_detach_type_t dt)
+void qdrc_endpoint_do_detach_CT(qdr_core_t *core, qdrc_endpoint_t *ep, qdr_error_t *error, bool first_detach)
 {
-    if (dt == QD_LOST) {
-        qdrc_endpoint_do_cleanup_CT(core, ep);
-        qdr_error_free(error);
-
-    } else if (ep->link->detach_count == 1) {
+    if (first_detach) {
         if (!!ep->desc->on_first_detach)
             ep->desc->on_first_detach(ep->link_context, error);
         else {
-            qdr_link_outbound_detach_CT(core, ep->link, 0, QDR_CONDITION_NONE, true);
+            qdr_link_outbound_detach_CT(core, ep->link, 0, QDR_CONDITION_NONE);
             qdr_error_free(error);
         }
     } else {

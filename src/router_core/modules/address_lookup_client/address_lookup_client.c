@@ -234,13 +234,13 @@ static void qdr_link_react_to_first_attach_CT(qdr_core_t       *core,
         source = target = 0;  // ownership passed to qdrc_endpoint_do_bound_attach_CT
     }
     else if (unavailable) {
-        qdr_link_outbound_detach_CT(core, link, qdr_error(QD_AMQP_COND_NOT_FOUND, "Node not found"), 0, true);
+        qdr_link_outbound_detach_CT(core, link, qdr_error(QD_AMQP_COND_NOT_FOUND, "Node not found"), 0);
     }
     else if (!addr) {
         //
         // No route to this destination, reject the link
         //
-        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION, true);
+        qdr_link_outbound_detach_CT(core, link, 0, QDR_CONDITION_NO_ROUTE_TO_DESTINATION);
     } else {
         //
         // Prior to binding, check to see if this is an inter-edge connection.  If so,
