@@ -1,0 +1,5 @@
+GET e/0 HTTP/1.0
+Co/pi: /pi HTTP/1.1
+Ch: 0
+
+//2

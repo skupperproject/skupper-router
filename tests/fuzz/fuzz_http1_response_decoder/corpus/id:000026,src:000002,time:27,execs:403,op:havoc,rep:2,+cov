@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr: value
+
+B;joe=Aob
+01234567891
+0000
+trailer: field
+J

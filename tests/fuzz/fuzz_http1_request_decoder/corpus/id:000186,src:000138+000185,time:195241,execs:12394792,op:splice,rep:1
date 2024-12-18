@@ -1,0 +1,28 @@
+
+POST /anl HTTP/1.1
+
+
+POST //1 HTTP/1.1
+1
+
+ET kline/1 HTTP/1.1
+Co1.1
+
+GE p1peline/1 HTTP/1.1
+Ch: 0
+
+GET //2 HTTP/1.1
+
+
+ET //2 HTTP/1.1
+.1
+1
+
+ET k/1 HTTP/1.1
+Co1
+Content-length: 0
+
+
+GET 
+
+G

@@ -1,0 +1,17 @@
+
+
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr:ue
+
+B;
+01234567891
+00HTTP/1.1 201 OK
+transfer-eVcodiiiiiiiiiiiiiiiiiiiiiiiiiiing
+transfer-																											ng: yes&no, chunked
+		=bob
+0HTTP/1.1 200 OK
+header: foo
+co123co45679 value
+
+B;•o

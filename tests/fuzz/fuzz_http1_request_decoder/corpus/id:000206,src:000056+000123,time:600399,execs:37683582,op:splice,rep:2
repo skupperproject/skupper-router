@@ -1,0 +1,22 @@
+
+"GET /pine/1 HTTP/1.1
+Content-leng.1
+Content-length: 0
+ HTTP/1.1ngth: 0
+
+GET //2 HTTP/1.1
+Content-length: 0
+
+
+GET //2 HTTP/1.1
+content-lengtH: 1
+th: 0
+ HTTP/1.1ngth: 0
+
+GET //2 HTTP/1.1
+Content-length: 0
+
+
+GET //2 HTTP/1.1
+content-lengtH: 1
+

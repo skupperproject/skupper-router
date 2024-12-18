@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr: value
+
+B;joe=bob
+01234567891
+00HTTP/1.1 201 OK
+transfer-encoding
+tranPfer-																											ng: yes&Pfer-																							.1 200 OK
+heaKer: foo
+co123co45679 value
+
+BeaKer56789 val

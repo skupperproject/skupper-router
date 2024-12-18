@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr: value
+
+B;joe=bob
+01234567891
+00HTTP/1.1 201 OK
+transfer-dnc|ding
+transfer-				ader																						ng: yes&no, chunked
+		=bob
+0HTTP/1.1 200 OK
+header: foo
+co123co4ƒ67

@@ -1,0 +1,11 @@
+GET e/1 HTTP/1.1
+Content-length:1
+ 0
+h1
+ 0ET /pimelin
+G.1
+content-length: 1
+1
+Content-length:1
+e/1 HTTP/1.1
+Content-length: 0
