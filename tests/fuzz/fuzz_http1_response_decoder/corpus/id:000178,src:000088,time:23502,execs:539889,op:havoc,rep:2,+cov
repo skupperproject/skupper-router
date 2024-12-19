@@ -1,0 +1,5 @@
+HTTP/1.1 304 OK
+transfer-encoding: yes,no, chunked
+rdr: e
+
+BDjob

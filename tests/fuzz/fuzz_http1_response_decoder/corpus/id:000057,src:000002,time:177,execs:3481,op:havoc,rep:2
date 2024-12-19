@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+transfer-encoding: yXs,no, chunked
+hdr: e
+
+B=bob
+012value
+
+B;joe=bob
+01234567891
+0000
+trailer: field
+

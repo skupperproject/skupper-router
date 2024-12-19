@@ -1,0 +1,7 @@
+GET e/1 HTTP/1.1
+bo:e/1.     
+
+GET /1. HTTP/1.1
+content-length: 1
+
+A

@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr: value
+
+B;joe=bob
+01234567891
+00HTTP/1.1 201 OK
+transfer-encoding
+transfdr-																					bob
+0HTTP/1.1 200 OK
+head		=bob
+0HTTP/1.1 200 OK
+header: foo
+co123co45679 value
+
+B;jo3456789 val

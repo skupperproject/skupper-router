@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, chunked
+hdr: value
+
+Bue
+
+B;joe=bob
+
+0

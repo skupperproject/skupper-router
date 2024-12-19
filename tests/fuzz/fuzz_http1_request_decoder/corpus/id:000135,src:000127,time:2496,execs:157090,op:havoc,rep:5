@@ -1,0 +1,19 @@
+
+POS /anllllllllllllll HTTP/1.1
+transfer-encoding: a,b,chunked
+
+003
+A:C
+003
+ABC
+0b	
+03
+A3
+A:C
+003
+ABC
+0b	
+F3
+A:C
+0
+

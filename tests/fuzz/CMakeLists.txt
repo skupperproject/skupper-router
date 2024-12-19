@@ -51,4 +51,5 @@ macro(add_fuzz_test test)
 endmacro(add_fuzz_test test)
 
 add_fuzz_test(fuzz_http2_decoder fuzz_http2_decoder.c)
-#add_fuzz_test(fuzz_http1_decoder fuzz_http1_decoder.c)
+add_fuzz_test(fuzz_http1_request_decoder fuzz_http1_request_decoder.c)
+add_fuzz_test(fuzz_http1_response_decoder fuzz_http1_response_decoder.c)

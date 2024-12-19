@@ -1,0 +1,6 @@
+GET e/1/2 HTTP/1.0
+.1
+Content-length: 0
+
+GET //2 HTTP/1.0
+c

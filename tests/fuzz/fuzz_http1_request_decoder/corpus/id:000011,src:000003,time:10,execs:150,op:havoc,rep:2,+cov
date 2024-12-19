@@ -1,0 +1,5 @@
+GET eline/1 HTTP/1.1
+Co1.1
+content-length: 1
+
+A

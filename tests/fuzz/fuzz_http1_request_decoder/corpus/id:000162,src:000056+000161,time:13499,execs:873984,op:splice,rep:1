@@ -1,0 +1,10 @@
+
+GET eli/2 HTTP/1.0
+coe1.1
+Con-0
+
+GET //2 HTTP/1.0
+ngth: 0
+
+GET //2 HTTP/1.0
+con

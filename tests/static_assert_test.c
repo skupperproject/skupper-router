@@ -19,12 +19,16 @@
 
 #include "qpid/dispatch/static_assert.h"
 
-static unsigned long ul;
-static long          l;
-static int           i;
+#ifndef NDEBUG
+unsigned long static_assert_test_ul;
+long          static_assert_test_l;
+int           static_assert_test_i;
 
-STATIC_ASSERT(IS_SAME(unsigned long, ul), ul is unsigned long);
-STATIC_ASSERT(!IS_SAME(unsigned long, l), l is not unsigned long);
+STATIC_ASSERT(IS_SAME(unsigned long, static_assert_test_ul), static_assert_test_ul is unsigned long);
+STATIC_ASSERT(!IS_SAME(unsigned long, static_assert_test_l), static_assert_test_l is not unsigned long);
 
-STATIC_ASSERT(!IS_SAME(int, l), l is not int);
-STATIC_ASSERT(!IS_SAME(long, i), i is not long);
+STATIC_ASSERT(!IS_SAME(int, static_assert_test_l), static_assert_test_l is not int);
+STATIC_ASSERT(!IS_SAME(long, static_assert_test_i), static_assert_test_i is not long);
+#else
+int static_assert_test_dummy;  // avoid empty file compilation error
+#endif

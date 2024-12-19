@@ -1,0 +1,20 @@
+POST /anl HTTP/1.1
+transfer-encoding: a,b,chunked
+
+0
+ABC
+0.1
+Contth:1
+ 0
+g:1
+ 0
+G.1
+conten
+T
+'
+GET
+Co1.?
+conelin: .1
+cohi
+colengt
+T

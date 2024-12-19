@@ -1,0 +1,7 @@
+HTTP/1.0 200 OK
+transfeng: yes,ked
+hdr: vHTTP/1.1 200 OK
+tranoding: yes,np, chunked
+hdr: value
+
+B;

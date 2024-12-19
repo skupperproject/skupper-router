@@ -1,0 +1,28 @@
+
+
+
+GET eli/2 HTTP/1.0
+co
+
+GET //2 HTTP/1.0
+ngt`: 
+Co
+
+GET //2 HTTP/1.0
+ngt`: 0
+
+GET //2 HTTP/1.0
+
+
+GET eli/2 HTTP/1.0
+co
+
+GET //2 HTTP/1.0
+ngt`: 
+Co
+
+GET /2 HTTP/1.0
+ngt`: 0
+
+GET //2 HTTP/1.0
+cc

@@ -1,0 +1,2 @@
+GET https://host.com/url/path?query HTTP/1.1
+
