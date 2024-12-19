@@ -513,7 +513,7 @@ class Http2TestAutoRouterNginx(TestCase):
         success = retry(lambda: snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
-        # Pass traffic:
+        # Pass traffic with one X-Forwarded-For header:
         _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head', '--header', 'X-Forwarded-For: 192.168.0.2'])
         self.assertIn('HTTP/2 200', out)
         self.assertIn('content-type: text/html', out)
@@ -531,6 +531,51 @@ class Http2TestAutoRouterNginx(TestCase):
         }
         success = retry(lambda: snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Pass traffic with comma separated X-Forwarded-For header:
+        _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head', '--header', 'X-Forwarded-For: 192.168.0.1, 203.168.2.2'])
+        self.assertIn('HTTP/2 200', out)
+        self.assertIn('content-type: text/html', out)
+
+        # Expect a TCP flow/counter-flow and one HTTP/2 flow
+        expected = {
+            "QDR": [
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
+                                'METHOD': 'HEAD',
+                                'RESULT': '200',
+                                'SOURCE_HOST': '192.168.0.1',
+                                'STREAM_ID': ANY_VALUE,
+                                'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Pass traffic with many comma separated X-Forwarded-For headers:
+        _, out, _ = run_local_curl(get_address(self.router_qdra),
+                                   args=['--head', '--header',
+                                         'X-Forwarded-For: 192.168.1.7, 203.168.2.2',
+                                         '--header',
+                                         'X-Forwarded-For: 2001:db8:85a3:8d3:1319:8a2e:370:7348, 207.168.2.2',
+                                         '--header',
+                                         'X-Forwarded-For: 2003:db9:85a3:8d5:1318:8a2e:370:6322, 207.168.2.1'])
+        self.assertIn('HTTP/2 200', out)
+        self.assertIn('content-type: text/html', out)
+
+        # Expect a TCP flow/counter-flow and one HTTP/2 flow
+        expected = {
+            "QDR": [
+                ('BIFLOW_APP', {'PROTOCOL': 'HTTP/2',
+                                'METHOD': 'HEAD',
+                                'RESULT': '200',
+                                'SOURCE_HOST': '192.168.1.7',
+                                'STREAM_ID': ANY_VALUE,
+                                'END_TIME': ANY_VALUE})
+            ]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected))
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
 
     def test_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
