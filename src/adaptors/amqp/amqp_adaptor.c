@@ -1285,7 +1285,7 @@ static void AMQP_link_closed_handler(qd_router_t *router, qd_link_t *qd_link, bo
         // Notify core that this link no longer exists
         qdr_link_set_context(qdr_link, 0);
         qd_link_set_context(qd_link, 0);
-        qdr_link_closed(qdr_link, forced);
+        qdr_link_notify_closed(qdr_link, forced);
         // This will cause the core to free qdr_link at some point so:
         qdr_link = 0;
     }
@@ -1772,7 +1772,7 @@ static int AMQP_closed_handler(qd_router_t *router, qd_connection_t *conn, void 
         if (!!conn->listener && qdrc->role != QDR_ROLE_INTER_ROUTER_DATA) {
             qd_listener_remove_link(conn->listener);
         }
-        qdr_connection_closed(qdrc);
+        qdr_connection_notify_closed(qdrc);
         qd_connection_set_context(conn, 0);
     }
 

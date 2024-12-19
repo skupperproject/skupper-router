@@ -180,7 +180,7 @@ static qd_link_t *setup_outgoing_link(qd_container_t *container, pn_link_t *pn_l
     qd_session_incref(link->qd_session);
 
     pn_link_set_context(pn_link, link);
-    container->ntype->outgoing_handler(container->qd_router, link);
+    container->ntype->outgoing_link_handler(container->qd_router, link);
     return link;
 }
 
@@ -212,7 +212,7 @@ static qd_link_t *setup_incoming_link(qd_container_t *container, pn_link_t *pn_l
         pn_link_set_max_message_size(pn_link, max_size);
     }
     pn_link_set_context(pn_link, link);
-    container->ntype->incoming_handler(container->qd_router, link);
+    container->ntype->incoming_link_handler(container->qd_router, link);
     return link;
 }
 

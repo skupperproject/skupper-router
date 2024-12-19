@@ -32,11 +32,11 @@
 #include <strings.h>
 
 static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_connection_notify_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_inbound_first_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
-static void qdr_link_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_link_notify_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_processing_complete_CT(qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_link_processing_complete(qdr_core_t *core, qdr_link_t *link);
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn);
@@ -159,9 +159,9 @@ void qdr_connection_set_tracing(qdr_connection_t *conn, bool enable_protocol_tra
     qdr_action_enqueue(conn->core, action);
 }
 
-void qdr_connection_closed(qdr_connection_t *conn)
+void qdr_connection_notify_closed(qdr_connection_t *conn)
 {
-    qdr_action_t *action = qdr_action(qdr_connection_closed_CT, "connection_closed");
+    qdr_action_t *action = qdr_action(qdr_connection_notify_closed_CT, "connection_notify_closed");
     set_safe_ptr_qdr_connection_t(conn, &action->args.connection.conn);
     qdr_action_enqueue(conn->core, action);
 }
@@ -771,9 +771,9 @@ void qdr_link_detach_received(qdr_link_t *link, qdr_error_t *error)
 }
 
 
-void qdr_link_closed(qdr_link_t *link, bool forced)
+void qdr_link_notify_closed(qdr_link_t *link, bool forced)
 {
-    qdr_action_t *action = qdr_action(qdr_link_closed_CT, "link_closed");
+    qdr_action_t *action = qdr_action(qdr_link_notify_closed_CT, "link_notify_closed");
 
     set_safe_ptr_qdr_link_t(link, &action->args.connection.link);
     action->args.connection.forced_close = forced;
@@ -1767,7 +1767,7 @@ static void qdr_connection_set_tracing_CT(qdr_core_t *core, qdr_action_t *action
 }
 
 
-static void qdr_connection_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_connection_notify_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     qdr_connection_t *conn = safe_deref_qdr_connection_t(action->args.connection.conn);
     if (discard || !conn)
@@ -2444,7 +2444,7 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
 }
 
 
-static void qdr_link_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+static void qdr_link_notify_closed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
 {
     qdr_link_t *link  = safe_deref_qdr_link_t(action->args.connection.link);
     bool forced_close = action->args.connection.forced_close;
@@ -2463,7 +2463,7 @@ static void qdr_link_closed_CT(qdr_core_t *core, qdr_action_t *action, bool disc
             }
 
             qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
-                   "[C%"PRIu64"][L%"PRIu64"] qdr_link_closed_CT(forced=%s) handle %s detach",
+                   "[C%"PRIu64"][L%"PRIu64"] qdr_link_notify_closed_CT(forced=%s) handle %s detach",
                    link->conn->identity, link->identity, forced_close ? "YES" : "NO",
                        (link->state & QDR_LINK_STATE_DETACH_SENT) == 0 ? "first" : "second");
 

@@ -48,11 +48,11 @@ struct qd_node_type_t {
     /** Invoked when an existing delivery changes disposition or settlement state. */
     qd_container_disposition_handler_t disp_handler;
 
-    /** Invoked when an attach for a new incoming link is received. */
-    qd_container_link_handler_t incoming_handler;
+    /** Invoked when an attach for a new incoming (receiving) link is received. */
+    qd_container_link_handler_t incoming_link_handler;
 
-    /** Invoked when an attach for a new outgoing link is received. */
-    qd_container_link_handler_t outgoing_handler;
+    /** Invoked when an attach for a new outgoing (sending) link is received. */
+    qd_container_link_handler_t outgoing_link_handler;
 
     /** Invoked when an activated connection is available for writing. */
     qd_container_conn_handler_t writable_handler;
