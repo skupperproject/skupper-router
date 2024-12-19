@@ -193,7 +193,7 @@ qd_direction_t    qdrc_endpoint_get_direction_CT(const qdrc_endpoint_t *endpoint
 qdr_connection_t *qdrc_endpoint_get_connection_CT(qdrc_endpoint_t *endpoint);
 
 /**
- * Detach a link attached to the core-endpoint
+ * Respond to a link attach to the core-endpoint. Typically called by the on_first_attach callback.
  *
  * @param core Pointer to the core object
  * @param endpoint Pointer to an endpoint object
@@ -261,7 +261,7 @@ void qdrc_endpoint_do_second_attach_CT(qdr_core_t *core, qdrc_endpoint_t *endpoi
 void qdrc_endpoint_do_deliver_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint, qdr_delivery_t *delivery);
 void qdrc_endpoint_do_update_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint, qdr_delivery_t *delivery, bool settled);
 void qdrc_endpoint_do_flow_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint, int credit, bool drain);
-void qdrc_endpoint_do_detach_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint, qdr_error_t *error, qd_detach_type_t dt);
+void qdrc_endpoint_do_detach_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint, qdr_error_t *error, bool first_detach);
 void qdrc_endpoint_do_cleanup_CT(qdr_core_t *core, qdrc_endpoint_t *endpoint);
 
 #endif

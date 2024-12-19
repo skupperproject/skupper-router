@@ -628,7 +628,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->inbound_link) {
-        qdr_link_detach(conn->inbound_link, QD_LOST, 0);
+        qdr_link_notify_closed(conn->inbound_link, true);
     }
 
     if (!!conn->outbound_delivery) {
@@ -638,7 +638,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->outbound_link) {
-        qdr_link_detach(conn->outbound_link, QD_LOST, 0);
+        qdr_link_notify_closed(conn->outbound_link, true);
     }
 
     if (conn->observer_handle) {
@@ -653,7 +653,7 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
     }
 
     if (!!conn->core_conn) {
-        qdr_connection_closed(conn->core_conn);
+        qdr_connection_notify_closed(conn->core_conn);
         conn->core_conn = 0;
         qd_connection_counter_dec(QD_PROTOCOL_TCP);
     }
@@ -2340,8 +2340,8 @@ static void CORE_connection_close(void *context, qdr_connection_t *conn, qdr_err
                "[C%" PRIu64 "] qdr_tcp_conn_close: closing raw connection", tcp_conn->conn_id);
         //
         // Closing the raw connection (calling pn_raw_connection_close()) will generate a PN_RAW_CONNECTION_DISCONNECTED
-        // event which will call the handle_disconnected() which in turn calls qdr_connection_closed() which removes the
-        // connection from the list of connections.
+        // event which will call the handle_disconnected() which in turn calls qdr_connection_notify_closed() which
+        // removes the connection from the list of connections.
         //
         pn_raw_connection_close(tcp_conn->raw_conn);
     }
@@ -2501,11 +2501,11 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
         //
         if (!!connector->out_link) {
             qdr_link_set_context(connector->out_link, 0);
-            qdr_link_detach(connector->out_link, QD_LOST, 0);
+            qdr_link_notify_closed(connector->out_link, true);
             connector->out_link = 0;
         }
 
-        qdr_connection_closed(connector->core_conn);
+        qdr_connection_notify_closed(connector->core_conn);
         connector->core_conn = 0;
         qd_connection_counter_dec(QD_PROTOCOL_TCP);
         //

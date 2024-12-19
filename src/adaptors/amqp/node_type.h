@@ -26,10 +26,10 @@ typedef struct qd_router_t    qd_router_t;
 typedef bool (*qd_container_delivery_handler_t)                  (qd_router_t *, qd_link_t *link);
 typedef void (*qd_container_disposition_handler_t)               (qd_router_t *, qd_link_t *link, pn_delivery_t *pnd);
 typedef int  (*qd_container_link_handler_t)                      (qd_router_t *, qd_link_t *link);
-typedef int  (*qd_container_link_detach_handler_t)               (qd_router_t *, qd_link_t *link, qd_detach_type_t dt);
+typedef int  (*qd_container_link_detach_handler_t)               (qd_router_t *, qd_link_t *link);
+typedef void (*qd_container_link_closed_handler_t)               (qd_router_t *, qd_link_t *link, bool forced);
 typedef void (*qd_container_node_handler_t)                      (qd_router_t *);
 typedef int  (*qd_container_conn_handler_t)                      (qd_router_t *, qd_connection_t *conn, void *context);
-typedef void (*qd_container_link_abandoned_deliveries_handler_t) (qd_router_t *, qd_link_t *link);
 
 /**
  * A set  of Node handlers for deliveries, links and container events.
@@ -48,23 +48,28 @@ struct qd_node_type_t {
     /** Invoked when an existing delivery changes disposition or settlement state. */
     qd_container_disposition_handler_t disp_handler;
 
-    /** Invoked when an attach for a new incoming link is received. */
-    qd_container_link_handler_t incoming_handler;
+    /** Invoked when an attach for a new incoming (receiving) link is received. */
+    qd_container_link_handler_t incoming_link_handler;
 
-    /** Invoked when an attach for a new outgoing link is received. */
-    qd_container_link_handler_t outgoing_handler;
+    /** Invoked when an attach for a new outgoing (sending) link is received. */
+    qd_container_link_handler_t outgoing_link_handler;
 
     /** Invoked when an activated connection is available for writing. */
     qd_container_conn_handler_t writable_handler;
 
-    /** Invoked when a link is detached. */
+    /** Invoked when link detached is received. */
     qd_container_link_detach_handler_t link_detach_handler;
+
+    /** The last callback issued for the given qd_link_t. The adaptor must clean up all state related to the qd_link_t
+     * as it will be freed on return from this call. The forced flag is set to true if the link is being forced closed
+     * due to the parent connection/session closing or on shutdown.
+     */
+    qd_container_link_closed_handler_t link_closed_handler;
+
     ///@}
 
     /** Invoked when a link we created was opened by the peer */
     qd_container_link_handler_t link_attach_handler;
-
-    qd_container_link_abandoned_deliveries_handler_t link_abandoned_deliveries_handler;
 
     /** Invoked when a link receives a flow event */
     qd_container_link_handler_t link_flow_handler;
