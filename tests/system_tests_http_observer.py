@@ -533,7 +533,8 @@ class Http2TestAutoRouterNginx(TestCase):
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
 
         # Pass traffic with comma separated X-Forwarded-For header:
-        _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head', '--header', 'X-Forwarded-For: 192.168.0.1, 203.168.2.2'])
+        _, out, _ = run_local_curl(get_address(self.router_qdra), args=['--head', '--header',
+                                                                        'X-Forwarded-For: 192.168.0.1, 203.168.2.2'])
         self.assertIn('HTTP/2 200', out)
         self.assertIn('content-type: text/html', out)
 
@@ -575,7 +576,6 @@ class Http2TestAutoRouterNginx(TestCase):
         }
         success = retry(lambda: snooper_thread.match_records(expected))
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
-
 
     def test_get_image_jpg(self):
         # Run curl 127.0.0.1:port --output images/test.jpg --http2-prior-knowledge
