@@ -434,7 +434,7 @@ class ManagementTest(system_test.TestCase):
         result = self.node.get_operations()
         for type in AMQP_LISTENER_TYPE, ROUTER_LINK_TYPE:
             self.assertIn(type, result)
-        self.assertEqual(["UPDATE", "READ"], result[ROUTER_LINK_TYPE])
+        self.assertEqual(["READ"], result[ROUTER_LINK_TYPE])
 
     def test_get_attributes(self):
         result = self.node.get_attributes(type=DUMMY_TYPE)

@@ -699,7 +699,6 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
     link->link_direction = dir;
     link->capacity       = conn->link_capacity;
     link->credit_pending = conn->link_capacity;
-    link->admin_enabled  = true;
     link->oper_status    = QDR_LINK_OPER_DOWN;
     link->core_ticks     = qdr_core_uptime_ticks(conn->core);
     link->zero_credit_time = link->core_ticks;
@@ -1219,7 +1218,6 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     link->disambiguated_name = 0;
     link->terminus_addr  = 0;
     qdr_generate_link_name("qdlink", link->name, QD_DISCRIMINATOR_SIZE + 8);
-    link->admin_enabled  = true;
     link->oper_status    = QDR_LINK_OPER_DOWN;
     link->insert_prefix  = 0;
     link->strip_prefix   = 0;

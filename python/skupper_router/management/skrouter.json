@@ -1392,13 +1392,7 @@
         "router.link": {
             "description": "Link to another AMQP endpoint: router node, client or other AMQP process.",
             "extends": "operationalEntity",
-            "operations": ["UPDATE"],
             "attributes": {
-                "adminStatus": {
-                    "type": ["enabled", "disabled"],
-                    "default": "enabled",
-                    "update": true
-                },
                 "operStatus": {
                     "type": ["up", "down", "quiescing", "idle"]
                 },
