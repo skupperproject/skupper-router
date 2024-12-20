@@ -116,6 +116,22 @@ class NameCollisionTest(TestCase):
         args = {"name": "autoLink", "address": "autoLink1", "connection": "broker", "direction": "in"}
         # Add autoLink with the same name as the one already present.
         mgmt = SkManager(address=self.router.addresses[0])
+
+        not_found = False
+        try:
+            mgmt.read(long_type=CONFIG_AUTOLINK_TYPE, name="autoLink10")
+        except Exception as e:
+            error_message = str(e)
+            if "NotFoundStatus: Not Found" in error_message:
+                not_found = True
+        self.assertTrue(not_found)
+
+        auto_link = mgmt.read(long_type=CONFIG_AUTOLINK_TYPE, name="autoLink")
+        self.assertIsNotNone(auto_link)
+
+        auto_link = mgmt.read(long_type=CONFIG_AUTOLINK_TYPE, identity="2")
+        self.assertIsNotNone(auto_link)
+
         test_pass = False
         try:
             mgmt.create(CONFIG_AUTOLINK_TYPE, args)

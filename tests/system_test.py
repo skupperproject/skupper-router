@@ -1823,8 +1823,20 @@ class SkManager:
             cmd += " %s=%s" % (k, v)
         return json.loads(self(cmd))
 
-    def read(self, name):
-        return json.loads(self(f"READ --name {name}"))
+    # According to the AMQP spec, the READ operation does not require a type, requires either a name or identity.
+    # But the C management agent requires a long type to be specified (see management_agent.c)
+    def read(self, long_type=None, name=None, identity=None):
+        if name is not None and identity is not None:
+            return json.loads(self(f"READ --type={long_type} --name {name} --identity {identity}"))
+        if long_type is not None:
+            if name is not None:
+                return json.loads(self(f"READ --type={long_type} --name {name}"))
+            if identity is not None:
+                return json.loads(self(f"READ --type={long_type} --identity {identity}"))
+        else:
+            if identity is not None:
+                return json.loads(self(f"READ --identity {identity}"))
+            return json.loads(self(f"READ --name {name}"))
 
     def update(self, long_type, kwargs, name=None, identity=None):
         cmd = 'UPDATE --type=%s' % long_type
