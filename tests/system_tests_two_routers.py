@@ -335,6 +335,50 @@ class TwoRouterTest(TestCase):
         self.assertEqual(test.error, None)
         test.run()
 
+    def test_22_delete_update_inter_router_link(self):
+        """
+        This test tries to delete an inter-router link but is
+        prevented from doing so.
+        """
+        query_command = 'QUERY --type=link'
+        outputs = json.loads(self.run_skmanage(query_command))
+        passed = False
+
+        # Should fail trying to delete an inter-router link.
+        for output in outputs:
+            if "inter-router" == output['linkType']:
+                identity = output['identity']
+                if identity:
+                    update_command = 'DELETE --type=link --id=' + identity
+                    try:
+                        json.loads(self.run_skmanage(update_command))
+                    except Exception as e:
+                        if "Forbidden" in str(e):
+                            passed = True
+                            break
+
+        # The test has passed since we were forbidden from deleting
+        # inter-router links.
+        self.assertTrue(passed)
+
+        passed = False
+        # Should fail trying to update the admin status an inter-router link.
+        for output in outputs:
+            if "inter-router" == output['linkType']:
+                identity = output['identity']
+                if identity:
+                    update_command = 'UPDATE --type=link linkName=helloWorld --id=' + identity
+                    try:
+                        json.loads(self.run_skmanage(update_command))
+                    except Exception as e:
+                        if "Forbidden" in str(e):
+                            passed = True
+                            break
+
+        # The test has passed since we were forbidden from updating
+        # inter-router links.
+        self.assertTrue(passed)
+
     def test_30_huge_address(self):
         # try a link with an extremely long address
         # DISPATCH-1461

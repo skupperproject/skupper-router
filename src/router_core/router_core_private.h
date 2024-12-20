@@ -462,7 +462,6 @@ struct qdr_link_t {
     int                      credit_reported;   ///< Number of credits to expose to management
     uint32_t                 zero_credit_time;  ///< Number of core ticks when credit last went to zero
     bool                     reported_as_blocked; ///< The fact that this link has been blocked with zero credit has been logged
-    bool                     admin_enabled;
     bool                     strip_annotations_in;
     bool                     strip_annotations_out;
     bool                     drain_mode;

@@ -427,7 +427,7 @@ static void qdr_manage_create_CT(qdr_core_t *core, qdr_action_t *action, bool di
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_create_CT(core, name, query, in_body); break;
         case QD_ROUTER_CONNECTION:        break;
         case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
-        case QD_ROUTER_LINK:              break;
+        case QD_ROUTER_LINK:              qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_ADDRESS:           break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
        }
@@ -451,7 +451,7 @@ static void qdr_manage_delete_CT(qdr_core_t *core, qdr_action_t *action, bool di
         case QD_ROUTER_CONFIG_AUTO_LINK:  qdra_config_auto_link_delete_CT(core, query, name, identity); break;
         case QD_ROUTER_CONNECTION:        qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
-        case QD_ROUTER_LINK:              break;
+        case QD_ROUTER_LINK:              qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_ADDRESS:           break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
        }
@@ -469,15 +469,15 @@ static void qdr_manage_update_CT(qdr_core_t *core, qdr_action_t *action, bool di
     qd_parsed_field_t *in_body  = action->args.agent.in_body;
 
     if (!discard) {
-            switch (query->entity_type) {
+        switch (query->entity_type) {
         case QD_ROUTER_CONFIG_ADDRESS:    break;
         case QD_ROUTER_CONFIG_AUTO_LINK:  break;
         case QD_ROUTER_CONNECTION:        qdra_connection_update_CT(core, name, identity, query, in_body); break;
-        case QD_ROUTER_LINK:              qdra_link_update_CT(core, name, identity, query, in_body); break;
+        case QD_ROUTER_LINK:              qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_ADDRESS:           break;
         case QD_ROUTER_ROUTER_METRICS:    qdr_agent_forbidden(core, query, false); break;
         case QD_ROUTER_FORBIDDEN:         qdr_agent_forbidden(core, query, false); break;
-       }
+        }
     }
 
    qdr_field_free(action->args.agent.name);
