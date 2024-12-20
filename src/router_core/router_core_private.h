@@ -475,7 +475,6 @@ struct qdr_link_t {
     bool                     streaming;         ///< True if this link can be reused for streaming msgs
     bool                     in_streaming_pool; ///< True if this link is in the connections standby pool STREAMING_POOL
     bool                     user_streaming;    ///< True if this link can be used to transfer a stream (requested by the in-process attacher)
-    bool                     terminus_survives_disconnect;
     bool                     resend_released_deliveries;
     bool                     no_route;          ///< True if this link is to not receive routed deliveries
     bool                     no_route_bound;    ///< Has the no_route link been bound ? Has the link's owning address been set for no_route links ?

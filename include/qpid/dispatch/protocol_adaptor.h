@@ -636,16 +636,6 @@ void qdr_terminus_strip_address_prefix(qdr_terminus_t *term, const char *prefix)
  */
 qd_iterator_t *qdr_terminus_dnp_address(qdr_terminus_t *term);
 
-/**
- * qdr_terminus_set_dnp_address_iterator
- *
- * Overwrite the dynamic-node-properties.address in the terminus
- *
- * @param term A qdr_terminus pointer returned by qdr_terminus()
- * @param iter An iterator whose view shall be placed in the dnp.address
- */
-void qdr_terminus_set_dnp_address_iterator(qdr_terminus_t *term, qd_iterator_t *iter);
-
 
 /**
  ******************************************************************************
