@@ -276,10 +276,6 @@ bool qdr_terminus_is_dynamic(qdr_terminus_t *term)
     return term->dynamic;
 }
 
-bool qdr_terminus_survives_disconnect(qdr_terminus_t *term)
-{
-    return term->timeout > 0 || term->expiry_policy == PN_EXPIRE_NEVER;
-}
 
 void qdr_terminus_set_address(qdr_terminus_t *term, const char *addr)
 {
@@ -303,89 +299,3 @@ qd_iterator_t *qdr_terminus_get_address(qdr_terminus_t *term)
 
     return term->address->iterator;
 }
-
-void qdr_terminus_insert_address_prefix(qdr_terminus_t *term, const char *prefix)
-{
-    qd_iterator_t *orig = qdr_terminus_get_address(term);
-    char *rewrite_addr = 0;
-
-    size_t prefix_len = strlen(prefix);
-    size_t orig_len = qd_iterator_length(orig);
-    rewrite_addr = malloc(prefix_len + orig_len + 1);
-    strcpy(rewrite_addr, prefix);
-    qd_iterator_strncpy(orig, rewrite_addr+prefix_len, orig_len + 1);
-
-    qdr_terminus_set_address(term, rewrite_addr);
-    free(rewrite_addr);
-}
-
-void qdr_terminus_strip_address_prefix(qdr_terminus_t *term, const char *prefix)
-{
-    qd_iterator_t *orig = qdr_terminus_get_address(term);
-    size_t prefix_len = strlen(prefix);
-    size_t orig_len = qd_iterator_length(orig);
-    if (orig_len > prefix_len && qd_iterator_prefix(orig, prefix)) {
-        char *rewrite_addr = malloc(orig_len + 1);
-        qd_iterator_strncpy(orig, rewrite_addr, orig_len + 1);
-        qdr_terminus_set_address(term, rewrite_addr + prefix_len);
-        free(rewrite_addr);
-    }
-}
-
-
-qd_iterator_t *qdr_terminus_dnp_address(qdr_terminus_t *term)
-{
-    pn_data_t *props = term->properties;
-    if (!props)
-        return 0;
-
-    pn_data_rewind(props);
-    if (pn_data_next(props) && pn_data_enter(props) && pn_data_next(props)) {
-        pn_bytes_t sym = pn_data_get_symbol(props);
-        if (sym.start && strcmp(QD_DYNAMIC_NODE_PROPERTY_ADDRESS, sym.start) == 0) {
-            if (pn_data_next(props)) {
-                pn_bytes_t val = pn_data_get_string(props);
-                if (val.start && *val.start != '\0')
-                    return qd_iterator_binary(val.start, val.size, ITER_VIEW_ALL);
-            }
-        }
-    }
-
-    return 0;
-}
-
-
-void qdr_terminus_set_dnp_address_iterator(qdr_terminus_t *term, qd_iterator_t *iter)
-{
-    char       buffer[1001];
-    char      *text    = buffer;
-    bool       on_heap = false;
-    pn_data_t *old     = term->properties;
-    size_t     len;
-
-    if (!old)
-        return;
-
-    if (qd_iterator_length(iter) < 1000) {
-        len = qd_iterator_ncopy(iter, (unsigned char*) text, 1000);
-        text[len] = '\0';
-    } else {
-        text    = (char*) qd_iterator_copy(iter);
-        on_heap = true;
-        len = strlen(text);
-    }
-
-    pn_data_t *new = pn_data(pn_data_size(old));
-    pn_data_put_map(new);
-    pn_data_enter(new);
-    pn_data_put_symbol(new, pn_bytes(strlen(QD_DYNAMIC_NODE_PROPERTY_ADDRESS), QD_DYNAMIC_NODE_PROPERTY_ADDRESS));
-    pn_data_put_string(new, pn_bytes(len, text));
-    pn_data_exit(new);
-
-    term->properties = new;
-    pn_data_free(old);
-
-    if (on_heap)
-        free(text);
-}
-
