@@ -73,11 +73,12 @@ typedef struct qd_http2_stream_info_t         qd_http2_stream_info_t;
 
 struct qd_http2_stream_info_t {
     DEQ_LINKS(qd_http2_stream_info_t);
-    qd_http2_decoder_connection_t *conn_state;             // Reference to the stream's connection state information
-    vflow_record_t                *vflow;                  // stream level vanflow. this is a vanflow per request
-    uint32_t                       stream_id;              // stream_id of the stream.
-    uint64_t                       bytes_in;
-    uint64_t                       bytes_out;
+    qd_http2_decoder_connection_t *conn_state;      // Reference to the stream's connection state information
+    vflow_record_t                *vflow;           // stream level vanflow. this is a vanflow per request
+    uint32_t                       stream_id;       // stream_id of the stream.
+    uint64_t                       bytes_in;        // bytes received from client on this stream
+    uint64_t                       bytes_out;       // bytes sent to the client on this stream
+    bool                           x_forwarded_for; // True if the x-forwarded-for header has already been received
 
 };
 
