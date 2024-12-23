@@ -34,23 +34,22 @@
 #define QDR_LINK_UNSETTLED_COUNT          9
 #define QDR_LINK_DELIVERY_COUNT           10
 #define QDR_LINK_CONNECTION_ID            11
-#define QDR_LINK_ADMIN_STATE              12
-#define QDR_LINK_OPER_STATE               13
-#define QDR_LINK_PRESETTLED_COUNT         14
-#define QDR_LINK_DROPPED_PRESETTLED_COUNT 15
-#define QDR_LINK_ACCEPTED_COUNT           16
-#define QDR_LINK_REJECTED_COUNT           17
-#define QDR_LINK_RELEASED_COUNT           18
-#define QDR_LINK_MODIFIED_COUNT           19
-#define QDR_LINK_DELAYED_1SEC             20
-#define QDR_LINK_DELAYED_10SEC            21
-#define QDR_LINK_DELIVERIES_STUCK         22
-#define QDR_LINK_OPEN_MOVED_STREAMS       23
-#define QDR_LINK_INGRESS_HISTOGRAM        24
-#define QDR_LINK_PRIORITY                 25
-#define QDR_LINK_SETTLE_RATE              26
-#define QDR_LINK_CREDIT_AVAILABLE         27
-#define QDR_LINK_ZERO_CREDIT_SECONDS      28
+#define QDR_LINK_OPER_STATE               12
+#define QDR_LINK_PRESETTLED_COUNT         13
+#define QDR_LINK_DROPPED_PRESETTLED_COUNT 14
+#define QDR_LINK_ACCEPTED_COUNT           15
+#define QDR_LINK_REJECTED_COUNT           16
+#define QDR_LINK_RELEASED_COUNT           17
+#define QDR_LINK_MODIFIED_COUNT           18
+#define QDR_LINK_DELAYED_1SEC             19
+#define QDR_LINK_DELAYED_10SEC            20
+#define QDR_LINK_DELIVERIES_STUCK         21
+#define QDR_LINK_OPEN_MOVED_STREAMS       22
+#define QDR_LINK_INGRESS_HISTOGRAM        23
+#define QDR_LINK_PRIORITY                 24
+#define QDR_LINK_SETTLE_RATE              25
+#define QDR_LINK_CREDIT_AVAILABLE         26
+#define QDR_LINK_ZERO_CREDIT_SECONDS      27
 
 const char *qdr_link_columns[] =
     {"name",
@@ -65,7 +64,6 @@ const char *qdr_link_columns[] =
      "unsettledCount",
      "deliveryCount",
      "connectionId", // The connection id of the owner connection
-     "adminStatus",
      "operStatus",
      "presettledCount",
      "droppedPresettledCount",
@@ -173,11 +171,6 @@ static void qdr_agent_write_column_CT(qdr_core_t *core, qd_composed_field_t *bod
         qd_compose_insert_string(body, id);
         break;
     }
-
-    case QDR_LINK_ADMIN_STATE:
-        text = link->admin_enabled ? "enabled" : "disabled";
-        qd_compose_insert_string(body, text);
-        break;
 
     case QDR_LINK_OPER_STATE:
         switch (link->oper_status) {
@@ -381,128 +374,6 @@ void qdra_link_get_next_CT(qdr_core_t *core, qdr_query_t *query)
         qdr_manage_advance_link_CT(query, link);
     } else
         query->more = false;
-
-    //
-    // Enqueue the response.
-    //
-    qdr_agent_enqueue_response_CT(core, query);
-}
-
-
-static void qdr_manage_write_response_map_CT(qdr_core_t *core, qd_composed_field_t *body, qdr_link_t *link)
-{
-    qd_compose_start_map(body);
-
-    for(int i = 0; i < QDR_LINK_COLUMN_COUNT; i++) {
-        qd_compose_insert_string(body, qdr_link_columns[i]);
-        qdr_agent_write_column_CT(core, body, i, link);
-    }
-
-    qd_compose_end_map(body);
-}
-
-
-static qdr_link_t *qdr_link_find_by_identity(qdr_core_t *core, qd_iterator_t *identity)
-{
-    if (!identity)
-        return 0;
-
-    qdr_link_t *link = DEQ_HEAD(core->open_links);
-
-    while(link) {
-        char id[100];
-        if (link->identity) {
-            snprintf(id, 100, "%"PRId64, link->identity);
-            if (qd_iterator_equal(identity, (const unsigned char *)id))
-                break;
-        }
-        link = DEQ_NEXT(link);
-    }
-
-    return link;
-
-}
-
-
-static qdr_link_t *qdr_link_find_by_name(qdr_core_t *core, qd_iterator_t *name)
-{
-    if(!name)
-        return 0;
-
-    qdr_link_t *link = DEQ_HEAD(core->open_links);
-
-    while(link) {
-        if (link->name && qd_iterator_equal(name, (const unsigned char *)link->name))
-            break;
-        link = DEQ_NEXT(link);
-    }
-
-    return link;
-}
-
-
-static void qdra_link_update_set_status(qdr_core_t *core, qdr_query_t *query, qdr_link_t *link)
-{
-    if (link) {
-        //link->admin_state = qd_iterator_copy(adm_state);
-        qdr_manage_write_response_map_CT(core, query->body, link);
-        query->status = QD_AMQP_OK;
-    }
-    else {
-        query->status = QD_AMQP_NOT_FOUND;
-        qd_compose_start_map(query->body);
-        qd_compose_end_map(query->body);
-    }
-}
-
-static void qdra_link_set_bad_request(qdr_query_t *query)
-{
-    query->status = QD_AMQP_BAD_REQUEST;
-    qd_compose_start_map(query->body);
-    qd_compose_end_map(query->body);
-}
-
-void qdra_link_update_CT(qdr_core_t            *core,
-                             qd_iterator_t     *name,
-                             qd_iterator_t     *identity,
-                             qdr_query_t       *query,
-                             qd_parsed_field_t *in_body)
-
-{
-    // If the request was successful then the statusCode MUST contain 200 (OK) and the body of the message
-    // MUST contain a map containing the actual attributes of the entity updated. These MAY differ from those
-    // requested.
-    // A map containing attributes that are not applicable for the entity being created, or invalid values for a
-    // given attribute, MUST result in a failure response with a statusCode of 400 (Bad Request).
-    if (qd_parse_is_map(in_body)) {
-        // The absence of an attribute name implies that the entity should retain its existing value.
-        // If the map contains a key-value pair where the value is null then the updated entity should have no value
-        // for that attribute, removing any previous value.
-
-        qd_parsed_field_t *admin_state = qd_parse_value_by_key(in_body, qdr_link_columns[QDR_LINK_ADMIN_STATE]);
-        if (admin_state) { //admin state is the only field that can be updated via the update management request
-            //qd_iterator_t *adm_state = qd_parse_raw(admin_state);
-
-            if (identity) {
-                qdr_link_t *link = qdr_link_find_by_identity(core, identity);
-                // TODO - set the adm_state on the link
-                qdra_link_update_set_status(core, query, link);
-            }
-            else if (name) {
-                qdr_link_t *link = qdr_link_find_by_name(core, name);
-                // TODO - set the adm_state on the link
-                qdra_link_update_set_status(core, query, link);
-            }
-            else {
-                qdra_link_set_bad_request(query);
-            }
-        }
-        else
-            qdra_link_set_bad_request(query);
-
-    }
-    else
-        query->status = QD_AMQP_BAD_REQUEST;
 
     //
     // Enqueue the response.
