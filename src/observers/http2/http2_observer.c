@@ -259,8 +259,8 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 // The first X-Forwarded-For header is comma separated list, we will obtain the leftmost (the first) value (2001:db8:85a3:8d3:1319:8a2e:370:7348) in the list
 
                 // const uint8_t *value passed into this function is guaranteed to be NULL-terminated
-                char value_copy[valuelen+1];
-                strcpy(value_copy, (const char *)value);
+                char value_copy[128];
+                strncpy(value_copy, (const char *)value, 128);
                 // Get the first token (left-most)
                 char *first_token = strtok(value_copy, ",");
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
