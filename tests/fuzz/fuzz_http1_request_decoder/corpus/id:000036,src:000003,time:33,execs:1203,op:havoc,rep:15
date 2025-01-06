@@ -1,0 +1,5 @@
+GET ne/1 HTTP/1.1
+Co:TTP
+
+Cength:TTP/1.1CoRtent-leng 0
+

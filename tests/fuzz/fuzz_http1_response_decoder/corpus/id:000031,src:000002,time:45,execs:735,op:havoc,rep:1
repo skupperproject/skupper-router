@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+tra
+transfer-encoding: yes,nsf yes,no, chunked
+hdr: v
+
+B;joe=bob
+01234567891
+0000
+traile
+

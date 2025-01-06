@@ -1,0 +1,8 @@
+POST /anl HTTP/1.1
+transfer-encoding: a,b,chunked
+
+0T1
+ten3
+ABC
+00
+

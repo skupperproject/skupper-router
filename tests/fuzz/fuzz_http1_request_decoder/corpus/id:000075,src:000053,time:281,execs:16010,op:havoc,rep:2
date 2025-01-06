@@ -1,0 +1,9 @@
+GET eline/1 HTTP/1.1
+Content-length: 0
+
+GET //2 HTTP/1.1
+con
+transfer-encoding: Con 0
+: h 1
+
+A

@@ -1,0 +1,12 @@
+
+POST /anl HTTP/1.1
+transfer-encoding: a,b,chunked
+
+03
+ÓBC
+003
+ABC
+00003
+ABC
+00
+

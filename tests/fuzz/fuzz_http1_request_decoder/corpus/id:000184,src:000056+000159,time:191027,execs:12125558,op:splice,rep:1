@@ -1,0 +1,21 @@
+
+
+POST /aine/1 HTTP/1.1
+1
+
+ET e/1 HTTP/1.1
+Co
+
+GE p1peline/1 HTTP/1.1
+Ch: 0
+
+GET //2 HTTP/1.1
+
+
+ET //2 HTTP/1.1
+cZ0
+
+GET //2 HTTP/1.1
+
+
+ET

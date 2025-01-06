@@ -34,7 +34,7 @@ WORKDIR /src/qpid-proton
 RUN mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF -DENABLE_LINKTIME_OPTIMIZATION=OFF -DBUILD_TLS=ON -DSSL_IMPL=openssl -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF && make install
 
 WORKDIR /src
-RUN git clone https://github.com/skupperproject/skupper-router.git
+RUN git clone --depth 1 https://github.com/skupperproject/skupper-router.git
 
 WORKDIR /src/skupper-router
 
@@ -49,12 +49,23 @@ RUN mkdir build
 WORKDIR /src/skupper-router/build
 RUN FUZZING_LANGUAGE='' FUZZING_ENGINE=afl /usr/local/bin/compile
 WORKDIR /src/skupper-router/build/
-RUN make install
+RUN make -k install
 
-# Run one of the following commands to run the http1 or http2 fuzzer.
-# Starts the AFL fuzzer that runs in an infinite loop. Let it run for about 30 minutes and press Ctrl + C to kill it.
-# The AFL program displays the stats on stdout upon termination.
-#LD_LIBRARY_PATH=/usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/ AFL_MAP_SIZE=10000000 AFL_DEBUG=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i /src/skupper-router/tests/fuzz/fuzz_http1_decoder/corpus/ -o findings_dir /src/skupper-router/build/tests/fuzz/fuzz_http1_decoder; fi
-#LD_LIBRARY_PATH=/usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/ AFL_MAP_SIZE=10000000 AFL_DEBUG=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i /src/skupper-router/tests/fuzz/fuzz_http2_decoder/corpus/ -o findings_dir /src/skupper-router/build/tests/fuzz/fuzz_http2_decoder; fi
+# Attach to the container and run one of the following commands to run
+# the http1 or http2 fuzzer. These commands start the AFL fuzzer which
+# runs in an infinite loop. Let it run for about 30 minutes and press
+# Ctrl + C to kill it. The AFL program displays the stats on stdout
+# upon termination.  Note that http1 has two separate fuzzers: one for
+# request messages and one for response messages. This is necessary
+# because http1 message formats are different for request and response
+# messages.
+
+#LD_LIBRARY_PATH=/usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/ AFL_MAP_SIZE=10000000 AFL_DEBUG=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i /src/skupper-router/tests/fuzz/fuzz_http1_request_decoder/corpus/ -o findings_dir /src/skupper-router/build/tests/fuzz/fuzz_http1_request_decoder
+#LD_LIBRARY_PATH=/usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/ AFL_MAP_SIZE=10000000 AFL_DEBUG=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i /src/skupper-router/tests/fuzz/fuzz_http1_response_decoder/corpus/ -o findings_dir /src/skupper-router/build/tests/fuzz/fuzz_http1_response_decoder
+#LD_LIBRARY_PATH=/usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/ AFL_MAP_SIZE=10000000 AFL_DEBUG=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i /src/skupper-router/tests/fuzz/fuzz_http2_decoder/corpus/ -o findings_dir /src/skupper-router/build/tests/fuzz/fuzz_http2_decoder
+
+# For the above commands the fuzzer will put the generated output in
+# the /src/skupper-router/build/findings_dir directory.
+
 CMD ["/bin/bash"]
 

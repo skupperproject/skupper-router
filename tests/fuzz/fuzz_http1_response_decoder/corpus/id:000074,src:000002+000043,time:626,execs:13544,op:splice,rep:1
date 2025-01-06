@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+transfer-encoding: yes,no, ader: foo
+co123co45;joe=bob
+01234567891
+00HTTP/1.1 201 OK
+transfer-encoding
+transfer-																											ng: yes&no, chunked
+		=bob
+0HTTP/1.1 200 OK
+header: foo
+co123co45679 value
+
+B
