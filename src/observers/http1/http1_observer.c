@@ -30,11 +30,12 @@ struct http1_request_state_t {
     uint64_t        client_body_octets;  // total bytes received in client request msg body
     uint64_t        server_body_octets;  // total bytes received in server response msg body
     bool            latency_done:1;      // true: vflow latency timing complete
+    bool            x_forwarded_for;     // true, if the x-forwarded-for header has already been received, false otherwise
 };
 ALLOC_DECLARE(http1_request_state_t);
 ALLOC_DEFINE(http1_request_state_t);
 
-
+const char *X_FORWARDED = "x-forwarded-for";
 /*
  * HTTP/1.x decoder callbacks
  */
@@ -149,10 +150,43 @@ static void protocol_error(qd_http1_decoder_connection_t *hconn, const char *rea
 }
 
 
+static int rx_header(qd_http1_decoder_connection_t *hconn, uintptr_t request_context,bool is_client, const char *key, const char *value)
+{
+    if (is_client) {
+        //
+        // We only care about the X-Forwarded-For header coming from the client.
+        //
+        if (strcasecmp(X_FORWARDED, (const char *)key) == 0) {
+            http1_request_state_t *hreq = (http1_request_state_t *) request_context;
+            if (!hreq->x_forwarded_for) {
+                //
+                // We will capture the very first x-forwarded-for header and ignore the other x-forwarded for headers in the same request.
+                // Say a request has the following three x-forwarded-for headers
+                //
+                // X-Forwarded-For: 2001:db8:85a3:8d3:1319:8a2e:370:7348, 197.1.773.201
+                // X-Forwarded-For: 195.0.223.001
+                // X-Forwarded-For: 203.0.113.195, 2007:db5:85a3:8d3:1319:8a2e:370:3221
+                //
+                // We will obtain the value of the first X-Forwarded-For (2001:db8:85a3:8d3:1319:8a2e:370:7348, 197.1.773.201) and ignore the
+                // other two X-Forwarded-For headers.
+                // The first X-Forwarded-For header is comma separated list, we will obtain the leftmost (the first) value (2001:db8:85a3:8d3:1319:8a2e:370:7348) in the list
+                char value_copy[128];
+                strncpy(value_copy, (const char *)value, 128);
+                // Get the first token (left-most)
+                char *first_token = strtok(value_copy, ",");
+                vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
+                hreq->x_forwarded_for = true;
+            }
+        }
+    }
+    return 0;
+}
+
+
 static qd_http1_decoder_config_t decoder_config = {
     .rx_request = rx_request,
     .rx_response = rx_response,
-    // .rx_header = rx_header,
+    .rx_header = rx_header,
     // .rx_headers_done = rx_headers_done,
     .rx_body = rx_body,
     // .message_done = message_done,

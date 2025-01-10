@@ -190,6 +190,9 @@ class Http1AutoObserverTest(TestCase):
         pages = ['index.html', 't100K.html', 't10K.html', 't1K.html']
         for page in pages:
             curl_args.append(f"http://localhost:{l_port}/{page}")
+            curl_args.append('--header')
+            # Single IP address in a single X-Forwarded-For header
+            curl_args.append('X-Forwarded-For: 192.168.0.2')
         (rc, out, err) = run_curl(args=curl_args)
         self.assertEqual(0, rc, f"curl failed: {rc}, {err}, {out}")
 
@@ -203,12 +206,14 @@ class Http1AutoObserverTest(TestCase):
                                 "REASON": "OK",
                                 "PROTOCOL": "HTTP/1.1",
                                 "OCTETS": 0,
+                                'SOURCE_HOST': '192.168.0.2',
                                 "OCTETS_REVERSE": 45,  # index.html length
                                 'END_TIME': ANY_VALUE}),
                 ('BIFLOW_APP', {"METHOD": "GET",
                                 "RESULT": "200",
                                 "REASON": "OK",
                                 "PROTOCOL": "HTTP/1.1",
+                                'SOURCE_HOST': '192.168.0.2',
                                 "OCTETS": 0,
                                 "OCTETS_REVERSE": 108803,  # t100K.html length
                                 'END_TIME': ANY_VALUE}),
@@ -216,6 +221,7 @@ class Http1AutoObserverTest(TestCase):
                                 "RESULT": "200",
                                 "REASON": "OK",
                                 "OCTETS": 0,
+                                'SOURCE_HOST': '192.168.0.2',
                                 "OCTETS_REVERSE": 10972,  # t10K.html length
                                 "PROTOCOL": "HTTP/1.1",
                                 'END_TIME': ANY_VALUE}),
@@ -223,6 +229,7 @@ class Http1AutoObserverTest(TestCase):
                                 'RESULT': "200",
                                 'REASON': "OK",
                                 'PROTOCOL': 'HTTP/1.1',
+                                'SOURCE_HOST': '192.168.0.2',
                                 "OCTETS": 0,
                                 "OCTETS_REVERSE": 1188,  # t1K.html length
                                 'END_TIME': ANY_VALUE})
@@ -230,6 +237,57 @@ class Http1AutoObserverTest(TestCase):
         }
         success = retry(lambda: snooper_thread.match_records(expected), delay=1)
         self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        page = 'index.html'
+        curl_args = ['--http1.1', '-G']
+        curl_args.append(f"http://localhost:{l_port}/{page}")
+        curl_args.append('--header')
+        # Comma separated IP addresses in a single X-Forwarded-For header
+        curl_args.append('X-Forwarded-For: 192.168.0.1, 203.168.2.2')
+        (rc, out, err) = run_curl(args=curl_args)
+        self.assertEqual(0, rc, f"curl failed: {rc}, {err}, {out}")
+
+        expected = {
+            "test_01": [
+                ('BIFLOW_APP', {"METHOD": "GET",
+                                "RESULT": "200",
+                                "REASON": "OK",
+                                "PROTOCOL": "HTTP/1.1",
+                                "OCTETS": 0,
+                                'SOURCE_HOST': '192.168.0.1',
+                                "OCTETS_REVERSE": 45,  # index.html length
+                                'END_TIME': ANY_VALUE})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=1)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        curl_args = ['--http1.1', '-G']
+        curl_args.append(f"http://localhost:{l_port}/{page}")
+        curl_args.append('--header')
+        # Comma separated IP addresses in multiple X-Forwarded-For headers
+        curl_args.append('X-Forwarded-For: 192.168.1.7, 203.168.2.2')
+        curl_args.append('--header')
+        curl_args.append('X-Forwarded-For: 2001:db8:85a3:8d3:1319:8a2e:370:7348, 207.168.2.2')
+        curl_args.append('--header')
+        curl_args.append('X-Forwarded-For: 2003:db9:85a3:8d5:1318:8a2e:370:6322, 207.168.2.1')
+
+        (rc, out, err) = run_curl(args=curl_args)
+        self.assertEqual(0, rc, f"curl failed: {rc}, {err}, {out}")
+
+        expected = {
+            "test_01": [
+                ('BIFLOW_APP', {"METHOD": "GET",
+                                "RESULT": "200",
+                                "REASON": "OK",
+                                "PROTOCOL": "HTTP/1.1",
+                                "OCTETS": 0,
+                                'SOURCE_HOST': '192.168.1.7',
+                                "OCTETS_REVERSE": 45,  # index.html length
+                                'END_TIME': ANY_VALUE})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=1)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
         router.teardown()
         snooper_thread.join(timeout=TIMEOUT)
 
