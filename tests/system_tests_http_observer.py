@@ -265,7 +265,10 @@ class Http1AutoObserverTest(TestCase):
         curl_args.append(f"http://localhost:{l_port}/{page}")
         curl_args.append('--header')
         # Comma separated IP addresses in multiple X-Forwarded-For headers
-        curl_args.append('X-Forwarded-For: 192.168.1.7, 203.168.2.2')
+        curl_args.append('X-Forwarded-For: 192.168.1.7, 123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                         '123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                         '123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                         '123.3234.4565.2323, 123.3234.4565.2323')
         curl_args.append('--header')
         curl_args.append('X-Forwarded-For: 2001:db8:85a3:8d3:1319:8a2e:370:7348, 207.168.2.2')
         curl_args.append('--header')
@@ -613,7 +616,11 @@ class Http2TestAutoRouterNginx(TestCase):
         # Pass traffic with many comma separated X-Forwarded-For headers:
         _, out, _ = run_local_curl(get_address(self.router_qdra),
                                    args=['--head', '--header',
-                                         'X-Forwarded-For: 192.168.1.7, 203.168.2.2',
+                                         'X-Forwarded-For: 192.168.1.7, 123.3234.4565.2323, 123.3234.4565.2323, '
+                                         '123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                                         '123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                                         '123.3234.4565.2323, 123.3234.4565.2323, 123.3234.4565.2323, '
+                                         '123.3234.4565.2323, 123.3234.4565.2323',
                                          '--header',
                                          'X-Forwarded-For: 2001:db8:85a3:8d3:1319:8a2e:370:7348, 207.168.2.2',
                                          '--header',

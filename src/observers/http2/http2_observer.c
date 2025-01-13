@@ -260,7 +260,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
 
                 // const uint8_t *value passed into this function is guaranteed to be NULL-terminated
                 char value_copy[128];
-                strncpy(value_copy, (const char *)value, 128);
+                snprintf(value_copy, sizeof(value_copy), "%s", value);
                 // Get the first token (left-most)
                 char *first_token = strtok(value_copy, ",");
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);

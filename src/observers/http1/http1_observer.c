@@ -171,7 +171,7 @@ static int rx_header(qd_http1_decoder_connection_t *hconn, uintptr_t request_con
                 // other two X-Forwarded-For headers.
                 // The first X-Forwarded-For header is comma separated list, we will obtain the leftmost (the first) value (2001:db8:85a3:8d3:1319:8a2e:370:7348) in the list
                 char value_copy[128];
-                strncpy(value_copy, (const char *)value, 128);
+                snprintf(value_copy, sizeof(value_copy), "%s", value);
                 // Get the first token (left-most)
                 char *first_token = strtok(value_copy, ",");
                 vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
