@@ -239,7 +239,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
             }
         }
-    } else if (strcasecmp(X_FORWARDED_FOR, (const char *)name) == 0) {
+    } else if (strcasecmp(X_FORWARDED_FOR, (const char *)name) == 0 && value != 0) {
         qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         if (error == QD_ERROR_NOT_FOUND) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] set_stream_vflow_attribute could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
@@ -262,8 +262,14 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 char value_copy[128];
                 snprintf(value_copy, sizeof(value_copy), "%s", value);
                 // Get the first token (left-most)
-                char *first_token = strtok(value_copy, ",");
-                vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
+                char *saveptr = 0;
+                char *first_token = strtok_r(value_copy, ",", &saveptr);
+                if (first_token) {
+                    vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
+                }
+
+                // If the first token was 0 or a valid value, we have seen the first x-forwarded-for header
+                // and will not look again.
                 stream_info->x_forwarded_for = true;
             }
         }

@@ -156,7 +156,7 @@ static int rx_header(qd_http1_decoder_connection_t *hconn, uintptr_t request_con
         //
         // We only care about the X-Forwarded-For header coming from the client.
         //
-        if (strcasecmp(X_FORWARDED, (const char *)key) == 0) {
+        if (strcasecmp(X_FORWARDED, (const char *)key) == 0 && value != 0) {
             http1_request_state_t *hreq = (http1_request_state_t *) request_context;
             if (!hreq->x_forwarded_for) {
                 //
@@ -173,8 +173,14 @@ static int rx_header(qd_http1_decoder_connection_t *hconn, uintptr_t request_con
                 char value_copy[128];
                 snprintf(value_copy, sizeof(value_copy), "%s", value);
                 // Get the first token (left-most)
-                char *first_token = strtok(value_copy, ",");
-                vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
+                char *saveptr = 0;
+                char *first_token = strtok_r(value_copy, ",", &saveptr);
+                if (first_token) {
+                    vflow_set_string(hreq->vflow, VFLOW_ATTRIBUTE_SOURCE_HOST, first_token);
+                }
+
+                // If the first token was 0 or a valid value, we have seen the first x-forwarded-for header
+                // and will not look again.
                 hreq->x_forwarded_for = true;
             }
         }
