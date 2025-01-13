@@ -239,7 +239,7 @@ static int on_header_recv_callback(qd_http2_decoder_connection_t *conn_state,
                 vflow_set_string(stream_info->vflow, VFLOW_ATTRIBUTE_RESULT, status_code_str);
             }
         }
-    } else if (strcmp(X_FORWARDED_FOR, (const char *)name) == 0) {
+    } else if (strcasecmp(X_FORWARDED_FOR, (const char *)name) == 0) {
         qd_error_t error = get_stream_info_from_hashtable(transport_handle, &stream_info, stream_id);
         if (error == QD_ERROR_NOT_FOUND) {
             qd_log(LOG_HTTP2_DECODER, QD_LOG_ERROR, "[C%"PRIu64"] set_stream_vflow_attribute could not find in the hashtable, stream_id=%" PRIu32, transport_handle->conn_id, stream_id);
