@@ -651,7 +651,7 @@
                     "create": true
                 },
                 "version": {
-                    "description":"Build version of skupper",
+                    "description":"Build version of the running control-plane software",
                     "type": "string",
                     "required": false,
                     "create": true
