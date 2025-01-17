@@ -2157,6 +2157,7 @@ QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *
     char *provider  = qd_entity_opt_string(entity, "provider", 0);
     char *platform  = qd_entity_opt_string(entity, "platform", 0);
     char *namespace = qd_entity_opt_string(entity, "namespace", 0);
+    char *version   = qd_entity_opt_string(entity, "version", 0);
 
     if (qd_error_code() == QD_ERROR_NONE) {
         vflow_record_t *site;
@@ -2168,6 +2169,7 @@ QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *
         }
 
         if (name)      vflow_set_string(site, VFLOW_ATTRIBUTE_NAME, name);
+        if (version)   vflow_set_string(site, VFLOW_ATTRIBUTE_BUILD_VERSION, version);
         if (location)  vflow_set_string(site, VFLOW_ATTRIBUTE_LOCATION, location);
         if (provider)  vflow_set_string(site, VFLOW_ATTRIBUTE_PROVIDER, provider);
         if (platform)  vflow_set_string(site, VFLOW_ATTRIBUTE_PLATFORM, platform);
@@ -2179,6 +2181,7 @@ QD_EXPORT qd_error_t qd_dispatch_configure_site(qd_dispatch_t *qd, qd_entity_t *
     free(provider);
     free(platform);
     free(namespace);
+    free(version);
 
     return qd_error_code();
 }
