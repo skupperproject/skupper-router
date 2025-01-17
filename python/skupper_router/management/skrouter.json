@@ -650,6 +650,12 @@
                     "required": false,
                     "create": true
                 },
+                "version": {
+                    "description":"Build version of skupper",
+                    "type": "string",
+                    "required": false,
+                    "create": true
+                },
                 "platform": {
                     "description":"Description of the platform on which the site is deployed.  Examples are Kubernetes, Docker, Podman, Linux, etc.",
                     "type": "string",
