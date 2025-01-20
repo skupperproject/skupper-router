@@ -126,10 +126,10 @@ struct qdr_action_t {
             qdr_terminus_t      *source;
             qdr_terminus_t      *target;
             qdr_error_t         *error;
-            qd_detach_type_t     dt;
             int                  credit;
             bool                 drain;
             bool                 enable_protocol_trace;
+            bool                 forced_close;
             qdr_delivery_t      *initial_delivery;
         } connection;
 
@@ -428,6 +428,22 @@ typedef enum {
     QDR_LINK_OPER_IDLE
 } qdr_link_oper_status_t;
 
+typedef enum {
+    QDR_LINK_STATE_UNINIT       = 0x00,
+    QDR_LINK_STATE_ATTACH_RECVD = 0x01,
+    QDR_LINK_STATE_ATTACH_SENT  = 0x02,
+    QDR_LINK_STATE_DETACH_RECVD = 0x04,
+    QDR_LINK_STATE_DETACH_SENT  = 0x08,
+    QDR_LINK_STATE_MASK         = 0x0F
+} qdr_link_state_t;
+
+// Link Open: both sides attach (and no detaches yet)
+#define QDR_LINK_STATE_IS_OPEN(LS)   (!!(((LS) & QDR_LINK_STATE_MASK) == \
+                                         (QDR_LINK_STATE_ATTACH_RECVD | QDR_LINK_STATE_ATTACH_SENT)))
+// Link Closed: both sides detach
+#define QDR_LINK_STATE_IS_CLOSED(LS) (!!(((LS) & (QDR_LINK_STATE_DETACH_RECVD | QDR_LINK_STATE_DETACH_SENT)) \
+                                         == (QDR_LINK_STATE_DETACH_RECVD | QDR_LINK_STATE_DETACH_SENT)))
+
 #define QDR_LINK_RATE_DEPTH 5
 
 struct qdr_link_t {
@@ -439,12 +455,11 @@ struct qdr_link_t {
     qdr_connection_t        *conn;               ///< [ref] Connection that owns this link
     qd_link_type_t           link_type;
     qd_direction_t           link_direction;
+    qdr_link_state_t         state;
     qdr_link_work_list_t     work_list;
     char                    *name;
     char                    *disambiguated_name;
     char                    *terminus_addr;
-    int                      attach_count;       ///< 1 or 2 depending on the state of the lifecycle
-    int                      detach_count;       ///< 0, 1, or 2 depending on the state of the lifecycle
     uint32_t                 open_moved_streams; ///< Number of still-open streaming deliveries that were moved from this link
     qdr_address_t           *owning_addr;        ///< [ref] Address record that owns this link
     qdrc_endpoint_t         *core_endpoint;      ///< [ref] Set if this link terminates on an in-core endpoint
@@ -466,8 +481,6 @@ struct qdr_link_t {
     bool                     strip_annotations_out;
     bool                     drain_mode;
     bool                     stalled_outbound;  ///< Indicates that this link is stalled on outbound buffer backpressure
-    bool                     detach_received;   ///< True on core receipt of inbound attach
-    bool                     detach_send_done;  ///< True once the detach has been sent by the I/O thread
     bool                     edge;              ///< True if this link is in an edge-connection
     bool                     processing;        ///< True if an IO thread is currently handling this link
     bool                     ready_to_free;     ///< True if the core thread wanted to clean up the link but it was processing
@@ -990,7 +1003,7 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
                                qd_session_class_t ssn_class,
                                uint8_t priority);
 
-void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition, bool close);
+void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t *error, qdr_condition_t condition);
 void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target);
 bool qdr_link_is_idle_CT(const qdr_link_t *link);
 qdr_terminus_t *qdr_terminus_router_control(void);  ///< new terminus for router control links

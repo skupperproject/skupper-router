@@ -152,10 +152,6 @@ int qdr_link_process_deliveries(qdr_core_t *core, qdr_link_t *link, int credit)
 
     if (link->link_direction == QD_OUTGOING) {
 
-        // If a detach has been received on the link, there is no need to process deliveries on the link.
-        if (link->detach_received)
-            return 0;
-
         while (credit > 0) {
             sys_mutex_lock(&conn->work_lock);
             dlv = DEQ_HEAD(link->undelivered);
@@ -432,10 +428,10 @@ static void qdr_link_flow_CT(qdr_core_t *core, qdr_action_t *action, bool discar
         qdrc_endpoint_do_flow_CT(core, link->core_endpoint, credit, drain);
     }
 
-    if (link->attach_count == 1)
+    if (!QDR_LINK_STATE_IS_OPEN(link->state))
         //
-        // The link is half-open.  Store the pending credit to be dealt with once the link is
-        // progressed to the next step.
+        // The link is not fully open. Store the pending credit to be dealt with once the link has
+        // reached the open state.
         //
         link->credit_stored += credit;
 

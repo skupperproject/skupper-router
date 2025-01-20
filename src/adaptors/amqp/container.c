@@ -64,6 +64,9 @@ struct qd_link_t {
 ALLOC_DEFINE_SAFE(qd_link_t);
 ALLOC_DEFINE(qd_link_ref_t);
 
+static void qd_link_free(qd_link_t *);
+
+
 /** Encapsulates a proton session */
 struct qd_session_t {
     DEQ_LINKS(qd_session_t);
@@ -177,7 +180,7 @@ static qd_link_t *setup_outgoing_link(qd_container_t *container, pn_link_t *pn_l
     qd_session_incref(link->qd_session);
 
     pn_link_set_context(pn_link, link);
-    container->ntype->outgoing_handler(container->qd_router, link);
+    container->ntype->outgoing_link_handler(container->qd_router, link);
     return link;
 }
 
@@ -209,7 +212,7 @@ static qd_link_t *setup_incoming_link(qd_container_t *container, pn_link_t *pn_l
         pn_link_set_max_message_size(pn_link, max_size);
     }
     pn_link_set_context(pn_link, link);
-    container->ntype->incoming_handler(container->qd_router, link);
+    container->ntype->incoming_link_handler(container->qd_router, link);
     return link;
 }
 
@@ -277,7 +280,8 @@ static void notify_closed(qd_container_t *container, qd_connection_t *conn, void
 
 
 // The given connection has dropped. There will be no further link events for this connection so manually clean up all
-// links
+// links. Note that we do not free the pn_link_t - proton will free all links when the parent connection is freed.
+//
 static void close_links(qd_container_t *container, pn_connection_t *conn, bool print_log)
 {
     pn_link_t *pn_link = pn_link_head(conn, 0);
@@ -289,7 +293,7 @@ static void close_links(qd_container_t *container, pn_connection_t *conn, bool p
             if (print_log)
                 qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
                        pn_link_name(pn_link));
-            container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
+            container->ntype->link_closed_handler(container->qd_router, qd_link, true);  // true == forced
             qd_link_free(qd_link);
         }
 
@@ -318,6 +322,7 @@ static void cleanup_link(qd_link_t *link)
         // cleanup any inbound message that has not been forwarded
         qd_message_t *msg = qd_alloc_deref_safe_ptr(&link->incoming_msg);
         if (msg) {
+            qd_nullify_safe_ptr(&link->incoming_msg);
             qd_message_free(msg);
         }
     }
@@ -326,8 +331,7 @@ static void cleanup_link(qd_link_t *link)
 static int close_handler(qd_container_t *container, pn_connection_t *conn, qd_connection_t* qd_conn)
 {
     //
-    // Close all links, passing QD_LOST as the reason.  These links are not
-    // being properly 'detached'.  They are being orphaned.
+    // Close all links. These links are not being properly 'detached'. They are being orphaned.
     //
     if (qd_conn)
         qd_conn->closed = true;
@@ -508,9 +512,9 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
         }
         if (!(pn_connection_state(conn) & PN_LOCAL_CLOSED)) {
             if (pn_session_state(ssn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
-                // Remote has nuked our session.  Check for any links that were
-                // left open and forcibly detach them, since no detaches will
-                // arrive on this session.
+                // Remote has closed the session.  Check for any child links and forcibly close them since there will be
+                // no detach performatives arriving for these links. Note that we do not free the pn_link_t since proton
+                // will free all child pn_link_t when it frees the session.
                 pn_link = pn_link_head(conn, 0);
                 while (pn_link) {
                     pn_link_t *next_link = pn_link_next(pn_link, 0);
@@ -529,7 +533,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                             }
                             qd_log(LOG_CONTAINER, QD_LOG_DEBUG,
                                    "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
-                            container->ntype->link_detach_handler(container->qd_router, qd_link, QD_LOST);
+                            container->ntype->link_closed_handler(container->qd_router, qd_link, true);
                             qd_link_free(qd_link);
                         }
                     }
@@ -590,10 +594,6 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
             pn_link = pn_event_link(event);
             qd_link = (qd_link_t*) pn_link_get_context(pn_link);
             if (qd_link) {
-                qd_detach_type_t dt = pn_event_type(event) == PN_LINK_REMOTE_CLOSE ? QD_CLOSED : QD_DETACHED;
-                if (qd_link->pn_link == pn_link) {
-                    pn_link_close(pn_link);
-                }
                 if (qd_link->policy_counted) {
                     qd_link->policy_counted = false;
                     if (pn_link_is_sender(pn_link)) {
@@ -609,16 +609,21 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                     }
                 }
 
-                container->ntype->link_detach_handler(container->qd_router, qd_link, dt);
+                // notify arrival of inbound detach
+                container->ntype->link_detach_handler(container->qd_router, qd_link);
 
-                if (pn_link_state(pn_link) & PN_LOCAL_CLOSED) {
-                    // link fully closed
-                    add_link_to_free_list(&qd_conn->free_link_list, pn_link);
+                if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
+                    // Link now fully detached
+                    container->ntype->link_closed_handler(container->qd_router, qd_link, false);
                     qd_link_free(qd_link);
+                    add_link_to_free_list(&qd_conn->free_link_list, pn_link);
                 }
-
-            } else {
-                add_link_to_free_list(&qd_conn->free_link_list, pn_link);
+            } else {  // no qd_link, manually detach or free
+                if ((pn_link_state(pn_link) & PN_LOCAL_CLOSED) == 0) {
+                    pn_link_close(pn_link);
+                } else {
+                    add_link_to_free_list(&qd_conn->free_link_list, pn_link);
+                }
             }
         }
         break;
@@ -626,8 +631,13 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
     case PN_LINK_LOCAL_CLOSE:
         pn_link = pn_event_link(event);
         if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
-            add_link_to_free_list(&qd_conn->free_link_list, pn_link);
-            qd_link_free((qd_link_t *) pn_link_get_context(pn_link));
+            qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
+            if (qd_link) {
+                // Link now fully detached
+                container->ntype->link_closed_handler(container->qd_router, qd_link, false);
+                qd_link_free(qd_link);
+            }
+            add_link_to_free_list(&qd_conn->free_link_list, pn_link);   // why???
         }
         break;
 
@@ -775,15 +785,13 @@ qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char* name, 
 }
 
 
-void qd_link_free(qd_link_t *link)
+static void qd_link_free(qd_link_t *link)
 {
     if (!link) return;
 
     sys_mutex_lock(&amqp_adaptor.container->lock);
     DEQ_REMOVE(amqp_adaptor.container->links, link);
     sys_mutex_unlock(&amqp_adaptor.container->lock);
-
-    amqp_adaptor.container->ntype->link_abandoned_deliveries_handler(amqp_adaptor.container->qd_router, link);
 
     cleanup_link(link);
     free_qd_link_t(link);

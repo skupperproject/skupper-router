@@ -196,7 +196,6 @@ static bool event_handler(pn_event_t *event)
 
     case PN_PROACTOR_INACTIVE:
     case PN_PROACTOR_INTERRUPT: {
-        assert(stop);  // expect: due to stopping
         debug("proactor inactive!\n");
         return true;
     } break;

@@ -117,7 +117,7 @@ static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
     if (link) {
         qd_nullify_safe_ptr(&addr->edge_inlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
-        qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
+        qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE);
     }
 }
 
@@ -148,7 +148,7 @@ static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
     if (link) {
         qd_nullify_safe_ptr(&addr->edge_outlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
-        qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
+        qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE);
     }
 }
 
@@ -184,7 +184,7 @@ static void remove_proxies_for_addr(qcm_edge_addr_proxy_t *ap, qdr_address_t *ad
         qdr_link_t     *link = ref->link;
         if (link->conn && link->conn->role == QDR_ROLE_INTER_EDGE) {
             qdr_core_unbind_address_link_CT(ap->core, addr, link);
-            qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE, true);
+            qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE);
         }
         ref = next;
     }

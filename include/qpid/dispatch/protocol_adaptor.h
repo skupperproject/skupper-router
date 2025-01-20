@@ -386,15 +386,18 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
                                         void                          *bind_token);
 
 /**
- * qdr_connection_closed
+ * qdr_connection_notify_closed
  *
- * This function must be called when a connection is closed, either cleanly by protocol
- * or uncleanly by lost connectivity.  Once this function is called, the caller must never
- * again refer to or use the connection pointer.
+ * This function is invoked by the adaptor to notify the core that the given connection has been closed. This must be
+ * called when a connection is closed, either cleanly by protocol or uncleanly by lost connectivity.
+ *
+ * This must be the last core API call made by the adaptor for this connection. The core thread will free the
+ * qdr_connection_t as a result of this call therefore the adaptor MUST NOT reference the qdr_connection_t on return
+ * from this call.
  *
  * @param conn The pointer returned by qdr_connection_opened
  */
-void qdr_connection_closed(qdr_connection_t *conn);
+void qdr_connection_notify_closed(qdr_connection_t *conn);
 
 /**
  * qdr_connection_set_tracing
@@ -643,12 +646,6 @@ qd_iterator_t *qdr_terminus_dnp_address(qdr_terminus_t *term);
  ******************************************************************************
  */
 
-typedef enum {
-    QD_DETACHED,  // Protocol detach
-    QD_CLOSED,    // Protocol close
-    QD_LOST       // Connection or session closed
-} qd_detach_type_t;
-
 /**
  * qdr_link_set_context
  *
@@ -800,15 +797,32 @@ qdr_link_t *qdr_link_first_attach(qdr_connection_t *conn,
 void qdr_link_second_attach(qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target);
 
 /**
- * qdr_link_detach
+ * qdr_link_detach_received
  *
- * This function is invoked when a link detach arrives.
+ * This function is invoked when a link detach performative arrives from the remote peer. This may the first detach
+ * (peer-initiated link detach) or in response to a detach sent by the router (second detach).
  *
  * @param link The link pointer returned by qdr_link_first_attach or in a FIRST_ATTACH event.
- * @param dt The type of detach that occurred.
  * @param error The link error from the detach frame or 0 if none.
  */
-void qdr_link_detach(qdr_link_t *link, qd_detach_type_t dt, qdr_error_t *error);
+void qdr_link_detach_received(qdr_link_t *link, qdr_error_t *error);
+
+
+/**
+ * qdr_link_notify_closed
+ *
+ * This function is invoked by the adaptor to notify the core that the given link has been closed. This must be called
+ * when the link is closed, either cleanly by protocol or uncleanly by lost connectivity (e.g. parent connection
+ * drop). This will also be called during adaptor shutdown on any outstanding links.
+ *
+ * This must be the last core API call made by the adaptor for this link. The core thread will free the qdr_link_t as a
+ * result of this call therefore the adaptor MUST NOT reference the qdr_link_t on return from this call.
+ *
+ * @param link The link pointer returned by qdr_link_first_attach or in a FIRST_ATTACH event.
+ * @param forced True if the link was closed due to failure or shutdown. False if closed by clean detach handshake.
+ */
+void qdr_link_notify_closed(qdr_link_t *link, bool forced);
+
 
 /**
  * qdr_link_deliver
