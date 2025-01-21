@@ -65,7 +65,7 @@ RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     python3 \
     libnghttp2 \
     gettext hostname iputils \
-    shadow-utils \
+    shadow-utils rsyslog util-linux \
  && microdnf clean all
 
 # Remove gnutls, libarchive and everything that depends on it. 
