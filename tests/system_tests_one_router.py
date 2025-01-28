@@ -487,7 +487,7 @@ class RouterConfigTest(TestCase):
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
                             'password': "server-password",
-                            'version': -1})
+                            'ordinal': -1})
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_23, wait=False, expect=Process.EXIT_FAIL))
 
@@ -504,8 +504,8 @@ class RouterConfigTest(TestCase):
                             'certFile': SERVER_CERTIFICATE,
                             'privateKeyFile': SERVER_PRIVATE_KEY,
                             'password': "server-password",
-                            'version': 1,
-                            'oldestValidVersion': 42})
+                            'ordinal': 1,
+                            'oldestValidOrdinal': 42})
         ])
         cls.routers.append(cls.tester.qdrouterd(name, config_24, wait=False, expect=Process.EXIT_FAIL))
 
@@ -668,10 +668,10 @@ class RouterConfigTest(TestCase):
         err = "Failed to configure TLS Ciphers 'Blah-Blah-Blabbity-Blab' for sslProfile 'BadCipherProfile'"
         self.routers[22].wait_log_message(err, timeout=1.0)
 
-        err = "Negative version field values are invalid"
+        err = "Negative ordinal field values are invalid"
         self.routers[23].wait_log_message(err, timeout=1.0)
 
-        err = "version must be >= oldestValidVersion"
+        err = "ordinal must be >= oldestValidOrdinal"
         self.routers[24].wait_log_message(err, timeout=1.0)
 
         with open(self.routers[25].outfile + '.out', 'r') as out_file:

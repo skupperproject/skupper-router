@@ -69,7 +69,7 @@ struct qd_tls_session_t {
     // copies from parent qd_tls_config_t to avoid locking during I/O:
     char                  *ssl_profile_name;
     char                  *uid_format;
-    long                   version;
+    uint64_t               ordinal;
 
     bool                   tls_error;
     bool                   output_eos;       // pn_tls_close_output() called
@@ -97,7 +97,12 @@ struct qd_tls_config_t {
     qd_proton_config_t *proton_tls_cfg;  // lock must be held
     qd_tls_type_t       p_type;
     sys_atomic_t        ref_count;
-    long                version;         // lock must be held
+    uint64_t            ordinal;               // lock must be held
+    uint64_t            oldest_valid_ordinal;  // lock must be held
+
+    // Invoked on management thread whenever sslProfile is updated
+    qd_tls_config_update_cb_t  update_callback;
+    void                      *update_context;
 
     bool                authenticate_peer;
     bool                verify_hostname;

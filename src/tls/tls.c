@@ -283,12 +283,14 @@ qd_tls_config_t *qd_tls_config(const char *ssl_profile_name,
 
     tls_config->ssl_profile_name  = qd_strdup(ssl_profile_name);
     tls_config->uid_format        = CHECKED_STRDUP(tls_context->profile.uid_format);
-    tls_config->version           = tls_context->profile.version;
+    tls_config->ordinal            = tls_context->profile.ordinal;
+    tls_config->oldest_valid_ordinal = tls_context->profile.oldest_valid_ordinal;
     tls_config->authenticate_peer = authenticate_peer;
     tls_config->verify_hostname   = verify_hostname;
     tls_config->is_listener       = is_listener;
     tls_config->p_type            = p_type;
     tls_config->proton_tls_cfg    = qd_proton_config(pn_raw_config, pn_amqp_config);
+
     DEQ_INSERT_TAIL(tls_context->tls_configs, tls_config);
 
     return tls_config;
@@ -310,6 +312,50 @@ void qd_tls_config_decref(qd_tls_config_t *tls_config)
             sys_mutex_free(&tls_config->lock);
             free_qd_tls_config_t(tls_config);
         }
+    }
+}
+
+
+uint64_t qd_tls_config_get_ordinal(const qd_tls_config_t *config)
+{
+    // config->ordinal can be changed via management. Calling this from any other thread risks returning a stale value.
+    ASSERT_MGMT_THREAD;
+
+    return config->ordinal;
+}
+
+
+uint64_t qd_tls_config_get_oldest_valid_ordinal(const qd_tls_config_t *config)
+{
+    // config->oldest_valid_ordinal can be changed via management. Calling this from any other thread risks returning a
+    // stale value.
+    ASSERT_MGMT_THREAD;
+
+    return config->oldest_valid_ordinal;
+}
+
+
+void qd_tls_config_register_update_callback(qd_tls_config_t *config, void *update_cb_context,
+                                            qd_tls_config_update_cb_t update_cb)
+{
+    // Since this function can only be called on the mgmt thread there is no chance that the update fields are being
+    // accessed by another thread
+    ASSERT_MGMT_THREAD;
+
+    config->update_callback = update_cb;
+    config->update_context  = update_cb_context;
+}
+
+
+void qd_tls_config_cancel_update_callback(qd_tls_config_t *config)
+{
+    // Since this function can only be called on the mgmt thread there is no chance that the handler is being run while
+    // it is being cancelled.
+    ASSERT_MGMT_THREAD;
+
+    if (config) {
+        config->update_callback = 0;
+        config->update_context  = 0;
     }
 }
 
@@ -339,7 +385,7 @@ qd_tls_session_t *qd_tls_session_raw(qd_tls_config_t *tls_config, const char *pe
     assert(p_cfg);
     sys_atomic_inc(&p_cfg->ref_count);  // prevents free after we drop lock
     tls_session->uid_format = CHECKED_STRDUP(tls_config->uid_format);  // may be changed by mgmt thread
-    tls_session->version = tls_config->version;  // may be changed by mgmt thread
+    tls_session->ordinal = tls_config->ordinal;  // may be changed by mgmt thread
     sys_mutex_unlock(&tls_config->lock);
 
     tls_session->proton_tls_cfg = p_cfg;
@@ -434,7 +480,7 @@ qd_tls_session_t *qd_tls_session_amqp(qd_tls_config_t *tls_config, pn_transport_
     assert(p_cfg);
     sys_atomic_inc(&p_cfg->ref_count);  // prevents free after we drop lock
     tls_session->uid_format = CHECKED_STRDUP(tls_config->uid_format);  // may be changed by mgmt thread
-    tls_session->version = tls_config->version;  // may be changed by mgmt thread
+    tls_session->ordinal = tls_config->ordinal;  // may be changed by mgmt thread
     sys_mutex_unlock(&tls_config->lock);
 
     tls_session->proton_tls_cfg = p_cfg;
@@ -589,6 +635,14 @@ int qd_tls_session_get_ssf(const qd_tls_session_t *tls_session)
 }
 
 
+uint64_t qd_tls_session_get_profile_ordinal(const qd_tls_session_t *session)
+{
+    if (session)
+        return session->ordinal;
+    return 0;
+}
+
+
 qd_ssl2_profile_t *qd_tls_read_ssl_profile(const char *ssl_profile_name, qd_ssl2_profile_t *profile)
 {
     ASSERT_MGMT_THREAD;
@@ -607,8 +661,8 @@ qd_ssl2_profile_t *qd_tls_read_ssl_profile(const char *ssl_profile_name, qd_ssl2
     profile->private_key_file       = CHECKED_STRDUP(tls_context->profile.private_key_file);
     profile->uid_name_mapping_file  = CHECKED_STRDUP(tls_context->profile.uid_name_mapping_file);
     profile->trusted_certificate_db = CHECKED_STRDUP(tls_context->profile.trusted_certificate_db);
-    profile->version                = tls_context->profile.version;
-    profile->oldest_valid_version   = tls_context->profile.oldest_valid_version;
+    profile->ordinal                = tls_context->profile.ordinal;
+    profile->oldest_valid_ordinal   = tls_context->profile.oldest_valid_ordinal;
 
     return profile;
 }
@@ -637,6 +691,8 @@ static qd_error_t _read_tls_profile(qd_entity_t *entity, qd_ssl2_profile_t *prof
 {
     ZERO(profile);
 
+    long ordinal;
+    long oldest_valid_ordinal;
     char *name = 0;
     name = qd_entity_opt_string(entity, "name", "<NONE>");
     if (qd_error_code()) goto error;
@@ -657,9 +713,9 @@ static qd_error_t _read_tls_profile(qd_entity_t *entity, qd_ssl2_profile_t *prof
     if (qd_error_code()) goto error;
     profile->uid_name_mapping_file      = qd_entity_opt_string(entity, "uidNameMappingFile", 0);
     if (qd_error_code()) goto error;
-    profile->version                    = qd_entity_opt_long(entity, "version", 0);
+    ordinal                             = qd_entity_opt_long(entity, "ordinal", 0);
     if (qd_error_code()) goto error;
-    profile->oldest_valid_version       = qd_entity_opt_long(entity, "oldestValidVersion", 0);
+    oldest_valid_ordinal                = qd_entity_opt_long(entity, "oldestValidOrdinal", 0);
     if (qd_error_code()) goto error;
 
     if (profile->uid_format) {
@@ -695,15 +751,18 @@ static qd_error_t _read_tls_profile(qd_entity_t *entity, qd_ssl2_profile_t *prof
         }
     }
 
-    // simple validation of version fields:
-    if (profile->version < 0 || profile->oldest_valid_version < 0) {
-        qd_error(QD_ERROR_CONFIG, "Negative version field values are invalid (sslProfile '%s')", name);
+    // simple validation of ordinal fields:
+    if (ordinal < 0 || oldest_valid_ordinal < 0) {
+        qd_error(QD_ERROR_CONFIG, "Negative ordinal field values are invalid (sslProfile '%s')", name);
         goto error;
     }
-    if (profile->version < profile->oldest_valid_version) {
-        qd_error(QD_ERROR_CONFIG, "version must be >= oldestValidVersion (sslProfile '%s')", name);
+    if (ordinal < oldest_valid_ordinal) {
+        qd_error(QD_ERROR_CONFIG, "ordinal must be >= oldestValidOrdinal (sslProfile '%s')", name);
         goto error;
     }
+
+    profile->ordinal = (uint64_t) ordinal;
+    profile->oldest_valid_ordinal = (uint64_t) oldest_valid_ordinal;
 
     free(name);
     return QD_ERROR_NONE;
@@ -788,10 +847,18 @@ static qd_error_t _update_tls_config(qd_tls_config_t *tls_config, const qd_ssl2_
     old_cfg = tls_config->proton_tls_cfg;
     tls_config->proton_tls_cfg = new_cfg;
     // And refresh any parameters that must be used when creating new sessions:
-    tls_config->version = profile->version;
+    tls_config->ordinal = profile->ordinal;
+    tls_config->oldest_valid_ordinal = profile->oldest_valid_ordinal;
     free(tls_config->uid_format);
     tls_config->uid_format = CHECKED_STRDUP(profile->uid_format);
+
+    // Calling the callback under lock ensures that no new TLS sessions can be created using the updated
+    // configuration until after the callback is run.
+    if (tls_config->update_callback) {
+        tls_config->update_callback(tls_config, tls_config->update_context);
+    }
     sys_mutex_unlock(&tls_config->lock);
+
 
     // no need to hold the lock here because the decref is atomic and if this
     // is the last reference then by definition there are no other threads involved.
