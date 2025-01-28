@@ -654,10 +654,11 @@ struct qdr_connection_info_t {
     bool                   opened;
     bool                   streaming_links;  // will allow streaming links
     bool                   connection_trunking; // peer supports connection trunking
+    bool                   tls;
     qd_direction_t         dir;
     qdr_connection_role_t  role;
     pn_data_t             *connection_properties;
-    bool                   tls;
+    uint64_t               tls_ordinal;  // sslProfile revision used for the TLS session
     int                    tls_ssf; // TLS strength factor
     char                  *version; // if role is router or edge
     sys_mutex_t            connection_info_lock;

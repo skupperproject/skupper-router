@@ -95,7 +95,11 @@ struct qd_connector_config_t {
     qd_server_config_t        config;
     qd_server_t              *server;
     char                     *policy_vhost;  /* Optional policy vhost name */
+
+    // TLS Configuration. Keep a local copy of the TLS ordinals to monitor changes by management
     qd_tls_config_t          *tls_config;
+    uint64_t                  tls_ordinal;
+    uint64_t                  tls_oldest_valid_ordinal;
     uint32_t                  data_connection_count;  // # of child inter-router data connections
 
     // The group correlation id for all child connections
@@ -164,5 +168,6 @@ void qd_connector_add_link(qd_connector_t *ctor);
 // remove the child connection
 // NOTE WELL: this may free the connector if the connection is holding the last
 // reference to it
-void qd_connector_remove_connection(qd_connector_t *ctor, bool final, const char *condition_name, const char *condition_description);
+void qd_connector_remove_connection(qd_connector_t *connector, bool final, const char *condition_name, const char *condition_description);
+
 #endif

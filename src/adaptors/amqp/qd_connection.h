@@ -297,4 +297,13 @@ void qd_connection_transport_tracer(pn_transport_t *transport, const char *messa
 
 bool qd_connection_handle_event(qd_server_t *qd_server, pn_event_t *e, void *context);
 bool qd_connection_strip_annotations_in(const qd_connection_t *c);
+
+/**
+ * Get the value of the TLS ordinal that is in use by this connection.
+ *
+ * @return True if the TLS ordinal is configured and tls_ordinal has been set, false if the connection has no TLS
+ * ordinal.
+ */
+bool qd_connection_get_tls_ordinal(const qd_connection_t *qd_conn, uint64_t *tls_ordinal);
+
 #endif

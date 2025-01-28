@@ -80,6 +80,8 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
             qd_listener_decref(li);
             return 0;
         }
+        li->tls_ordinal = qd_tls_config_get_ordinal(li->tls_config);
+        li->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(li->tls_config);
     }
 
     char *fol = qd_entity_opt_string(entity, "failoverUrls", 0);
@@ -285,8 +287,8 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 
 QD_EXPORT qd_connector_config_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_connection_manager_t *cm       = qd->connection_manager;
-    qd_connector_config_t    *ctor_config = qd_connector_config_create(qd, entity);
+    qd_connection_manager_t *cm          = qd->connection_manager;
+    qd_connector_config_t   *ctor_config = qd_connector_config_create(qd, entity);
     if (!ctor_config) {
         return 0;
     }
