@@ -66,10 +66,9 @@ RUN microdnf -y upgrade --refresh --best --nodocs --noplugins --setopt=install_w
     cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
-    gettext hostname iputils \
+    hostname iputils \
     shadow-utils \
- && microdnf clean all \
- && microdnf -y remove gnutls glib2 gobject-introspection libpeas microdnf gnupg2 gpgme libdnf json-glib libmodulemd librepo librhsm libsolv rpm rpm-libs libarchive libyaml libusbx systemd-libs
+ && microdnf clean all && microdnf -y remove libxml2 gnutls glib2 gobject-introspection libpeas microdnf gnupg2 gpgme libdnf json-glib libmodulemd librepo librhsm libsolv rpm rpm-libs libarchive libyaml libusbx systemd-libs
 
 RUN useradd --uid 10000 runner
 USER 10000
