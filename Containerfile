@@ -56,22 +56,20 @@ RUN mkdir /image/licenses && cp ./LICENSE /image/licenses
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # upgrade first to avoid fixable vulnerabilities
+# then install required packages
+# finally, remove gnutls etc. to reduce CVE exposure
+# https://github.com/skupperproject/skupper-router/issues/1477
+# https://github.com/skupperproject/skupper-router/issues/1639
 RUN microdnf -y upgrade --refresh --best --nodocs --noplugins --setopt=install_weak_deps=0 --setopt=keepcache=0 \
- && microdnf clean all -y
-
-RUN microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
+ && microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
     glibc \
     cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
     gettext hostname iputils \
     shadow-utils \
- && microdnf clean all
-
-# Remove gnutls, libarchive and everything that depends on it. 
-# https://github.com/skupperproject/skupper-router/issues/1477
-# https://github.com/skupperproject/skupper-router/issues/1639
-RUN microdnf -y remove gnutls glib2 gobject-introspection libpeas microdnf gnupg2 gpgme libdnf json-glib libmodulemd librepo librhsm libsolv rpm rpm-libs libarchive libyaml libusbx systemd-libs
+ && microdnf clean all \
+ && microdnf -y remove gnutls glib2 gobject-introspection libpeas microdnf gnupg2 gpgme libdnf json-glib libmodulemd librepo librhsm libsolv rpm rpm-libs libarchive libyaml libusbx systemd-libs
 
 RUN useradd --uid 10000 runner
 USER 10000
