@@ -152,12 +152,14 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     if (strcmp(config->role, "inter-router") == 0) {
         // For inter-router connections only, the dataConnectionCount defaults to "auto",
         // which means it will be determined as a function of the number of worker threads.
-        config->data_connection_count = strdup(qd->data_connection_count);
-        // If the user has *not* explicitly set the value "0",
-        // then we will have some data connections.
-        if (strcmp(config->data_connection_count, "0")) {
-            config->has_data_connectors = true;
+        if (strcmp(qd->data_connection_count, "0") == 0) {
+            // With the advent of the Certificate Rotation feature (https://github.com/skupperproject/skupper-router/issues/1722),
+            // the dataConnectionCount on inter-router cannot be set to zero. If set to zero, force it to 1.
+            strcpy(qd->data_connection_count, "1");
         }
+
+        config->data_connection_count = strdup(qd->data_connection_count);
+        config->has_data_connectors = true;
     } else {
         config->data_connection_count = strdup("0");
     }

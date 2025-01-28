@@ -618,7 +618,7 @@
                     "required": false
                 },
                 "dataConnectionCount": {
-                    "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers",
+                    "description": "The number of parallel data connections to carry streaming data between routers. Applies only to interior routers. Defaults to 'auto', don't set to 0 (zero), if set to zero, will be forced to 1",
                     "type": "string",
                     "required": false,
                     "default": "auto",
