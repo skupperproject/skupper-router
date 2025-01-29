@@ -238,9 +238,29 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
         strcpy(qd->router_id, mode);
         qd_generate_discriminator(qd->router_id + strlen(qd->router_id));
     }
-
     qd->thread_count = qd_entity_opt_long(entity, "workerThreads", 4); QD_ERROR_RET();
-    qd->data_connection_count = qd_entity_opt_string(entity, "dataConnectionCount", "auto"); QD_ERROR_RET();
+    char *data_conn_count_str = qd_entity_opt_string(entity, "dataConnectionCount", "auto"); QD_ERROR_RET();
+
+    if (!strcmp("auto", data_conn_count_str)) {
+        // The user has explicitly requested 'auto'.
+        qd->data_connection_count = (qd->thread_count + 1) / 2;
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections calculated at %d ", qd->data_connection_count);
+    } else if (1 == sscanf(data_conn_count_str, "%u", &qd->data_connection_count)) {
+        // The user has requested a specific number of connections.
+        if (qd->data_connection_count == 0) {
+            // Force data_connection_count to 1 if set to 0.
+            qd->data_connection_count = 1;
+        }
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections set to %d ", qd->data_connection_count);
+    } else {
+        // The user has entered a non-numeric value that is not 'auto'.
+        // This is not a legal value. Default to 'auto' and mention it.
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Bad value \"%s\" for dataConnectionCount ", data_conn_count_str);
+        qd->data_connection_count = (qd->thread_count + 1) / 2;
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections calculated at %d ", qd->data_connection_count);
+    }
+    free(data_conn_count_str);
+
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
     qd->metadata = qd_entity_opt_string(entity, "metadata", 0); QD_ERROR_RET();
@@ -385,7 +405,6 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_http_server_free(qd_server_http(qd->server));
 
     free(qd->sasl_config_path);
-    free(qd->data_connection_count);
     free(qd->sasl_config_name);
     qd_connection_manager_free(qd->connection_manager);
     qd_policy_free(qd->policy);

@@ -46,19 +46,18 @@ struct qd_dispatch_t {
     qd_connection_manager_t *connection_manager;
     qd_policy_t             *policy;
     qd_address_treatment_t   default_treatment;
-
-    int    thread_count;
-    char  *sasl_config_path;
-    char  *sasl_config_name;
-    char  *router_area;
-    char  *router_id;
-    qd_router_mode_t router_mode;
-    char  *van_id;
-    char  *timestamp_format;
-    char  *metadata;
-    bool   timestamps_in_utc;
-    char  *data_connection_count;
-    bool   terminate_tcp_conns;
+    qd_router_mode_t         router_mode;
+    int       thread_count;
+    uint32_t  data_connection_count;
+    char     *sasl_config_path;
+    char     *sasl_config_name;
+    char     *router_area;
+    char     *router_id;
+    char     *van_id;
+    char     *timestamp_format;
+    char     *metadata;
+    bool      timestamps_in_utc;
+    bool      terminate_tcp_conns;
 };
 
 qd_dispatch_t *qd_dispatch_get_dispatch(void);
