@@ -53,22 +53,21 @@ RUN if [ "$PLATFORM" = "amd64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-
 RUN if [ "$PLATFORM" = "arm64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
 RUN mkdir /image/licenses && cp ./LICENSE /image/licenses
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi:latest AS packager
 
-# upgrade first to avoid fixable vulnerabilities
-# then install required packages
-# finally, remove gnutls etc. to reduce CVE exposure
-# https://github.com/skupperproject/skupper-router/issues/1477
-# https://github.com/skupperproject/skupper-router/issues/1639
-RUN microdnf -y upgrade --refresh --best --nodocs --noplugins --setopt=install_weak_deps=0 --setopt=keepcache=0 \
- && microdnf -y --setopt=install_weak_deps=0 --setopt=tsflags=nodocs install \
-    glibc \
+RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
+    --installroot /output install \
+    coreutils-single \
     cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
     hostname iputils \
     shadow-utils \
- && microdnf clean all && microdnf -y remove libxml2 gnutls glib2 gobject-introspection libpeas microdnf gnupg2 gpgme libdnf json-glib libmodulemd librepo librhsm libsolv rpm rpm-libs libarchive libyaml libusbx systemd-libs
+ && dnf clean all --installroot /output
+
+FROM scratch
+
+COPY --from=packager /output /
 
 RUN useradd --uid 10000 runner
 USER 10000
