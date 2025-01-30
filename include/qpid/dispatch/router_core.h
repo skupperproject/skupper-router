@@ -75,14 +75,6 @@ qd_dispatch_t *qdr_core_dispatch(qdr_core_t *core);
 void qdr_process_tick(qdr_core_t *core);
 
 /**
- * Return the count of worker threads.
- *
- * @param core Pointer to the core object returned by qd_core()
- * @return count of worker threads
- */
-int qdr_core_get_worker_thread_count(const qdr_core_t *core);
-
-/**
  * @brief Return the text of the router's virtual application network ID, or 0.
  *
  * @param core Pointer to the core object returned by qdr_core()

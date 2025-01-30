@@ -152,14 +152,9 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     if (strcmp(config->role, "inter-router") == 0) {
         // For inter-router connections only, the dataConnectionCount defaults to "auto",
         // which means it will be determined as a function of the number of worker threads.
-        config->data_connection_count = strdup(qd->data_connection_count);
         // If the user has *not* explicitly set the value "0",
         // then we will have some data connections.
-        if (strcmp(config->data_connection_count, "0")) {
-            config->has_data_connectors = true;
-        }
-    } else {
-        config->data_connection_count = strdup("0");
+        config->has_data_connectors = true;
     }
 
     set_config_host(config, entity);
@@ -281,7 +276,6 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->log_message)           free(cf->log_message);
     if (cf->policy_vhost)          free(cf->policy_vhost);
 
-    free(cf->data_connection_count);
     if (cf->conn_props) pn_data_free(cf->conn_props);
 
     memset(cf, 0, sizeof(*cf));

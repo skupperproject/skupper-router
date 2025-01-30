@@ -268,10 +268,6 @@ typedef struct qd_server_config_t {
      */
     pn_data_t *conn_props;
 
-    /**
-     * For inter-router roles only.  The number of data connections associated with the link.
-     */
-    char *data_connection_count;
     bool  has_data_connectors;
 
     /**
