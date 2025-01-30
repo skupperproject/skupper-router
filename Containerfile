@@ -63,13 +63,14 @@ RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
     libnghttp2 \
     hostname iputils \
     shadow-utils \
+ && chroot /output useradd --uid 10000 runner \
+ && dnf -y --installroot /output remove shadow-utils \
  && dnf clean all --installroot /output
 
 FROM scratch
 
 COPY --from=packager /output /
 
-RUN useradd --uid 10000 runner
 USER 10000
 
 WORKDIR /
