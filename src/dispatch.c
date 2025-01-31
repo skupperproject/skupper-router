@@ -247,10 +247,6 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
         qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections calculated at %d ", qd->data_connection_count);
     } else if (1 == sscanf(data_conn_count_str, "%u", &qd->data_connection_count)) {
         // The user has requested a specific number of connections.
-        if (qd->data_connection_count == 0) {
-            // Force data_connection_count to 1 if set to 0.
-            qd->data_connection_count = 1;
-        }
         qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections set to %d ", qd->data_connection_count);
     } else {
         // The user has entered a non-numeric value that is not 'auto'.

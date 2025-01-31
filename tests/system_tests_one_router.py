@@ -3588,10 +3588,7 @@ class DataConnectionCountTest(TestCase):
                     expected_result = int((int(worker_threads) + 1) / 2)
                     msg = "Inter-router data connections calculated at " + str(expected_result)
                 else:
-                    if con_count == '0':
-                        expected_result = '1'
-                    else:
-                        expected_result = con_count
+                    expected_result = con_count
                     msg = "Inter-router data connections set to " + str(expected_result)
 
                 print("worker threads:", worker_threads, ", requested connections:", con_count, ", expected result:", expected_result, end=" ")
