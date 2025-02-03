@@ -1210,7 +1210,6 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_
 /* Timer callback to try/retry connection open, connector->lock held */
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection) TA_REQ(connector->lock)
 {
-    // If the connector has been deleted, do not try to open new connection.
     assert(connector->state != CXTR_STATE_DELETED);
 
     // connection until pn_proactor_connect is called below
@@ -1774,7 +1773,7 @@ bool qd_connector_connect(qd_connector_t *ct)
         sys_mutex_unlock(&ct->lock);
         return true;
     }
-    sys_mutex_lock(&ct->lock);
+    sys_mutex_unlock(&ct->lock);
     return false;
 }
 
