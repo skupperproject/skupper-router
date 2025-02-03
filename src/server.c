@@ -1211,8 +1211,7 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection) TA_REQ(connector->lock)
 {
     // If the connector has been deleted, do not try to open new connection.
-    if (connector->state == CXTR_STATE_DELETED)
-        return;
+    assert(connector->state != CXTR_STATE_DELETED);
 
     // connection until pn_proactor_connect is called below
     qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
@@ -1764,8 +1763,8 @@ const char *qd_connector_policy_vhost(qd_connector_t* ct)
 
 bool qd_connector_connect(qd_connector_t *ct)
 {
+    sys_mutex_lock(&ct->lock);
     if (ct->state != CXTR_STATE_DELETED) {
-        sys_mutex_lock(&ct->lock);
         // expect: do not attempt to connect an already connected qd_connection
         assert(ct->qd_conn == 0);
         ct->qd_conn = 0;
@@ -1775,6 +1774,7 @@ bool qd_connector_connect(qd_connector_t *ct)
         sys_mutex_unlock(&ct->lock);
         return true;
     }
+    sys_mutex_lock(&ct->lock);
     return false;
 }
 
