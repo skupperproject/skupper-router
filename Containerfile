@@ -61,6 +61,7 @@ RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
     cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
+    hostname iputils \
     shadow-utils \
  && chroot /output useradd --uid 10000 runner \
  && dnf -y --installroot /output remove shadow-utils \
