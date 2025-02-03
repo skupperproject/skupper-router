@@ -1066,36 +1066,39 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                 const qd_server_config_t *config = &ctx->connector->config;
                 char conn_msg[QD_CXTR_CONN_MSG_BUF_SIZE];  // avoid holding connector lock when logging
                 char conn_msg_1[QD_CXTR_CONN_MSG_BUF_SIZE]; // this connection message does not contain the connection id
-
+                bool log_error_message = false;
                 sys_mutex_lock(&ctx->connector->lock);
                 qd_increment_conn_index_lh(ctx);
                 // note: will transition back to STATE_CONNECTING when ctx is freed (pn_connection_free)
-                ctx->connector->state = CXTR_STATE_FAILED;
-                if (condition && pn_condition_is_set(condition)) {
-                    qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed: %s %s",
-                                     ctx->connection_id, config->host_port, pn_condition_get_name(condition),
-                                     pn_condition_get_description(condition));
+                if (ctx->connector->state != CXTR_STATE_DELETED) {
+                    // If the connector state is CXTR_STATE_DELETED, do not change the state to CXTR_STATE_FAILED
+                    ctx->connector->state = CXTR_STATE_FAILED;
 
-                    qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed: %s %s",
-                                     config->host_port, pn_condition_get_name(condition), pn_condition_get_description(condition));
-                } else {
-                    qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed",
-                                     ctx->connection_id, config->host_port);
-                    qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed", config->host_port);
-                }
-                //
-                // This is a fix for https://github.com/skupperproject/skupper-router/issues/1385
-                // The router will repeatedly try to connect to the host/port specified in the connector
-                // If it is unable to connect, an error message will be logged only once and more error messages
-                // from connection failures will only be logged if the error message changes.
-                // This is done so we don't flood the log with connection failure error messages
-                // Even though we restrict the number of times the error message is displayed, the
-                // router will still keep trying to connect to the host/port specified in the connector.
-                //
-                bool log_error_message = false;
-                if (strcmp(ctx->connector->conn_msg, conn_msg_1) != 0) {
-                    strncpy(ctx->connector->conn_msg, conn_msg_1, QD_CXTR_CONN_MSG_BUF_SIZE);
-                    log_error_message = true;
+                    if (condition && pn_condition_is_set(condition)) {
+                        qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed: %s %s",
+                                         ctx->connection_id, config->host_port, pn_condition_get_name(condition),
+                                         pn_condition_get_description(condition));
+
+                        qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed: %s %s",
+                                         config->host_port, pn_condition_get_name(condition), pn_condition_get_description(condition));
+                    } else {
+                        qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed",
+                                         ctx->connection_id, config->host_port);
+                        qd_format_string(conn_msg_1, sizeof(conn_msg_1), "Connection to %s failed", config->host_port);
+                    }
+                    //
+                    // This is a fix for https://github.com/skupperproject/skupper-router/issues/1385
+                    // The router will repeatedly try to connect to the host/port specified in the connector
+                    // If it is unable to connect, an error message will be logged only once and more error messages
+                    // from connection failures will only be logged if the error message changes.
+                    // This is done so we don't flood the log with connection failure error messages
+                    // Even though we restrict the number of times the error message is displayed, the
+                    // router will still keep trying to connect to the host/port specified in the connector.
+                    //
+                    if (strcmp(ctx->connector->conn_msg, conn_msg_1) != 0) {
+                        strncpy(ctx->connector->conn_msg, conn_msg_1, QD_CXTR_CONN_MSG_BUF_SIZE);
+                        log_error_message = true;
+                    }
                 }
                 sys_mutex_unlock(&ctx->connector->lock);
                 if (log_error_message) {
@@ -1207,6 +1210,10 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_
 /* Timer callback to try/retry connection open, connector->lock held */
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *connection) TA_REQ(connector->lock)
 {
+    // If the connector has been deleted, do not try to open new connection.
+    if (connector->state == CXTR_STATE_DELETED)
+        return;
+
     // connection until pn_proactor_connect is called below
     qd_connection_t *qd_conn = qd_server_connection_impl(connector->server, &connector->config, connection, connector);
     if (!qd_conn) {                 /* Try again later */
@@ -1757,15 +1764,18 @@ const char *qd_connector_policy_vhost(qd_connector_t* ct)
 
 bool qd_connector_connect(qd_connector_t *ct)
 {
-    sys_mutex_lock(&ct->lock);
-    // expect: do not attempt to connect an already connected qd_connection
-    assert(ct->qd_conn == 0);
-    ct->qd_conn = 0;
-    ct->delay   = 0;
-    ct->state   = CXTR_STATE_CONNECTING;
-    qd_timer_schedule(ct->timer, ct->delay);
-    sys_mutex_unlock(&ct->lock);
-    return true;
+    if (ct->state != CXTR_STATE_DELETED) {
+        sys_mutex_lock(&ct->lock);
+        // expect: do not attempt to connect an already connected qd_connection
+        assert(ct->qd_conn == 0);
+        ct->qd_conn = 0;
+        ct->delay   = 0;
+        ct->state   = CXTR_STATE_CONNECTING;
+        qd_timer_schedule(ct->timer, ct->delay);
+        sys_mutex_unlock(&ct->lock);
+        return true;
+    }
+    return false;
 }
 
 
