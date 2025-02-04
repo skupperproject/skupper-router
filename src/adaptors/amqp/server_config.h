@@ -268,8 +268,6 @@ typedef struct qd_server_config_t {
      */
     pn_data_t *conn_props;
 
-    bool  has_data_connectors;
-
     /**
      * @name These fields are not primary configuration, they are computed.
      * @{
@@ -286,7 +284,7 @@ typedef struct qd_server_config_t {
 } qd_server_config_t;
 
 
-qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *cf, qd_entity_t *entity, bool is_listener, const char *role_override);
+qd_error_t qd_server_config_load(qd_server_config_t *cf, qd_entity_t *entity, bool is_listener);
 void qd_server_config_free(qd_server_config_t *cf);
 void qd_server_config_process_password(char **actual_val, char *pw, bool *is_file, bool allow_literal_prefix);
 void qd_set_password_from_file(const char *password_file, char **password_field);

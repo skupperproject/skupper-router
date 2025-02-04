@@ -458,3 +458,13 @@ qd_policy_t *qd_dispatch_get_policy(const qd_dispatch_t *dispatch)
 {
     return qd->policy;
 }
+
+uint32_t qd_dispatch_get_data_connection_count(const qd_dispatch_t *dispatch)
+{
+    return qd->data_connection_count;
+}
+
+qd_server_t *qd_dispatch_get_server(const qd_dispatch_t *dispatch)
+{
+    return qd->server;
+}
