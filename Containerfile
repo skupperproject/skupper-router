@@ -70,13 +70,13 @@ RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
 FROM scratch
 
 COPY --from=packager /output /
+COPY --from=packager /etc/yum.repos.d /etc/yum.repos.d
+COPY --from=packager /root/buildinfo /root/buildinfo
 
 USER 10000
 
-WORKDIR /
 COPY --from=builder /image /
 
-WORKDIR /home/skrouterd/etc
 WORKDIR /home/skrouterd/bin
 COPY ./scripts/* /home/skrouterd/bin/
 
