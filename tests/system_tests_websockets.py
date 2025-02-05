@@ -51,13 +51,15 @@ class WebsocketsConsoleTest(TestCase):
 
         Previously, this was broken in DISPATCH-857, DISPATCH-945, DISPATCH-2098"""
 
+        from websockets.asyncio.client import connect
+
         async def run():
             uri = f"ws://localhost:{self.http_port}"
-            async with websockets.connect(uri, subprotocols=['amqp']) as ws:
+            async with connect(uri, subprotocols=['amqp']) as ws:
                 self.router.terminate()
                 self.router.wait()
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
 
 
 if __name__ == '__main__':

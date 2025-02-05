@@ -37,7 +37,7 @@ protobuf
 hypercorn<0.14.0
 quart
 selectors
-websockets>=9.1
+websockets>=14.2
 psutil
 
 # For running the python-checker tests
