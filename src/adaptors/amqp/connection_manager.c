@@ -44,7 +44,7 @@
 struct qd_connection_manager_t {
     qd_server_t                  *server;
     qd_listener_list_t            listeners;
-    qd_admin_connector_list_t     admin_connectors;
+    qd_connector_config_list_t    connector_configs;
 };
 
 
@@ -166,7 +166,7 @@ static int get_failover_info_length(qd_failover_item_list_t   conn_info_list)
  */
 QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl)
 {
-    qd_admin_connector_t *admin_conn = (qd_admin_connector_t *) impl;
+    qd_connector_config_t *ctor_config = (qd_connector_config_t *) impl;
     qd_connector_t       *connector  = 0;
 
     qd_error_clear();
@@ -174,13 +174,13 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
     // TODO(kgiusti): inter-router connections may have several qd_connector_ts active due to the router data connection
     // count configuration.  However we can only report 1 connector via management. It would be more accurate to report
     // all connectors associated with this management entity
-    sys_mutex_lock(&admin_conn->lock);
-    connector = DEQ_HEAD(admin_conn->connectors);
+    sys_mutex_lock(&ctor_config->lock);
+    connector = DEQ_HEAD(ctor_config->connectors);
     if (connector) {
         // prevent I/O thread from freeing connector while it is being accessed
         sys_atomic_inc(&connector->ref_count);
     }
-    sys_mutex_unlock(&admin_conn->lock);
+    sys_mutex_unlock(&ctor_config->lock);
 
     if (connector) {
         int i = 1;
@@ -244,19 +244,19 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 
         const char *state_info = 0;
         switch (connector->state) {
-            case CXTR_STATE_CONNECTING:
+            case CTOR_STATE_CONNECTING:
                 state_info = "CONNECTING";
                 break;
-            case CXTR_STATE_OPEN:
+            case CTOR_STATE_OPEN:
                 state_info = "SUCCESS";
                 break;
-            case CXTR_STATE_FAILED:
+            case CTOR_STATE_FAILED:
                 state_info = "FAILED";
                 break;
-            case CXTR_STATE_INIT:
+            case CTOR_STATE_INIT:
                 state_info = "INITIALIZING";
                 break;
-            case CXTR_STATE_DELETED:
+            case CTOR_STATE_DELETED:
                 // deleted by management, waiting for connection to close
                 state_info = "CLOSING";
                 break;
@@ -283,17 +283,17 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 }
 
 
-QD_EXPORT qd_admin_connector_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+QD_EXPORT qd_connector_config_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm       = qd->connection_manager;
-    qd_admin_connector_t    *admin_conn = qd_admin_connector_create(qd, entity);
-    if (!admin_conn) {
+    qd_connector_config_t    *ctor_config = qd_connector_config_create(qd, entity);
+    if (!ctor_config) {
         return 0;
     }
 
-    DEQ_INSERT_TAIL(cm->admin_connectors, admin_conn);
-    log_config(&admin_conn->config, "Connector", true);
-    return admin_conn;
+    DEQ_INSERT_TAIL(cm->connector_configs, ctor_config);
+    log_config(&ctor_config->config, "Connector", true);
+    return ctor_config;
 }
 
 
@@ -305,7 +305,7 @@ qd_connection_manager_t *qd_connection_manager(qd_dispatch_t *qd)
 
     cm->server     = qd->server;
     DEQ_INIT(cm->listeners);
-    DEQ_INIT(cm->admin_connectors);
+    DEQ_INIT(cm->connector_configs);
 
     return cm;
 }
@@ -333,11 +333,11 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
         li = DEQ_HEAD(cm->listeners);
     }
 
-    qd_admin_connector_t *admin_conn = DEQ_HEAD(cm->admin_connectors);
-    while (admin_conn) {
-        DEQ_REMOVE_HEAD(cm->admin_connectors);
-        qd_admin_connector_delete(admin_conn);
-        admin_conn = DEQ_HEAD(cm->admin_connectors);
+    qd_connector_config_t *ctor_config = DEQ_HEAD(cm->connector_configs);
+    while (ctor_config) {
+        DEQ_REMOVE_HEAD(cm->connector_configs);
+        qd_connector_config_delete(ctor_config);
+        ctor_config = DEQ_HEAD(cm->connector_configs);
     }
 
     free(cm);
@@ -351,7 +351,7 @@ QD_EXPORT void qd_connection_manager_start(qd_dispatch_t *qd)
 {
     static bool first_start = true;
     qd_listener_t  *li = DEQ_HEAD(qd->connection_manager->listeners);
-    qd_admin_connector_t *admin_conn = DEQ_HEAD(qd->connection_manager->admin_connectors);
+    qd_connector_config_t *ctor_config = DEQ_HEAD(qd->connection_manager->connector_configs);
 
     while (li) {
         if (!li->pn_listener) {
@@ -366,9 +366,9 @@ QD_EXPORT void qd_connection_manager_start(qd_dispatch_t *qd)
         li = DEQ_NEXT(li);
     }
 
-    while (admin_conn) {
-        qd_admin_connector_connect(admin_conn);
-        admin_conn = DEQ_NEXT(admin_conn);
+    while (ctor_config) {
+        qd_connector_config_connect(ctor_config);
+        ctor_config = DEQ_NEXT(ctor_config);
     }
 
     first_start = false;
@@ -399,19 +399,19 @@ QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *im
 //
 QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *impl)
 {
-    qd_admin_connector_t *admin_conn = (qd_admin_connector_t*) impl;
-    assert(admin_conn);
+    qd_connector_config_t *ctor_config = (qd_connector_config_t *) impl;
+    assert(ctor_config);
 
     // take it off the connection manager
 
-    log_config(&admin_conn->config, "Connector", false);
-    DEQ_REMOVE(qd->connection_manager->admin_connectors, admin_conn);
-    qd_admin_connector_delete(admin_conn);
+    log_config(&ctor_config->config, "Connector", false);
+    DEQ_REMOVE(qd->connection_manager->connector_configs, ctor_config);
+    qd_connector_config_delete(ctor_config);
 }
 
 
 const char *qd_connector_name(qd_connector_t *ct)
 {
-    return ct ? ct->admin_conn->config.name : 0;
+    return ct ? ct->ctor_config->config.name : 0;
 }
 

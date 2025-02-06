@@ -1416,8 +1416,8 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     qd_router_connection_get_config(conn, &role, &cost, &name,
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
-    if (connector && !!connector->admin_conn->data_connection_count) {
-        memcpy(conn->group_correlator, connector->admin_conn->group_correlator, QD_DISCRIMINATOR_SIZE);
+    if (connector && !!connector->ctor_config->data_connection_count) {
+        memcpy(conn->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
         if (connector->is_data_connector) {
             // override the configured role to identify this as a data connection
             assert(role == QDR_ROLE_INTER_ROUTER);
@@ -1602,7 +1602,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     if (!!connector) {
         qd_connector_add_link(connector);
         sys_mutex_lock(&connector->lock);
-        qd_format_string(connector->conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE,
+        qd_format_string(connector->conn_msg, QD_CTOR_CONN_MSG_BUF_SIZE,
                          "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s auth=%s user=%s container_id=%s",
                          connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
                          authenticated ? mech : "no", (char*) user, container);
