@@ -843,9 +843,9 @@ class RouterTestSslProfileUpdate(RouterTestSslBase):
     def setUpClass(cls):
         super(RouterTestSslProfileUpdate, cls).setUpClass()
         if cls.DISABLE_SSL_TESTING:
-            cls.skipTest(cls.DISABLE_REASON)
+            cls.skipTest(cls, cls.DISABLE_REASON)
         if not SASL.extended():
-            cls.skipTest("Cyrus library not available. skipping test")
+            cls.skipTest(cls, "Cyrus library not available. skipping test")
 
         cls.main_listener1_port = cls.tester.get_port()
         cls.main_listener2_port = cls.tester.get_port()
@@ -1023,9 +1023,9 @@ class RouterTestSslProfileUpdateClients(RouterTestSslBase):
     def setUpClass(cls):
         super(RouterTestSslProfileUpdateClients, cls).setUpClass()
         if cls.DISABLE_SSL_TESTING:
-            cls.skipTest(cls.DISABLE_REASON)
+            cls.skipTest(cls, cls.DISABLE_REASON)
         if not SASL.extended():
-            cls.skipTest("Cyrus library not available. skipping test")
+            cls.skipTest(cls, "Cyrus library not available. skipping test")
 
         cls.listener1_port = cls.tester.get_port()
         cls.listener2_port = cls.tester.get_port()
@@ -1296,9 +1296,9 @@ class RouterTestSslProfileDeleteClients(RouterTestSslBase):
     def setUpClass(cls):
         super(RouterTestSslProfileDeleteClients, cls).setUpClass()
         if cls.DISABLE_SSL_TESTING:
-            cls.skipTest(cls.DISABLE_REASON)
+            cls.skipTest(cls, cls.DISABLE_REASON)
         if not SASL.extended():
-            cls.skipTest("Cyrus library not available. skipping test")
+            cls.skipTest(cls, "Cyrus library not available. skipping test")
 
         cls.listener1_port = cls.tester.get_port()
         cls.listener2_port = cls.tester.get_port()
