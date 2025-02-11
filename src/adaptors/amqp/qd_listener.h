@@ -82,6 +82,4 @@ void qd_listener_add_link(qd_listener_t *li);
 // account for a removed link from the listener
 void qd_listener_remove_link(qd_listener_t *li);
 
-void qd_listener_update_tls_ordinal(qd_listener_t *li, uint64_t new_ordinal);
-void qd_listener_update_tls_oldest_valid_ordinal(qd_listener_t *li, uint64_t new_oldest_valid_ordinal);
 #endif

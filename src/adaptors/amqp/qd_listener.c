@@ -216,20 +216,3 @@ void qd_listener_remove_link(qd_listener_t *li)
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
     }
 }
-
-
-void qd_listener_update_tls_ordinal(qd_listener_t *li, uint64_t new_ordinal)
-{
-    qd_log(LOG_SERVER, QD_LOG_DEBUG,
-           "Listener %s new ordinal: %"PRIu64", previous: %"PRIu64,
-           li->config.name, new_ordinal, li->tls_ordinal);
-    li->tls_ordinal = new_ordinal;
-}
-
-void qd_listener_update_tls_oldest_valid_ordinal(qd_listener_t *li, uint64_t new_oldest_valid_ordinal)
-{
-    qd_log(LOG_SERVER, QD_LOG_DEBUG,
-           "Listener %s new oldest valid ordinal: %"PRIu64", previous: %"PRIu64,
-           li->config.name, new_oldest_valid_ordinal, li->tls_oldest_valid_ordinal);
-    li->tls_oldest_valid_ordinal = new_oldest_valid_ordinal;
-}
