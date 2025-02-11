@@ -57,6 +57,7 @@ const char * const QD_CONNECTION_PROPERTY_ADAPTOR_KEY           = "qd.adaptor";
 const char * const QD_CONNECTION_PROPERTY_TCP_ADAPTOR_VALUE     = "tcp";
 const char * const QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY = "qd.annotations-version";
 const char * const QD_CONNECTION_PROPERTY_ACCESS_ID             = "qd.access-id";
+const char * const QD_CONNECTION_PROPERTY_TLS_ORDINAL           = "qd.tls-ordinal";
 
 const char * const QD_TERMINUS_EDGE_ADDRESS_TRACKING = "_$qd.edge_addr_tracking";
 const char * const QD_TERMINUS_HEARTBEAT             = "_$qd.edge_heartbeat";

@@ -49,7 +49,11 @@ struct qd_listener_t {
     DEQ_LINKS(qd_listener_t);
     bool                      exit_on_error;
     vflow_record_t           *vflow_record;
+
+    // TLS Configuration. Keep a local copy of the TLS ordinals to monitor changes by management
     qd_tls_config_t          *tls_config;
+    uint64_t                  tls_ordinal;
+    uint64_t                  tls_oldest_valid_ordinal;
 };
 
 DEQ_DECLARE(qd_listener_t, qd_listener_list_t);

@@ -190,6 +190,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            const char      *user,
                                            const char      *container,
                                            pn_data_t       *connection_properties,
+                                           uint64_t         tls_ordinal,
                                            int              tls_ssf,
                                            bool             tls,
                                            const char      *version,
@@ -223,8 +224,9 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
         pn_data_copy(qdr_conn_properties, connection_properties);
 
     connection_info->connection_properties = qdr_conn_properties;
-    connection_info->tls_ssf = tls_ssf;
-    connection_info->tls     = tls;
+    connection_info->tls_ssf     = tls_ssf;
+    connection_info->tls         = tls;
+    connection_info->tls_ordinal = tls_ordinal;
     connection_info->streaming_links = streaming_links;
     connection_info->connection_trunking = connection_trunking;
     sys_mutex_init(&connection_info->connection_info_lock);

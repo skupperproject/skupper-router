@@ -725,15 +725,15 @@
                     "description": "The absolute path to the file containing the unique id to display name mapping",
                     "create": true
                 },
-                "version": {
+                "ordinal": {
                     "type": "integer",
-                    "description": "RESERVED FOR FUTURE USE",
+                    "description": "Indicates the revision of the TLS certificates provided. Used by certificate rotation. Each time the TLS certificates associated with this profile are updated the ordinal value will be increased. The most recent version of the TLS credentials will have the highest numerical ordinal value.",
                     "create": true,
                     "update": true
                 },
-                "oldestValidVersion": {
+                "oldestValidOrdinal": {
                     "type": "integer",
-                    "description": "RESERVED FOR FUTURE USE",
+                    "description": "Used by certificate rotation to remove connections that were created using TLS certificates that are no longer considered valid. Any active connections based on TLS certificates an ordinal value less than oldesValidOrdinal will be immediately terminated by the router.",
                     "create": true,
                     "update": true
                 }
