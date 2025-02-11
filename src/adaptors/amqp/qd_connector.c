@@ -20,11 +20,13 @@
 #include "qd_connector.h"
 #include "qd_connection.h"
 #include "private.h"
+#include "entity.h"
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/tls_amqp.h"
+#include "qpid/dispatch/dispatch.h"
 
 #include <proton/proactor.h>
 
@@ -32,6 +34,7 @@
 
 
 ALLOC_DEFINE(qd_connector_t);
+ALLOC_DEFINE(qd_connector_config_t);
 
 
 static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_REQ(ct->lock)
@@ -50,10 +53,12 @@ static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_
 /* Timer callback to try/retry connection open, connector->lock held */
 static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_REQ(connector->lock)
 {
-    assert(connector->state != CXTR_STATE_DELETED);
-    qd_connection_init(qd_conn, connector->server, &connector->config, connector, 0);
+    assert(connector->state != CTOR_STATE_DELETED);
 
-    connector->state   = CXTR_STATE_OPEN;
+    const qd_connector_config_t *ctor_config = connector->ctor_config;
+    qd_connection_init(qd_conn, ctor_config->server, &ctor_config->config, connector, 0);
+
+    connector->state   = CTOR_STATE_OPEN;
     connector->delay   = 5000;
 
     //
@@ -70,7 +75,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
 
     // Set the sasl user name and password on the proton connection object. This has to be
     // done before pn_proactor_connect which will bind a transport to the connection
-    const qd_server_config_t *config = &connector->config;
+    const qd_server_config_t *config = &connector->ctor_config->config;
     if(config->sasl_username)
         pn_connection_set_user(qd_conn->pn_conn, config->sasl_username);
     if (config->sasl_password)
@@ -78,7 +83,7 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
 
     qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
     /* Note: the transport is configured in the PN_CONNECTION_BOUND event */
-    pn_proactor_connect(qd_server_proactor(connector->server), qd_conn->pn_conn, host_port);
+    pn_proactor_connect(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, host_port);
     // at this point the qd_conn may now be scheduled on another thread
 }
 
@@ -96,9 +101,9 @@ static void try_open_cb(void *context)
 
     sys_mutex_lock(&ct->lock);
 
-    if (ct->state == CXTR_STATE_CONNECTING || ct->state == CXTR_STATE_INIT) {
+    if (ct->state == CTOR_STATE_CONNECTING || ct->state == CTOR_STATE_INIT) {
         // else deleted or failed - on failed wait until after connection is freed
-        // and state is set to CXTR_STATE_CONNECTING (timer is rescheduled then)
+        // and state is set to CTOR_STATE_CONNECTING (timer is rescheduled then)
         try_open_lh(ct, ctx);
         ctx = 0;  // owned by ct
     }
@@ -109,54 +114,96 @@ static void try_open_cb(void *context)
 }
 
 
-const qd_server_config_t *qd_connector_config(const qd_connector_t *c)
+/** Close the proton connection
+ *
+ * Scheduled on the target connections thread
+ */
+static void deferred_close(void *context, bool discard)
 {
-    return &c->config;
+    if (!discard) {
+        pn_connection_close((pn_connection_t*)context);
+    }
 }
 
 
-qd_connector_t *qd_server_connector(qd_server_t *server)
+const qd_server_config_t *qd_connector_get_config(const qd_connector_t *c)
+{
+    return &c->ctor_config->config;
+}
+
+
+qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_data_connector)
 {
     qd_connector_t *connector = new_qd_connector_t();
     if (!connector) return 0;
+
     ZERO(connector);
-    sys_atomic_init(&connector->ref_count, 1);
+    sys_atomic_init(&connector->ref_count, 1);  // for caller
     DEQ_INIT(connector->conn_info_list);
     DEQ_ITEM_INIT(connector);
 
     sys_mutex_init(&connector->lock);
-    connector->timer = qd_timer(amqp_adaptor.dispatch, try_open_cb, connector);
-    if (!connector->timer)
-        goto error;
+    connector->timer             = qd_timer(amqp_adaptor.dispatch, try_open_cb, connector);
+    connector->reconnect_enabled = true;
+    connector->is_data_connector = is_data_connector;
 
-    connector->server     = server;
+    connector->ctor_config = ctor_config;
+    sys_atomic_inc(&ctor_config->ref_count);
+
     connector->conn_index = 1;
-    connector->state      = CXTR_STATE_INIT;
+    connector->state      = CTOR_STATE_INIT;
 
+    qd_failover_item_t *item = NEW(qd_failover_item_t);
+    ZERO(item);
+    if (ctor_config->config.ssl_required)
+        item->scheme = strdup("amqps");
+    else
+        item->scheme = strdup("amqp");
+    item->host = qd_strdup(ctor_config->config.host);
+    item->port = qd_strdup(ctor_config->config.port);
+    int hplen = strlen(item->host) + strlen(item->port) + 2;
+    item->host_port = malloc(hplen);
+    snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
+    DEQ_INSERT_TAIL(connector->conn_info_list, item);
+
+    //
+    // Set up the vanflow record for this connector (LINK)
+    // Do this only for router-to-router connectors since the record represents an inter-router link
+    //
+    if ((strcmp(ctor_config->config.role, "inter-router") == 0 && !is_data_connector) ||
+        strcmp(ctor_config->config.role, "edge") == 0 ||
+        strcmp(ctor_config->config.role, "inter-edge") == 0) {
+        connector->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_NAME, ctor_config->config.name);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_ROLE, ctor_config->config.role);
+        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_LINK_COST, ctor_config->config.inter_router_cost);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 0);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
+        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
+        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
+        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+    }
     return connector;
-
-error:
-    connector->state = CXTR_STATE_DELETED;
-    qd_connector_decref(connector);
-    return 0;
 }
 
 
 const char *qd_connector_policy_vhost(const qd_connector_t* ct)
 {
-    return ct->policy_vhost;
+    return ct->ctor_config->policy_vhost;
 }
 
 
 bool qd_connector_connect(qd_connector_t *ct)
 {
     sys_mutex_lock(&ct->lock);
-    if (ct->state != CXTR_STATE_DELETED) {
+    if (ct->state != CTOR_STATE_DELETED) {
         // expect: do not attempt to connect an already connected qd_connection
         assert(ct->qd_conn == 0);
         ct->qd_conn = 0;
         ct->delay   = 0;
-        ct->state   = CXTR_STATE_CONNECTING;
+        ct->state   = CTOR_STATE_CONNECTING;
         qd_timer_schedule(ct->timer, ct->delay);
         sys_mutex_unlock(&ct->lock);
         return true;
@@ -166,20 +213,47 @@ bool qd_connector_connect(qd_connector_t *ct)
 }
 
 
+// Teardown the connection associated with the connector and
+// prepare the connector for deletion
+//
+void qd_connector_close(qd_connector_t *ct)
+{
+    // cannot free the timer while holding ct->lock since the
+    // timer callback may be running during the call to qd_timer_free
+    qd_timer_t *timer = 0;
+    void       *dct = qd_connection_new_qd_deferred_call_t();
+
+    sys_mutex_lock(&ct->lock);
+    timer = ct->timer;
+    ct->timer = 0;
+    ct->state = CTOR_STATE_DELETED;
+    qd_connection_t *conn = ct->qd_conn;
+    if (conn && conn->pn_conn) {
+        qd_connection_invoke_deferred_impl(conn, deferred_close, conn->pn_conn, dct);
+        sys_mutex_unlock(&ct->lock);
+    } else {
+        sys_mutex_unlock(&ct->lock);
+        qd_connection_free_qd_deferred_call_t(dct);
+    }
+    qd_timer_free(timer);
+}
+
+
 void qd_connector_decref(qd_connector_t* connector)
 {
     if (!connector) return;
     if (sys_atomic_dec(&connector->ref_count) == 1) {
 
         // expect both mgmt and qd_connection no longer reference this
-        assert(connector->state == CXTR_STATE_DELETED);
+        assert(connector->state == CTOR_STATE_DELETED);
         assert(connector->qd_conn == 0);
 
+        qd_connector_config_decref(connector->ctor_config);
         vflow_end_record(connector->vflow_record);
         connector->vflow_record = 0;
-        qd_server_config_free(&connector->config);
         qd_timer_free(connector->timer);
         sys_mutex_free(&connector->lock);
+        sys_atomic_destroy(&connector->ref_count);
 
         qd_failover_item_t *item = DEQ_HEAD(connector->conn_info_list);
         while (item) {
@@ -192,9 +266,6 @@ void qd_connector_decref(qd_connector_t* connector)
             free(item);
             item = DEQ_HEAD(connector->conn_info_list);
         }
-        if (connector->policy_vhost) free(connector->policy_vhost);
-        qd_tls_config_decref(connector->tls_config);
-
         free_qd_connector_t(connector);
     }
 }
@@ -229,16 +300,16 @@ static void increment_conn_index_lh(qd_connector_t *connector) TA_REQ(connector-
  */
 void qd_connector_handle_transport_error(qd_connector_t *connector, uint64_t connection_id, pn_condition_t *condition)
 {
-    const qd_server_config_t *config = &connector->config;
-    char conn_msg[QD_CXTR_CONN_MSG_BUF_SIZE];  // avoid holding connector lock when logging
-    char conn_msg_1[QD_CXTR_CONN_MSG_BUF_SIZE]; // this connection message does not contain the connection id
+    const qd_server_config_t *config = &connector->ctor_config->config;
+    char conn_msg[QD_CTOR_CONN_MSG_BUF_SIZE];  // avoid holding connector lock when logging
+    char conn_msg_1[QD_CTOR_CONN_MSG_BUF_SIZE]; // this connection message does not contain the connection id
 
     bool log_error_message = false;
     sys_mutex_lock(&connector->lock);
-    if (connector->state != CXTR_STATE_DELETED) {
+    if (connector->state != CTOR_STATE_DELETED) {
         increment_conn_index_lh(connector);
         // note: will transition back to STATE_CONNECTING when associated connection is freed (pn_connection_free)
-        connector->state = CXTR_STATE_FAILED;
+        connector->state = CTOR_STATE_FAILED;
         if (condition && pn_condition_is_set(condition)) {
             qd_format_string(conn_msg, sizeof(conn_msg), "[C%"PRIu64"] Connection to %s failed: %s %s",
                              connection_id, config->host_port, pn_condition_get_name(condition),
@@ -262,7 +333,7 @@ void qd_connector_handle_transport_error(qd_connector_t *connector, uint64_t con
         //
 
         if (strcmp(connector->conn_msg, conn_msg_1) != 0) {
-            strncpy(connector->conn_msg, conn_msg_1, QD_CXTR_CONN_MSG_BUF_SIZE);
+            strncpy(connector->conn_msg, conn_msg_1, QD_CTOR_CONN_MSG_BUF_SIZE);
             log_error_message = true;
         }
     }
@@ -299,7 +370,7 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
     ctx->connector = connector;
     connector->qd_conn = ctx;
 
-    strncpy(ctx->group_correlator, connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    strncpy(ctx->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
 }
 
 
@@ -333,7 +404,7 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
     connector->qd_conn = 0;
     ctx->connector = 0;
 
-    if (connector->state != CXTR_STATE_DELETED) {
+    if (connector->state != CTOR_STATE_DELETED) {
         // Increment the connection index by so that we can try connecting to the failover url (if any).
         bool has_failover = qd_connector_has_failover_info(connector);
         long delay = connector->delay;
@@ -344,11 +415,156 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
             // We want to quickly keep cycling thru the failover urls every second.
             delay = 1000;
         }
-        connector->state = CXTR_STATE_CONNECTING;
+        connector->state = CTOR_STATE_CONNECTING;
         qd_timer_schedule(connector->timer, delay);
     }
     sys_mutex_unlock(&connector->lock);
 
     // Drop reference held by connection.
     qd_connector_decref(connector);
+}
+
+
+/**
+ * Create a new qd_connector_config_t instance
+ */
+qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    qd_connector_config_t *ctor_config = new_qd_connector_config_t();
+    if (!ctor_config) {
+        char *name = qd_entity_opt_string(entity, "name", "UNKNOWN");
+        qd_error(QD_ERROR_CONFIG, "Failed to create Connector %s: resource allocation failed", name);
+        free(name);
+        return 0;
+    }
+
+    qd_error_clear();
+
+    ZERO(ctor_config);
+    DEQ_ITEM_INIT(ctor_config);
+    sys_atomic_init(&ctor_config->ref_count, 1);  // for caller
+    sys_mutex_init(&ctor_config->lock);
+    ctor_config->server = qd_dispatch_get_server(qd);
+    DEQ_INIT(ctor_config->connectors);
+
+    if (qd_server_config_load(&ctor_config->config, entity, false) != QD_ERROR_NONE) {
+        qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create connector: %s", qd_error_message());
+        qd_connector_config_decref(ctor_config);
+        return 0;
+    }
+
+    ctor_config->policy_vhost = qd_entity_opt_string(entity, "policyVhost", 0);
+    if (qd_error_code()) {
+        qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create connector: %s", qd_error_message());
+        qd_connector_config_decref(ctor_config);
+        return 0;
+    }
+
+    //
+    // If an sslProfile is configured allocate a TLS config to be used by all child connector's connections
+    //
+    if (ctor_config->config.ssl_profile_name) {
+        ctor_config->tls_config = qd_tls_config(ctor_config->config.ssl_profile_name,
+                                             QD_TLS_TYPE_PROTON_AMQP,
+                                             QD_TLS_CONFIG_CLIENT_MODE,
+                                             ctor_config->config.verify_host_name,
+                                             ctor_config->config.ssl_require_peer_authentication);
+        if (!ctor_config->tls_config) {
+            // qd_tls2_config() has set the qd_error_message(), which is logged below
+            goto error;
+        }
+    }
+
+    // For inter-router connectors create associated inter-router data connectors if configured
+
+    if (strcmp(ctor_config->config.role, "inter-router") == 0) {
+        ctor_config->data_connection_count = qd_dispatch_get_data_connection_count(qd);
+        if (!!ctor_config->data_connection_count) {
+            qd_generate_discriminator(ctor_config->group_correlator);
+
+            // Add any data connectors to the head of the connectors list first. This allows the
+            // router control connector to be located at the head of the list.
+
+            for (int i = 0; i < ctor_config->data_connection_count; i++) {
+                qd_connector_t *dc = qd_connector_create(ctor_config, true);
+                if (!dc) {
+                    qd_error(QD_ERROR_CONFIG, "Failed to create data Connector %s: resource allocation failed", ctor_config->config.name);
+                    goto error;
+                }
+                DEQ_INSERT_HEAD(ctor_config->connectors, dc);
+            }
+        }
+    }
+
+    // Create the primary connector associated with this configuration. It will be located
+    // at the head of the connectors list
+
+    qd_connector_t *ct = qd_connector_create(ctor_config, false);
+    if (!ct) {
+        qd_error(QD_ERROR_CONFIG, "Failed to create data Connector %s: resource allocation failed", ctor_config->config.name);
+        goto error;
+    }
+    DEQ_INSERT_HEAD(ctor_config->connectors, ct);
+
+    return ctor_config;
+
+  error:
+    if (qd_error_code())
+        qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create connector: %s", qd_error_message());
+    for (qd_connector_t *dc = DEQ_HEAD(ctor_config->connectors); dc; dc = DEQ_HEAD(ctor_config->connectors)) {
+        DEQ_REMOVE_HEAD(ctor_config->connectors);
+        dc->state = CTOR_STATE_DELETED;
+        qd_connector_decref(dc);
+    }
+    qd_connector_config_decref(ctor_config);
+    return 0;
+}
+
+
+void qd_connector_config_delete(qd_connector_config_t *ctor_config)
+{
+    qd_connector_t *ct = DEQ_HEAD(ctor_config->connectors);
+    while (ct) {
+        DEQ_REMOVE_HEAD(ctor_config->connectors);
+        qd_connector_close(ct);
+        qd_connector_decref(ct);
+        ct = DEQ_HEAD(ctor_config->connectors);
+    }
+
+    // drop ref held by the caller
+    qd_connector_config_decref(ctor_config);
+}
+
+
+void qd_connector_config_decref(qd_connector_config_t *ctor_config)
+{
+    if (!ctor_config)
+        return;
+
+    uint32_t rc = sys_atomic_dec(&ctor_config->ref_count);
+    (void) rc;
+    assert(rc > 0);  // else underflow
+
+    if (rc == 1) {
+        // Expect: all connectors hold the ref_count so this must be empty
+        assert(DEQ_IS_EMPTY(ctor_config->connectors));
+        sys_mutex_free(&ctor_config->lock);
+        sys_atomic_destroy(&ctor_config->ref_count);
+        free(ctor_config->policy_vhost);
+        qd_tls_config_decref(ctor_config->tls_config);
+        qd_server_config_free(&ctor_config->config);
+        free_qd_connector_config_t(ctor_config);
+    }
+}
+
+
+// Initiate connections on all child connectors
+void qd_connector_config_connect(qd_connector_config_t *ctor_config)
+{
+    if (!ctor_config->activated) {
+        ctor_config->activated = true;
+        for (qd_connector_t *ct = DEQ_HEAD(ctor_config->connectors); !!ct; ct = DEQ_NEXT(ct)) {
+            qd_connector_connect(ct);
+        }
+    }
 }

@@ -95,7 +95,7 @@ static void set_config_host(qd_server_config_t *config, qd_entity_t* entity)
 /**
  * Initialize the server_config from the listener or connector management entity instance
  */
-qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, qd_entity_t* entity, bool is_listener, const char *role_override)
+qd_error_t qd_server_config_load(qd_server_config_t *config, qd_entity_t *entity, bool is_listener)
 {
     qd_error_clear();
 
@@ -109,13 +109,8 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     config->message_log_flags    = qd_message_repr_flags(config->log_message);
     config->port                 = qd_entity_get_string(entity, "port");              CHECK();
     config->name                 = qd_entity_opt_string(entity, "name", 0);           CHECK();
+    config->role                 = qd_entity_get_string(entity, "role");              CHECK();
     long inter_router_cost       = qd_entity_opt_long(entity, "cost", 1);             CHECK();
-
-    if (!role_override) {
-        config->role = qd_entity_get_string(entity, "role"); CHECK();
-    } else {
-        config->role = strdup(role_override);
-    }
 
     //
     // The cost field on the listener or the connector should be > 0 and <= INT32_MAX
@@ -147,15 +142,6 @@ qd_error_t qd_server_config_load(qd_dispatch_t *qd, qd_server_config_t *config, 
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
     config->conn_props           = qd_entity_opt_map(entity, "openProperties");       CHECK();
-
-
-    if (strcmp(config->role, "inter-router") == 0) {
-        // For inter-router connections only, the dataConnectionCount defaults to "auto",
-        // which means it will be determined as a function of the number of worker threads.
-        // If the user has *not* explicitly set the value "0",
-        // then we will have some data connections.
-        config->has_data_connectors = true;
-    }
 
     set_config_host(config, entity);
 

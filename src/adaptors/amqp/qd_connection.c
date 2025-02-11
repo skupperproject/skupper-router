@@ -150,7 +150,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
         pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
-    if (ctx->connector && (ctx->connector->is_data_connector || ctx->connector->config.has_data_connectors)) {
+    if (ctx->connector && (ctx->connector->is_data_connector || !!ctx->connector->ctor_config->data_connection_count)) {
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY), QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY));
         pn_data_put_string(pn_connection_properties(conn),
@@ -242,7 +242,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
  * Does not allocate any managed objects and therefore
  * does not take ENTITY_CACHE lock.
  */
-void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, qd_server_config_t *config, qd_connector_t *connector, qd_listener_t *listener)
+void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, const qd_server_config_t *config, qd_connector_t *connector, qd_listener_t *listener)
 {
     ctx->pn_conn = pn_connection();
     assert(ctx->pn_conn);
@@ -464,7 +464,7 @@ const qd_server_config_t *qd_connection_config(const qd_connection_t *conn)
     if (conn->listener)
         return &conn->listener->config;
     if (conn->connector)
-        return &conn->connector->config;
+        return &conn->connector->ctor_config->config;
     return NULL;
 }
 
@@ -533,7 +533,7 @@ void qd_connection_invoke_deferred_calls(qd_connection_t *conn, bool discard)
 const char* qd_connection_name(const qd_connection_t *c)
 {
     if (c->connector) {
-        return c->connector->config.host_port;
+        return c->connector->ctor_config->config.host_port;
     } else {
         return c->rhost_port;
     }
@@ -595,14 +595,14 @@ static void set_rhost_port(qd_connection_t *ctx) {
 static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
 {
     qd_connector_t *ct = ctx->connector;
-    const qd_server_config_t *config = &ct->config;
+    const qd_server_config_t *config = &ct->ctor_config->config;
     pn_transport_t *tport  = pn_connection_transport(ctx->pn_conn);
 
     //
     // Create an SSL session if required
     //
-    if (ct->tls_config) {
-        ctx->ssl = qd_tls_session_amqp(ct->tls_config, tport, false);
+    if (ct->ctor_config->tls_config) {
+        ctx->ssl = qd_tls_session_amqp(ct->ctor_config->tls_config, tport, false);
         if (!ctx->ssl) {
             qd_log(LOG_SERVER, QD_LOG_ERROR,
                    "Failed to create TLS session for connection [C%" PRIu64 "] to %s:%s (%s)",
@@ -682,7 +682,7 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         qd_log(LOG_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Accepted connection to %s from %s",
                ctx->connection_id, name, ctx->rhost_port);
     } else if (ctx->connector) { /* Establishing an outgoing connection */
-        config = &ctx->connector->config;
+        config = &ctx->connector->ctor_config->config;
         if (!setup_ssl_sasl_and_open(ctx)) {
             qd_log(LOG_SERVER, QD_LOG_ERROR, "[C%" PRIu64 "] Connection aborted due to internal setup error",
                    ctx->connection_id);

@@ -1402,8 +1402,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     const char *host = 0;
     char host_local[255];
     const qd_server_config_t *config;
-    if (qd_connection_connector(conn)) {
-        config = qd_connector_config(qd_connection_connector(conn));
+    qd_connector_t *connector = qd_connection_connector(conn);
+
+    if (connector) {
+        config = qd_connector_get_config(connector);
         snprintf(host_local, 254, "%s", config->host_port);
         host = &host_local[0];
     }
@@ -1414,8 +1416,13 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     qd_router_connection_get_config(conn, &role, &cost, &name,
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
-    if (conn->connector && conn->connector->config.has_data_connectors) {
-        memcpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    if (connector && !!connector->ctor_config->data_connection_count) {
+        memcpy(conn->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
+        if (connector->is_data_connector) {
+            // override the configured role to identify this as a data connection
+            assert(role == QDR_ROLE_INTER_ROUTER);
+            role = QDR_ROLE_INTER_ROUTER_DATA;
+        }
     }
 
     // check offered capabilities for streaming link support and connection trunking support
@@ -1524,8 +1531,8 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                 } else if ((key.size == strlen(QD_CONNECTION_PROPERTY_ACCESS_ID)
                            && strncmp(key.start, QD_CONNECTION_PROPERTY_ACCESS_ID, key.size) == 0)) {
                     if (!pn_data_next(props)) break;
-                    if (!!conn->connector && !!conn->connector->vflow_record && pn_data_type(props) == PN_STRING) {
-                        vflow_set_ref_from_pn(conn->connector->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
+                    if (!!connector && !!connector->vflow_record && pn_data_type(props) == PN_STRING) {
+                        vflow_set_ref_from_pn(connector->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
                     }
 
                 } else {
@@ -1553,7 +1560,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  authenticated,
                                                                  conn->opened,
                                                                  (char*) mech,
-                                                                 conn->connector ? QD_OUTGOING : QD_INCOMING,
+                                                                 connector ? QD_OUTGOING : QD_INCOMING,
                                                                  host,
                                                                  proto,
                                                                  cipher,
@@ -1592,17 +1599,14 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         qd_listener_add_link(conn->listener);
     }
 
-    if (!!conn->connector) {
-        qd_connector_add_link(conn->connector);
-    }
-
-    if (conn->connector) {
-        sys_mutex_lock(&conn->connector->lock);
-        qd_format_string(conn->connector->conn_msg, QD_CXTR_CONN_MSG_BUF_SIZE,
+    if (!!connector) {
+        qd_connector_add_link(connector);
+        sys_mutex_lock(&connector->lock);
+        qd_format_string(connector->conn_msg, QD_CTOR_CONN_MSG_BUF_SIZE,
                          "[C%"PRIu64"] Connection Opened: dir=%s host=%s encrypted=%s auth=%s user=%s container_id=%s",
                          connection_id, inbound ? "in" : "out", host, encrypted ? proto : "no",
                          authenticated ? mech : "no", (char*) user, container);
-        sys_mutex_unlock(&conn->connector->lock);
+        sys_mutex_unlock(&connector->lock);
     }
 
     free(proto);

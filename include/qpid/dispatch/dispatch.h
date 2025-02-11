@@ -22,6 +22,7 @@
 #include "qpid/dispatch/error.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /**@file
  * Configure and prepare a dispatch instance.
@@ -33,6 +34,7 @@
 typedef struct qd_dispatch_t           qd_dispatch_t;
 typedef struct qd_connection_manager_t qd_connection_manager_t;
 typedef struct qd_policy_t             qd_policy_t;
+typedef struct qd_server_t             qd_server_t;
 
 /**
  * Initialize the Dispatch library and prepare it for operation.
@@ -83,6 +85,15 @@ qd_connection_manager_t *qd_dispatch_connection_manager(const qd_dispatch_t *qd)
  */
 qd_policy_t *qd_dispatch_get_policy(const qd_dispatch_t *dispatch);
 
+/**
+ * Return the configured inter-router data connection count
+ */
+uint32_t qd_dispatch_get_data_connection_count(const qd_dispatch_t *dispatch);
+
+/**
+ * Return the routers server
+ */
+qd_server_t *qd_dispatch_get_server(const qd_dispatch_t *dispatch);
 
 /**
  * @}
