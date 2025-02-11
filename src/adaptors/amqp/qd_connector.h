@@ -136,7 +136,7 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config);
  * Create a new connector.
  * Call qd_connector_connect() to initiate the outgoing connection
  */
-qd_connector_t *qd_connector(qd_connector_config_t *ctor_config, bool is_data_connector);
+qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_data_connector);
 
 /**
  * Initiate an outgoing connection. Returns true if successful.

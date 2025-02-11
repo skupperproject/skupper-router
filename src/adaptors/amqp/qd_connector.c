@@ -132,7 +132,7 @@ const qd_server_config_t *qd_connector_get_config(const qd_connector_t *c)
 }
 
 
-qd_connector_t *qd_connector(qd_connector_config_t *ctor_config, bool is_data_connector)
+qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_data_connector)
 {
     qd_connector_t *connector = new_qd_connector_t();
     if (!connector) return 0;
@@ -159,8 +159,8 @@ qd_connector_t *qd_connector(qd_connector_config_t *ctor_config, bool is_data_co
         item->scheme = strdup("amqps");
     else
         item->scheme = strdup("amqp");
-    item->host = strdup(ctor_config->config.host);
-    item->port = strdup(ctor_config->config.port);
+    item->host = qd_strdup(ctor_config->config.host);
+    item->port = qd_strdup(ctor_config->config.port);
     int hplen = strlen(item->host) + strlen(item->port) + 2;
     item->host_port = malloc(hplen);
     snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
@@ -486,7 +486,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
             // router control connector to be located at the head of the list.
 
             for (int i = 0; i < ctor_config->data_connection_count; i++) {
-                qd_connector_t *dc = qd_connector(ctor_config, true);
+                qd_connector_t *dc = qd_connector_create(ctor_config, true);
                 if (!dc) {
                     qd_error(QD_ERROR_CONFIG, "Failed to create data Connector %s: resource allocation failed", ctor_config->config.name);
                     goto error;
@@ -499,7 +499,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
     // Create the primary connector associated with this configuration. It will be located
     // at the head of the connectors list
 
-    qd_connector_t *ct = qd_connector(ctor_config, false);
+    qd_connector_t *ct = qd_connector_create(ctor_config, false);
     if (!ct) {
         qd_error(QD_ERROR_CONFIG, "Failed to create data Connector %s: resource allocation failed", ctor_config->config.name);
         goto error;
