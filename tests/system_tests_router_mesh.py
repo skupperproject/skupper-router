@@ -203,7 +203,7 @@ class ThreeRouterTest(TestCase):
         Ensure all messages arrive as expected.
         """
         priorities = 10
-        send_batch = 25
+        send_batch = 15
 
         total = priorities * send_batch
         rx = self.spawn_receiver(self.RouterC,

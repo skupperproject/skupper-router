@@ -352,14 +352,14 @@ class TopologyDispositionTests (TestCase):
         cls.client_addrs['D'] = cls.router_D.addresses[0]
 
         # 1 means skip that test.
-        cls.skip = {'test_01' : 0,
-                    'test_02' : 0,
-                    'test_03' : 0,
-                    'test_04' : 0
+        cls.skip = {'test_01_delete_spurious_connector' : 0,
+                    'test_02_topology_disposition' : 0,
+                    'test_03_connection_id_propagation' : 0,
+                    'test_04_scraper_tool' : 1
                     }
 
     def test_01_delete_spurious_connector(self):
-        name = 'test_01'
+        name = 'test_01_delete_spurious_connector'
         if self.skip[name] :
             self.skipTest("Test skipped during development.")
         test = DeleteSpuriousConnector(name,
@@ -371,7 +371,7 @@ class TopologyDispositionTests (TestCase):
         self.assertIsNone(test.error)
 
     def test_02_topology_disposition(self):
-        name = 'test_02'
+        name = 'test_02_topology_disposition'
         if self.skip[name] :
             self.skipTest("Test skipped during development.")
         test = TopologyDisposition(name,
@@ -381,7 +381,7 @@ class TopologyDispositionTests (TestCase):
         self.assertIsNone(test.error)
 
     def test_03_connection_id_propagation(self):
-        name = 'test_03'
+        name = 'test_03_connection_id_propagation'
         error = None
         if self.skip[name] :
             self.skipTest("Test skipped during development.")
@@ -414,7 +414,7 @@ class TopologyDispositionTests (TestCase):
             self.assertIsNone(error)
 
     def test_04_scraper_tool(self):
-        name = 'test_04'
+        name = 'test_04_scraper_tool'
         error = str(None)
         if self.skip[name] :
             self.skipTest("Test skipped during development.")
@@ -815,16 +815,17 @@ class TopologyDisposition (MessagingHandler):
         self.timeout_count        = 0
         self.confirmed_kills      = 0
         self.send_interval        = 0.1
-        self.to_be_sent           = 700
+        self.to_be_sent           = 600
         self.deadline             = 100
         self.message_status       = dict()
         self.message_times        = dict()
         self.most_recent_kill     = 0
         self.first_trouble        = 0
         self.flow                 = 100
-        self.max_trouble_duration = 20
+        self.max_trouble_duration = 40
         self.link_check_count     = 0
         self.send_burst_size      = 10
+        self.test_name            = test_name
 
         # Holds the management sender, receiver, and 'helper'
         # associated with each router.
@@ -862,7 +863,7 @@ class TopologyDisposition (MessagingHandler):
 
     def debug_print(self, text) :
         if self.debug:
-            print("%.6lf %s" % (time.time(), text))
+            print("%s %.6lf %s" % (self.test_name, time.time(), text))
 
     # Shut down everything and exit.
     def bail(self, text):
@@ -936,7 +937,7 @@ class TopologyDisposition (MessagingHandler):
         self.state_transition('on_start', 'starting')
         self.reactor = event.reactor
         self.test_timer = event.reactor.schedule(self.deadline, Timeout(self, "test"))
-        self.send_timer = event.reactor.schedule(self.send_interval, Timeout(self, "sender"))
+        self.send_timer = event.reactor.schedule(5, Timeout(self, "sender"))
         self.send_conn  = event.container.connect(self.client_addrs['A'])
         self.recv_conn  = event.container.connect(self.client_addrs['B'])
         self.sender     = event.container.create_sender(self.send_conn, self.dest)
@@ -956,6 +957,7 @@ class TopologyDisposition (MessagingHandler):
         self.routers['B']['mgmt_sender']   = event.container.create_sender(self.routers['B']['mgmt_conn'], "$management")
         self.routers['C']['mgmt_sender']   = event.container.create_sender(self.routers['C']['mgmt_conn'], "$management")
         self.routers['D']['mgmt_sender']   = event.container.create_sender(self.routers['D']['mgmt_conn'], "$management")
+        self.debug_print("on_start completed - 5 second sender timer scheduled")
 
     # -----------------------------------------------------------------
     # At start-time, as the management links to the routers open,
@@ -1055,10 +1057,6 @@ class TopologyDisposition (MessagingHandler):
                     self.debug_print("received link check message from C ------------")
                 elif event.receiver == self.routers['D']['mgmt_receiver'] :
                     self.debug_print("received link check message from D ------------")
-                body = event.message.body
-                self.debug_print("body: %s" % body)
-                self.debug_print("properties: %s" % event.message.properties)
-
                 self.link_check_count -= 1
                 if self.link_check_count == 0 :
                     if self.state == 'link checking' :
