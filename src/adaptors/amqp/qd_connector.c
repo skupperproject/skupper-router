@@ -136,7 +136,7 @@ static void deferred_close(void *context, bool discard)
 }
 
 
-const qd_server_config_t *qd_connector_get_config(const qd_connector_t *c)
+const qd_server_config_t *qd_connector_get_server_config(const qd_connector_t *c)
 {
     return &c->ctor_config->config;
 }
@@ -157,11 +157,11 @@ qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_
     connector->reconnect_enabled = true;
     connector->is_data_connector = is_data_connector;
 
-    connector->ctor_config = ctor_config;
     sys_atomic_inc(&ctor_config->ref_count);
-
-    connector->conn_index = 1;
-    connector->state      = CTOR_STATE_INIT;
+    connector->ctor_config = ctor_config;
+    connector->conn_index  = 1;
+    connector->state       = CTOR_STATE_INIT;
+    connector->tls_ordinal = ctor_config->tls_ordinal;
 
     qd_failover_item_t *item = NEW(qd_failover_item_t);
     ZERO(item);
@@ -379,8 +379,6 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
     sys_atomic_inc(&connector->ref_count);
     ctx->connector = connector;
     connector->qd_conn = ctx;
-
-    strncpy(ctx->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
 }
 
 
@@ -502,6 +500,8 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         return 0;
     }
 
+    const bool is_inter_router = strcmp(ctor_config->config.role, "inter-router") == 0;
+
     //
     // If an sslProfile is configured allocate a TLS config to be used by all child connector's connections
     //
@@ -515,9 +515,9 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
             // qd_tls2_config() has set the qd_error_message(), which is logged below
             goto error;
         }
-        ctor_config->tls_ordinal = qd_tls_config_get_ordinal(ctor_config->tls_config);
+        ctor_config->tls_ordinal              = qd_tls_config_get_ordinal(ctor_config->tls_config);
         ctor_config->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(ctor_config->tls_config);
-        if (strcmp(ctor_config->config.role, "inter-router") == 0) {
+        if (is_inter_router) {
             qd_tls_config_register_update_callback(ctor_config->tls_config, ctor_config,
                                                    handle_connector_ssl_profile_mgmt_update);
         }
@@ -525,11 +525,10 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
 
     // For inter-router connectors create associated inter-router data connectors if configured
 
-    if (strcmp(ctor_config->config.role, "inter-router") == 0) {
+    if (is_inter_router) {
+        qd_generate_discriminator(ctor_config->group_correlator);
         ctor_config->data_connection_count = qd_dispatch_get_data_connection_count(qd);
         if (!!ctor_config->data_connection_count) {
-            qd_generate_discriminator(ctor_config->group_correlator);
-
             // Add any data connectors to the head of the connectors list first. This allows the
             // router control connector to be located at the head of the list.
 
@@ -621,3 +620,13 @@ void qd_connector_config_connect(qd_connector_config_t *ctor_config)
     }
 }
 
+
+bool qd_connector_get_tls_ordinal(const qd_connector_t *ctor, uint64_t *tls_ordinal)
+{
+    if (!!ctor->ctor_config->tls_config) {
+        *tls_ordinal = ctor->tls_ordinal;
+        return true;
+    }
+    *tls_ordinal = 0;
+    return false;
+}

@@ -80,7 +80,7 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
             qd_listener_decref(li);
             return 0;
         }
-        li->tls_ordinal = qd_tls_config_get_ordinal(li->tls_config);
+        li->tls_ordinal              = qd_tls_config_get_ordinal(li->tls_config);
         li->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(li->tls_config);
     }
 

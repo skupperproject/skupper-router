@@ -47,6 +47,7 @@ const char * const QD_CONNECTION_PROPERTY_VERSION_KEY           = "version";
 const char * const QD_CONNECTION_PROPERTY_COST_KEY              = "qd.inter-router-cost";
 const char * const QD_CONNECTION_PROPERTY_ROLE_KEY              = "qd.inter-router-role";
 const char * const QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY  = "qd.group-correlator";
+const char * const QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY     = "qd.group-ordinal";
 const char * const QD_CONNECTION_PROPERTY_CONN_ID               = "qd.conn-id";
 const char * const QD_CONNECTION_PROPERTY_FAILOVER_LIST_KEY     = "failover-server-list";
 const char * const QD_CONNECTION_PROPERTY_FAILOVER_NETHOST_KEY  = "network-host";
@@ -57,7 +58,6 @@ const char * const QD_CONNECTION_PROPERTY_ADAPTOR_KEY           = "qd.adaptor";
 const char * const QD_CONNECTION_PROPERTY_TCP_ADAPTOR_VALUE     = "tcp";
 const char * const QD_CONNECTION_PROPERTY_ANNOTATIONS_VERSION_KEY = "qd.annotations-version";
 const char * const QD_CONNECTION_PROPERTY_ACCESS_ID             = "qd.access-id";
-const char * const QD_CONNECTION_PROPERTY_TLS_ORDINAL           = "qd.tls-ordinal";
 
 const char * const QD_TERMINUS_EDGE_ADDRESS_TRACKING = "_$qd.edge_addr_tracking";
 const char * const QD_TERMINUS_HEARTBEAT             = "_$qd.edge_heartbeat";

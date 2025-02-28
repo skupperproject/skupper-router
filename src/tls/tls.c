@@ -281,15 +281,15 @@ qd_tls_config_t *qd_tls_config(const char *ssl_profile_name,
     // 1 reference for caller and another for the tls_configs list
     sys_atomic_init(&tls_config->ref_count, 2);
 
-    tls_config->ssl_profile_name  = qd_strdup(ssl_profile_name);
-    tls_config->uid_format        = CHECKED_STRDUP(tls_context->profile.uid_format);
-    tls_config->ordinal            = tls_context->profile.ordinal;
+    tls_config->ssl_profile_name     = qd_strdup(ssl_profile_name);
+    tls_config->uid_format           = CHECKED_STRDUP(tls_context->profile.uid_format);
+    tls_config->ordinal              = tls_context->profile.ordinal;
     tls_config->oldest_valid_ordinal = tls_context->profile.oldest_valid_ordinal;
-    tls_config->authenticate_peer = authenticate_peer;
-    tls_config->verify_hostname   = verify_hostname;
-    tls_config->is_listener       = is_listener;
-    tls_config->p_type            = p_type;
-    tls_config->proton_tls_cfg    = qd_proton_config(pn_raw_config, pn_amqp_config);
+    tls_config->authenticate_peer    = authenticate_peer;
+    tls_config->verify_hostname      = verify_hostname;
+    tls_config->is_listener          = is_listener;
+    tls_config->p_type               = p_type;
+    tls_config->proton_tls_cfg       = qd_proton_config(pn_raw_config, pn_amqp_config);
 
     DEQ_INSERT_TAIL(tls_context->tls_configs, tls_config);
 
@@ -318,7 +318,8 @@ void qd_tls_config_decref(qd_tls_config_t *tls_config)
 
 uint64_t qd_tls_config_get_ordinal(const qd_tls_config_t *config)
 {
-    // config->ordinal can be changed via management. Calling this from any other thread risks returning a stale value.
+    // config->ordinal can only be changed by the management thread. Calling this from any other thread risks returning
+    // a stale value.
     ASSERT_MGMT_THREAD;
 
     return config->ordinal;
@@ -327,8 +328,8 @@ uint64_t qd_tls_config_get_ordinal(const qd_tls_config_t *config)
 
 uint64_t qd_tls_config_get_oldest_valid_ordinal(const qd_tls_config_t *config)
 {
-    // config->oldest_valid_ordinal can be changed via management. Calling this from any other thread risks returning a
-    // stale value.
+    // config->oldest_valid_ordinal can only be changed by the management thread . Calling this from any other thread
+    // risks returning a stale value.
     ASSERT_MGMT_THREAD;
 
     return config->oldest_valid_ordinal;
@@ -385,7 +386,7 @@ qd_tls_session_t *qd_tls_session_raw(qd_tls_config_t *tls_config, const char *pe
     assert(p_cfg);
     sys_atomic_inc(&p_cfg->ref_count);  // prevents free after we drop lock
     tls_session->uid_format = CHECKED_STRDUP(tls_config->uid_format);  // may be changed by mgmt thread
-    tls_session->ordinal = tls_config->ordinal;  // may be changed by mgmt thread
+    tls_session->ordinal    = tls_config->ordinal;  // may be changed by mgmt thread
     sys_mutex_unlock(&tls_config->lock);
 
     tls_session->proton_tls_cfg = p_cfg;
@@ -846,8 +847,9 @@ static qd_error_t _update_tls_config(qd_tls_config_t *tls_config, const qd_ssl2_
     sys_mutex_lock(&tls_config->lock);
     old_cfg = tls_config->proton_tls_cfg;
     tls_config->proton_tls_cfg = new_cfg;
+
     // And refresh any parameters that must be used when creating new sessions:
-    tls_config->ordinal = profile->ordinal;
+    tls_config->ordinal              = profile->ordinal;
     tls_config->oldest_valid_ordinal = profile->oldest_valid_ordinal;
     free(tls_config->uid_format);
     tls_config->uid_format = CHECKED_STRDUP(profile->uid_format);

@@ -99,7 +99,6 @@ struct qd_connection_t {
     sys_mutex_t                     deferred_call_lock;
     bool                            policy_counted;
     char                           *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
-    char                            group_correlator[QD_DISCRIMINATOR_SIZE];
     qd_pn_free_link_list_t          free_link_list;
     bool                            strip_annotations_in;
     bool                            strip_annotations_out;

@@ -131,8 +131,7 @@ static void decorate_connection(qd_connection_t *ctx)
 
     pn_data_put_symbol(pn_connection_properties(conn),
                        pn_bytes(strlen(QD_CONNECTION_PROPERTY_CONN_ID), QD_CONNECTION_PROPERTY_CONN_ID));
-    qd_connection_t *qd_conn = pn_connection_get_context(conn);
-    pn_data_put_int(pn_connection_properties(conn), qd_conn->connection_id);
+    pn_data_put_int(pn_connection_properties(conn), ctx->connection_id);
 
     if (config && config->inter_router_cost > 1) {
         pn_data_put_symbol(pn_connection_properties(conn),
@@ -146,16 +145,22 @@ static void decorate_connection(qd_connection_t *ctx)
         pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
-    if (ctx->connector && (ctx->connector->is_data_connector || !!ctx->connector->ctor_config->data_connection_count)) {
+    // The connector-side assigns the group correlator and ordinal values and passes it to the listener side
+    //
+    if (ctx->connector && !!ctx->connector->ctor_config->group_correlator[0]) {
         uint64_t tls_ordinal;
+        const qd_connector_config_t *ctor_config = ctx->connector->ctor_config;
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY), QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY));
         pn_data_put_string(pn_connection_properties(conn),
-                           pn_bytes(strnlen(ctx->group_correlator, QD_DISCRIMINATOR_SIZE - 1), ctx->group_correlator));
+                           pn_bytes(strnlen(ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE - 1), ctor_config->group_correlator));
 
-        if (qd_connection_get_tls_ordinal(qd_conn, &tls_ordinal)) {
+        // Use the connectors tls_ordinal value as the group ordinal because the connection with the highest tls_ordinal
+        // value has the most up-to-date security credentials and should take precedence over connections with a lower
+        // ordinal value.
+        if (qd_connector_get_tls_ordinal(ctx->connector, &tls_ordinal)) {
             pn_data_put_symbol(pn_connection_properties(conn),
-                               pn_bytes(strlen(QD_CONNECTION_PROPERTY_TLS_ORDINAL), QD_CONNECTION_PROPERTY_TLS_ORDINAL));
+                               pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY), QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY));
             pn_data_put_ulong(pn_connection_properties(conn), tls_ordinal);
         }
     }

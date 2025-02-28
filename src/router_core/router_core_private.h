@@ -663,6 +663,7 @@ struct qdr_connection_info_t {
     char                  *version; // if role is router or edge
     sys_mutex_t            connection_info_lock;
     char                   group_correlator[QD_DISCRIMINATOR_SIZE];  // Used to associate inter-router-data connections to their inter-router connection
+    uint64_t               group_ordinal;  // inter-router conn with highest ordinal value takes precedence
 };
 
 ALLOC_DECLARE(qdr_connection_info_t);

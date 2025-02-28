@@ -1376,53 +1376,39 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     char                   rversion[128];
     uint64_t               connection_id = qd_connection_connection_id(conn);
     pn_connection_t       *pn_conn = qd_connection_pn(conn);
-    pn_transport_t *tport = 0;
-    pn_sasl_t      *sasl  = 0;
-    const char     *mech  = 0;
-    const char     *user  = 0;
-    const char *container = conn->pn_conn ? pn_connection_remote_container(conn->pn_conn) : 0;
+    const char            *host   = 0;
+    uint64_t               group_ordinal = 0;
+    const char            *container  = conn->pn_conn ? pn_connection_remote_container(conn->pn_conn) : 0;
+    char                   group_correlator[QD_DISCRIMINATOR_SIZE];
+    char                   host_local[255];
 
-    rversion[0] = 0;
+    rversion[0]         = 0;
+    group_correlator[0] = 0;
+    host_local[0]       = 0;
+
     conn->strip_annotations_in  = false;
     conn->strip_annotations_out = false;
-    if (conn->pn_conn) {
-        tport = pn_connection_transport(conn->pn_conn);
-    }
-    if (tport) {
-        sasl = pn_sasl(tport);
-        if(conn->user_id)
-            user = conn->user_id;
-        else
-            user = pn_transport_get_user(tport);
-    }
-
-    if (sasl)
-        mech = pn_sasl_get_mech(sasl);
-
-    const char *host = 0;
-    char host_local[255];
-    const qd_server_config_t *config;
-    qd_connector_t *connector = qd_connection_connector(conn);
-
-    if (connector) {
-        config = qd_connector_get_config(connector);
-        snprintf(host_local, 254, "%s", config->host_port);
-        host = &host_local[0];
-    }
-    else
-        host = qd_connection_name(conn);
-
-
     qd_router_connection_get_config(conn, &role, &cost, &name,
                                     &conn->strip_annotations_in, &conn->strip_annotations_out, &link_capacity);
 
-    if (connector && !!connector->ctor_config->data_connection_count) {
-        memcpy(conn->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
+    qd_connector_t *connector = qd_connection_connector(conn);
+    if (connector) {
+        const qd_server_config_t *config = qd_connector_get_server_config(connector);
+        snprintf(host_local, 254, "%s", config->host_port);
+        host = &host_local[0];
+
+        // Use the connectors tls_ordinal value as the group ordinal because the connection with the highest tls_ordinal
+        // value has the most up-to-date security credentials and should take precedence over connections with a lower
+        // ordinal value.
+        (void) qd_connector_get_tls_ordinal(connector, &group_ordinal);
+        memcpy(group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
         if (connector->is_data_connector) {
             // override the configured role to identify this as a data connection
             assert(role == QDR_ROLE_INTER_ROUTER);
             role = QDR_ROLE_INTER_ROUTER_DATA;
         }
+    } else {
+        host = qd_connection_name(conn);
     }
 
     // check offered capabilities for streaming link support and connection trunking support
@@ -1457,10 +1443,13 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         const bool is_router = (role == QDR_ROLE_INTER_ROUTER || role == QDR_ROLE_EDGE_CONNECTION);
         pn_data_rewind(props);
         if (pn_data_next(props) && pn_data_type(props) == PN_MAP) {
-            const size_t num_items = pn_data_get_map(props);
-            int props_found = 0;  // once all props found exit loop
+
+            const size_t num_items   = pn_data_get_map(props);
+            const int    max_props   = 8;  // total possible props
+            int          props_found = 0;  // once all props found exit loop
+
             pn_data_enter(props);
-            for (int i = 0; i < num_items / 2 && props_found < 7; ++i) {
+            for (int i = 0; i < num_items / 2 && props_found < max_props; ++i) {
                 if (!pn_data_next(props)) break;
                 if (pn_data_type(props) != PN_SYMBOL) break;  // invalid properties map
                 pn_bytes_t key = pn_data_get_symbol(props);
@@ -1493,11 +1482,26 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                 } else if (key.size == strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY) &&
                     strncmp(key.start, QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY, key.size) == 0) {
                     props_found += 1;
+                    assert(!connector);  // expect: connector sets correlator, listener consumes it
                     if (!pn_data_next(props)) break;
                     if (role == QDR_ROLE_INTER_ROUTER || role == QDR_ROLE_INTER_ROUTER_DATA) {
                         if (pn_data_type(props) == PN_STRING) {
+                            // pn_bytes is not null terminated
                             pn_bytes_t gc = pn_data_get_string(props);
-                            strncpy(conn->group_correlator, gc.start, MIN(gc.size, QD_DISCRIMINATOR_SIZE));
+                            size_t len = MIN(gc.size, QD_DISCRIMINATOR_BYTES);
+                            memcpy(group_correlator, gc.start, len);
+                            group_correlator[len] = '\0';
+                        }
+                    }
+
+                } else if (key.size == strlen(QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY) &&
+                    strncmp(key.start, QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY, key.size) == 0) {
+                    props_found += 1;
+                    assert(!connector);  // expect: connector sets ordinal, listener consumes it
+                    if (!pn_data_next(props)) break;
+                    if (role == QDR_ROLE_INTER_ROUTER || role == QDR_ROLE_INTER_ROUTER_DATA) {
+                        if (pn_data_type(props) == PN_ULONG) {
+                            group_ordinal = pn_data_get_ulong(props);
                         }
                     }
 
@@ -1530,6 +1534,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
                 } else if ((key.size == strlen(QD_CONNECTION_PROPERTY_ACCESS_ID)
                            && strncmp(key.start, QD_CONNECTION_PROPERTY_ACCESS_ID, key.size) == 0)) {
+                    props_found += 1;
                     if (!pn_data_next(props)) break;
                     if (!!connector && !!connector->vflow_record && pn_data_type(props) == PN_STRING) {
                         vflow_set_ref_from_pn(connector->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
@@ -1539,13 +1544,35 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                     // skip this key
                     if (!pn_data_next(props)) break;
                 }
+
+                // NOTE: if adding more keys update max_props value above!
             }
         }
     }
 
-    char *proto = 0;
-    char *cipher = 0;
-    int ssl_ssf = 0;
+    // Gather transport-level information
+
+    pn_transport_t *tport  = 0;
+    pn_sasl_t      *sasl   = 0;
+    const char     *mech   = 0;
+    const char     *user   = 0;
+    char           *proto  = 0;
+    char           *cipher = 0;
+    int            ssl_ssf = 0;
+
+    if (conn->pn_conn) {
+        tport = pn_connection_transport(conn->pn_conn);
+    }
+    if (tport) {
+        sasl = pn_sasl(tport);
+        if(conn->user_id)
+            user = conn->user_id;
+        else
+            user = pn_transport_get_user(tport);
+    }
+
+    if (sasl)
+        mech = pn_sasl_get_mech(sasl);
 
     if (conn->ssl) {
         proto = qd_tls_session_get_protocol_version(conn->ssl);
@@ -1574,7 +1601,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  streaming_links,
                                                                  connection_trunking);
 
-    qdr_connection_info_set_group_correlator(connection_info, conn->group_correlator);
+    qdr_connection_info_set_group(connection_info, group_correlator, group_ordinal);
 
     qdr_connection_opened(router->router_core,
                           amqp_adaptor.adaptor,

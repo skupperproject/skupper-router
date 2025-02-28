@@ -224,18 +224,19 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
         pn_data_copy(qdr_conn_properties, connection_properties);
 
     connection_info->connection_properties = qdr_conn_properties;
-    connection_info->tls_ssf     = tls_ssf;
-    connection_info->tls         = tls;
-    connection_info->tls_ordinal = tls_ordinal;
-    connection_info->streaming_links = streaming_links;
-    connection_info->connection_trunking = connection_trunking;
+    connection_info->tls_ssf               = tls_ssf;
+    connection_info->tls                   = tls;
+    connection_info->tls_ordinal           = tls_ordinal;
+    connection_info->streaming_links       = streaming_links;
+    connection_info->connection_trunking   = connection_trunking;
     sys_mutex_init(&connection_info->connection_info_lock);
     return connection_info;
 }
 
 
-void qdr_connection_info_set_group_correlator(qdr_connection_info_t *info, const char *correlator)
+void qdr_connection_info_set_group(qdr_connection_info_t *info, const char *correlator, uint64_t ordinal)
 {
+    info->group_ordinal = ordinal;
     memcpy(info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE);
 }
 
