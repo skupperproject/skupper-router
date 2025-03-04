@@ -1309,7 +1309,10 @@ class StreamingMessageTest(TestCase):
         self._wait_address_gone(self.INT_A,  "multicast/test-address")
         self._wait_address_gone(self.INT_B,  "multicast/test-address")
 
-    def test_13_streaming_balanced_parallel(self):
+    # Make sure this test is the last test to be run in this test suite. This
+    # does not call the _wait_address_gone() functions so it can exit quickly.
+    # It does not wait for its test addresses to be removed from the address table.
+    def test_99_streaming_balanced_parallel(self):
         """
         Verify streaming does not block other balanced traffic.
         """
