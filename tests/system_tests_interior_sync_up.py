@@ -96,7 +96,7 @@ class InteriorSyncUpTest(MessagingHandler):
         self.poll_timer        = None
         self.delay_timer       = None
         self.count             = 1000
-        self.delay_count       = 12   # This should be larger than MAX_KEPT_DELTAS in mobile.py
+        self.delay_count       = 2   # This should be larger than MAX_KEPT_DELTAS in mobile.py
         self.inter_router_port = inter_router_port
 
         self.receivers      = []
@@ -218,11 +218,9 @@ class InteriorSyncUpTest(MessagingHandler):
 
                 self.last_action = "Got a query response with %d of the expected addresses" % (got_count)
 
-                print(f"got_count={got_count}, self.count={self.count}")
                 if got_count == self.count:
                     self.fail(None)
                 else:
-                    print(f"self.num_attempts={self.num_attempts}, self.max_attempts={self.max_attempts}")
                     if self.num_attempts < self.max_attempts:
                         self.poll_timer = self.reactor.schedule(5, PollTimeout(self))
                         self.num_attempts += 1
