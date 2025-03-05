@@ -101,6 +101,7 @@ const char *qdr_connection_columns[] =
      "meshId",
      "tlsOrdinal",
      "groupCorrelationId",
+     "groupOrdinal",
      0};
 
 const char *CONNECTION_TYPE = "io.skupper.router.connection";

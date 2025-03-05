@@ -635,6 +635,14 @@ void qdr_core_remove_address_config(qdr_core_t *core, qdr_address_config_t *addr
 bool qdr_is_addr_treatment_multicast(qdr_address_t *addr);
 const char *get_address_treatment_string(qd_address_treatment_t  treatment);
 
+// non-streaming inter-router links sorted by priority
+//
+typedef struct qdr_priority_sheaf_t {
+    qdr_link_t *link[QDR_N_PRIORITIES];
+    int count;
+} qdr_priority_sheaf_t;
+
+
 //
 // Connection Information
 //
@@ -682,26 +690,29 @@ struct qdr_connection_t {
     bool                        closed; // This bit is used in the case where a client is trying to force close this connection.
     uint8_t                     next_pri;  // for incoming inter-router data links
     qdr_connection_role_t       role;
-    int                         inter_router_cost;
     qdr_conn_identifier_t      *conn_id;
     qdr_conn_identifier_t      *alt_conn_id;
     bool                        strip_annotations_in;
     bool                        strip_annotations_out;
+    bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
+    bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
+    int                         inter_router_cost;
     int                         link_capacity;
-    int                         mask_bit;  ///< set only if inter-router connection
+    int                         mask_bit;  ///< set only if inter-router control connection
+    int                         group_parent_mask_bit;  ///< if inter-router data connection maskbit of group parent inter-router control conn
     qdr_connection_work_list_t  work_list;
     sys_mutex_t                 work_lock;
     qdr_link_ref_list_t         links;
     qdr_link_ref_list_t         links_with_work[QDR_N_PRIORITIES];
     qdr_connection_info_t      *connection_info;
     void                       *user_context; /* Updated from IO thread, use work_lock */
+    qdr_link_t                 *control_links[2];  // QD_LINK_CONTROL links [QD_INCOMING/QD_OUTGOING] (inter-router conn only)
+    qdr_priority_sheaf_t        data_links;  // links for non-streaming messages (by priority)  (inter-router conn only)
     qd_conn_oper_status_t       oper_status;
     qd_conn_admin_status_t      admin_status;
     qdr_error_t                *error;
     uint32_t                    conn_uptime; // Timestamp which can be used to calculate the number of seconds this connection has been up and running.
     uint32_t                    last_delivery_time; // Timestamp which can be used to calculate the number of seconds since the last delivery arrived on this connection.
-    bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
-    bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
     qdr_link_list_t             streaming_link_pool;   ///< pool of links available for streaming messages
     const qd_policy_spec_t     *policy_spec;
     qdr_connection_list_t       connection_group;      ///< List of associated connection group members
@@ -766,11 +777,6 @@ struct qdr_conn_identifier_t {
     qdr_connection_ref_list_t  connection_refs;
     qdr_auto_link_list_t       auto_link_refs;
 };
-
-typedef struct qdr_priority_sheaf_t {
-    qdr_link_t *links[QDR_N_PRIORITIES];
-    int count;
-} qdr_priority_sheaf_t;
 
 
 struct qdr_protocol_adaptor_t {
@@ -882,14 +888,13 @@ struct qdr_core_t {
     qdr_address_t             *router_addr_T;
     qdr_address_t             *routerma_addr_T;
 
-    qdr_node_list_t         routers;                      ///< List of routers, in order of cost, from lowest to highest
-    qd_bitmask_t           *neighbor_free_mask;           ///< bits available for new conns (qd_connection_t->mask_bit values)
-    qdr_node_t            **routers_by_mask_bit;          ///< indexed by qdr_node_t->mask_bit
-    qdr_connection_t      **rnode_conns_by_mask_bit;      ///< inter-router conns indexed by conn->mask_bit
-    qdr_link_t            **control_links_by_mask_bit;    ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
-    qdr_priority_sheaf_t   *data_links_by_mask_bit;       ///< indexed by qdr_node_t->link_mask_bit, qdr_connection_t->mask_bit
-    qdr_connection_list_t   unallocated_group_members;    ///< List of unallocated group members (i.e. before the group is given a maskbit)
-    char                  **group_correlator_by_maskbit;  ///< Group correlator number indexed by conn->maskbit
+    qdr_node_list_t         routers;                          ///< List of routers, in order of cost, from lowest to highest
+    qd_bitmask_t           *neighbor_free_mask;               ///< bits available for new conns (qd_connection_t->mask_bit values)
+    qdr_node_t            **routers_by_mask_bit;              ///< indexed by qdr_node_t->mask_bit
+    qdr_connection_t      **rnode_conns_by_mask_bit;          ///< inter-router conns indexed by conn->mask_bit
+    qdr_connection_t      **pending_rnode_conns_by_mask_bit;  ///< higher precedence inter-router conns pending upgrade [conn->mask_bit]
+    qdr_connection_list_t   unallocated_group_members;        ///< List of unallocated group members (i.e. before the group is given a maskbit)
+    char                  **group_correlator_by_maskbit;      ///< Group correlator number indexed by conn->maskbit
     uint64_t                cost_epoch;
 
     uint64_t              next_tag;
@@ -1061,10 +1066,9 @@ void qdr_core_timer_free_CT(qdr_core_t *core, qdr_core_timer_t *timer);
  * Clears the sheaf of priority links in a connection.
  * Call this when a connection is being closed, when the mask-bit
  * for that sheaf is being returned to the core for re-use.
- * @param core Pointer to the core object returned by qd_core()
- * @param n uint8_t index for the sheaf to be reset prior to re-use.
+ * @param conn Pointer to the connection owning the sheaf
  */
-void qdr_reset_sheaf(qdr_core_t *core, uint8_t n);
+void qdr_reset_sheaf(qdr_connection_t *conn);
 
 /**
  * Run in an IO thread.

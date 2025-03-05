@@ -240,23 +240,18 @@ void qdr_route_table_setup_CT(qdr_core_t *core)
 
         core->neighbor_free_mask = qd_bitmask(1);
 
-        core->routers_by_mask_bit       = NEW_PTR_ARRAY(qdr_node_t, qd_bitmask_width());
-        core->control_links_by_mask_bit = NEW_PTR_ARRAY(qdr_link_t, qd_bitmask_width());
-        core->rnode_conns_by_mask_bit   = NEW_PTR_ARRAY(qdr_connection_t, qd_bitmask_width());
-        core->data_links_by_mask_bit    = NEW_ARRAY(qdr_priority_sheaf_t, qd_bitmask_width());
+        core->routers_by_mask_bit             = NEW_PTR_ARRAY(qdr_node_t, qd_bitmask_width());
+        core->rnode_conns_by_mask_bit         = NEW_PTR_ARRAY(qdr_connection_t, qd_bitmask_width());
+        core->pending_rnode_conns_by_mask_bit = NEW_PTR_ARRAY(qdr_connection_t, qd_bitmask_width());
+        core->group_correlator_by_maskbit     = NEW_PTR_ARRAY(char, qd_bitmask_width());
         DEQ_INIT(core->unallocated_group_members);
-        core->group_correlator_by_maskbit = NEW_PTR_ARRAY(char, qd_bitmask_width());
 
         for (int idx = 0; idx < qd_bitmask_width(); idx++) {
-            core->routers_by_mask_bit[idx]          = 0;
-            core->control_links_by_mask_bit[idx]    = 0;
-            core->data_links_by_mask_bit[idx].count = 0;
-            core->rnode_conns_by_mask_bit[idx]      = 0;
-            for (int priority = 0; priority < QDR_N_PRIORITIES; ++ priority) {
-                core->data_links_by_mask_bit[idx].links[priority] = 0;
-            }
-            core->group_correlator_by_maskbit[idx] = (char*) malloc(QD_DISCRIMINATOR_SIZE);
-            core->group_correlator_by_maskbit[idx][0] = '\0';
+            core->routers_by_mask_bit[idx]             = 0;
+            core->rnode_conns_by_mask_bit[idx]         = 0;
+            core->pending_rnode_conns_by_mask_bit[idx] = 0;
+            core->group_correlator_by_maskbit[idx]     = (char*) qd_malloc(QD_DISCRIMINATOR_SIZE);
+            core->group_correlator_by_maskbit[idx][0]  = '\0';
         }
     }
 }
@@ -441,7 +436,13 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
         return;
     }
 
-    if (core->control_links_by_mask_bit[conn_maskbit] == 0) {
+    qdr_connection_t *conn = core->rnode_conns_by_mask_bit[conn_maskbit];
+    if (conn == 0) {
+        qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Invalid conn reference: %d", conn_maskbit);
+        return;
+    }
+
+    if (conn->control_links[QD_OUTGOING] == 0) {
         qd_log(LOG_ROUTER_CORE, QD_LOG_CRITICAL, "set_link: Invalid link reference: %d", conn_maskbit);
         return;
     }

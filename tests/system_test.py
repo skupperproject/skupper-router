@@ -1204,6 +1204,66 @@ class Qdrouterd(Process):
         conns = self.management.query(type=CONNECTION_TYPE).get_dicts()
         return [c for c in conns if 'inter-router' in c['role']]
 
+    def get_inter_router_data_conns(self):
+        """
+        Return a list of all inter-router-data connections present
+        """
+        dconns = self.get_inter_router_conns()
+        return [c for c in dconns if c['role'] == 'inter-router-data']
+
+    def get_inter_router_control_conns(self):
+        """
+        Return a list of all inter-router control connections present
+        """
+        dconns = self.get_inter_router_conns()
+        return [c for c in dconns if c['role'] == 'inter-router']
+
+    def get_links_by_conn_id(self, connection_id):
+        """
+        Return a list of all active AMQP links for the given connection
+        """
+        links = self.management.query(type=ROUTER_LINK_TYPE).get_dicts()
+        return [link for link in links if link['connectionId'] == connection_id]
+
+    def get_active_inter_router_data_links(self):
+        # Get the list of active inter-router-data links for the router. These
+        # are the dynamically provisioned links for passing streaming data
+        # between routers. For example there will be at least one streaming
+        # data link for every TCP session passing through the router.
+        ir_conns = self.get_inter_router_data_conns()
+        links = []
+        for conn in ir_conns:
+            links.extend([link for link in self.get_links_by_conn_id(conn['identity'])
+                          if link['linkType'] == 'endpoint' and
+                          link['operStatus'] == 'up'])
+        return links
+
+    def get_active_inter_router_control_links(self):
+        # Get the list of active inter-router control links for the
+        # router. These are the links that carry the inter-router Hello message
+        # traffic as well as priority-based non-streaming messages.
+        # There will be two for each inter-router path (1 incoming link, 1
+        # outgoing link)
+        ir_conns = self.get_inter_router_control_conns()
+        links = []
+        for conn in ir_conns:
+            links.extend([link for link in self.get_links_by_conn_id(conn['identity'])
+                          if link['linkType'] == 'router-control' and
+                          link['operStatus'] == 'up'])
+        return links
+
+    def get_last_topology_change(self):
+        """
+        Get the timestamp when this router last re-computed topology. Returns
+        None if the router is not interior.
+        """
+        try:
+            node_state = self.management.read(type=ROUTER_NODE_TYPE,
+                                              identity=f"router.node/{self.config.router_id}")
+            return node_state["lastTopoChange"]
+        except:
+            return None
+
 
 class NcatException(Exception):
     def __init__(self, error=None):

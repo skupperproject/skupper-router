@@ -1437,6 +1437,10 @@
                     "graph": true,
                     "description": "The total number of deliveries that have traversed this link."
                 },
+                "connectionId": {
+                    "type": "integer",
+                    "description": "The identity of the parent connection."
+                },
                 "presettledCount": {
                     "type": "integer",
                     "graph": true,
