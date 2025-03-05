@@ -74,7 +74,12 @@ typedef struct {
 //
 
 typedef struct {
-    sys_mutex_t          lock;
+    sys_mutex_t          lock,
+                         producer_lock,                   // These locks prevent either side from activating
+                         consumer_lock;                   // the other during tear-down.
+                                                          // Using these locks, rather than the content lock
+                                                          // for this purpose, eliminates severe contention
+                                                          // that was observed on the content lock.
     sys_atomic_t         ref_count;                       // The number of messages referencing this
     qd_buffer_list_t     buffers;                         // The buffer chain containing the message
     qd_buffer_t         *pending;                         // Buffer owned by and filled by qd_message_receive
