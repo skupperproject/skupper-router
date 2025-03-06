@@ -74,9 +74,9 @@ typedef struct {
 //
 
 typedef struct {
-    sys_mutex_t          lock,
-                         producer_lock,                   // These locks prevent either side from activating
-                         consumer_lock;                   // the other during tear-down.
+    sys_mutex_t          lock;
+    sys_mutex_t          producer_activation_lock;        // These locks prevent either side from activating
+    sys_mutex_t          consumer_activation_lock;        // the other during tear-down.
                                                           // Using these locks, rather than the content lock
                                                           // for this purpose, eliminates severe contention
                                                           // that was observed on the content lock.
