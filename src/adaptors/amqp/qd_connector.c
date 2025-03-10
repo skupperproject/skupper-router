@@ -37,6 +37,16 @@ ALLOC_DEFINE(qd_connector_t);
 ALLOC_DEFINE(qd_connector_config_t);
 
 
+/* Thread verification
+ *
+ * We can avoid locking during various connector operations if we ensure that these operations happen on the same
+ * thread.
+ *
+ * Initial configuration file load occurs on main thread, management updates runs via a zero timer.
+ */
+#define ASSERT_MGMT_THREAD assert(sys_thread_role(0) == SYS_THREAD_MAIN || sys_thread_proactor_mode() == SYS_THREAD_PROACTOR_MODE_TIMER)
+
+
 static qd_failover_item_t *qd_connector_get_conn_info_lh(qd_connector_t *ct) TA_REQ(ct->lock)
 {
     qd_failover_item_t *item = DEQ_HEAD(ct->conn_info_list);
@@ -126,7 +136,7 @@ static void deferred_close(void *context, bool discard)
 }
 
 
-const qd_server_config_t *qd_connector_get_config(const qd_connector_t *c)
+const qd_server_config_t *qd_connector_get_server_config(const qd_connector_t *c)
 {
     return &c->ctor_config->config;
 }
@@ -147,11 +157,11 @@ qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_
     connector->reconnect_enabled = true;
     connector->is_data_connector = is_data_connector;
 
-    connector->ctor_config = ctor_config;
     sys_atomic_inc(&ctor_config->ref_count);
-
-    connector->conn_index = 1;
-    connector->state      = CTOR_STATE_INIT;
+    connector->ctor_config = ctor_config;
+    connector->conn_index  = 1;
+    connector->state       = CTOR_STATE_INIT;
+    connector->tls_ordinal = ctor_config->tls_ordinal;
 
     qd_failover_item_t *item = NEW(qd_failover_item_t);
     ZERO(item);
@@ -369,8 +379,6 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
     sys_atomic_inc(&connector->ref_count);
     ctx->connector = connector;
     connector->qd_conn = ctx;
-
-    strncpy(ctx->group_correlator, connector->ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE);
 }
 
 
@@ -425,11 +433,43 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
 }
 
 
+// Handler invoked by mgmt thread whenever the sslProfile is updated for a given qd_connector_t. Check for changes to
+// the sslProfile ordinal and oldestValidOrdinal attributes.  Note this is called with the sslProfile lock held to
+// prevent new connections from being activated until after this call returns.
+//
+static void handle_connector_ssl_profile_mgmt_update(const qd_tls_config_t *config, void *context)
+{
+    ASSERT_MGMT_THREAD;
+
+    uint64_t new_ordinal = qd_tls_config_get_ordinal(config);
+    uint64_t new_oldest_ordinal = qd_tls_config_get_oldest_valid_ordinal(config);
+    qd_connector_config_t *ctor_config = (qd_connector_config_t *) context;
+
+    if (new_ordinal > ctor_config->tls_ordinal) {
+        // TBD
+        qd_log(LOG_SERVER, QD_LOG_DEBUG,
+               "Connector %s new ordinal: %"PRIu64", previous: %"PRIu64,
+               ctor_config->config.name, new_ordinal, ctor_config->tls_ordinal);
+        ctor_config->tls_ordinal = new_ordinal;
+    }
+
+    if (new_oldest_ordinal > ctor_config->tls_oldest_valid_ordinal) {
+        // TBD
+        qd_log(LOG_SERVER, QD_LOG_DEBUG,
+               "Connector %s new oldest valid ordinal: %"PRIu64", previous: %"PRIu64,
+               ctor_config->config.name, new_oldest_ordinal, ctor_config->tls_oldest_valid_ordinal);
+        ctor_config->tls_oldest_valid_ordinal = new_oldest_ordinal;
+    }
+}
+
+
 /**
  * Create a new qd_connector_config_t instance
  */
 qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t *entity)
 {
+    ASSERT_MGMT_THREAD;
+
     qd_connector_config_t *ctor_config = new_qd_connector_config_t();
     if (!ctor_config) {
         char *name = qd_entity_opt_string(entity, "name", "UNKNOWN");
@@ -460,28 +500,35 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         return 0;
     }
 
+    const bool is_inter_router = strcmp(ctor_config->config.role, "inter-router") == 0;
+
     //
     // If an sslProfile is configured allocate a TLS config to be used by all child connector's connections
     //
     if (ctor_config->config.ssl_profile_name) {
         ctor_config->tls_config = qd_tls_config(ctor_config->config.ssl_profile_name,
-                                             QD_TLS_TYPE_PROTON_AMQP,
-                                             QD_TLS_CONFIG_CLIENT_MODE,
-                                             ctor_config->config.verify_host_name,
-                                             ctor_config->config.ssl_require_peer_authentication);
+                                                QD_TLS_TYPE_PROTON_AMQP,
+                                                QD_TLS_CONFIG_CLIENT_MODE,
+                                                ctor_config->config.verify_host_name,
+                                                ctor_config->config.ssl_require_peer_authentication);
         if (!ctor_config->tls_config) {
             // qd_tls2_config() has set the qd_error_message(), which is logged below
             goto error;
+        }
+        ctor_config->tls_ordinal              = qd_tls_config_get_ordinal(ctor_config->tls_config);
+        ctor_config->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(ctor_config->tls_config);
+        if (is_inter_router) {
+            qd_tls_config_register_update_callback(ctor_config->tls_config, ctor_config,
+                                                   handle_connector_ssl_profile_mgmt_update);
         }
     }
 
     // For inter-router connectors create associated inter-router data connectors if configured
 
-    if (strcmp(ctor_config->config.role, "inter-router") == 0) {
+    if (is_inter_router) {
+        qd_generate_discriminator(ctor_config->group_correlator);
         ctor_config->data_connection_count = qd_dispatch_get_data_connection_count(qd);
         if (!!ctor_config->data_connection_count) {
-            qd_generate_discriminator(ctor_config->group_correlator);
-
             // Add any data connectors to the head of the connectors list first. This allows the
             // router control connector to be located at the head of the list.
 
@@ -523,6 +570,8 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
 
 void qd_connector_config_delete(qd_connector_config_t *ctor_config)
 {
+    ASSERT_MGMT_THREAD;
+
     qd_connector_t *ct = DEQ_HEAD(ctor_config->connectors);
     while (ct) {
         DEQ_REMOVE_HEAD(ctor_config->connectors);
@@ -530,6 +579,8 @@ void qd_connector_config_delete(qd_connector_config_t *ctor_config)
         qd_connector_decref(ct);
         ct = DEQ_HEAD(ctor_config->connectors);
     }
+
+    qd_tls_config_unregister_update_callback(ctor_config->tls_config);
 
     // drop ref held by the caller
     qd_connector_config_decref(ctor_config);
@@ -567,4 +618,15 @@ void qd_connector_config_connect(qd_connector_config_t *ctor_config)
             qd_connector_connect(ct);
         }
     }
+}
+
+
+bool qd_connector_get_tls_ordinal(const qd_connector_t *ctor, uint64_t *tls_ordinal)
+{
+    if (!!ctor->ctor_config->tls_config) {
+        *tls_ordinal = ctor->tls_ordinal;
+        return true;
+    }
+    *tls_ordinal = 0;
+    return false;
 }

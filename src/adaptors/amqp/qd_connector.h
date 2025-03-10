@@ -58,6 +58,7 @@ typedef struct qd_connector_t {
     sys_atomic_t              ref_count;
     qd_timer_t               *timer;
     long                      delay;
+    uint64_t                  tls_ordinal;  // ordinal that was in effect when created
 
     /* Connector state and qd_conn can be modified by I/O or management threads. */
     sys_mutex_t               lock;
@@ -95,7 +96,11 @@ struct qd_connector_config_t {
     qd_server_config_t        config;
     qd_server_t              *server;
     char                     *policy_vhost;  /* Optional policy vhost name */
+
+    // TLS Configuration. Keep a local copy of the TLS ordinals to monitor changes by management
     qd_tls_config_t          *tls_config;
+    uint64_t                  tls_ordinal;
+    uint64_t                  tls_oldest_valid_ordinal;
     uint32_t                  data_connection_count;  // # of child inter-router data connections
 
     // The group correlation id for all child connections
@@ -150,7 +155,7 @@ void qd_connector_close(qd_connector_t *ctor);
 
 void qd_connector_decref(qd_connector_t *ctor);
 
-const qd_server_config_t *qd_connector_get_config(const qd_connector_t *ctor);
+const qd_server_config_t *qd_connector_get_server_config(const qd_connector_t *ctor);
 const char *qd_connector_get_group_correlator(const qd_connector_t *ctor);
 bool qd_connector_has_failover_info(const qd_connector_t* ctor);
 const char *qd_connector_policy_vhost(const qd_connector_t* ctor);
@@ -161,8 +166,12 @@ void qd_connector_remote_opened(qd_connector_t *ctor);
 void qd_connector_add_connection(qd_connector_t *ctor, qd_connection_t *qd_conn);
 void qd_connector_add_link(qd_connector_t *ctor);
 
+// return True if ordinal is used, return false if no ordinal configured
+bool qd_connector_get_tls_ordinal(const qd_connector_t *ctor, uint64_t *ordinal);
+
 // remove the child connection
 // NOTE WELL: this may free the connector if the connection is holding the last
 // reference to it
-void qd_connector_remove_connection(qd_connector_t *ctor, bool final, const char *condition_name, const char *condition_description);
+void qd_connector_remove_connection(qd_connector_t *connector, bool final, const char *condition_name, const char *condition_description);
+
 #endif

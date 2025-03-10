@@ -99,7 +99,6 @@ struct qd_connection_t {
     sys_mutex_t                     deferred_call_lock;
     bool                            policy_counted;
     char                           *role;  //The specified role of the connection, e.g. "normal", "inter-router", "route-container" etc.
-    char                            group_correlator[QD_DISCRIMINATOR_SIZE];
     qd_pn_free_link_list_t          free_link_list;
     bool                            strip_annotations_in;
     bool                            strip_annotations_out;
@@ -297,4 +296,13 @@ void qd_connection_transport_tracer(pn_transport_t *transport, const char *messa
 
 bool qd_connection_handle_event(qd_server_t *qd_server, pn_event_t *e, void *context);
 bool qd_connection_strip_annotations_in(const qd_connection_t *c);
+
+/**
+ * Get the value of the TLS ordinal that is in use by this connection.
+ *
+ * @return True if the TLS ordinal is configured and tls_ordinal has been set, false if the connection has no TLS
+ * ordinal.
+ */
+bool qd_connection_get_tls_ordinal(const qd_connection_t *qd_conn, uint64_t *tls_ordinal);
+
 #endif
