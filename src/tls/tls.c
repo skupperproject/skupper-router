@@ -328,7 +328,7 @@ uint64_t qd_tls_config_get_ordinal(const qd_tls_config_t *config)
 
 uint64_t qd_tls_config_get_oldest_valid_ordinal(const qd_tls_config_t *config)
 {
-    // config->oldest_valid_ordinal can only be changed by the management thread . Calling this from any other thread
+    // config->oldest_valid_ordinal can only be changed by the management thread. Calling this from any other thread
     // risks returning a stale value.
     ASSERT_MGMT_THREAD;
 
@@ -348,7 +348,7 @@ void qd_tls_config_register_update_callback(qd_tls_config_t *config, void *updat
 }
 
 
-void qd_tls_config_cancel_update_callback(qd_tls_config_t *config)
+void qd_tls_config_unregister_update_callback(qd_tls_config_t *config)
 {
     // Since this function can only be called on the mgmt thread there is no chance that the handler is being run while
     // it is being cancelled.
@@ -636,7 +636,7 @@ int qd_tls_session_get_ssf(const qd_tls_session_t *tls_session)
 }
 
 
-uint64_t qd_tls_session_get_profile_ordinal(const qd_tls_session_t *session)
+uint64_t qd_tls_session_get_ssl_profile_ordinal(const qd_tls_session_t *session)
 {
     if (session)
         return session->ordinal;
@@ -845,7 +845,7 @@ static qd_error_t _update_tls_config(qd_tls_config_t *tls_config, const qd_ssl2_
     // new sessions while we change pointers.
 
     sys_mutex_lock(&tls_config->lock);
-    old_cfg = tls_config->proton_tls_cfg;
+    old_cfg                    = tls_config->proton_tls_cfg;
     tls_config->proton_tls_cfg = new_cfg;
 
     // And refresh any parameters that must be used when creating new sessions:

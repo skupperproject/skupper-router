@@ -155,7 +155,7 @@ void qd_tls_config_register_update_callback(qd_tls_config_t *config, void *updat
  *
  * @param config The qd_tls_config_t whose callback will be cancelled
  */
-void qd_tls_config_cancel_update_callback(qd_tls_config_t *config);
+void qd_tls_config_unregister_update_callback(qd_tls_config_t *config);
 
 
 /**
@@ -200,7 +200,7 @@ int qd_tls_session_get_ssf(const qd_tls_session_t *session);
  * @param session to be queried
  * @return the value of the sslProfile ordinal associated with this session.
  */
-uint64_t qd_tls_session_get_profile_ordinal(const qd_tls_session_t *session);
+uint64_t qd_tls_session_get_ssl_profile_ordinal(const qd_tls_session_t *session);
 
 /**
  * Fill out the given *profile with the configuration from the named sslProfile record.

@@ -580,7 +580,7 @@ void qd_connector_config_delete(qd_connector_config_t *ctor_config)
         ct = DEQ_HEAD(ctor_config->connectors);
     }
 
-    qd_tls_config_cancel_update_callback(ctor_config->tls_config);
+    qd_tls_config_unregister_update_callback(ctor_config->tls_config);
 
     // drop ref held by the caller
     qd_connector_config_decref(ctor_config);

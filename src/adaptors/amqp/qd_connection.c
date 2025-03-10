@@ -862,7 +862,7 @@ void qd_amqp_connection_set_tracing(bool enable_tracing)
 bool qd_connection_get_tls_ordinal(const qd_connection_t *qd_conn, uint64_t *tls_ordinal)
 {
     if (qd_conn->ssl) {
-        *tls_ordinal = qd_tls_session_get_profile_ordinal(qd_conn->ssl);
+        *tls_ordinal = qd_tls_session_get_ssl_profile_ordinal(qd_conn->ssl);
         return true;
     }
     *tls_ordinal = 0;

@@ -210,10 +210,6 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
     connection_info->dir = dir;
     if (host)
         connection_info->host = strdup(host);
-    if (tls_proto)
-        connection_info->tls_proto = strdup(tls_proto);
-    if (tls_cipher)
-        connection_info->tls_cipher = strdup(tls_cipher);
     if (user)
         connection_info->user = strdup(user);
     if (version)
@@ -224,11 +220,16 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
         pn_data_copy(qdr_conn_properties, connection_properties);
 
     connection_info->connection_properties = qdr_conn_properties;
-    connection_info->tls_ssf               = tls_ssf;
-    connection_info->tls                   = tls;
-    connection_info->tls_ordinal           = tls_ordinal;
     connection_info->streaming_links       = streaming_links;
     connection_info->connection_trunking   = connection_trunking;
+
+    if (tls) {
+        connection_info->tls         = true;
+        connection_info->tls_ssf     = tls_ssf;
+        connection_info->tls_ordinal = tls_ordinal;
+        connection_info->tls_proto   = !!tls_proto ? strdup(tls_proto) : 0;
+        connection_info->tls_cipher  = !!tls_cipher ? strdup(tls_cipher) : 0;
+    }
     sys_mutex_init(&connection_info->connection_info_lock);
     return connection_info;
 }

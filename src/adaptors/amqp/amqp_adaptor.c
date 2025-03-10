@@ -1594,7 +1594,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                                                                  (char*) user,
                                                                  container,
                                                                  props,
-                                                                 qd_tls_session_get_profile_ordinal(conn->ssl),
+                                                                 qd_tls_session_get_ssl_profile_ordinal(conn->ssl),
                                                                  ssl_ssf,
                                                                  !!conn->ssl,
                                                                  rversion,
