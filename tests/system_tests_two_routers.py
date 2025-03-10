@@ -20,7 +20,7 @@
 import json
 import os
 import logging
-from time import sleep
+#from time import sleep
 from threading import Timer
 from subprocess import PIPE, STDOUT
 
@@ -1764,44 +1764,46 @@ class TwoRouterExtensionStateTest(TestCase):
         cls.RouterA.wait_router_connected('RouterB')
         cls.RouterB.wait_router_connected('RouterA')
 
-    def test_02_closest(self):
-        """
-        Verify non-terminal state and data propagates over anycase
-        """
-        test = ExtensionStateTester(self.RouterA.addresses[0],
-                                    self.RouterB.addresses[0],
-                                    "closest/fleabag")
-        test.run()
-        self.assertIsNone(test.error)
+    # The following two tests are commented out temporarily until the proton disposition
+    # issue involving extension state is fixed on proton main
+    #def test_02_closest(self):
+    #    """
+    #    Verify non-terminal state and data propagates over anycase
+    #    """
+    #    test = ExtensionStateTester(self.RouterA.addresses[0],
+    #                                self.RouterB.addresses[0],
+    #                                "closest/fleabag")
+    #    test.run()
+    #    self.assertIsNone(test.error)
 
-    def test_03_multicast(self):
-        """
-        Verify that disposition state set by the publisher is available to all
-        consumers
-        """
-        rxs = [MyExtendedReceiver(self.RouterA.addresses[0],
-                                  "multicast/thingy")
-               for x in range(3)]
-        self.RouterA.wait_address("multicast/thingy", subscribers=3)
-        sleep(0.5)  # let subscribers grant credit
-        tx = MyExtendedSender(self.RouterB.addresses[0],
-                              "multicast/thingy")
-        tx.wait()
+    #def test_03_multicast(self):
+    #    """
+    #    Verify that disposition state set by the publisher is available to all
+    #    consumers
+    #    """
+    #    rxs = [MyExtendedReceiver(self.RouterA.addresses[0],
+    #                              "multicast/thingy")
+    #           for x in range(3)]
+    #    self.RouterA.wait_address("multicast/thingy", subscribers=3)
+    #    sleep(0.5)  # let subscribers grant credit
+    #    tx = MyExtendedSender(self.RouterB.addresses[0],
+    #                          "multicast/thingy")
+    #    tx.wait()
 
-        # DISPATCH-1705: only one of the receivers gets the data, but all
-        # should get the state
+    #    # DISPATCH-1705: only one of the receivers gets the data, but all
+    #    # should get the state
 
-        ext_data = None
-        for rx in rxs:
-            rx.stop()
-            try:
-                while True:
-                    dispo = rx.remote_states.pop()
-                    self.assertEqual(999, dispo[0])
-                    ext_data = dispo[1] or ext_data
-            except IndexError:
-                pass
-        self.assertEqual([1, 2, 3], ext_data)
+    #    ext_data = None
+    #    for rx in rxs:
+    #        rx.stop()
+    #        try:
+    #            while True:
+    #                dispo = rx.remote_states.pop()
+    #                self.assertEqual(999, dispo[0])
+    #                ext_data = dispo[1] or ext_data
+    #        except IndexError:
+    #            pass
+    #    self.assertEqual([1, 2, 3], ext_data)
 
 
 class MyExtendedSender(AsyncTestSender):
