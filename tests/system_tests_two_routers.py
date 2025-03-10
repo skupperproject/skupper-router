@@ -20,7 +20,7 @@
 import json
 import os
 import logging
-from time import sleep
+#from time import sleep
 from threading import Timer
 from subprocess import PIPE, STDOUT
 
@@ -1764,7 +1764,7 @@ class TwoRouterExtensionStateTest(TestCase):
         cls.RouterA.wait_router_connected('RouterB')
         cls.RouterB.wait_router_connected('RouterA')
 
-    # The following two tests are commented out temporarily until the proton disposition 
+    # The following two tests are commented out temporarily until the proton disposition
     # issue involving extension state is fixed on proton main
     #def test_02_closest(self):
     #    """
