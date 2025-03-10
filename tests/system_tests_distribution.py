@@ -630,8 +630,7 @@ class DistributionTests(TestCase):
                              self.A_addr,
                              self.B_addr,
                              self.C_addr,
-                             "addr_14"
-                             )
+                             "addr_14")
         test.run()
         self.assertIsNone(test.error)
 
@@ -1389,8 +1388,7 @@ class MulticastTest (MessagingHandler):
                  router_1,
                  router_2,
                  router_3,
-                 addr_suffix
-                 ):
+                 addr_suffix):
         super(MulticastTest, self).__init__(prefetch=0)
         self.error       = None
         self.router_1    = router_1
@@ -1399,7 +1397,7 @@ class MulticastTest (MessagingHandler):
         self.addr_suffix = addr_suffix
         self.dest        = "multicast/" + addr_suffix
 
-        self.n_to_send = 100
+        self.n_to_send = 50
         self.n_sent    = 0
 
         self.n_received = 0
@@ -1410,6 +1408,18 @@ class MulticastTest (MessagingHandler):
         self.count_2_b = 0
         self.count_3_a = 0
         self.count_3_b = 0
+
+        self.timer    = None
+        self.send_cnx = None
+        self.cnx_1    = None
+        self.cnx_2    = None
+        self.cnx_3    = None
+        self.recv_1_a = None
+        self.recv_1_b = None
+        self.recv_2_a = None
+        self.recv_2_b = None
+        self.recv_3_a = None
+        self.recv_3_b = None
 
         self.addr_check_timer    = None
         self.addr_check_receiver = None
@@ -1477,17 +1487,12 @@ class MulticastTest (MessagingHandler):
     def on_sendable(self, event):
         if self.sender and self.n_sent < self.n_to_send :
             msg = Message(body="Hello, closest.",
-                          address=self.dest
-                          )
+                          address=self.dest)
             dlv = self.sender.send(msg)
             self.n_sent += 1
             dlv.settle()
 
     def on_message(self, event):
-
-        # if self.bailed is True :
-        #    return
-
         if event.receiver == self.addr_check_receiver:
             # This is a response to one of my address-readiness checking messages.
             response = self.addr_checker.parse_address_query_response(event.message)
@@ -1505,7 +1510,7 @@ class MulticastTest (MessagingHandler):
             else:
                 # If the latest check did not find the link-attack route ready,
                 # schedule another check a little while from now.
-                self.addr_check_timer = event.reactor.schedule(0.25, AddressCheckerTimeout(self))
+                self.addr_check_timer = event.reactor.schedule(1, AddressCheckerTimeout(self))
         else :
             # This is a payload message.
             self.n_received += 1

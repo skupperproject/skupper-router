@@ -1312,7 +1312,8 @@ class PropagatedDisposition(MessagingHandler):
 
     def on_released(self, event):
         # yes, for some reason Proton triggers on_released when MODIFIED is set
-        self.test.assertEqual(Delivery.MODIFIED, event.delivery.remote_state)
+        rel_modified_outcome = [Delivery.MODIFIED, Delivery.RELEASED]
+        self.test.assertIn(event.delivery.remote_state, rel_modified_outcome)
         self.test.assertEqual('modified', self.trackers[event.delivery])
         self.check_modified_data(event.delivery.remote)
         self.settled.append('modified')

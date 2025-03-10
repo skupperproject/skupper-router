@@ -191,6 +191,7 @@ class RouterTestHttp(TestCase):
         # https not configured
         self.assertRaises(URLError, urlopen, "https://localhost:%d/nosuch" % r.ports[0])
 
+    @unittest.skipIf(os.environ.get("SKIP_HTTP_METRICS_TEST", None) is not None, "Skipping metrics test on arm64 if asan turned on")
     def test_http_metrics(self):
         """ Verify the prometheus metrics provided by the router """
         metrics_ports = [self.get_port(), self.get_port()]
@@ -201,6 +202,7 @@ class RouterTestHttp(TestCase):
             ('listener', {'port': metrics_ports[1], 'httpRootDir': os.path.dirname(__file__)}),
         ])
         r = self.qdrouterd('metrics-test-router', config)
+        r.wait_ready()
 
         # generate a list of all metric names expected to be provided via HTTP:
 
@@ -226,13 +228,19 @@ class RouterTestHttp(TestCase):
         for stat in r.management.query(type=ALLOCATOR_TYPE).get_dicts():
             stat_names.append(stat['typeName'])
 
-        def _test(stat_names, port):
+        def _test_metrics(stat_names, port):
             # sanity check that all expected stats are reported
             sctxt = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
             sctxt.load_verify_locations(cafile=CA_CERT)
             resp = urlopen(f"http://localhost:{port}/metrics", context=sctxt)
             self.assertEqual(200, resp.getcode())
-            metrics = [x for x in resp.read().decode('utf-8').splitlines() if not x.startswith("#")]
+            http_response = b""
+            response_chunk = resp.read(1024)
+            while response_chunk:
+                http_response += response_chunk
+                response_chunk = resp.read(1024)
+            resp_lines = http_response.decode('utf-8').splitlines()
+            metrics = [x for x in resp_lines if not x.startswith("#")]
 
             # Verify that all metric names are valid prometheus names that
             # must match the regex [a-zA-Z_:][a-zA-Z0-9_:]*
@@ -243,7 +251,6 @@ class RouterTestHttp(TestCase):
                 self.assertIsNotNone(match, f"Metric {mname} has invalid name syntax")
 
             # Verify that all expected stats are reported by the metrics URL
-
             for name in stat_names:
                 found = False
                 for metric in metrics:
@@ -257,7 +264,7 @@ class RouterTestHttp(TestCase):
 
         # Sequential calls on multiple ports
         for port in metrics_ports:
-            _test(stat_names, port)
+            _test_metrics(stat_names, port)
 
         # Concurrent calls on multiple ports
         class TestThread(threading.Thread):
@@ -268,7 +275,7 @@ class RouterTestHttp(TestCase):
 
             def run(self):
                 try:
-                    _test(stat_names, self.port)
+                    _test_metrics(stat_names, self.port)
                 except Exception as e:
                     self.ex = e
 

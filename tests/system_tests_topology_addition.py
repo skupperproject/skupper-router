@@ -199,7 +199,7 @@ class TopologyAdditionTests (TestCase):
     # This method allows test code to add new routers during the test,
     # rather than only at startup like A and B above.
 
-    def addRouter(self, name, more_config) :
+    def addRouter(self, name, more_config, neighbors=None) :
         config = [('router',  {'mode': 'interior', 'id': name}),
                   ('address', {'prefix': 'closest',   'distribution': 'closest'}),
                   ('address', {'prefix': 'balanced',  'distribution': 'balanced'}),
@@ -208,8 +208,12 @@ class TopologyAdditionTests (TestCase):
             + more_config
 
         config = Qdrouterd.Config(config)
+        new_router = TopologyAdditionTests.tester.qdrouterd(name, config, wait=True)
+        TopologyAdditionTests.routers.append(new_router)
 
-        TopologyAdditionTests.routers.append(TopologyAdditionTests.tester.qdrouterd(name, config, wait=True))
+        if neighbors is not None:
+            for neighbor in neighbors:
+                new_router.wait_router_connected(neighbor)
 
     def test_01_new_route_low_cost(self):
         # During the test, test code will add a new router C,
@@ -328,8 +332,7 @@ class AddRouter (MessagingHandler):
                  new_router_name,
                  new_router_config,
                  expected_traces,
-                 released_ok
-                 ):
+                 released_ok):
         super(AddRouter, self).__init__(prefetch=100)
         self.send_addr         = send_addr
         self.recv_addr         = recv_addr
@@ -338,23 +341,22 @@ class AddRouter (MessagingHandler):
         self.new_router_name   = new_router_name
         self.new_router_config = new_router_config
         self.released_ok       = released_ok
-
         self.error         = None
         self.sender        = None
         self.receiver      = None
-
         self.n_messages    = 30
         self.n_sent        = 0
         self.n_received    = 0
         self.n_released    = 0
         self.n_accepted    = 0
-
         self.test_timer    = None
         self.send_timer    = None
         self.timeout_count = 0
         self.reactor       = None
         self.container     = None
         self.finishing     = False
+        self.send_conn     = None
+        self.recv_conn     = None
 
         # The parent sends us a list of the traces we
         # ought to see on messages.
@@ -399,14 +401,11 @@ class AddRouter (MessagingHandler):
             # network, and some will flow through the network with
             # the new router added.
             if self.timeout_count == 5 :
-                self.parent.addRouter(self.new_router_name, self.new_router_config)
+                self.parent.addRouter(self.new_router_name, self.new_router_config, neighbors=['A', 'B'])
 
     def on_start(self, event):
         self.reactor   = event.reactor
         self.container = event.container
-
-        self.test_timer  = self.reactor.schedule(TIMEOUT, Timeout(self, "test"))
-        self.send_timer  = self.reactor.schedule(1, Timeout(self, "send"))
 
         self.send_conn   = event.container.connect(self.send_addr)
         self.recv_conn   = event.container.connect(self.recv_addr)
@@ -414,6 +413,9 @@ class AddRouter (MessagingHandler):
         self.sender      = event.container.create_sender(self.send_conn, self.dest)
         self.receiver    = event.container.create_receiver(self.recv_conn, self.dest)
         self.receiver.flow(self.n_messages)
+
+        self.test_timer  = self.reactor.schedule(TIMEOUT, Timeout(self, "test"))
+        self.send_timer  = self.reactor.schedule(5, Timeout(self, "send"))
 
     # ------------------------------------------------------------
     # Sender Side
