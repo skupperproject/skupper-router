@@ -23,7 +23,7 @@ Tests the routers TLS Certificate Rotation feature.
 
 import time
 from system_test import TestCase, main_module, Qdrouterd, unittest, retry
-from system_test import CA_CERT, SSL_PROFILE_TYPE, CONNECTION_TYPE
+from system_test import CA_CERT, SSL_PROFILE_TYPE
 from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
 from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
 
@@ -46,15 +46,10 @@ class InterRouterCertRotationTest(TestCase):
         config.extend(test_config)
         return self.tester.qdrouterd(name, Qdrouterd.Config(config), **kwargs)
 
-    def get_inter_router_conns(self, router):
-        mgmt = router.management
-        conns = mgmt.query(type=CONNECTION_TYPE).get_dicts()
-        return [c for c in conns if 'inter-router' in c['role']]
-
     def wait_inter_router_conns(self, router, count):
         ok = retry(lambda rtr=router, ct=count:
-                   len(self.get_inter_router_conns(rtr)) == ct)
-        self.assertTrue(ok, f"Failed to get {count} i.r. conns: {self.get_inter_router_conns(router)}")
+                   len(rtr.get_inter_router_conns()) == ct)
+        self.assertTrue(ok, f"Failed to get {count} i.r. conns: {router.get_inter_router_conns()}")
 
     def test_01_ordinal_updates(self):
         """
@@ -94,7 +89,7 @@ class InterRouterCertRotationTest(TestCase):
 
         # get the number of active inter-router conns, verify count and tlsOrdinal are 0
         self.wait_inter_router_conns(router_C, data_conn_count + 1)
-        irc = self.get_inter_router_conns(router_C)
+        irc = router_C.get_inter_router_conns()
         zero_ordinals = [c for c in irc if c['tlsOrdinal'] == 0]
         self.assertEqual(data_conn_count + 1, len(zero_ordinals), f"Missing conns: {zero_ordinals}")
 
@@ -112,7 +107,7 @@ class InterRouterCertRotationTest(TestCase):
         self.wait_inter_router_conns(router_C, data_conn_count + 1)
 
         # Verify all tlsOrdinals are 3
-        irc = self.get_inter_router_conns(router_C)
+        irc = router_C.get_inter_router_conns()
         self.assertEqual(data_conn_count + 1,
                          len([c for c in irc if c['tlsOrdinal'] == 3]),
                          f"Unexpected conns: {irc}")
@@ -187,7 +182,7 @@ class InterRouterCertRotationTest(TestCase):
         # expect only those connectors with ordinal == 3 are restored
         self.wait_inter_router_conns(router_C, data_conn_count + 1)
         time.sleep(1.0)  # ensure no extra conns come up
-        irc = self.get_inter_router_conns(router_C)
+        irc = router_C.get_inter_router_conns()
         self.assertEqual(data_conn_count + 1, len(irc), f"Wrong conns: {irc}")
         self.assertEqual(0, len([c for c in irc if c['tlsOrdinal'] != 3]),
                          f"tlsOrdinals !=3: {irc}")

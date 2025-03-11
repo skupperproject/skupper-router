@@ -1196,6 +1196,14 @@ class Qdrouterd(Process):
         """Path to a DEFAULT logfile"""
         return os.path.join(self.outdir, self.logfile)
 
+    def get_inter_router_conns(self):
+        """
+        Query the router for a list of all connections of role
+        inter-router/inter-router-data
+        """
+        conns = self.management.query(type=CONNECTION_TYPE).get_dicts()
+        return [c for c in conns if 'inter-router' in c['role']]
+
 
 class NcatException(Exception):
     def __init__(self, error=None):
