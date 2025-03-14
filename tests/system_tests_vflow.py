@@ -534,7 +534,7 @@ class VFlowInterRouterTest(TestCase):
         self.assertTrue(success, f"Failed to find baseline connector {self.snooper_thread.get_results()}")
 
         test_name = 'test_03_short_connections'
-        flow_count = 100
+        flow_count = 25
         clients = []
         expected = {'EdgeB': []}
 

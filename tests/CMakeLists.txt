@@ -174,6 +174,7 @@ foreach(py_test_module
     system_tests_panic_handler
     system_tests_resend_released
     system_tests_http1_decoder
+    system_tests_cert_rotation
     )
 
   string(CONFIGURE "${PYTHON_TEST_COMMAND}" CONFIGURED_PYTHON_TEST_COMMAND)

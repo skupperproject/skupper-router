@@ -80,6 +80,8 @@ QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_en
             qd_listener_decref(li);
             return 0;
         }
+        li->tls_ordinal              = qd_tls_config_get_ordinal(li->tls_config);
+        li->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(li->tls_config);
     }
 
     char *fol = qd_entity_opt_string(entity, "failoverUrls", 0);
@@ -174,13 +176,8 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
     // TODO(kgiusti): inter-router connections may have several qd_connector_ts active due to the router data connection
     // count configuration.  However we can only report 1 connector via management. It would be more accurate to report
     // all connectors associated with this management entity
-    sys_mutex_lock(&ctor_config->lock);
+    assert(sys_thread_role(0) == SYS_THREAD_MAIN || sys_thread_proactor_mode() == SYS_THREAD_PROACTOR_MODE_TIMER);  // only mgmt thread can access connectors list
     connector = DEQ_HEAD(ctor_config->connectors);
-    if (connector) {
-        // prevent I/O thread from freeing connector while it is being accessed
-        sys_atomic_inc(&connector->ref_count);
-    }
-    sys_mutex_unlock(&ctor_config->lock);
 
     if (connector) {
         int i = 1;
@@ -273,7 +270,6 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
         }
 
         sys_mutex_unlock(&connector->lock);
-        qd_connector_decref(connector);  // release local reference
         free(failover_info);
     } else {
         qd_error(QD_ERROR_NOT_FOUND, "No active connector present");
@@ -285,8 +281,8 @@ QD_EXPORT qd_error_t qd_entity_refresh_connector(qd_entity_t* entity, void *impl
 
 QD_EXPORT qd_connector_config_t *qd_dispatch_configure_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    qd_connection_manager_t *cm       = qd->connection_manager;
-    qd_connector_config_t    *ctor_config = qd_connector_config_create(qd, entity);
+    qd_connection_manager_t *cm          = qd->connection_manager;
+    qd_connector_config_t   *ctor_config = qd_connector_config_create(qd, entity);
     if (!ctor_config) {
         return 0;
     }
@@ -367,7 +363,7 @@ QD_EXPORT void qd_connection_manager_start(qd_dispatch_t *qd)
     }
 
     while (ctor_config) {
-        qd_connector_config_connect(ctor_config);
+        qd_connector_config_activate(ctor_config);
         ctor_config = DEQ_NEXT(ctor_config);
     }
 

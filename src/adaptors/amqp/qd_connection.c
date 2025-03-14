@@ -74,18 +74,14 @@ static void connection_wake(qd_connection_t *ctx)
 }
 
 
-static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *config)
+/** Setup connection capabilities and properties.
+ * These are communicated to the peer via the Open performative.
+ */
+static void decorate_connection(qd_connection_t *ctx)
 {
-    qd_server_t     *qd_server = ctx->server;
-    pn_connection_t *conn      = ctx->pn_conn;
-    //
-    // Set the container name
-    //
-    pn_connection_set_container(conn, qd_server_get_container_name(qd_server));
+    pn_connection_t          *conn   = ctx->pn_conn;
+    const qd_server_config_t *config = qd_connection_config(ctx);
 
-    //
-    // Advertise our container capabilities.
-    //
     {
         // offered: extension capabilities this router supports
         pn_data_t *ocaps = pn_connection_offered_capabilities(conn);
@@ -135,8 +131,7 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
 
     pn_data_put_symbol(pn_connection_properties(conn),
                        pn_bytes(strlen(QD_CONNECTION_PROPERTY_CONN_ID), QD_CONNECTION_PROPERTY_CONN_ID));
-    qd_connection_t *qd_conn = pn_connection_get_context(conn);
-    pn_data_put_int(pn_connection_properties(conn), qd_conn->connection_id);
+    pn_data_put_int(pn_connection_properties(conn), ctx->connection_id);
 
     if (config && config->inter_router_cost > 1) {
         pn_data_put_symbol(pn_connection_properties(conn),
@@ -150,11 +145,24 @@ static void decorate_connection(qd_connection_t *ctx, const qd_server_config_t *
         pn_data_put_int(pn_connection_properties(conn), QDR_ROLE_INTER_ROUTER_DATA);
     }
 
-    if (ctx->connector && (ctx->connector->is_data_connector || !!ctx->connector->ctor_config->data_connection_count)) {
+    // The connector-side assigns the group correlator and ordinal values and passes it to the listener side
+    //
+    if (ctx->connector && !!ctx->connector->ctor_config->group_correlator[0]) {
+        uint64_t tls_ordinal;
+        const qd_connector_config_t *ctor_config = ctx->connector->ctor_config;
         pn_data_put_symbol(pn_connection_properties(conn),
                            pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY), QD_CONNECTION_PROPERTY_GROUP_CORRELATOR_KEY));
         pn_data_put_string(pn_connection_properties(conn),
-                           pn_bytes(strnlen(ctx->group_correlator, QD_DISCRIMINATOR_SIZE - 1), ctx->group_correlator));
+                           pn_bytes(strnlen(ctor_config->group_correlator, QD_DISCRIMINATOR_SIZE - 1), ctor_config->group_correlator));
+
+        // Use the connectors tls_ordinal value as the group ordinal because the connection with the highest tls_ordinal
+        // value has the most up-to-date security credentials and should take precedence over connections with a lower
+        // ordinal value.
+        if (qd_connector_get_tls_ordinal(ctx->connector, &tls_ordinal)) {
+            pn_data_put_symbol(pn_connection_properties(conn),
+                               pn_bytes(strlen(QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY), QD_CONNECTION_PROPERTY_GROUP_ORDINAL_KEY));
+            pn_data_put_ulong(pn_connection_properties(conn), tls_ordinal);
+        }
     }
 
     if (ctx->listener && !!ctx->listener->vflow_record) {
@@ -246,6 +254,8 @@ void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, const qd_serv
 {
     ctx->pn_conn = pn_connection();
     assert(ctx->pn_conn);
+
+    pn_connection_set_container(ctx->pn_conn, qd_server_get_container_name(server));
     sys_mutex_init(&ctx->deferred_call_lock);
     ctx->role = qd_strdup(config->role);
     ctx->server = server;
@@ -262,17 +272,12 @@ void qd_connection_init(qd_connection_t *ctx, qd_server_t *server, const qd_serv
     DEQ_INIT(ctx->free_link_list);
     DEQ_INIT(ctx->child_sessions);
 
-    // note: setup connector or listener before decorating the connection since
-    // decoration involves accessing the connection's parent.
-
     if (!!connector) {
         assert(!listener);
         qd_connector_add_connection(connector, ctx);
     } else if (!!listener) {
         qd_listener_add_connection(listener, ctx);
     }
-
-    decorate_connection(ctx, config);
 
     sys_mutex_lock(&amqp_adaptor.lock);
     DEQ_INSERT_TAIL(amqp_adaptor.conn_list, ctx);
@@ -619,13 +624,15 @@ static bool setup_ssl_sasl_and_open(qd_connection_t *ctx)
         pn_sasl_allowed_mechs(sasl, config->sasl_mechanisms);
     pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
 
+    decorate_connection(ctx);
     pn_connection_open(ctx->pn_conn);
     return true;
 }
 
 
 /* Configure the transport once it is bound to the connection */
-static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
+static void on_connection_bound(qd_server_t *server, pn_event_t *e)
+{
     pn_connection_t *pn_conn = pn_event_connection(e);
     qd_connection_t *ctx = pn_connection_get_context(pn_conn);
     pn_transport_t *tport  = pn_connection_transport(pn_conn);
@@ -643,9 +650,21 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_transport_set_tracer(tport, transport_tracer);
     }
 
-    const qd_server_config_t *config = NULL;
+    const qd_server_config_t *config = qd_connection_config(ctx);
+    assert(config);
+
+    //
+    // Common transport configuration.
+    //
+    pn_transport_set_max_frame(tport, config->max_frame_size);
+    pn_transport_set_idle_timeout(tport, config->idle_timeout_seconds * 1000);
+    // pn_transport_set_channel_max sets the maximum session *identifier*, not the total number of sessions. Thus Proton
+    // will allow sessions with identifiers [0..max_sessions], which is one greater than the value we pass to
+    // pn_transport_set_channel_max. So to limit the maximum number of simultaineous sessions to config->max_sessions we
+    // have to decrement it by one for Proton.
+    pn_transport_set_channel_max(tport, config->max_sessions - 1);
+
     if (ctx->listener) {        /* Accepting an incoming connection */
-        config = &ctx->listener->config;
         const char *name = config->host_port;
         pn_transport_set_server(tport);
         set_rhost_port(ctx);
@@ -676,13 +695,14 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         pn_transport_require_auth(tport, config->requireAuthentication);
         pn_transport_require_encryption(tport, config->requireEncryption);
         pn_sasl_set_allow_insecure_mechs(sasl, config->allowInsecureAuthentication);
+        decorate_connection(ctx);
 
         // This log statement is kept at INFO level because this shows the inter-router
         // connections and that is useful when debugging router issues.
         qd_log(LOG_SERVER, QD_LOG_INFO, "[C%" PRIu64 "] Accepted connection to %s from %s",
                ctx->connection_id, name, ctx->rhost_port);
+
     } else if (ctx->connector) { /* Establishing an outgoing connection */
-        config = &ctx->connector->ctor_config->config;
         if (!setup_ssl_sasl_and_open(ctx)) {
             qd_log(LOG_SERVER, QD_LOG_ERROR, "[C%" PRIu64 "] Connection aborted due to internal setup error",
                    ctx->connection_id);
@@ -695,17 +715,6 @@ static void on_connection_bound(qd_server_t *server, pn_event_t *e) {
         connect_fail(ctx, QD_AMQP_COND_INTERNAL_ERROR, "unknown Connection");
         return;
     }
-
-    //
-    // Common transport configuration.
-    //
-    pn_transport_set_max_frame(tport, config->max_frame_size);
-    pn_transport_set_idle_timeout(tport, config->idle_timeout_seconds * 1000);
-    // pn_transport_set_channel_max sets the maximum session *identifier*, not the total number of sessions. Thus Proton
-    // will allow sessions with identifiers [0..max_sessions], which is one greater than the value we pass to
-    // pn_transport_set_channel_max. So to limit the maximum number of simultaineous sessions to config->max_sessions we
-    // have to decrement it by one for Proton.
-    pn_transport_set_channel_max(tport, config->max_sessions - 1);
 }
 
 void qd_container_handle_event(qd_container_t *container, pn_event_t *event, pn_connection_t *pn_conn, qd_connection_t *qd_conn);
@@ -847,4 +856,15 @@ void qd_amqp_connection_set_tracing(bool enable_tracing)
         }
         sys_mutex_unlock(&amqp_adaptor.lock);
     }
+}
+
+
+bool qd_connection_get_tls_ordinal(const qd_connection_t *qd_conn, uint64_t *tls_ordinal)
+{
+    if (qd_conn->ssl) {
+        *tls_ordinal = qd_tls_session_get_ssl_profile_ordinal(qd_conn->ssl);
+        return true;
+    }
+    *tls_ordinal = 0;
+    return false;
 }

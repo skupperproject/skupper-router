@@ -56,8 +56,9 @@ typedef struct qd_connector_t {
 
     /* Referenced by parent qd_connector_config_t and child qd_connection_t */
     sys_atomic_t              ref_count;
-    qd_timer_t               *timer;
+    qd_timer_t               *reconnect_timer;
     long                      delay;
+    uint64_t                  tls_ordinal;  // ordinal that was in effect when created
 
     /* Connector state and qd_conn can be modified by I/O or management threads. */
     sys_mutex_t               lock;
@@ -65,7 +66,6 @@ typedef struct qd_connector_t {
     qd_connection_t          *qd_conn;
     vflow_record_t           *vflow_record;
     bool                      oper_status_down;  // set when oper-status transitions to 'down' to avoid repeated error indications.
-    bool                      reconnect_enabled; // False: disable reconnect on connection drop
     bool                      is_data_connector; // inter-router conn for streaming messages
 
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
@@ -95,15 +95,20 @@ struct qd_connector_config_t {
     qd_server_config_t        config;
     qd_server_t              *server;
     char                     *policy_vhost;  /* Optional policy vhost name */
+    qd_timer_t               *cleanup_timer; /* remove quiesced connectors */
+
+    // TLS Configuration. Keep a local copy of the TLS ordinals to monitor changes by management
     qd_tls_config_t          *tls_config;
+    uint64_t                  tls_ordinal;
+    uint64_t                  tls_oldest_valid_ordinal;
     uint32_t                  data_connection_count;  // # of child inter-router data connections
 
-    // The group correlation id for all child connections
+    // The group correlation id for all child connectors/connections
     char                      group_correlator[QD_DISCRIMINATOR_SIZE];
 
-    bool                      activated;     // T: activated by connection manager
-    sys_mutex_t               lock;          // protect connectors list
+    // The connectors list can only be accessed in the context of the management thread
     qd_connector_list_t       connectors;
+    bool                      activated;     // T: activated by connection manager
 };
 
 DEQ_DECLARE(qd_connector_config_t, qd_connector_config_list_t);
@@ -121,7 +126,7 @@ void qd_connector_config_delete(qd_connector_config_t *ctor_config);
 
 /** Management call start all child connections for the given configuration instance
  */
-void qd_connector_config_connect(qd_connector_config_t *ctor_config);
+void qd_connector_config_activate(qd_connector_config_t *ctor_config);
 
 /** Drop a reference to the configuration instance.
  * This may free the given instance.
@@ -139,9 +144,9 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config);
 qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_data_connector);
 
 /**
- * Initiate an outgoing connection. Returns true if successful.
+ * Activate the connector. This will start the connection process.
  */
-bool qd_connector_connect(qd_connector_t *ctor);
+void qd_connector_activate(qd_connector_t *ctor);
 
 /**
  * Close the associated connection and deactivate the connector
@@ -150,7 +155,7 @@ void qd_connector_close(qd_connector_t *ctor);
 
 void qd_connector_decref(qd_connector_t *ctor);
 
-const qd_server_config_t *qd_connector_get_config(const qd_connector_t *ctor);
+const qd_server_config_t *qd_connector_get_server_config(const qd_connector_t *ctor);
 const char *qd_connector_get_group_correlator(const qd_connector_t *ctor);
 bool qd_connector_has_failover_info(const qd_connector_t* ctor);
 const char *qd_connector_policy_vhost(const qd_connector_t* ctor);
@@ -161,8 +166,12 @@ void qd_connector_remote_opened(qd_connector_t *ctor);
 void qd_connector_add_connection(qd_connector_t *ctor, qd_connection_t *qd_conn);
 void qd_connector_add_link(qd_connector_t *ctor);
 
+// return True if ordinal is used, return false if no ordinal configured
+bool qd_connector_get_tls_ordinal(const qd_connector_t *ctor, uint64_t *ordinal);
+
 // remove the child connection
 // NOTE WELL: this may free the connector if the connection is holding the last
 // reference to it
-void qd_connector_remove_connection(qd_connector_t *ctor, bool final, const char *condition_name, const char *condition_description);
+void qd_connector_remove_connection(qd_connector_t *connector, bool final, const char *condition_name, const char *condition_description);
+
 #endif

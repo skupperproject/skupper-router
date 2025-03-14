@@ -84,15 +84,17 @@ struct qd_ssl2_profile_t {
     char *uid_name_mapping_file;
 
     /**
-     * version: Version assigned to the current configuration
-     * oldest_valid_version: Previous sslProfile updates with versions values < oldest_valid_version have expired.
+     * Certificate Rotation
+     * ordinal: Identifies the current configuration's revision
+     * oldest_valid_ordinal: Previous configurations with ordinal values < oldest_valid_ordinal have expired.
      */
-    long version;
-    long oldest_valid_version;
+    uint64_t ordinal;
+    uint64_t oldest_valid_ordinal;
 };
 
 /**
- * Create a new TLS qd_tls_config_t instance with the given configuration
+ * Create a new TLS qd_tls_config_t instance with the given configuration. This is called when a listener/connector
+ * record is created.
  *
  * @param ssl_profile_name the name of the sslProfile configuration to use
  * @param p_type protocol type for the child connections (TCP or AMQP)
@@ -115,6 +117,45 @@ qd_tls_config_t *qd_tls_config(const char *ssl_profile_name,
  * @param config to be released. The config pointer must no longer be referenced
  */
 void qd_tls_config_decref(qd_tls_config_t *config);
+
+
+/**
+ * Get the values of the ordinal/oldestValidOrdinal assocated with the TLS configuration.
+ *
+ * Note: To avoid races this function can only be called from the context of the management thread.
+ *
+ * @param config The qd_tls_config_t to query.
+ * @return the value for the ordinal/lastValidOrdinal sslProfile attributes used by this config
+ */
+uint64_t qd_tls_config_get_ordinal(const qd_tls_config_t *config);
+uint64_t qd_tls_config_get_oldest_valid_ordinal(const qd_tls_config_t *config);
+
+
+/** Register a callback to monitor updates to the TLS configuration
+ *
+ * Register a callback function that will be invoked by the management thread whenever the sslProfile record associated
+ * with the qd_tls_config_t is updated.  Note that the update callback is invoked on the management thread while the
+ * qd_tls_config is locked. This prevents new TLS sessions from being created using the updated configuration until
+ * after the update callback returns.
+ *
+ * @param update_cb_context Opaque handle passed to update callback function.
+ * @param update_cb Optional callback when the sslProfile has been updated by management.
+ */
+typedef void (*qd_tls_config_update_cb_t)(const qd_tls_config_t *config,
+                                          void *update_cb_context);
+void qd_tls_config_register_update_callback(qd_tls_config_t *config, void *update_cb_context,
+                                            qd_tls_config_update_cb_t update_cb);
+
+
+/**
+ * Cancel the update callback.
+ *
+ * Deregisters the update callback provided in qd_tls_config(). No further calls to the callback will occur on return
+ * from this call. Can only be called from the context of the management thread.
+ *
+ * @param config The qd_tls_config_t whose callback will be cancelled
+ */
+void qd_tls_config_unregister_update_callback(qd_tls_config_t *config);
 
 
 /**
@@ -153,6 +194,13 @@ char *qd_tls_session_get_protocol_ciphers(const qd_tls_session_t *session);
  */
 int qd_tls_session_get_ssf(const qd_tls_session_t *session);
 
+/**
+ * Get the ordinal of the sslProfile used to create this session
+ *
+ * @param session to be queried
+ * @return the value of the sslProfile ordinal associated with this session.
+ */
+uint64_t qd_tls_session_get_ssl_profile_ordinal(const qd_tls_session_t *session);
 
 /**
  * Fill out the given *profile with the configuration from the named sslProfile record.

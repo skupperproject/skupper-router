@@ -62,14 +62,9 @@ class ManagementMessageHelper:
                  'name':       'self',
                  'type':       'org.amqp.management'
                  }
-        attrs = []
-        attrs.append(UNICODE('linkType'))
-        attrs.append(UNICODE('linkDir'))
-        attrs.append(UNICODE('deliveryCount'))
-        attrs.append(UNICODE('priority'))
+        attrs = [UNICODE('linkType'), UNICODE('linkDir'), UNICODE('deliveryCount'), UNICODE('priority')]
 
-        msg_body = {}
-        msg_body['attributeNames'] = attrs
+        msg_body = {'attributeNames': attrs}
         return Message(body=msg_body, properties=props, reply_to=self.reply_addr)
 
 
@@ -84,16 +79,9 @@ class PriorityTests (TestCase):
         super(PriorityTests, cls).setUpClass()
 
         def router(name, more_config):
-
-            config = [('router',  {'mode': 'interior', 'id': name, 'workerThreads': 4}),
-                      ('address', {'prefix': 'closest',   'distribution': 'closest'}),
-                      ('address', {'prefix': 'balanced',  'distribution': 'balanced'}),
-                      ('address', {'prefix': 'multicast', 'distribution': 'multicast'})
-                      ]    \
+            config = [('router',  {'mode': 'interior', 'id': name, 'workerThreads': 4})]    \
                 + more_config
-
             config = Qdrouterd.Config(config)
-
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True))
 
         cls.routers = []
@@ -105,7 +93,6 @@ class PriorityTests (TestCase):
         cls.magic_message_priority = 3
         cls.magic_address_priority = 7
 
-        link_cap = 100
         A_client_port = cls.tester.get_port()
         B_client_port = cls.tester.get_port()
         C_client_port = cls.tester.get_port()
@@ -118,15 +105,11 @@ class PriorityTests (TestCase):
             ('listener',
              {'port'             : A_client_port,
               'role'             : 'normal',
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('listener',
              {'role'             : 'inter-router',
               'port'             : A_inter_router_port,
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('address',
@@ -141,23 +124,17 @@ class PriorityTests (TestCase):
             ('listener',
              {'port'             : B_client_port,
               'role'             : 'normal',
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('listener',
              {'role'             : 'inter-router',
               'port'             : B_inter_router_port,
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('connector',
              {'name'             : 'BA_connector',
               'role'             : 'inter-router',
               'port'             : A_inter_router_port,
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              )
         ]
@@ -166,23 +143,17 @@ class PriorityTests (TestCase):
             ('listener',
              {'port'             : C_client_port,
               'role'             : 'normal',
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('listener',
              {'role'             : 'inter-router',
               'port'             : C_inter_router_port,
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              ),
             ('connector',
              {'name'             : 'CB_connector',
               'role'             : 'inter-router',
               'port'             : B_inter_router_port,
-              'linkCapacity'     : link_cap,
-              'stripAnnotations' : 'no'
               }
              )
         ]
@@ -232,7 +203,7 @@ class Priority (MessagingHandler):
     # on inter-router links. The links from A to B will show
     # address-priority overriding message-priority. When a
     # router does not set any message priority, then messages
-    # are routed acording to their intrinsic priority which
+    # are routed according to their intrinsic priority which
     # was assigned by the sender. This will be shown by the
     # connection from router B to C.
     #
@@ -290,6 +261,10 @@ class Priority (MessagingHandler):
         self.A_addr          = self.client_addrs[0]
         self.B_addr          = self.client_addrs[1]
         self.C_addr          = self.client_addrs[2]
+        self.test_name       = test_name
+        self.max_attempts    = 3
+        self.num_attempts_A  = 0
+        self.num_attempts_B  = 0
         self.routers = {
             'A' : dict(),
             'B' : dict()
@@ -297,7 +272,6 @@ class Priority (MessagingHandler):
 
     # Shut down everything and exit.
     def bail(self, text):
-        self.send_timer.cancel()
         self.finishing = True
         self.error = text
         for conn in self.connections :
@@ -325,13 +299,9 @@ class Priority (MessagingHandler):
         self.routers['B']['mgmt_receiver'] = event.container.create_receiver(self.routers['B']['mgmt_conn'], dynamic=True)
         self.routers['B']['mgmt_sender']   = event.container.create_sender(self.routers['B']['mgmt_conn'], "$management")
 
-        self.send_timer = event.reactor.schedule(2, Timeout(self, "send"))
-
-    def timeout(self, name):
-        if name == 'send':
-            self.send()
-            if not self.sent_queries :
-                self.test_timer = self.reactor.schedule(1, Timeout(self, "send"))
+        # The initial setup is done, kick off the sender.
+        # This timer calls send on timeout and that kicks off the whole test.
+        event.reactor.schedule(2, Timeout(self, "send"))
 
     def on_link_opened(self, event) :
         # A mgmt link has opened. Create its management helper.
@@ -345,52 +315,54 @@ class Priority (MessagingHandler):
             event.receiver.flow(1000)
             self.routers['B']['mgmt_helper'] = ManagementMessageHelper(event.receiver.remote_source.address)
 
-    def send(self) :
-        if self.sender.credit <= 0:
-            self.receiver.flow(100)
-            return
+    def timeout(self, name):
+        if name == 'send':
+            if self.n_sent == 0:
+                self.send(send_qrys=False)
+                self.reactor.schedule(5, Timeout(self, "send"))
+            else:
+                self.send(send_qrys=True)
 
-        # First send the payload messages.
-        if self.n_sent < self.n_messages :
-            for i in range(50) :
-                msg = Message(body=self.n_sent)
-                msg.priority = 3
-                self.sender.send(msg)
-                self.n_sent += 1
-        # Then send the management queries.
-        # But only send them once.
-        elif not self.sent_queries  :
-            # Query router A.
+    def send_queries(self):
+        # Query router A.
+        if self.num_attempts_A < self.max_attempts:
             mgmt_helper = self.routers['A']['mgmt_helper']
             mgmt_sender = self.routers['A']['mgmt_sender']
             msg = mgmt_helper.make_router_link_query()
             mgmt_sender.send(msg)
 
-            # Query router B.
+        # Query router B.
+        if self.num_attempts_B < self.max_attempts:
             mgmt_helper = self.routers['B']['mgmt_helper']
             mgmt_sender = self.routers['B']['mgmt_sender']
             msg = mgmt_helper.make_router_link_query()
             mgmt_sender.send(msg)
 
-            self.sent_queries = True
+    def send(self, send_qrys=True) :
+        # First send all the payload messages.
+        if self.n_sent < self.n_messages :
+            for i in range(self.n_messages) :
+                msg = Message(body=self.n_sent)
+                msg.priority = 3
+                self.sender.send(msg)
+                self.n_sent += 1
+        if send_qrys:
+            self.send_queries()
 
     # This test has two goals: get the response from router A
     # and from router B. As they come in, we check them. If
     # the response is unsatisfactory we bail out
     def goal_satisfied(self) :
         self.goals += 1
-        if self.goals >= self.n_goals :
+        if self.goals >= self.n_goals:
             self.bail(None)
 
-    def on_message(self, event) :
-
+    def on_message(self, event):
         # Don't take any more messages if 'bail' has been called.
         if self.finishing :
             return
-
         msg = event.message
-
-        if event.receiver == self.routers['A']['mgmt_receiver'] :
+        if event.receiver == self.routers['A']['mgmt_receiver']:
             # Router A has only one set of outgoing links, and it
             # has set a priority for our target address. We should
             # see all the messages we sent go out with that priority.
@@ -412,11 +384,13 @@ class Priority (MessagingHandler):
                     if role == "inter-router" and dir == "out" and priority == magic  :
                         if message_count >= self.n_messages :
                             self.goal_satisfied()
-                            return
                         else :
-                            self.bail("Router A priority %d had %d messages instead of %d." %
-                                      (magic, message_count, self.n_messages))
-                            return
+                            if self.num_attempts_A < self.max_attempts:
+                                self.num_attempts_A += 1
+                                self.reactor.schedule(5, Timeout(self, "send"))
+                            else:
+                                self.bail("Router A priority %d had %d messages instead of %d." %
+                                          (magic, message_count, self.n_messages))
 
         elif event.receiver == self.routers['B']['mgmt_receiver'] :
             # Router B has two sets of outgoing links, and it has not
@@ -424,7 +398,6 @@ class Priority (MessagingHandler):
             # of our messages going out over the message-intrinsic
             # priority that the sending client used -- one one of those
             # two sets of outgoing links.
-            magic = self.magic_msg_priority
             if 'results' in msg.body :
                 message_counts = list()
                 results = msg.body['results']
@@ -435,13 +408,17 @@ class Priority (MessagingHandler):
                     message_count = result[2]
                     priority      = result[3]
                     if role == "inter-router" and dir == "out" :
-                        if priority == magic :
+                        if priority == self.magic_msg_priority :
                             message_counts.append(message_count)
 
                 if self.n_messages in message_counts :
                     self.goal_satisfied()
                 else :
-                    self.bail("No outgoing link on router B had %d messages at priority 3" % self.n_messages)
+                    if self.num_attempts_B < self.max_attempts:
+                        self.num_attempts_B += 1
+                        self.reactor.schedule(5, Timeout(self, "send"))
+                    else:
+                        self.bail("No outgoing link on router B had %d messages at priority 3" % self.n_messages)
 
         else :
             # This is a payload message -- not management. Just count it.

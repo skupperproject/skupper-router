@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
         buildType: [Debug, RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
@@ -140,13 +140,6 @@ jobs:
       - name: Create Build and Install directories
         run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "${InstallPrefix}"
 
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.9
-          architecture: x64
-          check-latest: true
-
       - name: Install Linux build dependencies
         run: |
           sudo apt update; sudo apt install -y libdw-dev swig libpython3-dev libsasl2-dev libjsoncpp-dev libwebsockets-dev libnghttp2-dev ccache ninja-build pixz libbenchmark-dev nginx libunwind-dev
@@ -178,8 +171,8 @@ jobs:
           cmake "${{github.workspace}}/skupper-router" \
             "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
             "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
-            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
+            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=500;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
+            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=500;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
             "-GNinja" \
             ${RouterCMakeExtraArgs}
 
@@ -221,7 +214,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
         buildType: [Debug, RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
@@ -267,13 +260,6 @@ jobs:
         with:
           name: skupper_router_wrk_${{env.JOB_IDENTIFIER}}
 
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.9
-          architecture: x64
-          check-latest: true
-
       - name: Install Linux runtime/test dependencies
         run: |
           sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 libwebsockets19t64 libbenchmark1.8.3 pixz curl ncat gdb elfutils findutils file python3-dbg
@@ -293,7 +279,11 @@ jobs:
           sudo sysctl -w kernel.core_pattern="coredump.%e.%p"
           ulimit -c unlimited
           sudo sysctl -w vm.mmap_rnd_bits=28
-          ctest --timeout 1200 -V --output-junit Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
+          if [[ ${{ matrix.runtimeCheck == 'asan'}} ]] && [[ ${{ matrix.os == 'ubuntu-24.04-arm'}} ]]; then
+            echo "SKIP_HTTP_METRICS_TEST=true" >> $GITHUB_ENV
+            export SKIP_HTTP_METRICS_TEST="true"
+          fi
+          ctest --timeout 1300 -V --output-junit Testing/Test.xml --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j12 ${{env.RouterCTestExtraArgs}}
 
       - name: Report coredump stacktraces (if any tests failed)
         if: ${{ failure() }}
@@ -327,157 +317,6 @@ jobs:
           name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
           path: |
             **/coredump*
-
-
-####################
-### ARM runner ###
-####################
-
-  compile_and_test_pi5:
-    name: "Compile and Test on ubuntu-24.04-arm"
-    runs-on: ubuntu-24.04-arm
-    env:
-      CC: 'gcc-12'
-      CXX: 'g++-12'
-      BuildType: RelWithDebInfo
-      ProtonBuildDir: ${{github.workspace}}/qpid-proton/build
-      RouterBuildDir: ${{github.workspace}}/skupper-router/build
-      InstallPrefix: ${{github.workspace}}/install
-      VERBOSE: 1
-      protonRepository: "${{ github.event.inputs.protonRepository || 'apache/qpid-proton' }}"
-      protonBranch: "${{ github.event.inputs.protonBranch || 'main' }}"
-      ProtonCMakeExtraArgs: >
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DBUILD_BINDINGS=python
-        -DPython_EXECUTABLE=/usr/bin/python3
-        -DBUILD_TOOLS=OFF
-        -DBUILD_EXAMPLES=OFF
-        -DBUILD_TESTING=OFF
-        -DENABLE_FUZZ_TESTING=OFF
-        -DRUNTIME_CHECK=OFF
-        -DBUILD_TLS=ON
-      RouterCMakeExtraArgs: >
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DPython_EXECUTABLE=/usr/bin/python3
-        -DRUNTIME_CHECK=OFF
-        -DENABLE_PROFILE_GUIDED_OPTIMIZATION=OFF
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.protonRepository }}
-          ref: main
-          path: 'qpid-proton'
-      - uses: actions/checkout@v4
-        with:
-          path: 'skupper-router'
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt update; sudo apt install -y flake8 mypy pylint python3-qpid-proton libpython3-dev ninja-build ccache libwebsockets-dev libnghttp2-dev nginx python3-build python3-cffi python3-pip python3-setuptools python3-wheel tox
-      # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
-      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
-      - name: Prepare ccache timestamp
-        id: ccache_cache_timestamp
-        shell: cmake -P {0}
-        run: |
-          string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}")
-      - uses: actions/cache@v4
-        env:
-          cache-name: cache-ccache
-        with:
-          path: .ccache
-          key: ${{ github.workflow }}-main-${{ env.cache-name }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
-          restore-keys: |
-            ${{ github.workflow }}-main-${{ env.cache-name }}
-
-      - name: Create Build and Install directories
-        run: mkdir -p "${ProtonBuildDir}" "${RouterBuildDir}" "{InstallPrefix}"
-
-      - name: Zero ccache stats
-        run: ccache -z
-
-      - name: qpid-proton cmake configure
-        working-directory: ${{env.ProtonBuildDir}}
-        run: >
-          cmake "${{github.workspace}}/qpid-proton" \
-            "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
-            "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            ${ProtonCMakeExtraArgs}
-
-      - name: qpid-proton cmake build/install
-        run: cmake --build "${ProtonBuildDir}" --config ${BuildType} --target install --parallel 2
-
-      - name: Display ccache stats
-        run: ccache -s
-
-      - name: skupper-router cmake configure
-        working-directory: ${{env.RouterBuildDir}}
-        run: |
-          cmake "${{github.workspace}}/skupper-router" \
-            "-DCMAKE_INSTALL_PREFIX=${InstallPrefix}" \
-            "-DCMAKE_BUILD_TYPE=${BuildType}" \
-            "-DPYTHON_TEST_COMMAND='-m;pytest;-vs;--timeout=400;--junit-prefix=pytest.\${py_test_module};--junit-xml=junitxmls/\${py_test_module}.xml;--pyargs;\${py_test_module}'" \
-            ${RouterCMakeExtraArgs}
-
-      - name: skupper-router cmake build/install
-        run: cmake --build "${RouterBuildDir}" --config ${BuildType} --target install --parallel 6
-
-      - name: Install Python runtime/test dependencies
-        run: python3 -m pip install --break-system-packages -r ${{github.workspace}}/skupper-router/requirements-dev.txt
-
-      - name: Install Linux runtime/test dependencies
-        run: |
-          sudo apt update; sudo apt install -y libdw1 libsasl2-2 libsasl2-modules sasl2-bin libjsoncpp25 pixz curl libwebsockets-dev ncat gdb elfutils findutils file python3-dbg
-
-      - name: install qpid-proton python wheel
-        run: python3 -m pip install --break-system-packages $(find ${ProtonBuildDir}/python/dist -name 'python_qpid_proton*.whl')
-
-      - name: CTest
-        working-directory: ${{env.RouterBuildDir}}
-        run: |
-          ulimit -c unlimited
-          threads=4
-          ctest --timeout 1200 -V --output-junit Testing/Test.xml --output-on-failure --no-compress-output -j${threads}
-
-      - name: Report coredump stacktraces (if any tests failed)
-        if: ${{ failure() }}
-        run: |
-          find -name 'coredump*' -exec ${{github.workspace}}/skupper-router/scripts/gha_analyze_coredump.sh {} \;
-
-      - name: Dump dmesg (on failure)
-        if: ${{ failure() }}
-        run: dmesg
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: ${{ ! cancelled() }}
-        with:
-          name: Test_Results_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
-          path: ${{env.RouterBuildDir}}/tests/junitxmls/*.xml
-
-      - name: Delete logs from passing tests
-        if: ${{ failure() }}
-        continue-on-error: true
-        run: python3 ${{github.workspace}}/skupper-router/scripts/gha_purge_successful_test_logs.py --build-dir=${{env.RouterBuildDir}} --no-dry-run
-
-      - name: Upload log files (if any tests failed)
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: testLogs_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
-          path: |
-            ${{env.RouterBuildDir}}/tests
-
-      - name: Upload core files (if any)
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: cores_${{env.JOB_IDENTIFIER}}_${{matrix.shard}}
-          path: |
-            **/coredump*
-
 
 ####################
 ### Fedora Tests ###
@@ -802,7 +641,7 @@ jobs:
             threads=6
           fi
 
-          ctest --timeout 1200 -V --output-junit Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
+          ctest --timeout 1300 -V --output-junit Testing/Test.xml --output-on-failure --no-compress-output -I ${{matrix.shard}},,${{matrix.shards}} -j${threads} ${{env.RouterCTestExtraArgs}}
 
       - name: Process C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}

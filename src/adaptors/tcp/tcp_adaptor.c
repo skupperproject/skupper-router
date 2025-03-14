@@ -336,6 +336,7 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                                       "",           // user,
                                                       "TcpAdaptor", // container,
                                                       properties,   // connection_properties,
+                                                      0,            // TLS Ordinal
                                                       0,            // ssl_ssf,
                                                       false,        // ssl,
                                                       "",           // peer router version,
