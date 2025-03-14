@@ -49,6 +49,9 @@
 #define QDR_CONNECTION_LAST_DLV_SECONDS      22
 #define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 23
 #define QDR_CONNECTION_MESH_ID               24
+#define QDR_CONNECTION_TLS_ORDINAL           25
+#define QDR_CONNECTION_GROUP_CORRELATOR      26
+#define QDR_CONNECTION_GROUP_ORDINAL         27
 
 
 const char * const QDR_CONNECTION_DIR_IN  = "in";
@@ -96,6 +99,8 @@ const char *qdr_connection_columns[] =
      "lastDlvSeconds",
      "enableProtocolTrace",
      "meshId",
+     "tlsOrdinal",
+     "groupCorrelationId",
      0};
 
 const char *CONNECTION_TYPE = "io.skupper.router.connection";
@@ -309,6 +314,30 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
     case QDR_CONNECTION_MESH_ID:
         if (core->router_mode == QD_ROUTER_MODE_INTERIOR && conn->role == QDR_ROLE_EDGE_CONNECTION && conn->edge_mesh_id[0] != '\0') {
             qd_compose_insert_string_n(body, conn->edge_mesh_id, QD_DISCRIMINATOR_BYTES);
+        } else {
+            qd_compose_insert_null(body);
+        }
+        break;
+
+    case QDR_CONNECTION_TLS_ORDINAL:
+        if (conn->connection_info->tls) {
+            qd_compose_insert_ulong(body, conn->connection_info->tls_ordinal);
+        } else {
+            qd_compose_insert_null(body);
+        }
+        break;
+
+    case QDR_CONNECTION_GROUP_CORRELATOR:
+        if (conn->connection_info->group_correlator[0] != '\0') {
+            qd_compose_insert_string_n(body, conn->connection_info->group_correlator, QD_DISCRIMINATOR_BYTES);
+        } else {
+            qd_compose_insert_null(body);
+        }
+        break;
+
+    case QDR_CONNECTION_GROUP_ORDINAL:
+        if (conn->connection_info->group_correlator[0] != '\0') {
+            qd_compose_insert_ulong(body, conn->connection_info->group_ordinal);
         } else {
             qd_compose_insert_null(body);
         }

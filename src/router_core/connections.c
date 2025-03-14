@@ -1456,26 +1456,31 @@ void qdr_process_addr_attributes_CT(qdr_core_t *core, qdr_address_t *addr)
 static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     const char *correlator = conn->connection_info->group_correlator;
+    uint64_t    ordinal    = conn->connection_info->group_ordinal;
 
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
     qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
-           "CGROUP qdr_connection_group_setup_CT - %lx (%s)",
-           (ulong) conn, conn->connection_info->host);
+           "Connection group '%s' setup parent [C%"PRIu64"] with ordinal=%"PRIu64" (host=%s)",
+           correlator, conn->identity, ordinal, conn->connection_info->host);
 
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
+#if 0   // KAG TODO FIX: allow dupes for now:
         //
         // Check the existing set of correlators (by mask-bit) to determine if there exists another
         // connection with the same correlator.  If found, clear the old correlator and move the old
         // connection's group members to the unallocated list.  These will be picked up by the new connection.
         //
         for (int mask_bit = 0; mask_bit < qd_bitmask_width(); mask_bit++) {
-            if (strncmp(core->group_correlator_by_maskbit[mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qdr_connection_t *old_conn = core->rnode_conns_by_mask_bit[mask_bit];
-                if (!!old_conn) {
+            qdr_connection_t *old_conn = core->rnode_conns_by_mask_bit[mask_bit];
+            if (old_conn) {
+                if(strncmp(old_conn->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
                     qdr_connection_group_cleanup_CT(core, old_conn);
                 }
             }
         }
+#else
+        assert(qd_bitmask_valid_bit_value(conn->mask_bit));
+#endif
 
         //
         // Record the group's correlator in the core record.
@@ -1483,15 +1488,16 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
         // matches into this connection's group.
         //
         assert(core->group_correlator_by_maskbit[conn->mask_bit][0] == '\0');
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = %s", conn->mask_bit, correlator);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' recording correlator[mask-bit=%d]", correlator, conn->mask_bit);
         strncpy(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE);
 
         qdr_connection_t *member = DEQ_HEAD(core->unallocated_group_members);
         while (!!member) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, member);
-            if (strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     moving member from unallocated - %lx",
-                       (ulong) member);
+            if (member->connection_info->group_ordinal == ordinal &&
+                strncmp(member->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0) {
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' moving member [C%"PRIu64"] to parent [C%"PRIu64"]",
+                       correlator, member->identity, conn->identity);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
                 DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
             }
@@ -1506,29 +1512,38 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
 static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_setup_CT - %lx", (ulong) conn);
     //
     // Scan the correlators-by-maskbit to see if this member's correlator is active.
     // If so, import this into the active group and reset the cursor.
     // If not, put this member into the unallocated list.
     //
     const char       *correlator = conn->connection_info->group_correlator;
-    qdr_connection_t *parent = 0;
+    uint64_t          ordinal    = conn->connection_info->group_ordinal;
+    qdr_connection_t *parent     = 0;
+
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' adding member [C%"PRIu64"] with ordinal=%"PRIu64,
+           correlator, conn->identity, ordinal);
 
     for (int maskbit = 0; maskbit < qd_bitmask_width(); maskbit++) {
         if (strncmp(core->group_correlator_by_maskbit[maskbit], correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-            parent = core->rnode_conns_by_mask_bit[maskbit];
-            break;
+            assert(!!core->rnode_conns_by_mask_bit[maskbit]);
+            if (core->rnode_conns_by_mask_bit[maskbit]->connection_info->group_ordinal == ordinal) {
+                parent = core->rnode_conns_by_mask_bit[maskbit];
+                break;
+            }
         }
     }
 
     if (!!parent) {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to parent: %lx", (ulong) parent);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' member [C%"PRIu64"] added to parent [C%"PRIu64"]",
+               correlator, conn->identity, parent->identity);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
+        assert(parent->connection_info->group_ordinal == ordinal);
         DEQ_INSERT_TAIL_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
     } else {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to unallocated");
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' parent not present moving [C%"PRIu64"] to unallocated",
+               correlator, conn->identity);
         DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, conn);
     }
 }
@@ -1537,23 +1552,24 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
 static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER);
-    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_cleanup_CT - %lx", (ulong) conn);
-
     //
     // Remove the correlator from the maskbit index.
     // Nullify the cursor and move all group members to the unallocated list.
     //
     const char *correlator = conn->connection_info->group_correlator;
+    uint64_t    ordinal    = conn->connection_info->group_ordinal;
+
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' clean up parent [C%"PRIu64"] with ordinal=%"PRIu64,
+           correlator, conn->identity, ordinal);
     if (strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0) {
         assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     correlator[%d] = NULL (was %s)", conn->mask_bit,
-               correlator);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' clearing correlator[mask-bit=%d]", correlator, conn->mask_bit);
         core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
 
         while (!!DEQ_HEAD(conn->connection_group)) {
-            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,        //
-                   "CGROUP     moving member from parent to unallocated: %lx",  //
-                   (ulong) DEQ_HEAD(conn->connection_group));
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                   "Connection group '%s' moving member [C%"PRIu64"] to unallocated",
+                   correlator, DEQ_HEAD(conn->connection_group)->identity);
             qdr_connection_t *member = DEQ_HEAD(conn->connection_group);
             DEQ_REMOVE_HEAD_N(GROUP, conn->connection_group);
             DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, member);
@@ -1566,27 +1582,33 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
 static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
     assert(conn->role == QDR_ROLE_INTER_ROUTER_DATA);
-    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP qdr_connection_group_member_cleanup_CT - %lx",
-           (ulong) conn);
     //
     // Search for the correlator in the maskbit index.
     // If found, get the parent connection and remove this connection from the group. Reset the cursor.
     // If not found, remove this connection from the unallocated group
     //
     const char       *correlator = conn->connection_info->group_correlator;
+    uint64_t          ordinal    = conn->connection_info->group_ordinal;
     qdr_connection_t *parent     = 0;
 
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' cleanup member [C%"PRIu64"] with ordinal=%"PRIu64,
+           correlator, conn->identity, ordinal);
     assert(strnlen(correlator, QD_DISCRIMINATOR_SIZE) > 0);
     for (int maskbit = 0; maskbit < qd_bitmask_width(); maskbit++) {
         if (strncmp(core->group_correlator_by_maskbit[maskbit], correlator, QD_DISCRIMINATOR_SIZE) == 0) {
-            parent = core->rnode_conns_by_mask_bit[maskbit];
-            break;
+            assert(core->rnode_conns_by_mask_bit[maskbit]);
+            if (core->rnode_conns_by_mask_bit[maskbit]->connection_info->group_ordinal == ordinal) {
+                parent = core->rnode_conns_by_mask_bit[maskbit];
+                break;
+            }
         }
     }
 
     if (!!parent) {
-        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from parent: %lx", (ulong) parent);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' removing member [C%"PRIu64"] from parent [C%"PRIu64"]",
+               correlator, conn->identity, parent->identity);
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
+        assert(parent->connection_info->group_ordinal == ordinal);
         DEQ_REMOVE_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
     } else {
@@ -1594,7 +1616,8 @@ static void qdr_connection_group_member_cleanup_CT(qdr_core_t *core, qdr_connect
         while (!!ptr) {
             qdr_connection_t *next = DEQ_NEXT_N(GROUP, ptr);
             if (ptr == conn) {
-                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     removing member from unallocated");
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' removing member [C%"PRIu64"] from unallocated",
+                       correlator, conn->identity);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, ptr);
                 break;
             }
