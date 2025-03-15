@@ -351,11 +351,10 @@ void qdr_core_free(qdr_core_t *core)
     assert(DEQ_IS_EMPTY(core->action_list_background));
     assert(DEQ_IS_EMPTY(core->streaming_connections));
 
-    if (core->routers_by_mask_bit)         free(core->routers_by_mask_bit);
-    if (core->control_links_by_mask_bit)   free(core->control_links_by_mask_bit);
-    if (core->data_links_by_mask_bit)      free(core->data_links_by_mask_bit);
-    if (core->neighbor_free_mask)          qd_bitmask_free(core->neighbor_free_mask);
-    if (core->rnode_conns_by_mask_bit)     free(core->rnode_conns_by_mask_bit);
+    if (core->routers_by_mask_bit)             free(core->routers_by_mask_bit);
+    if (core->neighbor_free_mask)              qd_bitmask_free(core->neighbor_free_mask);
+    if (core->rnode_conns_by_mask_bit)         free(core->rnode_conns_by_mask_bit);
+    if (core->pending_rnode_conns_by_mask_bit) free(core->pending_rnode_conns_by_mask_bit);
     if (core->group_correlator_by_maskbit) {
         for (int idx = 0; idx < qd_bitmask_width(); idx++) {
             free(core->group_correlator_by_maskbit[idx]);
@@ -1063,11 +1062,10 @@ uint64_t qdr_identifier(qdr_core_t* core)
     return id;
 }
 
-void qdr_reset_sheaf(qdr_core_t *core, uint8_t n)
+
+void qdr_reset_sheaf(qdr_connection_t *conn)
 {
-  qdr_priority_sheaf_t *sheaf = core->data_links_by_mask_bit + n;
-  sheaf->count = 0;
-  memset(sheaf->links, 0, QDR_N_PRIORITIES * sizeof(void *));
+    conn->data_links = (qdr_priority_sheaf_t) {0};
 }
 
 
