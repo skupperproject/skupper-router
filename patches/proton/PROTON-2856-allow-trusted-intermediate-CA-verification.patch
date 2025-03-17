@@ -1,0 +1,71 @@
+From 2aed3743363835ee63858a276d88d4cc4c0c6189 Mon Sep 17 00:00:00 2001
+From: Cliff Jansen <cliffjansen@apache.org>
+Date: Tue, 5 Nov 2024 10:59:57 -0800
+Subject: [PATCH] PROTON-2856: allow trusted intermediate CA verification using
+ OpenSSL
+
+---
+ INSTALL.md                                    |   2 +-
+ c/src/ssl/PLATFORM_NOTES.md                   |   4 +++
+ c/src/ssl/openssl.c                           |   4 +++
+ c/src/tls/openssl.c                           |   4 +++
+
+diff --git a/INSTALL.md b/INSTALL.md
+index fa997514..56db9588 100644
+--- a/INSTALL.md
++++ b/INSTALL.md
+@@ -20,7 +20,7 @@ Linux dependencies
+   - GNU Make 3.81+
+   - GCC 9+
+   - Cyrus SASL 2.1+ (for SASL support)
+-  - OpenSSL 1.0+ (for SSL support)
++  - OpenSSL 1.0.2a+ (for SSL support)
+   - JsonCpp 1.8+ for C++ connection configuration file support
+ 
+ Windows dependencies
+diff --git a/c/src/ssl/PLATFORM_NOTES.md b/c/src/ssl/PLATFORM_NOTES.md
+index 1c4c5175..fa5664af 100644
+--- a/c/src/ssl/PLATFORM_NOTES.md
++++ b/c/src/ssl/PLATFORM_NOTES.md
+@@ -21,6 +21,10 @@ of the certificate's name.  See
+ [here](https://www.openssl.org/docs/ssl/SSL_CTX_load_verify_locations.htm)
+ for more details.
+ 
++Proton uses the OpenSSL X509_V_FLAG_PARTIAL_CHAIN flag during peer verification.
++All certificates included in a CA database, including those for intermediate
++Certificate Authorities, will be treated as potential trust anchors by OpenSSL.
++
+ 
+ SChannel
+ ========
+diff --git a/c/src/ssl/openssl.c b/c/src/ssl/openssl.c
+index 4a1fc12b..7455cb61 100644
+--- a/c/src/ssl/openssl.c
++++ b/c/src/ssl/openssl.c
+@@ -555,6 +555,10 @@ static bool pni_init_ssl_domain( pn_ssl_domain_t * domain, pn_ssl_mode_t mode )
+     return false;
+   };
+ 
++  // Support intermediate/subordinate CAs as trust anchors.
++  X509_STORE* store = SSL_CTX_get_cert_store(domain->ctx);
++  X509_STORE_set_flags(store, X509_V_FLAG_PARTIAL_CHAIN);
++
+   const long reject_insecure =
+       SSL_OP_NO_SSLv2
+     | SSL_OP_NO_SSLv3
+diff --git a/c/src/tls/openssl.c b/c/src/tls/openssl.c
+index 4ba457d1..8b78891c 100644
+--- a/c/src/tls/openssl.c
++++ b/c/src/tls/openssl.c
+@@ -858,6 +858,10 @@ static bool pni_init_ssl_domain( pn_tls_config_t * domain, pn_tls_mode_t mode )
+     return false;
+   };
+ 
++  // Support intermediate/subordinate CAs as trust anchors.
++  X509_STORE* store = SSL_CTX_get_cert_store(domain->ctx);
++  X509_STORE_set_flags(store, X509_V_FLAG_PARTIAL_CHAIN);
++
+   const long reject_insecure =
+       SSL_OP_NO_SSLv2
+     | SSL_OP_NO_SSLv3
+
