@@ -543,7 +543,7 @@ jobs:
         run: ${PYTHON} -m pip install --upgrade pip
 
       - name: Install python package for qpid-proton
-        run: ${PYTHON} -m pip install --upgrade -r ${{github.workspace}}/qpid-proton/python/ci_requirements.txt
+        run: ${PYTHON} -m pip install --upgrade build wheel flake8 tox cffi
 
       # https://cristianadam.eu/20200113/speeding-up-c-plus-plus-github-actions-using-ccache/
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
