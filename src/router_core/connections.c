@@ -1505,7 +1505,7 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
             if (strcmp(core->group_correlator_by_maskbit[mask_bit], correlator) == 0) {
                 qdr_connection_t *old_conn = core->rnode_conns_by_mask_bit[mask_bit];
                 qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
-                       "CGROUP duplicate group control connection detected: correlator=%s conns=[C%"PRIu64"],[C%"PRIu64"]",
+                       "Connection group duplicate correlator detected: correlator=%s conns=[C%"PRIu64"],[C%"PRIu64"]",
                        correlator, conn->identity, old_conn ? old_conn->identity : 0);
                 if (old_conn) {
                     // This is what is called a "hail mary pass" - google it - in an attempt to recover from this mess
@@ -1933,7 +1933,7 @@ static void qdr_attach_link_control_CT(qdr_core_t *core, qdr_connection_t *conn,
     //
     if (!!conn->control_links[QD_INCOMING] && !!conn->control_links[QD_OUTGOING]) {
         //
-        // If this connection is pending upgrade we can now to the switchover.
+        // If this connection is pending upgrade we can now do the switchover.
         //
         if (qd_bitmask_valid_bit_value(conn->mask_bit) && core->pending_rnode_conns_by_mask_bit[conn->mask_bit] == conn) {
             qdr_connection_t *old_conn = core->rnode_conns_by_mask_bit[conn->mask_bit];
