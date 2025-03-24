@@ -282,10 +282,10 @@ static void close_links(qd_container_t *container, pn_connection_t *conn, bool p
         pn_link_t *next_link = pn_link_next(pn_link, 0);
 
         if (qd_link) {
-            if (print_log)
-                qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
-                       pn_link_name(pn_link));
-                       AMQP_link_closed_handler(container->qd_router, qd_link, true);  // true == forced
+            if (print_log) {
+                qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end", pn_link_name(pn_link));
+            }
+            AMQP_link_closed_handler(container->qd_router, qd_link, true);  // true == forced
             qd_link_free(qd_link);
         }
 
