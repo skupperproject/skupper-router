@@ -1,0 +1,20 @@
+# https://vector.dev/docs/reference/vrl
+# https://vector.dev/docs/reference/vrl/#parse-custom-logs
+
+# language documentation at https://vrl.dev
+# https://vector.dev/docs/reference/vrl/expressions/
+# try your code in the VRL REPL, learn more at https://vrl.dev/examples
+
+# https://vector.dev/docs/reference/vrl/functions/#parse_regex
+# https://docs.rs/regex/latest/regex/#syntax
+# see also https://vector.dev/docs/reference/vrl/functions/#parse_grok
+
+#. = parse_regex!(.message, r'^(?P<timestamp>[^ ]+ [^ ]+ [^ ]+) (?P<component>[^ ]+) \((?P<severity>[^ ]+)\) (?P<message>.*)$')
+#. = parse_regex!(.message, r'^(?P<timestamp>\d+-\d+-\d+ \d+:\d+:\d+\.\d+ \+\d+) (?P<component>[^ ]+) \((?P<severity>[^ ]+)\) (?P<message>.*)$')
+
+# uses lazy capture in message field
+. = parse_regex!(.message, r'^(?P<timestamp>[^ ]+ [^ ]+ [^ ]+) (?P<component>[^ ]+) \((?P<severity>[^ ]+)\) (?P<message>.*?)(?: \((?P<source>.*:\d+)\))?$')
+#. = parse_regex!(.message, r'^(?P<timestamp>\d+-\d+-\d+ \d+:\d+:\d+\.\d+ \+\d+) (?P<component>[^ ]+) \((?P<severity>[^ ]+)\) (?P<message>.*?)(?: \((?P<source>.*:\d+)\))?$')
+
+# Coerce parsed fields
+.timestamp = parse_timestamp(.timestamp, "%Y-%m-%d %H:%M:%S.%N %z") ?? now()
