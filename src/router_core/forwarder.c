@@ -39,10 +39,11 @@ DEQ_DECLARE(qdr_forward_deliver_info_t, qdr_forward_deliver_info_list_t);
 ALLOC_DEFINE(qdr_forward_deliver_info_t);
 
 
-// get the control link for a given inter-router connection
+// get the outgoing control link for a given inter-router connection
 static inline qdr_link_t *peer_router_control_link(qdr_core_t *core, int conn_mask)
 {
-    return (conn_mask >= 0) ? core->control_links_by_mask_bit[conn_mask] : 0;
+    qdr_connection_t *conn = (conn_mask >= 0) ? core->rnode_conns_by_mask_bit[conn_mask] : 0;
+    return (!!conn) ? conn->control_links[QD_OUTGOING] : 0;
 }
 
 
@@ -54,11 +55,15 @@ static inline qdr_link_t *peer_router_data_link(qdr_core_t *core,
     if (conn_mask < 0 || priority < 0)
         return 0;
 
+    qdr_connection_t *conn = core->rnode_conns_by_mask_bit[conn_mask];
+    if (!conn)
+        return 0;
+
     // Try to return the requested priority link, but if it does
     // not exist, return the closest one that is lower.
     qdr_link_t * link = 0;
     while (1) {
-        if ((link = core->data_links_by_mask_bit[conn_mask].links[priority]))
+        if ((link = conn->data_links.link[priority]))
             return link;
         if (-- priority < 0)
             return 0;
