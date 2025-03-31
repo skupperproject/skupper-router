@@ -173,17 +173,17 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
         break;
 
     case QDR_CONNECTION_CONTAINER_ID:
-        if (conn->connection_info->container)
+        if (strlen(conn->connection_info->container))
             qd_compose_insert_string(body, conn->connection_info->container);
         else
             qd_compose_insert_null(body);
         break;
 
     case QDR_CONNECTION_SASL_MECHANISMS:
-        if (conn->connection_info->sasl_mechanisms) 
+        if (conn->connection_info->sasl_mechanisms)
             qd_compose_insert_string(body, conn->connection_info->sasl_mechanisms);
-	else
-	    qd_compose_insert_null(body);
+        else
+            qd_compose_insert_null(body);
         break;
 
     case QDR_CONNECTION_IS_AUTHENTICATED:
