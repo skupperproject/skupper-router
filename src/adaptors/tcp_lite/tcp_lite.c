@@ -226,7 +226,6 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                  1,               // cost
                                  conn_id,         // management_id
                                  0,               // label
-                                 0,               // remote_container_id
                                  false,           // strip_annotations_in
                                  false,           // strip_annotations_out
                                  5,               // link_capacity

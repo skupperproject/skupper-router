@@ -85,7 +85,6 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
                                         int                           cost,
                                         uint64_t                      management_id,
                                         const char                   *label,
-                                        const char                   *remote_container_id,
                                         bool                          strip_annotations_in,
                                         bool                          strip_annotations_out,
                                         int                           link_capacity,
@@ -126,7 +125,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
 
     set_safe_ptr_qdr_connection_t(conn, &action->args.connection.conn);
     action->args.connection.connection_label = qdr_field(label);
-    action->args.connection.container_id     = qdr_field(remote_container_id);
+    action->args.connection.container_id     = qdr_field(connection_info->container);
     if (qd_log_enabled(LOG_PROTOCOL, QD_LOG_DEBUG)) {
         action->args.connection.enable_protocol_trace = true;
     }
@@ -202,9 +201,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
     connection_info->is_encrypted          = is_encrypted;
     connection_info->is_authenticated      = is_authenticated;
     connection_info->opened                = opened;
-
-    if (container)
-        connection_info->container = strdup(container);
+    connection_info->container             = strdup(!!container ? container : "");
     if (sasl_mechanisms)
         connection_info->sasl_mechanisms = strdup(sasl_mechanisms);
     connection_info->dir = dir;
@@ -1493,6 +1490,15 @@ static void qdr_connection_group_setup_CT(qdr_core_t *core, qdr_connection_t *co
                        (ulong) member);
                 DEQ_REMOVE_N(GROUP, core->unallocated_group_members, member);
                 DEQ_INSERT_HEAD_N(GROUP, conn->connection_group, member);
+
+                // ISSUE-1762: Check if the group member connection terminates on the wrong peer router.
+                // This can happen if the group is spread across a load balancer, which is a mis-configuration.
+                if (strcmp(member->connection_info->container, conn->connection_info->container) != 0) {
+                    qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
+                           "Connection group failure: connections split across routers: %s ([C%"PRIu64"]) and %s ([C%"PRIu64"])",
+                           member->connection_info->container, member->identity,
+                           conn->connection_info->container, conn->identity);
+                }
             }
             member = next;
         }
@@ -1526,6 +1532,15 @@ static void qdr_connection_group_member_setup_CT(qdr_core_t *core, qdr_connectio
         assert(strncmp(parent->connection_info->group_correlator, correlator, QD_DISCRIMINATOR_SIZE) == 0);
         DEQ_INSERT_TAIL_N(GROUP, parent->connection_group, conn);
         parent->group_cursor = DEQ_HEAD(parent->connection_group);
+
+        // ISSUE-1762: Check if the group member connection terminates on the wrong peer router.
+        // This can happen if the group is spread across a load balancer, which is a mis-configuration.
+        if (strcmp(conn->connection_info->container, parent->connection_info->container) != 0) {
+            qd_log(LOG_ROUTER_CORE, QD_LOG_ERROR,
+                   "Connection group failure: connections split across routers: %s ([C%"PRIu64"]) and %s ([C%"PRIu64"])",
+                   conn->connection_info->container, conn->identity,
+                   parent->connection_info->container, parent->identity);
+        }
     } else {
         qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "CGROUP     adding member to unallocated");
         DEQ_INSERT_TAIL_N(GROUP, core->unallocated_group_members, conn);

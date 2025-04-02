@@ -217,7 +217,6 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
                                             1,      // cost
                                             hconn->conn_id,
                                             0,  // label
-                                            0,  // remote container id
                                             false,  // strip annotations in
                                             false,  // strip annotations out
                                             DEFAULT_CAPACITY,

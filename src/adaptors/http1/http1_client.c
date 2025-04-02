@@ -357,7 +357,6 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             1,  // cost
                                             hconn->conn_id,
                                             0,                    // label
-                                            0,                    // remote container id
                                             false,                // strip annotations in
                                             false,                // strip annotations out
                                             REQUEST_BACKLOG_MAX,  // incoming link capacity
