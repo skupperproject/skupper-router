@@ -1610,7 +1610,6 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           cost,
                           connection_id,
                           name,
-                          pn_connection_remote_container(pn_conn),
                           conn->strip_annotations_in,
                           conn->strip_annotations_out,
                           link_capacity,
