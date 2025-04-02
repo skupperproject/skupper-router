@@ -432,7 +432,6 @@ static void on_startup(void *context)
                                           1,                // cost
                                           qd_server_allocate_connection_id(adaptor->core->qd->server),
                                           0,                // label
-                                          0,                // remote_container_id
                                           false,            // strip_annotations_in
                                           false,            // strip_annotations_out
                                           250,              // link_capacity

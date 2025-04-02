@@ -982,7 +982,6 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                    1,               // cost
                                                    tc->conn_id,     // management_id
                                                    0,               // label
-                                                   0,               // remote_container_id
                                                    false,           // strip_annotations_in
                                                    false,           // strip_annotations_out
                                                    250,             // link_capacity
@@ -1427,7 +1426,6 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
                                                    1,               // cost
                                                    tc->conn_id,     // management_id
                                                    0,               // label
-                                                   0,               // remote_container_id
                                                    false,           // strip_annotations_in
                                                    false,           // strip_annotations_out
                                                    250,             // link_capacity
