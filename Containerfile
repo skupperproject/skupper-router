@@ -71,7 +71,6 @@ FROM scratch
 
 COPY --from=packager /output /
 COPY --from=packager /etc/yum.repos.d /etc/yum.repos.d
-COPY --from=packager /root/buildinfo /root/buildinfo
 
 USER 10000
 

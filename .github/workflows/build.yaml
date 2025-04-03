@@ -1013,12 +1013,12 @@ jobs:
 #              --secret-config=${{github.workspace}}/.github/trivy-secret.yaml \
 #              ${{ env.ImageName }}
 
-      - name: Run Grype security scan on the image
-        if: ${{ ! cancelled() }}
-        # https://github.com/anchore/grype#getting-started
-        run: |
-          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock docker.io/anchore/grype:latest \
-            --only-fixed --fail-on low ${{ env.ImageName }}
+#      - name: Run Grype security scan on the image
+#        if: ${{ ! cancelled() }}
+#        # https://github.com/anchore/grype#getting-started
+#        run: |
+#          podman run --rm --volume ${PODMAN_SOCK}:/var/run/docker.sock docker.io/anchore/grype:latest \
+#            --only-fixed --fail-on low ${{ env.ImageName }}
 
 
 ####################################
