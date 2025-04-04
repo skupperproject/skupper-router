@@ -58,7 +58,7 @@ static char *edge_role        = "edge";
 static char *inter_edge_role  = "inter-edge";
 
 
-static void deferred_AMQP_rx_handler(void *context, bool discard);
+static void deferred_AMQP_rx_handler(qd_connection_t *qd_conn, void *context, bool discard);
 static bool parse_failover_property_list(qd_router_t *router, qd_connection_t *conn, pn_data_t *props);
 static void clear_producer_activation(qdr_core_t *core, qdr_delivery_t *delivery);
 static void clear_consumer_activation(qdr_core_t *core, qdr_delivery_t *delivery);
@@ -981,7 +981,7 @@ static bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
 /**
  * Deferred callback for inbound delivery handler
  */
-static void deferred_AMQP_rx_handler(void *context, bool discard)
+static void deferred_AMQP_rx_handler(qd_connection_t *qd_conn, void *context, bool discard)
 {
     qd_link_t_sp *safe_qdl = (qd_link_t_sp*) context;
 

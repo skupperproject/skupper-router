@@ -18,8 +18,10 @@
  */
 
 #include "qd_listener.h"
+#include "private.h"
 #include "qd_connection.h"
 #include "http.h"
+#include "entity.h"
 
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/log.h"
@@ -36,6 +38,9 @@
 ALLOC_DEFINE(qd_listener_t);
 
 static const int BACKLOG = 50;  /* Listening backlog */
+
+static void handle_listener_ssl_profile_mgmt_update(const qd_tls_config_t *config, void *context);
+
 
 static void on_accept(pn_event_t *e, qd_listener_t *listener)
 {
@@ -113,19 +118,115 @@ static void handle_listener(pn_event_t *e, qd_server_t *qd_server, void *context
     }
 }
 
-qd_listener_t *qd_listener(qd_server_t *server)
+qd_listener_t *qd_listener_create(qd_dispatch_t *qd, qd_entity_t *entity)
 {
+    qd_error_clear();
+
     qd_listener_t *li = new_qd_listener_t();
-    if (!li) return 0;
+    if (!li) {
+        char *name = qd_entity_opt_string(entity, "name", "UNKNOWN");
+        qd_error(QD_ERROR_CONFIG, "Failed to create listener %s: resource allocation failed", name);
+        free(name);
+        return 0;
+    }
+
     ZERO(li);
+    DEQ_ITEM_INIT(li);
     sys_atomic_init(&li->ref_count, 1);
     sys_atomic_init(&li->connection_count, 0);
-    li->server      = server;
-    li->http = NULL;
+    li->server       = qd_dispatch_get_server(qd);
+    li->http         = NULL;
     li->type.context = li;
     li->type.handler = &handle_listener;
+
+    if (qd_server_config_load(&li->config, entity, true) != QD_ERROR_NONE) {
+        qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener: %s", qd_error_message());
+        qd_listener_decref(li);
+        return 0;
+    }
+
+    char *fol = qd_entity_opt_string(entity, "failoverUrls", 0);
+    if (fol) {
+        li->config.failover_list = qd_failover_list(fol);
+        free(fol);
+        if (li->config.failover_list == 0) {
+            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener, bad failover list: %s",
+                   qd_error_message());
+            qd_listener_decref(li);
+            return 0;
+        }
+    } else {
+        li->config.failover_list = 0;
+    }
+
+    if (li->config.ssl_profile_name) {
+        li->tls_config = qd_tls_config(li->config.ssl_profile_name,
+                                       QD_TLS_TYPE_PROTON_AMQP,
+                                       QD_TLS_CONFIG_SERVER_MODE,
+                                       li->config.verify_host_name,
+                                       li->config.ssl_require_peer_authentication);
+        if (!li->tls_config) {
+            // qd_tls_config() sets qd_error_message():
+            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Failed to configure TLS for Listener %s: %s",
+                   li->config.name, qd_error_message());
+            qd_listener_decref(li);
+            return 0;
+        }
+
+        li->tls_ordinal              = qd_tls_config_get_ordinal(li->tls_config);
+        li->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(li->tls_config);
+        qd_tls_config_register_update_callback(li->tls_config, li,
+                                               handle_listener_ssl_profile_mgmt_update);
+    }
+
+    //
+    // Set up the vanflow record for this listener (ROUTER_ACCESS).
+    // Do this only for router-to-router links: not mgmt/metrics/healthz/websockets listeners
+    //
+    if (strcmp(li->config.role, "inter-router") == 0 ||
+        strcmp(li->config.role, "edge") == 0 ||
+        strcmp(li->config.role, "inter-edge") == 0) {
+        li->vflow_record = vflow_start_record(VFLOW_RECORD_ROUTER_ACCESS, 0);
+        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_NAME, li->config.name);
+        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
+        vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
+    }
+
     return li;
 }
+
+
+void qd_listener_delete(qd_listener_t *li, bool on_shutdown)
+{
+    if (li) {
+        // Disable the listener to prevent new incoming connections. This is an asynchronous "clean close": the
+        // Proton/LWS listeners will still hold their respective reference counts to this listener until the close
+        // request has been processed (on another thread).
+        //
+        if (li->pn_listener) {
+            pn_listener_close(li->pn_listener);
+            if (on_shutdown) {
+                // DISPATCH-1508: qd_listener_delete() does an asynchronous "clean close" which requires proton to
+                // invoke the listeners event handler with a PN_LISTENER_CLOSE event on a proactor thread in order to
+                // release the reference count to the listener held by the pn_listener. But since the router is going
+                // down those events will not occur which means the pn_listeners reference count will not be cleaned
+                // up. In this case we have to manually remove the reference before deleting the listener:
+                //
+                pn_listener_set_context(li->pn_listener, 0);
+                li->pn_listener = 0;
+                qd_listener_decref(li);  // for the pn_listener's context
+            }
+
+        } else if (li->http) {
+            qd_lws_listener_close(li->http);
+        }
+
+        // immediately prevent further notfications of sslProfile config changes
+        qd_tls_config_unregister_update_callback(li->tls_config);
+        qd_listener_decref(li);
+    }
+}
+
 
 static bool qd_listener_listen_pn(qd_listener_t *li)
 {
@@ -177,11 +278,6 @@ void qd_listener_decref(qd_listener_t *li)
     }
 }
 
-qd_lws_listener_t *qd_listener_http(const qd_listener_t *li)
-{
-    return li->http;
-}
-
 const qd_server_config_t *qd_listener_config(const qd_listener_t *li)
 {
     return &li->config;
@@ -214,5 +310,101 @@ void qd_listener_remove_link(qd_listener_t *li)
     if (!!li->vflow_record) {
         uint32_t count = sys_atomic_dec(&li->connection_count) - 1;
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+    }
+}
+
+
+// This function searches for connections that need to be closed due to violating the parent listeners TLS oldest valid
+// ordinal
+//
+static void expired_ordinal_connection_scrubber(qd_connection_t *qd_conn, void *context, bool discard)
+{
+    qd_listener_t *li = (qd_listener_t *)context;
+
+    if (!discard) {
+        if (qd_conn->pn_conn) {
+            assert(qd_conn->pn_conn == (pn_connection_t *)sys_thread_proactor_context());
+            qd_log(LOG_SERVER, QD_LOG_DEBUG,
+                   "[C%"PRIu64"] Closing due to expired TLS ordinal", qd_conn->connection_id);
+            pn_connection_close(qd_conn->pn_conn);
+        }
+
+        // Pre-allocate the deferred call in order to avoid allocation while holding the adaptor lock
+        qd_deferred_call_t *dc = qd_connection_new_qd_deferred_call_t(expired_ordinal_connection_scrubber, li);
+
+        // now search the global list of AMQP connections for other connections that need to be closed
+        sys_mutex_lock(&amqp_adaptor.lock);
+        qd_connection_t *next_conn = DEQ_NEXT(qd_conn);
+
+        // Check if qd_conn has been removed from the global list since this function was scheduled. If it was restart
+        // the scan otherwise we might leave up connections that should be removed.
+        if (next_conn == 0 && DEQ_TAIL(amqp_adaptor.conn_list) != qd_conn) {
+            next_conn = DEQ_HEAD(amqp_adaptor.conn_list);
+        }
+
+        // find the next victim:
+        uint64_t tls_ordinal;
+        while (next_conn && (next_conn->listener != li ||
+                             next_conn->pn_conn == 0 ||
+                             !qd_connection_get_tls_ordinal(next_conn, &tls_ordinal) ||
+                             tls_ordinal >= li->tls_oldest_valid_ordinal)) {
+            next_conn = DEQ_NEXT(next_conn);
+        }
+        if (next_conn) {
+            qd_connection_invoke_deferred_impl(next_conn, dc);
+            dc = 0;  // ownership passed, avoid free
+        }
+        sys_mutex_unlock(&amqp_adaptor.lock);
+
+        if (dc) {
+            qd_connection_free_qd_deferred_call_t(dc);
+        }
+    }
+}
+
+
+// Handler invoked by mgmt thread whenever the sslProfile is updated for a given qd_listener_t. Check for changes to the
+// sslProfile oldestValidOrdinal attribute.  Note this is called with the sslProfile lock held to prevent new
+// connections from being activated until after this call returns.
+//
+static void handle_listener_ssl_profile_mgmt_update(const qd_tls_config_t *config, void *context)
+{
+    uint64_t new_oldest_ordinal = qd_tls_config_get_oldest_valid_ordinal(config);
+    qd_listener_t *li           = (qd_listener_t *) context;
+
+    // destroy all connections whose connectors use an expired TLS ordinal:
+
+    if (new_oldest_ordinal > li->tls_oldest_valid_ordinal) {
+
+        qd_log(LOG_SERVER, QD_LOG_DEBUG,
+               "Listeners %s new oldest valid TLS ordinal: %"PRIu64", previous: %"PRIu64,
+               li->config.name, new_oldest_ordinal, li->tls_oldest_valid_ordinal);
+
+        li->tls_oldest_valid_ordinal = new_oldest_ordinal;
+
+        // Pre-allocate the deferred call in order to avoid allocation while holding the adaptor lock
+        qd_deferred_call_t *dc = qd_connection_new_qd_deferred_call_t(expired_ordinal_connection_scrubber, li);
+
+        // find the first expired connection and schedule it to be closed. When that connection closes it will find the
+        // next connection that needs closing. This process repeats until all connections have been dealt with.
+        //
+        sys_mutex_lock(&amqp_adaptor.lock);
+        qd_connection_t *qd_conn = DEQ_HEAD(amqp_adaptor.conn_list);
+        while (qd_conn) {
+            if (qd_conn->listener == li) {
+                uint64_t tls_ordinal;
+                if (qd_connection_get_tls_ordinal(qd_conn, &tls_ordinal) && tls_ordinal < new_oldest_ordinal) {
+                    qd_connection_invoke_deferred_impl(qd_conn, dc);
+                    dc = 0;  // ownership passed, avoid free
+                    break;
+                }
+            }
+            qd_conn = DEQ_NEXT(qd_conn);
+        }
+        sys_mutex_unlock(&amqp_adaptor.lock);
+
+        if (dc) {
+            qd_connection_free_qd_deferred_call_t(dc);
+        }
     }
 }

@@ -44,19 +44,6 @@ typedef struct sys_mutex_t      sys_mutex_t;
  */
 
 /**
- * Deferred callback
- *
- * This type is for calls that are deferred until they can be invoked on
- * a specific connection's thread.
- *
- * @param context An opaque context to be passed back with the call.
- * @param discard If true, the call should be discarded because the connection it
- *        was pending on was deleted.
- */
-typedef void (*qd_deferred_t)(void *context, bool discard);
-
-
-/**
  * Run the server threads until completion - The blocking version.
  *
  * Start the operation of the server, including launching all of the worker
