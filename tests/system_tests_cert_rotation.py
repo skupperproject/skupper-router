@@ -639,6 +639,12 @@ class InterRouterCertRotationTest(TestCase):
         self.assertEqual(20, len(router_L.get_active_inter_router_data_links()),
                          f"Failed to get 20 links: {router_L.get_active_inter_router_data_links()}")
 
+        # Store the connection identifiers of all inter-router connections on
+        # the Listener side. This will be used as a filter to identify the new
+        # connections that have established due to certificate rotation.
+        old_conns = [conn["identity"] for conn in router_L.get_inter_router_conns()]
+        self.assertEqual(data_conn_count + 1, len(old_conns))
+
         # Now rotate the certs: Start on the listener side
         router_L.management.update(type=SSL_PROFILE_TYPE,
                                    attributes={'ordinal': 10,
@@ -687,6 +693,13 @@ class InterRouterCertRotationTest(TestCase):
         self.assertEqual(28, len(router_L.get_active_inter_router_data_links()),
                          f"Failed to get 28 links: {router_L.get_active_inter_router_data_links()}")
 
+        # Verify that new Listener-side connections are using the latest
+        # tlsOrdinal value for the Listener's sslProfile (10).
+        new_conns = [conn for conn in router_L.get_inter_router_conns() if conn['identity'] not in old_conns]
+        self.assertEqual(data_conn_count + 1, len(new_conns))
+        for conn in new_conns:
+            self.assertEqual(10, conn["tlsOrdinal"], f"Wrong tlsOrdinal {conn}")
+
         # Now expire the old inter-router connections by setting the listeners
         # oldestValidOrdinal to 10. Expect the connections that carry the old
         # streaming data to close.
@@ -697,6 +710,12 @@ class InterRouterCertRotationTest(TestCase):
         ok = retry(lambda: tcp_streamer.is_alive is False)
         self.assertTrue(ok, "Failed to terminate the streamer")
         tcp_streamer.join()
+
+        # verify that all remaining connections are using the proper tlsOrdinal
+        for conn in router_L.get_inter_router_conns():
+            self.assertEqual(10, conn["tlsOrdinal"], f"Wrong Listener tlsOrdinal {conn}")
+        for conn in router_C.get_inter_router_conns():
+            self.assertEqual(11, conn["tlsOrdinal"], f"Wrong Connector tlsOrdinal {conn}")
 
         # Verify that the new TCP flows are still actively passing data
         self.assertEqual(4, new_tcp_streamer.active_clients,
