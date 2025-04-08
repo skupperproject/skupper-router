@@ -21,7 +21,6 @@
 
 #include "policy.h"
 #include "qd_connection.h"
-#include "node_type.h"
 #include "private.h"
 
 #include "qpid/dispatch/amqp.h"
@@ -128,15 +127,8 @@ ALLOC_DEFINE(qd_pn_free_link_t);
 ALLOC_DECLARE(qd_session_t);
 ALLOC_DEFINE(qd_session_t);
 
-typedef struct qdc_node_type_t {
-    DEQ_LINKS(struct qdc_node_type_t);
-    const qd_node_type_t *ntype;
-} qdc_node_type_t;
-DEQ_DECLARE(qdc_node_type_t, qdc_node_type_list_t);
-
 struct qd_container_t {
     qd_router_t          *qd_router;
-    const qd_node_type_t *ntype;
     sys_mutex_t           lock;
     // KAG: todo move to amqp_adaptor
     qd_link_list_t        links;
@@ -180,7 +172,7 @@ static qd_link_t *setup_outgoing_link(qd_container_t *container, pn_link_t *pn_l
     qd_session_incref(link->qd_session);
 
     pn_link_set_context(pn_link, link);
-    container->ntype->outgoing_link_handler(container->qd_router, link);
+    AMQP_outgoing_link_handler(container->qd_router, link);
     return link;
 }
 
@@ -212,7 +204,7 @@ static qd_link_t *setup_incoming_link(qd_container_t *container, pn_link_t *pn_l
         pn_link_set_max_message_size(pn_link, max_size);
     }
     pn_link_set_context(pn_link, link);
-    container->ntype->incoming_link_handler(container->qd_router, link);
+    AMQP_incoming_link_handler(container->qd_router, link);
     return link;
 }
 
@@ -222,7 +214,7 @@ static void handle_link_open(qd_container_t *container, pn_link_t *pn_link)
     qd_link_t *link = (qd_link_t*) pn_link_get_context(pn_link);
     if (link == 0)
         return;
-    container->ntype->link_attach_handler(container->qd_router, link);
+    AMQP_link_attach_handler(container->qd_router, link);
 }
 
 
@@ -232,7 +224,7 @@ static void do_receive(qd_container_t *container, pn_link_t *pn_link, pn_deliver
 
     if (link) {
         while (true) {
-            if (!container->ntype->rx_handler(container->qd_router, link))
+            if (!AMQP_rx_handler(container->qd_router, link))
                 break;
         }
         return;
@@ -254,7 +246,7 @@ static void do_updated(qd_container_t *container, pn_delivery_t *pnd)
     qd_link_t     *link     = (qd_link_t*) pn_link_get_context(pn_link);
 
     if (link) {
-        container->ntype->disp_handler(container->qd_router, link, pnd);
+        AMQP_disposition_handler(container->qd_router, link, pnd);
     }
 }
 
@@ -262,9 +254,9 @@ static void do_updated(qd_container_t *container, pn_delivery_t *pnd)
 static void notify_opened(qd_container_t *container, qd_connection_t *conn, void *context)
 {
     if (qd_connection_inbound(conn)) {
-        container->ntype->inbound_conn_opened_handler(container->qd_router, conn, context);
+        AMQP_inbound_opened_handler(container->qd_router, conn, context);
     } else {
-        container->ntype->outbound_conn_opened_handler(container->qd_router, conn, context);
+        AMQP_outbound_opened_handler(container->qd_router, conn, context);
     }
 }
 
@@ -275,7 +267,7 @@ void policy_notify_opened(void *container, qd_connection_t *conn, void *context)
 
 static void notify_closed(qd_container_t *container, qd_connection_t *conn, void *context)
 {
-    container->ntype->conn_closed_handler(container->qd_router, conn, context);
+    AMQP_closed_handler(container->qd_router, conn, context);
 }
 
 
@@ -290,10 +282,10 @@ static void close_links(qd_container_t *container, pn_connection_t *conn, bool p
         pn_link_t *next_link = pn_link_next(pn_link, 0);
 
         if (qd_link) {
-            if (print_log)
-                qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end",
-                       pn_link_name(pn_link));
-            container->ntype->link_closed_handler(container->qd_router, qd_link, true);  // true == forced
+            if (print_log) {
+                qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent connection end", pn_link_name(pn_link));
+            }
+            AMQP_link_closed_handler(container->qd_router, qd_link, true);  // true == forced
             qd_link_free(qd_link);
         }
 
@@ -345,7 +337,7 @@ static int close_handler(qd_container_t *container, pn_connection_t *conn, qd_co
 
 static void writable_handler(qd_container_t *container, pn_connection_t *conn, qd_connection_t* qd_conn)
 {
-    container->ntype->writable_handler(container->qd_router, qd_conn, 0);
+    AMQP_conn_wake_handler(container->qd_router, qd_conn, 0);
 }
 
 
@@ -531,9 +523,8 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                                     assert(qd_conn->n_senders >= 0);
                                 }
                             }
-                            qd_log(LOG_CONTAINER, QD_LOG_DEBUG,
-                                   "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
-                            container->ntype->link_closed_handler(container->qd_router, qd_link, true);
+                            qd_log(LOG_CONTAINER, QD_LOG_DEBUG, "Aborting link '%s' due to parent session end", pn_link_name(pn_link));
+                            AMQP_link_closed_handler(container->qd_router, qd_link, true);
                             qd_link_free(qd_link);
                         }
                     }
@@ -610,11 +601,11 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
                 }
 
                 // notify arrival of inbound detach
-                container->ntype->link_detach_handler(container->qd_router, qd_link);
+                AMQP_link_detach_handler(container->qd_router, qd_link);
 
                 if (pn_link_state(pn_link) == (PN_LOCAL_CLOSED | PN_REMOTE_CLOSED)) {
                     // Link now fully detached
-                    container->ntype->link_closed_handler(container->qd_router, qd_link, false);
+                    AMQP_link_closed_handler(container->qd_router, qd_link, false);
                     qd_link_free(qd_link);
                     add_link_to_free_list(&qd_conn->free_link_list, pn_link);
                 }
@@ -634,7 +625,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
             qd_link_t *qd_link = (qd_link_t*) pn_link_get_context(pn_link);
             if (qd_link) {
                 // Link now fully detached
-                container->ntype->link_closed_handler(container->qd_router, qd_link, false);
+                AMQP_link_closed_handler(container->qd_router, qd_link, false);
                 qd_link_free(qd_link);
             }
             add_link_to_free_list(&qd_conn->free_link_list, pn_link);   // why???
@@ -663,8 +654,9 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
     case PN_LINK_FLOW :
         pn_link = pn_event_link(event);
         qd_link = (qd_link_t*) pn_link_get_context(pn_link);
-        if (qd_link)
-            container->ntype->link_flow_handler(container->qd_router, qd_link);
+        if (qd_link) {
+            AMQP_link_flow_handler(container->qd_router, qd_link);
+        }   
         break;
 
     case PN_DELIVERY :
@@ -695,7 +687,7 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event,
 }
 
 
-qd_container_t *qd_container(qd_router_t *router, const qd_node_type_t *ntype)
+qd_container_t *qd_container(qd_router_t *router)
 {
     qd_container_t *container = NEW(qd_container_t);
 
@@ -703,7 +695,6 @@ qd_container_t *qd_container(qd_router_t *router, const qd_node_type_t *ntype)
 
     assert(router);
     container->qd_router     = router;
-    container->ntype         = ntype;
     sys_mutex_init(&container->lock);
     DEQ_INIT(container->links);
 

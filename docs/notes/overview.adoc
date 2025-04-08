@@ -203,11 +203,7 @@ Interaction among:
 
 * qd_server_t - proactor AMQP event batch handler
 * qd_container_t - dispatches events to AMQP callbacks
-   ** defines a set of callbacks to handler AMQP events
-      *** qd_node_type_t in include/qpid/dispatch/container.h
-   ** callbacks are the interface to the dispatch library “application”
 * qd_router_t - router “application”
-   ** registers callbacks with the container via a “qd_node_type_t”
    ** see the router_node structure in router_node.c
 
 == Data plane: Proactor event handling

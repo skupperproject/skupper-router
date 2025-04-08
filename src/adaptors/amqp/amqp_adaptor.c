@@ -22,7 +22,6 @@
 #include "qd_connection.h"
 #include "qd_listener.h"
 #include "container.h"
-#include "node_type.h"
 
 #include "delivery.h"
 #include "dispatch_private.h"
@@ -331,7 +330,7 @@ static void clear_producer_activation(qdr_core_t *core, qdr_delivery_t *delivery
 }
 
 
-static int AMQP_conn_wake_handler(qd_router_t *router, qd_connection_t *conn, void *context)
+int AMQP_conn_wake_handler(qd_router_t *router, qd_connection_t *conn, void *context)
 {
     qdr_connection_t *qconn  = (qdr_connection_t*) qd_connection_get_context(conn);
     int               result = 0;
@@ -536,7 +535,7 @@ static void log_link_message(qd_connection_t *conn, pn_link_t *pn_link, qd_messa
  * ready for rx processing.  This will cause the container to immediately
  * re-call this function with the next delivery.
  */
-static bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
+bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
 {
     pn_link_t      *pn_link = qd_link_pn(link);
 
@@ -1003,7 +1002,7 @@ static void deferred_AMQP_rx_handler(void *context, bool discard)
 /**
  * Delivery Disposition Handler
  */
-static void AMQP_disposition_handler(qd_router_t *router, qd_link_t *link, pn_delivery_t *pnd)
+void AMQP_disposition_handler(qd_router_t *router, qd_link_t *link, pn_delivery_t *pnd)
 {
     qdr_delivery_t *delivery = qdr_node_delivery_qdr_from_pn(pnd);
 
@@ -1047,7 +1046,7 @@ static void AMQP_disposition_handler(qd_router_t *router, qd_link_t *link, pn_de
 /**
  * New Incoming Link Handler
  */
-static int AMQP_incoming_link_handler(qd_router_t *router, qd_link_t *link)
+int AMQP_incoming_link_handler(qd_router_t *router, qd_link_t *link)
 {
     qd_connection_t  *conn     = qd_link_connection(link);
     uint64_t link_id;
@@ -1080,7 +1079,7 @@ static int AMQP_incoming_link_handler(qd_router_t *router, qd_link_t *link)
 /**
  * New Outgoing Link Handler
  */
-static int AMQP_outgoing_link_handler(qd_router_t *router, qd_link_t *link)
+int AMQP_outgoing_link_handler(qd_router_t *router, qd_link_t *link)
 {
     qd_connection_t  *conn     = qd_link_connection(link);
     uint64_t link_id;
@@ -1111,7 +1110,7 @@ static int AMQP_outgoing_link_handler(qd_router_t *router, qd_link_t *link)
 /**
  * Handler for remote opening of links that we initiated.
  */
-static int AMQP_link_attach_handler(qd_router_t *router, qd_link_t *link)
+int AMQP_link_attach_handler(qd_router_t *router, qd_link_t *link)
 {
     qdr_link_t *qlink = (qdr_link_t*) qd_link_get_context(link);
     qdr_link_second_attach(qlink,
@@ -1126,7 +1125,7 @@ static int AMQP_link_attach_handler(qd_router_t *router, qd_link_t *link)
  * Handler for flow events on links.  Flow updates include session window
  * state, which needs to be checked for unblocking Q3.
  */
-static int AMQP_link_flow_handler(qd_router_t *router, qd_link_t *link)
+int AMQP_link_flow_handler(qd_router_t *router, qd_link_t *link)
 {
     pn_link_t   *pnlink  = qd_link_pn(link);
     qdr_link_t  *rlink   = (qdr_link_t*) qd_link_get_context(link);
@@ -1236,7 +1235,7 @@ static void drain_link(qd_router_t *router, qd_link_t *qd_link)
 /**
  * Link Detached Handler
  */
-static int AMQP_link_detach_handler(qd_router_t *router, qd_link_t *link)
+int AMQP_link_detach_handler(qd_router_t *router, qd_link_t *link)
 {
     assert(link);
 
@@ -1270,7 +1269,7 @@ static int AMQP_link_detach_handler(qd_router_t *router, qd_link_t *link)
  * This is the last callback for the given link - the link will be freed on return from this call! Forced is true if the
  * link has not properly closed (detach handshake completed).
 */
-static void AMQP_link_closed_handler(qd_router_t *router, qd_link_t *qd_link, bool forced)
+void AMQP_link_closed_handler(qd_router_t *router, qd_link_t *qd_link, bool forced)
 {
     assert(qd_link);
 
@@ -1786,21 +1785,21 @@ static bool parse_failover_property_list(qd_router_t *router, qd_connection_t *c
 }
 
 
-static int AMQP_inbound_opened_handler(qd_router_t *router, qd_connection_t *conn, void *context)
+int AMQP_inbound_opened_handler(qd_router_t *router, qd_connection_t *conn, void *context)
 {
     AMQP_opened_handler(router, conn, true);
     return 0;
 }
 
 
-static int AMQP_outbound_opened_handler(qd_router_t *router, qd_connection_t *conn, void *context)
+int AMQP_outbound_opened_handler(qd_router_t *router, qd_connection_t *conn, void *context)
 {
     AMQP_opened_handler(router, conn, false);
     return 0;
 }
 
 
-static int AMQP_closed_handler(qd_router_t *router, qd_connection_t *conn, void *context)
+int AMQP_closed_handler(qd_router_t *router, qd_connection_t *conn, void *context)
 {
     qdr_connection_t *qdrc   = (qdr_connection_t*) qd_connection_get_context(conn);
 
@@ -1821,23 +1820,6 @@ static int AMQP_closed_handler(qd_router_t *router, qd_connection_t *conn, void 
 
     return 0;
 }
-
-
-static const qd_node_type_t router_node = {"router", 0,
-                                     AMQP_rx_handler,
-                                     AMQP_disposition_handler,
-                                     AMQP_incoming_link_handler,
-                                     AMQP_outgoing_link_handler,
-                                     AMQP_conn_wake_handler,
-                                     AMQP_link_detach_handler,
-                                     AMQP_link_closed_handler,
-                                     AMQP_link_attach_handler,
-                                     AMQP_link_flow_handler,
-                                     0,   // node_created_handler
-                                     0,   // node_destroyed_handler
-                                     AMQP_inbound_opened_handler,
-                                     AMQP_outbound_opened_handler,
-                                     AMQP_closed_handler};
 
 
 static void CORE_connection_activate(void *context, qdr_connection_t *conn)
@@ -2361,7 +2343,7 @@ static void qd_amqp_adaptor_init(qdr_core_t *core, void **adaptor_context)
     amqp_adaptor.dispatch = qd;
     assert(qd->router);  // ensure router has been initialized first
     amqp_adaptor.router  = qd->router;
-    amqp_adaptor.container = qd_container(qd->router, &router_node);
+    amqp_adaptor.container = qd_container(qd->router);
     amqp_adaptor.adaptor = qdr_protocol_adaptor(core,
                                                         "amqp",
                                                         (void*) amqp_adaptor.router,

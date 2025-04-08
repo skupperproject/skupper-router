@@ -58,13 +58,12 @@ typedef enum {
 typedef struct qd_session_t    qd_session_t;
 typedef struct qd_link_t       qd_link_t;
 typedef struct qd_connection_t qd_connection_t;
-typedef struct qd_node_type_t  qd_node_type_t;
 
 
 ALLOC_DECLARE_SAFE(qd_link_t);
 DEQ_DECLARE(qd_link_t, qd_link_list_t);
 
-qd_container_t *qd_container(qd_router_t *router, const qd_node_type_t *node_type);
+qd_container_t *qd_container(qd_router_t *router);
 void qd_container_free(qd_container_t *container);
 
 qd_link_t *qd_link(qd_connection_t *conn, qd_direction_t dir, const char *name, qd_session_class_t);
