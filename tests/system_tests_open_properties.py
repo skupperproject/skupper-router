@@ -18,13 +18,14 @@
 #
 
 import json
+from threading import Thread, Event
 
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 from test_broker import FakeBroker
 from system_test import TestCase, unittest, main_module, Qdrouterd
 from system_test import retry, TIMEOUT, wait_port, SkManager, Process
-from system_test import CONNECTION_TYPE
+from system_test import CONNECTION_TYPE, PollTimeout
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
 
@@ -98,6 +99,45 @@ class OpenPropertiesClient(MessagingHandler):
         else:
             self._addr = self._router.addresses[0]
         Container(self).run()
+
+
+class OpenPropertiesSender(MessagingHandler):
+    """
+    A test client that sends a map of test open properties to the router.
+    """
+
+    def __init__(self, router_addr, test_props):
+        super(OpenPropertiesSender, self).__init__()
+        self._test_props = test_props
+        self._addr = router_addr
+        self._shutdown = False
+        self._connected = Event()  # set when TCP connection up (or error)
+        self._thread = Thread(target=self.run)
+        self._thread.daemon = True
+        self._thread.start()
+        self._connected.wait()
+
+    def on_start(self, event):
+        self._reactor = event.reactor
+        self._poll_timer = event.reactor.schedule(0.5, PollTimeout(self))
+        self._conn = event.container.connect(self._addr, properties=self._test_props)
+
+    def on_connection_opened(self, event):
+        self._connected.set()
+
+    def poll_timeout(self):
+        # force thread to exit if shutdown flag set
+        if self._shutdown:
+            self._conn.close()
+        else:
+            self._poll_timer = self._reactor.schedule(0.5, PollTimeout(self))
+
+    def run(self):
+        Container(self, container_id="OPSender").run()
+
+    def join(self):
+        self._shutdown = True
+        self._thread.join(TIMEOUT)
 
 
 class OpenPropertiesConfigTest(TestCase):
@@ -523,6 +563,71 @@ class OpenPropertiesEdgeRouterTest(TestCase):
 
         line = get_log_line(b_logfile, log_msg)
         self.assertIsNotNone(line)
+
+
+class OpenPropertiesMgmtTest(TestCase):
+    """
+    Verifies that a management read of a connection has the expected open properties
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(OpenPropertiesMgmtTest, cls).setUpClass()
+
+        cls.RouterA = cls.tester.qdrouterd("RouterA",
+                                           Qdrouterd.Config([
+                                               ('router', {'mode': 'interior',
+                                                           'id': 'RouterA'}),
+                                               ('listener', {'port':
+                                                             cls.tester.get_port()})
+                                           ]),
+                                           wait=True)
+
+    def test_01_zero_values(self):
+        """
+        Verify that attributes with zero values are present in the open
+        properties. See github issue #1773
+        """
+        mgmt = self.RouterA.management
+        test_maps = [{"Attribute1": "A String",
+                      "Attribute2": 1,
+                      "Attribute3": 42},
+                     {"Thing1": 1,
+                      "Thing0": 0,
+                      "Thing2": 2},
+                     {"X": "",
+                      "Y": 7,
+                      "Z": 0}]
+
+        for test in test_maps:
+            client = OpenPropertiesSender(self.RouterA.addresses[0], test)
+            conns = mgmt.query(type=CONNECTION_TYPE).get_dicts()
+            for conn in conns:
+                # find the test client's connection
+                if conn['container'] == "OPSender":
+                    self.assertEqual(test, conn['properties'])
+                    break
+            client.join()
+
+    def test_02_malformed_maps(self):
+        """
+        Verify that maps that are not valid open properties are ignored by the
+        router.
+        """
+        mgmt = self.RouterA.management
+        test_maps = [{"Ok1": 2, "Bad": None, "Bad2": 7, "Bad3": "?"},
+                     {"Ok1": 2, 7: "invalid", "Bad2": 7, "Bad3": "?"}]
+
+        # Expect that the first entry "Ok1" is parsed but parsing stops due to
+        # the next entry being invalid
+        for test in test_maps:
+            client = OpenPropertiesSender(self.RouterA.addresses[0], test)
+            conns = mgmt.query(type=CONNECTION_TYPE).get_dicts()
+            for conn in conns:
+                # find the test client's connection
+                if conn['container'] == "OPSender":
+                    self.assertEqual({"Ok1": 2}, conn['properties'])
+                    break
+            client.join()
 
 
 if __name__ == '__main__':
