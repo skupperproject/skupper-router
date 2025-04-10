@@ -66,12 +66,13 @@ RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
  && chroot /output useradd --uid 10000 runner \
  && dnf -y --installroot /output remove shadow-utils \
  && dnf clean all --installroot /output
+RUN [ -d /usr/share/buildinfo ] && cp -a /usr/share/buildinfo /output/usr/share/buildinfo ||:
+RUN [ -d /root/buildinfo ] && cp -a /root/buildinfo /output/root/buildinfo ||:
 
 FROM scratch
 
 COPY --from=packager /output /
 COPY --from=packager /etc/yum.repos.d /etc/yum.repos.d
-COPY --from=packager /usr/share/buildinfo /usr/share/buildinfo
 
 USER 10000
 
