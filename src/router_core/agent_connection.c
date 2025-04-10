@@ -106,27 +106,32 @@ const char *qdr_connection_columns[] =
 
 const char *CONNECTION_TYPE = "io.skupper.router.connection";
 
-static void qd_get_next_pn_data(pn_data_t **data, const char **d, int *d1)
+// Parse out an integer or string value, return true on success
+// Only supports stringy/integery values (others TBD)
+static bool qd_get_pn_data(pn_data_t *data, const char **d, int *d1)
 {
-    if (pn_data_next(*data)) {
-        switch (pn_data_type(*data)) {
-            case PN_STRING:
-                *d = pn_data_get_string(*data).start;
-                break;
-            case PN_SYMBOL:
-                *d = pn_data_get_symbol(*data).start;
-                break;
-            case PN_INT:
-                *d1 = pn_data_get_int(*data);
-                break;
-            case PN_LONG:
-                *d1 = pn_data_get_long(*data);
-                break;
-            default:
-                break;
-        }
+    assert(!!d && !!d1);
+
+    bool value_set = true;
+    switch (pn_data_type(data)) {
+        case PN_STRING:
+            *d = pn_data_get_string(data).start;
+            break;
+        case PN_SYMBOL:
+            *d = pn_data_get_symbol(data).start;
+            break;
+        case PN_INT:
+            *d1 = pn_data_get_int(data);
+            break;
+        case PN_LONG:
+            *d1 = pn_data_get_long(data);
+            break;
+        default:
+            value_set = false;
+            break;
     }
-    }
+    return value_set;
+}
 
 
 static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *conn, int col, qd_composed_field_t *body, bool as_map)
@@ -284,24 +289,40 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
             if (count > 0) {
 
                 for (size_t i = 0; i < count/2; i++) {
-                    const char *key   = 0;
-                    // We are assuming for now that all keys are strings
-                    qd_get_next_pn_data(&data, &key, 0);
+                    const char *key = 0;
+                    int value_int   = 0;
 
-                    const char *value_string = 0;
-                    int value_int = 0;
+                    // Move to key node:
+                    if (!pn_data_next(data)) {
+                        break;  // no key?
+                    }
+
+                    // We are assuming for now that all keys are strings
+                    if (!qd_get_pn_data(data, &key, &value_int) || !key) {
+                        // failed to parse a key string
+                        break;
+                    }
+
+                    // Move to value node:
+                    if (!pn_data_next(data)) {
+                        break; // no value?
+                    }
+
                     // We are assuming for now that all values are either strings or integers
-                    qd_get_next_pn_data(&data, &value_string, &value_int);
+                    const char *value_string = 0;
+                    if (!qd_get_pn_data(data, &value_string, &value_int)) {
+                        // failed to parse
+                        break;
+                    }
 
                     // We now have the key and the value. Do not insert the key or the value if key is empty
                     if (key) {
                         qd_compose_insert_string(body, key);
                         if (value_string)
                             qd_compose_insert_string(body, value_string);
-                        else if (value_int)
+                        else
                             qd_compose_insert_int(body, value_int);
                     }
-
                 }
             }
 
