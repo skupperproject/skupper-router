@@ -233,10 +233,12 @@ static void try_open_cb(void *context)
  *
  * Scheduled on the target connections thread
  */
-static void deferred_close(void *context, bool discard)
+static void deferred_close(qd_connection_t *qd_conn, void *context, bool discard)
 {
     if (!discard) {
-        pn_connection_close((pn_connection_t*)context);
+        if (qd_conn->pn_conn) {
+            pn_connection_close(qd_conn->pn_conn);
+        }
     }
 }
 
@@ -327,10 +329,10 @@ void qd_connector_activate(qd_connector_t *ct)
 //
 void qd_connector_close(qd_connector_t *ct)
 {
-    // cannot free the timer while holding ct->lock since the
-    // timer callback may be running during the call to qd_timer_free
-    qd_timer_t *timer = 0;
-    void       *dct = qd_connection_new_qd_deferred_call_t();
+    // cannot free the timer while holding ct->lock since if the timer callback is running on the timer thread the call
+    // to qd_timer_free will block.
+    qd_timer_t         *timer = 0;
+    qd_deferred_call_t *dct   = qd_connection_new_qd_deferred_call_t(deferred_close, 0);
 
     sys_mutex_lock(&ct->lock);
     timer = ct->reconnect_timer;
@@ -338,7 +340,7 @@ void qd_connector_close(qd_connector_t *ct)
     ct->state = CTOR_STATE_DELETED;
     qd_connection_t *conn = ct->qd_conn;
     if (conn && conn->pn_conn) {
-        qd_connection_invoke_deferred_impl(conn, deferred_close, conn->pn_conn, dct);
+        qd_connection_invoke_deferred_impl(conn, dct);
         sys_mutex_unlock(&ct->lock);
     } else {
         sys_mutex_unlock(&ct->lock);

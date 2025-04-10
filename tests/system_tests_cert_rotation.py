@@ -27,6 +27,9 @@ from system_test import TestCase, main_module, Qdrouterd, unittest, retry
 from system_test import CA_CERT, SSL_PROFILE_TYPE
 from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
 from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
+from system_test import CA2_CERT
+from system_test import CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD
+from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD
 from tcp_streamer import TcpStreamerThread
 
 
@@ -224,14 +227,14 @@ class InterRouterCertRotationTest(TestCase):
         router_L.teardown()
         router_C.teardown()
 
-    def test_03_tcp_streams(self):
+    def test_03_connector_tcp_streams(self):
         """
         Verify that existing TCP streams are not interrupted when new
         inter-router connections are established.
 
         This test sets up several TCP streaming connections through two
-        routers. It then does a certificate rotation and verifies that the
-        streams have not failed.
+        routers. It then does a connector-side certificate rotation and
+        verifies that the streams have not failed.
 
         It then creates another set of TCP streaming connections. It verifies
         that these streams are sent over the upgraded connections.
@@ -523,6 +526,218 @@ class InterRouterCertRotationTest(TestCase):
 
         tcp_streamer.join()
         new_tcp_streamer.join()
+
+        router_L.teardown()
+        router_C.teardown()
+
+    def test_05_listener_tcp_streams(self):
+        """
+        Similar to test_03_connector_tcp_streams but in this case the
+        connections are dropped due to advancing the oldestValidOrdinal on the
+        listener-side.
+
+        In this test the listener-side sslProfile will be rotated to a new
+        CA/certificate that are incompatible with the connector side. The
+        connector side will then be rotated to a compatible
+        CA/certificate. Then the older certificates will be expired on the
+        listener side.
+        """
+        data_conn_count = 4
+        inter_router_port = self.tester.get_port()
+        tcp_listener_port_1 = self.tester.get_port()
+        tcp_listener_port_2 = self.tester.get_port()
+        tcp_connector_port_1 = self.tester.get_port()
+        tcp_connector_port_2 = self.tester.get_port()
+
+        router_L = self.router("RouterL",
+                               [('sslProfile', {'name': 'ListenerSslProfile',
+                                                'caCertFile': CA_CERT,
+                                                'certFile': SERVER_CERTIFICATE,
+                                                'privateKeyFile': SERVER_PRIVATE_KEY,
+                                                'password': SERVER_PRIVATE_KEY_PASSWORD}),
+                                ('listener', {'name': 'Listener01',
+                                              'role': 'inter-router',
+                                              'host': '0.0.0.0',
+                                              'port': inter_router_port,
+                                              'requireSsl': 'yes',
+                                              'sslProfile': 'ListenerSslProfile'}),
+                                ('tcpListener', {'name': 'tcpListener01',
+                                                 'address': 'tcp/streaming/1',
+                                                 'port': tcp_listener_port_1}),
+                                ('tcpListener', {'name': 'tcpListener02',
+                                                 'address': 'tcp/streaming/2',
+                                                 'port': tcp_listener_port_2})],
+                               data_conn_count, wait=False)
+        router_C = self.router("RouterC",
+                               [('sslProfile', {'name': "ConnectorSslProfile",
+                                                'ordinal': 0,
+                                                'oldestValidOrdinal': 0,
+                                                'caCertFile': CA_CERT,
+                                                'certFile': CLIENT_CERTIFICATE,
+                                                'privateKeyFile': CLIENT_PRIVATE_KEY,
+                                                'password': CLIENT_PRIVATE_KEY_PASSWORD}),
+                                ('connector', {'role': 'inter-router',
+                                               'host': 'localhost',
+                                               'port': inter_router_port,
+                                               'verifyHostname': 'yes',
+                                               'sslProfile': 'ConnectorSslProfile'}),
+                                ('tcpConnector', {'name': 'tcpConnector01',
+                                                  'address': 'tcp/streaming/1',
+                                                  'host': 'localhost',
+                                                  'port': tcp_connector_port_1}),
+                                ('tcpConnector', {'name': 'tcpConnector02',
+                                                  'address': 'tcp/streaming/2',
+                                                  'host': 'localhost',
+                                                  'port': tcp_connector_port_2})],
+                               data_conn_count, wait=True)
+        router_C.wait_router_connected("RouterL")
+        router_L.wait_router_connected("RouterC")
+
+        # wait for all the inter-router data connections and the TCP listener
+        # ports to come up
+        self.wait_inter_router_conns(router_L, data_conn_count + 1)
+        wait_tcp_listeners_up(router_L.addresses[0])
+
+        # Verify all inter-router conns on Router_C are based on the same
+        # tlsOrdinal, which is zero.
+        ir_conns = router_C.get_inter_router_conns()
+        for ir_conn in ir_conns:
+            self.assertEqual(0, ir_conn['tlsOrdinal'])
+
+        # This test allows the certificate rotation to complete before expiring
+        # the old inter-router connections. Therefore we expect that the
+        # router's topology does not change during this test. Let the topology
+        # settle before continuting the test. Using the default flux_interval
+        # which should be "long enough" (fingers crossed)
+        flux_interval = 4.1  # wait a bit longer than the interval to prevent races
+        last_topo_C = router_C.get_last_topology_change()
+        last_topo_L = router_L.get_last_topology_change()
+        deadline = time.time() + flux_interval
+        while deadline > time.time():  # test will timeout on failure
+            time.sleep(0.1)
+            topo_C = router_C.get_last_topology_change()
+            topo_L = router_L.get_last_topology_change()
+            if topo_C != last_topo_C or topo_L != last_topo_L:
+                last_topo_C = topo_C
+                last_topo_L = topo_L
+                deadline = time.time() + flux_interval
+
+        # start TCP streaming connections across the routers
+        tcp_streamer = TcpStreamerThread(client_addr=('localhost', tcp_listener_port_1),
+                                         server_addr=('0.0.0.0', tcp_connector_port_1),
+                                         client_count=10, poll_timeout=0.2)
+
+        # Now wait until the streaming client have connected and traffic is
+        # being sent
+        ok = retry(lambda: tcp_streamer.active_clients == 10)
+        self.assertTrue(ok, f"Streaming clients failed {tcp_streamer.active_clients}")
+        begin_recv = tcp_streamer.bytes_received
+        ok = retry(lambda: tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {tcp_streamer.bytes_received}")
+
+        # Expect 2 streaming links per TCP flow (links are uni-directional)
+        self.assertEqual(20, len(router_L.get_active_inter_router_data_links()),
+                         f"Failed to get 20 links: {router_L.get_active_inter_router_data_links()}")
+
+        # Store the connection identifiers of all inter-router connections on
+        # the Listener side. This will be used as a filter to identify the new
+        # connections that have established due to certificate rotation.
+        old_conns = [conn["identity"] for conn in router_L.get_inter_router_conns()]
+        self.assertEqual(data_conn_count + 1, len(old_conns))
+
+        # Now rotate the certs: Start on the listener side
+        router_L.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'ordinal': 10,
+                                               'caCertFile': CA2_CERT,
+                                               'certFile': SERVER2_CERTIFICATE,
+                                               'privateKeyFile': SERVER2_PRIVATE_KEY,
+                                               'password': SERVER2_PRIVATE_KEY_PASSWORD},
+                                   name='ListenerSslProfile')
+
+        # And now the connector. This will result in a new set of inter-router
+        # connections that will replace the existing ones.
+        router_C.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'ordinal': 11,
+                                               'caCertFile': CA2_CERT,
+                                               'certFile': CLIENT2_CERTIFICATE,
+                                               'privateKeyFile': CLIENT2_PRIVATE_KEY,
+                                               'password': CLIENT2_PRIVATE_KEY_PASSWORD},
+                                   name='ConnectorSslProfile')
+
+        # wait until the new control links are active and all the data
+        # connections have established
+        self.wait_inter_router_conns(router_L, 2 * (data_conn_count + 1))
+        ok = self.wait_control_links(router_C, 11)
+        self.assertTrue(ok, f"Bad control links: {router_C.get_active_inter_router_control_links()}")
+        ok = self.wait_control_links(router_L, 11)
+        self.assertTrue(ok, f"Bad control links: {router_L.get_active_inter_router_control_links()}")
+
+        # verify that the streamer is still running and the streams are still passing traffic
+        begin_recv = tcp_streamer.bytes_received
+        ok = retry(lambda: tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {tcp_streamer.bytes_received}")
+        self.assertTrue(tcp_streamer.is_alive, "Streamer has failed!")
+
+        # Now create a new streamer. Its TCP flows should use the new
+        # inter-router-data links
+        new_tcp_streamer = TcpStreamerThread(client_addr=('localhost', tcp_listener_port_2),
+                                             server_addr=('0.0.0.0', tcp_connector_port_2),
+                                             client_count=4, poll_timeout=0.2)
+        ok = retry(lambda: new_tcp_streamer.active_clients == 4)
+        self.assertTrue(ok, f"Streaming clients failed {new_tcp_streamer.active_clients}")
+        begin_recv = new_tcp_streamer.bytes_received
+        ok = retry(lambda: new_tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {new_tcp_streamer.bytes_received}")
+
+        # Expect an additional 2 streaming links per TCP flow (links are uni-directional)
+        self.assertEqual(28, len(router_L.get_active_inter_router_data_links()),
+                         f"Failed to get 28 links: {router_L.get_active_inter_router_data_links()}")
+
+        # Verify that new Listener-side connections are using the latest
+        # tlsOrdinal value for the Listener's sslProfile (10).
+        new_conns = [conn for conn in router_L.get_inter_router_conns() if conn['identity'] not in old_conns]
+        self.assertEqual(data_conn_count + 1, len(new_conns))
+        for conn in new_conns:
+            self.assertEqual(10, conn["tlsOrdinal"], f"Wrong tlsOrdinal {conn}")
+
+        # Now expire the old inter-router connections by setting the listeners
+        # oldestValidOrdinal to 10. Expect the connections that carry the old
+        # streaming data to close.
+        router_L.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'oldestValidOrdinal': 10},
+                                   name='ListenerSslProfile')
+        self.wait_inter_router_conns(router_C, data_conn_count + 1)
+        ok = retry(lambda: tcp_streamer.is_alive is False)
+        self.assertTrue(ok, "Failed to terminate the streamer")
+        tcp_streamer.join()
+
+        # verify that all remaining connections are using the proper tlsOrdinal
+        for conn in router_L.get_inter_router_conns():
+            self.assertEqual(10, conn["tlsOrdinal"], f"Wrong Listener tlsOrdinal {conn}")
+        for conn in router_C.get_inter_router_conns():
+            self.assertEqual(11, conn["tlsOrdinal"], f"Wrong Connector tlsOrdinal {conn}")
+
+        # Verify that the new TCP flows are still actively passing data
+        self.assertEqual(4, new_tcp_streamer.active_clients,
+                         f"New flows failed: {new_tcp_streamer.active_clients}")
+        begin_recv = new_tcp_streamer.bytes_received
+        ok = retry(lambda: new_tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Streaming data failed {new_tcp_streamer.bytes_received}")
+        new_tcp_streamer.join()
+
+        # Verify that the remaining inter-router conns (both data and control)
+        # share the group ordinal value (currently the same as the
+        # connector-side tlsOrdinal - may change in the future)
+        ir_conns = router_C.get_inter_router_conns()
+        ir_conns.extend(router_L.get_inter_router_conns())
+        for ir_conn in ir_conns:
+            self.assertEqual(11, ir_conn['groupOrdinal'], f"Wrong ordinal {ir_conn}")
+
+        # Lastly check that neither router has seen a topology change:
+        self.assertEqual(last_topo_C, router_C.get_last_topology_change(),
+                         "Unexpected topology change for RouterC")
+        self.assertEqual(last_topo_L, router_L.get_last_topology_change(),
+                         "Unexpected topology change for RouterL")
 
         router_L.teardown()
         router_C.teardown()

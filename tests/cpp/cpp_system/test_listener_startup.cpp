@@ -22,11 +22,14 @@
 
 #include <proton/listener.h>
 
+#include <Python.h>
+
 #include <regex>
 #include <thread>
 
 extern "C" {
 #include "adaptors/amqp/qd_listener.h"
+#include "entity.h"
     qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity);
     void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *impl);
 }
@@ -38,14 +41,13 @@ static bool regex_is_broken() {
     return !std::regex_search("", std::regex(""));
 }
 
-void check_amqp_listener_startup_log_message(qd_server_config_t config, std::string listen, std::string stop)
+void check_amqp_listener_startup_log_message(qd_entity_t *entity, std::string listen, std::string stop)
 {
     QDR qdr{};
     CaptureCStream css(stderr);
     qdr.initialize("./minimal_trace.conf");
 
-    qd_listener_t *li = qd_listener(qdr.qd->server);
-    li->config = config;
+    qd_listener_t *li = qd_listener_create(qdr.qd, entity);
 
     CHECK(qd_listener_listen(li));
     pn_listener_close(li->pn_listener);
@@ -65,14 +67,13 @@ void check_amqp_listener_startup_log_message(qd_server_config_t config, std::str
                   stop, " not found in ", logging);
 }
 
-void check_http_listener_startup_log_message(qd_server_config_t config, std::string listen, std::string stop, std::string failed)
+void check_http_listener_startup_log_message(qd_entity_t *entity, std::string listen, std::string stop, std::string failed)
 {
     QDR qdr{};
     CaptureCStream css(stderr);
     qdr.initialize("./minimal_trace.conf");
 
-    qd_listener_t *li = qd_listener(qdr.qd->server);
-    li->config = config;
+    qd_listener_t *li = qd_listener_create(qdr.qd, entity);
 
     const bool http_supported = qd_server_http(qdr.qd->server) != nullptr;
 
@@ -105,71 +106,112 @@ void check_http_listener_startup_log_message(qd_server_config_t config, std::str
 TEST_CASE("Start AMQP listener with zero port" * doctest::skip(regex_is_broken()))
 {
     std::thread([] {
-        qd_server_config_t config{};
-        config.port      = strdup("0");
-        config.host      = strdup("localhost");
-        config.host_port = strdup("localhost:0");
+        PyObject *pyObject = PyDict_New();
+        PyObject *port = PyUnicode_FromString("0");
+        PyObject *host = PyUnicode_FromString("localhost");
+
+        PyDict_SetItemString(pyObject, "port", port);
+        PyDict_SetItemString(pyObject, "host", host);
+
+        qd_entity_t *entity = reinterpret_cast<qd_entity_t *>(pyObject);
 
         check_amqp_listener_startup_log_message(
-            config,
+            entity,
             R"EOS(SERVER \(info\) Listening on (127.0.0.1)|(::1):(\d\d+))EOS",
             R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
+
+        Py_DECREF(port);
+        Py_DECREF(host);
+        Py_DECREF(pyObject);
     }).join();
 }
 
 TEST_CASE("Start AMQP listener with zero port and a name" * doctest::skip(regex_is_broken()))
 {
     std::thread([] {
-        qd_server_config_t config{};
-        config.name      = strdup("pepa");
-        config.port      = strdup("0");
-        config.host      = strdup("localhost");
-        config.host_port = strdup("localhost:0");
+
+        PyObject *pyObject = PyDict_New();
+        PyObject *name = PyUnicode_FromString("pepa");
+        PyObject *port = PyUnicode_FromString("0");
+        PyObject *host = PyUnicode_FromString("localhost");
+
+        PyDict_SetItemString(pyObject, "name", name);
+        PyDict_SetItemString(pyObject, "port", port);
+        PyDict_SetItemString(pyObject, "host", host);
+
+        qd_entity_t *entity = reinterpret_cast<qd_entity_t *>(pyObject);
 
         check_amqp_listener_startup_log_message(
-            config,
+            entity,
             R"EOS(SERVER \(info\) Listening on (127.0.0.1)|(::1):(\d\d+) \(pepa\))EOS",
             R"EOS(SERVER \(debug\) Listener closed on localhost:0)EOS"
         );
+
+        Py_DECREF(name);
+        Py_DECREF(port);
+        Py_DECREF(host);
+        Py_DECREF(pyObject);
+
     }).join();
 }
 
 TEST_CASE("Start HTTP listener with zero port" * doctest::skip(regex_is_broken()))
 {
     std::thread([] {
-        qd_server_config_t config{};
-        config.port      = strdup("0");
-        config.host      = strdup("localhost");
-        config.host_port = strdup("localhost:0");
-        config.http      = true;
+        PyObject *pyObject = PyDict_New();
+        PyObject *port = PyUnicode_FromString("0");
+        PyObject *host = PyUnicode_FromString("localhost");
+
+        PyDict_SetItemString(pyObject, "port", port);
+        PyDict_SetItemString(pyObject, "host", host);
+        PyDict_SetItemString(pyObject, "http", Py_True);
+
+        qd_entity_t *entity = reinterpret_cast<qd_entity_t *>(pyObject);
 
         check_http_listener_startup_log_message(
-            config,
+            entity,
             R"EOS(HTTP \(info\) Listening for HTTP on localhost:(\d\d+))EOS",
             R"EOS(HTTP \(info\) Stopped listening for HTTP on localhost:0)EOS",
 
             R"EOS(HTTP \(error\) No HTTP support to listen on localhost:0)EOS"
         );
+
+        Py_DECREF(port);
+        Py_DECREF(host);
+        Py_DECREF(pyObject);
+
     }).join();
 }
 
 TEST_CASE("Start HTTP listener with zero port and a name" * doctest::skip(regex_is_broken()))
 {
     std::thread([] {
-        qd_server_config_t config{};
-        config.name      = strdup("pepa");
-        config.port      = strdup("0");
-        config.host      = strdup("localhost");
-        config.host_port = strdup("localhost:0");
-        config.http      = true;
+
+        PyObject *pyObject = PyDict_New();
+        PyObject *name = PyUnicode_FromString("pepa");
+        PyObject *port = PyUnicode_FromString("0");
+        PyObject *host = PyUnicode_FromString("localhost");
+
+        PyDict_SetItemString(pyObject, "name", port);
+        PyDict_SetItemString(pyObject, "port", port);
+        PyDict_SetItemString(pyObject, "host", host);
+        PyDict_SetItemString(pyObject, "http", Py_True);
+
+        qd_entity_t *entity = reinterpret_cast<qd_entity_t *>(pyObject);
 
         check_http_listener_startup_log_message(
-            config,
+            entity,
             R"EOS(HTTP \(info\) Listening for HTTP on localhost:(\d\d+))EOS",
             R"EOS(HTTP \(info\) Stopped listening for HTTP on localhost:0)EOS",
 
             R"EOS(HTTP \(error\) No HTTP support to listen on localhost:0)EOS"
         );
+
+        Py_DECREF(name);
+        Py_DECREF(port);
+        Py_DECREF(host);
+        Py_DECREF(pyObject);
+
     }).join();
 }
