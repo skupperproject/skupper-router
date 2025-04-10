@@ -1319,12 +1319,15 @@ void qdr_link_outbound_detach_CT(qdr_core_t *core, qdr_link_t *link, qdr_error_t
         }
     }
 
+    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "[C%"PRIu64"][L%"PRIu64"] Sending link detach", link->conn->identity, link->identity);
     qdr_link_enqueue_work_CT(core, link, work);
 }
 
 
 void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_terminus_t *source, qdr_terminus_t *target)
 {
+    assert((link->state & QDR_LINK_STATE_ATTACH_SENT) == 0);
+
     qdr_connection_work_t *work = new_qdr_connection_work_t();
     ZERO(work);
     work->work_type = QDR_CONNECTION_WORK_SECOND_ATTACH;
@@ -1333,6 +1336,7 @@ void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_
     work->target    = target;
 
     link->oper_status = QDR_LINK_OPER_UP;
+    link->state      |= QDR_LINK_STATE_ATTACH_SENT;
 
     qdr_connection_enqueue_work_CT(core, link->conn, work);
 }
@@ -2586,8 +2590,8 @@ static void qdr_link_inbound_detach_CT(qdr_core_t *core, qdr_action_t *action, b
         return;
 
     qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
-           "[C%"PRIu64"][L%"PRIu64"] qdr_link_inbound_detach_CT()",
-           conn->identity, link->identity);
+           "[C%"PRIu64"][L%"PRIu64"] qdr_link_inbound_detach_CT(link state=0x%X)",
+           conn->identity, link->identity, (unsigned int) link->state);
 
     link->state |= QDR_LINK_STATE_DETACH_RECVD;
 
