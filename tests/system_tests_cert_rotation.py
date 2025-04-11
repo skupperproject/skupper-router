@@ -477,22 +477,22 @@ class InterRouterCertRotationTest(TestCase):
         # do several back to back rotations while the connections are coming
         # up. Do not wait for anything to stabilize between updates
 
-        for tls_ordinal in range(1, 11):  # max ordinal == 10
+        max_ordinal = 20
+        for tls_ordinal in range(1, max_ordinal + 1):
             router_C.management.update(type=SSL_PROFILE_TYPE,
                                        attributes={'ordinal': tls_ordinal},
                                        name='ConnectorSslProfile')
 
-        # Immediately teardown all new connections but the last one (ordinal ==
-        # 10)
+        # Immediately teardown all new connections but the last one (max_ordinal)
         router_C.management.update(type=SSL_PROFILE_TYPE,
-                                   attributes={'oldestValidOrdinal': 10},
+                                   attributes={'oldestValidOrdinal': max_ordinal},
                                    name='ConnectorSslProfile')
 
         # Wait for the carnage to subside by waiting until the control links
-        # have all closed with the exception of two links for ordinal 10.
-        ok = self.wait_control_links(router_C, 10)
+        # have all closed with the exception of two links for max_ordinal
+        ok = self.wait_control_links(router_C, max_ordinal)
         self.assertTrue(ok, f"Bad control links: {router_C.get_active_inter_router_control_links()}")
-        ok = self.wait_control_links(router_L, 10)
+        ok = self.wait_control_links(router_L, max_ordinal)
         self.assertTrue(ok, f"Bad control links: {router_L.get_active_inter_router_control_links()}")
 
         # wait for all data conns to come up and verify all inter-router conns
@@ -502,7 +502,7 @@ class InterRouterCertRotationTest(TestCase):
         ir_conns = router_C.get_inter_router_conns()
         ir_conns.extend(router_L.get_inter_router_conns())
         for ir_conn in ir_conns:
-            self.assertEqual(10, ir_conn['groupOrdinal'], f"Wrong ordinal {ir_conn}")
+            self.assertEqual(max_ordinal, ir_conn['groupOrdinal'], f"Wrong ordinal {ir_conn}")
 
         # This test aggressively tears down inter-router connections without
         # waiting for them to complete connection to the peer. Therefore it is
