@@ -1634,10 +1634,12 @@ static void qdr_connection_group_cleanup_CT(qdr_core_t *core, qdr_connection_t *
         // It is possible that this connection is not the active group parent (like on connection upgrade).  Only the
         // active parent can unregister the correlator mask bit map in the core:
         if (qd_bitmask_valid_bit_value(conn->mask_bit) && core->rnode_conns_by_mask_bit[conn->mask_bit] == conn) {
-            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' clean up parent [C%"PRIu64"] with ordinal=%"PRIu64,
-                   correlator, conn->identity, ordinal);
-            assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
-            core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
+            if (!!core->group_correlator_by_maskbit[conn->mask_bit][0]) {  // otherwise group has not been setup yet
+                assert(strncmp(core->group_correlator_by_maskbit[conn->mask_bit], correlator, QD_DISCRIMINATOR_SIZE) == 0);
+                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Connection group '%s' clean up parent [C%"PRIu64"] with ordinal=%"PRIu64,
+                       correlator, conn->identity, ordinal);
+                core->group_correlator_by_maskbit[conn->mask_bit][0] = '\0';
+            }
         }
 
         while (!!DEQ_HEAD(conn->connection_group)) {
