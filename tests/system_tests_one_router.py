@@ -3558,8 +3558,7 @@ class DataConnectionCountTest(TestCase):
         DataConnectionCountTest.listen_port = cls.tester.get_port()
         cls.config = Qdrouterd.Config([
             ('router', {'mode': 'interior', 'id': 'DCC', 'workerThreads': '7'}),
-            ('listener', {'port': DataConnectionCountTest.listen_port, 'role': 'normal'}),
-            ('connector', {'role': 'inter-router', 'host': '127.0.0.1', 'port': DataConnectionCountTest.listen_port, 'saslMechanisms': 'ANONYMOUS', 'idleTimeoutSeconds': '120'}),
+            ('listener', {'port': DataConnectionCountTest.listen_port, 'role': 'normal'})
         ])
         cls.name = "dcc-test-router"
 
