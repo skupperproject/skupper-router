@@ -24,7 +24,6 @@ import selectors
 import socket
 import sys
 from threading import Thread
-from system_test import TIMEOUT
 
 
 logger = logging.getLogger(__name__)
@@ -137,8 +136,14 @@ class TcpStreamerThread:
     def _run(self):
         self._streamer.run()
 
-    def join(self, timeout=TIMEOUT):
+    def join(self, timeout=None):
         self._streamer.shutdown()
+        if timeout is None:
+            # the streamer thread will check the shutdown flag on every poll
+            # timeout and immediately exit if the flag is true. Therefor it
+            # should shutdown within one poll_timeout and if it has not shut
+            # down after 100 polls then something is clearly busted
+            timeout = 100 * self._streamer.poll_timeout
         self._thread.join(timeout)
         if self._thread.is_alive():
             raise Exception("TcpStreamer failed to join!")

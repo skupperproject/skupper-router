@@ -1204,6 +1204,14 @@ class Qdrouterd(Process):
         conns = self.management.query(type=CONNECTION_TYPE).get_dicts()
         return [c for c in conns if 'inter-router' in c['role']]
 
+    def get_edge_router_conns(self):
+        """
+        Query the router for a list of all connections of role
+        edge/inter-edge
+        """
+        conns = self.management.query(type=CONNECTION_TYPE).get_dicts()
+        return [c for c in conns if 'edge' in c['role']]
+
     def get_inter_router_data_conns(self):
         """
         Return a list of all inter-router-data connections present

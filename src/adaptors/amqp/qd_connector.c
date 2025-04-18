@@ -553,8 +553,9 @@ static void handle_connector_ssl_profile_mgmt_update(const qd_tls_config_t *conf
     uint64_t new_oldest_ordinal = qd_tls_config_get_oldest_valid_ordinal(config);
     qd_connector_config_t *ctor_config = (qd_connector_config_t *) context;
 
-    // Expect: this callback is only registered for inter-router connectors (for now)
-    assert(strcmp(ctor_config->config.role, "inter-router") == 0);
+    // Expect: this callback is only registered for inter-router or interior-edge connectors (for now)
+    assert(strcmp(ctor_config->config.role, "inter-router") == 0
+        || strcmp(ctor_config->config.role, "edge") == 0);
 
     // destroy all connections whose connectors use an expired TLS ordinal:
 
@@ -656,6 +657,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
     }
 
     const bool is_inter_router = strcmp(ctor_config->config.role, "inter-router") == 0;
+    const bool is_edge = strcmp(ctor_config->config.role, "edge") == 0;
 
     //
     // If an sslProfile is configured allocate a TLS config to be used by all child connector's connections
@@ -672,7 +674,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         }
         ctor_config->tls_ordinal              = qd_tls_config_get_ordinal(ctor_config->tls_config);
         ctor_config->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(ctor_config->tls_config);
-        if (is_inter_router) {
+        if (is_inter_router || is_edge) {
             qd_tls_config_register_update_callback(ctor_config->tls_config, ctor_config,
                                                    handle_connector_ssl_profile_mgmt_update);
         }

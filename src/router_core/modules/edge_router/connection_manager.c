@@ -137,12 +137,27 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
 
     switch (event) {
     case QDRC_EVENT_CONN_OPENED :
-        if (cm->active_edge_connection == 0 && conn->role == QDR_ROLE_EDGE_CONNECTION) {
+        if (conn->role == QDR_ROLE_EDGE_CONNECTION) {
+            if (cm->active_edge_connection == 0) {
                 qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
                        "Edge connection (id=%" PRIu64 ") to interior established", conn->identity);
                 cm->active_edge_connection       = conn;
                 cm->core->active_edge_connection = conn;
                 qdrc_event_conn_raise(cm->core, QDRC_EVENT_CONN_EDGE_ESTABLISHED, conn);
+            } else {
+                // There is already an active edge connection. Check if the new connection has a higher TLS ordinal and
+                // if so it takes precedence.
+                qdr_connection_t *old_conn = cm->active_edge_connection;
+                if (conn->connection_info->tls
+                    && conn->connection_info->tls_ordinal > old_conn->connection_info->tls_ordinal) {
+                    qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+                           "Upgrading Edge connection [C%"PRIu64"] to [C%"PRIu64"] due to certificate rotation",
+                           old_conn->identity, conn->identity);
+                    cm->active_edge_connection       = conn;
+                    cm->core->active_edge_connection = conn;
+                    qdrc_event_conn_raise(cm->core, QDRC_EVENT_CONN_EDGE_ESTABLISHED, conn);
+                }
+            }
         }
 
         if (conn->role == QDR_ROLE_INTER_EDGE) {
@@ -157,9 +172,32 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
     case QDRC_EVENT_CONN_CLOSED :
         if (cm->active_edge_connection == conn) {
             qdrc_event_conn_raise(cm->core, QDRC_EVENT_CONN_EDGE_LOST, conn);
-            qdr_connection_t *alternate = DEQ_HEAD(cm->core->open_connections);
-            while (alternate && (alternate == conn || alternate->role != QDR_ROLE_EDGE_CONNECTION))
-                alternate = DEQ_NEXT(alternate);
+
+            // See if there is another edge connection that we can fail-over to. Caveat: if TLS is configured select the
+            // fail-over with the largest tls_ordinal value since that connection will have the newest (longest valid)
+            // TLS credentials.
+            const bool        need_tls  = conn->connection_info->tls;
+            qdr_connection_t *c_ptr     = DEQ_HEAD(cm->core->open_connections);
+            qdr_connection_t *alternate = 0;
+            while (c_ptr) {
+                if (c_ptr == conn || c_ptr->role != QDR_ROLE_EDGE_CONNECTION
+                    || (need_tls && !c_ptr->connection_info->tls)) {
+                    c_ptr = DEQ_NEXT(c_ptr);
+                    continue;
+                }
+
+                if (!need_tls) {
+                    // if TLS is not used simply take first candidate
+                    alternate = c_ptr;
+                    break;
+                }
+
+                if (!alternate || (alternate && c_ptr->connection_info->tls_ordinal > alternate->connection_info->tls_ordinal)) {
+                    alternate = c_ptr;
+                }
+                c_ptr = DEQ_NEXT(c_ptr);
+            }
+
             if (alternate) {
                 qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
                        "Edge connection (id=%" PRIu64 ") to interior lost, activating alternate id=%" PRIu64 "",
