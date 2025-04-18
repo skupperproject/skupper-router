@@ -710,7 +710,28 @@ class InteriorEdgeCertRotationTest(TestCase):
         self.assertGreaterEqual(len(alinks), 20,
                                 f"Expected at least 20 anonymous links on 2: {alinks}")
 
+        # Now expire the certificate on the original connection, this should
+        # cause the first TCP streamer to exit due to connection drop
+        router_E.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'oldestValidOrdinal': 3},
+                                   name='ConnectorSslProfile')
+        ok = retry(lambda: tcp_streamer.is_alive is False)
+        self.assertTrue(ok, "Failed to terminate the streamer")
         tcp_streamer.join()
+
+        # Verify there is only one edge connection
+        while True:
+            edge_conns = router_I.get_edge_router_conns()
+            if len(edge_conns) == 1:
+                break
+
+        # And the streamer is still passing data:
+        ok = retry(lambda: new_tcp_streamer.active_clients == 10)
+        self.assertTrue(ok, f"Streaming clients failed {new_tcp_streamer.active_clients}")
+        begin_recv = new_tcp_streamer.bytes_received
+        ok = retry(lambda: new_tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {new_tcp_streamer.bytes_received}")
+
         new_tcp_streamer.join()
         router_I.teardown()
         router_E.teardown()
