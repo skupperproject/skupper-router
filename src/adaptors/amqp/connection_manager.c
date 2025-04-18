@@ -25,7 +25,6 @@
 #include "server_config.h"
 #include "dispatch_private.h"
 #include "entity.h"
-#include "server_private.h"
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/failoverlist.h"
@@ -42,7 +41,6 @@
 
 
 struct qd_connection_manager_t {
-    qd_server_t                  *server;
     qd_listener_list_t            listeners;
     qd_connector_config_list_t    connector_configs;
 };
@@ -60,58 +58,11 @@ static void log_config(qd_server_config_t *c, const char *what, bool create)
 QD_EXPORT qd_listener_t *qd_dispatch_configure_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_connection_manager_t *cm = qd->connection_manager;
-    qd_listener_t *li = qd_listener(qd->server);
-    if (!li || qd_server_config_load(&li->config, entity, true) != QD_ERROR_NONE) {
-        qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener: %s", qd_error_message());
-        qd_listener_decref(li);
+    qd_listener_t *li = qd_listener_create(qd, entity);
+    if (!li) {
         return 0;
     }
 
-    if (li->config.ssl_profile_name) {
-        li->tls_config = qd_tls_config(li->config.ssl_profile_name,
-                                       QD_TLS_TYPE_PROTON_AMQP,
-                                       QD_TLS_CONFIG_SERVER_MODE,
-                                       li->config.verify_host_name,
-                                       li->config.ssl_require_peer_authentication);
-        if (!li->tls_config) {
-            // qd_tls_config() sets qd_error_message():
-            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Failed to configure TLS for Listener %s: %s",
-                   li->config.name, qd_error_message());
-            qd_listener_decref(li);
-            return 0;
-        }
-        li->tls_ordinal              = qd_tls_config_get_ordinal(li->tls_config);
-        li->tls_oldest_valid_ordinal = qd_tls_config_get_oldest_valid_ordinal(li->tls_config);
-    }
-
-    char *fol = qd_entity_opt_string(entity, "failoverUrls", 0);
-    if (fol) {
-        li->config.failover_list = qd_failover_list(fol);
-        free(fol);
-        if (li->config.failover_list == 0) {
-            qd_log(LOG_CONN_MGR, QD_LOG_ERROR, "Unable to create listener, bad failover list: %s",
-                   qd_error_message());
-            qd_listener_decref(li);
-            return 0;
-        }
-    } else {
-        li->config.failover_list = 0;
-    }
-
-    //
-    // Set up the vanflow record for this listener (ROUTER_ACCESS).
-    // Do this only for router-to-router links: not mgmt/metrics/healthz/websockets listeners
-    //
-    if (strcmp(li->config.role, "inter-router") == 0 ||
-        strcmp(li->config.role, "edge") == 0 ||
-        strcmp(li->config.role, "inter-edge") == 0) {
-        li->vflow_record = vflow_start_record(VFLOW_RECORD_ROUTER_ACCESS, 0);
-        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_NAME, li->config.name);
-        vflow_set_string(li->vflow_record, VFLOW_ATTRIBUTE_ROLE, li->config.role);
-        vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, 0);
-    }
-
-    DEQ_ITEM_INIT(li);
     DEQ_INSERT_TAIL(cm->listeners, li);
     log_config(&li->config, "Listener", true);
     return li;
@@ -299,7 +250,6 @@ qd_connection_manager_t *qd_connection_manager(qd_dispatch_t *qd)
     if (!cm)
         return 0;
 
-    cm->server     = qd->server;
     DEQ_INIT(cm->listeners);
     DEQ_INIT(cm->connector_configs);
 
@@ -315,17 +265,7 @@ void qd_connection_manager_free(qd_connection_manager_t *cm)
     qd_listener_t *li = DEQ_HEAD(cm->listeners);
     while (li) {
         DEQ_REMOVE_HEAD(cm->listeners);
-        if (li->pn_listener) {
-            // DISPATCH-1508: force cleanup of pn_listener context.  This is
-            // usually done in the PN_LISTENER_CLOSE event handler in server.c,
-            // but since the router is going down those events will no longer
-            // be generated.
-            pn_listener_set_context(li->pn_listener, 0);
-            pn_listener_close(li->pn_listener);
-            li->pn_listener = 0;
-            qd_listener_decref(li);  // for the pn_listener's context
-        }
-        qd_listener_decref(li);
+        qd_listener_delete(li, true);  // true == router is shutting down
         li = DEQ_HEAD(cm->listeners);
     }
 
@@ -351,6 +291,10 @@ QD_EXPORT void qd_connection_manager_start(qd_dispatch_t *qd)
 
     while (li) {
         if (!li->pn_listener) {
+            // DISPATCH-55: failure to bind on router initialization can result in a router that cannot be accessed by
+            // management, preventing diagnosing/fixing the issue.  Treat listener failure on initial bring up as a
+            // critical issue. Failure of listeners added after the router has been successfully started will simply
+            // result in a logged error.
             if (!qd_listener_listen(li) && first_start) {
                 qd_log(LOG_CONN_MGR, QD_LOG_CRITICAL, "Listen on %s failed during initial config",
                        li->config.host_port);
@@ -375,17 +319,9 @@ QD_EXPORT void qd_connection_manager_delete_listener(qd_dispatch_t *qd, void *im
 {
     qd_listener_t *li = (qd_listener_t*) impl;
     if (li) {
-        if (li->pn_listener) {
-            pn_listener_close(li->pn_listener);
-        }
-        else if (li->http) {
-            qd_lws_listener_close(li->http);
-        }
-
-        log_config(&li->config, "Listener", false);
-
         DEQ_REMOVE(qd->connection_manager->listeners, li);
-        qd_listener_decref(li);
+        log_config(&li->config, "Listener", false);
+        qd_listener_delete(li, false);  // false == do a clean listener close
     }
 }
 
