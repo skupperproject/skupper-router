@@ -58,18 +58,46 @@ struct qd_listener_t {
 
 DEQ_DECLARE(qd_listener_t, qd_listener_list_t);
 
+/**
+ * Management call to create a qd_listener_t from a configuration entity.
+ *
+ * This provisions the listener but does not activate it. To start accepting new connections activate it by calling
+ * qd_listener_listen().
+ *
+ * Returns 0 and sets qd_error_code() if creation fails
+ */
+qd_listener_t *qd_listener_create(qd_dispatch_t *qd, qd_entity_t *entity);
+
+/**
+ * Management call to delete a listener.
+ *
+ * This deactivates the listener preventing it from accepting new incoming connections and drops the reference
+ * count. The listener pointer becomes invalid after this call.
+ *
+ * @param li the listener to delete
+ * @param on_shutdown true if the listener is being deleted as part of router shutdown
+ */
+void qd_listener_delete(qd_listener_t *li, bool on_shutdown);
+
+/**
+ * Drop a reference to the listener.
+ *
+ * The listener pointer becomes invalid on return from this call.
+ */
+void qd_listener_decref(qd_listener_t *li);
 
 /**
  * Listen for incoming connections, return true if listening succeeded.
  */
-bool qd_listener_listen(qd_listener_t *l);
-qd_listener_t *qd_listener(qd_server_t *server);
-void qd_listener_decref(qd_listener_t* ct);
-qd_lws_listener_t *qd_listener_http(const qd_listener_t *li);
+bool qd_listener_listen(qd_listener_t *li);
+
+// Read only access to the listeners configuration
+//
 const qd_server_config_t *qd_listener_config(const qd_listener_t *li);
 
-// add a new connection with the parent listener
-void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *ctx);
+// add a new child connection to the parent listener
+//
+void qd_listener_add_connection(qd_listener_t *li, qd_connection_t *qd_conn);
 
 // remove the connection with its parent listener
 // NOTE WELL: may free the listener if this connection is holding the last reference

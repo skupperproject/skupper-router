@@ -47,18 +47,8 @@ typedef struct qd_session_t         qd_session_t;
 typedef struct qd_timer_t           qd_timer_t;
 typedef struct qd_tls_session_t     qd_tls_session_t;
 
-
-// defer a function call to be invoked on the connections proactor thread at
-// a later time
-//
-typedef struct qd_deferred_call_t {
-    DEQ_LINKS(struct qd_deferred_call_t);
-    qd_deferred_t  call;
-    void          *context;
-} qd_deferred_call_t;
-
+typedef struct qd_deferred_call_t   qd_deferred_call_t;
 DEQ_DECLARE(qd_deferred_call_t, qd_deferred_call_list_t);
-
 
 typedef struct qd_pn_free_link_t qd_pn_free_link_t;
 DEQ_DECLARE(qd_pn_free_link_t, qd_pn_free_link_list_t);
@@ -146,39 +136,47 @@ const char* qd_connection_name(const qd_connection_t *c);
  * Schedule a call to be invoked on a thread that has ownership of this connection.
  * It will be safe for the callback to perform operations related to this connection.
  *
- * @param conn Connection object
- * @param call The function to be invoked on the connection's thread
+ * @param qd_conn Connection object. Note well: the caller must ensure qd_conn remains valid until after
+ *        this call returns.
+ * @param call The function to be invoked asynchronously on the connection's thread.
  * @param context The context to be passed back in the callback
  */
-void qd_connection_invoke_deferred(qd_connection_t *conn, qd_deferred_t call, void *context);
-
-void qd_connection_invoke_deferred_calls(qd_connection_t *conn, bool discard);
+typedef void (*qd_deferred_cb_t)(qd_connection_t *qd_conn, void *context, bool discard);
+void qd_connection_invoke_deferred(qd_connection_t *conn, qd_deferred_cb_t call, void *context);
 
 /**
- * Schedule a call to be invoked on a thread that has ownership of this connection
- * when it will be safe for the callback to perform operations related to this connection.
- * A qd_deferred_call_t object has been allocated before hand to avoid taking
- * the ENTITY_CACHE lock.
+ * Alternative qd_connection_invoke_deferred() API
  *
- * @param conn Connection object
- * @param call The function to be invoked on the connection's thread
- * @param context The context to be passed back in the callback
- * @param dct Pointer to preallocated qd_deferred_call_t object
+ * Allows the caller to pre-allocate the deferred callback context. This allows the context to be allocated outside of a
+ * critical section where the qd_connection_t has been locked.
+ *
+ * @param conn Connection object. Note well: the caller must ensure qd_conn remains valid until after
+ *        this call returns.
+ * @param call_context The qd_deferred_call_t allocated via qd_connection_new_qd_deferred_call_t(). Ownership is passed
+ *        to the call - do not call qd_connection_free_qd_deferred_call_t()
  */
-void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_t call, void *context, void *dct);
-
+void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_call_t *call_context);
 
 /**
  * Allocate a qd_deferred_call_t object
  */
-void *qd_connection_new_qd_deferred_call_t(void);
+qd_deferred_call_t *qd_connection_new_qd_deferred_call_t(qd_deferred_cb_t callback, void *context);
 
 /**
- * Deallocate a qd_deferred_call_t object
+ * Deallocate a qd_deferred_call_t object. Call this only in the case where the call context was not passed to
+ * qd_connection_invoke_deferred_impl()
  *
  * @param dct Pointer to preallocated qd_deferred_call_t object
  */
-void qd_connection_free_qd_deferred_call_t(void *dct);
+void qd_connection_free_qd_deferred_call_t(qd_deferred_call_t *dct);
+
+
+/**
+ * Run all deferred callbacks.
+ *
+ * Invoked by the PN_CONNECTION_WAKE event handler
+ */
+void qd_connection_invoke_deferred_calls(qd_connection_t *conn, bool discard);
 
 
 /**
@@ -304,5 +302,4 @@ bool qd_connection_strip_annotations_in(const qd_connection_t *c);
  * ordinal.
  */
 bool qd_connection_get_tls_ordinal(const qd_connection_t *qd_conn, uint64_t *tls_ordinal);
-
 #endif

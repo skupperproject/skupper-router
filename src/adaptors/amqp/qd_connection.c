@@ -38,8 +38,17 @@
 #include <inttypes.h>
 
 
-ALLOC_DEFINE(qd_deferred_call_t);
 ALLOC_DEFINE_SAFE(qd_connection_t);
+
+/**
+ * Context for the deferred callback
+ */
+struct qd_deferred_call_t {
+    DEQ_LINKS(struct qd_deferred_call_t);
+    qd_deferred_cb_t  call;
+    void             *context;
+};
+ALLOC_DEFINE(qd_deferred_call_t);
 
 const char *MECH_EXTERNAL = "EXTERNAL";
 
@@ -474,24 +483,16 @@ const qd_server_config_t *qd_connection_config(const qd_connection_t *conn)
 }
 
 
-void qd_connection_invoke_deferred(qd_connection_t *conn, qd_deferred_t call, void *context)
+void qd_connection_invoke_deferred(qd_connection_t *conn, qd_deferred_cb_t call, void *context)
 {
-    if (!conn)
-        return;
-
-    qd_connection_invoke_deferred_impl(conn, call, context, new_qd_deferred_call_t());
+    assert(conn);
+    qd_connection_invoke_deferred_impl(conn, qd_connection_new_qd_deferred_call_t(call, context));
 }
 
 
-void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_t call, void *context, void *dct)
+void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_call_t *dc)
 {
-    if (!conn)
-        return;
-
-    qd_deferred_call_t *dc = (qd_deferred_call_t*)dct;
-    DEQ_ITEM_INIT(dc);
-    dc->call    = call;
-    dc->context = context;
+    assert(!!conn && !!dc);
 
     sys_mutex_lock(&conn->deferred_call_lock);
     DEQ_INSERT_TAIL(conn->deferred_calls, dc);
@@ -502,37 +503,46 @@ void qd_connection_invoke_deferred_impl(qd_connection_t *conn, qd_deferred_t cal
     sys_mutex_unlock(qd_server_get_activation_lock(conn->server));
 }
 
-void *qd_connection_new_qd_deferred_call_t(void)
+
+qd_deferred_call_t *qd_connection_new_qd_deferred_call_t(qd_deferred_cb_t callback, void *context)
 {
-    return new_qd_deferred_call_t();
+    qd_deferred_call_t *dc = new_qd_deferred_call_t();
+    DEQ_ITEM_INIT(dc);
+    dc->call    = callback;
+    dc->context = context;
+    return dc;
 }
 
 
-void qd_connection_free_qd_deferred_call_t(void *dct)
+void qd_connection_free_qd_deferred_call_t(qd_deferred_call_t *dc)
 {
-    free_qd_deferred_call_t((qd_deferred_call_t *)dct);
+    free_qd_deferred_call_t(dc);
 }
+
 
 void qd_connection_invoke_deferred_calls(qd_connection_t *conn, bool discard)
 {
-    if (!conn)
-        return;
+    assert(conn);
 
-    // Lock access to deferred_calls, other threads may concurrently add to it.  Invoke
+    // Snapshot the deferred_calls list under lock since other threads may concurrently add to it.  Invoke
     // the calls outside of the critical section.
     //
+    qd_deferred_call_list_t deferred_calls = DEQ_EMPTY;
     sys_mutex_lock(&conn->deferred_call_lock);
-    qd_deferred_call_t *dc;
-    while ((dc = DEQ_HEAD(conn->deferred_calls))) {
-        DEQ_REMOVE_HEAD(conn->deferred_calls);
-        sys_mutex_unlock(&conn->deferred_call_lock);
-        dc->call(dc->context, discard);
-        free_qd_deferred_call_t(dc);
-        sys_mutex_lock(&conn->deferred_call_lock);
-    }
+    DEQ_MOVE(conn->deferred_calls, deferred_calls);
     sys_mutex_unlock(&conn->deferred_call_lock);
-}
 
+    qd_deferred_call_t *dc = DEQ_HEAD(deferred_calls);
+    while (dc) {
+        // Note: this destroys the list as it is traversed. This is an optimization: since everything is freed do not
+        // bother with the overhead of dequeing
+        qd_deferred_call_t *tmp = dc;
+        dc = DEQ_NEXT(dc);
+
+        tmp->call(conn, tmp->context, discard);
+        free_qd_deferred_call_t(tmp);
+    }
+}
 
 
 const char* qd_connection_name(const qd_connection_t *c)
@@ -721,15 +731,14 @@ void qd_container_handle_event(qd_container_t *container, pn_event_t *event, pn_
 void qd_conn_event_batch_complete(qd_container_t *container, qd_connection_t *qd_conn, bool conn_closed);
 
 
-static void timeout_on_handshake(void *context, bool discard)
+static void timeout_on_handshake(qd_connection_t *qd_conn, void *context, bool discard)
 {
     if (discard)
         return;
 
-    qd_connection_t *ctx   = (qd_connection_t*) context;
-    pn_transport_t  *tport = pn_connection_transport(ctx->pn_conn);
-    pn_transport_close_head(tport);
-    connect_fail(ctx, QD_AMQP_COND_NOT_ALLOWED, "Timeout waiting for initial handshake");
+    pn_transport_t  *tport = pn_connection_transport(qd_conn->pn_conn);
+    pn_transport_close_head(tport);  // force close to avoid doing handshake (may hang otherwise)
+    connect_fail(qd_conn, QD_AMQP_COND_NOT_ALLOWED, "Timeout waiting for initial handshake");
 }
 
 
