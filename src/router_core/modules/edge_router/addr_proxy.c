@@ -65,14 +65,18 @@
 
 #define INITIAL_CREDIT 32
 
+
 struct qcm_edge_addr_proxy_t {
     qdr_core_t                *core;
     qdrc_event_subscription_t *event_sub;
-    bool                       edge_conn_established;
     qdr_address_t             *edge_conn_addr;
-    qdr_connection_t          *edge_conn;
-    qdrc_endpoint_t           *tracking_endpoint;
     qdrc_endpoint_desc_t       endpoint_descriptor;
+
+    // Connection-related state:
+    qdr_connection_t          *edge_conn;
+    qdr_link_t                *edge_uplink;        // anonymous link for deliveries to interior
+    qdr_link_t                *edge_downlink;      // for router-addressed deliveries from interior
+    qdrc_endpoint_t           *tracking_endpoint;  // for address tracking updates from interior
 };
 
 
@@ -107,6 +111,10 @@ static void add_inlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_t
         link->proxy = true;
         qdr_core_bind_address_link_CT(ap->core, addr, link);
         set_safe_ptr_qdr_link_t(link, &addr->edge_inlink_sp);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+               "[C%"PRIu64"][L%"PRIu64"] creating incoming proxy link to address '%s'",
+               link->conn->identity, link->identity,
+               (const char*) qd_hash_key_by_handle(addr->hash_handle));
     }
 }
 
@@ -115,6 +123,10 @@ static void del_inlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 {
     qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_inlink_sp);
     if (link) {
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+               "[C%"PRIu64"][L%"PRIu64"] deleting incoming proxy link to address '%s'",
+               link->conn->identity, link->identity,
+               (const char*) qd_hash_key_by_handle(addr->hash_handle));
         qd_nullify_safe_ptr(&addr->edge_inlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
         qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE);
@@ -138,6 +150,11 @@ static void add_outlink(qcm_edge_addr_proxy_t *ap, const char *key, qdr_address_
                                               QDR_DEFAULT_PRIORITY);
         link->proxy = true;
         set_safe_ptr_qdr_link_t(link, &addr->edge_outlink_sp);
+
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+               "[C%"PRIu64"][L%"PRIu64"] created outgoing proxy link to address '%s'",
+               link->conn->identity, link->identity,
+               (const char*) qd_hash_key_by_handle(addr->hash_handle));
     }
 }
 
@@ -146,6 +163,10 @@ static void del_outlink(qcm_edge_addr_proxy_t *ap, qdr_address_t *addr)
 {
     qdr_link_t *link = safe_deref_qdr_link_t(addr->edge_outlink_sp);
     if (link) {
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+               "[C%"PRIu64"][L%"PRIu64"] deleting outgoing proxy link to address '%s'",
+               link->conn->identity, link->identity,
+               (const char*) qd_hash_key_by_handle(addr->hash_handle));
         qd_nullify_safe_ptr(&addr->edge_outlink_sp);
         qdr_core_unbind_address_link_CT(ap->core, addr, link);
         qdr_link_outbound_detach_CT(ap->core, link, 0, QDR_CONDITION_NONE);
@@ -226,6 +247,10 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
                     // and we don't want anyone dereferencing the addr->edge_outlink
                     //
                     qd_nullify_safe_ptr(&addr->edge_outlink_sp);
+                    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                           "[C%"PRIu64"][L%"PRIu64"] outgoing link to address '%s' detached",
+                           link->conn->identity, link->identity,
+                           (const char*) qd_hash_key_by_handle(addr->hash_handle));
                 }
             }
             break;
@@ -242,6 +267,10 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
                     // and we don't want anyone dereferencing the addr->edge_inlink
                     //
                     qd_nullify_safe_ptr(&addr->edge_inlink_sp);
+                    qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                           "[C%"PRIu64"][L%"PRIu64"] incoming link to address '%s' detached",
+                           link->conn->identity, link->identity,
+                           (const char*) qd_hash_key_by_handle(addr->hash_handle));
                 }
             }
             break;
@@ -251,6 +280,147 @@ static void on_link_event(void *context, qdrc_event_t event, qdr_link_t *link)
             assert(false);
             break;
     }
+}
+
+
+// The edge connection has opened.  Setup the various control links and tracking endpoint. Run through all
+// locally-terminated mobile-addressed links and create proxy links to the interior.
+//
+static void setup_edge_connection(qcm_edge_addr_proxy_t *ap, qdr_connection_t *conn)
+{
+    assert(!ap->edge_conn);
+    ap->edge_conn = conn;
+
+
+    //
+    // Attach an anonymous sending link to the interior router.
+    //
+    assert(!ap->edge_uplink);
+    ap->edge_uplink = qdr_create_link_CT(ap->core, conn,
+                                         QD_LINK_ENDPOINT, QD_OUTGOING,
+                                         qdr_terminus(0), qdr_terminus(0),
+                                         QD_SSN_ENDPOINT,
+                                         QDR_DEFAULT_PRIORITY);
+    ap->edge_uplink->proxy = true;
+
+    //
+    // Associate the anonymous sender with the edge connection address.  This will cause
+    // all deliveries destined off-edge to be sent to the interior via the edge connection.
+    //
+    qdr_core_bind_address_link_CT(ap->core, ap->edge_conn_addr, ap->edge_uplink);
+
+    //
+    // Attach a receiving link for edge summary.  This will cause all deliveries
+    // destined for this router to be delivered via the edge connection.
+    //
+    assert(!ap->edge_downlink);
+    ap->edge_downlink = qdr_create_link_CT(ap->core, conn,
+                                           QD_LINK_ENDPOINT, QD_INCOMING,
+                                           qdr_terminus_edge_downlink(ap->core->router_id),
+                                           qdr_terminus_edge_downlink(0),
+                                           QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+    ap->edge_downlink->proxy = true;
+
+    //
+    // Attach a receiving link for edge address tracking updates.
+    //
+    assert(!ap->tracking_endpoint);
+    ap->tracking_endpoint =
+        qdrc_endpoint_create_link_CT(ap->core, conn, QD_INCOMING,
+                                     qdr_terminus_normal(QD_TERMINUS_EDGE_ADDRESS_TRACKING),
+                                     qdr_terminus(0), &ap->endpoint_descriptor, ap);
+
+    //
+    // Create proxy links for eligible local destinations (mobile only)
+    //
+    qdr_address_t *addr = DEQ_HEAD(ap->core->addrs);
+    while (addr) {
+        const char *key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
+        if (*key == QD_ITER_HASH_PREFIX_MOBILE) {
+            //
+            // If the address has more than zero attached destinations, create an
+            // incoming link from the interior to signal the presence of local consumers.
+            //
+            if (DEQ_SIZE(addr->rlinks) > 0 || (DEQ_SIZE(addr->subscriptions) > 0 && addr->propagate_local)) {
+                if (DEQ_SIZE(addr->rlinks) == 1) { // TODO - fix this logic
+                    //
+                    // If there's only one link and it's on the edge connection, ignore the address.
+                    //
+                    qdr_link_ref_t *ref = DEQ_HEAD(addr->rlinks);
+                    if (ref->link->conn != ap->edge_conn)
+                        add_inlink(ap, key, addr);
+                } else
+                    add_inlink(ap, key, addr);
+            }
+
+            //
+            // If the address has more than zero attached sources, create an outgoing link
+            // to the interior to signal the presence of local producers.
+            //
+            bool add = false;
+            if (DEQ_SIZE(addr->inlinks) > 0 || DEQ_SIZE(addr->watches) > 0) {
+                if (DEQ_SIZE(addr->inlinks) == 1 && DEQ_SIZE(addr->watches) == 0) {
+                    //
+                    // If there's only one link and it's on the edge connection, ignore the address.
+                    //
+                    qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);
+                    if (ref->link->conn != ap->edge_conn)
+                        add = true;
+                } else
+                    add = true;
+
+                if (add) {
+                    add_outlink(ap, key, addr);
+                }
+            }
+        }
+        addr = DEQ_NEXT(addr);
+    }
+}
+
+
+// Remove all edge control and proxy links for the current connection.
+// This reverts the setup done in setup_edge_connection.
+//
+static void cleanup_edge_connection(qcm_edge_addr_proxy_t *ap)
+{
+    if (ap->tracking_endpoint) {
+        qdrc_endpoint_detach_CT(ap->core, ap->tracking_endpoint, 0);
+        ap->tracking_endpoint = 0;
+    }
+
+    if (ap->edge_downlink) {
+        qdr_link_outbound_detach_CT(ap->core, ap->edge_downlink, 0, QDR_CONDITION_NONE);
+        ap->edge_downlink = 0;
+    }
+
+    if (ap->edge_uplink) {
+        qdr_core_unbind_address_link_CT(ap->core, ap->edge_conn_addr, ap->edge_uplink);
+        qdr_link_outbound_detach_CT(ap->core, ap->edge_uplink, 0, QDR_CONDITION_NONE);
+        ap->edge_uplink = 0;
+    }
+
+    //
+    // Teardown all proxy links. NOTE WELL: this does not tear down *streaming links*!  Those are anonymous links (not
+    // mobile). We do not want to tear down streaming links because we do not want to terminate active TCP flows.
+    //
+    qdr_address_t *addr = DEQ_HEAD(ap->core->addrs);
+    while (addr) {
+        qdr_link_t *link;
+        if ((link = safe_deref_qdr_link_t(addr->edge_inlink_sp)) != 0) {
+            assert(link->conn == ap->edge_conn);
+            (void) link;
+            del_inlink(ap, addr);
+        } else if ((link = safe_deref_qdr_link_t(addr->edge_outlink_sp)) != 0) {
+            assert(link->conn == ap->edge_conn);
+            (void) link;
+            del_outlink(ap, addr);
+        }
+        addr = DEQ_NEXT(addr);
+    }
+
+    // Leave the edge conn up - it may be used for failover
+    ap->edge_conn = 0;
 }
 
 
@@ -267,98 +437,26 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
 
     case QDRC_EVENT_CONN_EDGE_ESTABLISHED : {
         //
-        // Flag the edge connection as being established.
+        // The edge connection to the interior router has opened.
         //
-        ap->edge_conn_established = true;
-        ap->edge_conn             = conn;
-
-        //
-        // Attach an anonymous sending link to the interior router.
-        //
-        qdr_link_t *out_link = qdr_create_link_CT(ap->core, conn,
-                                                  QD_LINK_ENDPOINT, QD_OUTGOING,
-                                                  qdr_terminus(0), qdr_terminus(0),
-                                                  QD_SSN_ENDPOINT,
-                                                  QDR_DEFAULT_PRIORITY);
-        out_link->proxy = true;
-
-        //
-        // Associate the anonymous sender with the edge connection address.  This will cause
-        // all deliveries destined off-edge to be sent to the interior via the edge connection.
-        //
-        qdr_core_bind_address_link_CT(ap->core, ap->edge_conn_addr, out_link);
-
-        //
-        // Attach a receiving link for edge summary.  This will cause all deliveries
-        // destined for this router to be delivered via the edge connection.
-        //
-        qdr_link_t *elink = qdr_create_link_CT(ap->core, conn,
-                                               QD_LINK_ENDPOINT, QD_INCOMING,
-                                               qdr_terminus_edge_downlink(ap->core->router_id),
-                                               qdr_terminus_edge_downlink(0),
-                                               QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
-        elink->proxy = true;
-
-        //
-        // Attach a receiving link for edge address tracking updates.
-        //
-        ap->tracking_endpoint =
-            qdrc_endpoint_create_link_CT(ap->core, conn, QD_INCOMING,
-                                         qdr_terminus_normal(QD_TERMINUS_EDGE_ADDRESS_TRACKING),
-                                         qdr_terminus(0), &ap->endpoint_descriptor, ap);
-
-        //
-        // Process eligible local destinations
-        //
-        qdr_address_t *addr = DEQ_HEAD(ap->core->addrs);
-        while (addr) {
-            const char *key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-            if (*key == QD_ITER_HASH_PREFIX_MOBILE) {
-                //
-                // If the address has more than zero attached destinations, create an
-                // incoming link from the interior to signal the presence of local consumers.
-                //
-                if (DEQ_SIZE(addr->rlinks) > 0 || (DEQ_SIZE(addr->subscriptions) > 0 && addr->propagate_local)) {
-                    if (DEQ_SIZE(addr->rlinks) == 1) { // TODO - fix this logic
-                        //
-                        // If there's only one link and it's on the edge connection, ignore the address.
-                        //
-                        qdr_link_ref_t *ref = DEQ_HEAD(addr->rlinks);
-                        if (ref->link->conn != ap->edge_conn)
-                            add_inlink(ap, key, addr);
-                    } else
-                        add_inlink(ap, key, addr);
-                }
-
-                //
-                // If the address has more than zero attached sources, create an outgoing link
-                // to the interior to signal the presence of local producers.
-                //
-                bool add = false;
-                if (DEQ_SIZE(addr->inlinks) > 0 || DEQ_SIZE(addr->watches) > 0) {
-                    if (DEQ_SIZE(addr->inlinks) == 1 && DEQ_SIZE(addr->watches) == 0) {
-                        //
-                        // If there's only one link and it's on the edge connection, ignore the address.
-                        //
-                        qdr_link_ref_t *ref = DEQ_HEAD(addr->inlinks);
-                        if (ref->link->conn != ap->edge_conn)
-                            add = true;
-                    } else
-                        add = true;
-
-                    if (add) {
-                        add_outlink(ap, key, addr);
-                    }
-                }
-            }
-            addr = DEQ_NEXT(addr);
+        if (!ap->edge_conn) {
+            setup_edge_connection(ap, conn);
+        } else {
+            // Connection manager has found a "better" connection to the interior router. Migrate to it.
+            qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                   "Upgrading edge-to-interior connection [C%"PRIu64"] to [C%"PRIu64"]",
+                   ap->edge_conn->identity, conn->identity);
+            cleanup_edge_connection(ap);
+            setup_edge_connection(ap, conn);
         }
         break;
     }
 
     case QDRC_EVENT_CONN_EDGE_LOST :
-        ap->edge_conn_established = false;
-        ap->edge_conn             = 0;
+        ap->edge_conn = 0;
+        ap->edge_uplink = 0;
+        ap->edge_downlink = 0;
+        ap->tracking_endpoint = 0;
         break;
 
     default:
@@ -397,11 +495,11 @@ static void on_addr_event(void *context, qdrc_event_t event, qdr_address_t *addr
     default:
         break;
     }
-    
+
     //
     // If we don't have an established edge connection, there is no further work to be done.
     //
-    if (!ap->edge_conn_established)
+    if (!ap->edge_conn)
         return;
 
     const char *key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
@@ -491,10 +589,18 @@ static void on_transfer(void           *link_context,
                     if (link) {
                         if (dest) {
                             if (link->owning_addr == 0) {
+                                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                                       "[C%"PRIu64"][L%"PRIu64"] binding proxy link to address '%s'",
+                                       link->conn->identity, link->identity,
+                                       (const char*) qd_hash_key_by_handle(addr->hash_handle));
                                 qdr_core_bind_address_link_CT(ap->core, addr, link);
                             }
                         } else {
                             if (link->owning_addr == addr) {
+                                qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+                                       "[C%"PRIu64"][L%"PRIu64"] unbinding proxy link from address '%s'",
+                                       link->conn->identity, link->identity,
+                                       (const char*) qd_hash_key_by_handle(addr->hash_handle));
                                 qdr_core_unbind_address_link_CT(ap->core, addr, link);
                             }
                         }
@@ -528,14 +634,6 @@ qdr_address_t *qcm_edge_conn_addr(void *link_context)
 }
 
 
-static void on_cleanup(void *link_context)
-{
-    qcm_edge_addr_proxy_t *ap = (qcm_edge_addr_proxy_t*) link_context;
-
-    ap->tracking_endpoint = 0;
-}
-
-
 qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
 {
     qcm_edge_addr_proxy_t *ap = NEW(qcm_edge_addr_proxy_t);
@@ -546,7 +644,6 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
     ap->endpoint_descriptor.label            = "Edge Address Proxy";
     ap->endpoint_descriptor.on_second_attach = on_second_attach;
     ap->endpoint_descriptor.on_transfer      = on_transfer;
-    ap->endpoint_descriptor.on_cleanup       = on_cleanup;
 
     //
     // Establish the edge connection address to represent destinations reachable via the edge connection
@@ -572,7 +669,7 @@ qcm_edge_addr_proxy_t *qcm_edge_addr_proxy(qdr_core_t *core)
                                             on_link_event,
                                             on_addr_event,
                                             0,
-                                            ap);                                            
+                                            ap);
 
     core->edge_conn_addr = qcm_edge_conn_addr;
     core->edge_context = ap;

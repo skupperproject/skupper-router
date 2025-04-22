@@ -24,7 +24,7 @@ Tests the routers TLS Certificate Rotation feature.
 import time
 from http1_tests import wait_tcp_listeners_up
 from system_test import TestCase, main_module, Qdrouterd, unittest, retry
-from system_test import CA_CERT, SSL_PROFILE_TYPE
+from system_test import CA_CERT, SSL_PROFILE_TYPE, ROUTER_LINK_TYPE
 from system_test import CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD
 from system_test import SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, SERVER_PRIVATE_KEY_PASSWORD
 from system_test import CA2_CERT
@@ -741,6 +741,215 @@ class InterRouterCertRotationTest(TestCase):
 
         router_L.teardown()
         router_C.teardown()
+
+
+class InteriorEdgeCertRotationTest(TestCase):
+    """
+    Validate the Certificate Rotation feature on edge-to-interior connections
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(InteriorEdgeCertRotationTest, cls).setUpClass()
+
+    def router(self, name, mode, test_config, **kwargs):
+        config = [
+            ('router', {'mode': mode,
+                        'id': name}),
+            ('listener', {'port': self.tester.get_port(), 'role': 'normal'}),
+        ]
+        config.extend(test_config)
+        return self.tester.qdrouterd(name, Qdrouterd.Config(config), **kwargs)
+
+    def _get_edge_downlinks(self, router):
+        mgmt = router.management
+        links = mgmt.query(type=ROUTER_LINK_TYPE).get_dicts()
+        return [link for link in links if link['linkType'] == "edge-downlink"]
+
+    def _get_addr_tracking_links(self, router):
+        mgmt = router.management
+        links = mgmt.query(type=ROUTER_LINK_TYPE).get_dicts()
+        return [link for link in links if link['linkType'] == "endpoint"
+                and link['owningAddr'] == "M_$qd.edge_addr_tracking"]
+
+    def _get_anonymous_links_by_conn(self, router, conn_id):
+        mgmt = router.management
+        links = mgmt.query(type=ROUTER_LINK_TYPE).get_dicts()
+        return [link for link in links if link["connectionId"] == conn_id
+                and link["linkType"] == "endpoint"
+                and link["owningAddr"] is None]
+
+    def test_01_tcp_streams(self):
+        """
+        Verify that existing TCP streams are not interrupted when new
+        inter-router connections are established.
+
+        This test sets up several TCP streaming connections through an edge
+        router into an interior router. It then does a certificate rotation and
+        verifies that the streams have not failed.
+
+        It then creates another set of TCP streaming connections. It verifies
+        that these streams are sent over the upgraded connections.
+        """
+        inter_router_port = self.tester.get_port()
+        tcp_listener_port_1 = self.tester.get_port()
+        tcp_listener_port_2 = self.tester.get_port()
+        tcp_connector_port_1 = self.tester.get_port()
+        tcp_connector_port_2 = self.tester.get_port()
+
+        router_I = self.router("RouterI", "interior",
+                               [('sslProfile', {'name': 'ListenerSslProfile',
+                                                'caCertFile': CA_CERT,
+                                                'certFile': SERVER_CERTIFICATE,
+                                                'privateKeyFile': SERVER_PRIVATE_KEY,
+                                                'password': SERVER_PRIVATE_KEY_PASSWORD}),
+                                ('listener', {'name': 'Listener01',
+                                              'role': 'edge',
+                                              'host': '0.0.0.0',
+                                              'port': inter_router_port,
+                                              'requireSsl': 'yes',
+                                              'sslProfile': 'ListenerSslProfile'}),
+                                ('tcpConnector', {'name': 'tcpConnector01',
+                                                  'address': 'tcp/streaming/1',
+                                                  'host': 'localhost',
+                                                  'port': tcp_connector_port_1}),
+                                ('tcpConnector', {'name': 'tcpConnector02',
+                                                  'address': 'tcp/streaming/2',
+                                                  'host': 'localhost',
+                                                  'port': tcp_connector_port_2})],
+                               wait=False)
+        router_E = self.router("RouterE", "edge",
+                               [('sslProfile', {'name': "ConnectorSslProfile",
+                                                'ordinal': 0,
+                                                'oldestValidOrdinal': 0,
+                                                'caCertFile': CA_CERT,
+                                                'certFile': CLIENT_CERTIFICATE,
+                                                'privateKeyFile': CLIENT_PRIVATE_KEY,
+                                                'password': CLIENT_PRIVATE_KEY_PASSWORD}),
+                                ('connector', {'role': 'edge',
+                                               'host': 'localhost',
+                                               'port': inter_router_port,
+                                               'verifyHostname': 'yes',
+                                               'sslProfile': 'ConnectorSslProfile'}),
+                                ('tcpListener', {'name': 'tcpListener01',
+                                                 'address': 'tcp/streaming/1',
+                                                 'port': tcp_listener_port_1}),
+                                ('tcpListener', {'name': 'tcpListener02',
+                                                 'address': 'tcp/streaming/2',
+                                                 'port': tcp_listener_port_2})],
+                               wait=False)
+        router_I.is_edge_routers_connected(1)
+
+        # wait for all the TCP listeners to come up
+        wait_tcp_listeners_up(router_E.addresses[0])
+
+        # Wait for the edge downlink and tracking link to come up. Record the
+        # connection id. The test will time out if these loops do not exit
+        edge_conn_1 = None
+        while True:
+            downlinks = self._get_edge_downlinks(router_I)
+            etlinks = self._get_addr_tracking_links(router_I)
+            if len(downlinks) == 1 and len(etlinks) == 1:
+                self.assertEqual(downlinks[0]["connectionId"],
+                                 etlinks[0]["connectionId"],
+                                 "Incorrect edge router links")
+                edge_conn_1 = downlinks[0]["connectionId"]
+                break
+
+        # now start TCP streaming connections across the routers
+        tcp_streamer = TcpStreamerThread(client_addr=('localhost', tcp_listener_port_1),
+                                         server_addr=('0.0.0.0', tcp_connector_port_1),
+                                         client_count=10, poll_timeout=0.2)
+
+        # Now wait until the streaming client have connected and traffic is
+        # being sent
+        ok = retry(lambda: tcp_streamer.active_clients == 10)
+        self.assertTrue(ok, f"Streaming clients failed {tcp_streamer.active_clients}")
+        begin_recv = tcp_streamer.bytes_received
+        ok = retry(lambda: tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {tcp_streamer.bytes_received}")
+
+        # Expect 2 anonymous links are created over the edge connection, 2 for
+        # each TCP client
+        alinks = self._get_anonymous_links_by_conn(router_I, edge_conn_1)
+        self.assertGreaterEqual(len(alinks), 20,
+                                f"Expected at least 20 anonymous links: {alinks}")
+
+        # Now rotate the certificate on the edge. This should create a new
+        # inter-edge connection
+        router_E.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'ordinal': 3},
+                                   name='ConnectorSslProfile')
+
+        # wait until both the edge downlink and tracking links have moved
+        def _wait_edge_rotate(router, old_conn):
+            downlinks = self._get_edge_downlinks(router)
+            if len(downlinks) != 1:
+                return False
+            etlinks = self._get_addr_tracking_links(router)
+            if len(etlinks) != 1:
+                return False
+            if downlinks[0]["connectionId"] != etlinks[0]["connectionId"]:
+                return False
+            if downlinks[0]["connectionId"] == old_conn:
+                return False
+            return downlinks[0]["connectionId"]
+        edge_conn_2 = retry(lambda router=router_I, old_conn=edge_conn_1:
+                            _wait_edge_rotate(router, old_conn))
+        self.assertTrue(edge_conn_2 is not False,
+                        "Second edge conn did not activate")
+
+        # Now create a new streamer. Its TCP flows should use the new
+        # edge connection
+        new_tcp_streamer = TcpStreamerThread(client_addr=('localhost', tcp_listener_port_2),
+                                             server_addr=('0.0.0.0', tcp_connector_port_2),
+                                             client_count=10, poll_timeout=0.2)
+        ok = retry(lambda: new_tcp_streamer.active_clients == 10)
+        self.assertTrue(ok, f"Streaming clients failed {new_tcp_streamer.active_clients}")
+        begin_recv = new_tcp_streamer.bytes_received
+        ok = retry(lambda: new_tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {new_tcp_streamer.bytes_received}")
+
+        # verify that the old streamer is still running and the streams are still passing traffic
+        begin_recv = tcp_streamer.bytes_received
+        ok = retry(lambda: tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {tcp_streamer.bytes_received}")
+        self.assertTrue(tcp_streamer.is_alive, "Streamer has failed!")
+
+        # Expect 2 anonymous links are created over the edge connection, 2 for
+        # each TCP client. Verify this is the case for the new and old edge
+        # connections:
+        alinks = self._get_anonymous_links_by_conn(router_I, edge_conn_1)
+        self.assertGreaterEqual(len(alinks), 20,
+                                f"Expected at least 20 anonymous links on 1: {alinks}")
+        alinks = self._get_anonymous_links_by_conn(router_I, edge_conn_2)
+        self.assertGreaterEqual(len(alinks), 20,
+                                f"Expected at least 20 anonymous links on 2: {alinks}")
+
+        # Now expire the certificate on the original connection, this should
+        # cause the first TCP streamer to exit due to connection drop
+        router_E.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'oldestValidOrdinal': 3},
+                                   name='ConnectorSslProfile')
+        ok = retry(lambda: tcp_streamer.is_alive is False)
+        self.assertTrue(ok, "Failed to terminate the streamer")
+        tcp_streamer.join()
+
+        # Verify there is only one edge connection
+        while True:
+            edge_conns = router_I.get_edge_router_conns()
+            if len(edge_conns) == 1:
+                break
+
+        # And the streamer is still passing data:
+        ok = retry(lambda: new_tcp_streamer.active_clients == 10)
+        self.assertTrue(ok, f"Streaming clients failed {new_tcp_streamer.active_clients}")
+        begin_recv = new_tcp_streamer.bytes_received
+        ok = retry(lambda: new_tcp_streamer.bytes_received > begin_recv)
+        self.assertTrue(ok, f"Failed to stream data {new_tcp_streamer.bytes_received}")
+
+        new_tcp_streamer.join()
+        router_I.teardown()
+        router_E.teardown()
 
 
 if __name__ == '__main__':
