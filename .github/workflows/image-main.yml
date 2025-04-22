@@ -25,69 +25,26 @@ on:
     types:
       - completed
 jobs:
-  build-image-amd64:
-    name: Publish skupper-router amd64 image
+  build-multiarch-image:
+    name: Build and publish multiarch skupper-router image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Build and publish the main amd64 image
-        run: |
-          # The version on main will be 0.0.0+<commit-sha>-main
-          export VERSION="0.0.0+${GITHUB_SHA}-main"
-          export PLATFORM=amd64
-          unset PUSH_LATEST
-          ./.github/scripts/image.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
-  build-image-arm64:
-    name: Publish skupper-router arm64 image
-    runs-on: ubuntu-24.04-arm
-    steps:
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v2
+      
       - uses: actions/checkout@v4
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-      - name: Build and publish the main arm64 image
+      - name: Build and publish multiarch skupper-router image
         run: |
           # The version on main will be 0.0.0+<commit-sha>-main
           export VERSION="0.0.0+${GITHUB_SHA}-main"
           unset PUSH_LATEST
-          export PLATFORM=arm64
+          
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}' 
 
-  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
-  create-manifest:
-    needs: [build-image-amd64, build-image-arm64]
-    name: Pull skupper-router amd64 and arm64 images and create/push manifest
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
-        run: |
-          # This is the main build which means we WON'T push the :latest tag to the container repo.
-          unset PUSH_LATEST
-          ./.github/scripts/manifest.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
 

@@ -30,17 +30,22 @@ on:
         type: boolean
         default: false
 jobs:
-  build-image-amd64:
-    name: Rebuild and publish skupper-router amd64 image for an already released tag
+  build-multiarch-image:
+    name: Build and publish multiarch skupper-router image
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Get the tag name and set it as the CONTAINER_TAG env variable.
         run:  |
-          echo "CONTAINER_TAG=${{github.event.inputs.tag}}" >> $GITHUB_ENV
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{github.event.inputs.tag}}
-      - name: Build and publish skupper-router amd64 image
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV        
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Multi-Arch Image
         run: |
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           export VERSION="${{ env.CONTAINER_TAG }}"
@@ -58,86 +63,8 @@ jobs:
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
             jq .tags | grep -E '^\[\]$' || \
             { echo Unable to get a unique build number ; exit 1 ; }
-          export PLATFORM=amd64
+          
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-
-  build-image-arm64:
-    name: Rebuild and publish skupper-router arm64 image for an already released tag
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
-        run:  |
-          echo "CONTAINER_TAG=${{github.event.inputs.tag}}" >> $GITHUB_ENV
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{github.event.inputs.tag}}
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-      - name: Build and publish skupper-router arm64 image
-        run: |
-          export VERSION="${{ env.CONTAINER_TAG }}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          # Only accepts tag if build_number is higher than one
-          [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
-          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
-          export VERSION="${{ env.CONTAINER_TAG }}"
-          CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
-          if [ "${CAN_PUSH_LATEST}" == "true" ]; then
-            echo 'release-respin.yml(job: build-image-arm64) setting PUSH_LATEST=true, will push :latest tag'
-            export PUSH_LATEST=true
-          else
-            echo 'release-respin.yml(job: build-image-arm64) not setting PUSH_LATEST, will not push :latest tag'
-          fi
-          export PLATFORM=arm64
-          ./.github/scripts/image.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-
-  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
-  create-manifest:
-    needs: [build-image-amd64, build-image-arm64]
-    name: Pull skupper-router amd64 and arm64 images and create/push manifest
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
-        run:  |
-          echo "CONTAINER_TAG=${{github.event.inputs.tag}}" >> $GITHUB_ENV
-      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
-        run: |
-          export VERSION="${{ env.CONTAINER_TAG }}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          # Only accepts tag if build_number is higher than one
-          [[ ${BUILD_NUMBER} -eq 1 ]] && { echo "The provided tag (${VERSION}) does not refer to a released image. You must provide a tag that has already been released."; exit 1; }
-          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
-          CAN_PUSH_LATEST='${{github.event.inputs.canPushLatestTag}}'
-          if [ "${CAN_PUSH_LATEST}" == "true" ]; then
-            echo 'release-respin.yml(job: create-manifest) setting PUSH_LATEST=true, will push :latest tag'
-            export PUSH_LATEST=true
-          else
-            echo 'release-respin.yml(job: create-manifest) not setting PUSH_LATEST, will not push :latest tag'
-          fi
-          ./.github/scripts/manifest.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}' 

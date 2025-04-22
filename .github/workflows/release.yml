@@ -27,15 +27,22 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  build-image-amd64:
-    name: Build and publish skupper-router amd64 image
+  build-multiarch-image:
+    name: Build and publish multiarch skupper-router image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Get the tag name and set it as the CONTAINER_TAG env variable.
         run:  |
-          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-      - name: Build and publish skupper-router image
+          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV        
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Multi-Arch Image
         run: |
           export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
           export VERSION="${{ env.CONTAINER_TAG }}"
@@ -48,82 +55,17 @@ jobs:
           # Query github to see if this VERSION is the latest
           LATEST_RELEASE_TAG=`curl -s https://api.github.com/repos/skupperproject/skupper-router/releases/latest  | jq -r ".tag_name"`
           LATEST_VERSION=`(echo "${VERSION}" ; echo "${LATEST_RELEASE_TAG}" ) | sort -V | tail -n1`
-          [[ "${VERSION}" = "${LATEST_VERSION}" ]] && PUSH_LATEST=true || unset PUSH_LATEST
-          export PLATFORM=amd64
+          [[ "${VERSION}" = "${LATEST_VERSION}" ]] && export PUSH_LATEST=true || unset PUSH_LATEST
+          
           ./.github/scripts/image.sh
         env:
           CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
+          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'          
 
-  build-image-arm64:
-    name: Build and publish skupper-router arm64 image
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
-        run:  |
-          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-      - name: Build and publish skupper-router arm64 image
-        run: |
-          export VERSION="${{ env.CONTAINER_TAG }}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          export PROJECT_TAG="${{ env.CONTAINER_TAG }}" 
-          # Query github to see if this VERSION is the latest
-          LATEST_RELEASE_TAG=`curl -s https://api.github.com/repos/skupperproject/skupper-router/releases/latest  | jq -r ".tag_name"`
-          LATEST_VERSION=`(echo "${VERSION}" ; echo "${LATEST_RELEASE_TAG}" ) | sort -V | tail -n1`
-          [[ "${VERSION}" = "${LATEST_VERSION}" ]] && PUSH_LATEST=true || unset PUSH_LATEST
-          export PLATFORM=arm64
-          ./.github/scripts/image.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
-
-  # This job pulls the images produced by the build-image-amd64 and build-image-arm64 jobs
-  create-manifest:
-    name: Pull skupper-router amd64 and arm64 images and create/push manifest
-    needs: [build-image-amd64, build-image-arm64]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install podman
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get -qq -y install podman
-          podman version
-          # Starting systemd user service
-          systemctl --user start podman.socket
-          echo "PODMAN_SOCK=/run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-          echo "DOCKER_HOST=unix:///run/user/${UID}/podman/podman.sock" >> $GITHUB_ENV
-
-      - name: Get the tag name and set it as the CONTAINER_TAG env variable.
-        run:  |
-          echo "CONTAINER_TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-      - name: Pull skupper-router amd64 and arm64 images and create/push manifest
-        run: |
-          export VERSION="${CONTAINER_TAG}"
-          export BUILD_NUMBER=$((`curl -s https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=like:${VERSION} | jq '.tags[] | select(has("end_ts") | not) | .name' | grep -E "\"${VERSION}-[0-9]+\"" | wc -l || echo 0` + 1))
-          export PROJECT_TAG="${{ env.CONTAINER_TAG }}"
-          # Query github to see if this VERSION is the latest
-          LATEST_RELEASE_TAG=`curl -s https://api.github.com/repos/skupperproject/skupper-router/releases/latest  | jq -r ".tag_name"`
-          LATEST_VERSION=`(echo "${VERSION}" ; echo "${LATEST_RELEASE_TAG}" ) | sort -V | tail -n1`
-          [[ "${VERSION}" = "${LATEST_VERSION}" ]] && PUSH_LATEST=true || unset PUSH_LATEST
-          ./.github/scripts/manifest.sh
-        env:
-          CONTAINER_USER: '${{ secrets.DOCKER_USER }}'
-          CONTAINER_PASSWORD: '${{ secrets.DOCKER_PASSWORD }}'
 
   create-release:
     name: Create Draft Release
-    needs: create-manifest
+    needs: build-multiarch-image
     runs-on: ubuntu-latest
     steps:
       - name: Get the tag name and set it as the CONTAINER_TAG env variable.
