@@ -46,11 +46,14 @@ ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 ARG VERSION=0.0.0
 ENV VERSION=$VERSION
-ARG PLATFORM=amd64
-ENV PLATFORM=$PLATFORM
+ARG TARGETARCH
+ENV PLATFORM=$TARGETARCH
 RUN .github/scripts/compile.sh
 RUN if [ "$PLATFORM" = "amd64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image && tar zxpf /libunwind-image.tar.gz --one-top-level=/image; fi
 RUN if [ "$PLATFORM" = "arm64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
+RUN if [ "$PLATFORM" = "s390x" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
+RUN if [ "$PLATFORM" = "ppc64le" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
+
 RUN mkdir /image/licenses && cp ./LICENSE /image/licenses
 
 FROM registry.access.redhat.com/ubi9/ubi:latest AS packager
