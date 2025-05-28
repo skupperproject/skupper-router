@@ -1104,7 +1104,6 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                 if (log_error_message) {
                     qd_log(LOG_SERVER, QD_LOG_ERROR, "%s", conn_msg);
                 }
-
             } else if (ctx && ctx->listener) { /* Incoming connection */
                 if (condition && pn_condition_is_set(condition)) {
                     qd_log(LOG_SERVER, QD_LOG_ERROR,
@@ -1113,6 +1112,8 @@ static bool handle(qd_server_t *qd_server, pn_event_t *e, pn_connection_t *pn_co
                            pn_condition_get_description(condition));
                 }
             }
+            pn_connection_write_flush(pn_conn);
+            pn_transport_close_head(transport);
         }
         break;
 

@@ -1580,6 +1580,7 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
             server.bind(("", self.interior_tcp_connector_port))
             server.listen(10)
         except Exception as exc:
+            server.close()
             print("%s: failed creating tcp server: %s" % (self.test_name, exc),
                   flush=True)
             raise
@@ -1598,6 +1599,7 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
             except ConnectionRefusedError:
                 print("%s: client connection refused, retrying..." % self.test_name,
                       flush=True)
+                client_conn.close()
                 time.sleep(1.0)
                 continue
 
