@@ -143,6 +143,7 @@ typedef enum vflow_attribute {
 
     VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  = 64,  // String
     VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE = 65,  // String
+    VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL   = 66   // uint The SSL Profile ordinal field that is currently in operation
 } vflow_attribute_t;
 // clang-format on
 

@@ -224,7 +224,7 @@ static uint8_t valid_attribute_types[] = {
     ATTR_UCOUNT, ATTR_STRING, ATTR_STRING, ATTR_UINT,
     ATTR_UINT,   ATTR_UCOUNT, ATTR_UCOUNT, ATTR_UINT,
     ATTR_REF,    ATTR_UINT,   ATTR_STRING, ATTR_STRING,
-    ATTR_STRING, ATTR_STRING,
+    ATTR_STRING, ATTR_STRING, ATTR_UINT
 };
 
 /**
@@ -1042,6 +1042,7 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_PROXY_PORT           : return "proxyPort";
     case VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  : return "errorListenerSide";
     case VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE : return "errorConnectorSide";
+    case VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL   : return "activeTlsOrdinal";
     }
     return "UNKNOWN";
 }
