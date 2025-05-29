@@ -486,6 +486,10 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx
 void qd_connector_add_link(qd_connector_t *connector)
 {
     if (!connector->is_data_connector) {
+        if (connector->vflow_record && connector->ctor_config->tls_config) {
+            // connector->ctor_config->tls_ordinal is set in the handle_connector_ssl_profile_mgmt_update() callback
+            vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL, connector->ctor_config->tls_ordinal);
+        }
         vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
         vflow_set_timestamp_now(connector->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
         connector->oper_status_down = false;
@@ -611,7 +615,6 @@ static void handle_connector_ssl_profile_mgmt_update(const qd_tls_config_t *conf
         }
 
         // Create a new set of connectors (and their associated connections) that will use the updated TLS credentials.
-
         ctor_config->tls_ordinal = new_ordinal;
 
         if (qd_connector_config_create_connectors(ctor_config) != QD_ERROR_NONE) {
