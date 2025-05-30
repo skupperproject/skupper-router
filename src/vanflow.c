@@ -148,6 +148,10 @@ static const int   rate_span                   = 10;    // Ten-second rolling av
 static sys_atomic_t site_configured;
 
 typedef struct {
+    // How many records of types that support observability currently exist?
+    // Their creation can be interrupted if necessary to avoid excessive memory growth.
+    sys_atomic_t         observability_record_count;
+    sys_atomic_t         emit_observability_records;
     qdr_core_t          *router_core;
     sys_mutex_t          lock;
     sys_mutex_t          id_lock;
@@ -483,6 +487,15 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     }
 
     vflow_record_t *record = work->record;
+
+    // If this is one of the record types that supports observability,
+    // count it. If the number currently existing is above the threshold,
+    // indicate that we should temporarily stop producing them.
+    if (observability_records[record->record_type]) {
+        if (sys_atomic_inc(&state->observability_record_count) >= 100) {
+            sys_atomic_set(&state->emit_observability_records, 0);
+        }
+    }
 
     if (!record->co_record) {
         //
@@ -864,6 +877,15 @@ static void _vflow_create_router_record(void)
  */
 static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
 {
+    // If this is one of the record types that supports observability,
+    // count it. If the number currently existing is now below the
+    // resumption threshold, indicate that we should resume producing them.
+    if (observability_records[record->record_type]) {
+        if (sys_atomic_dec(&state->observability_record_count) <= 20) {
+            sys_atomic_set(&state->emit_observability_records, 1);
+        }
+    }
+
     //
     // If this record is a child of a parent, remove it from the parent's child list
     //
@@ -1829,6 +1851,9 @@ vflow_record_t *vflow_start_record_custom_id(vflow_record_type_t record_type, vf
 //=====================================================================================
 vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record_t *parent)
 {
+    if (observability_records[record_type] && state->emit_observability_records == false) {
+        return 0;
+    }
     vflow_record_t *record = new_vflow_record_t();
     vflow_work_t   *work   = _vflow_work(_vflow_start_record_TH);
     ZERO(record);
@@ -1861,6 +1886,12 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
     // search/replacement algorithm in _vflow_process_co_record_TH will need to be re-written in a more general way.
     //
     assert(record_type == VFLOW_RECORD_BIFLOW_TPORT);
+    // The above record type is 'observability', which
+    // means we may have been told to temporarily halt
+    // production of them.
+    if (state->emit_observability_records == false ) {
+        return 0;
+    }
     vflow_record_t *record = new_vflow_record_t();
     ZERO(record);
     record->record_type        = record_type;
@@ -1909,6 +1940,8 @@ void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t 
             snprintf(buffer, IDENTITY_MAX, "%s:%"PRIu64, record->identity.s.source_id, record->identity.record_id);
             qd_compose_insert_string(field, buffer);
         }
+    } else {
+        qd_compose_insert_null(field);
     }
 }
 
@@ -2439,6 +2472,8 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     state = NEW(vflow_state_t);
     ZERO(state);
 
+    sys_atomic_init(&state->observability_record_count, 0);
+    sys_atomic_init(&state->emit_observability_records, 1);
     state->router_core = core;
     state->hostname = getenv("HOSTNAME");
     size_t hostLength = !!state->hostname ? strlen(state->hostname) : 0;
