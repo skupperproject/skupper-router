@@ -64,7 +64,6 @@ typedef struct qd_connector_t {
     sys_mutex_t               lock;
     connector_state_t         state;
     qd_connection_t          *qd_conn;
-    vflow_record_t           *vflow_record;
     bool                      oper_status_down;  // set when oper-status transitions to 'down' to avoid repeated error indications.
     bool                      is_data_connector; // inter-router conn for streaming messages
 
@@ -96,7 +95,7 @@ struct qd_connector_config_t {
     qd_server_t              *server;
     char                     *policy_vhost;  /* Optional policy vhost name */
     qd_timer_t               *cleanup_timer; /* remove quiesced connectors */
-
+    vflow_record_t           *vflow_record; /* vflow record for VFLOW_RECORD_LINK */
     // TLS Configuration. Keep a local copy of the TLS ordinals to monitor changes by management
     qd_tls_config_t          *tls_config;
     uint64_t                  tls_ordinal;
