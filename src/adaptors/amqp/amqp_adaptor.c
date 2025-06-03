@@ -569,8 +569,8 @@ bool AMQP_rx_handler(qd_router_t *router, qd_link_t *link)
     //
     // Bump LINK metrics if appropriate
     //
-    if (!!conn->connector && !!conn->connector->vflow_record) {
-        vflow_inc_counter(conn->connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, (uint64_t) octets_received);
+    if (!!conn->connector && !!conn->connector->ctor_config && !!conn->connector->ctor_config->vflow_record) {
+        vflow_inc_counter(conn->connector->ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, (uint64_t) octets_received);
     }
 
     // check if cut-through can be enabled or disabled
@@ -1535,8 +1535,8 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                            && strncmp(key.start, QD_CONNECTION_PROPERTY_ACCESS_ID, key.size) == 0)) {
                     props_found += 1;
                     if (!pn_data_next(props)) break;
-                    if (!!connector && !!connector->vflow_record && pn_data_type(props) == PN_STRING) {
-                        vflow_set_ref_from_pn(connector->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
+                    if (!!connector && !!connector->ctor_config && !!connector->ctor_config->vflow_record && pn_data_type(props) == PN_STRING) {
+                        vflow_set_ref_from_pn(connector->ctor_config->vflow_record, VFLOW_ATTRIBUTE_PEER, props);
                     }
 
                 } else {
@@ -2143,8 +2143,8 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
     //
     // Bump LINK metrics if appropriate
     //
-    if (!!qconn->connector && !!qconn->connector->vflow_record) {
-        vflow_inc_counter(qconn->connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS, (uint64_t) octets_sent);
+    if (!!qconn->connector && !!qconn->connector->ctor_config && !!qconn->connector->ctor_config->vflow_record) {
+        vflow_inc_counter(qconn->connector->ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS, (uint64_t) octets_sent);
     }
 
     //

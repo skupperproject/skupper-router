@@ -108,7 +108,6 @@ static void qd_connector_config_cleanup_conns(void *context)
 static qd_error_t qd_connector_config_create_connectors(qd_connector_config_t *ctor_config)
 {
     ASSERT_MGMT_THREAD;  // only the mgmt thread can modify the connector list!
-
     qd_error_clear();
 
     // The connector configuration for inter-router connections may define a data connection count. This is the number
@@ -282,25 +281,6 @@ qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_
     snprintf(item->host_port, hplen, "%s:%s", item->host , item->port);
     DEQ_INSERT_TAIL(connector->conn_info_list, item);
 
-    //
-    // Set up the vanflow record for this connector (LINK)
-    // Do this only for router-to-router connectors since the record represents an inter-router link
-    //
-    if ((strcmp(ctor_config->config.role, "inter-router") == 0 && !is_data_connector) ||
-        strcmp(ctor_config->config.role, "edge") == 0 ||
-        strcmp(ctor_config->config.role, "inter-edge") == 0) {
-        connector->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_NAME, ctor_config->config.name);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_ROLE, ctor_config->config.role);
-        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_LINK_COST, ctor_config->config.inter_router_cost);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
-        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 0);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, item->scheme);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_HOST, item->host);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, item->port);
-        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
-        vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
-    }
     return connector;
 }
 
@@ -360,8 +340,6 @@ void qd_connector_decref(qd_connector_t* connector)
         assert(connector->qd_conn == 0);
 
         qd_connector_config_decref(connector->ctor_config);
-        vflow_end_record(connector->vflow_record);
-        connector->vflow_record = 0;
         qd_timer_free(connector->reconnect_timer);
         sys_mutex_free(&connector->lock);
         sys_atomic_destroy(&connector->ref_count);
@@ -473,25 +451,34 @@ void qd_connector_remote_opened(qd_connector_t *connector)
 /**
  * Set the child connection of the connector
  */
-void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx)
+void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *qd_conn)
 {
-    assert(ctx->connector == 0);
-
+    assert(qd_conn->connector == 0);
     sys_atomic_inc(&connector->ref_count);
-    ctx->connector = connector;
-    connector->qd_conn = ctx;
+    qd_conn->connector = connector;
+    connector->qd_conn = qd_conn;
+    if (!connector->is_data_connector) {
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        sys_atomic_inc(&ctor_config->active_control_conn_count);
+    }    
 }
 
 
 void qd_connector_add_link(qd_connector_t *connector)
 {
     if (!connector->is_data_connector) {
-        if (connector->vflow_record && connector->ctor_config->tls_config) {
-            // connector->ctor_config->tls_ordinal is set in the handle_connector_ssl_profile_mgmt_update() callback
-            vflow_set_uint64(connector->vflow_record, VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL, connector->ctor_config->tls_ordinal);
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        if (ctor_config && ctor_config->vflow_record) {
+            if (ctor_config->tls_config) {
+                // connector->ctor_config->tls_ordinal is set in the handle_connector_ssl_profile_mgmt_update() callback
+                vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL, connector->ctor_config->tls_ordinal);
+            }        
+            if (sys_atomic_get(&ctor_config->active_control_conn_count) == 1) {
+                vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
+                vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
+            }
+
         }
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
-        vflow_set_timestamp_now(connector->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
         connector->oper_status_down = false;
     }
 }
@@ -505,14 +492,25 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
 {
     sys_mutex_lock(&connector->lock);
 
+    if (!connector->is_data_connector) {
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        sys_atomic_dec(&ctor_config->active_control_conn_count);
+    }     
+    
+
     qd_connection_t *ctx = connector->qd_conn;
     if (!connector->is_data_connector && !connector->oper_status_down  && !final) {
         connector->oper_status_down = true;
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
-        vflow_inc_counter(connector->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
-        vflow_set_timestamp_now(connector->vflow_record, VFLOW_ATTRIBUTE_DOWN_TIMESTAMP);
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_RESULT, condition_name        ? condition_name : "unknown");
-        vflow_set_string(connector->vflow_record, VFLOW_ATTRIBUTE_REASON, condition_description ? condition_description : "");
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        // If there are no active control connections, we can safely assume that
+        // the operation status of the LINK record is "down"
+        if (ctor_config && ctor_config->vflow_record && sys_atomic_get(&ctor_config->active_control_conn_count) == 0) {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+            vflow_inc_counter(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
+            vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_TIMESTAMP);
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_RESULT, condition_name        ? condition_name : "unknown");
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_REASON, condition_description ? condition_description : "");
+        }
     }
     connector->qd_conn = 0;
     ctx->connector = 0;
@@ -644,6 +642,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
     ZERO(ctor_config);
     DEQ_ITEM_INIT(ctor_config);
     sys_atomic_init(&ctor_config->ref_count, 1);  // for caller
+    sys_atomic_init(&ctor_config->active_control_conn_count, 0);
     ctor_config->server = qd_dispatch_get_server(qd);
     DEQ_INIT(ctor_config->connectors);
     ctor_config->cleanup_timer = qd_timer(amqp_adaptor.dispatch, qd_connector_config_cleanup_conns, ctor_config);
@@ -663,6 +662,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
 
     const bool is_inter_router = strcmp(ctor_config->config.role, "inter-router") == 0;
     const bool is_edge = strcmp(ctor_config->config.role, "edge") == 0;
+    const bool is_inter_edge = strcmp(ctor_config->config.role, "inter-edge") == 0;
 
     //
     // If an sslProfile is configured allocate a TLS config to be used by all child connector's connections
@@ -684,9 +684,25 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
                                                    handle_connector_ssl_profile_mgmt_update);
         }
     }
-
+    if (is_inter_router || is_edge || is_inter_edge) {
+        ctor_config->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
+        vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_NAME, ctor_config->config.name);
+        vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_ROLE, ctor_config->config.role);
+        vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_LINK_COST, ctor_config->config.inter_router_cost);
+        vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
+        vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 0);
+        if (ctor_config->config.ssl_required) {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, "amqps");
+        } else {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, "amqp");
+        }
+                vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, ctor_config->config.port);
+        vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
+        vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+    }    
+    //
     // For inter-router connectors generate a group correlator and configure the data connection count
-
+    //
     if (is_inter_router) {
         qd_generate_discriminator(ctor_config->group_correlator);
         ctor_config->data_connection_count = qd_dispatch_get_data_connection_count(qd);
@@ -742,6 +758,11 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config)
     assert(rc > 0);  // else underflow
 
     if (rc == 1) {
+        if (ctor_config->vflow_record) {
+           vflow_end_record(ctor_config->vflow_record);
+           ctor_config->vflow_record = 0;
+        }
+        
         // Expect: all connectors hold the ref_count so this must be empty
         assert(DEQ_IS_EMPTY(ctor_config->connectors));
 
@@ -749,6 +770,7 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config)
         // down:
         qd_timer_free(ctor_config->cleanup_timer);
         sys_atomic_destroy(&ctor_config->ref_count);
+        sys_atomic_destroy(&ctor_config->active_control_conn_count);
         free(ctor_config->policy_vhost);
         qd_tls_config_decref(ctor_config->tls_config);
         qd_server_config_free(&ctor_config->config);

@@ -31,6 +31,7 @@ from system_test import CA2_CERT
 from system_test import CLIENT2_CERTIFICATE, CLIENT2_PRIVATE_KEY, CLIENT2_PRIVATE_KEY_PASSWORD
 from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVATE_KEY_PASSWORD
 from tcp_streamer import TcpStreamerThread
+from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
 
 class InterRouterCertRotationTest(TestCase):
@@ -122,12 +123,54 @@ class InterRouterCertRotationTest(TestCase):
         zero_ordinals = [c for c in irc if c['tlsOrdinal'] == 0]
         self.assertEqual(data_conn_count + 1, len(zero_ordinals), f"Missing conns: {zero_ordinals}")
 
+        snooper_thread = VFlowSnooperThread(router_C.addresses[0])
+
+        expected = {
+            'RouterL': [('ROUTER_ACCESS', {'LINK_COUNT': 1,
+                                           'ROLE': 'inter-router',
+                                           'IDENTITY': ANY_VALUE})],
+            'RouterC': [('LINK', {'PEER': ANY_VALUE,
+                                  'OPER_STATUS': 'up',
+                                  'ACTIVE_TLS_ORDINAL': 0,
+                                  'ROLE': 'inter-router'})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=2)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Before incrementing the ordinal on the sslProfile, get the vflow LINK record
+        # and capture its identity and start time. After we update the ordinal, we will
+        # make sure that the LINK record we obtain then has the same ordinal and start time
+        # as the current LINK record. This will prove that the LINK records were not recreated
+        # across ordinal updates.
+        link_vflow_recs = snooper_thread.get_router_records("RouterC", record_type='LINK')
+        link_vflow_dict = link_vflow_recs[0]
+        link_identity = link_vflow_dict['IDENTITY']
+        link_start_time = link_vflow_dict['START_TIME']
+
         # update tlsOrdinal to 3 and wait for new conns to appear
         router_C.management.update(type=SSL_PROFILE_TYPE,
                                    attributes={'ordinal': 3},
                                    name='ConnectorSslProfile')
         self.wait_inter_router_conns(router_C, 2 * (data_conn_count + 1))
         self.wait_inter_router_conns(router_L, 2 * (data_conn_count + 1))
+
+        # The ordinal has been updated to 3, check to see if the LINK has the correct
+        # ordinal value of 3
+        expected = {
+            'RouterC': [('LINK', {'PEER': ANY_VALUE,
+                                  'OPER_STATUS': 'up',
+                                  'ACTIVE_TLS_ORDINAL': 3,
+                                  'ROLE': 'inter-router'})]
+        }
+        success = retry(lambda: snooper_thread.match_records(expected), delay=2)
+        self.assertTrue(success, f"Failed to match records {snooper_thread.get_results()}")
+
+        # Check to see if there is still the same link
+        # record as from before the ordinal was updated.
+        link_vflow_recs = snooper_thread.get_router_records("RouterC", record_type='LINK')
+        link_vflow_dict = link_vflow_recs[0]
+        self.assertEqual(link_identity, link_vflow_dict['IDENTITY'])
+        self.assertEqual(link_start_time, link_vflow_dict['START_TIME'])
 
         # Update oldestValidOrdinal to 3. Expect the older connections with an
         # ordinal value of 0 to be deleted
@@ -137,6 +180,13 @@ class InterRouterCertRotationTest(TestCase):
         self.wait_inter_router_conns(router_L, data_conn_count + 1)
         self.wait_inter_router_conns(router_C, data_conn_count + 1)
 
+        # The oldestValidOrdinal has been updated to 3, we will check to see if there is
+        # still the same link record as from before the ordinal was updated.
+        link_vflow_recs = snooper_thread.get_router_records("RouterC", record_type='LINK')
+        link_vflow_dict = link_vflow_recs[0]
+        self.assertEqual(link_identity, link_vflow_dict['IDENTITY'])
+        self.assertEqual(link_start_time, link_vflow_dict['START_TIME'])
+
         # Verify all group Ordinals are 3 (same as connector tlsOrdinal)
         irc = router_C.get_inter_router_conns()
         irc.extend(router_L.get_inter_router_conns())
@@ -144,6 +194,16 @@ class InterRouterCertRotationTest(TestCase):
                          len([c for c in irc if c['groupOrdinal'] == 3]),
                          f"Unexpected conns: {irc}")
         router_L.teardown()
+
+        # Router L has now been torn down, check to see if the RouterC's OPER_STATUS on the LINK record is "down"
+        expected = {
+            'RouterC': [('LINK', {'PEER': ANY_VALUE,
+                                  'OPER_STATUS': 'down',
+                                  "PROTOCOL": "amqp",
+                                  'ROLE': 'inter-router'})]
+        }
+
+        success = retry(lambda: snooper_thread.match_records(expected), delay=2)
         router_C.teardown()
 
     def test_02_drop_old(self):
