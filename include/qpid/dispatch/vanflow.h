@@ -60,10 +60,10 @@ typedef enum vflow_record_type {
 #define VFLOW_RECORD_MAX VFLOW_RECORD_BIFLOW_APP // Update this if you add new record types to vflow_record_type
 
 // Most record-types support critical functionality and must be emitted every time the corresponding
-// event occurs. But a few record-types support observability functionality that can be interrupted,
+// event occurs. But a few record-types support discretionary functionality that can be interrupted,
 // if necessary, to prevent excessive memory growth.
 // This array identifies which is which.
-static const bool observability_records[VFLOW_RECORD_MAX + 1] = {
+static const bool discretionary_records[VFLOW_RECORD_MAX + 1] = {
     false,     // VFLOW_RECORD_SITE          (0x00)
     false,     // VFLOW_RECORD_ROUTER        (0x01)
     false,     // VFLOW_RECORD_LINK          (0x02)

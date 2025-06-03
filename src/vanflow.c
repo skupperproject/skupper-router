@@ -46,6 +46,15 @@
 #define DEFERRED_DELETION_TICKS 25  // Five seconds
 #define VFLOW_ID_CUSTOM 0xffffffffffffffff
 
+// If the number of discretionary records rises above
+// this threshold, stop production of them to avoid
+// excessive memory growth.
+#define DISCRETIONARY_RECORDS_STOP_THRESHOLD    5000
+
+// If the number of discretionary records falls below
+// this threshold, allow their production to start again.
+#define DISCRETIONARY_RECORDS_START_THRESHOLD   1000
+
 //
 // If the record_id value is VFLOW_ID_CUSTOM, use the full_id for arbitrary strings, otherwise use ${s.source_id}:${record_id}
 //
@@ -148,10 +157,10 @@ static const int   rate_span                   = 10;    // Ten-second rolling av
 static sys_atomic_t site_configured;
 
 typedef struct {
-    // How many records of types that support observability currently exist?
+    // How many records of types that support discretionary currently exist?
     // Their creation can be interrupted if necessary to avoid excessive memory growth.
-    sys_atomic_t         observability_record_count;
-    sys_atomic_t         emit_observability_records;
+    sys_atomic_t         discretionary_record_count;
+    sys_atomic_t         emit_discretionary_records;
     qdr_core_t          *router_core;
     sys_mutex_t          lock;
     sys_mutex_t          id_lock;
@@ -487,15 +496,6 @@ static void _vflow_start_record_TH(vflow_work_t *work, bool discard)
     }
 
     vflow_record_t *record = work->record;
-
-    // If this is one of the record types that supports observability,
-    // count it. If the number currently existing is above the threshold,
-    // indicate that we should temporarily stop producing them.
-    if (observability_records[record->record_type]) {
-        if (sys_atomic_inc(&state->observability_record_count) >= 100) {
-            sys_atomic_set(&state->emit_observability_records, 0);
-        }
-    }
 
     if (!record->co_record) {
         //
@@ -877,12 +877,12 @@ static void _vflow_create_router_record(void)
  */
 static void _vflow_free_record_TH(vflow_record_t *record, bool recursive)
 {
-    // If this is one of the record types that supports observability,
+    // If this is one of the record types that supports discretionary functionality,
     // count it. If the number currently existing is now below the
     // resumption threshold, indicate that we should resume producing them.
-    if (observability_records[record->record_type]) {
-        if (sys_atomic_dec(&state->observability_record_count) <= 20) {
-            sys_atomic_set(&state->emit_observability_records, 1);
+    if (discretionary_records[record->record_type]) {
+        if (sys_atomic_dec(&state->discretionary_record_count) <= DISCRETIONARY_RECORDS_START_THRESHOLD) {
+            sys_atomic_set(&state->emit_discretionary_records, 1);
         }
     }
 
@@ -1851,9 +1851,19 @@ vflow_record_t *vflow_start_record_custom_id(vflow_record_type_t record_type, vf
 //=====================================================================================
 vflow_record_t *vflow_start_record(vflow_record_type_t record_type, vflow_record_t *parent)
 {
-    if (observability_records[record_type] && state->emit_observability_records == false) {
-        return 0;
+    // If this is one of the record types that supports discretionary functionality,
+    // and if we already have the maximum allowed number of those, just don't produce
+    // another one.
+    // Otherwise, produce and count it, and check if this one put us over the limit.
+    if (discretionary_records[record_type]) {
+        if (0 == sys_atomic_get(&state->emit_discretionary_records)) {
+            return 0;
+        }
+        if (sys_atomic_inc(&state->discretionary_record_count) >= DISCRETIONARY_RECORDS_STOP_THRESHOLD) {
+            sys_atomic_set(&state->emit_discretionary_records, 0);
+        }
     }
+
     vflow_record_t *record = new_vflow_record_t();
     vflow_work_t   *work   = _vflow_work(_vflow_start_record_TH);
     ZERO(record);
@@ -1886,10 +1896,10 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
     // search/replacement algorithm in _vflow_process_co_record_TH will need to be re-written in a more general way.
     //
     assert(record_type == VFLOW_RECORD_BIFLOW_TPORT);
-    // The above record type is 'observability', which
+    // The above record type is 'discretionary', which
     // means we may have been told to temporarily halt
     // production of them.
-    if (state->emit_observability_records == false ) {
+    if (sys_atomic_get(&state->emit_discretionary_records) == 0) {
         return 0;
     }
     vflow_record_t *record = new_vflow_record_t();
@@ -1932,7 +1942,6 @@ void vflow_end_record(vflow_record_t *record)
 void vflow_serialize_identity(const vflow_record_t *record, qd_composed_field_t *field)
 {
     char buffer[IDENTITY_MAX + 1];
-    assert(!!record);
     if (!!record) {
         if (record->identity.record_id == VFLOW_ID_CUSTOM) {
             qd_compose_insert_string(field, record->identity.s.full_id);
@@ -2472,8 +2481,8 @@ static void _vflow_init(qdr_core_t *core, void **adaptor_context)
     state = NEW(vflow_state_t);
     ZERO(state);
 
-    sys_atomic_init(&state->observability_record_count, 0);
-    sys_atomic_init(&state->emit_observability_records, 1);
+    sys_atomic_init(&state->discretionary_record_count, 0);
+    sys_atomic_init(&state->emit_discretionary_records, 1);
     state->router_core = core;
     state->hostname = getenv("HOSTNAME");
     size_t hostLength = !!state->hostname ? strlen(state->hostname) : 0;
