@@ -57,6 +57,34 @@ typedef enum vflow_record_type {
     VFLOW_RECORD_BIFLOW_APP    = 0x11,  // Bidirectional Application (L7) flow
 } vflow_record_type_t;
 
+#define VFLOW_RECORD_MAX VFLOW_RECORD_BIFLOW_APP // Update this if you add new record types to vflow_record_type
+
+// Most record-types support critical functionality and must be emitted every time the corresponding
+// event occurs. But a few record-types support discretionary functionality that can be interrupted,
+// if necessary, to prevent excessive memory growth.
+// This array identifies which is which.
+static const bool discretionary_records[VFLOW_RECORD_MAX + 1] = {
+    false,     // VFLOW_RECORD_SITE          (0x00)
+    false,     // VFLOW_RECORD_ROUTER        (0x01)
+    false,     // VFLOW_RECORD_LINK          (0x02)
+    false,     // VFLOW_RECORD_CONTROLLER    (0x03)
+    false,     // VFLOW_RECORD_LISTENER      (0x04)
+    false,     // VFLOW_RECORD_CONNECTOR     (0x05)
+    true,      // VFLOW_RECORD_FLOW          (0x06)
+    false,     // VFLOW_RECORD_PROCESS       (0x07)
+    false,     // VFLOW_RECORD_IMAGE         (0x08)
+    false,     // VFLOW_RECORD_INGRESS       (0x09)
+    false,     // VFLOW_RECORD_EGRESS        (0x0a)
+    false,     // VFLOW_RECORD_COLLECTOR     (0x0b)
+    false,     // VFLOW_RECORD_PROCESS_GROUP (0x0c)
+    false,     // VFLOW_RECORD_HOST          (0x0d)
+    false,     // VFLOW_RECORD_LOG           (0x0e)
+    false,     // VFLOW_RECORD_ROUTER_ACCESS (0x0f)
+    true,      // VFLOW_RECORD_BIFLOW_TPORT  (0x10)
+    true,      // VFLOW_RECORD_BIFLOW_APP    (0x11)
+
+};
+
 // clang-format off
 typedef enum vflow_attribute {
     // Note: these values are shared with the Skupper control plane - do not re-use or change them without updating the
