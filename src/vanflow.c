@@ -53,7 +53,7 @@
 
 // If the number of discretionary records falls below
 // this threshold, allow their production to start again.
-#define DISCRETIONARY_RECORDS_START_THRESHOLD   1000
+#define DISCRETIONARY_RECORDS_START_THRESHOLD   4990
 
 //
 // If the record_id value is VFLOW_ID_CUSTOM, use the full_id for arbitrary strings, otherwise use ${s.source_id}:${record_id}
