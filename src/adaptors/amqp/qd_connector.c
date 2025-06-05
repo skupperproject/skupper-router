@@ -451,13 +451,16 @@ void qd_connector_remote_opened(qd_connector_t *connector)
 /**
  * Set the child connection of the connector
  */
-void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *ctx)
+void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *qd_conn)
 {
-    assert(ctx->connector == 0);
-
+    assert(qd_conn->connector == 0);
     sys_atomic_inc(&connector->ref_count);
-    ctx->connector = connector;
-    connector->qd_conn = ctx;
+    qd_conn->connector = connector;
+    connector->qd_conn = qd_conn;
+    if (!connector->is_data_connector) {
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        ctor_config->active_control_conn_count += 1;
+    }    
 }
 
 
@@ -465,7 +468,7 @@ void qd_connector_add_link(qd_connector_t *connector)
 {
     if (!connector->is_data_connector) {
         qd_connector_config_t *ctor_config = connector->ctor_config;
-        if (ctor_config && ctor_config->vflow_record) {
+        if (ctor_config && ctor_config->vflow_record && ctor_config->active_control_conn_count == 1) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
             vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
         }
@@ -482,13 +485,19 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
 {
     sys_mutex_lock(&connector->lock);
 
+    if (!connector->is_data_connector) {
+        qd_connector_config_t *ctor_config = connector->ctor_config;
+        ctor_config->active_control_conn_count -= 1;
+    }     
+    
+
     qd_connection_t *ctx = connector->qd_conn;
     if (!connector->is_data_connector && !connector->oper_status_down  && !final) {
         connector->oper_status_down = true;
         qd_connector_config_t *ctor_config = connector->ctor_config;
         // If this connector's tls_ordinal matches the latest tls_ordinal from the connector config, we can safely assume that
         // the operation status of the LINK record is "down"
-        if (ctor_config && ctor_config->vflow_record && connector->tls_ordinal == ctor_config->tls_ordinal && connector->state != CTOR_STATE_FAILED) {
+        if (ctor_config && ctor_config->vflow_record && ctor_config->active_control_conn_count == 0) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
             vflow_inc_counter(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
             vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_TIMESTAMP);
