@@ -488,7 +488,7 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
         qd_connector_config_t *ctor_config = connector->ctor_config;
         // If this connector's tls_ordinal matches the latest tls_ordinal from the connector config, we can safely assume that
         // the operation status of the LINK record is "down"
-        if (ctor_config && ctor_config->vflow_record && connector->tls_ordinal == ctor_config->tls_ordinal) {
+        if (ctor_config && ctor_config->vflow_record && connector->tls_ordinal == ctor_config->tls_ordinal && connector->state != CTOR_STATE_FAILED) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
             vflow_inc_counter(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
             vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_TIMESTAMP);
