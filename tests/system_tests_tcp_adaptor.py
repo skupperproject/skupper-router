@@ -1298,6 +1298,7 @@ class TcpAdaptorStuckDeliveryTest(TestCase):
             server.bind(("", self.interior_tcp_connector_port))
             server.listen(10)
         except Exception as exc:
+            server.close()
             print("%s: failed creating tcp server: %s" % (self.test_name, exc),
                   flush=True)
             raise
@@ -1834,6 +1835,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
                         # There may be a delay between the operStatus going up and
                         # the actual listener socket availability, so allow that:
                         time.sleep(0.1)
+                        client_conn.close()
                         continue
 
                     server_conn, _ = server.accept()
@@ -1864,6 +1866,7 @@ class TcpAdaptorListenerConnectTest(TestCase):
                     continue
                 except ConnectionRefusedError:
                     # Test successful
+                    client_conn.close()
                     break
 
         l_mgmt.delete(type=TCP_LISTENER_TYPE, name=listener_name)
