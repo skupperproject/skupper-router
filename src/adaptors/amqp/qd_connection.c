@@ -821,6 +821,8 @@ bool qd_connection_handle_event(qd_server_t *qd_server, pn_event_t *e, void *con
                            pn_condition_get_description(condition));
                 }
             }
+            pn_connection_write_flush(pn_conn);
+            pn_transport_close_head(transport);
         }
         break;
 
