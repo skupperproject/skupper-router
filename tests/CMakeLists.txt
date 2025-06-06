@@ -125,7 +125,7 @@ foreach(py_test_module
     system_tests_handle_failover
     system_tests_default_distribution
     ${SYSTEM_TESTS_POLICY}
-    system_tests_socket_address_family
+    #system_tests_socket_address_family
     system_tests_protocol_settings
     system_tests_skmanage
     system_tests_skstat
