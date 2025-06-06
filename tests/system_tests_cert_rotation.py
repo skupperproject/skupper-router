@@ -33,6 +33,7 @@ from system_test import SERVER2_CERTIFICATE, SERVER2_PRIVATE_KEY, SERVER2_PRIVAT
 from tcp_streamer import TcpStreamerThread
 from vanflow_snooper import VFlowSnooperThread, ANY_VALUE
 
+
 class InterRouterCertRotationTest(TestCase):
     """
     Validate the Certificate Rotation feature against interior inter-router connections.
@@ -156,7 +157,7 @@ class InterRouterCertRotationTest(TestCase):
         # record as from before the ordinal was updated.
         link_vflow_recs = snooper_thread.get_router_records("RouterC", record_type='LINK')
         link_vflow_dict = link_vflow_recs[0]
-        self.assertEqual(link_identity,link_vflow_dict['IDENTITY'])
+        self.assertEqual(link_identity, link_vflow_dict['IDENTITY'])
         self.assertEqual(link_start_time, link_vflow_dict['START_TIME'])
 
         # Update oldestValidOrdinal to 3. Expect the older connections with an
@@ -171,7 +172,7 @@ class InterRouterCertRotationTest(TestCase):
         # still the same link record as from before the ordinal was updated.
         link_vflow_recs = snooper_thread.get_router_records("RouterC", record_type='LINK')
         link_vflow_dict = link_vflow_recs[0]
-        self.assertEqual(link_identity,link_vflow_dict['IDENTITY'])
+        self.assertEqual(link_identity, link_vflow_dict['IDENTITY'])
         self.assertEqual(link_start_time, link_vflow_dict['START_TIME'])
 
         # Verify all group Ordinals are 3 (same as connector tlsOrdinal)
