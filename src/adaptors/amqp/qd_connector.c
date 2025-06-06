@@ -459,7 +459,7 @@ void qd_connector_add_connection(qd_connector_t *connector, qd_connection_t *qd_
     connector->qd_conn = qd_conn;
     if (!connector->is_data_connector) {
         qd_connector_config_t *ctor_config = connector->ctor_config;
-        ctor_config->active_control_conn_count += 1;
+        sys_atomic_inc(&ctor_config->active_control_conn_count);
     }    
 }
 
@@ -468,7 +468,7 @@ void qd_connector_add_link(qd_connector_t *connector)
 {
     if (!connector->is_data_connector) {
         qd_connector_config_t *ctor_config = connector->ctor_config;
-        if (ctor_config && ctor_config->vflow_record && ctor_config->active_control_conn_count == 1) {
+        if (ctor_config && ctor_config->vflow_record && sys_atomic_get(&ctor_config->active_control_conn_count) == 1) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
             vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_UP_TIMESTAMP);
         }
@@ -487,7 +487,7 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
 
     if (!connector->is_data_connector) {
         qd_connector_config_t *ctor_config = connector->ctor_config;
-        ctor_config->active_control_conn_count -= 1;
+        sys_atomic_dec(&ctor_config->active_control_conn_count);
     }     
     
 
@@ -497,7 +497,7 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
         qd_connector_config_t *ctor_config = connector->ctor_config;
         // If this connector's tls_ordinal matches the latest tls_ordinal from the connector config, we can safely assume that
         // the operation status of the LINK record is "down"
-        if (ctor_config && ctor_config->vflow_record && ctor_config->active_control_conn_count == 0) {
+        if (ctor_config && ctor_config->vflow_record && sys_atomic_get(&ctor_config->active_control_conn_count) == 0) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
             vflow_inc_counter(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_COUNT, 1);
             vflow_set_timestamp_now(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DOWN_TIMESTAMP);
@@ -636,6 +636,7 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
     ZERO(ctor_config);
     DEQ_ITEM_INIT(ctor_config);
     sys_atomic_init(&ctor_config->ref_count, 1);  // for caller
+    sys_atomic_init(&ctor_config->active_control_conn_count, 0);
     ctor_config->server = qd_dispatch_get_server(qd);
     DEQ_INIT(ctor_config->connectors);
     ctor_config->cleanup_timer = qd_timer(amqp_adaptor.dispatch, qd_connector_config_cleanup_conns, ctor_config);
@@ -763,6 +764,7 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config)
         // down:
         qd_timer_free(ctor_config->cleanup_timer);
         sys_atomic_destroy(&ctor_config->ref_count);
+        sys_atomic_destroy(&ctor_config->active_control_conn_count);
         free(ctor_config->policy_vhost);
         qd_tls_config_decref(ctor_config->tls_config);
         qd_server_config_free(&ctor_config->config);

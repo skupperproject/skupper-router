@@ -101,7 +101,7 @@ struct qd_connector_config_t {
     uint64_t                  tls_ordinal;
     uint64_t                  tls_oldest_valid_ordinal;
     uint32_t                  data_connection_count;  // # of child inter-router data connections
-    uint32_t                  active_control_conn_count;
+    sys_atomic_t              active_control_conn_count;
     // The group correlation id for all child connectors/connections
     char                      group_correlator[QD_DISCRIMINATOR_SIZE];
 
