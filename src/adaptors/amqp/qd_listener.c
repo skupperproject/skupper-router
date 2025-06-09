@@ -302,6 +302,9 @@ void qd_listener_add_link(qd_listener_t *li)
     if (!!li->vflow_record) {
         uint32_t count = sys_atomic_inc(&li->connection_count) + 1;
         vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_LINK_COUNT, count);
+        if (li->tls_config && li->vflow_record) {
+            vflow_set_uint64(li->vflow_record, VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL, li->tls_ordinal);
+        }
     }
 }
 
@@ -369,11 +372,12 @@ static void expired_ordinal_connection_scrubber(qd_connection_t *qd_conn, void *
 //
 static void handle_listener_ssl_profile_mgmt_update(const qd_tls_config_t *config, void *context)
 {
+    uint64_t new_ordinal = qd_tls_config_get_ordinal(config);
     uint64_t new_oldest_ordinal = qd_tls_config_get_oldest_valid_ordinal(config);
     qd_listener_t *li           = (qd_listener_t *) context;
+    li->tls_ordinal = new_ordinal;
 
     // destroy all connections whose connectors use an expired TLS ordinal:
-
     if (new_oldest_ordinal > li->tls_oldest_valid_ordinal) {
 
         qd_log(LOG_SERVER, QD_LOG_DEBUG,
