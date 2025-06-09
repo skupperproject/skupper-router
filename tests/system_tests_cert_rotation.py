@@ -182,6 +182,16 @@ class InterRouterCertRotationTest(TestCase):
                          len([c for c in irc if c['groupOrdinal'] == 3]),
                          f"Unexpected conns: {irc}")
         router_L.teardown()
+
+        # Router L has now been torn down, check to see if the RouterC's OPER_STATUS on the LINK record is "down"
+        expected = {
+            'RouterC': [('LINK', {'PEER': ANY_VALUE,
+                                  'OPER_STATUS': 'down',
+                                  "PROTOCOL": "amqp",
+                                  'ROLE': 'inter-router'})]
+        }
+
+        success = retry(lambda: snooper_thread.match_records(expected), delay=2)
         router_C.teardown()
 
     def test_02_drop_old(self):
