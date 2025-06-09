@@ -495,7 +495,7 @@ void qd_connector_remove_connection(qd_connector_t *connector, bool final, const
     if (!connector->is_data_connector && !connector->oper_status_down  && !final) {
         connector->oper_status_down = true;
         qd_connector_config_t *ctor_config = connector->ctor_config;
-        // If this connector's tls_ordinal matches the latest tls_ordinal from the connector config, we can safely assume that
+        // If there are no active control connections, we can safely assume that
         // the operation status of the LINK record is "down"
         if (ctor_config && ctor_config->vflow_record && sys_atomic_get(&ctor_config->active_control_conn_count) == 0) {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "down");
