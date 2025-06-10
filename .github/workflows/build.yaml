@@ -336,12 +336,12 @@ jobs:
 
 
 ####################
-### Raspberry PI ###
+### Ubuntu ARM build and test ###
 ####################
 
-  compile_and_test_pi5:
-    name: "Compile and Test on Pi 5 (aarch64 on Pi 5 proton 0.39.0)"
-    runs-on: self-hosted-arm64
+  compile_and_test_arm64:
+    name: "Compile and Test on Ubuntu arm64"
+    runs-on: ubuntu-24.04-arm
     env:
       CC: 'gcc-12'
       CXX: 'g++-12'
@@ -1032,7 +1032,7 @@ jobs:
 
   container_arm64:
     name: arm64 container image
-    runs-on: self-hosted-arm64
+    runs-on: ubuntu-24.04-arm
     env:
       ImageName: local/skupper-router:local
 
