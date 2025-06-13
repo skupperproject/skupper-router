@@ -1900,9 +1900,13 @@ vflow_record_t *vflow_start_co_record_iter(vflow_record_type_t record_type, qd_i
     // The above record type is 'discretionary', which
     // means we may have been told to temporarily halt
     // production of them.
-    if (sys_atomic_get(&state->emit_discretionary_records) == 0) {
+    if (0 == sys_atomic_get(&state->emit_discretionary_records)) {
         return 0;
     }
+    if (sys_atomic_inc(&state->discretionary_record_count) >= DISCRETIONARY_RECORDS_STOP_THRESHOLD) {
+        sys_atomic_set(&state->emit_discretionary_records, 0);
+    }
+
     vflow_record_t *record = new_vflow_record_t();
     ZERO(record);
     record->record_type        = record_type;
