@@ -127,7 +127,8 @@ attribute_types = {
     62: "PROXY_HOST",
     63: "PROXY_PORT",
     64: "ERROR_LISTENER_SIDE",
-    65: "ERROR_CONNECTOR_SIDE"
+    65: "ERROR_CONNECTOR_SIDE",
+    66: "ACTIVE_TLS_ORDINAL"
 }
 
 
