@@ -56,6 +56,7 @@ struct qd_dispatch_t {
     char     *van_id;
     char     *timestamp_format;
     char     *metadata;
+    char     *transport_plugin;
     bool      timestamps_in_utc;
     bool      terminate_tcp_conns;
 };

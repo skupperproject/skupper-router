@@ -32,7 +32,9 @@
 
 ALLOC_DEFINE(qdr_action_t);
 
-
+//
+// Core Module Registration
+//
 typedef struct qdrc_module_t {
     DEQ_LINKS(struct qdrc_module_t);
     const char          *name;
@@ -57,7 +59,9 @@ void qdr_register_core_module(const char *name, qdrc_module_enable_t enable, qdr
     DEQ_INSERT_TAIL(registered_modules, module);
 }
 
-
+//
+// Adaptor Module Registration
+//
 typedef struct qdrc_adaptor_t {
     DEQ_LINKS(struct qdrc_adaptor_t);
     const char          *name;
@@ -88,6 +92,30 @@ void qdr_register_adaptor(const char *name, qdr_adaptor_init_t on_init, qdr_adap
         insert = DEQ_PREV(insert);
     }
     DEQ_INSERT_HEAD(registered_adaptors, adaptor);
+}
+
+//
+// Transport Module Registration
+//
+typedef struct qdrc_transport_module_t {
+    DEQ_LINKS(struct qdrc_transport_module_t);
+    const char          *name;
+    qdrc_module_init_t   on_init;
+    qdrc_module_final_t  on_final;
+    void                *context;
+} qdrc_transport_module_t;
+
+DEQ_DECLARE(qdrc_transport_module_t, qdrc_transport_module_list_t);
+static qdrc_transport_module_list_t registered_transport_modules;
+
+void qdr_register_transport_module(const char *name, qdrc_module_init_t on_init, qdrc_module_final_t on_final)
+{
+    qdrc_transport_module_t *module = NEW(qdrc_transport_module_t);
+    ZERO(module);
+    module->name = name;
+    module->on_init = on_init;
+    module->on_final = on_final;
+    DEQ_INSERT_TAIL(registered_transport_modules, module);
 }
 
 
@@ -184,6 +212,33 @@ void qdr_adaptors_finalize(qdr_core_t *core)
     assert(DEQ_SIZE(core->protocol_adaptors) == 0);
 
     qd_adaptor_listener_finalize();
+}
+
+void qdr_transports_init(qdr_core_t *core)
+{
+    qdrc_transport_module_t *module = DEQ_HEAD(registered_transport_modules);
+    const char *chosen = qdr_core_dispatch(core)->transport_plugin;
+
+    while (module) {
+        if (!strcmp(module->name, chosen ? chosen : "")) {
+            module->on_init(core, &module->context);
+        }
+        module = DEQ_NEXT(module);
+    }
+}
+
+
+void qdr_transports_finalize(qdr_core_t *core)
+{
+    qdrc_transport_module_t *module = DEQ_HEAD(registered_transport_modules);
+    const char *chosen = qdr_core_dispatch(core)->transport_plugin;
+
+    while (module) {
+        if (!strcmp(module->name, chosen ? chosen : "")) {
+            module->on_final(module->context);
+        }
+        module = DEQ_NEXT(module);
+    }
 }
 
 

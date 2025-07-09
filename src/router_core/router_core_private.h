@@ -1025,8 +1025,10 @@ qdr_query_t *qdr_query(qdr_core_t              *core,
 
 void qdr_modules_init(qdr_core_t *core);
 void qdr_adaptors_init(qdr_core_t *core);
+void qdr_transports_init(qdr_core_t *core);
 void qdr_modules_finalize(qdr_core_t *core);
 void qdr_adaptors_finalize(qdr_core_t *core);
+void qdr_transports_finalize(qdr_core_t *core);
 
 /**
  * Create a new timer which will only be used inside the core thread.

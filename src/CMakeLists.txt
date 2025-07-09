@@ -55,6 +55,7 @@ set(qpid_dispatch_SOURCES
   observers/http2/http2_observer.c
   decoders/http1/http1_decoder.c
   decoders/http2/http2_decoder.c
+  transport_modules/reference.c
   alloc.c
   alloc_pool.c
   aprintf.c

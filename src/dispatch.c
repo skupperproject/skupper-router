@@ -257,6 +257,8 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     }
     free(data_conn_count_str);
 
+    qd->transport_plugin = qd_entity_opt_string(entity, "transportPlugin", 0); QD_ERROR_RET();
+
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
     qd->metadata = qd_entity_opt_string(entity, "metadata", 0); QD_ERROR_RET();
