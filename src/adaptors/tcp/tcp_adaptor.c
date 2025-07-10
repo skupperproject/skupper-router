@@ -2361,7 +2361,7 @@ static void CORE_connection_trace(void *context, qdr_connection_t *conn, bool tr
 // Entrypoints for Management
 //=================================================================================
 
-QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+void *configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     SET_THREAD_UNKNOWN;
     qd_tcp_listener_t *listener = new_qd_tcp_listener_t();
@@ -2414,7 +2414,7 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
 /**
  * Handles tcpListener record update request from management agent.
  */
-QD_EXPORT void *qd_dispatch_update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity, void *impl)
+void *update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity, void *impl)
 {
     SET_THREAD_UNKNOWN;
     qd_error_clear();
@@ -2441,8 +2441,7 @@ QD_EXPORT void *qd_dispatch_update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *
     return listener;
 }
 
-
-QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+void delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 {
 
     SET_THREAD_UNKNOWN;
@@ -2490,8 +2489,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
     }
 }
 
-
-QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+void delete_tcp_connector(qd_dispatch_t *qd, void *impl)
 {
     SET_THREAD_UNKNOWN;
     qd_tcp_connector_t *connector = (qd_tcp_connector_t*) impl;
@@ -2537,8 +2535,7 @@ QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
     }
 }
 
-
-QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+qd_error_t refresh_tcp_listener(qd_entity_t* entity, void *impl)
 {
     SET_THREAD_UNKNOWN;
     uint64_t co = 0;
@@ -2566,8 +2563,7 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
     return qd_error_code();
 }
 
-
-qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+void *configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     SET_THREAD_UNKNOWN;
     qd_tcp_connector_t *connector = new_qd_tcp_connector_t();
@@ -2617,8 +2613,7 @@ qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_en
     return connector;
 }
 
-
-QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+qd_error_t refresh_tcp_connector(qd_entity_t* entity, void *impl)
 {
     SET_THREAD_UNKNOWN;
     qd_tcp_connector_t *cr = (qd_tcp_connector_t*) impl;
@@ -2645,7 +2640,23 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *i
 static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
 {
     SET_THREAD_UNKNOWN;
+    const char *chosen = qdr_core_dispatch(core)->transport_plugin;
+    if (!!chosen) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Initialization suppressed.  There's an alternate service transport enabled.");
+        *adaptor_context = 0;
+        return;
+    }
+
+    qd_register_tcp_management_handlers(configure_tcp_listener,
+                                        configure_tcp_connector,
+                                        update_tcp_listener,
+                                        delete_tcp_listener,
+                                        delete_tcp_connector,
+                                        refresh_tcp_listener,
+                                        refresh_tcp_connector);
+
     tcp_context = NEW(qd_tcp_context_t);
+    *adaptor_context = tcp_context;
     ZERO(tcp_context);
 
     tcp_context->core   = core;
@@ -2703,6 +2714,10 @@ static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
 static void ADAPTOR_final(void *adaptor_context)
 {
     SET_THREAD_UNKNOWN;
+    if (!adaptor_context) {
+        return;
+    }
+
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO, "Shutting down TCP protocol adaptor");
     while (DEQ_HEAD(tcp_context->listeners)) {
         qd_tcp_listener_t *listener   = DEQ_HEAD(tcp_context->listeners);

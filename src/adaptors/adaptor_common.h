@@ -95,4 +95,17 @@ void qd_set_condition_on_vflow(pn_raw_connection_t *raw_conn, vflow_record_t *vf
 
 qd_observer_t get_listener_observer(const char *observer);
 
+typedef void*      (*configure_entity_t) (qd_dispatch_t *qd, qd_entity_t *entity);
+typedef void*      (*update_entity_t)    (qd_dispatch_t *qd, qd_entity_t *entity, void *impl);
+typedef void       (*delete_entity_t)    (qd_dispatch_t *qd, void *impl);
+typedef qd_error_t (*refresh_entity_t)   (qd_entity_t* entity, void *impl);
+
+void qd_register_tcp_management_handlers(configure_entity_t configure_tcp_listener,
+                                         configure_entity_t configure_tcp_connector,
+                                         update_entity_t    update_tcp_listener,
+                                         delete_entity_t    delete_tcp_listener,
+                                         delete_entity_t    delete_tcp_connector,
+                                         refresh_entity_t   refresh_tcp_listener,
+                                         refresh_entity_t   refresh_tcp_connector);
+
 #endif // __adaptor_common_h__

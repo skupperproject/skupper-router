@@ -24,11 +24,18 @@
 #include <qpid/dispatch/protocol_adaptor.h>
 #include <qpid/dispatch/log.h>
 
+//
+// This initialization function is invoked once at router startup if this module is
+// the one transport module enabled in the router configuration.
+//
 static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
 {
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Reference Transport Module Initialized");
 }
 
+//
+// This finalization function is invoked once at router shut-down only if it was earlier initialized.
+//
 static void MODULE_final(void *module_context)
 {
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Reference Transport Module Finalized");
