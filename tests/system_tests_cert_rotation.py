@@ -193,6 +193,24 @@ class InterRouterCertRotationTest(TestCase):
         self.assertEqual(2 * (data_conn_count + 1),
                          len([c for c in irc if c['groupOrdinal'] == 3]),
                          f"Unexpected conns: {irc}")
+        # We are going to update the ordinal on the ConnectorSslProfile one more time which then leads
+        # to a bunch of additional inter-router connections.
+        router_C.management.update(type=SSL_PROFILE_TYPE, attributes={'ordinal': 4}, name='ConnectorSslProfile')
+        self.wait_inter_router_conns(router_C, 2 * (data_conn_count + 1))
+        self.wait_inter_router_conns(router_L, 2 * (data_conn_count + 1))
+
+        router_L.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'ordinal': 4},
+                                   name='ListenerSslProfile')
+
+        # Update oldestValidOrdinal to 4 on the listener
+        # so many of the inter-router connections will get torn down using the expired_ordinal_connection_scrubber().
+        router_L.management.update(type=SSL_PROFILE_TYPE,
+                                   attributes={'oldestValidOrdinal': 4},
+                                   name='ListenerSslProfile')
+        self.wait_inter_router_conns(router_L, data_conn_count + 1)
+        self.wait_inter_router_conns(router_C, data_conn_count + 1)
+
         router_L.teardown()
 
         # Router L has now been torn down, check to see if the RouterC's OPER_STATUS on the LINK record is "down"
