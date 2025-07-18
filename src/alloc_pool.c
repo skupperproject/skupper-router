@@ -23,7 +23,7 @@
 
 #include "aprintf.h"
 #include "config.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "entity_cache.h"
 #include "http.h"
 #include "qd_asan_interface.h"

@@ -21,7 +21,7 @@
 #include "private.h"
 #include "qd_connection.h"
 #include "http.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include "qpid/dispatch/server.h"
 #include "qpid/dispatch/log.h"

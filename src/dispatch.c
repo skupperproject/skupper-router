@@ -24,7 +24,7 @@
 
 #include "config.h"
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "entity_cache.h"
 #include "http.h"
 #include "log_private.h"

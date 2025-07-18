@@ -23,12 +23,26 @@
 #include <qpid/dispatch/io_module.h>
 #include <qpid/dispatch/protocol_adaptor.h>
 #include <qpid/dispatch/log.h>
+#include <qpid/dispatch/adaptor_common.h>
 
+//===========================================================================================
+// Transport API Handlers
+//===========================================================================================
+
+
+//===========================================================================================
+// Management API Handlers
+//===========================================================================================
+
+
+//===========================================================================================
+// Module API Handlers
+//===========================================================================================
 //
 // This initialization function is invoked once at router startup if this module is
 // the one transport module enabled in the router configuration.
 //
-static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
+static void TRANSPORT_init(qdr_core_t *core, void **adaptor_context)
 {
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Reference Transport Module Initialized");
 }
@@ -36,7 +50,7 @@ static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
 //
 // This finalization function is invoked once at router shut-down only if it was earlier initialized.
 //
-static void MODULE_final(void *module_context)
+static void TRANSPORT_final(void *module_context)
 {
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Reference Transport Module Finalized");
 }
@@ -44,4 +58,4 @@ static void MODULE_final(void *module_context)
 /**
  * Declare the module so that it will self-register on process startup.
  */
-QDR_TRANSPORT_MODULE_DECLARE("reference", ADAPTOR_init, MODULE_final)
+QDR_TRANSPORT_MODULE_DECLARE("reference", TRANSPORT_init, TRANSPORT_final)

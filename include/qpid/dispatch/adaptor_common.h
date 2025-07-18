@@ -20,8 +20,7 @@
  * under the License.
  */
 
-#include "entity.h"
-
+#include "qpid/dispatch/entity.h"
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/dispatch.h"

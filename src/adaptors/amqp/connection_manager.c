@@ -24,7 +24,7 @@
 #include "qd_connector.h"
 #include "server_config.h"
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/failoverlist.h"

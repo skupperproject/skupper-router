@@ -24,7 +24,7 @@
 #include "qpid/dispatch/error.h"
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/buffer.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include <proton/tls.h>
 #include <proton/ssl.h>

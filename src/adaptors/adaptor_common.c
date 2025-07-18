@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-#include "adaptor_common.h"
+#include "qpid/dispatch/adaptor_common.h"
 #include "tcp/tcp_adaptor.h"
 
 #include "qpid/dispatch/amqp.h"

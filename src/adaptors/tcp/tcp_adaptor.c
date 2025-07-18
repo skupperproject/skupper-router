@@ -2637,7 +2637,7 @@ qd_error_t refresh_tcp_connector(qd_entity_t* entity, void *impl)
 //=================================================================================
 // Interface to Protocol Adaptor registration
 //=================================================================================
-static void ADAPTOR_init(qdr_core_t *core, void **adaptor_context)
+static void TRANSPORT_init(qdr_core_t *core, void **adaptor_context)
 {
     SET_THREAD_UNKNOWN;
     const char *chosen = qdr_core_dispatch(core)->transport_plugin;
@@ -2761,4 +2761,4 @@ static void ADAPTOR_final(void *adaptor_context)
 /**
  * Declare the adaptor so that it will self-register on process startup.
  */
-QDR_CORE_ADAPTOR_DECLARE("tcp", ADAPTOR_init, ADAPTOR_final)
+QDR_CORE_ADAPTOR_DECLARE("tcp", TRANSPORT_init, ADAPTOR_final)

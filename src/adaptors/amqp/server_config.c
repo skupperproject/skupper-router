@@ -23,7 +23,7 @@
 #include "container.h"
 #include "server_config.h"
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include <qpid/dispatch/amqp_adaptor.h>
 #include <qpid/dispatch/log.h>

@@ -21,7 +21,7 @@
 
 #include "dispatch_private.h"
 #include "delivery.h"
-#include "adaptors/adaptor_common.h"
+#include "qpid/dispatch/adaptor_common.h"
 #include "adaptors/adaptor_listener.h"
 #include <qpid/dispatch/protocol_observer.h>
 

@@ -20,7 +20,7 @@
 #include "python_private.h"  // must be first!
 #include "qpid/dispatch/python_embedded.h"
 
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include "dispatch_private.h"
 

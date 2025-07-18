@@ -22,7 +22,7 @@
 #include "qpid/dispatch/log.h"
 
 #include "aprintf.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "entity_cache.h"
 #include "log_private.h"
 
