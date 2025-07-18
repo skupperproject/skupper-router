@@ -31,9 +31,45 @@
 
 
 //===========================================================================================
-// Management API Handlers
+// Management API Handlers - TCP Listeners
 //===========================================================================================
 
+static void *configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    return 0;
+}
+
+static void *update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity, void *impl)
+{
+    return 0;
+}
+
+static void delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+{
+}
+
+static qd_error_t refresh_tcp_listener(qd_entity_t* entity, void *impl)
+{
+    return QD_ERROR_NONE;
+}
+
+//===========================================================================================
+// Management API Handlers - TCP Connectors
+//===========================================================================================
+
+static void *configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    return 0;
+}
+
+static void delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+{
+}
+
+static qd_error_t refresh_tcp_connector(qd_entity_t* entity, void *impl)
+{
+    return QD_ERROR_NONE;
+}
 
 //===========================================================================================
 // Module API Handlers
@@ -45,6 +81,14 @@
 static void TRANSPORT_init(qdr_core_t *core, void **adaptor_context)
 {
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Reference Transport Module Initialized");
+
+    qd_register_tcp_management_handlers(configure_tcp_listener,
+                                        configure_tcp_connector,
+                                        update_tcp_listener,
+                                        delete_tcp_listener,
+                                        delete_tcp_connector,
+                                        refresh_tcp_listener,
+                                        refresh_tcp_connector);
 }
 
 //
