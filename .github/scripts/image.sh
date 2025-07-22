@@ -39,8 +39,9 @@ TAGS=(
 if [[ -n "${BUILD_NUMBER:-}" ]]; then
     TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}")
 fi
+
 if [[ -n "${PUSH_LATEST:-}" ]]; then
-    TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}")
+    TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:latest")
 fi
 
 # Building the skupper-router image
