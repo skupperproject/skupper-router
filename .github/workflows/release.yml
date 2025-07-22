@@ -50,7 +50,7 @@ jobs:
           echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
           # Verify if build number is unique, otherwise fail
           curl -s "https://quay.io/api/v1/repository/skupper/skupper-router/tag/?filter_tag_name=eq:${VERSION}-${BUILD_NUMBER}" | \
-            | jq '.tags | map(select((.end_ts | length) == 0 or .end_ts == null))' | grep -E '^\[\]$' || \
+            jq '.tags | map(select((.end_ts | length) == 0 or .end_ts == null))' | grep -E '^\[\]$' || \
             { echo Unable to get a unique build number ; exit 1 ; }
           # Query github to see if this VERSION is the latest
           LATEST_RELEASE_TAG=`curl -s https://api.github.com/repos/skupperproject/skupper-router/releases/latest  | jq -r ".tag_name"`
