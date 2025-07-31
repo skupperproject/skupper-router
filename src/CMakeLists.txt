@@ -89,6 +89,7 @@ set(qpid_dispatch_SOURCES
   python_embedded.c
   router_agent.c
   router_config.c
+  service_transport.c
   platform.c
   vanflow.c
   router.c
