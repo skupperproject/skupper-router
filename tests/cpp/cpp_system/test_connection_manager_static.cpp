@@ -23,7 +23,7 @@
 #include "helpers.hpp"
 
 extern "C" {
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "qpid/dispatch/tls_common.h"
 #include "qpid/dispatch/threading.h"
 }

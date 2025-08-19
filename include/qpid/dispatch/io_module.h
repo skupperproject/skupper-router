@@ -64,5 +64,24 @@ void qdr_register_adaptor(const char         *name,
                           qdr_adaptor_final_t on_final,
                           uint32_t            ordinal);
 
+/**
+ * Declaration of a protocol adaptor
+ *
+ * A protocol adaptor may declare itself by invoking the QDR_CORE_ADAPTOR_DECLARE macro in its body.
+ *
+ * @param name A null-terminated literal string naming the module
+ * @param on_init Pointer to a function for adaptor initialization, called at core thread startup
+ * @param on_final Pointer to a function for adaptor finalization, called at core thread shutdown
+ */
+#define QDR_TRANSPORT_MODULE_DECLARE(name, on_init, on_final)      \
+    static void transportstart(void) __attribute__((constructor)); \
+    void        transportstart(void)                               \
+    {                                                              \
+        qdr_register_transport_module(name, on_init, on_final);    \
+    }
+void qdr_register_transport_module(const char         *name,
+                                   qdr_adaptor_init_t  on_init,
+                                   qdr_adaptor_final_t on_final);
+
 
 #endif

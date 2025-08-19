@@ -21,7 +21,7 @@
 
 #include <qpid/dispatch/protocol_observer.h>
 #include <qpid/dispatch/hash.h>
-#include "adaptors/adaptor_common.h"
+#include <qpid/dispatch/adaptor_common.h>
 struct qdpo_config_t {
     qdpo_use_address_t           use_address;
     qd_observer_t                observer;

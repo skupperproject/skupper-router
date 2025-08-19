@@ -26,8 +26,7 @@
 //
 
 #include <qpid/dispatch/protocol_adaptor.h>
-
-#include "adaptor_common.h"
+#include <qpid/dispatch/adaptor_common.h>
 
 typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
 

@@ -30,7 +30,7 @@
 #include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/error.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "dispatch_private.h"
 #include "buffer_field_api.h"
 #include "stdbool.h"

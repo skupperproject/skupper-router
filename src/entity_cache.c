@@ -21,7 +21,7 @@
 
 #include "entity_cache.h"
 
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/threading.h"
