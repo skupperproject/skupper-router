@@ -75,16 +75,9 @@ static void load_strip_annotations(qd_server_config_t *config, const char* strip
     }
 }
 
-
-/**
- * Since both the host and the addr have defaults of 127.0.0.1, we will have to use the non-default wherever it is
- * available.
- */
 static void set_config_host(qd_server_config_t *config, qd_entity_t* entity)
 {
-    config->host = qd_entity_opt_string(entity, "host", 0);
-
-    assert(config->host);
+    config->host = qd_entity_get_string(entity, "host");
 
     int hplen = strlen(config->host) + strlen(config->port) + 2;
     config->host_port = malloc(hplen);
