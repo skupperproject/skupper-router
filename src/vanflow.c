@@ -745,6 +745,10 @@ static const char *_vflow_attribute_name(const vflow_attribute_data_t *data)
     case VFLOW_ATTRIBUTE_LOG_TEXT         : return "logText";
     case VFLOW_ATTRIBUTE_SOURCE_FILE      : return "sourceFile";
     case VFLOW_ATTRIBUTE_SOURCE_LINE      : return "sourceLine";
+    case VFLOW_ATTRIBUTE_VERSION          : return "version";
+    case VFLOW_ATTRIBUTE_POLICY           : return "policy";
+    case VFLOW_ATTRIBUTE_TARGET           : return "target";
+    case VFLOW_ATTRIBUTE_LINK_NAME        : return "linkName";
     }
     return "UNKNOWN";
 }

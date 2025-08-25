@@ -121,13 +121,19 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_LOG_TEXT         = 49,  // String
     VFLOW_ATTRIBUTE_SOURCE_FILE      = 50,  // String
     VFLOW_ATTRIBUTE_SOURCE_LINE      = 51,  // uint
+
+    VFLOW_ATTRIBUTE_VERSION          = 52,  // String
+    VFLOW_ATTRIBUTE_POLICY           = 53,  // String
+    VFLOW_ATTRIBUTE_TARGET           = 54,  // String
+
+    VFLOW_ATTRIBUTE_LINK_NAME        = 55,  // String
 } vflow_attribute_t;
 // clang-format on
 
 #define VALID_REF_ATTRS     0x00006000000000e6
 #define VALID_UINT_ATTRS    0x00099ffa07800119
 #define VALID_COUNTER_ATTRS 0x0000035000800000
-#define VALID_STRING_ATTRS  0x00060005787ffe00
+#define VALID_STRING_ATTRS  0x00860005787ffe00
 #define VALID_TRACE_ATTRS   0x0000000080000000
 
 typedef enum vflow_log_severity {
