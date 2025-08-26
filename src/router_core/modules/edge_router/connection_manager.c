@@ -190,6 +190,8 @@ static void on_conn_event(void *context, qdrc_event_t event, qdr_connection_t *c
         vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_NAME, conn->connection_info->container);
         vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_MODE, "edge");
         vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_DIRECTION, "outgoing");
+        const char *linkName = (const char*) "TestLinkNameFromEdgeRouter";
+        vflow_set_string(cm->edge_link_record, VFLOW_ATTRIBUTE_LINK_NAME, linkName);
         break;
 
     case QDRC_EVENT_CONN_EDGE_LOST :
