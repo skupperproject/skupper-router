@@ -980,6 +980,7 @@ static void qdr_tcp_connection_ingress_accept(qdr_tcp_connection_t* tc)
                                                    true,            // incoming
                                                    QDR_ROLE_NORMAL, // role
                                                    1,               // cost
+                                                   0,               // configured link name
                                                    tc->conn_id,     // management_id
                                                    0,               // label
                                                    false,           // strip_annotations_in
@@ -1424,6 +1425,7 @@ static void qdr_tcp_create_server_side_connection(qdr_tcp_connection_t* tc)
                                                    false,           // incoming
                                                    QDR_ROLE_NORMAL, // role
                                                    1,               // cost
+                                                   0,               // configured link name
                                                    tc->conn_id,     // management_id
                                                    0,               // label
                                                    false,           // strip_annotations_in

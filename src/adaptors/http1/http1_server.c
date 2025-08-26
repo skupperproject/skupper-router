@@ -215,6 +215,7 @@ static qdr_http1_connection_t *_create_server_connection(qd_http_connector_t *co
                                             false,  // incoming
                                             QDR_ROLE_NORMAL,
                                             1,      // cost
+                                            0,      // configured link name
                                             hconn->conn_id,
                                             0,  // label
                                             false,  // strip annotations in

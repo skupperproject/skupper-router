@@ -2805,6 +2805,7 @@ qdr_http2_connection_t *qdr_http_connection_ingress_accept(qdr_http2_connection_
                                                    true,
                                                    QDR_ROLE_NORMAL,
                                                    1,
+                                                   0,  // configured link name
                                                    ingress_http_conn->conn_id,
                                                    0,
                                                    false,
@@ -3108,6 +3109,7 @@ qdr_http2_connection_t *qdr_http_connection_egress(qd_http_connector_t *connecto
                                                        true,
                                                        QDR_ROLE_NORMAL,
                                                        1,
+                                                       0,  // configured link name
                                                        egress_http_conn->conn_id,
                                                        0,
                                                        false,

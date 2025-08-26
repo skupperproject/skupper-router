@@ -224,6 +224,7 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
                                  incoming,        // incoming
                                  QDR_ROLE_NORMAL, // role
                                  1,               // cost
+                                 0,               // configured link name
                                  conn_id,         // management_id
                                  0,               // label
                                  false,           // strip_annotations_in

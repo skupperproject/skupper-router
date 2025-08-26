@@ -83,6 +83,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
                                         bool                          incoming,
                                         qdr_connection_role_t         role,
                                         int                           cost,
+                                        const char                   *configured_link_name,
                                         uint64_t                      management_id,
                                         const char                   *label,
                                         bool                          strip_annotations_in,
@@ -105,6 +106,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     conn->incoming              = incoming;
     conn->role                  = role;
     conn->inter_router_cost     = cost;
+    conn->configured_link_name  = configured_link_name;
     conn->strip_annotations_in  = strip_annotations_in;
     conn->strip_annotations_out = strip_annotations_out;
     conn->policy_spec           = policy_spec;
