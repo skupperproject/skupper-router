@@ -1373,6 +1373,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
     const char     *mech  = 0;
     const char     *user  = 0;
     const char *container = conn->pn_conn ? pn_connection_remote_container(conn->pn_conn) : 0;
+    const char     *configured_link_name = 0;
 
     rversion[0] = 0;
     conn->strip_annotations_in  = false;
@@ -1409,6 +1410,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 
     if (conn->connector && conn->connector->config.has_data_connectors) {
         memcpy(conn->group_correlator, conn->connector->group_correlator, QD_DISCRIMINATOR_SIZE);
+    }
+
+    if (conn->connector && conn->connector->config.name) {
+        configured_link_name = conn->connector->config.name;
     }
 
     // check offered capabilities for streaming link support and connection trunking support
@@ -1565,6 +1570,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           inbound,
                           role,
                           cost,
+                          configured_link_name,
                           connection_id,
                           name,
                           conn->strip_annotations_in,

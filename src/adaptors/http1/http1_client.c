@@ -355,6 +355,7 @@ static void _setup_client_connection(qdr_http1_connection_t *hconn)
                                             true,  // incoming
                                             QDR_ROLE_NORMAL,
                                             1,  // cost
+                                            0,  // configured link name
                                             hconn->conn_id,
                                             0,                    // label
                                             false,                // strip annotations in

@@ -478,9 +478,8 @@ static void qdr_set_link_CT(qdr_core_t *core, qdr_action_t *action, bool discard
     if (!!conn) {
         vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_DIRECTION,
                         conn->incoming ? "incoming" : "outgoing");
-        if (!conn->incoming) {
-            const char *linkName = (const char*) "TestLinkName";
-            vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_LINK_NAME, linkName);
+        if (!conn->incoming && !!conn->configured_link_name) {
+            vflow_set_string(core->vflow_links_by_mask_bit[router_maskbit], VFLOW_ATTRIBUTE_LINK_NAME, conn->configured_link_name);
         }
     }
 

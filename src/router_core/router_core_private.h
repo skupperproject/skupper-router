@@ -679,6 +679,7 @@ struct qdr_connection_t {
     bool                        strip_annotations_in;
     bool                        strip_annotations_out;
     int                         link_capacity;
+    const char                 *configured_link_name;
     int                         mask_bit;  ///< set only if inter-router connection
     qdr_connection_work_list_t  work_list;
     sys_mutex_t                 work_lock;

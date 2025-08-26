@@ -430,6 +430,7 @@ static void on_startup(void *context)
                                           true,             // incoming
                                           QDR_ROLE_NORMAL,  // role
                                           1,                // cost
+                                          0,                // configured link name
                                           qd_server_allocate_connection_id(adaptor->core->qd->server),
                                           0,                // label
                                           false,            // strip_annotations_in
