@@ -2543,11 +2543,13 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
     SET_THREAD_UNKNOWN;
     uint64_t co = 0;
     uint64_t cc = 0;
+    char    *msg = 0;
     qd_listener_oper_status_t os = QD_LISTENER_OPER_DOWN;
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) impl;
 
     if (!!li->adaptor_listener) {
         os = qd_adaptor_listener_oper_status(li->adaptor_listener);
+        msg = qd_adaptor_listener_error_message(li->adaptor_listener);
         sys_mutex_lock(&li->lock);
         co = li->connections_opened;
         cc = li->connections_closed;
@@ -2558,7 +2560,8 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
         && qd_entity_set_long(entity, "bytesOut",          0) == 0
         && qd_entity_set_long(entity, "connectionsOpened", co) == 0
         && qd_entity_set_long(entity, "connectionsClosed", cc) == 0
-        && qd_entity_set_string(entity, "operStatus", os == QD_LISTENER_OPER_UP ? "up" : "down") == 0)
+        && qd_entity_set_string(entity, "operStatus", os == QD_LISTENER_OPER_UP ? "up" : "down") == 0
+        && qd_entity_set_string(entity, "connectionMsg", msg ? msg : "") == 0)
     {
         return QD_ERROR_NONE;
     }
