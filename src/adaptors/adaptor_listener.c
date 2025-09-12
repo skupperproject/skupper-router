@@ -36,6 +36,7 @@ struct qd_adaptor_listener_t {
     qd_adaptor_listener_accept_t  on_accept;
     qd_listener_admin_status_t    admin_status;  // set by mgmt
     qd_listener_oper_status_t     oper_status;
+    char                         *error_message;
     int                           ref_count;
     bool                          watched;
 
@@ -80,12 +81,24 @@ static qd_handler_context_t _deny_conn_context = {
     .handler = _deny_conn_handler,
 };
 
+static void _set_error_message_LH(qd_adaptor_listener_t *li, const char *m)
+{
+    free(li->error_message);
+
+    if (!!m) {
+        li->error_message = qd_strdup(m);
+    } else {
+        li->error_message = 0;
+    }
+}
+
 // called during shutdown: must not schedule work!
 static void _listener_free(qd_adaptor_listener_t *li)
 {
     free(li->name);
     free(li->host_port);
     free(li->service_address);
+    free(li->error_message);
     sys_mutex_free(&li->lock);
     free_qd_adaptor_listener_t(li);
 }
@@ -131,6 +144,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
                 if (li->oper_status == QD_LISTENER_OPER_OPENING) {  // may have been closed
                     up              = true;
                     li->oper_status = QD_LISTENER_OPER_UP;
+                    _set_error_message_LH(li, 0);
                 }
                 sys_mutex_unlock(&li->lock);
                 if (up)
@@ -167,10 +181,12 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
          }
 
         case PN_LISTENER_CLOSE: {
+            bool hard_failure = false;
             pn_condition_t *cond = pn_listener_condition(pn_event_listener(e));
             if (cond && pn_condition_is_set(cond)) {
                 qd_log(log_module, QD_LOG_ERROR, "Listener %s: proactor listener error on %s: %s (%s)", li->name,
                        li->host_port, pn_condition_get_name(cond), pn_condition_get_description(cond));
+                hard_failure = true;
             } else {
                 qd_log(log_module, QD_LOG_INFO, "Listener %s: stopped listening for client connections on %s",
                        li->name, li->host_port);
@@ -179,6 +195,12 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             sys_mutex_lock(&li->lock);
 
             li->ref_count += 1;  // temporary - prevent freeing
+
+            if (hard_failure) {
+                _set_error_message_LH(li, pn_condition_get_description(cond));
+            } else {
+                _set_error_message_LH(li, 0);
+            }
 
             // the pn_listener holds a counted reference to this listener in its context.
             if (pn_listener_get_context(li->pn_listener) != 0) {
@@ -191,7 +213,7 @@ static void _listener_event_handler(pn_event_t *e, qd_server_t *qd_server, void 
             if (li->admin_status == QD_LISTENER_ADMIN_ENABLED) {
                 // close is due to loss of available consumers - see
                 // _on_watched_address_update()
-                if (li->oper_status != QD_LISTENER_OPER_DOWN) {
+                if (li->oper_status != QD_LISTENER_OPER_DOWN && !hard_failure) {
                     // The VAN address now has consumers - it is possible that
                     // new consumers arrived since the close was
                     // started. Re-establish the listening socket:
@@ -405,6 +427,15 @@ qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_liste
     assert(li);
     sys_mutex_lock((sys_mutex_t *) &li->lock);
     const qd_listener_oper_status_t value = li->oper_status;
+    sys_mutex_unlock((sys_mutex_t *) &li->lock);
+    return value;
+}
+
+char *qd_adaptor_listener_error_message(const qd_adaptor_listener_t *li)
+{
+    assert(li);
+    sys_mutex_lock((sys_mutex_t *) &li->lock);
+    char *value = li->error_message;
     sys_mutex_unlock((sys_mutex_t *) &li->lock);
     return value;
 }
