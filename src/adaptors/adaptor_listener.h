@@ -65,6 +65,10 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *listener);
 //
 qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_listener_t *listener);
 
+// Get the error string from the listener
+//
+char *qd_adaptor_listener_error_message(const qd_adaptor_listener_t *listener);
+
 // Deny the new connection rather than accepting it. This may only be called during the
 // qd_adaptor_listener_accept_t callback
 //
