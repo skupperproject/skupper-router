@@ -433,9 +433,12 @@ qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_liste
 
 char *qd_adaptor_listener_error_message(const qd_adaptor_listener_t *li)
 {
+    char *value = 0;
     assert(li);
     sys_mutex_lock((sys_mutex_t *) &li->lock);
-    char *value = li->error_message;
+    if (!!li->error_message) {
+        value = qd_strdup(li->error_message);
+    }
     sys_mutex_unlock((sys_mutex_t *) &li->lock);
     return value;
 }

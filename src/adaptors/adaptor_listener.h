@@ -65,7 +65,8 @@ void qd_adaptor_listener_close(qd_adaptor_listener_t *listener);
 //
 qd_listener_oper_status_t qd_adaptor_listener_oper_status(const qd_adaptor_listener_t *listener);
 
-// Get the error string from the listener
+// Get the error string from the listener - The returned string (if not NULL) has been allocated and must
+// be freed by the caller.
 //
 char *qd_adaptor_listener_error_message(const qd_adaptor_listener_t *listener);
 
