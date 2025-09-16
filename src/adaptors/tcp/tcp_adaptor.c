@@ -2563,9 +2563,11 @@ QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *im
         && qd_entity_set_string(entity, "operStatus", os == QD_LISTENER_OPER_UP ? "up" : "down") == 0
         && qd_entity_set_string(entity, "connectionMsg", msg ? msg : "") == 0)
     {
+        free(msg);
         return QD_ERROR_NONE;
     }
 
+    free(msg);
     return qd_error_code();
 }
 
