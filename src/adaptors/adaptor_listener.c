@@ -18,7 +18,6 @@
  */
 
 #include "adaptor_listener.h"
-#include "adaptor_common.h"
 #include "server_private.h"
 
 #include <qpid/dispatch/protocol_adaptor.h>

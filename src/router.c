@@ -105,6 +105,10 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
             break;
     }
 
+    if (!!qd->transport_plugin) {
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Transport plugin: %s", qd->transport_plugin);
+    }
+
     qd_log(LOG_ROUTER, QD_LOG_INFO, "Version: %s", QPID_DISPATCH_VERSION);
 
     return router;
