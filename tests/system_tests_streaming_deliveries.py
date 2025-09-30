@@ -53,7 +53,11 @@ class RouterTest(TestCase):
             if connection2:
                 config.append(connection2)
             if extra:
-                config.append(extra)
+                if extra.__class__ == list:
+                    for e in extra:
+                        config.append(e)
+                else:
+                    config.append(extra)
             config = Qdrouterd.Config(config)
             cls.routers.append(cls.tester.qdrouterd(name, config, wait=True, cl_args=args or []))
 
@@ -143,6 +147,71 @@ class RouterTest(TestCase):
 
     def test_160_closest_remote_edge_interior_four_streams(self):
         test = InterleavedStreamsTest([(self.inta, 0, 1), (self.inta, 0, 1), (self.ea1, 1, 0), (self.ea2, 1, 0)], self.eb1, 'cl.streaming.160')
+        test.run()
+        self.assertIsNone(test.error)
+
+
+class RouterTestAutoLink(TestCase):
+
+    inter_router_port = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a router"""
+        super(RouterTestAutoLink, cls).setUpClass()
+
+        def router(name, mode, connection1, connection2=None, extra=None, args=None):
+            config = [
+                ('router', {'mode': mode, 'id': name}),
+                ('listener', {'port': cls.tester.get_port()}),
+                ('address', {'prefix': 'cl', 'distribution': 'closest'}),
+                connection1
+            ]
+
+            if connection2:
+                config.append(connection2)
+            if extra:
+                if extra.__class__ == list:
+                    for e in extra:
+                        config.append(e)
+                else:
+                    config.append(extra)
+            config = Qdrouterd.Config(config)
+            #print(name)
+            #print(config)
+            cls.routers.append(cls.tester.qdrouterd(name, config, wait=True, cl_args=args or []))
+
+        cls.routers = []
+
+        normal_port_A = cls.tester.get_port()
+
+        router('INT.A', 'interior',
+               ('listener', {'role': 'normal', 'port': normal_port_A, 'stripAnnotations': 'no'}))
+        router('INT.B', 'interior',
+               ('connector', {'name': 'autoconnect', 'role': 'route-container', 'port': normal_port_A, 'stripAnnotations': 'no'}),
+               ('autoLink', {'address': 'streaming.auto.a-to-b', 'direction': 'in', 'connection': 'autoconnect'}),
+               ('autoLink', {'address': 'streaming.auto.b-to-a', 'direction': 'out', 'connection': 'autoconnect'}))
+
+        cls.inta = cls.routers[0].addresses[0]
+        cls.intb = cls.routers[1].addresses[0]
+
+    def test_010_balanced_one_stream_autolink_in(self):
+        test = InterleavedStreamsTest([(self.inta, 1, 0)], self.intb, 'streaming.auto.a-to-b')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_011_balanced_two_streams_autolink_in(self):
+        test = InterleavedStreamsTest([(self.inta, 1, 0), (self.inta, 1, 0)], self.intb, 'streaming.auto.a-to-b')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_020_balanced_one_stream_autolink_out(self):
+        test = InterleavedStreamsTest([(self.intb, 1, 0)], self.inta, 'streaming.auto.b-to-a')
+        test.run()
+        self.assertIsNone(test.error)
+
+    def test_021_balanced_two_streams_autolink_out(self):
+        test = InterleavedStreamsTest([(self.intb, 1, 0), (self.intb, 1, 0)], self.inta, 'streaming.auto.b-to-a')
         test.run()
         self.assertIsNone(test.error)
 
