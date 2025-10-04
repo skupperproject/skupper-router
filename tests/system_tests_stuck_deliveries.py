@@ -569,7 +569,7 @@ class RouterTestAutoLink(TestCase):
 
         router('INT.A', 'interior', ('listener', {'role': 'normal', 'port': inter_router_port}))
         router('INT.B', 'interior', ('connector', {'name': 'connectorToA', 'role': 'route-container', 'port': inter_router_port}),
-               ('autoLink', {'address': 'test-address', 'connection': 'connectorToA', 'direction': 'in' }))
+               ('autoLink', {'address': 'test-address', 'connection': 'connectorToA', 'direction': 'in'}))
 
     def test_101_recovery_of_2ack_delivery(self):
         test = TwoAckRecoveryTest(self.routers[0].addresses[0],
@@ -669,7 +669,7 @@ class TwoAckRecoveryTest(MessagingHandler):
             event.delivery._ordinal = ordinal
             if ordinal % 3 < 2:   # 2/3rds are accepted
                 event.delivery.update(Delivery.ACCEPTED)
- 
+
     def on_accepted(self, event):
         if event.sender == self.sender:
             ordinal = event.delivery._ordinal
@@ -677,7 +677,7 @@ class TwoAckRecoveryTest(MessagingHandler):
                 self.stop_test("Delivery with unexpected ordinal was accepted, ordinal=%d" % ordinal)
                 return
             self.n_accepted += 1
-            if ordinal % 3 == 1: # half of the 2/3rds are settled
+            if ordinal % 3 == 1:   # half of the 2/3rds are settled
                 self.settle(event.delivery)
 
     def on_settled(self, event):
