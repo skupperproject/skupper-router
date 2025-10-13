@@ -2157,6 +2157,7 @@ static void CORE_first_attach(void               *context,
                               qdr_terminus_t     *target,
                               qd_session_class_t  ssn_class)
 {
+    if (!link) return;
     qd_tcp_common_t *common = (qd_tcp_common_t*) qdr_connection_get_context(conn);
     qdr_link_set_context(link, common);
 
@@ -2180,7 +2181,7 @@ static void CORE_second_attach(void           *context,
 {
     qd_tcp_common_t *common = (qd_tcp_common_t*) qdr_link_get_context(link);
 
-    if (common->context_type == TL_CONNECTION) {
+    if (!!common && common->context_type == TL_CONNECTION) {
         qd_tcp_connection_t *conn = (qd_tcp_connection_t*) common;
         if (qdr_link_direction(link) == QD_OUTGOING) {
             conn->reply_to = (char*) qd_iterator_copy(qdr_terminus_get_address(source));
