@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from proton import Message
+from proton import Message, Delivery
 from proton.handlers import MessagingHandler
 from proton.reactor import Container
 
@@ -537,6 +537,171 @@ class TxLinkCreditTest(MessagingHandler):
 
     def poll_timeout(self):
         self.process()
+
+    def run(self):
+        Container(self).run()
+
+
+class RouterTestAutoLink(TestCase):
+
+    inter_router_port = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a router"""
+        super(RouterTestAutoLink, cls).setUpClass()
+
+        def router(name, mode, connection, extra=None, args=None):
+            config = [
+                ('router', {'mode': mode, 'id': name}),
+                ('listener', {'port': cls.tester.get_port(), 'stripAnnotations': 'no'}),
+                connection
+            ]
+
+            if extra:
+                config.append(extra)
+            config = Qdrouterd.Config(config)
+            cls.routers.append(cls.tester.qdrouterd(name, config, wait=True, cl_args=args or []))
+
+        cls.routers = []
+
+        inter_router_port = cls.tester.get_port()
+
+        router('INT.A', 'interior', ('listener', {'role': 'normal', 'port': inter_router_port}))
+        router('INT.B', 'interior', ('connector', {'name': 'connectorToA', 'role': 'route-container', 'port': inter_router_port}),
+               ('autoLink', {'address': 'test-address', 'connection': 'connectorToA', 'direction': 'in'}))
+
+    def test_101_recovery_of_2ack_delivery(self):
+        test = TwoAckRecoveryTest(self.routers[0].addresses[0],
+                                  self.routers[1].addresses[0],
+                                  self.routers[1].addresses[0],
+                                  'test-address')
+        test.run()
+        self.assertIsNone(test.error)
+
+
+class TwoAckRecoveryTest(MessagingHandler):
+    """
+    Run 2-ack deliveries between two routers using a connection and auto-link.
+
+        sender          receiver
+        ======          ========
+           send ------------>
+           <---------- accept
+           settle ---------->
+
+    N messages are sent (multiple of 3)
+    2/3 N deliveries are accepted
+    1/3 N (half of accepted) are settled.
+    Then delete the connection and collect settled/modified updates.
+    There should be (2/3)N at both the sender and the receiver (those not already settled).
+    """
+    def __init__(self, sender_host, receiver_host, query_host, addr):
+        super(TwoAckRecoveryTest, self).__init__(auto_accept=False, auto_settle=False)
+        self.sender_host   = sender_host
+        self.receiver_host = receiver_host
+        self.query_host    = query_host
+        self.addr          = addr
+
+        self.dlv_count         = 30
+        self.sender_conn       = None
+        self.receiver_conn     = None
+        self.query_conn        = None
+        self.error             = None
+        self.timer             = None
+        self.receiver          = None
+        self.sender            = None
+        self.query_sender      = None
+        self.reply_receiver    = None
+        self.proxy             = None
+        self.reply_addr        = None
+        self.n_sent            = 0
+        self.n_accepted        = 0
+        self.n_settled_prefail = 0
+        self.n_mod_at_sender   = 0
+        self.n_mod_at_receiver = 0
+        self.link_failed       = False
+
+    def timeout(self):
+        self.error = "Timeout Expired - sent=%d, accepted=%d, settled_prefail=%d mod_sender=%d mod_receiver=%d" %\
+            (self.n_sent, self.n_accepted, self.n_settled_prefail, self.n_mod_at_sender, self.n_mod_at_receiver)
+        self.sender_conn.close()
+        self.receiver_conn.close()
+        self.query_conn.close()
+
+    def stop_test(self, error):
+        self.error = error
+        self.sender_conn.close()
+        self.receiver_conn.close()
+        self.query_conn.close()
+        self.timer.cancel()
+
+    def on_start(self, event):
+        self.timer          = event.reactor.schedule(TIMEOUT, TestTimeout(self))
+        self.receiver_conn  = event.container.connect(self.receiver_host)
+        self.sender_conn    = event.container.connect(self.sender_host)
+        self.query_conn     = event.container.connect(self.query_host)
+        self.query_sender   = event.container.create_sender(self.query_conn, "$management")
+        self.receiver       = event.container.create_receiver(self.receiver_conn, self.addr)
+        self.reply_receiver = event.container.create_receiver(self.query_conn, dynamic=True)
+
+    def on_sendable(self, event):
+        if event.sender == self.sender:
+            while self.sender.credit > 0 and self.n_sent < self.dlv_count:
+                delivery = self.sender.send(Message(address=self.addr, body={'ordinal': self.n_sent}))
+                delivery._ordinal = self.n_sent
+                self.n_sent += 1
+
+    def on_link_opened(self, event):
+        if event.receiver == self.reply_receiver:
+            self.reply_addr = event.receiver.remote_source.address
+            self.proxy      = MgmtMsgProxy(self.reply_addr)
+            self.sender     = event.container.create_sender(self.sender_conn, self.addr)
+
+    def on_message(self, event):
+        if event.receiver == self.reply_receiver:
+            response = self.proxy.response(event.message)
+            if response.status_code != 204:
+                self.stop_test("Error from connector deletion: %d (%s)" % (response.status_code, response.status_description))
+            self.accept(event.delivery)
+        elif event.receiver == self.receiver:
+            ordinal = event.message.body['ordinal']
+            event.delivery._ordinal = ordinal
+            if ordinal % 3 < 2:   # 2/3rds are accepted
+                event.delivery.update(Delivery.ACCEPTED)
+
+    def on_accepted(self, event):
+        if event.sender == self.sender:
+            ordinal = event.delivery._ordinal
+            if ordinal % 3 == 2:
+                self.stop_test("Delivery with unexpected ordinal was accepted, ordinal=%d" % ordinal)
+                return
+            self.n_accepted += 1
+            if ordinal % 3 == 1:   # half of the 2/3rds are settled
+                self.settle(event.delivery)
+
+    def on_settled(self, event):
+        if event.sender == self.sender:
+            ordinal = event.delivery._ordinal
+            if not self.link_failed:
+                self.stop_test("Delivery settled on sender prior to link failure, ordinal=%d" % ordinal)
+            else:
+                self.n_mod_at_sender += 1
+        elif event.receiver == self.receiver:
+            ordinal = event.delivery._ordinal
+            if not self.link_failed:
+                self.n_settled_prefail += 1
+                if ordinal % 3 != 1:
+                    self.stop_test("Delivery settled on receiver prior to link fail with unexpected ordinal: %d" % ordinal)
+                if self.n_settled_prefail == self.dlv_count / 3:
+                    self.link_failed = True
+                    msg = self.proxy.delete_connector('connectorToA')
+                    self.query_sender.send(msg)
+            else:
+                self.n_mod_at_receiver += 1
+        expected_mod = (self.dlv_count * 2) / 3
+        if self.n_mod_at_receiver == expected_mod and self.n_mod_at_sender == expected_mod:
+            self.stop_test(None)
 
     def run(self):
         Container(self).run()

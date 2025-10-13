@@ -304,7 +304,7 @@ class InterleavedStreamsTest(MessagingHandler):
                     self.stream_receivers[event.link.name] = 0
 
     def on_delivery(self, event):
-        if event.sender or event.link.name not in self.stream_receivers:
+        if event.sender or event.link.name not in self.stream_receivers or not event.link.current:
             return
         self.stream_receivers[event.link.name] += 1
         stuff = event.link.recv(1000)

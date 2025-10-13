@@ -1008,8 +1008,7 @@ void qdr_link_cleanup_deliveries_CT(qdr_core_t *core, qdr_connection_t *conn, qd
                     //
                     qdr_delivery_mcast_outbound_update_CT(core, peer, dlv, PN_MODIFIED, true);
                 } else {
-                    if (link->link_direction == QD_OUTGOING)
-                        qdr_delivery_failed_CT(core, peer);
+                    qdr_delivery_failed_CT(core, peer);
                     qdr_delivery_unlink_peers_CT(core, dlv, peer);
                 }
                 peer = qdr_delivery_next_peer_CT(dlv);
