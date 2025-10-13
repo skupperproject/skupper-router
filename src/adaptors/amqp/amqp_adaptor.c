@@ -1849,6 +1849,7 @@ static void CORE_link_first_attach(void             *context,
 {
     qd_connection_t *qconn  = (qd_connection_t*) qdr_connection_get_context(conn);
     if (!qconn) return;        /* Connection is already closed */
+    if (!link) return;
 
     //
     // Create a new link to be attached
