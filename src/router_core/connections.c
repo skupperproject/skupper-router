@@ -417,11 +417,13 @@ int qdr_connection_process(qdr_connection_t *conn)
 
         switch (work->work_type) {
         case QDR_CONNECTION_WORK_FIRST_ATTACH :
-            conn->protocol_adaptor->first_attach_handler(conn->protocol_adaptor->user_context, conn, work->link, work->source, work->target, work->ssn_class);
+            link = safe_deref_qdr_link_t(work->link_sp);
+            conn->protocol_adaptor->first_attach_handler(conn->protocol_adaptor->user_context, conn, link, work->source, work->target, work->ssn_class);
             break;
 
         case QDR_CONNECTION_WORK_SECOND_ATTACH :
-            conn->protocol_adaptor->second_attach_handler(conn->protocol_adaptor->user_context, work->link, work->source, work->target);
+            link = safe_deref_qdr_link_t(work->link_sp);
+            conn->protocol_adaptor->second_attach_handler(conn->protocol_adaptor->user_context, link, work->source, work->target);
             break;
 
         case QDR_CONNECTION_WORK_TRACING_ON :
@@ -1238,7 +1240,7 @@ qdr_link_t *qdr_create_link_CT(qdr_core_t        *core,
     qdr_connection_work_t *work = new_qdr_connection_work_t();
     ZERO(work);
     work->work_type = QDR_CONNECTION_WORK_FIRST_ATTACH;
-    work->link      = link;
+    set_safe_ptr_qdr_link_t(link, &work->link_sp);
     work->source    = source;
     work->target    = target;
     work->ssn_class = ssn_class;
@@ -1330,7 +1332,7 @@ void qdr_link_outbound_second_attach_CT(qdr_core_t *core, qdr_link_t *link, qdr_
     qdr_connection_work_t *work = new_qdr_connection_work_t();
     ZERO(work);
     work->work_type = QDR_CONNECTION_WORK_SECOND_ATTACH;
-    work->link      = link;
+    set_safe_ptr_qdr_link_t(link, &work->link_sp);
     work->source    = source;
     work->target    = target;
 

@@ -278,7 +278,7 @@ typedef enum {
 typedef struct qdr_connection_work_t {
     DEQ_LINKS(struct qdr_connection_work_t);
     qdr_connection_work_type_t  work_type;
-    qdr_link_t                 *link;
+    qdr_link_t_sp               link_sp;
     qdr_terminus_t             *source;
     qdr_terminus_t             *target;
     qd_session_class_t          ssn_class;
