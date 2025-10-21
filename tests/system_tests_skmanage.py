@@ -360,7 +360,7 @@ class SkmanageTest(TestCase):
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['name'], "test-auto-link")
         self.assertEqual(output[0]['direction'], "out")
-        self.assertEqual(output[0]['addr'], "mnop")
+        self.assertEqual(output[0]['address'], "mnop")
 
     def test_specify_container_id_connection_auto_link(self):
         create_command = f'CREATE --type={CONFIG_AUTOLINK_TYPE} address=abc containerId=id1 connection=conn1 direction=out'
