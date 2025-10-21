@@ -30,29 +30,23 @@
 #define QDR_CONFIG_AUTO_LINK_IDENTITY      1
 #define QDR_CONFIG_AUTO_LINK_TYPE          2
 #define QDR_CONFIG_AUTO_LINK_ADDRESS       3
-#define QDR_CONFIG_AUTO_LINK_ADDR          4
-#define QDR_CONFIG_AUTO_LINK_DIRECTION     5
-#define QDR_CONFIG_AUTO_LINK_DIR           6
-#define QDR_CONFIG_AUTO_LINK_CONNECTION    7
-#define QDR_CONFIG_AUTO_LINK_CONTAINER_ID  8
-#define QDR_CONFIG_AUTO_LINK_EXT_ADDRESS   9
-#define QDR_CONFIG_AUTO_LINK_EXT_ADDR      10
-#define QDR_CONFIG_AUTO_LINK_LINK_REF      11
-#define QDR_CONFIG_AUTO_LINK_OPER_STATUS   12
-#define QDR_CONFIG_AUTO_LINK_LAST_ERROR    13
+#define QDR_CONFIG_AUTO_LINK_DIRECTION     4
+#define QDR_CONFIG_AUTO_LINK_CONNECTION    5
+#define QDR_CONFIG_AUTO_LINK_CONTAINER_ID  6
+#define QDR_CONFIG_AUTO_LINK_EXT_ADDRESS   7
+#define QDR_CONFIG_AUTO_LINK_LINK_REF      8
+#define QDR_CONFIG_AUTO_LINK_OPER_STATUS   9
+#define QDR_CONFIG_AUTO_LINK_LAST_ERROR    10
 
 const char *qdr_config_auto_link_columns[] =
     {"name",
      "identity",
      "type",
      "address",
-     "addr",
      "direction",
-     "dir",
      "connection",
      "containerId",
      "externalAddress",
-     "externalAddr",
      "linkRef",
      "operStatus",
      "lastError",
@@ -90,7 +84,6 @@ static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, 
         qd_compose_insert_string(body, CONFIG_AUTOLINK_TYPE);
         break;
 
-    case QDR_CONFIG_AUTO_LINK_ADDR:
     case QDR_CONFIG_AUTO_LINK_ADDRESS:
         key = (const char*) qd_hash_key_by_handle(al->addr->hash_handle);
         if (key && key[0] == 'M')
@@ -99,7 +92,6 @@ static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, 
             qd_compose_insert_null(body);
         break;
 
-    case QDR_CONFIG_AUTO_LINK_DIR:
     case QDR_CONFIG_AUTO_LINK_DIRECTION:
         text = al->dir == QD_INCOMING ? "in" : "out";
         qd_compose_insert_string(body, text);
@@ -124,7 +116,6 @@ static void qdr_config_auto_link_insert_column_CT(qdr_auto_link_t *al, int col, 
         qd_compose_insert_null(body);
         break;
 
-    case QDR_CONFIG_AUTO_LINK_EXT_ADDR:
     case QDR_CONFIG_AUTO_LINK_EXT_ADDRESS:
         if (al->external_addr)
             qd_compose_insert_string(body, al->external_addr);
@@ -409,33 +400,10 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         // Extract the fields from the request
         //
         qd_parsed_field_t *addr_field       = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_ADDRESS]);
-        if (!addr_field) {
-            addr_field       = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_ADDR]);
-            if (addr_field)
-            qd_log(LOG_AGENT,
-                   QD_LOG_WARNING,
-                   "The 'addr' attribute of autoLink has been deprecated. Use 'address' instead");
-        }
         qd_parsed_field_t *dir_field        = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_DIRECTION]);
-        if (! dir_field) {
-            dir_field        = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_DIR]);
-            if (dir_field)
-            qd_log(LOG_AGENT,
-                   QD_LOG_WARNING,
-                   "The 'dir' attribute of autoLink has been deprecated. Use 'direction' instead");
-        }
         qd_parsed_field_t *connection_field = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_CONNECTION]);
         qd_parsed_field_t *container_field  = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_CONTAINER_ID]);
-
         qd_parsed_field_t *external_addr    = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_EXT_ADDRESS]);
-        if (!external_addr) {
-            external_addr    = qd_parse_value_by_key(in_body, qdr_config_auto_link_columns[QDR_CONFIG_AUTO_LINK_EXT_ADDR]);
-            if (external_addr)
-            qd_log(LOG_AGENT,
-                   QD_LOG_WARNING,
-                   "The 'externalAddr' attribute of autoLink has been deprecated. Use 'externalAddress' instead");
-        }
-
 
         if (connection_field && container_field) {
             query->status = QD_AMQP_BAD_REQUEST;
