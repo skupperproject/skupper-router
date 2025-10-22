@@ -138,8 +138,6 @@ static void qdr_route_log_CT(qdr_core_t *core, const char *text, const char *nam
 
 static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr_connection_t *conn)
 {
-    const char *key;
-
     qdr_route_log_CT(core, "Auto Link Activated", al->name, al->identity, conn);
 
     if (al->addr) {
@@ -147,28 +145,22 @@ static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr
         qdr_terminus_t *target = qdr_terminus(0);
         qdr_terminus_t *term;
 
-        if (al->dir == QD_INCOMING)
-            term = source;
-        else
-            term = target;
+        if (al->dir == QD_INCOMING) {
+            term  = source;
+        } else {    // QD_OUTGOING
+            term  = target;
+        }
 
-        key = (const char*) qd_hash_key_by_handle(al->addr->hash_handle);
-        if (key || al->external_addr) {
-            if (al->external_addr) {
-                qdr_terminus_set_address(term, al->external_addr);
-                if (key)
-                    al->internal_addr = &key[1];
-            } else
-                qdr_terminus_set_address(term, &key[1]); // truncate the "M" annotation
-            al->link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, al->dir, source, target,
-                                          QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
-            al->link->auto_link = al;
-            al->state = QDR_AUTO_LINK_STATE_ATTACHING;
+        if (al->external_addr) {
+            qdr_terminus_set_address(term, al->external_addr);
+        } else if (al->internal_addr) {
+            qdr_terminus_set_address(term, al->internal_addr);
         }
-        else {
-            free_qdr_terminus_t(source);
-            free_qdr_terminus_t(target);
-        }
+
+        al->link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, al->dir, source, target,
+                                        QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+        al->link->auto_link = al;
+        al->state = QDR_AUTO_LINK_STATE_ATTACHING;
     }
 }
 
@@ -269,10 +261,11 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
     al->name          = name ? (char*) qd_iterator_copy(name) : 0;
     al->dir           = dir;
     al->state         = QDR_AUTO_LINK_STATE_INACTIVE;
+    al->internal_addr = addr_field    ? (char*) qd_iterator_copy(qd_parse_raw(addr_field)) : 0;
     al->external_addr = external_addr ? (char*) qd_iterator_copy(qd_parse_raw(external_addr)) : 0;
 
     //
-    // Find or create an address for the auto_link destination
+    // Find or create an address for the internal address
     //
     qd_iterator_t *iter = qd_parse_raw(addr_field);
     qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);

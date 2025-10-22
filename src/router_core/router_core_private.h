@@ -753,9 +753,9 @@ struct qdr_auto_link_t {
     DEQ_LINKS_N(REF, qdr_auto_link_t);
     uint64_t               identity;
     char                  *name;
-    qdr_address_t         *addr;
-    char                  *external_addr;
-    const char            *internal_addr;
+    qdr_address_t         *addr;           // Pointer to local address structure
+    char                  *external_addr;  // Text of remote address
+    const char            *internal_addr;  // Text of local address
     int                    retry_attempts;
     qd_direction_t         dir;
     qdr_conn_identifier_t *conn_id;
