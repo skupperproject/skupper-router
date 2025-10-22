@@ -2402,7 +2402,9 @@ static void qdr_link_inbound_second_attach_CT(qdr_core_t *core, qdr_action_t *ac
                 //
                 if (qdr_terminus_get_address(source)) {
                     link->auto_link->state = QDR_AUTO_LINK_STATE_ACTIVE;
-                    qdr_core_bind_address_link_CT(core, link->auto_link->addr, link);
+                    if (link->auto_link->addr) {
+                        qdr_core_bind_address_link_CT(core, link->auto_link->addr, link);
+                    }
                 }
             }
 

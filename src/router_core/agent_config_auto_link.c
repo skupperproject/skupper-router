@@ -417,11 +417,11 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         }
 
         //
-        // Addr and direction fields are mandatory.  Fail if they're not both here.
+        // Direction field is mandatory.
         //
-        if (!addr_field || !dir_field) {
+        if (!dir_field) {
             query->status = QD_AMQP_BAD_REQUEST;
-            query->status.description = "address and direction fields are mandatory";
+            query->status.description = "direction field is mandatory";
             qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
@@ -435,6 +435,17 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
         if (error) {
             query->status = QD_AMQP_BAD_REQUEST;
             query->status.description = error;
+            qd_log(LOG_AGENT,
+                   QD_LOG_ERROR,
+                   "Error performing CREATE of %s: %s",
+                   CONFIG_AUTOLINK_TYPE,
+                   query->status.description);
+            break;
+        }
+
+        if (!addr_field && dir == QD_OUTGOING) {
+            query->status = QD_AMQP_BAD_REQUEST;
+            query->status.description = "address field is only optional if direction is incoming";
             qd_log(LOG_AGENT,
                    QD_LOG_ERROR,
                    "Error performing CREATE of %s: %s",
@@ -457,7 +468,7 @@ void qdra_config_auto_link_create_CT(qdr_core_t        *core,
                 qdr_config_auto_link_insert_column_CT(al, col, query->body, true);
             qd_compose_end_map(query->body);
         }
-        const char *address = (char*) qd_hash_key_by_handle(al->addr->hash_handle);
+        const char *address = al->internal_addr ? al->internal_addr : "<anonymous>";
         qd_log(LOG_CONN_MGR, QD_LOG_INFO, "Configured autolink with address=%s, direction=%s and %s=%s", address, dir==QD_INCOMING ? "in":"out", al->connection ? "connection": "containerId", al->connection? al->connection: al->container_id);
         query->status = QD_AMQP_CREATED;
         break;

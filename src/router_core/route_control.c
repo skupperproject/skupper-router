@@ -140,15 +140,15 @@ static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr
 {
     qdr_route_log_CT(core, "Auto Link Activated", al->name, al->identity, conn);
 
-    if (al->addr) {
+    if (al->internal_addr || al->external_addr) {
         qdr_terminus_t *source = qdr_terminus(0);
         qdr_terminus_t *target = qdr_terminus(0);
         qdr_terminus_t *term;
 
         if (al->dir == QD_INCOMING) {
-            term  = source;
+            term = source;
         } else {    // QD_OUTGOING
-            term  = target;
+            term = target;
         }
 
         if (al->external_addr) {
@@ -158,7 +158,7 @@ static void qdr_auto_link_activate_CT(qdr_core_t *core, qdr_auto_link_t *al, qdr
         }
 
         al->link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, al->dir, source, target,
-                                        QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
+                                      QD_SSN_ENDPOINT, QDR_DEFAULT_PRIORITY);
         al->link->auto_link = al;
         al->state = QDR_AUTO_LINK_STATE_ATTACHING;
     }
@@ -267,24 +267,26 @@ qdr_auto_link_t *qdr_route_add_auto_link_CT(qdr_core_t          *core,
     //
     // Find or create an address for the internal address
     //
-    qd_iterator_t *iter = qd_parse_raw(addr_field);
-    qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
+    if (addr_field) {
+        qd_iterator_t *iter = qd_parse_raw(addr_field);
+        qd_iterator_reset_view(iter, ITER_VIEW_ADDRESS_HASH);
 
-    qd_hash_retrieve(core->addr_hash, iter, (void*) &al->addr);
-    if (!al->addr) {
-        qdr_address_config_t   *addr_config = qdr_config_for_address_CT(core, 0, iter);
-        qd_address_treatment_t  treatment   = addr_config ? addr_config->treatment : QD_TREATMENT_ANYCAST_BALANCED;
+        qd_hash_retrieve(core->addr_hash, iter, (void*) &al->addr);
+        if (!al->addr) {
+            qdr_address_config_t   *addr_config = qdr_config_for_address_CT(core, 0, iter);
+            qd_address_treatment_t  treatment   = addr_config ? addr_config->treatment : QD_TREATMENT_ANYCAST_BALANCED;
 
-        if (treatment == QD_TREATMENT_UNAVAILABLE) {
-            //if associated address is not defined, assume balanced
-            treatment = QD_TREATMENT_ANYCAST_BALANCED;
+            if (treatment == QD_TREATMENT_UNAVAILABLE) {
+                //if associated address is not defined, assume balanced
+                treatment = QD_TREATMENT_ANYCAST_BALANCED;
+            }
+            al->addr = qdr_address_CT(core, treatment, addr_config);
+            DEQ_INSERT_TAIL(core->addrs, al->addr);
+            qd_hash_insert(core->addr_hash, iter, al->addr, &al->addr->hash_handle);
         }
-        al->addr = qdr_address_CT(core, treatment, addr_config);
-        DEQ_INSERT_TAIL(core->addrs, al->addr);
-        qd_hash_insert(core->addr_hash, iter, al->addr, &al->addr->hash_handle);
-    }
 
-    al->addr->ref_count++;
+        al->addr->ref_count++;
+    }
 
     //
     // Find or create a connection identifier structure for this auto_link
