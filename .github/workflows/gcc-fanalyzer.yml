@@ -91,7 +91,7 @@ jobs:
       run: |
         dnf install -y npm
         npm install -g @microsoft/sarif-multitool
-        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --output-file merged.sarif
+        npx -y @microsoft/sarif-multitool merge $(find build/ -name '*.sarif') --output-file merged.sarif --merge-runs
         python3 scripts/gha_sarif_masher.py --basedir "${PWD}" --output mashed.sarif merged.sarif
         npx -y @microsoft/sarif-multitool rewrite mashed.sarif --normalize-for-ghas --output current.sarif --sarif-output-version Current
       env:
@@ -105,10 +105,10 @@ jobs:
 
     # https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github
     - name: upload sarif file to github
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         # Path to SARIF file relative to the root of the repository
         sarif_file: current.sarif
         # Optional category for the results
         # Used to differentiate multiple results for one commit
-        category: /gcc-fanalyzer
+        category: gcc-fanalyzer-${{ github.run_number }}
