@@ -327,6 +327,8 @@ static char* test_view_address_hash(void *context)
     {"_topo/my-area/router/my-addr",            "Rrouter"},
     {"_topo/my-area/my-router/my-addr",         "Lmy-addr"},
     {"_topo/my-area/router",                    "Rrouter"},
+    {"_topo/all/my-router/my-addr",             "Lmy-addr"},
+    {"_topo/all/router/my-addr",                "Rrouter"},
     {"amqp:/mobile",                            "Mmobile"},
     {"mobile",                                  "Mmobile"},
     {"/mobile",                                 "Mmobile"},
