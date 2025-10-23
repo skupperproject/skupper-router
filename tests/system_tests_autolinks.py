@@ -330,10 +330,14 @@ class AutolinkTest(TestCase):
 
             #
             # Create a pair of auto-links with a different external address
-            # Leave the direction as dir to test backward compatibility.
             #
             ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'direction': 'in'}),
             ('autoLink', {'address': 'node.2', 'externalAddress': 'ext.2', 'containerId': 'container.4', 'direction': 'out'}),
+
+            #
+            # Create an anonymous auto-link
+            #
+            ('autoLink', {'containerId': 'container.5', 'externalAddress': 'ext.anon', 'direction': 'in'}),
 
             #
             # Note here that the connection is set to a previously declared 'myListener'
@@ -433,6 +437,16 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_12_autolink_attach_anonymous(self):
+        """
+        Create the route-container connection and verify that the appropriate links are attached.
+        Disconnect, reconnect, and verify that the links are re-attached.  Verify that the node addresses
+        in the links are the configured external address.
+        """
+        test = AutolinkAttachTest('container.5', self.route_address, 'ext.anon', True)
+        test.run()
+        self.assertIsNone(test.error)
+
 
 class AutolinkAttachTestWithListenerName(MessagingHandler):
     def __init__(self, address, node_addr):
@@ -457,7 +471,7 @@ class AutolinkAttachTestWithListenerName(MessagingHandler):
     def on_start(self, event):
         self.timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
 
-        # We create teo connections to the same listener here and we expect attaches to be sent on both connections
+        # We create two connections to the same listener here and we expect attaches to be sent on both connections
         self.conn = event.container.connect(self.address)
         self.conn1 = event.container.connect(self.address)
 
@@ -496,7 +510,7 @@ class AutolinkAttachTestWithListenerName(MessagingHandler):
 
 
 class AutolinkAttachTest(MessagingHandler):
-    def __init__(self, cid, address, node_addr):
+    def __init__(self, cid, address, node_addr, in_only=False):
         super(AutolinkAttachTest, self).__init__(prefetch=0)
         self.cid       = cid
         self.address   = address
@@ -504,6 +518,7 @@ class AutolinkAttachTest(MessagingHandler):
         self.error     = None
         self.sender    = None
         self.receiver  = None
+        self.in_only   = in_only
 
         self.n_rx_attach = 0
         self.n_tx_attach = 0
@@ -533,9 +548,9 @@ class AutolinkAttachTest(MessagingHandler):
                 self.error = "Expected receiver address '%s', got '%s'" % (self.node_addr, event.receiver.remote_target.address)
                 self.timer.cancel()
                 self.conn.close()
-        if self.n_tx_attach == 1 and self.n_rx_attach == 1:
+        if self.n_tx_attach == 1 and (self.n_rx_attach == 1 or self.in_only):
             self.conn.close()
-        if self.n_tx_attach == 2 and self.n_rx_attach == 2:
+        if self.n_tx_attach == 2 and (self.n_rx_attach == 2 or self.in_only):
             self.conn.close()
             self.timer.cancel()
 
