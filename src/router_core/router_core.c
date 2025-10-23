@@ -644,6 +644,7 @@ void qdr_core_delete_auto_link(qdr_core_t *core, qdr_auto_link_t *al)
         qdr_check_addr_CT(core, addr);
 
     free(al->name);
+    free(al->internal_addr);
     free(al->external_addr);
     free(al->container_id);
     free(al->connection);
