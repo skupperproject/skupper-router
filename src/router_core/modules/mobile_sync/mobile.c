@@ -1008,9 +1008,11 @@ static void qcm_mobile_sync_init_CT(qdr_core_t *core, void **module_context)
     // Establish the address for message distribution
     //
     msync->all_routers_address = (char*) malloc(strlen(core->router_area) + 23);
-    strcpy(msync->all_routers_address, "_topo/");
-    strcat(msync->all_routers_address, core->router_area);
-    strcat(msync->all_routers_address, "/all/qdrouter.ma");
+    if (msync->all_routers_address) {
+        strcpy(msync->all_routers_address, "_topo/");
+        strcat(msync->all_routers_address, core->router_area);
+        strcat(msync->all_routers_address, "/all/qdrouter.ma");
+    }
 
     //
     // Subscribe to core events:
@@ -1060,6 +1062,7 @@ static void qcm_mobile_sync_final_CT(void *module_context)
     qdr_core_unsubscribe(msync->message_sub1);
     qdr_core_unsubscribe(msync->message_sub2);
 
+    free(msync->all_routers_address);
     free(msync);
 }
 
