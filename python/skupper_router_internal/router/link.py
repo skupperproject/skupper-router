@@ -66,12 +66,12 @@ class LinkStateEngine:
 
     def send_lsr(self, _id):
         msg = MessageLSR(None, self.id)
-        self.container.send('amqp:/_topo/0/%s/qdrouter' % _id, msg)
+        self.container.send('amqp:/_topo/%s/%s/qdrouter' % (self.container.area, _id), msg)
         self.container.log_ls(LOG_DEBUG, "SENT: %r to: %s" % (msg, _id))
 
     def send_ra(self, now):
         self.last_ra_time = now
         ls_seq = self.node_tracker.link_state.ls_seq
         msg = MessageRA(None, self.id, ls_seq, self.mobile_seq, self.container.instance)
-        self.container.send('amqp:/_topo/0/all/qdrouter', msg)
+        self.container.send('amqp:/_topo/%s/all/qdrouter' % self.container.area, msg)
         self.container.log_ls(LOG_DEBUG, "SENT: %r" % msg)

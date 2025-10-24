@@ -403,6 +403,9 @@ static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id) {
         free(qd->van_id);
     }
     qd->van_id = _van_id;
+    if (_van_id) {
+        qd_dispatch_set_router_area(qd, strdup(_van_id));
+    }
 }
 
 void qd_dispatch_free(qd_dispatch_t *qd)
