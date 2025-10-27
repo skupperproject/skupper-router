@@ -136,6 +136,9 @@ class MessageRouteTruncateTest(MessagingHandler):
         self.sender_host      = sender_host
         self.receiver_host    = receiver_host
         self.address          = address
+        # If the sender and receiver are on the same router, we expect to see aborted deliveries.
+        # If there are multiple routers, aborted deliveries may be absorbed by downrange routers and not seen here.
+        self.same_router      = sender_host == receiver_host
 
         self.sender_conn   = None
         self.receiver_conn = None
@@ -152,9 +155,14 @@ class MessageRouteTruncateTest(MessagingHandler):
         self.sent_stream   = 0
         self.program       = ['Send_Short_1', 'Send_Long_Truncated', 'Send_Short_2', 'Send_Short_3']
         self.result        = []
-        self.expected_result = ['Send_Short_1', 'Aborted_Delivery', '2', '2', '2', '2', '2',
-                                '2', '2', '2', '2', '2', 'Send_Short_2', '3', '3', '3', '3',
-                                '3', '3', '3', '3', '3', '3', 'Send_Short_3']
+        if self.same_router:
+            self.expected_result = ['Send_Short_1', 'Aborted_Delivery', '2', '2', '2', '2', '2',
+                                    '2', '2', '2', '2', '2', 'Send_Short_2', '3', '3', '3', '3',
+                                    '3', '3', '3', '3', '3', '3', 'Send_Short_3']
+        else:
+            self.expected_result = ['Send_Short_1', '2', '2', '2', '2', '2',
+                                    '2', '2', '2', '2', '2', 'Send_Short_2', '3', '3', '3', '3',
+                                    '3', '3', '3', '3', '3', '3', 'Send_Short_3']
 
     def timeout(self):
         self.error = "Timeout Expired - Unprocessed Ops: %r, Result: %r" % (self.program, self.result)
@@ -224,7 +232,8 @@ class MessageRouteTruncateTest(MessagingHandler):
             self.timer.cancel()
 
     def on_aborted(self, event):
-        self.result.append('Aborted_Delivery')
+        if self.same_router:
+            self.result.append('Aborted_Delivery')
         self.send()
 
     def run(self):
