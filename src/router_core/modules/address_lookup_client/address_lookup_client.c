@@ -25,6 +25,7 @@
 
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/discriminator.h"
+#include "qpid/dispatch/protocol_adaptor.h"
 
 #include <stdio.h>
 
@@ -37,31 +38,38 @@ typedef struct qcm_lookup_client_t {
  * Generate a temporary routable address for a destination connected to this
  * router node. Caller must free() return value when done.
  */
-static char *qdr_generate_temp_addr(qdr_core_t *core)
+static char *qdr_generate_temp_addr(qdr_core_t *core, bool use_xnet)
 {
     static const char *edge_template     = "amqp:/_edge/%s/temp.%s";
     static const char *edge_template_van = "amqp:/_edge/%s/%s/temp.%s";
     static const char *topo_template     = "amqp:/_topo/%s/%s/temp.%s";
     static const char *topo_template_van = "amqp:/_topo/%s/%s/%s/temp.%s";
+    static const char *xnet_template     = "amqp:/_xnet/%s/%s/%s/temp.%s";
     const size_t       max_template      = 20;  // printable chars
     char discriminator[QD_DISCRIMINATOR_SIZE];
 
     qd_generate_discriminator(discriminator);
     size_t len = max_template + QD_DISCRIMINATOR_SIZE + 1
-        + strlen(core->router_id) + strlen(core->router_area)
-        + (!!core->van_id ? strlen(core->van_id) : 0);
+        + strlen(core->router_id) + strlen(core->router_area);
+    if (core->router_mode != QD_ROUTER_MODE_EDGE && use_xnet && !!core->network_id) {
+        len += strlen(core->network_id);
+    } else {
+        len += (!!core->tenant_id ? strlen(core->tenant_id) : 0);
+    }
 
     int rc;
     char *buffer = qd_malloc(len);
     if (core->router_mode == QD_ROUTER_MODE_EDGE) {
-        if (!!core->van_id) {
-            rc = snprintf(buffer, len, edge_template_van, core->router_id, core->van_id, discriminator);
+        if (!!core->tenant_id) {
+            rc = snprintf(buffer, len, edge_template_van, core->router_id, core->tenant_id, discriminator);
         } else {
             rc = snprintf(buffer, len, edge_template, core->router_id, discriminator);
         }
     } else {
-        if (!!core->van_id) {
-            rc = snprintf(buffer, len, topo_template_van, core->router_area, core->router_id, core->van_id, discriminator);
+        if (use_xnet && !!core->network_id) {
+            rc = snprintf(buffer, len, xnet_template, core->network_id, core->router_area, core->router_id, discriminator);
+        } else if (!!core->tenant_id) {
+            rc = snprintf(buffer, len, topo_template_van, core->router_area, core->router_id, core->tenant_id, discriminator);
         } else {
             rc = snprintf(buffer, len, topo_template, core->router_area, core->router_id, discriminator);
         }
@@ -136,10 +144,12 @@ static qdr_address_t *qdr_lookup_terminus_address_CT(qdr_core_t       *core,
             // unlikely).
             //
             char *temp_addr = 0;
-            if (dir == QD_OUTGOING)
-                temp_addr = qdr_generate_temp_addr(core);
-            else
+            if (dir == QD_OUTGOING) {
+                bool use_xnet = qdr_terminus_has_capability(terminus, QD_CAPABILITY_CROSS_NETWORK);
+                temp_addr = qdr_generate_temp_addr(core, use_xnet);
+            } else {
                 temp_addr = qdr_generate_mobile_addr(core);
+            }
 
             qd_iterator_t *temp_iter = qd_iterator_string(temp_addr, ITER_VIEW_ADDRESS_HASH);
             qd_hash_retrieve(core->addr_hash, temp_iter, (void**) &addr);

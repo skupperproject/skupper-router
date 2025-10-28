@@ -104,6 +104,7 @@ class QdDll(PyDLL):
         self._prototype(self.qd_error_message, c_char_p, [], check=False)
         self._prototype(self.qd_log_entity, c_long, [py_object])
         self._prototype(self.qd_dispatch_configure_managed_router, None, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_update_managed_router, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_router, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_site, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_prepare, None, [self.qd_dispatch_p])

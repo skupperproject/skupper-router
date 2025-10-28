@@ -57,7 +57,7 @@ struct qd_router_t {
     qd_router_mode_t          router_mode;
     const char               *router_area;
     const char               *router_id;
-    const char               *van_id;
+    const char               *tenant_id;
 
     sys_mutex_t               lock;
     qd_timer_t               *timer;

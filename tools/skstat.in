@@ -278,6 +278,8 @@ class BusManager:
             return ""
         if addr[0] == 'M'  :
             return "mobile"
+        if addr[0] == 'N'  :
+            return "network"
         if addr[0] == 'R'  :
             return "router"
         if addr[0] == 'A'  :
@@ -286,10 +288,6 @@ class BusManager:
             return "local"
         if addr[0] == 'T'  :
             return "topo"
-        if addr[0] in 'CE' :
-            return "link-in"
-        if addr[0] in 'DF' :
-            return "link-out"
         if addr[0] == 'H'  :
             return "edge"
         return "unknown: %s" % addr[0]

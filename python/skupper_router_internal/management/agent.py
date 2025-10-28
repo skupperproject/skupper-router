@@ -287,6 +287,9 @@ class ManagedRouterEntity(EntityAdapter):
     def create(self):
         self._qd.qd_dispatch_configure_managed_router(self._dispatch, self)
 
+    def _update(self):
+        self._qd.qd_dispatch_update_managed_router(self._dispatch, self)
+
     def __str__(self):
         return super(ManagedRouterEntity, self).__str__().replace("Entity(", "ManagedRouterEntity(")
 

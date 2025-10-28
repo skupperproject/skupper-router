@@ -140,11 +140,12 @@ extern const char * const QD_CAPABILITY_ROUTER_DATA;
 extern const char * const QD_CAPABILITY_EDGE_DOWNLINK;
 extern const char * const QD_CAPABILITY_STREAMING_DELIVERIES;
 extern const char * const QD_CAPABILITY_RESEND_RELEASED;
+extern const char * const QD_CAPABILITY_CROSS_NETWORK;
 /// @}
 
 /** @name Dynamic Node Properties */
 /// @{
-extern const char * const QD_DYNAMIC_NODE_PROPERTY_ADDRESS;  ///< Address for routing dynamic sources
+extern const char * const QD_DYNAMIC_NODE_PROPERTY_ADDRESS;       ///< Address for routing dynamic sources
 /// @}
 
 /** @name Connection Properties */

@@ -58,7 +58,8 @@ void            qd_router_free(qd_router_t *router);
 void            qd_error_initialize(void);
 static void qd_dispatch_set_router_id(qd_dispatch_t *qd, char *_id);
 static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area);
-static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id);
+static void qd_dispatch_set_router_tenant_id(qd_dispatch_t *qd, char *_tenant_id);
+static void qd_dispatch_set_router_network_id(qd_dispatch_t *qd, char *_network_id);
 static void qd_dispatch_policy_c_counts_free(PyObject *capsule);
 
 const char     *CLOSEST_DISTRIBUTION   = "closest";
@@ -221,10 +222,23 @@ static void qd_dispatch_set_router_default_distribution(qd_dispatch_t *qd, char 
 
 qd_error_t qd_dispatch_configure_managed_router(qd_dispatch_t *qd, qd_entity_t *entity)
 {
-    char *van_id = qd_entity_opt_string(entity, "vanId", 0); QD_ERROR_RET();
-    if (van_id) {
-        qd_dispatch_set_router_van_id(qd, van_id);
+    char *tenant_id = qd_entity_opt_string(entity, "tenantId", 0); QD_ERROR_RET();
+    if (tenant_id) {
+        qd_dispatch_set_router_tenant_id(qd, tenant_id);
     }
+
+    char *network_id = qd_entity_opt_string(entity, "networkId", 0); QD_ERROR_RET();
+    qd_dispatch_set_router_network_id(qd, network_id);
+
+    return QD_ERROR_NONE;
+}
+
+qd_error_t qd_dispatch_update_managed_router(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    char *network_id = qd_entity_opt_string(entity, "networkId", 0); QD_ERROR_RET();
+    qd_dispatch_set_router_network_id(qd, network_id);
+    qdr_core_set_network_id(qd->router->router_core, network_id);
+
     return QD_ERROR_NONE;
 }
 
@@ -234,8 +248,8 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     qd_dispatch_set_router_id(qd, qd_entity_opt_string(entity, "id", 0)); QD_ERROR_RET();
     char *van_id = qd_entity_opt_string(entity, "vanId", 0); QD_ERROR_RET();
     if (van_id) {
-        qd_dispatch_set_router_van_id(qd, van_id);
-        qd_log(LOG_ROUTER, QD_LOG_WARNING, "The vanId attribute is deprecated in the router entity.  Please move it to managedRouter.");
+        qd_dispatch_set_router_tenant_id(qd, van_id);
+        qd_log(LOG_ROUTER, QD_LOG_WARNING, "The vanId attribute is deprecated in the router entity.  Please use tenantId in managedRouter.");
     }
     qd->router_mode = qd_entity_get_long(entity, "mode"); QD_ERROR_RET();
     if (!qd->router_id) {
@@ -397,12 +411,20 @@ static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area) {
     qd->router_area = _area;
 }
 
-// Takes ownership of _van_id
-static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id) {
-    if (qd->van_id) {
-        free(qd->van_id);
+// Takes ownership of _tenant_id
+static void qd_dispatch_set_router_tenant_id(qd_dispatch_t *qd, char *_tenant_id) {
+    if (qd->tenant_id) {
+        free(qd->tenant_id);
     }
-    qd->van_id = _van_id;
+    qd->tenant_id = _tenant_id;
+}
+
+// Takes ownership of _network_id
+static void qd_dispatch_set_router_network_id(qd_dispatch_t *qd, char *_network_id) {
+    if (qd->network_id) {
+        free(qd->network_id);
+    }
+    qd->network_id = _network_id;
 }
 
 void qd_dispatch_free(qd_dispatch_t *qd)
@@ -425,7 +447,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     qd_python_finalize();
     qd_dispatch_set_router_id(qd, NULL);
     qd_dispatch_set_router_area(qd, NULL);
-    qd_dispatch_set_router_van_id(qd, NULL);
+    qd_dispatch_set_router_tenant_id(qd, NULL);
     qd_iterator_finalize();
     free(qd->timestamp_format);
     free(qd->metadata);
@@ -454,7 +476,8 @@ qd_connection_manager_t *qd_dispatch_connection_manager(const qd_dispatch_t *qd)
 QD_EXPORT void qd_router_setup_late(qd_dispatch_t *qd)
 {
     qd->router->tracemask   = qd_tracemask();
-    qd->router->router_core = qdr_core(qd, qd->router->router_mode, qd->router->router_area, qd->router->router_id, qd->router->van_id);
+    qd->router->router_core = qdr_core(qd, qd->router->router_mode, qd->router->router_area, qd->router->router_id, qd->router->tenant_id);
+    qdr_core_set_network_id(qd->router->router_core, qd->network_id);
     qd_router_python_setup(qd->router);
     qd_timer_schedule(qd->router->timer, 1000);
 }

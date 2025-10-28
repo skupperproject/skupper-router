@@ -86,9 +86,10 @@ typedef enum {
 //
 // Static state that influences how the iterator operates.
 //
-static bool  edge_mode = false;
-static char *my_area   = 0;
-static char *my_router = 0;
+static bool  edge_mode  = false;
+static char *my_network = 0;
+static char *my_area    = 0;
+static char *my_router  = 0;
 
 //
 // Used for edge routers only.  This is a list of routers that are connected directly
@@ -187,6 +188,50 @@ static void parse_address_view(qd_iterator_t *iter)
                 set_to_edge_connection(iter);
             else {
                 iter->prefix = QD_ITER_HASH_PREFIX_AREA;
+                iter->state  = STATE_AT_PREFIX;
+                iter->mode   = MODE_TO_SLASH;
+            }
+            return;
+        }
+
+        if (qd_iterator_prefix(iter, "xnet/")) {
+            assert(my_area && my_router);  // ensure qd_iterator_set_address called!
+            if (qd_iterator_prefix(iter, my_network)) {
+                if (qd_iterator_prefix(iter, "all/") || qd_iterator_prefix(iter, my_area)) {
+                    if (qd_iterator_prefix(iter, "all/")) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_TOPOLOGICAL;
+                        iter->state  = STATE_AT_PREFIX;
+                        return;
+                    } else if (qd_iterator_prefix(iter, my_router)) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
+                        iter->state  = STATE_AT_PREFIX;
+                        return;
+                    }
+
+                    if (edge_mode)
+                        set_to_edge_connection(iter);
+                    else {
+                        iter->prefix = QD_ITER_HASH_PREFIX_ROUTER;
+                        iter->state  = STATE_AT_PREFIX;
+                        iter->mode   = MODE_TO_SLASH;
+                    }
+                    return;
+                }
+
+                if (edge_mode)
+                    set_to_edge_connection(iter);
+                else {
+                    iter->prefix = QD_ITER_HASH_PREFIX_AREA;
+                    iter->state  = STATE_AT_PREFIX;
+                    iter->mode   = MODE_TO_SLASH;
+                }
+                return;
+            }
+
+            if (edge_mode) {
+                set_to_edge_connection(iter);
+            } else {
+                iter->prefix = QD_ITER_HASH_PREFIX_NETWORK;
                 iter->state  = STATE_AT_PREFIX;
                 iter->mode   = MODE_TO_SLASH;
             }
@@ -503,6 +548,18 @@ void qd_iterator_set_address(bool _edge_mode, const char *area, const char *rout
     sprintf(my_router, "%s/", router);
 }
 
+void qd_iterator_set_network(const char *network)
+{
+    free(my_network);
+    if (!network) {
+        my_network = 0;
+    } else {
+        const size_t network_size = strlen(network);
+        my_network = qd_malloc(network_size + 2);
+        sprintf(my_network, "%s/", network);
+    }
+}
+
 void qd_iterator_add_peer_edge(const char *router)
 {
     qd_iterator_peer_edge_t *peer_edge = NEW(qd_iterator_peer_edge_t);
@@ -801,7 +858,7 @@ bool qd_iterator_equal_n(qd_iterator_t *iter, const unsigned char *string, size_
 
 bool qd_iterator_prefix(qd_iterator_t *iter, const char *prefix)
 {
-    if (!iter)
+    if (!iter || !prefix)
         return false;
 
     qd_buffer_field_t save_pointer = iter->view_pointer;
@@ -1006,10 +1063,12 @@ qd_buffer_field_t qd_iterator_get_view_cursor(const qd_iterator_t *iter)
 
 void qd_iterator_finalize(void)
 {
+    free(my_network);
     free(my_area);
     free(my_router);
 
     // unit tests need these zeroed
+    my_network = 0;
     my_area = 0;
     my_router = 0;
 }
