@@ -53,7 +53,8 @@ struct qd_dispatch_t {
     char     *sasl_config_name;
     char     *router_area;
     char     *router_id;
-    char     *van_id;
+    char     *network_id;
+    char     *tenant_id;
     char     *timestamp_format;
     char     *metadata;
     bool      timestamps_in_utc;

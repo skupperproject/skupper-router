@@ -1249,7 +1249,7 @@ void qd_policy_amqp_open_connector(qd_connection_t *qd_conn) {
     bool connection_allowed = true;
 
     if (policy->enableVhostPolicy &&
-        (!qd_conn->role || !strcmp(qd_conn->role, "normal") || !strcmp(qd_conn->role, "route-container"))) {
+        (!qd_conn->role || !strcmp(qd_conn->role, "normal") || !strcmp(qd_conn->role, "route-container") || !strcmp(qd_conn->role, "inter-network"))) {
         // Open connection or not based on policy.
         uint32_t conn_id = qd_conn->connection_id;
 
