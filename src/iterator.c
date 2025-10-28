@@ -86,9 +86,10 @@ typedef enum {
 //
 // Static state that influences how the iterator operates.
 //
-static bool  edge_mode = false;
-static char *my_area   = 0;
-static char *my_router = 0;
+static bool  edge_mode  = false;
+static char *my_network = 0;
+static char *my_area    = 0;
+static char *my_router  = 0;
 
 //
 // Used for edge routers only.  This is a list of routers that are connected directly
@@ -162,31 +163,42 @@ static void parse_address_view(qd_iterator_t *iter)
 
         if (qd_iterator_prefix(iter, "topo/")) {
             assert(my_area && my_router);  // ensure qd_iterator_set_address called!
-            if (qd_iterator_prefix(iter, "all/") || qd_iterator_prefix(iter, my_area)) {
-                if (qd_iterator_prefix(iter, "all/")) {
-                    iter->prefix = QD_ITER_HASH_PREFIX_TOPOLOGICAL;
-                    iter->state  = STATE_AT_PREFIX;
-                    return;
-                } else if (qd_iterator_prefix(iter, my_router)) {
-                    iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
-                    iter->state  = STATE_AT_PREFIX;
+            if (qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
+                if (qd_iterator_prefix(iter, "all/") || qd_iterator_prefix(iter, my_area)) {
+                    if (qd_iterator_prefix(iter, "all/")) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_TOPOLOGICAL;
+                        iter->state  = STATE_AT_PREFIX;
+                        return;
+                    } else if (qd_iterator_prefix(iter, my_router)) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
+                        iter->state  = STATE_AT_PREFIX;
+                        return;
+                    }
+
+                    if (edge_mode)
+                        set_to_edge_connection(iter);
+                    else {
+                        iter->prefix = QD_ITER_HASH_PREFIX_ROUTER;
+                        iter->state  = STATE_AT_PREFIX;
+                        iter->mode   = MODE_TO_SLASH;
+                    }
                     return;
                 }
 
                 if (edge_mode)
                     set_to_edge_connection(iter);
                 else {
-                    iter->prefix = QD_ITER_HASH_PREFIX_ROUTER;
+                    iter->prefix = QD_ITER_HASH_PREFIX_AREA;
                     iter->state  = STATE_AT_PREFIX;
                     iter->mode   = MODE_TO_SLASH;
                 }
                 return;
             }
 
-            if (edge_mode)
+            if (edge_mode) {
                 set_to_edge_connection(iter);
-            else {
-                iter->prefix = QD_ITER_HASH_PREFIX_AREA;
+            } else {
+                iter->prefix = QD_ITER_HASH_PREFIX_NETWORK;
                 iter->state  = STATE_AT_PREFIX;
                 iter->mode   = MODE_TO_SLASH;
             }
@@ -194,40 +206,51 @@ static void parse_address_view(qd_iterator_t *iter)
         }
 
         if (qd_iterator_prefix(iter, "edge/")) {
-            if (qd_iterator_prefix(iter, my_router)) {
-                iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
-                iter->state  = STATE_AT_PREFIX;
-                return;
-            }
-
-            if (edge_mode) {
-                bool is_peer = false;
-                qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
-                qd_buffer_field_t save_pointer = iter->view_pointer;
-                while (!!peer_edge) {
-                    if (qd_iterator_prefix(iter, peer_edge->router_id)) {
-                        is_peer = true;
-                        iter->view_pointer = save_pointer;
-                        break;
-                    }
-                    peer_edge = DEQ_NEXT(peer_edge);
+            if (qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
+                if (qd_iterator_prefix(iter, my_router)) {
+                    iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
+                    iter->state  = STATE_AT_PREFIX;
+                    return;
                 }
 
-                if (is_peer) {
+                if (edge_mode) {
+                    bool is_peer = false;
+                    qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
+                    qd_buffer_field_t save_pointer = iter->view_pointer;
+                    while (!!peer_edge) {
+                        if (qd_iterator_prefix(iter, peer_edge->router_id)) {
+                            is_peer = true;
+                            iter->view_pointer = save_pointer;
+                            break;
+                        }
+                        peer_edge = DEQ_NEXT(peer_edge);
+                    }
+
+                    if (is_peer) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
+                        iter->state  = STATE_AT_PREFIX;
+                        iter->mode   = MODE_TO_SLASH;
+                    } else {
+                        set_to_edge_connection(iter);
+                    }
+
+                    return;
+                } else {
                     iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
                     iter->state  = STATE_AT_PREFIX;
                     iter->mode   = MODE_TO_SLASH;
-                } else {
-                    set_to_edge_connection(iter);
+                    return;
                 }
+            }
 
-                return;
+            if (edge_mode) {
+                set_to_edge_connection(iter);
             } else {
-                iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
+                iter->prefix = QD_ITER_HASH_PREFIX_NETWORK;
                 iter->state  = STATE_AT_PREFIX;
                 iter->mode   = MODE_TO_SLASH;
-                return;
             }
+            return;
         }
 
         iter->view_pointer  = save_pointer;
@@ -501,6 +524,18 @@ void qd_iterator_set_address(bool _edge_mode, const char *area, const char *rout
     free(my_router);
     my_router = qd_malloc(router_size + 2);
     sprintf(my_router, "%s/", router);
+}
+
+void qd_iterator_set_network(const char *network)
+{
+    free(my_network);
+    if (!network) {
+        my_network = 0;
+    } else {
+        const size_t network_size = strlen(network);
+        my_network = qd_malloc(network_size + 2);
+        sprintf(my_network, "%s/", network);
+    }
 }
 
 void qd_iterator_add_peer_edge(const char *router)
@@ -801,7 +836,7 @@ bool qd_iterator_equal_n(qd_iterator_t *iter, const unsigned char *string, size_
 
 bool qd_iterator_prefix(qd_iterator_t *iter, const char *prefix)
 {
-    if (!iter)
+    if (!iter || !prefix)
         return false;
 
     qd_buffer_field_t save_pointer = iter->view_pointer;
@@ -1006,10 +1041,12 @@ qd_buffer_field_t qd_iterator_get_view_cursor(const qd_iterator_t *iter)
 
 void qd_iterator_finalize(void)
 {
+    free(my_network);
     free(my_area);
     free(my_router);
 
     // unit tests need these zeroed
+    my_network = 0;
     my_area = 0;
     my_router = 0;
 }

@@ -387,7 +387,7 @@ class ManagementTest(system_test.TestCase):
             self.assertEqual(attrs['identity'], 'router.node/%s' % name)
             self.assertEqual(attrs['name'], 'router.node/%s' % name)
             self.assertEqual(attrs['type'], ROUTER_NODE_TYPE)
-            self.assertEqual(attrs['address'], 'amqp:/_topo/0/%s' % name)
+            self.assertEqual(attrs['address'], 'amqp:/_topo/0/0/%s' % name)
             return name
 
         self.assertEqual({"router0", "router1", "router2"}, {check(n) for n in rnode_lists[0]})
@@ -413,13 +413,13 @@ class ManagementTest(system_test.TestCase):
         """Test that we can access management info of remote nodes using get_mgmt_nodes addresses"""
         nodes = [self.cleanup(Node.connect(Url(r.addresses[0]))) for r in self.routers]
         remotes = sum([n.get_mgmt_nodes() for n in nodes], [])
-        self.assertEqual({'amqp:/_topo/0/router%s/$management' % i for i in [0, 1, 2]},
+        self.assertEqual({'amqp:/_topo/0/0/router%s/$management' % i for i in [0, 1, 2]},
                          set(remotes))
         self.assertEqual(9, len(remotes))
         # Query router2 indirectly via router1
         remote_url = Url(self.routers[0].addresses[0], path=Url(remotes[0]).path)
         remote = self.cleanup(Node.connect(remote_url))
-        router_id = remotes[0].split("/")[3]
+        router_id = remotes[0].split("/")[4]
         assert router_id in ['router0', 'router1', 'router2']
         self.assertEqual([router_id], [r.id for r in remote.query(type=ROUTER_TYPE).get_entities()])
 

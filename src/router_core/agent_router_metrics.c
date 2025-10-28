@@ -48,13 +48,15 @@
 #define QDR_ROUTER_DELIVERIES_TRANSIT                  19
 #define QDR_ROUTER_DELIVERIES_INGRESS_ROUTE_CONTAINER  20
 #define QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER   21
-#define QDR_ROUTER_DELIVERIES_REDIRECTED               22
-#define QDR_ROUTER_LINKS_BLOCKED                       23
-#define QDR_ROUTER_UPTIME_SECONDS                      24
-#define QDR_ROUTER_MEMORY_USAGE                        25
-#define QDR_ROUTER_RSS_USAGE                           26
-#define QDR_ROUTER_CONNECTION_COUNTERS                 27
-#define QDR_ROUTER_VERSION                             28
+#define QDR_ROUTER_DELIVERIES_INGRESS_INTER_NETWORK    22
+#define QDR_ROUTER_DELIVERIES_EGRESS_INTER_NETWORK     23
+#define QDR_ROUTER_DELIVERIES_REDIRECTED               24
+#define QDR_ROUTER_LINKS_BLOCKED                       25
+#define QDR_ROUTER_UPTIME_SECONDS                      26
+#define QDR_ROUTER_MEMORY_USAGE                        27
+#define QDR_ROUTER_RSS_USAGE                           28
+#define QDR_ROUTER_CONNECTION_COUNTERS                 29
+#define QDR_ROUTER_VERSION                             31
 
 const char *qdr_router_columns[] =
     {"identity",
@@ -79,6 +81,8 @@ const char *qdr_router_columns[] =
      "deliveriesTransit",
      "deliveriesIngressRouteContainer",
      "deliveriesEgressRouteContainer",
+     "deliveriesIngressInterNetwork",
+     "deliveriesEgressInterNetwork",
      "deliveriesRedirectedToFallback",
      "linksBlocked",
      "uptimeSeconds",
@@ -184,6 +188,14 @@ static void qdr_agent_write_column_CT(qd_composed_field_t *body, int col, qdr_co
 
     case QDR_ROUTER_DELIVERIES_EGRESS_ROUTE_CONTAINER:
         qd_compose_insert_ulong(body, core->deliveries_egress_route_container);
+        break;
+
+    case QDR_ROUTER_DELIVERIES_INGRESS_INTER_NETWORK:
+        qd_compose_insert_ulong(body, core->deliveries_ingress_inter_network);
+        break;
+
+    case QDR_ROUTER_DELIVERIES_EGRESS_INTER_NETWORK:
+        qd_compose_insert_ulong(body, core->deliveries_egress_inter_network);
         break;
 
     case QDR_ROUTER_DELIVERIES_REDIRECTED:

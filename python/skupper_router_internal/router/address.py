@@ -49,7 +49,7 @@ class Address(str):
         @param path: Path part of address.
         @param area: Routing area (placeholder)
         """
-        addr = "%s/%s/%s" % (cls.TOPO, area, router_id)
+        addr = "%s/0/%s/%s" % (cls.TOPO, area, router_id)
         if path:
             addr = "%s/%s" % (addr, path)
         return Address(addr)
