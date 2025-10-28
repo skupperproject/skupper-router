@@ -79,7 +79,7 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
     router->router_mode  = mode;
     router->router_area  = area;
     router->router_id    = id;
-    router->van_id       = qd->van_id;
+    router->tenant_id    = qd->tenant_id;
 
     sys_mutex_init(&router->lock);
     router->timer = qd_timer(qd, qd_router_timer_handler, (void*) router);
@@ -89,6 +89,7 @@ qd_router_t *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *are
     // uses this to offload some of the address-processing load from the router.
     //
     qd_iterator_set_address(mode == QD_ROUTER_MODE_EDGE, area, id);
+    qd_iterator_set_network(qd->network_id);
 
     switch (router->router_mode) {
         case QD_ROUTER_MODE_STANDALONE:
@@ -121,7 +122,7 @@ void qd_router_free(qd_router_t *router)
     //
     router->router_id = 0;
     router->router_area = 0;
-    router->van_id = 0;
+    router->tenant_id = 0;
 
     qd_router_python_free(router);
     qdr_core_free(router->router_core);

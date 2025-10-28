@@ -830,7 +830,7 @@ class ManagementTest(MessagingHandler):
             self.sender.send(request)
 
             request = Message()
-            request.address = "amqp:/_topo/0/QDR.B/$management"
+            request.address = "amqp:/_topo/0/0/QDR.B/$management"
             request.correlation_id = "C2"
             request.reply_to = self.receiver.remote_source.address
             request.properties = {'type': 'org.amqp.management', 'name': 'self', 'operation': 'GET-MGMT-NODES'}
@@ -841,12 +841,12 @@ class ManagementTest(MessagingHandler):
             if event.message.correlation_id == "C1":
                 if event.message.properties['statusCode'] == 200 and \
                         event.message.properties['statusDescription'] is not None \
-                        and 'amqp:/_topo/0/QDR.B/$management' in event.message.body:
+                        and 'amqp:/_topo/0/0/QDR.B/$management' in event.message.body:
                     self.response1 = True
             elif event.message.correlation_id == "C2":
                 if event.message.properties['statusCode'] == 200 and \
                         event.message.properties['statusDescription'] is not None \
-                        and 'amqp:/_topo/0/QDR.A/$management' in event.message.body:
+                        and 'amqp:/_topo/0/0/QDR.A/$management' in event.message.body:
                     self.response2 = True
 
         if self.response1 and self.response2:

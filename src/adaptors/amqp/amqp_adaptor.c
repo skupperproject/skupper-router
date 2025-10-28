@@ -50,11 +50,12 @@
 amqp_adaptor_t amqp_adaptor;
 
 
-static char *router_role      = "inter-router";
-static char *router_data_role = "inter-router-data";
-static char *container_role   = "route-container";
-static char *edge_role        = "edge";
-static char *inter_edge_role  = "inter-edge";
+static char *router_role        = "inter-router";
+static char *router_data_role   = "inter-router-data";
+static char *container_role     = "route-container";
+static char *edge_role          = "edge";
+static char *inter_edge_role    = "inter-edge";
+static char *inter_network_role = "inter-network";
 
 
 static void deferred_AMQP_rx_handler(qd_connection_t *qd_conn, void *context, bool discard);
@@ -295,9 +296,13 @@ static void qd_router_connection_get_config(const qd_connection_t  *conn,
             *strip_annotations_out = false;
             *role = QDR_ROLE_INTER_EDGE;
             *cost = cf->inter_router_cost;
-        } else if (cf && (strcmp(cf->role, container_role) == 0))  // backward compat
+        } else if (cf && (strcmp(cf->role, container_role) == 0)) { // backward compat
             *role = QDR_ROLE_ROUTE_CONTAINER;
-        else
+        } else if (cf && (strcmp(cf->role, inter_network_role) == 0)) {
+            *strip_annotations_in  = false;
+            *strip_annotations_out = false;
+            *role = QDR_ROLE_INTER_NETWORK;
+        } else
             *role = QDR_ROLE_NORMAL;
 
         *name = cf ? cf->name : 0;
@@ -2136,6 +2141,7 @@ static uint64_t CORE_link_deliver(void *context, qdr_link_t *link, qdr_delivery_
     unsigned int ra_flags = qdr_link_strip_annotations_out(link) ? QD_MESSAGE_RA_STRIP_ALL
         // edge routers do not propagate self in trace or ingress RA
         : router->router_mode == QD_ROUTER_MODE_EDGE ? (QD_MESSAGE_RA_STRIP_INGRESS | QD_MESSAGE_RA_STRIP_TRACE)
+        : qdr_link_connection_role(link) == QDR_ROLE_INTER_NETWORK ? (QD_MESSAGE_RA_STRIP_INGRESS | QD_MESSAGE_RA_STRIP_TRACE)
         : QD_MESSAGE_RA_STRIP_NONE;
 
     octets_sent = qd_message_send(msg_out, qlink, ra_flags, &q3_stalled);
