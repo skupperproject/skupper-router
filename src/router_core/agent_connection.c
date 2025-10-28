@@ -71,6 +71,7 @@ const char *qdr_connection_roles[] =
      "edge",
      "inter-router-data",
      "inter-edge",
+     "inter-network",
      0};
 
 const char *qdr_connection_columns[] =

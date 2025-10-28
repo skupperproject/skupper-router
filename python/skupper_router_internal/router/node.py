@@ -393,7 +393,7 @@ class RouterNode:
         self.need_ls_request         = True
         self.need_mobile_request     = False
         self.keep_alive_count        = 0
-        self.adapter.add_router("amqp:/_topo/0/%s/qdrouter" % self.id, self.maskbit)
+        self.adapter.add_router("amqp:/_topo/0/0/%s/qdrouter" % self.id, self.maskbit)
         self.log(LOG_DEBUG, "Node %s created: maskbit=%d" % (self.id, self.maskbit))
         self.adapter.get_agent().add_implementation(self, "router.node")
 
