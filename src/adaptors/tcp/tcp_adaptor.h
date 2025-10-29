@@ -21,7 +21,7 @@
 
 #include "dispatch_private.h"
 #include "delivery.h"
-#include "adaptors/adaptor_common.h"
+#include "qpid/dispatch/adaptor_common.h"
 #include "adaptors/adaptor_listener.h"
 #include <qpid/dispatch/protocol_observer.h>
 
@@ -162,13 +162,5 @@ typedef struct qd_tcp_connection_t {
     bool                        outbound_first_octet;
     bool                        outbound_body_complete;
 } qd_tcp_connection_t;
-
-
-QD_EXPORT void       *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity);
-QD_EXPORT void        qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl);
-QD_EXPORT qd_error_t  qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl);
-QD_EXPORT void        qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl);
-QD_EXPORT qd_error_t  qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl);
-qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity);
 
 #endif

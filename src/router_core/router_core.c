@@ -70,6 +70,11 @@ static void qdr_core_setup_init(qdr_core_t *core)
     // Initialize all registered adaptors (HTTP1, HTTP2, TCP)
     //
     qdr_adaptors_init(core);
+
+    //
+    // Initialize all registered transport modules
+    //
+    qdr_transports_init(core);
 }
 
 qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *van_id)
@@ -152,6 +157,11 @@ void qdr_core_free(qdr_core_t *core)
     //
     qdr_action_enqueue(core, qdr_action(qdr_core_stop_thread_CT, "Stop Thread"));
     sys_thread_join(core->thread);
+
+    //
+    // Finalize the transport modules
+    //
+    qdr_transports_finalize(core);
 
     // have adaptors clean up all core resources
     qdr_adaptors_finalize(core);

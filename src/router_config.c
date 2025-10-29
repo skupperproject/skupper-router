@@ -18,7 +18,7 @@
  */
 
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "router_private.h"
 
 #include "qpid/dispatch.h"

@@ -20,7 +20,7 @@
  */
 
 #include "config.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "entity_cache.h"
 #include "parse_tree.h"
 

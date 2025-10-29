@@ -24,7 +24,7 @@
 
 #include "config.h"
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "entity_cache.h"
 #include "http.h"
 #include "log_private.h"
@@ -269,6 +269,8 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
         qd_log(LOG_ROUTER, QD_LOG_INFO, "Inter-router data connections calculated at %d ", qd->data_connection_count);
     }
     free(data_conn_count_str);
+
+    qd->transport_plugin = qd_entity_opt_string(entity, "transportPlugin", 0); QD_ERROR_RET();
 
     qd->timestamps_in_utc = qd_entity_opt_bool(entity, "timestampsInUTC", false); QD_ERROR_RET();
     qd->timestamp_format = qd_entity_opt_string(entity, "timestampFormat", 0); QD_ERROR_RET();
