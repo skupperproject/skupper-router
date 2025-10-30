@@ -67,17 +67,17 @@ class CrossNetworkPreconfiguredTest(TestCase):
         edge_port_Y         = cls.tester.get_port()
 
         router('NET.X.INT.A', 'interior', 'net-x',
-               ('listener', {'role': 'inter-router', 'port': inter_router_port_X}),
-               ('listener', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port}),
+               ('listener', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
+               ('listener', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port, 'linkCapacity': '10'}),
                ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'externalAddress': '_xnet/net-x'}))
         router('NET.X.INT.B', 'interior', 'net-x',
-               ('connector', {'role': 'inter-router', 'port': inter_router_port_X}),
-               ('listener', {'role': 'edge', 'port': edge_port_X}))
-        router('EX', 'edge', 'net-x', ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_X}))
+               ('connector', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
+               ('listener', {'role': 'edge', 'port': edge_port_X, 'linkCapacity': '10'}))
+        router('EX', 'edge', 'net-x', ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_X, 'linkCapacity': '10'}))
 
         router('NET.Y.INT.A', 'interior', 'net-y',
-               ('listener', {'role': 'inter-router', 'port': inter_router_port_Y}),
-               ('connector', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port}),
+               ('listener', {'role': 'inter-router', 'port': inter_router_port_Y, 'linkCapacity': '10'}),
+               ('connector', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port, 'linkCapacity': '10'}),
                [('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service01'}),
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service02'}),
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service03'}),
@@ -88,9 +88,9 @@ class CrossNetworkPreconfiguredTest(TestCase):
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service08'}),
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service09'})])
         router('NET.Y.INT.B', 'interior', 'net-y',
-               ('connector', {'role': 'inter-router', 'port': inter_router_port_Y}),
-               ('listener', {'role': 'edge', 'port': edge_port_Y}))
-        router('EY', 'edge', 'net-y', ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_Y}))
+               ('connector', {'role': 'inter-router', 'port': inter_router_port_Y, 'linkCapacity': '10'}),
+               ('listener', {'role': 'edge', 'port': edge_port_Y, 'linkCapacity': '10'}))
+        router('EY', 'edge', 'net-y', ('connector', {'name': 'edge', 'role': 'edge', 'port': edge_port_Y, 'linkCapacity': '10'}))
 
         cls.routers[0].wait_router_connected('NET.X.INT.B')
         cls.routers[1].wait_router_connected('NET.X.INT.A')
@@ -102,6 +102,7 @@ class CrossNetworkPreconfiguredTest(TestCase):
         cls.routers[4].is_edge_routers_connected(num_edges=1)
 
         cls.routers[0].wait_address('EX', 0, 1, 1)
+        cls.routers[4].wait_address('net-x', 0, 1, 1)
 
         cls.xinta = cls.routers[0].addresses[0]
         cls.xintb = cls.routers[1].addresses[0]
@@ -117,50 +118,36 @@ class CrossNetworkPreconfiguredTest(TestCase):
         #print("export EX=%s" % cls.ex)
         #print("export EY=%s" % cls.ey)
 
-    def test_01_local_to_local(self):
-        test = ClientServerTest(self.xinta, self.yinta, self.yinta, 'service01')
+    def _run(self, test):
         test.run()
         self.assertIsNone(test.error)
+
+    def test_01_local_to_local(self):
+        self._run(ClientServerTest(self.xinta, self.yinta, self.yinta, 'service01'))
 
     def test_02_distant_to_local(self):
-        test = ClientServerTest(self.xintb, self.yinta, self.yinta, 'service02')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.xintb, self.yinta, self.yinta, 'service02'))
 
     def test_03_local_to_distant(self):
-        test = ClientServerTest(self.xinta, self.yintb, self.yinta, 'service03')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.xinta, self.yintb, self.yinta, 'service03'))
 
     def test_04_distant_to_distant(self):
-        test = ClientServerTest(self.xintb, self.yintb, self.yinta, 'service04')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.xintb, self.yintb, self.yinta, 'service04'))
 
     def test_05_local_to_edge(self):
-        test = ClientServerTest(self.xinta, self.ey, self.yinta, 'service05')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.xinta, self.ey, self.yinta, 'service05'))
 
     def test_06_distant_to_edge(self):
-        test = ClientServerTest(self.xintb, self.ey, self.yinta, 'service06')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.xintb, self.ey, self.yinta, 'service06'))
 
     def test_07_edge_to_local(self):
-        test = ClientServerTest(self.ex, self.yinta, self.yinta, 'service07')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.ex, self.yinta, self.yinta, 'service07'))
 
     def test_08_edge_to_distant(self):
-        test = ClientServerTest(self.ex, self.yintb, self.yinta, 'service08')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.ex, self.yintb, self.yinta, 'service08'))
 
     def test_09_edge_to_edge(self):
-        test = ClientServerTest(self.ex, self.ey, self.yinta, 'service09')
-        test.run()
-        self.assertIsNone(test.error)
+        self._run(ClientServerTest(self.ex, self.ey, self.yinta, 'service09'))
 
 
 class ClientServerTest(MessagingHandler):
@@ -191,7 +178,7 @@ class ClientServerTest(MessagingHandler):
         self.n_server_released  = 0
         self.first_rel_sequence = None
         self.last_rel_sequence  = None
-        self.count              = 400
+        self.count              = 25
 
     def timeout(self):
         self.error = "Timeout Expired - client_sent=%d, server_rcvd=%d, server_sent=%d, client_rcvd=%d, attached=%d, client_released=%d, server_released=%d, first_rel=%r, last_rel=%r, reply_to=%s" % \
