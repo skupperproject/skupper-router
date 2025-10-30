@@ -275,6 +275,54 @@ static void parse_address_view(qd_iterator_t *iter)
             }
         }
 
+        if (qd_iterator_prefix(iter, "xedge/")) {
+            if (qd_iterator_prefix(iter, my_network)) {
+                if (qd_iterator_prefix(iter, my_router)) {
+                    iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
+                    iter->state  = STATE_AT_PREFIX;
+                    return;
+                }
+
+                if (edge_mode) {
+                    bool is_peer = false;
+                    qd_iterator_peer_edge_t *peer_edge = DEQ_HEAD(peer_edges);
+                    qd_buffer_field_t save_pointer = iter->view_pointer;
+                    while (!!peer_edge) {
+                        if (qd_iterator_prefix(iter, peer_edge->router_id)) {
+                            is_peer = true;
+                            iter->view_pointer = save_pointer;
+                            break;
+                        }
+                        peer_edge = DEQ_NEXT(peer_edge);
+                    }
+
+                    if (is_peer) {
+                        iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
+                        iter->state  = STATE_AT_PREFIX;
+                        iter->mode   = MODE_TO_SLASH;
+                    } else {
+                        set_to_edge_connection(iter);
+                    }
+
+                    return;
+                } else {
+                    iter->prefix = QD_ITER_HASH_PREFIX_EDGE_SUMMARY;
+                    iter->state  = STATE_AT_PREFIX;
+                    iter->mode   = MODE_TO_SLASH;
+                    return;
+                }
+            }
+
+            if (edge_mode) {
+                set_to_edge_connection(iter);
+            } else {
+                iter->prefix = QD_ITER_HASH_PREFIX_NETWORK;
+                iter->state  = STATE_AT_PREFIX;
+                iter->mode   = MODE_TO_SLASH;
+            }
+            return;
+        }
+
         iter->view_pointer  = save_pointer;
     }
 

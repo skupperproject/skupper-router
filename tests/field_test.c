@@ -337,8 +337,10 @@ static char* test_view_address_hash(void *context)
     {"_xnet/my-network/area/router/my-addr",       "Aarea"},
     {"_xnet/my-network/my-area/router/my-addr",    "Rrouter"},
     {"_xnet/my-network/my-area/my-router/my-addr", "Lmy-addr"},
+    {"_xedge/network/router/sub",                  "Nnetwork"},
+    {"_xedge/my-network/router/sub",               "Hrouter"},
 
-    // Re-run the above tests to make sure trailing dots are ignored.
+    // Re-run some of the above tests to make sure trailing dots are ignored.
     {"amqp:/_local/my-addr/sub.",                "Lmy-addr/sub"},
     {"amqp:/_local/my-addr.",                    "Lmy-addr"},
     {"amqp:/_topo/area/router/local/sub.",       "Aarea"},
@@ -409,6 +411,11 @@ static char* test_view_address_hash_edge(void *context)
     {"amqp:/_edge/edgerouter-2/sub",            "Hedgerouter-2"},
     {"_edge/edgerouter-3/sub",                  "Hedgerouter-3"},
     {"_edge/edgerouter-4/sub",                  "L_edge"},
+    {"_xedge/network/router/sub",               "L_edge"},
+    {"_xedge/my-network/router/sub",            "L_edge"},
+    {"_xedge/my-network/my-router/sub",         "Lsub"},
+    {"_xedge/my-network/edgerouter-1/sub",      "Hedgerouter-1"},
+    {"_xedge/my-network/edgerouter-4/sub",      "L_edge"},
 
     {0, 0}
     };
