@@ -220,7 +220,7 @@ static void qd_dispatch_set_router_default_distribution(qd_dispatch_t *qd, char 
     free(distribution);
 }
 
-qd_error_t qd_dispatch_configure_managed_router(qd_dispatch_t *qd, qd_entity_t *entity)
+qd_error_t qd_dispatch_configure_network(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     char *tenant_id = qd_entity_opt_string(entity, "tenantId", 0); QD_ERROR_RET();
     if (tenant_id) {
@@ -233,7 +233,7 @@ qd_error_t qd_dispatch_configure_managed_router(qd_dispatch_t *qd, qd_entity_t *
     return QD_ERROR_NONE;
 }
 
-qd_error_t qd_dispatch_update_managed_router(qd_dispatch_t *qd, qd_entity_t *entity)
+qd_error_t qd_dispatch_update_network(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     char *network_id = qd_entity_opt_string(entity, "networkId", 0); QD_ERROR_RET();
     qd_dispatch_set_router_network_id(qd, network_id);

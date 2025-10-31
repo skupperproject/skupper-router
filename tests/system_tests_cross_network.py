@@ -41,7 +41,7 @@ class CrossNetworkPreconfiguredTest(TestCase):
         def router(name, mode, netid, connection1, connection2=None, extra=None, args=None):
             config = [
                 ('router', {'mode': mode, 'id': name}),
-                ('managedRouter', {'networkId': netid}),
+                ('network', {'networkId': netid}),
                 ('listener', {'port': cls.tester.get_port()}),
                 ('address', {'prefix': 'cl', 'distribution': 'closest'}),
                 connection1

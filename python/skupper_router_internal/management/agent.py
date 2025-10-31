@@ -280,18 +280,18 @@ class RouterEntity(EntityAdapter):
         return super(RouterEntity, self).__str__().replace("Entity(", "RouterEntity(")
 
 
-class ManagedRouterEntity(EntityAdapter):
+class NetworkEntity(EntityAdapter):
     def __init__(self, agent, entity_type, attributes=None):
-        super(ManagedRouterEntity, self).__init__(agent, entity_type, attributes, validate=False)
+        super(NetworkEntity, self).__init__(agent, entity_type, attributes, validate=False)
 
     def create(self):
-        self._qd.qd_dispatch_configure_managed_router(self._dispatch, self)
+        self._qd.qd_dispatch_configure_network(self._dispatch, self)
 
     def _update(self):
-        self._qd.qd_dispatch_update_managed_router(self._dispatch, self)
+        self._qd.qd_dispatch_update_network(self._dispatch, self)
 
     def __str__(self):
-        return super(ManagedRouterEntity, self).__str__().replace("Entity(", "ManagedRouterEntity(")
+        return super(NetworkEntity, self).__str__().replace("Entity(", "NetworkEntity(")
 
 
 class SiteEntity(EntityAdapter):

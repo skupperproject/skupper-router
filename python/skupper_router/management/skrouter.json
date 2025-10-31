@@ -521,7 +521,7 @@
                     "create": true
                 },
                 "vanId": {
-                    "description":"Deprecated:  See the managedRouter tenantId attribute.",
+                    "description":"Deprecated:  See the network tenantId attribute.",
                     "type": "string",
                     "required": false,
                     "create": true
@@ -643,8 +643,8 @@
             }
         },
 
-        "managedRouter": {
-            "description": "This optional entity holds configuration needed for the router to be managed by a central manager",
+        "network": {
+            "description": "This optional entity holds configuration needed for the router to participate in inter-network communication",
             "extends": "configurationEntity",
             "singleton": true,
             "operations": ["UPDATE"],
