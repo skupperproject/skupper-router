@@ -49,6 +49,7 @@ typedef struct qd_iterator_t qd_iterator_t;
  */
 #define QD_ITER_HASH_PREFIX_TOPOLOGICAL           'T'
 #define QD_ITER_HASH_PREFIX_LOCAL                 'L'
+#define QD_ITER_HASH_PREFIX_NETWORK               'N'
 #define QD_ITER_HASH_PREFIX_AREA                  'A'
 #define QD_ITER_HASH_PREFIX_ROUTER                'R'
 #define QD_ITER_HASH_PREFIX_MOBILE                'M'
@@ -136,6 +137,11 @@ void qd_iterator_finalize(void);
  * @param router The identifier of the router in the area
  */
 void qd_iterator_set_address(bool edge_mode, const char *area, const char *router);
+
+/**
+ * Set the network ID for the local router.  This can be updated repeatedly during run-time.
+ */
+void qd_iterator_set_network(const char *network);
 
 /**
  * Add and delete peer-edge router identities.  When in edge mode, peer edge routers

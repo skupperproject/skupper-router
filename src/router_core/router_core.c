@@ -72,7 +72,7 @@ static void qdr_core_setup_init(qdr_core_t *core)
     qdr_adaptors_init(core);
 }
 
-qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *van_id)
+qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *tenant_id)
 {
     qdr_core_t *core = NEW(qdr_core_t);
     ZERO(core);
@@ -81,7 +81,7 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     core->router_mode         = mode;
     core->router_area         = area;
     core->router_id           = id;
-    core->van_id              = van_id;
+    core->tenant_id           = tenant_id;
     core->worker_thread_count = qd->thread_count;
     sys_atomic_init(&core->uptime_ticks, 0);
 
@@ -90,8 +90,8 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     // module logs to the ROUTER_CORE module. There is no need to free the core->log as all log sources are.
     // freed by qd_dispatch_free()
     //
-    if (!!van_id) {
-        qd_log(LOG_ROUTER, QD_LOG_INFO, "Router is a member of Application Network: %s", van_id);
+    if (!!tenant_id) {
+        qd_log(LOG_ROUTER, QD_LOG_INFO, "Router is a member of Application Network Tenant: %s", tenant_id);
     }
 
     //
@@ -137,6 +137,21 @@ qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area,
     return core;
 }
 
+void qdr_core_set_network_id_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+{
+    if (!discard) {
+        core->network_id = (char*) action->args.general.context_1;
+        qd_iterator_set_network(core->network_id);
+        qd_log(LOG_ROUTER_CORE, QD_LOG_INFO, "Router's network-id updated to %s", core->network_id);
+    }
+}
+
+void qdr_core_set_network_id(qdr_core_t *core, const char *network_id)
+{
+    qdr_action_t *action = qdr_action(qdr_core_set_network_id_CT, "set_network_id");
+    action->args.general.context_1 = (void*) network_id;
+    qdr_action_enqueue(core, action);
+}
 
 void qdr_core_stop_thread_CT(qdr_core_t *core, qdr_action_t *action, bool discard) {
     if (!discard) {
@@ -390,9 +405,9 @@ void qdr_router_node_free(qdr_core_t *core, qdr_node_t *rnode)
 }
 
 
-const char *qdr_core_van_id(const qdr_core_t *core)
+const char *qdr_core_tenant_id(const qdr_core_t *core)
 {
-    return core->van_id;
+    return core->tenant_id;
 }
 
 ALLOC_DECLARE(qdr_field_t);

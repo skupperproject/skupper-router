@@ -601,6 +601,8 @@ struct qdr_address_t {
     uint64_t deliveries_from_container;
     uint64_t deliveries_egress_route_container;
     uint64_t deliveries_ingress_route_container;
+    uint64_t deliveries_egress_inter_network;
+    uint64_t deliveries_ingress_inter_network;
     uint64_t deliveries_redirected;
 
     ///@}
@@ -869,7 +871,8 @@ struct qdr_core_t {
     qd_router_mode_t  router_mode;
     const char       *router_area;
     const char       *router_id;
-    const char       *van_id;
+    const char       *tenant_id;
+    char             *network_id;
     int               worker_thread_count;
 
     qdr_address_config_list_t  addr_config;
@@ -918,6 +921,8 @@ struct qdr_core_t {
     uint64_t deliveries_transit;
     uint64_t deliveries_egress_route_container;
     uint64_t deliveries_ingress_route_container;
+    uint64_t deliveries_egress_inter_network;
+    uint64_t deliveries_ingress_inter_network;
     uint64_t deliveries_delayed_1sec;
     uint64_t deliveries_delayed_10sec;
     uint64_t deliveries_stuck;
