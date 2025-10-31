@@ -404,6 +404,8 @@ class BusManager:
             rows.append(('Transit Count', PlainNum(router_metrics.deliveriesTransit)))
             rows.append(('Deliveries from Route Container', PlainNum(router_metrics.deliveriesIngressRouteContainer)))
             rows.append(('Deliveries to Route Container', PlainNum(router_metrics.deliveriesEgressRouteContainer)))
+            rows.append(('Deliveries from Remote Network', PlainNum(router_metrics.deliveriesIngressInterNetwork)))
+            rows.append(('Deliveries to Remote Network', PlainNum(router_metrics.deliveriesEgressInterNetwork)))
         except:
             pass
 

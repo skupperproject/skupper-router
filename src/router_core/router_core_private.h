@@ -601,6 +601,8 @@ struct qdr_address_t {
     uint64_t deliveries_from_container;
     uint64_t deliveries_egress_route_container;
     uint64_t deliveries_ingress_route_container;
+    uint64_t deliveries_egress_inter_network;
+    uint64_t deliveries_ingress_inter_network;
     uint64_t deliveries_redirected;
 
     ///@}
@@ -919,6 +921,8 @@ struct qdr_core_t {
     uint64_t deliveries_transit;
     uint64_t deliveries_egress_route_container;
     uint64_t deliveries_ingress_route_container;
+    uint64_t deliveries_egress_inter_network;
+    uint64_t deliveries_ingress_inter_network;
     uint64_t deliveries_delayed_1sec;
     uint64_t deliveries_delayed_10sec;
     uint64_t deliveries_stuck;

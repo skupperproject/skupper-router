@@ -68,7 +68,7 @@ class CrossNetworkPreconfiguredTest(TestCase):
 
         router('NET.X.INT.A', 'interior', 'net-x',
                ('listener', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
-               ('listener', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port, 'linkCapacity': '10'}),
+               ('listener', {'name': 'cross-net', 'role': 'inter-network', 'port': cross_network_port, 'linkCapacity': '10'}),
                ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'externalAddress': '_xnet/net-x'}))
         router('NET.X.INT.B', 'interior', 'net-x',
                ('connector', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
@@ -77,7 +77,7 @@ class CrossNetworkPreconfiguredTest(TestCase):
 
         router('NET.Y.INT.A', 'interior', 'net-y',
                ('listener', {'role': 'inter-router', 'port': inter_router_port_Y, 'linkCapacity': '10'}),
-               ('connector', {'name': 'cross-net', 'role': 'route-container', 'port': cross_network_port, 'linkCapacity': '10'}),
+               ('connector', {'name': 'cross-net', 'role': 'inter-network', 'port': cross_network_port, 'linkCapacity': '10'}),
                [('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service01'}),
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service02'}),
                 ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'address': 'service03'}),
@@ -200,7 +200,7 @@ class ClientServerTest(MessagingHandler):
         self.server_conn = event.container.connect(self.server_address)
         self.probe_conn  = event.container.connect(self.probe_address)
         self.client_receiver = event.container.create_receiver(self.client_conn, None, dynamic=True, options=CrossNetworkOption())
-        self.server_sender   = event.container.create_sender(self.server_conn, None)
+        self.server_sender = event.container.create_sender(self.server_conn, None)
         self.server_receiver = event.container.create_receiver(self.server_conn, self.addr)
 
     def on_link_opened(self, event):

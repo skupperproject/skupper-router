@@ -347,6 +347,7 @@ typedef enum {
     QDR_ROLE_EDGE_CONNECTION,
     QDR_ROLE_INTER_ROUTER_DATA,
     QDR_ROLE_INTER_EDGE,
+    QDR_ROLE_INTER_NETWORK,
 } qdr_connection_role_t;
 
 typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *token);
@@ -424,6 +425,7 @@ void qdr_connection_set_tracing(qdr_connection_t *conn, bool enable_tracing);
 void qdr_core_close_connection(qdr_connection_t *conn);
 
 bool qdr_connection_route_container(qdr_connection_t *conn);
+bool qdr_connection_inter_network(qdr_connection_t *conn);
 
 /**
  * qdr_connection_set_context

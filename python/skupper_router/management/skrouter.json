@@ -462,6 +462,16 @@
                     "description": "Number of deliveries that were sent to route container connections.",
                     "graph": true
                 },
+                "deliveriesIngressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were received from a connected network.",
+                    "graph": true
+                },
+                "deliveriesEgressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to a connected network.",
+                    "graph": true
+                },
                 "residentMemoryUsage": {
                     "type": "integer",
                     "graph": true,
@@ -792,7 +802,8 @@
                         "inter-router",
                         "route-container",
                         "edge",
-                        "inter-edge"
+                        "inter-edge",
+                        "inter-network"
                     ],
                     "default": "normal",
                     "description": "The role of an established connection. In the normal role, the connection is assumed to be used for AMQP clients that are doing normal message delivery over the connection.  In the inter-router role, the connection is assumed to be to another router in the network.  Inter-router discovery and routing protocols can only be used over inter-router connections. route-container role can be used for router-container connections, for example, a router-broker connection.  In the edge role, the connection is assumed to be between an edge router and an interior router.",
@@ -966,7 +977,8 @@
                         "inter-router",
                         "route-container",
                         "edge",
-                        "inter-edge"
+                        "inter-edge",
+                        "inter-network"
                     ],
                     "default": "normal",
                     "description": "The role of an established connection. In the normal role, the connection is assumed to be used for AMQP clients that are doing normal message delivery over the connection.  In the inter-router role, the connection is assumed to be to another router in the network.  Inter-router discovery and routing protocols can only be used over inter-router connections. route-container role can be used for router-container connections, for example, a router-broker connection.  In the edge role, the connection is assumed to be between and edge router and an interior router.",
@@ -1604,6 +1616,16 @@
                 "deliveriesEgressRouteContainer": {
                     "type": "integer",
                     "description": "Number of deliveries that were sent to a route-container address.",
+                    "graph": true
+                },
+                "deliveriesIngressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were received from a connected network.",
+                    "graph": true
+                },
+                "deliveriesEgressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to a connected network.",
                     "graph": true
                 },
                 "key": {
