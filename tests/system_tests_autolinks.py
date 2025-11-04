@@ -447,6 +447,12 @@ class AutolinkTest(TestCase):
         test.run()
         self.assertIsNone(test.error)
 
+    def test_13_autolink_manage(self):
+        cmd = "CREATE --type=autoLink name=manual-link direction=in externalAddress=manual.ext"
+        self.run_skmanage(cmd)
+        cmd = "DELETE --type=autoLink --name=manual-link"
+        self.run_skmanage(cmd)
+
 
 class AutolinkAttachTestWithListenerName(MessagingHandler):
     def __init__(self, address, node_addr):
