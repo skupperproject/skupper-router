@@ -98,6 +98,7 @@ void qdr_core_set_cost(qdr_core_t *core, int router_maskbit, int cost);
 void qdr_core_set_valid_origins(qdr_core_t *core, int router_maskbit, qd_bitmask_t *routers);
 void qdr_core_flush_destinations(qdr_core_t *core, int router_maskbit);
 void qdr_core_mobile_seq_advanced(qdr_core_t *core, int router_maskbit);
+void qdr_core_topology_changed(qdr_core_t *core, int router_maskbit);
 
 typedef void (*qdr_set_mobile_seq_t)    (void *context, int router_maskbit, uint64_t mobile_seq);
 typedef void (*qdr_set_my_mobile_seq_t) (void *context, uint64_t mobile_seq);
@@ -420,6 +421,7 @@ typedef struct {
     size_t deliveries_stuck;
     size_t links_blocked;
     size_t deliveries_redirected_to_fallback;
+    int    last_topology_change_timestamp;
 }  qdr_global_stats_t;
 ALLOC_DECLARE(qdr_global_stats_t);
 

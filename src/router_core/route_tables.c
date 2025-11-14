@@ -29,6 +29,7 @@ static void qdr_set_cost_CT            (qdr_core_t *core, qdr_action_t *action, 
 static void qdr_set_valid_origins_CT   (qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_flush_destinations_CT  (qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_mobile_seq_advanced_CT (qdr_core_t *core, qdr_action_t *action, bool discard);
+static void qdr_topology_changed_CT    (qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_subscribe_CT           (qdr_core_t *core, qdr_action_t *action, bool discard);
 static void qdr_unsubscribe_CT         (qdr_core_t *core, qdr_action_t *action, bool discard);
 
@@ -118,6 +119,13 @@ void qdr_core_mobile_seq_advanced(qdr_core_t *core, int router_maskbit)
 {
     qdr_action_t *action = qdr_action(qdr_mobile_seq_advanced_CT, "mobile_seq_advanced");
     action->args.route_table.router_maskbit = router_maskbit;
+    qdr_action_enqueue(core, action);
+}
+
+void qdr_core_topology_changed(qdr_core_t *core, int timestamp)
+{
+    qdr_action_t *action = qdr_action(qdr_topology_changed_CT, "topology_changed");
+    action->args.route_table.cost = timestamp;
     qdr_action_enqueue(core, action);
 }
 
@@ -656,6 +664,14 @@ static void qdr_mobile_seq_advanced_CT(qdr_core_t *core, qdr_action_t *action, b
         //
         qdrc_event_router_raise(core, QDRC_EVENT_ROUTER_MOBILE_SEQ_ADVANCED, rnode);
     } while (false);
+}
+
+static void qdr_topology_changed_CT(qdr_core_t *core, qdr_action_t *action, bool discard)
+{
+    if (!!discard)
+        return;
+
+    core->last_topology_change_timestamp = action->args.route_table.cost;
 }
 
 
