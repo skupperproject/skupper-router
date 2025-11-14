@@ -279,6 +279,22 @@ static PyObject* qd_mobile_seq_advanced(PyObject *self, PyObject *args)
 }
 
 
+static PyObject* qd_topology_changed(PyObject *self, PyObject *args)
+{
+    RouterAdapter *adapter = (RouterAdapter*) self;
+    qd_router_t   *router  = adapter->router;
+    int            timestamp;
+
+    if (!PyArg_ParseTuple(args, "i", &timestamp))
+        return 0;
+
+    qdr_core_topology_changed(router->router_core, timestamp);
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+
 static PyObject* qd_get_agent(PyObject *self, PyObject *args) {
     RouterAdapter *adapter = (RouterAdapter*) self;
     PyObject *agent = adapter->router->qd->agent;
@@ -301,6 +317,7 @@ static PyMethodDef RouterAdapter_methods[] = {
     {"set_radius",          qd_set_radius,          METH_VARARGS, "Set the current topology radius"},
     {"flush_destinations",  qd_flush_destinations,  METH_VARARGS, "Remove all mapped destinations from a router"},
     {"mobile_seq_advanced", qd_mobile_seq_advanced, METH_VARARGS, "Mobile sequence for a router moved ahead of the local value"},
+    {"topology_changed",    qd_topology_changed,    METH_VARARGS, "The computed topology has changed.  Passes in the timestamp"},
     {"get_agent",           qd_get_agent,           METH_VARARGS, "Get the management agent"},
     {0, 0, 0, 0}
 };

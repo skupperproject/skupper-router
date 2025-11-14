@@ -126,6 +126,7 @@ class NodeTracker:
         ##
         if self.link_state_changed or self.recompute_topology:
             self.last_topology_change = int(round(now))
+            self.container.router_adapter.topology_changed(self.last_topology_change)
             if not self.flux_mode:
                 self.flux_mode = True
                 self.container.log(LOG_DEBUG, "Entered Router Flux Mode")

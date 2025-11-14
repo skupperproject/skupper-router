@@ -923,6 +923,7 @@ struct qdr_core_t {
     uint64_t deliveries_stuck;
     uint64_t deliveries_redirected;
     uint32_t links_blocked;
+    int      last_topology_change_timestamp;
 
     qdr_edge_conn_addr_t          edge_conn_addr;
     void                         *edge_context;

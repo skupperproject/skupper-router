@@ -221,6 +221,7 @@ class RouterTestHttp(TestCase):
                       "qdr_deliveries_delayed_10sec_total",
                       "qdr_deliveries_stuck_total",
                       "qdr_links_blocked_total",
+                      "qdr_last_topology_change_timestamp",
                       "qdr_tcp_service_connections",
                       "qdr_amqp_service_connections",
                       "qdr_http1_service_connections",

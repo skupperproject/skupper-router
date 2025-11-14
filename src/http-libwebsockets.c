@@ -568,6 +568,7 @@ static uint64_t stats_get_deliveries_delayed_1sec(const qdr_global_stats_t *stat
 static uint64_t stats_get_deliveries_delayed_10sec(const qdr_global_stats_t *stats) { return stats->deliveries_delayed_10sec; }
 static uint64_t stats_get_deliveries_stuck(const qdr_global_stats_t *stats) { return stats->deliveries_stuck; }
 static uint64_t stats_get_links_blocked(const qdr_global_stats_t *stats) { return stats->links_blocked; }
+static uint64_t stats_get_topology_changed(const qdr_global_stats_t *stats) { return stats->last_topology_change_timestamp; }
 
 static const struct metric_definition metrics[] = {
     {"qdr_connections_total", "gauge", stats_get_connections},
@@ -587,6 +588,7 @@ static const struct metric_definition metrics[] = {
     {"qdr_deliveries_delayed_10sec_total", "counter", stats_get_deliveries_delayed_10sec},
     {"qdr_deliveries_stuck_total", "gauge", stats_get_deliveries_stuck},
     {"qdr_links_blocked_total", "gauge", stats_get_links_blocked},
+    {"qdr_last_topology_change_timestamp", "gauge", stats_get_topology_changed},
 };
 static const size_t metrics_length = sizeof(metrics)/sizeof(metrics[0]);
 
