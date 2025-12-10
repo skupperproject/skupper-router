@@ -296,38 +296,21 @@ static char* _check_all_depths(qd_message_t *msg)
 
 static char* test_check_multiple(void *context)
 {
-    // case 1: a minimal encoded message
+    // case 1: minimal, with address field in header
     //
     pn_message_t *pn_msg = pn_message();
-
+    pn_message_set_address(pn_msg, "test_addr_2");
     size_t size = 10000;
     int result = pn_message_encode(pn_msg, (char *)buffer, &size);
     pn_message_free(pn_msg);
     if (result != 0) return "Error in pn_message_encode";
-
-    qd_message_t         *msg     = qd_message();
-    qd_message_content_t *content = MSG_CONTENT(msg);
-
-    set_content(content, buffer, size);
+    qd_message_t *msg = qd_message();
+    set_content(MSG_CONTENT(msg), buffer, size);
     char *rc = _check_all_depths(msg);
     qd_message_free(msg);
     if (rc) return rc;
 
-    // case 2: minimal, with address field in header
-    //
-    pn_msg = pn_message();
-    pn_message_set_address(pn_msg, "test_addr_2");
-    size = 10000;
-    result = pn_message_encode(pn_msg, (char *)buffer, &size);
-    pn_message_free(pn_msg);
-    if (result != 0) return "Error in pn_message_encode";
-    msg = qd_message();
-    set_content(MSG_CONTENT(msg), buffer, size);
-    rc = _check_all_depths(msg);
-    qd_message_free(msg);
-    if (rc) return rc;
-
-    // case 3: null body
+    // case 2: null body
     //
     pn_msg = pn_message();
     pn_data_t *body = pn_message_body(pn_msg);
@@ -342,7 +325,7 @@ static char* test_check_multiple(void *context)
     qd_message_free(msg);
     if (rc) return rc;
 
-    // case 4: minimal legal AMQP 1.0 message (as defined by the standard)
+    // case 3: minimal legal AMQP 1.0 message (as defined by the standard)
     // A single body field with a null value
     const unsigned char null_body[] = {0x00, 0x53, 0x77, 0x40};
     size = sizeof(null_body);
