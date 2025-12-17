@@ -161,7 +161,7 @@ static void send_bid(mesh_peer_t *peer)
 static void generate_id(void)
 {
     /* coverity[dont_call] */
-    const long offset = random() % 60000000; // Offset within one minute of start time
+    const long offset = random() % 1000000; // Offset within one second of start time
 
     state.my_negotiation_ordinal = state.start_time_usec + offset;
     qd_generate_discriminator(state.my_mesh_id);
