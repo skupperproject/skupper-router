@@ -28,6 +28,7 @@
 #include "qpid/dispatch/protocol_adaptor.h"
 
 #include <stdio.h>
+#include <sys/time.h>
 
 //
 // Structure to track each connected peer in the edge-mesh
@@ -59,6 +60,7 @@ static struct {
     int                        interior_sender_credit; // Credits available to send on the interior_sender
     bool                       interior_needs_update;  // If true, the interior is due an update
     mesh_peer_list_t           peers;                  // List of active connected mesh peers
+    long                       start_time_usec;                    // Start time in uSec since the epoch
     long                       my_negotiation_ordinal;             // This router's negotiating ordinal
     char                       my_mesh_id[QD_DISCRIMINATOR_BYTES]; // This router's proposed mesh ID
     long                       winning_negotiation_ordinal;        // The winning ordinal in the negotiation (the winning id is in *core)
@@ -111,6 +113,17 @@ static void send_mesh_id_to_interior(void)
 }
 
 
+static void update_mesh_id(const char *new_id)
+{
+    int diff = memcmp(state.core->edge_mesh_identifier, new_id, QD_DISCRIMINATOR_BYTES);
+    if (diff != 0) {
+        // The id changed.  Store it and push to the interior
+        memcpy(state.core->edge_mesh_identifier, new_id, QD_DISCRIMINATOR_BYTES);
+        send_mesh_id_to_interior();
+    }
+}
+
+
 static void send_bid(mesh_peer_t *peer)
 {
     qd_message_t *msg = qd_message();
@@ -136,14 +149,21 @@ static void send_bid(mesh_peer_t *peer)
 
 //
 // Generate a proposed mesh identifier and a negotiating ordinal.
-// During negotiation, the router with the numerically highest ordinal will
+// During negotiation, the router with the numerically lowest ordinal will
 // win the negotiation.  The winner's proposed identifier is used by all
 // of the routers in the mesh.
+//
+// Use start time in microseconds as a baseline for the ordinal.  Include a random offset to handle 
+// ordinal collisions.  This will give preference to edges that have been up for some time over
+// newly arrived or restarted edge routers.  The intent is to avoid mesh_id thrashing as a result
+// of newly joining routers.
 //
 static void generate_id(void)
 {
     /* coverity[dont_call] */
-    state.my_negotiation_ordinal = random();
+    const long offset = random() % 60000000; // Offset within one minute of start time
+
+    state.my_negotiation_ordinal = state.start_time_usec + offset;
     qd_generate_discriminator(state.my_mesh_id);
 }
 
@@ -154,12 +174,11 @@ static void start_negotiation(void)
     // Begin the process of negotiation.  Start by assuming we are the winner.
     //
     state.winning_negotiation_ordinal = state.my_negotiation_ordinal;
-    memcpy(state.core->edge_mesh_identifier, state.my_mesh_id, QD_DISCRIMINATOR_BYTES);
 
     //
-    // If possible, send our present results to the interior
+    // If possible (and needed), send our present results to the interior
     //
-    send_mesh_id_to_interior();
+    update_mesh_id(state.my_mesh_id);
 
     //
     // For every connected peer that we are able to send to, send our bid.
@@ -268,14 +287,14 @@ static void on_transfer(void *link_context, qdr_delivery_t *delivery, qd_message
             start_negotiation();
         } else {
             peer->negotiation_ordinal = ordinal;
-            if (ordinal > state.winning_negotiation_ordinal) {
+            if (ordinal < state.winning_negotiation_ordinal) {
                 //
                 // This peer's ordinal trumps ours.  Assume the winning identity and
                 // notify the interior.
                 //
                 state.winning_negotiation_ordinal = ordinal;
-                memcpy(state.core->edge_mesh_identifier, id, QD_DISCRIMINATOR_BYTES);
-                send_mesh_id_to_interior();
+                memcpy(state.my_mesh_id, id, QD_DISCRIMINATOR_BYTES);
+                update_mesh_id(id);
             }
         }
     }
@@ -412,6 +431,13 @@ static void mesh_discovery_edge_init_CT(qdr_core_t *core, void **module_context)
                                               0,
                                               0,
                                               &state);
+
+    //
+    // Get the start time.
+    //
+    struct timeval now;
+    gettimeofday(&now, 0);
+    state.start_time_usec = now.tv_usec + (now.tv_sec * 1000000);
 
     //
     // Generate an ID and ordinal for negotiation.
