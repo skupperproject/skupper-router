@@ -162,6 +162,11 @@ typedef struct qd_server_config_t {
     char *ssl_profile_name;
 
     /**
+     * The name of the related proxyProfile configuration.
+     */
+    char *proxy_profile_name;
+
+    /**
      * Iff true, require that the peer's certificate be supplied and that it be authentic
      * according to the set of trusted CAs.
      */

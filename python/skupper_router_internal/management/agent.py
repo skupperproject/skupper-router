@@ -410,6 +410,23 @@ class SslProfileEntity(EntityAdapter):
         return super(SslProfileEntity, self).__str__().replace("Entity(", "SslProfileEntity(")
 
 
+class ProxyProfileEntity(EntityAdapter):
+    def create(self):
+        proxy_profile = self._qd.qd_configure_proxy_profile(self._dispatch, self)
+        if proxy_profile is None:
+            raise ValidationError("Invalid proxyProfile configuration: see logs for details.")
+        return proxy_profile
+
+    def _delete(self):
+        self._qd.qd_delete_proxy_profile(self._dispatch, self._implementations[0].key)
+
+    def _identifier(self):
+        return self.name
+
+    def __str__(self):
+        return super(ProxyProfileEntity, self).__str__().replace("Entity(", "ProxyProfileEntity(")
+
+
 class ConnectionBaseEntity(EntityAdapter):
     """
     Provides validation of the openProperties attribute shared by Listener and
