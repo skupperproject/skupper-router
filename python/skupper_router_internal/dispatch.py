@@ -127,6 +127,10 @@ class QdDll(PyDLL):
         self._prototype(self.qd_tls_delete_ssl_profile, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_tls_register_display_name_service, None, [py_object])
 
+        # proxyProfile
+        self._prototype(self.qd_configure_proxy_profile, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_delete_proxy_profile, None, [self.qd_dispatch_p, c_void_p])
+
         # address and autoLink
         self._prototype(self.qd_dispatch_configure_address, None, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_dispatch_configure_auto_link, None, [self.qd_dispatch_p, py_object])

@@ -56,6 +56,8 @@ qd_router_t    *qd_router(qd_dispatch_t *qd, qd_router_mode_t mode, const char *
 void            qd_router_setup_late(qd_dispatch_t *qd);
 void            qd_router_free(qd_router_t *router);
 void            qd_error_initialize(void);
+void            qd_proxy_initialize(void);
+void            qd_proxy_finalize(void);
 static void qd_dispatch_set_router_id(qd_dispatch_t *qd, char *_id);
 static void qd_dispatch_set_router_area(qd_dispatch_t *qd, char *_area);
 static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id);
@@ -118,6 +120,7 @@ qd_dispatch_t *qd_dispatch(const char *python_pkgdir, bool test_hooks)
     qd_alloc_initialize();
     qd_log_initialize();
     qd_tls_initialize();
+    qd_proxy_initialize();
     qd_error_initialize();
     if (qd_error_code()) { qd_dispatch_free(qd); return 0; }
 
@@ -419,6 +422,7 @@ void qd_dispatch_free(qd_dispatch_t *qd)
     Py_XDECREF((PyObject*) qd->agent);
     qd_router_free(qd->router);
     qd_server_free(qd->server);
+    qd_proxy_finalize();
     qd_tls_finalize();
     qd_log_finalize();
     qd_alloc_finalize();

@@ -131,6 +131,7 @@ qd_error_t qd_server_config_load(qd_server_config_t *config, qd_entity_t *entity
     config->sasl_password        = qd_entity_opt_string(entity, "saslPassword", 0);   CHECK();
     config->sasl_mechanisms      = qd_entity_opt_string(entity, "saslMechanisms", 0); CHECK();
     config->ssl_profile_name     = qd_entity_opt_string(entity, "sslProfile", 0);     CHECK();
+    config->proxy_profile_name   = qd_entity_opt_string(entity, "proxyProfile", 0);   CHECK();
     config->link_capacity        = qd_entity_opt_long(entity, "linkCapacity", 0);     CHECK();
     config->multi_tenant         = qd_entity_opt_bool(entity, "multiTenant", false);  CHECK();
     config->policy_vhost         = qd_entity_opt_string(entity, "policyVhost", 0);    CHECK();
@@ -251,6 +252,7 @@ void qd_server_config_free(qd_server_config_t *cf)
     if (cf->sasl_password)         free(cf->sasl_password);
     if (cf->sasl_mechanisms)       free(cf->sasl_mechanisms);
     if (cf->ssl_profile_name)      free(cf->ssl_profile_name);
+    if (cf->proxy_profile_name)    free(cf->proxy_profile_name);
     if (cf->failover_list)         qd_failover_list_free(cf->failover_list);
     if (cf->log_message)           free(cf->log_message);
     if (cf->policy_vhost)          free(cf->policy_vhost);
