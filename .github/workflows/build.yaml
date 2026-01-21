@@ -872,6 +872,23 @@ jobs:
         run: |
           podman build --build-arg PLATFORM=arm64 -t ${{ env.ImageName }} -f ./Containerfile .
 
+  skupper:
+    name: Skupper Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Build the skupper-router image
+        run: |
+          docker build -t local/skupper-router:local -f ./Containerfile .
+
+      - name: Run the Skupper integration tests with the image
+        uses: ./.github/actions/skupper-integration-tests
+        with:
+          qdrouterdImage: "local/skupper-router:local"
+          skupperGitRef: "26da1caa6110505438f46c1749ffd871f54f9518"
+
   rpm:
     name: 'Build and test RPM (${{ matrix.container }}:${{ matrix.containerTag }})'
     runs-on: '${{ matrix.os }}'
