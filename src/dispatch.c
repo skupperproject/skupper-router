@@ -30,6 +30,7 @@
 #include "log_private.h"
 #include "message_private.h"
 #include "policy.h"
+#include "qd_asan_interface.h"
 #include "router_private.h"
 
 #include "qpid/dispatch/alloc.h"
@@ -408,6 +409,10 @@ static void qd_dispatch_set_router_van_id(qd_dispatch_t *qd, char *_van_id) {
 void qd_dispatch_free(qd_dispatch_t *qd)
 {
     if (!qd) return;
+
+    // Run a final lsan leakcheck right here (if lsan is enabled)
+    //  only leaks (i.e. memory made unreachable) before this point will be reported by lsan
+    LSAN_DO_LEAK_CHECK();
 
     /* Stop HTTP threads immediately */
     qd_http_server_free(qd_server_http(qd->server));
