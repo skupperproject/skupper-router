@@ -219,24 +219,11 @@ static void qd_dispatch_set_router_default_distribution(qd_dispatch_t *qd, char 
     free(distribution);
 }
 
-qd_error_t qd_dispatch_configure_managed_router(qd_dispatch_t *qd, qd_entity_t *entity)
-{
-    char *van_id = qd_entity_opt_string(entity, "vanId", 0); QD_ERROR_RET();
-    if (van_id) {
-        qd_dispatch_set_router_van_id(qd, van_id);
-    }
-    return QD_ERROR_NONE;
-}
-
 qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
 {
     qd_dispatch_set_router_default_distribution(qd, qd_entity_opt_string(entity, "defaultDistribution", 0)); QD_ERROR_RET();
     qd_dispatch_set_router_id(qd, qd_entity_opt_string(entity, "id", 0)); QD_ERROR_RET();
-    char *van_id = qd_entity_opt_string(entity, "vanId", 0); QD_ERROR_RET();
-    if (van_id) {
-        qd_dispatch_set_router_van_id(qd, van_id);
-        qd_log(LOG_ROUTER, QD_LOG_WARNING, "The vanId attribute is deprecated in the router entity.  Please move it to managedRouter.");
-    }
+    qd_dispatch_set_router_van_id(qd, qd_entity_opt_string(entity, "vanId", 0)); QD_ERROR_RET();
     qd->router_mode = qd_entity_get_long(entity, "mode"); QD_ERROR_RET();
     if (!qd->router_id) {
         char *mode = 0;
@@ -290,6 +277,7 @@ qd_error_t qd_dispatch_configure_router(qd_dispatch_t *qd, qd_entity_t *entity)
     }
 
     return QD_ERROR_NONE;
+
 }
 
 qd_error_t qd_dispatch_configure_address(qd_dispatch_t *qd, qd_entity_t *entity) {
