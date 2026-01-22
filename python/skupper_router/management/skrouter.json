@@ -499,6 +499,7 @@
             }
         },
 
+
         "router": {
             "description":"Tracks peer routers and computes routes to destinations. This entity is mandatory. The router will not start without this entity.",
             "extends": "configurationEntity",
@@ -511,7 +512,7 @@
                     "create": true
                 },
                 "vanId": {
-                    "description":"Deprecated:  See the managedRouter entity definition.",
+                    "description":"The unique ID of the Virtual Application Network that this router is a member of.",
                     "type": "string",
                     "required": false,
                     "create": true
@@ -633,20 +634,6 @@
             }
         },
 
-        "managedRouter": {
-            "description": "This optional entity holds configuration needed for the router to be managed by a central manager",
-            "extends": "configurationEntity",
-            "singleton": true,
-            "attributes": {
-                "vanId": {
-                    "description":"The unique ID of the Virtual Application Network that this router is a member of.",
-                    "type": "string",
-                    "required": false,
-                    "create": true
-                }
-            }
-        },
-
         "site": {
             "description":"Optional.  If present, this entity causes the router to emit a SITE record for VanFLow in the case that there is not an external controller to emit this record.",
             "extends": "configurationEntity",
@@ -683,7 +670,6 @@
                 }
             }
         },
-
         "sslProfile": {
             "description":"Attributes for setting TLS/SSL configuration for connections.",
             "referential": true,

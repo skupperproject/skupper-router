@@ -304,7 +304,6 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
 
     # Configure and prepare the router before we can activate the agent.
     configure(config.by_type('router')[0])
-    configure(config.by_type('managedRouter')[0])
     qd.qd_dispatch_prepare(dispatch)
     qd.qd_router_setup_late(dispatch)  # Actions requiring active management agent.
     agent.activate("$_management_internal")
