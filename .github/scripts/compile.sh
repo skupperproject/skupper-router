@@ -37,12 +37,14 @@ if [ -z "${REMOTE_SOURCES_DIR:-}" ]; then
   # and untar it into the libwebsockets folder
   wget "${LWS_SOURCE_URL}" -O libwebsockets.tar.gz
   wget "${LIBUNWIND_SOURCE_URL}" -O libunwind.tar.gz
-  tar -zxf libwebsockets.tar.gz --one-top-level="${LWS_DIR}"       --strip-components 1
-  tar -zxf libunwind.tar.gz     --one-top-level="${LIBUNWIND_DIR}" --strip-components 1
+  mkdir -p "${LWS_DIR}" "${LIBUNWIND_DIR}"
+  tar -zxf libwebsockets.tar.gz -C "${LWS_DIR}" --strip-components 1
+  tar -zxf libunwind.tar.gz -C "${LIBUNWIND_DIR}" --strip-components 1
 
   # No $REMOTE_SOURCES_DIR was provided, we will have to download the proton source tar.gz from ${PROTON_SOURCE_URL}
   wget "${PROTON_SOURCE_URL}" -O qpid-proton.tar.gz
-  tar -zxf qpid-proton.tar.gz --one-top-level="${PROTON_DIR}" --strip-components 1
+  mkdir -p "${PROTON_DIR}"
+  tar -zxf qpid-proton.tar.gz -C "${PROTON_DIR}" --strip-components 1
 else
   # If the env contains REMOTE_SOURCES_DIR, we will use that as the working dir
   # If REMOTE_SOURCES_DIR is provided, this scripts expects the following -
