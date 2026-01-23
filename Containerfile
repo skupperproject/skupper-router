@@ -49,10 +49,10 @@ ENV VERSION=$VERSION
 ARG TARGETARCH
 ENV PLATFORM=$TARGETARCH
 RUN .github/scripts/compile.sh
-RUN if [ "$PLATFORM" = "amd64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image && tar zxpf /libunwind-image.tar.gz --one-top-level=/image; fi
-RUN if [ "$PLATFORM" = "arm64" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
-RUN if [ "$PLATFORM" = "s390x" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
-RUN if [ "$PLATFORM" = "ppc64le" ]; then tar zxpf /qpid-proton-image.tar.gz --one-top-level=/image && tar zxpf /skupper-router-image.tar.gz --one-top-level=/image && tar zxpf /libwebsockets-image.tar.gz --one-top-level=/image; fi
+RUN mkdir -p /image && if [ "$PLATFORM" = "amd64" ]; then tar zxpf /qpid-proton-image.tar.gz -C /image && tar zxpf /skupper-router-image.tar.gz -C /image && tar zxpf /libwebsockets-image.tar.gz -C /image && tar zxpf /libunwind-image.tar.gz -C /image; fi
+RUN if [ "$PLATFORM" = "arm64" ]; then tar zxpf /qpid-proton-image.tar.gz -C /image && tar zxpf /skupper-router-image.tar.gz -C /image && tar zxpf /libwebsockets-image.tar.gz -C /image; fi
+RUN if [ "$PLATFORM" = "s390x" ]; then tar zxpf /qpid-proton-image.tar.gz -C /image && tar zxpf /skupper-router-image.tar.gz -C /image && tar zxpf /libwebsockets-image.tar.gz -C /image; fi
+RUN if [ "$PLATFORM" = "ppc64le" ]; then tar zxpf /qpid-proton-image.tar.gz -C /image && tar zxpf /skupper-router-image.tar.gz -C /image && tar zxpf /libwebsockets-image.tar.gz -C /image; fi
 
 RUN mkdir /image/licenses && cp ./LICENSE /image/licenses
 
