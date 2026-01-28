@@ -1089,6 +1089,7 @@
                 "address": {
                     "description":"Address of this bridge",
                     "type": "string",
+                    "required": true,
                     "create": true
                 },
                 "host": {
@@ -1107,6 +1108,7 @@
                 "port": {
                     "description": "Port number or symbolic service name.  If '0', the router shall assign an ephemeral port to the listener and log the port number with a log of the form 'SERVER (info) Listening on <host>:<assigned-port> (<listener-name>)'",
                     "type": "string",
+                    "required": true,
                     "create": true
                 },
                 "siteId": {
@@ -1175,6 +1177,7 @@
                 "address": {
                     "description":"Address of this bridge",
                     "type": "string",
+                    "required": true,
                     "create": true
                 },
                 "host": {
@@ -1186,6 +1189,7 @@
                 "port": {
                     "description": "Port number or symbolic service name.",
                     "type": "string",
+                    "required": true,
                     "create": true
                 },
                 "siteId": {

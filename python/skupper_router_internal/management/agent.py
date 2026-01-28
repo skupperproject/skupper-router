@@ -378,7 +378,7 @@ class VhostStatsEntity(EntityAdapter):
 
 
 def _host_port_name_identifier(entity):
-    for attr in ['host', 'port', 'name']:  # Set default values if need be
+    for attr in ['host', 'name']:  # Set default values if need be
         entity.attributes.setdefault(
             attr, entity.entity_type.attribute(attr).missing_value())
 

@@ -625,15 +625,28 @@ class RouterConfigTest(TestCase):
                 if error_string in line:
                     test_pass = True
                     break
+        self.assertTrue(test_pass)
 
+        error_string = "io.skupper.router.tcpConnector: Missing required attribute 'address'"
+        test_pass = False
+        with open(self.routers[10].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
+                    test_pass = True
+                    break
+        self.assertTrue(test_pass)
+
+        error_string = "io.skupper.router.tcpListener: Missing required attribute 'address'"
+        test_pass = False
+        with open(self.routers[11].outfile + '.out', 'r') as out_file:
+            for line in out_file:
+                if error_string in line:
+                    test_pass = True
+                    break
         self.assertTrue(test_pass)
 
         # a short timeout is OK since the router has exited the outfile is
         # completely written!
-
-        err = r"Router start-up failed: Python: .* KeyError: \(?'address'"
-        for index in [10, 11]:
-            self.routers[index].wait_log_message(err, timeout=1.0)
 
         err = "sslProfile 'DoesNotExist' not found"
         self.routers[12].wait_log_message(err, timeout=1.0)
