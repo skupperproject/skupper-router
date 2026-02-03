@@ -526,7 +526,7 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          dnf install -y elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan libunwind-devel
+          dnf install -y git elfutils-devel cmake libuuid-devel openssl openssl-devel cyrus-sasl-devel cyrus-sasl-plain swig make libwebsockets-devel libnghttp2-devel ccache libasan libubsan libtsan libunwind-devel
 
       - name: Install Linux build dependencies (Fedora)
         if: ${{ matrix.container == 'fedora' }}
@@ -653,11 +653,11 @@ jobs:
       # https://github.com/codecov/codecov-action
       - name: Upload C Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           flags: ${{matrix.covType}}tests
           verbose: true
-          gcov: true
+          plugins: gcov, pycoverage
           name: skupper-router
           root_dir: .
           working-directory: ${{github.workspace}}/skupper-router
@@ -671,7 +671,7 @@ jobs:
 
       - name: Upload Python Coverage
         if: ${{ !cancelled() && matrix.buildType == 'Coverage' }}
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           flags: py${{matrix.covType}}tests
           verbose: true
