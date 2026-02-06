@@ -324,11 +324,11 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
     agent.policy.set_use_hostname_patterns(useHostnamePatterns)
     agent.policy.set_max_message_size(maxMessageSize)
 
-    # Configure a block of types
+    # Configure a block of types that need to be ordered early in the sequence
     for t in ("sslProfile",
-              "router.config.address", "router.config.autoLink",
-              "router.config.exchange", "router.config.binding",
-              "vhost", "tcpListener", "tcpConnector"):
+              "router.config.address",
+              "router.config.autoLink",
+              "vhost"):
         for a in config.by_type(t):
             configure(a)
             if t == "sslProfile":
@@ -337,9 +337,12 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
                     ssl_profile_name = a.get('name')
                     displayname_service.add(ssl_profile_name, display_file_name)
 
-    # Configure remaining types except for connector and listener
-    for e in config.entities:
-        if not e['type'] in ['io.skupper.router.connector', 'io.skupper.router.listener']:
+    # Configure remaining types except for connectors and listeners
+    for e in config.entities[:]:
+        if not e['type'] in ['io.skupper.router.connector',
+                             'io.skupper.router.listener',
+                             'io.skupper.router.tcpListener',
+                             'io.skupper.router.tcpConnector']:
             configure(e)
 
     # Load the vhosts from the .json files in policyDir
@@ -355,6 +358,6 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
     # Static configuration is loaded except for connectors and listeners.
     # Configuring connectors and listeners last starts inter-router and user messages
     # when the router is in a known and repeatable initial configuration state.
-    for t in "connector", "listener":
+    for t in "connector", "listener", "tcpListener", "tcpConnector":
         for a in config.by_type(t):
             configure(a)
