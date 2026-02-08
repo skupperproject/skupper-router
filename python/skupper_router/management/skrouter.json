@@ -629,6 +629,12 @@
                     "description": "Terminate corresponding TCP connections when a tcpListener or a tcpConnector is deleted.",
                     "required": false,
                     "create": true
+                },
+                "transportPlugin": {
+                    "type": "string",
+                    "description": "If supplied, this is the name of the service-transport plugin to use for service traffic",
+                    "required": false,
+                    "create": true
                 }
             }
         },

@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-#include "adaptor_common.h"
+#include "qpid/dispatch/adaptor_common.h"
 #include "tcp/tcp_adaptor.h"
 
 #include "qpid/dispatch/amqp.h"
@@ -156,3 +156,89 @@ void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_
         vflow_set_string(vflow, ingress ? VFLOW_ATTRIBUTE_SOURCE_PORT : VFLOW_ATTRIBUTE_PROXY_PORT, remote_port);
     }
 }
+
+static struct {
+    bool  configured;
+    configure_entity_t configure_tcp_listener;
+    configure_entity_t configure_tcp_connector;
+    update_entity_t    update_tcp_listener;
+    delete_entity_t    delete_tcp_listener;
+    delete_entity_t    delete_tcp_connector;
+    refresh_entity_t   refresh_tcp_listener;
+    refresh_entity_t   refresh_tcp_connector;
+} management_calls = {false,0,0,0,0,0,0,0};
+
+void qd_register_tcp_management_handlers(configure_entity_t configure_tcp_listener,
+                                         configure_entity_t configure_tcp_connector,
+                                         update_entity_t    update_tcp_listener,
+                                         delete_entity_t    delete_tcp_listener,
+                                         delete_entity_t    delete_tcp_connector,
+                                         refresh_entity_t   refresh_tcp_listener,
+                                         refresh_entity_t   refresh_tcp_connector)
+{
+    assert(!management_calls.configured);
+    management_calls.configured              = true;
+    management_calls.configure_tcp_listener  = configure_tcp_listener;
+    management_calls.configure_tcp_connector = configure_tcp_connector;
+    management_calls.update_tcp_listener     = update_tcp_listener;
+    management_calls.delete_tcp_listener     = delete_tcp_listener;
+    management_calls.delete_tcp_connector    = delete_tcp_connector;
+    management_calls.refresh_tcp_listener    = refresh_tcp_listener;
+    management_calls.refresh_tcp_connector   = refresh_tcp_connector;
+}
+
+QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    if (management_calls.configured) {
+        return management_calls.configure_tcp_listener(qd, entity);
+    }
+    return 0;
+}
+
+QD_EXPORT void *qd_dispatch_update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity, void *impl)
+{
+    if (management_calls.configured) {
+        return management_calls.update_tcp_listener(qd, entity, impl);
+    }
+    return 0;
+}
+
+QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+{
+    if (management_calls.configured) {
+        management_calls.delete_tcp_listener(qd, impl);
+    }
+}
+
+QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
+{
+    if (management_calls.configured) {
+        management_calls.delete_tcp_connector(qd, impl);
+    }
+}
+
+QD_EXPORT qd_error_t qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl)
+{
+    if (management_calls.configured) {
+        return management_calls.refresh_tcp_listener(entity, impl);
+    }
+    return QD_ERROR_NONE;
+}
+
+QD_EXPORT void *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    if (management_calls.configured) {
+        return management_calls.configure_tcp_connector(qd, entity);
+    }
+    return 0;
+}
+
+QD_EXPORT qd_error_t qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl)
+{
+    if (management_calls.configured) {
+        return management_calls.refresh_tcp_connector(entity, impl);
+    }
+    return QD_ERROR_NONE;
+}
+
+

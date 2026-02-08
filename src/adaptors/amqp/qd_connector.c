@@ -20,7 +20,7 @@
 #include "qd_connector.h"
 #include "qd_connection.h"
 #include "private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/timer.h"

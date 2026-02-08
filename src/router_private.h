@@ -25,7 +25,7 @@
  */
 
 #include "dispatch_private.h"
-#include "entity.h"
+#include "qpid/dispatch/entity.h"
 #include "parse_tree.h"
 
 #include "qpid/dispatch/bitmask.h"
