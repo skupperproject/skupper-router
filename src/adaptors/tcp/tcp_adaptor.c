@@ -146,7 +146,7 @@ static void connection_run_LSIDE_IO(qd_tcp_connection_t *conn);
 static void connection_run_CSIDE_IO(qd_tcp_connection_t *conn);
 static void connection_run_XSIDE_IO(qd_tcp_connection_t *conn);
 static uint64_t validate_outbound_message(const qdr_delivery_t *out_dlv);
-static void on_accept(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener, void *context);
+static void on_accept_LH(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener, void *context);
 static void on_tls_connection_secured(qd_tls_session_t *tls, void *user_context);
 static char *get_tls_negotiated_alpn(qd_message_t *msg);  // caller must free() returned string!
 static int setup_tls_session(qd_tcp_connection_t *conn, qd_tls_config_t *parent_config, const char *peer_hostname,
@@ -216,14 +216,16 @@ static void qd_tcp_listener_free(qd_tcp_listener_t *listener)
     //
     // This call to vflow_end_record is only here to doubly make sure that any future calls to qd_tcp_listener_decref
     // will end the vflow record if it has not already ended and zeroed out.
-    //
-    if (listener->common.vflow) {
+    // Note that vflow records of a multi-address listener end when the address is freed.
+    if (listener->adaptor_config->address && listener->common.vflow) {
+        // single-address listener
         vflow_end_record(listener->common.vflow);
     }
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Deleted TcpListener for %s, %s:%s",
-            listener->adaptor_config->address, listener->adaptor_config->host, listener->adaptor_config->port);
+            listener->adaptor_config->address ? listener->adaptor_config->address : "multiple addresses",
+            listener->adaptor_config->host, listener->adaptor_config->port);
     if (listener->protocol_observer)
         qdpo_free(listener->protocol_observer);
 
@@ -366,16 +368,17 @@ static qdr_connection_t *TL_open_core_connection(uint64_t conn_id, bool incoming
 static void TL_setup_listener(qd_tcp_listener_t *li)
 {
     //
-    // Create a vflow record for this listener
+    // Create a vflow record for this listener if this is a single-address listener
     //
-    li->common.vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
-    vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_PROTOCOL,         "tcp");
-    vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_NAME,             li->adaptor_config->name);
-    vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, li->adaptor_config->host);
-    vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->adaptor_config->port);
-    vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->adaptor_config->address);
-    vflow_set_uint64(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
-
+    if (li->adaptor_config->address) {
+        li->common.vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
+        vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_PROTOCOL,         "tcp");
+        vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_NAME,             li->adaptor_config->name);
+        vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, li->adaptor_config->host);
+        vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, li->adaptor_config->port);
+        vflow_set_string(li->common.vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      li->adaptor_config->address);
+        vflow_set_uint64(li->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
+    }
     //
     // Set up the protocol observer
     //
@@ -391,7 +394,7 @@ static void TL_setup_listener(qd_tcp_listener_t *li)
     // callback will be invoked on the proactor listener thread.
     //
     li->adaptor_listener = qd_adaptor_listener(tcp_context->qd, li->adaptor_config, LOG_TCP_ADAPTOR);
-    qd_adaptor_listener_listen(li->adaptor_listener, on_accept, li);
+    qd_adaptor_listener_listen(li->adaptor_listener, on_accept_LH, li);
 }
 
 
@@ -565,6 +568,13 @@ static void close_connection_XSIDE_IO(qd_tcp_connection_t *conn)
             }
             DEQ_REMOVE(listener->connections, conn);
             sys_mutex_unlock(&listener->lock);
+
+            if (conn->target_address) {
+                // Release target address which is set if parent is a multi-address listener (see link_setup_LSIDE_IO())
+                qd_adaptor_listener_address_decref(conn->target_address);
+                conn->target_address = 0;
+            }
+
             //
             // Call listener decref when a connection associated with the listener is removed (DEQ_REMOVE(listener->connections, conn))
             //
@@ -946,9 +956,19 @@ static void link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
     qd_tcp_listener_t *li = (qd_tcp_listener_t*) conn->common.parent;
     qdr_terminus_t *target = qdr_terminus(0);
     qdr_terminus_t *source = qdr_terminus(0);
-    char               host[64];  // for numeric remote client IP:port address
+    char  host[64];  // for numeric remote client IP:port address
+    char  *target_address_string;
 
-    qdr_terminus_set_address(target, li->adaptor_config->address);
+    if (li->adaptor_config->address) {
+        // single-address listener
+        target_address_string = li->adaptor_config->address;
+    } else {
+        // multi-address listener
+        assert(conn->target_address);
+        target_address_string = qd_adaptor_listener_address_string(conn->target_address);
+    }
+    qdr_terminus_set_address(target, target_address_string);
+
     qdr_terminus_set_dynamic(source);
 
     qd_raw_conn_get_address_buf(conn->raw_conn, host, sizeof(host));
@@ -1006,10 +1026,21 @@ static bool try_compose_and_send_client_stream_LSIDE_IO(qd_tcp_connection_t *con
     //
     if (!!conn->reply_to) {
         message = qd_compose(QD_PERFORMATIVE_PROPERTIES, 0);
+
+        char *target_address_string;
+        if (li->adaptor_config->address) {
+            // the parent is a single-address listener
+            target_address_string = li->adaptor_config->address;
+        } else {
+            // the parent is a multi-address listener
+            assert(conn->target_address);
+            target_address_string = qd_adaptor_listener_address_string(conn->target_address);
+        }
+
         qd_compose_start_list(message);
         qd_compose_insert_null(message);                                // message-id
         qd_compose_insert_null(message);                                // user-id
-        qd_compose_insert_string(message, li->adaptor_config->address); // to
+        qd_compose_insert_string(message, target_address_string);       // to
         qd_compose_insert_null(message);                                // subject
         qd_compose_insert_string(message, conn->reply_to);              // reply-to
         vflow_serialize_identity(conn->common.vflow, message);          // correlation-id
@@ -2062,8 +2093,11 @@ static void on_connection_event_CSIDE_IO(pn_event_t *e, qd_server_t *qd_server, 
 }
 
 
-static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
+static void on_accept_LH(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn_listener, void *context)
 {
+    //
+    // NOTE: adaptor_listener->lock is held by the caller
+    //
     qd_tcp_listener_t *listener      = (qd_tcp_listener_t*) context;
     qd_tcp_connection_t *conn  = new_qd_tcp_connection_t();
 
@@ -2083,7 +2117,18 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     conn->listener_side = true;
     conn->state         = LSIDE_INITIAL;
 
-    conn->common.vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_TPORT, listener->common.vflow);
+    vflow_record_t *parent_vflow;
+    if (listener->adaptor_config->address) {
+        // single-address listener
+        parent_vflow = listener->common.vflow;
+    } else {
+        // Multi-address listener does not have vflow record.
+        // Parent vflow record comes from the target address to be selected for this connection
+        conn->target_address = qd_adaptor_listener_best_address_incref_LH(listener->adaptor_listener);
+        assert(conn->target_address);
+        parent_vflow = qd_adaptor_listener_address_vflow(conn->target_address);
+    }
+    conn->common.vflow = vflow_start_record(VFLOW_RECORD_BIFLOW_TPORT, parent_vflow);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS, 0);
     vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
     //vflow_set_uint64(conn->common.vflow, VFLOW_ATTRIBUTE_WINDOW_SIZE, TCP_MAX_CAPACITY_BYTES);
@@ -2103,7 +2148,13 @@ static void on_accept(qd_adaptor_listener_t *adaptor_listener, pn_listener_t *pn
     }
     DEQ_INSERT_TAIL(listener->connections, conn);
     listener->connections_opened++;
-    vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
+    if (listener->adaptor_config->address) {
+        // single-address listener
+        vflow_set_uint64(listener->common.vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, listener->connections_opened);
+    } else {
+        // multi-address listener
+        qd_adaptor_listener_address_connection_opened(conn->target_address);
+    }
     sys_mutex_unlock(&listener->lock);
 
     if (!has_protocol_observer) {
@@ -2279,6 +2330,12 @@ static void CORE_delivery_update(void *context, qdr_delivery_t *dlv, uint64_t di
             if (final_outcome && disp != PN_ACCEPTED) {
                 // The delivery failed - this is unrecoverable.
                 if (!!conn->raw_conn) {
+                    if (conn->listener_side) {
+                         qd_tcp_listener_t *listener = (qd_tcp_listener_t *)conn->common.parent;
+                        char *address = listener->adaptor_config->address ?
+                             listener->adaptor_config->address : qd_adaptor_listener_address_string(conn->target_address);
+                        qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, "Destination unreachable: %s", address);
+                    }
                     close_raw_connection(conn, "delivery-failed", "destination unreachable");
                     // clean stuff up when DISCONNECT event arrives
                 }
@@ -2372,7 +2429,21 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
     listener->adaptor_config = new_qd_adaptor_config_t();
     ZERO(listener->adaptor_config);
 
-    if (qd_load_adaptor_config(tcp_context->core, listener->adaptor_config, entity) != QD_ERROR_NONE) {
+    qd_error_t error = QD_ERROR_NONE;
+    error = qd_load_adaptor_config(tcp_context->core, listener->adaptor_config, entity);
+    if (error == QD_ERROR_NONE) {
+        if (!!listener->adaptor_config->multi_address_strategy &&
+            !strcmp(listener->adaptor_config->multi_address_strategy, "none")) {
+            // Convert "none" to NULL in order to simplify checking if multi_address_strategy is set
+            free(listener->adaptor_config->multi_address_strategy);
+            listener->adaptor_config->multi_address_strategy = 0;
+        }
+        if (!!listener->adaptor_config->multi_address_strategy == !!listener->adaptor_config->address) {
+            error = qd_error(QD_ERROR_CONFIG, "Exactly one of the 'address' or 'multiAddressStrategy' field must be set");
+        }
+    }
+
+    if (error != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp listener: %s", qd_error_message());
         qd_free_adaptor_config(listener->adaptor_config);
         free_qd_tcp_listener_t(listener);
@@ -2397,7 +2468,8 @@ QD_EXPORT void *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_
 
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
             "Configured TcpListener for %s, %s:%s",
-            listener->adaptor_config->address, listener->adaptor_config->host, listener->adaptor_config->port);
+            listener->adaptor_config->address ? listener->adaptor_config->address : "multiple addresses" ,
+            listener->adaptor_config->host, listener->adaptor_config->port);
 
     listener->common.context_type = TL_LISTENER;
     sys_mutex_init(&listener->lock);
@@ -2443,7 +2515,7 @@ QD_EXPORT void *qd_dispatch_update_tcp_listener(qd_dispatch_t *qd, qd_entity_t *
 }
 
 
-QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
+QD_EXPORT qd_error_t qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
 {
 
     SET_THREAD_UNKNOWN;
@@ -2453,14 +2525,22 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         // on the proactor thread
         //
         if (!!listener->adaptor_listener) {
-            qd_adaptor_listener_close(listener->adaptor_listener);
+            qd_error_t error = qd_adaptor_listener_close(listener->adaptor_listener);
+            if (error != QD_ERROR_NONE) {
+                qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Cannot delete tcp listener: %s", qd_error_message());
+                return error;
+            }
             listener->adaptor_listener = 0;
             //
             // End the vanflow record here. This will make sure that the vanflow is ended
             // as soon as the listener is deleted.
-            //
-            vflow_end_record(listener->common.vflow);
-            listener->common.vflow = 0;
+            // Note that vflow records of a multi-address listener end in the
+            // qd_adaptor_listener_close() above.
+            if (listener->adaptor_config->address && listener->common.vflow) {
+                // single-address listener
+                vflow_end_record(listener->common.vflow);
+                listener->common.vflow = 0;
+            }
         }
         //
         // Initiate termination of existing connections
@@ -2489,8 +2569,40 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl)
         //
         qd_tcp_listener_decref(listener);
     }
+    return QD_ERROR_NONE;
 }
 
+QD_EXPORT void *qd_dispatch_configure_tcp_listener_address(qd_dispatch_t *qd, qd_entity_t *entity)
+{
+    SET_THREAD_UNKNOWN;
+    void *listenerAddress = 0;
+    qd_listener_address_config_t address_config;
+    ZERO(&address_config);
+
+    if (qd_load_listener_address_config(tcp_context->core, &address_config, entity) == QD_ERROR_NONE &&
+        (listenerAddress = qd_adaptor_listener_add_address(&address_config))) {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_INFO,
+               "Configured new address for multi-address tcpListener %s %s",
+               address_config.address, address_config.listener_name);
+    } else {
+        qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp listener address: %s", qd_error_message());
+    }
+
+    qd_clear_listener_address_config(&address_config);
+
+    return listenerAddress;
+}
+
+QD_EXPORT void qd_dispatch_delete_tcp_listener_address(qd_dispatch_t *qd, void *impl)
+{
+    SET_THREAD_UNKNOWN;
+    qd_adaptor_listener_delete_address(qd, impl);
+}
+
+QD_EXPORT qd_error_t qd_entity_refresh_listenerAddress(qd_entity_t* entity, void *impl)
+{
+    return QD_ERROR_NONE;
+}
 
 QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)
 {
@@ -2584,7 +2696,12 @@ qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_en
     connector->adaptor_config = new_qd_adaptor_config_t();
     ZERO(connector->adaptor_config);
 
-    if (qd_load_adaptor_config(tcp_context->core, connector->adaptor_config, entity) != QD_ERROR_NONE) {
+    qd_error_t error = qd_load_adaptor_config(tcp_context->core, connector->adaptor_config, entity);
+    if (error == QD_ERROR_NONE && !connector->adaptor_config->address) {
+            error = qd_error(QD_ERROR_CONFIG, "Address must be set");
+    }
+
+    if (error != QD_ERROR_NONE) {
         qd_log(LOG_TCP_ADAPTOR, QD_LOG_ERROR, "Unable to create tcp connector: %s", qd_error_message());
         qd_free_adaptor_config(connector->adaptor_config);
         free_qd_tcp_connector_t(connector);
@@ -2722,6 +2839,13 @@ static void ADAPTOR_final(void *adaptor_context)
             qd_tcp_connection_t *next_conn = DEQ_NEXT(conn);
             close_connection_XSIDE_IO(conn);
             conn = next_conn;
+        }
+        if (!listener->adaptor_config->address) {
+            // Multi-address listener. End vlow records here before VANFLOW adaptor gets finalized.
+            if (!!listener->adaptor_listener) {
+                qd_adaptor_listener_address_vflows_end(listener->adaptor_listener);
+            }
+
         }
         qd_tcp_listener_free(listener);
     }

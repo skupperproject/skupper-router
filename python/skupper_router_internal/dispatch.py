@@ -110,8 +110,10 @@ class QdDll(PyDLL):
 
         # tcp and amqp listeners
         self._prototype(self.qd_dispatch_configure_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object])
-        self._prototype(self.qd_dispatch_delete_tcp_listener, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_delete_tcp_listener, c_long, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_dispatch_update_tcp_listener, c_void_p, [self.qd_dispatch_p, py_object, c_void_p])
+        self._prototype(self.qd_dispatch_configure_tcp_listener_address, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_dispatch_delete_tcp_listener_address, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_dispatch_configure_listener, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_connection_manager_delete_listener, None, [self.qd_dispatch_p, c_void_p])
 

@@ -631,9 +631,11 @@ class RouterConfigTest(TestCase):
         # a short timeout is OK since the router has exited the outfile is
         # completely written!
 
-        err = r"Router start-up failed: Python: .* KeyError: \(?'address'"
-        for index in [10, 11]:
-            self.routers[index].wait_log_message(err, timeout=1.0)
+        err = "Router start-up failed: Python: CError: Configuration: Address must be set"
+        self.routers[10].wait_log_message(err, timeout=1.0)
+
+        err = "Router start-up failed: Python: CError: Configuration: Exactly one of the 'address' or 'multiAddressStrategy' field must be set"
+        self.routers[11].wait_log_message(err, timeout=1.0)
 
         err = "sslProfile 'DoesNotExist' not found"
         self.routers[12].wait_log_message(err, timeout=1.0)
