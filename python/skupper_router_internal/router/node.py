@@ -161,9 +161,17 @@ class NodeTracker:
             self.container.router_adapter.set_radius(radius)
 
             ##
+            # Mark all of the nodes as un-visited so we can identify newly unreachable nodes
+            ##
+            visited = {}
+            for node_id in self.nodes.keys():
+                visited[node_id] = False
+
+            ##
             # Update the next hops and valid origins for each node
             ##
             for node_id, next_hop_id in next_hops.items():
+                visited[node_id] = True
                 node     = self.nodes[node_id]
                 next_hop = self.nodes[next_hop_id]
                 vo       = valid_origins[node_id]
@@ -171,6 +179,14 @@ class NodeTracker:
                 node.set_next_hop(next_hop)
                 node.set_valid_origins(vo)
                 node.set_cost(cost)
+
+            ##
+            # Un-map the addresses on each node that is no longer reachable
+            ##
+            for node_id, reachable in visited.items():
+                if not reachable:
+                    self.container.log_ls(LOG_INFO, "Node unreachable: %s" % node_id)
+                    self.nodes[node_id].unmap_all_addresses()
 
         ##
         # Send link-state requests and mobile-address requests to the nodes
