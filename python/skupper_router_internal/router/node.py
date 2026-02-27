@@ -241,6 +241,7 @@ class NodeTracker:
             node = self.nodes[node_id]
             node.remove_link()
             if self.link_state.del_peer(node_id):
+                node.unmap_all_addresses()
                 self.link_state_changed = True
 
     def set_mobile_seq(self, router_maskbit, mobile_seq):
