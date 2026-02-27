@@ -37,11 +37,13 @@
 #define QDR_ADDRESS_DELIVERIES_FROM_CONTAINER          13
 #define QDR_ADDRESS_DELIVERIES_EGRESS_ROUTE_CONTAINER  14
 #define QDR_ADDRESS_DELIVERIES_INGRESS_ROUTE_CONTAINER 15
-#define QDR_ADDRESS_TRANSIT_OUTSTANDING                16
-#define QDR_ADDRESS_TRACKED_DELIVERIES                 17
-#define QDR_ADDRESS_PRIORITY                           18
-#define QDR_ADDRESS_DELIVERIES_REDIRECTED              19
-#define QDR_ADDRESS_WATCH                              20
+#define QDR_ADDRESS_DELIVERIES_EGRESS_INTER_NETWORK    16
+#define QDR_ADDRESS_DELIVERIES_INGRESS_INTER_NETWORK   17
+#define QDR_ADDRESS_TRANSIT_OUTSTANDING                18
+#define QDR_ADDRESS_TRACKED_DELIVERIES                 19
+#define QDR_ADDRESS_PRIORITY                           20
+#define QDR_ADDRESS_DELIVERIES_REDIRECTED              21
+#define QDR_ADDRESS_WATCH                              22
 
 const char *qdr_address_columns[] =
     {"name",
@@ -60,6 +62,8 @@ const char *qdr_address_columns[] =
      "deliveriesFromContainer",
      "deliveriesEgressRouteContainer",
      "deliveriesIngressRouteContainer",
+     "deliveriesEgressInterNetwork",
+     "deliveriesIngressInterNetwork",
      "transitOutstanding",
      "trackedDeliveries",
      "priority",
@@ -151,6 +155,14 @@ static void qdr_insert_address_columns_CT(qdr_core_t          *core,
 
     case QDR_ADDRESS_DELIVERIES_INGRESS_ROUTE_CONTAINER:
         qd_compose_insert_ulong(body, addr->deliveries_ingress_route_container);
+        break;
+
+    case QDR_ADDRESS_DELIVERIES_EGRESS_INTER_NETWORK:
+        qd_compose_insert_ulong(body, addr->deliveries_egress_inter_network);
+        break;
+
+    case QDR_ADDRESS_DELIVERIES_INGRESS_INTER_NETWORK:
+        qd_compose_insert_ulong(body, addr->deliveries_ingress_inter_network);
         break;
 
     case QDR_ADDRESS_TRANSIT_OUTSTANDING:

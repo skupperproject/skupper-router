@@ -177,6 +177,7 @@ foreach(py_test_module
     system_tests_http1_decoder
     system_tests_cert_rotation
     system_tests_split_path
+    system_tests_cross_network
     )
 
   string(CONFIGURE "${PYTHON_TEST_COMMAND}" CONFIGURED_PYTHON_TEST_COMMAND)

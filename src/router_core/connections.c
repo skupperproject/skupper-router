@@ -173,6 +173,10 @@ bool qdr_connection_route_container(qdr_connection_t *conn)
     return conn->role == QDR_ROLE_ROUTE_CONTAINER;
 }
 
+bool qdr_connection_inter_network(qdr_connection_t *conn)
+{
+    return conn->role == QDR_ROLE_INTER_NETWORK;
+}
 
 void qdr_connection_set_context(qdr_connection_t *conn, void *context)
 {
@@ -285,6 +289,13 @@ static void qdr_connection_info_free(qdr_connection_info_t *ci)
 qdr_connection_role_t qdr_connection_role(const qdr_connection_t *conn)
 {
     return conn->role;
+}
+
+qdr_connection_role_t qdr_link_connection_role(const qdr_link_t *link)
+{
+    if (!!link && !!link->conn)
+        return link->conn->role;
+    return QDR_ROLE_NORMAL;
 }
 
 void *qdr_connection_get_context(const qdr_connection_t *conn)
@@ -1741,7 +1752,7 @@ static void qdr_connection_opened_CT(qdr_core_t *core, qdr_action_t *action, boo
             qdr_connection_group_member_setup_CT(core, conn);
         }
 
-        if (conn->role == QDR_ROLE_ROUTE_CONTAINER) {
+        if (conn->role == QDR_ROLE_ROUTE_CONTAINER || conn->role == QDR_ROLE_INTER_NETWORK) {
             //
             // Notify the route-control module that a route-container connection has opened.
             // There may be routes that need to be activated due to the opening of this connection.
@@ -1788,6 +1799,7 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
     case QDR_ROLE_EDGE_CONNECTION:
     case QDR_ROLE_INTER_ROUTER_DATA:
     case QDR_ROLE_ROUTE_CONTAINER:
+    case QDR_ROLE_INTER_NETWORK:
     case QDR_ROLE_NORMAL:
         out_link = qdr_create_link_CT(core, conn, QD_LINK_ENDPOINT, QD_OUTGOING,
                                       qdr_terminus(0), qdr_terminus(0),

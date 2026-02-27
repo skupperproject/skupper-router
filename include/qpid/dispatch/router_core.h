@@ -49,7 +49,12 @@ ENUM_DECLARE(qd_router_mode);
 /**
  * Allocate and start an instance of the router core module.
  */
-qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *van_id);
+qdr_core_t *qdr_core(qd_dispatch_t *qd, qd_router_mode_t mode, const char *area, const char *id, const char *tenant_id);
+
+/**
+ * Set the network id
+ */
+void qdr_core_set_network_id(qdr_core_t *core, const char *network_id);
 
 /**
  * Stop and deallocate an instance of the router core.
@@ -75,12 +80,12 @@ qd_dispatch_t *qdr_core_dispatch(qdr_core_t *core);
 void qdr_process_tick(qdr_core_t *core);
 
 /**
- * @brief Return the text of the router's virtual application network ID, or 0.
+ * @brief Return the text of the router's virtual application network tenant ID, or 0.
  *
  * @param core Pointer to the core object returned by qdr_core()
- * @return const char* null-terminated text of the van-id or 0 if there's no id.
+ * @return const char* null-terminated text of the tenant-id or 0 if there's no id.
  */
-const char *qdr_core_van_id(const qdr_core_t *core);
+const char *qdr_core_tenant_id(const qdr_core_t *core);
 
 
 /**

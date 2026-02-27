@@ -462,6 +462,16 @@
                     "description": "Number of deliveries that were sent to route container connections.",
                     "graph": true
                 },
+                "deliveriesIngressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were received from a connected network.",
+                    "graph": true
+                },
+                "deliveriesEgressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to a connected network.",
+                    "graph": true
+                },
                 "residentMemoryUsage": {
                     "type": "integer",
                     "graph": true,
@@ -511,7 +521,7 @@
                     "create": true
                 },
                 "vanId": {
-                    "description":"Deprecated:  See the managedRouter entity definition.",
+                    "description":"Deprecated:  See the network tenantId attribute.",
                     "type": "string",
                     "required": false,
                     "create": true
@@ -633,13 +643,21 @@
             }
         },
 
-        "managedRouter": {
-            "description": "This optional entity holds configuration needed for the router to be managed by a central manager",
+        "network": {
+            "description": "This optional entity holds configuration needed for the router to participate in inter-network communication",
             "extends": "configurationEntity",
             "singleton": true,
+            "operations": ["UPDATE"],
             "attributes": {
-                "vanId": {
-                    "description":"The unique ID of the Virtual Application Network that this router is a member of.",
+                "networkId": {
+                    "description":"The unique ID of the AMQP Network that this router is a member of.",
+                    "type": "string",
+                    "required": false,
+                    "create": true,
+                    "update": true
+                },
+                "tenantId": {
+                    "description":"The unique VAN tenant ID for routers that are connected to a multi-tenant service backbone.",
                     "type": "string",
                     "required": false,
                     "create": true
@@ -648,7 +666,7 @@
         },
 
         "site": {
-            "description":"Optional.  If present, this entity causes the router to emit a SITE record for VanFLow in the case that there is not an external controller to emit this record.",
+            "description":"Optional.  If present, this entity causes the router to emit a SITE record for VanFlow in the case that there is not an external controller to emit this record.",
             "extends": "configurationEntity",
             "attributes": {
                 "location": {
@@ -784,7 +802,8 @@
                         "inter-router",
                         "route-container",
                         "edge",
-                        "inter-edge"
+                        "inter-edge",
+                        "inter-network"
                     ],
                     "default": "normal",
                     "description": "The role of an established connection. In the normal role, the connection is assumed to be used for AMQP clients that are doing normal message delivery over the connection.  In the inter-router role, the connection is assumed to be to another router in the network.  Inter-router discovery and routing protocols can only be used over inter-router connections. route-container role can be used for router-container connections, for example, a router-broker connection.  In the edge role, the connection is assumed to be between an edge router and an interior router.",
@@ -958,7 +977,8 @@
                         "inter-router",
                         "route-container",
                         "edge",
-                        "inter-edge"
+                        "inter-edge",
+                        "inter-network"
                     ],
                     "default": "normal",
                     "description": "The role of an established connection. In the normal role, the connection is assumed to be used for AMQP clients that are doing normal message delivery over the connection.  In the inter-router role, the connection is assumed to be to another router in the network.  Inter-router discovery and routing protocols can only be used over inter-router connections. route-container role can be used for router-container connections, for example, a router-broker connection.  In the edge role, the connection is assumed to be between and edge router and an interior router.",
@@ -1628,6 +1648,16 @@
                 "deliveriesEgressRouteContainer": {
                     "type": "integer",
                     "description": "Number of deliveries that were sent to a route-container address.",
+                    "graph": true
+                },
+                "deliveriesIngressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were received from a connected network.",
+                    "graph": true
+                },
+                "deliveriesEgressInterNetwork": {
+                    "type": "integer",
+                    "description": "Number of deliveries that were sent to a connected network.",
                     "graph": true
                 },
                 "key": {

@@ -278,6 +278,8 @@ class BusManager:
             return ""
         if addr[0] == 'M'  :
             return "mobile"
+        if addr[0] == 'N'  :
+            return "network"
         if addr[0] == 'R'  :
             return "router"
         if addr[0] == 'A'  :
@@ -286,10 +288,6 @@ class BusManager:
             return "local"
         if addr[0] == 'T'  :
             return "topo"
-        if addr[0] in 'CE' :
-            return "link-in"
-        if addr[0] in 'DF' :
-            return "link-out"
         if addr[0] == 'H'  :
             return "edge"
         return "unknown: %s" % addr[0]
@@ -327,6 +325,14 @@ class BusManager:
 
         router_objects = self.query('io.skupper.router.router')
         router_metrics_objects = self.query('io.skupper.router.routerMetrics')
+        network = {
+            'networkId' : None,
+            'tenantId'  : None
+        }
+        try:
+            network = self.query('io.skupper.router.network')[0]
+        except:
+            pass
 
         router = router_objects[0]
         router_metrics = router_metrics_objects[0]
@@ -337,6 +343,10 @@ class BusManager:
         rows.append(('Version',                   router_metrics.version))
         rows.append(('Mode',                      router.mode))
         rows.append(('Router Id',                 router_metrics.id))
+        if network.networkId is not None:
+            rows.append(('Network Id', network.networkId))
+        if network.tenantId is not None:
+            rows.append(('Tenant Id', network.tenantId))
         rows.append(('Host Name',                 router.hostName))
         rows.append(('Hello Interval Seconds',    PlainNum(router.helloIntervalSeconds)))
         rows.append(('Hello Max Age Seconds',     PlainNum(router.helloMaxAgeSeconds)))
@@ -354,8 +364,6 @@ class BusManager:
         rows.append(('Default Distribution',      router.defaultDistribution))
         rows.append(('Metadata',                  router.metadata))
         rows.append(('Data Connection Count',     router.dataConnectionCount))
-        if router.vanId is not None:
-            rows.append(('Van Id', router.vanId))
         try:
             rows.append(('Worker Threads', PlainNum(router.workerThreads)))
         except:
@@ -406,6 +414,8 @@ class BusManager:
             rows.append(('Transit Count', PlainNum(router_metrics.deliveriesTransit)))
             rows.append(('Deliveries from Route Container', PlainNum(router_metrics.deliveriesIngressRouteContainer)))
             rows.append(('Deliveries to Route Container', PlainNum(router_metrics.deliveriesEgressRouteContainer)))
+            rows.append(('Deliveries from Remote Network', PlainNum(router_metrics.deliveriesIngressInterNetwork)))
+            rows.append(('Deliveries to Remote Network', PlainNum(router_metrics.deliveriesEgressInterNetwork)))
         except:
             pass
 
@@ -1037,7 +1047,7 @@ class BusManager:
             for node in nodes:
                 self.node.set_client(node[6:])
                 parts = node.split("/")
-                print("Router ", parts[3])
+                print("Router ", parts[4])
                 print("")
                 if self.show.__name__ == 'show_all':
                     self.show(show_summary=False)

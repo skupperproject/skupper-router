@@ -392,7 +392,7 @@ void qdr_route_connection_opened_CT(qdr_core_t       *core,
                                     qdr_field_t      *container_field,
                                     qdr_field_t      *connection_field)
 {
-    if (conn->role != QDR_ROLE_ROUTE_CONTAINER)
+    if (conn->role != QDR_ROLE_ROUTE_CONTAINER && conn->role != QDR_ROLE_INTER_NETWORK)
         return;
 
     if (connection_field) {
@@ -421,7 +421,7 @@ void qdr_route_connection_opened_CT(qdr_core_t       *core,
 
 void qdr_route_connection_closed_CT(qdr_core_t *core, qdr_connection_t *conn)
 {
-    if (conn->role != QDR_ROLE_ROUTE_CONTAINER)
+    if (conn->role != QDR_ROLE_ROUTE_CONTAINER && conn->role != QDR_ROLE_INTER_NETWORK)
         return;
 
     qdr_conn_identifier_t *cid = conn->conn_id;

@@ -101,9 +101,9 @@ class Node:
         if url_.path is not None:
             path = url_.path
         elif router:
-            path = '_topo/0/%s/$management' % router
+            path = '_topo/0/0/%s/$management' % router
         elif edge_router:
-            path = '_edge/%s/$management' % edge_router
+            path = '_edge/0/%s/$management' % edge_router
         else:
             path = '$management'
         connection = BlockingConnection(url,
