@@ -97,6 +97,7 @@ ROUTER_METRICS_TYPE = 'io.skupper.router.routerMetrics'
 SSL_PROFILE_TYPE = 'io.skupper.router.sslProfile'
 TCP_CONNECTOR_TYPE = 'io.skupper.router.tcpConnector'
 TCP_LISTENER_TYPE = 'io.skupper.router.tcpListener'
+LISTENER_ADDRESS_TYPE = 'io.skupper.router.listenerAddress'
 
 # The directory where this module lives. Used to locate static configuration files etc.
 DIR = os.path.dirname(__file__)
@@ -832,7 +833,7 @@ class Qdrouterd(Process):
         try:
             if self.sk_manager:
                 # Delete all adaptor connectors and listeners before shutting down the router
-                long_types = [TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
+                long_types = [LISTENER_ADDRESS_TYPE, TCP_LISTENER_TYPE, TCP_CONNECTOR_TYPE]
                 for long_type in long_types:
                     self.sk_manager.delete_all_entities(long_type)
                 retry_assertion(self.sk_manager.delete_adaptor_connections)

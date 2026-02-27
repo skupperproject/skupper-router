@@ -45,6 +45,7 @@ void qd_free_adaptor_config(qd_adaptor_config_t *config)
     free(config->address);
     free(config->host);
     free(config->port);
+    free(config->multi_address_strategy);
     free(config->site_id);
     free(config->host_port);
     free(config->ssl_profile_name);
@@ -77,7 +78,7 @@ qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config,
     config->name    = qd_entity_opt_string(entity, "name", 0);                         CHECK();
     config->host    = qd_entity_get_string(entity, "host");                            CHECK();
     config->port    = qd_entity_get_string(entity, "port");                            CHECK();
-    config_address  = qd_entity_get_string(entity, "address");                         CHECK();
+    config_address  = qd_entity_opt_string(entity, "address", 0);                      CHECK();
     config->site_id = qd_entity_opt_string(entity, "siteId", 0);                       CHECK();
     config->ssl_profile_name  = qd_entity_opt_string(entity, "sslProfile", 0);         CHECK();
     config->authenticate_peer = qd_entity_opt_bool(entity, "authenticatePeer", false); CHECK();
@@ -89,6 +90,8 @@ qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config,
     CHECK();
     if (config->backlog <= 0 || config->backlog > SOMAXCONN)
         config->backlog = SOMAXCONN;
+
+    config->multi_address_strategy =  qd_entity_opt_string(entity, "multiAddressStrategy", 0); CHECK();
 
     int hplen = strlen(config->host) + strlen(config->port) + 2;
     config->host_port = malloc(hplen);
@@ -113,6 +116,27 @@ qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config,
 
 error:
     return qd_error_code();
+}
+
+qd_error_t qd_load_listener_address_config(qdr_core_t *core, qd_listener_address_config_t *config, qd_entity_t *entity)
+{
+    qd_error_clear();
+    config->address = qd_entity_get_string(entity, "address");        CHECK();
+    config->value         = qd_entity_get_long(entity, "value");      CHECK();
+    config->listener_name = qd_entity_get_string(entity, "listener"); CHECK();
+
+    return QD_ERROR_NONE;
+
+error:
+    return qd_error_code();
+}
+
+void qd_clear_listener_address_config(qd_listener_address_config_t *config)
+{
+    if (config->address)
+        free(config->address);
+    if (config->listener_name)
+        free(config->listener_name);
 }
 
 size_t qd_raw_conn_get_address_buf(pn_raw_connection_t *pn_raw_conn, char *buf, size_t buflen)

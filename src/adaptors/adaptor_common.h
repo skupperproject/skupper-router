@@ -48,6 +48,7 @@ struct qd_adaptor_config_t
     char                       *name;
     char                       *host;
     char                       *port;
+    char                       *multi_address_strategy;
     char                       *address;
     char                       *site_id;
     char                       *host_port;
@@ -62,8 +63,20 @@ struct qd_adaptor_config_t
 
 ALLOC_DECLARE(qd_adaptor_config_t);
 
+typedef struct qd_listener_address_config_t qd_listener_address_config_t;
+
+// Address config for multi-address listeners
+struct qd_listener_address_config_t {
+    char *address;
+    int   value;
+    char *listener_name;
+};
+
 qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config, qd_entity_t *entity);
 void qd_free_adaptor_config(qd_adaptor_config_t *config);
+
+qd_error_t qd_load_listener_address_config(qdr_core_t *core, qd_listener_address_config_t *config, qd_entity_t *entity);
+void       qd_clear_listener_address_config(qd_listener_address_config_t *config);
 
 /**
  * Get the raw connections remote address.

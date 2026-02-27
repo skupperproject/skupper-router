@@ -156,6 +156,7 @@ typedef struct qd_tcp_connection_t {
         uint64_t                closed_count; // ingress: total count of window closures
         bool                    disabled;     // window flow control disabled, no backpressure allowed
     } window;
+    qd_listener_address_t      *target_address;  // target address if parent is a multi-address listener
     bool                        listener_side;
     bool                        inbound_credit;
     bool                        inbound_first_octet;
@@ -165,9 +166,11 @@ typedef struct qd_tcp_connection_t {
 
 
 QD_EXPORT void       *qd_dispatch_configure_tcp_listener(qd_dispatch_t *qd, qd_entity_t *entity);
-QD_EXPORT void        qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl);
+QD_EXPORT qd_error_t  qd_dispatch_delete_tcp_listener(qd_dispatch_t *qd, void *impl);
 QD_EXPORT qd_error_t  qd_entity_refresh_tcpListener(qd_entity_t* entity, void *impl);
+QD_EXPORT void       *qd_dispatch_configure_tcp_listener_address(qd_dispatch_t *qd, qd_entity_t *entity);
 QD_EXPORT void        qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl);
+QD_EXPORT qd_error_t  qd_entity_refresh_listenerAddress(qd_entity_t *entity, void *impl);
 QD_EXPORT qd_error_t  qd_entity_refresh_tcpConnector(qd_entity_t* entity, void *impl);
 qd_tcp_connector_t *qd_dispatch_configure_tcp_connector(qd_dispatch_t *qd, qd_entity_t *entity);
 

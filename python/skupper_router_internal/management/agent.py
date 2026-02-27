@@ -470,6 +470,24 @@ class ListenerEntity(ConnectionBaseEntity):
         self._qd.qd_connection_manager_delete_listener(self._dispatch, self._implementations[0].key)
 
 
+class ListenerAddressEntity(EntityAdapter):
+    def create(self):
+        config_listener_address = self._qd.qd_dispatch_configure_tcp_listener_address(self._dispatch, self)
+        return config_listener_address
+
+    def _identifier(self):
+        if self.attributes.get('name') is not None:
+            return "%s:%s:%s" % (self.listener, self.address, self.name)
+        else:
+            return "%s:%s" % (self.listener, self.address)
+
+    def __str__(self):
+        return super(ListenerAddressEntity, self).__str__().replace("Entity(", "ListenerAddressEntity(")
+
+    def _delete(self):
+        self._qd.qd_dispatch_delete_tcp_listener_address(self._dispatch, self._implementations[0].key)
+
+
 class ConnectorEntity(ConnectionBaseEntity):
     def __init__(self, agent, entity_type, attributes=None, validate=True):
         super(ConnectorEntity, self).__init__(agent, entity_type, attributes,
@@ -556,7 +574,9 @@ class TcpListenerEntity(EntityAdapter):
         return config_listener
 
     def _delete(self):
-        self._qd.qd_dispatch_delete_tcp_listener(self._dispatch, self._implementations[0].key)
+        err = self._qd.qd_dispatch_delete_tcp_listener(self._dispatch, self._implementations[0].key)
+        if err:
+            raise BadRequestStatus("Listener cannot be deleted: %s" % self._qd_error_message())
 
     def _update(self):
         tmp = self._qd.qd_dispatch_update_tcp_listener(self._dispatch, self, self._implementations[0].key)

@@ -342,7 +342,8 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
         if not e['type'] in ['io.skupper.router.connector',
                              'io.skupper.router.listener',
                              'io.skupper.router.tcpListener',
-                             'io.skupper.router.tcpConnector']:
+                             'io.skupper.router.tcpConnector',
+                             'io.skupper.router.listenerAddress']:
             configure(e)
 
     # Load the vhosts from the .json files in policyDir
@@ -358,6 +359,6 @@ def configure_dispatch(dispatch_int: int, filename: str) -> None:
     # Static configuration is loaded except for connectors and listeners.
     # Configuring connectors and listeners last starts inter-router and user messages
     # when the router is in a known and repeatable initial configuration state.
-    for t in "connector", "listener", "tcpListener", "tcpConnector":
+    for t in "connector", "listener", "tcpListener", "tcpConnector", "listenerAddress":
         for a in config.by_type(t):
             configure(a)

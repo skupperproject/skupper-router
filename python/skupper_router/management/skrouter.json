@@ -1109,6 +1109,12 @@
                     "type": "string",
                     "create": true
                 },
+                "multiAddressStrategy": {
+                    "description": "Connection target address selection strategy for multi-address listener. If not 'none', the 'address' field is ignored and multiple service addresses can be specified for the listener by creating 'listenerAddress' entities. The strategy value determines how new connections select a target address. The only supported value is 'priority' currently.  Priority strategy always selects the address with the highest priority value from the current set of reachable addresses.",
+                    "type": ["none", "priority"],
+                    "default": "none",
+                    "create": true
+                },
                 "siteId": {
                     "type": "string",
                     "required": false,
@@ -1234,6 +1240,32 @@
                 }
             }
         },
+
+        "listenerAddress" : {
+           "description": "Configure a service address for a multi-address 'tcpListener'. The corresponding 'tcpListener' must specify the strategy for selecting target addresses for new connections.",
+            "extends": "configurationEntity",
+            "operations": ["CREATE", "DELETE"],
+            "attributes": {
+                "address": {
+                    "description":"Service address.",
+                    "type": "string",
+                    "create": true,
+                    "required": true
+                },
+                "value": {
+                    "description":"Address selection strategy-specific numeric value (priority, etc.).",
+                    "type": "integer",
+                    "create": true,
+                    "required": true
+                },
+                "listener": {
+                    "description":"Name of the 'tcpListener' this address belongs to.",
+                    "type": "string",
+                    "create": true,
+                    "required": true
+                }
+            }
+       },
 
         "log": {
             "description": "Configure logging for a particular module. You can use the `UPDATE` operation to change log settings while the router is running.",

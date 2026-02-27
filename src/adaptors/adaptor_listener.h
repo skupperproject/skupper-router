@@ -31,6 +31,32 @@
 
 typedef struct qd_adaptor_listener_t qd_adaptor_listener_t;
 
+typedef struct qd_listener_address_t qd_listener_address_t;
+
+// Get the currently optimal listener address for a new connection and increase its refCount
+qd_listener_address_t *qd_adaptor_listener_best_address_incref_LH(qd_adaptor_listener_t *listener);
+
+// Get listener address as string
+char *qd_adaptor_listener_address_string(qd_listener_address_t *addr);
+
+// Get the vflow record of a listener address
+vflow_record_t *qd_adaptor_listener_address_vflow(qd_listener_address_t *addr);
+
+// End listener address vflow records
+void qd_adaptor_listener_address_vflows_end(qd_adaptor_listener_t *li);
+
+// Increase opened connections counter for this address
+void qd_adaptor_listener_address_connection_opened(qd_listener_address_t *addr);
+
+// Decrement the refCount of a listener address
+void qd_adaptor_listener_address_decref(qd_listener_address_t *addr);
+
+// Add a new item to the service address list of a multi-address listener
+void *qd_adaptor_listener_add_address(qd_listener_address_config_t *config);
+
+// Delete an item from service address list of a multi-address listener
+void qd_adaptor_listener_delete_address(qd_dispatch_t *qd, void *imp);
+
 // Callback invoked when a client has connected to the listener and is waiting to be accepted.  The application may
 // accept the new connection during this callback by allocating a pn_raw_connection_t and passing it to
 // pn_listener_raw_accept().  This callback may instead deny the new connection by calling
@@ -56,10 +82,11 @@ void qd_adaptor_listener_listen(qd_adaptor_listener_t *listener,
                                 void *context);
 
 // Stop listening and dispose of the listener. The caller must not reference
-// the listener again after this call. It is guaranteed that the on_accept
-// callback will never be invoked after this call returns.
-//
-void qd_adaptor_listener_close(qd_adaptor_listener_t *listener);
+// the listener again after this call if it returns no error. It is guaranteed that the on_accept
+// callback will never be invoked after this call returns without error.
+// The call returns an error if the listener cannot be deleted (e.g. a multi-address listener can only
+// be deleted after all of its addresses are deleted).
+qd_error_t qd_adaptor_listener_close(qd_adaptor_listener_t *listener);
 
 // Get the operational state of the listener
 //
@@ -74,6 +101,5 @@ char *qd_adaptor_listener_error_message(const qd_adaptor_listener_t *listener);
 // qd_adaptor_listener_accept_t callback
 //
 void qd_adaptor_listener_deny_conn(qd_adaptor_listener_t *listener, pn_listener_t *pn_listener);
-
 
 #endif // __adaptor_listener_h__
