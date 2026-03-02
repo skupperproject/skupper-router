@@ -43,13 +43,17 @@ class NodeTracker:
         self.nodes                 = {}  # id => RouterNode
         self.nodes_by_link_id      = {}  # link-id => node-id
         self.maskbits              = []
+        self.unreachable_ids       = []  # Router-ids of unreachable routers
+        self.unreach_holdoff       = 0
+        self.invalidate_unreach    = False
         self.next_maskbit          = 1   # Reserve bit '0' to represent this router
         for i in range(max_routers):
             self.maskbits.append(None)
-        self.maskbits[0]      = True
-        self.neighbor_max_age = self.container.config.helloMaxAgeSeconds
-        self.ls_max_age       = self.container.config.remoteLsMaxAgeSeconds
-        self.flux_interval    = self.container.config.raIntervalFluxSeconds * 2
+        self.maskbits[0]           = True
+        self.neighbor_max_age      = self.container.config.helloMaxAgeSeconds
+        self.ls_max_age            = self.container.config.remoteLsMaxAgeSeconds
+        self.unreach_holdoff_ticks = self.container.config.unreachableHoldoffSeconds
+        self.flux_interval         = self.container.config.raIntervalFluxSeconds * 2
         self.container.router_adapter.get_agent().add_implementation(self, "router.node")
 
     def refresh_entity(self, attributes):
@@ -181,12 +185,28 @@ class NodeTracker:
                 node.set_cost(cost)
 
             ##
-            # Un-map the addresses on each node that is no longer reachable
+            # Keep the ids of the routers that are no longer reachable
             ##
+            self.unreachable_ids    = []
+            self.unreach_holdoff    = self.unreach_holdoff_ticks
+            self.invalidate_unreach = False
             for node_id, reachable in visited.items():
                 if not reachable:
-                    self.container.log_ls(LOG_INFO, "Node unreachable: %s" % node_id)
-                    self.nodes[node_id].unmap_all_addresses()
+                    self.unreachable_ids.append(node_id)
+                    self.invalidate_unreach = True
+
+        ##
+        # Invalidate the addresses on any remote routers after the holdoff interval
+        ##
+        if self.invalidate_unreach:
+            if self.unreach_holdoff == 0:
+                for node_id in self.unreachable_ids:
+                    if node_id in self.nodes:
+                        self.container.log_ls(LOG_INFO, "Invalidating addresses on unreachable node: %s" % node_id)
+                        self.nodes[node_id].unmap_all_addresses()
+                self.invalidate_unreach = False
+                self.unreachable_ids    = []
+            self.unreach_holdoff -= 1
 
         ##
         # Send link-state requests and mobile-address requests to the nodes
