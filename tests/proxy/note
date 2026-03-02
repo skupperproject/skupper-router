@@ -1,0 +1,22 @@
+Not yet automated.
+
+Simple test using tinyproxy as the forward proxy.
+All processes on same machine using loopback.
+
+1. Start tinyproxy
+
+  $ tinyproxy -c irlproxy.conf -d
+
+2. in another shell start router2
+
+  $ skrouterd -c r2w4.conf
+
+3. in another shell start router1
+
+  $ skrouterd -c r1w4.conf
+
+4. Note 3 happy inter router links.
+
+5. terminate router2, watch router1 reconnect failures with error from proxy.
+
+6. restart router2 and note links reestablished.

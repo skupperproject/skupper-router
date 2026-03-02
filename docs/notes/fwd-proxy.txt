@@ -1,0 +1,46 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+
+Some environments require outgoing connections to use a forward proxy.
+
+One common such proxy uses the HTTP RFC 7231 CONNECT method to
+establish a pass through relay through the forward proxy where the
+byte traffic is passed without modification in each direction.
+
+The proxy negotiation is the first step of setting up the relay to the
+target server.  Once the proxy server confirms or rejects a connection
+relay request, the router's proxy setup code passes control back to
+the existing router connector code.  This uses the new
+pn_proactor_import_socket() call on success or the normal connector
+retry code on failure.
+
+Currently the only consumer of the proxy negotiation module is on
+establishment of inter-router links.  This is a comparatively rare
+operation so performance is not an important objective.  For
+simplicity, the initial IO operations with the proxy server, including
+blocking steps, are handled in a dedicated thread rather than by an
+existing worker thread in the main loop.
+
+The main code for the proxy setup module resides in proxy.c.  The
+connector passes information on the target host and proxy server
+configuration and a callback routine.  The callback routine runs in
+the timer thread where the connector parses a provided
+qd_proxy_setup_info_t structure and cleans up or starts the
+pn_connection_t as appropriate.

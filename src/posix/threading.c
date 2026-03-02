@@ -140,7 +140,8 @@ static const char thread_names[SYS_THREAD_ROLE_COUNT][SYS_THREAD_NAME_MAX + 1] =
     "core_thread",   // SYS_THREAD_CORE
     "wrkr_",         // SYS_THREAD_PROACTOR (multiple)
     "vflow_thread",  // SYS_THREAD_VFLOW
-    "lws_thread"     // SYS_THREAD_LWS_HTTP
+    "lws_thread",    // SYS_THREAD_LWS_HTTP
+    "proxy_thread"   // SYS_THREAD_PROXY
 };
 
 static sys_atomic_t proactor_thread_count = 0;

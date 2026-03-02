@@ -67,6 +67,7 @@ typedef enum {
     SYS_THREAD_PROACTOR,
     SYS_THREAD_VFLOW,
     SYS_THREAD_LWS_HTTP,
+    SYS_THREAD_PROXY,
     // add new thread roles here and update _thread_names in threading.c
     SYS_THREAD_ROLE_COUNT
 } sys_thread_role_t;
