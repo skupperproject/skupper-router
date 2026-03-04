@@ -46,7 +46,7 @@ class MultiAddressListenerTest(TestCase):
 
     @classmethod
     def findNewFlowId(cls, entity_type, entity_name, van_address=None, sources=None):
-        def findIdOnce(sources):
+        def findId(sources):
             flow_id = None
             for _, records in sources.items():
                 for rec in records:
@@ -54,26 +54,17 @@ class MultiAddressListenerTest(TestCase):
                         return rec['IDENTITY']
             return None
 
-        def findIdRepeat():
+        def findIdRetry():
             sources = cls.snooper_thread.get_results()
-            return findIdOnce(sources)
+            return findId(sources)
 
         if sources is not None:
-            return findIdOnce(sources)
+            return findId(sources)
         else:
-            return retry(findIdRepeat)
+            return retry(findIdRetry)
 
     @classmethod
     def setUpClass(cls):
-        """
-        Start two routers: R1 and R2. Both have two tcpConnectors with two TCP echo
-        server attached. Both router also  has four tcpListeners. One of the
-        tcpConnectors and two of the tcpListeners are using SSL at both routers.
-        The new config flag is tuned on for R1 but not for R2.
-        Each tcpConnector has a unique VAN address which is also used by one tcpListener
-        at each router. The four distinct VAN addresses are used to test deletion of a
-        tcpListeners and tcpConnectors with ot without using SSL.
-        """
         super(MultiAddressListenerTest, cls).setUpClass()
 
         cls.test_name = 'MultiAddressListenerTest'
@@ -103,18 +94,10 @@ class MultiAddressListenerTest(TestCase):
                                ofilename=os.path.join(os.path.dirname(os.getcwd()),
                                                       f"{cls.test_name}_echo_server.log"))
         echo_servers = {}
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_1"
-        echo_servers[cls.van_address[0]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[0]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_2"
-        echo_servers[cls.van_address[1]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[1]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_3"
-        echo_servers[cls.van_address[2]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[2]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_4"
-        echo_servers[cls.van_address[3]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[3]].is_running
+        for i in range(4):
+            server_prefix = f"{cls.test_name} ECHO_SERVER_addr_{i+1}"
+            echo_servers[cls.van_address[i]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
+            assert echo_servers[cls.van_address[i]].is_running
 
         cls.echo_servers = echo_servers
 
@@ -125,44 +108,22 @@ class MultiAddressListenerTest(TestCase):
                              'multiAddressStrategy': "priority",
                              'name': cls.listener_name})]
 
-        # listener address config
-        cls.listener_address_config = [
-            ('listenerAddress', {'name': cls.listener_address_name[0],
-                                 'value': cls.listener_address_priority[0],
-                                 'address': cls.van_address[0],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[1],
-                                 'value': cls.listener_address_priority[1],
-                                 'address': cls.van_address[1],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[2],
-                                 'value': cls.listener_address_priority[2],
-                                 'address': cls.van_address[2],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[3],
-                                 'value': cls.listener_address_priority[3],
-                                 'address': cls.van_address[3],
-                                 'listener': cls.listener_name})]
-
-        # tcp connector configs
-        cls.connector_config = [
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[0],
-                              'port': echo_servers[cls.van_address[0]].port,
-                              'name': cls.connector_name[0]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[1],
-                              'port': echo_servers[cls.van_address[1]].port,
-                              'name': cls.connector_name[1]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[2],
-                              'port': echo_servers[cls.van_address[2]].port,
-                              'name': cls.connector_name[2]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[3],
-                              'port': echo_servers[cls.van_address[3]].port,
-                              'name': cls.connector_name[3]})
-        ]
+        # listener address amd tcp connector configs
+        cls.listener_address_config = []
+        cls.connector_config = []
+        for i in range(4):
+             cls.listener_address_config.append(
+                 ('listenerAddress', {'name': cls.listener_address_name[i],
+                                        'value': cls.listener_address_priority[i],
+                                        'address': cls.van_address[i],
+                                        'listener': cls.listener_name})
+             )
+             cls.connector_config.append(
+                 ('tcpConnector', {'host': "localhost",
+                                    'address': cls.van_address[i],
+                                    'port': echo_servers[cls.van_address[i]].port,
+                                    'name': cls.connector_name[i]})
+             )
 
         # Launch routers
         inter_router_port = cls.tester.get_port()
@@ -229,7 +190,7 @@ class MultiAddressListenerTest(TestCase):
         # listener and connector vflow ids.
         cls.matched_biflow_tport_records = {}
 
-        # Generix info messages
+        # Generic info messages
         cls.logger = Logger(title=cls.test_name, print_to_console=True)
 
     @classmethod
@@ -293,7 +254,7 @@ class MultiAddressListenerTest(TestCase):
         # There may be a delay before address watch marks a listener address unreachable
         # when the corresponding tcpConnector is deleted. We use the retry() function to re-launch
         # echo client when the client gets stuck trying to send via the tcpConnector already
-        # closed. This manifest as a "server closed" exception when we call the client wait()
+        # closed. This manifests as a "server closed" exception when we call the client wait()
         # function.
         client_logger = Logger(title=client_prefix,
                                print_to_console=True)
@@ -318,7 +279,7 @@ class MultiAddressListenerTest(TestCase):
 
     def check_biflow_tport_vflow_record(self, router_id, listener_vflow_id, connector_vflow_id):
         """
-        Check if BIFLOW_TPORT vflow record for the specific listener and connector
+        Check if BIFLOW_TPORT vflow record exists for the specific listener and connector
         """
 
         # Add the new expected record description to the ones that have been matched already (in previous calls
