@@ -33,14 +33,15 @@ The router management schema is extended as follows.
 The new `multiAddressStrategy` field in the tcpListener entity can take the following values:
 
 * `none`: No address selection strategy is defined for the listener. This value indicates that it is an ordinary listener which has exactly one address. The address is defined in the address field of the listener entity. This is the default value.
-* `priority`: Indicates a multi address listener. The `address` field of the listener entity is ignored. This address selection strategy always picks the address with the highest priority value from the current set of reachable addresses. Note that this is the only supported address selection strategy currently.
+* `priority`: Multi address listener. This address selection strategy always picks the address with the highest priority value from the current set of reachable addresses.
+* `weighted` : Multi address listener. New connections are distributed randomly among the reachable addresses according to their `weight` values. The higher the `weight` of an address relative to the that of the other addresses, the higher the likelihood that it will be selected for a new connection. E.g. if each available address has the same weight value then new connections are distributed in a random uniform way among them. If, for instance, only two addresses are reachable with `weight` values 99 and 1, then the first address is selected for approximately 99% of the new connections.
 
 ### New listener address entity
 
 The new listenerAddress entity has the following fields.
 
 * `address`: The service address (a.k.a. routing key) value.
-* `value`: An integer parameter. The priority address selection strategy interprets this value as priority. Larger values represent higher priority.
+* `value`: An integer parameter. The `priority` address selection strategy interprets this value as priority. Larger values represent higher priority. The `weighted` strategy interprets it as the `weight` value. Note that only positive `weight` values are valid.
 * `listener`: The name of the listener which this service address is to be associated with. The referred listener must already exist.
 
 The `listenerAddress` entity supports `create` and `delete` operations. Service address entities can be created and deleted dynamically during the lifespan of the corresponding multi address listener.
@@ -48,6 +49,6 @@ The `listenerAddress` entity supports `create` and `delete` operations. Service 
 ## Implementation notes
 
 * Deletion of a service address entity does not affect already existing client connections targeting that address.
-* If multiple service addresses share the same value, those addresses will be ordered non-deterministically by the router. I.e. if there are two addresses with the same value, and that value is the highest priority, and both addresses are reachable, the router will arbitrarily choose one of those addresses to be treated as the currently highest priority address.
+* In case of the `priority` strategy, if multiple service addresses share the same value, those addresses will be ordered non-deterministically by the router. I.e. if there are two addresses with the same value, and that value is the highest priority, and both addresses are reachable, the router will arbitrarily choose one of those addresses to be treated as the currently highest priority address.
 * Each listener address holds a reference to the parent listener adaptor hence it is not allowed to delete a multi-address listener if it has any associated address.
 * A vanflow record of type `VFLOW_RECORD_LISTENER`is created for each individual address of a multi-address listener. The record begins and ends when the address is created and deleted, respectively. Vanflow records of the same multi-address listener have the same listener name.
