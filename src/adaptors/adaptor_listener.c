@@ -857,6 +857,20 @@ void qd_adaptor_listener_address_connection_opened(qd_listener_address_t  *addr)
     vflow_set_uint64(addr->vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, addr->connections_opened);
 }
 
+qd_error_t qd_adaptor_listener_refresh_address(qd_entity_t* entity, void *impl) {
+    qd_error_t ret;
+    uint64_t co = 0;
+
+    qd_listener_address_t  *addr = (qd_listener_address_t  *)impl;
+    if(!!addr->listener) {
+        sys_mutex_lock(&addr->listener->lock);
+        co = addr->connections_opened;
+        sys_mutex_unlock(&addr->listener->lock);
+    }
+    ret = qd_entity_set_long(entity, "connectionsOpened", co);
+    return ret;
+}
+
 void qd_adaptor_listener_init(void)
 {
     sys_mutex_init(&_listeners_lock);

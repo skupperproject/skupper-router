@@ -57,6 +57,9 @@ void *qd_adaptor_listener_add_address(qd_listener_address_config_t *config);
 // Delete an item from service address list of a multi-address listener
 void qd_adaptor_listener_delete_address(qd_dispatch_t *qd, void *imp);
 
+// Refresh listenerAddress entity
+qd_error_t qd_adaptor_listener_refresh_address(qd_entity_t *entity, void *impl);
+
 // Callback invoked when a client has connected to the listener and is waiting to be accepted.  The application may
 // accept the new connection during this callback by allocating a pn_raw_connection_t and passing it to
 // pn_listener_raw_accept().  This callback may instead deny the new connection by calling

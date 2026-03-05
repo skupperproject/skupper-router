@@ -2601,7 +2601,8 @@ QD_EXPORT void qd_dispatch_delete_tcp_listener_address(qd_dispatch_t *qd, void *
 
 QD_EXPORT qd_error_t qd_entity_refresh_listenerAddress(qd_entity_t* entity, void *impl)
 {
-    return QD_ERROR_NONE;
+    qd_error_t ret = qd_adaptor_listener_refresh_address(entity, impl);
+    return ret;
 }
 
 QD_EXPORT void qd_dispatch_delete_tcp_connector(qd_dispatch_t *qd, void *impl)

@@ -1263,6 +1263,10 @@
                     "type": "string",
                     "create": true,
                     "required": true
+                },
+                "connectionsOpened": {
+                    "type": "integer",
+                    "description": "The number of connections opened for this listener address."
                 }
             }
        },
