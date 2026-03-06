@@ -35,7 +35,6 @@ typedef struct qd_connection_t  qd_connection_t;
 typedef struct vflow_record_t   vflow_record_t;
 typedef struct qd_tls_config_t  qd_tls_config_t;
 typedef struct qd_connector_config_t qd_connector_config_t;
-typedef struct qd_proxy_context_t    qd_proxy_context_t;
 
 typedef enum {
     CTOR_STATE_INIT = 0,
@@ -67,9 +66,9 @@ typedef struct qd_connector_t {
     qd_connection_t          *qd_conn;
     bool                      oper_status_down;  // set when oper-status transitions to 'down' to avoid repeated error indications.
     bool                      is_data_connector; // inter-router conn for streaming messages
-    bool                      is_proxy_connector;  // conn passes through a proxy server
-    bool                      proxy_pending;  // proxy negotiation in progress
-    int                       proxy_socket;  // -1 if owned by proactor or not negotiated
+    bool                      uses_proxy;        // conn passes through a proxy server
+    bool                      proxy_pending;     // proxy negotiation in progress
+    int                       proxy_socket;      // -1 if owned by proactor or not negotiated
     /* This conn_list contains all the connection information needed to make a connection. It also includes failover
      * connection information */
     qd_failover_item_list_t   conn_info_list;
@@ -104,7 +103,6 @@ struct qd_connector_config_t {
     qd_tls_config_t          *tls_config;
     uint64_t                  tls_ordinal;
     uint64_t                  tls_oldest_valid_ordinal;
-    qd_proxy_context_t       *proxy_context;
     uint32_t                  data_connection_count;  // # of child inter-router data connections
     sys_atomic_t              active_control_conn_count;
     // The group correlation id for all child connectors/connections

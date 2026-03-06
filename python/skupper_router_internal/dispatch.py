@@ -131,6 +131,7 @@ class QdDll(PyDLL):
 
         # proxyProfile
         self._prototype(self.qd_configure_proxy_profile, c_void_p, [self.qd_dispatch_p, py_object])
+        self._prototype(self.qd_update_proxy_profile, c_void_p, [self.qd_dispatch_p, py_object, c_void_p])
         self._prototype(self.qd_delete_proxy_profile, None, [self.qd_dispatch_p, c_void_p])
 
         # address and autoLink

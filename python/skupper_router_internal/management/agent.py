@@ -420,6 +420,11 @@ class ProxyProfileEntity(EntityAdapter):
     def _delete(self):
         self._qd.qd_delete_proxy_profile(self._dispatch, self._implementations[0].key)
 
+    def _update(self):
+        proxy_profile = self._qd.qd_update_proxy_profile(self._dispatch, self, self._implementations[0].key)
+        if proxy_profile is None:
+            raise ValidationError("proxyProfile configuration update failed: see logs for details.")
+
     def _identifier(self):
         return self.name
 

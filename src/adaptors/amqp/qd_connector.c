@@ -171,11 +171,11 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
     const qd_connector_config_t *ctor_config = connector->ctor_config;
     qd_failover_item_t *item = qd_connector_get_conn_info_lh(connector);
 
-    if (connector->is_proxy_connector && connector->proxy_socket == -1) {
+    if (connector->uses_proxy && connector->proxy_socket == -1) {
         // Negotiate a proxy relay before AMQP configuration and starting the pn_connection_t.
         connector->proxy_pending = true;
         sys_atomic_inc(&connector->ref_count); // For the proxy handshake thread. Decrement on join.
-        qd_proxy_setup_lh(connector, qd_conn, item->host, item->port, ctor_config->proxy_context, proxy_setup_cb);
+        qd_proxy_setup_lh(connector, qd_conn, item->host, item->port, proxy_setup_cb);
         // connector try_open logic resumes below at proxy_setup_cb on timer thread.
         return;
     }
@@ -206,11 +206,12 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
     /* Note: the transport is configured in the PN_CONNECTION_BOUND event */
     
     // Start Proton connection via host_port or existing proxy socket as appropriate.
-    if (!connector->is_proxy_connector) {
+    if (!connector->uses_proxy) {
         qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
 
         pn_proactor_connect(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, host_port);
     } else {
+        assert(connector->proxy_socket != -1);
         qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting via proxy to %s", qd_conn->connection_id, host_port);
         pn_proactor_import_socket(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, NULL, connector->proxy_socket);
         connector->proxy_socket = -1;  // Socket now owned by proactor/pn_conn.
@@ -270,24 +271,31 @@ static void deferred_close(qd_connection_t *qd_conn, void *context, bool discard
  */
 static void proxy_setup_cb(void *context)
 {
+    ASSERT_MGMT_THREAD;
     qd_proxy_setup_info_t *info = (qd_proxy_setup_info_t *) context;
     qd_connector_t *ctor = info->connector;
     bool log_async_deletion = false;
     sys_thread_join(info->proxy_thread);
     sys_thread_free(info->proxy_thread);
-    qd_timer_free(info->callback_timer);
 
+    // This lock not technically needed due to join, but makes tsan happy
+    sys_mutex_lock(&info->lock);
+    assert(!info->shutdown);  // proactor still doing work, i.e. this callback
+    int proxyfd = info->proxy_socket;
+    sys_mutex_unlock(&info->lock);
+    
     sys_mutex_lock(&ctor->lock);
     ctor->proxy_pending = false;
     if (ctor->state == CTOR_STATE_DELETED) {
-        if (info->proxy_socket != -1) {
-            close(info->proxy_socket);
-            info->proxy_socket = -1;
+        if (proxyfd != -1) {
+            close(proxyfd);
+            proxyfd = -1;
             log_async_deletion = true;  // Log after lock dropped.
         }
     }
-    if (info->proxy_socket >= 0) {
-        ctor->proxy_socket = info->proxy_socket;
+    if (proxyfd >= 0) {
+        // Success.  qd_conn and it's pn_conn can now be configured and started.
+        ctor->proxy_socket = proxyfd;
         try_open_lh(ctor, info->qd_conn);
     } else {
         if (ctor->state != CTOR_STATE_DELETED) {
@@ -297,9 +305,9 @@ static void proxy_setup_cb(void *context)
     }
     sys_mutex_unlock(&ctor->lock);
 
-    if (info->proxy_socket == -1) {
+    if (proxyfd == -1) {
         // qd_conn ownership NOT moved to ctor->qd_conn, so cleanup.
-        assert(info->qd_conn == NULL);
+        assert(info->qd_conn != NULL);
         free_qd_connection_t(info->qd_conn);
     }
     if (log_async_deletion) {
@@ -336,9 +344,8 @@ qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_
     connector->conn_index  = 1;
     connector->state       = CTOR_STATE_INIT;
     connector->tls_ordinal = ctor_config->tls_ordinal;
-    if (ctor_config->proxy_context) {
-        connector->is_proxy_connector = true;
-        qd_proxy_context_incref(ctor_config->proxy_context);
+    if (!!ctor_config->config.proxy_profile_name) {
+        connector->uses_proxy = true;
     }
     connector->proxy_socket = -1;
 
@@ -413,7 +420,6 @@ void qd_connector_decref(qd_connector_t* connector)
         assert(connector->state == CTOR_STATE_DELETED);
         assert(connector->qd_conn == 0);
 
-        qd_proxy_context_decref(connector->ctor_config->proxy_context);
         qd_connector_config_decref(connector->ctor_config);
         qd_timer_free(connector->reconnect_timer);
         sys_mutex_free(&connector->lock);
@@ -760,15 +766,17 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         }
     }
     //
-    // If a proxyProfile is configured, get a reference
+    // Check if proxyProfile exists
     //
     if (ctor_config->config.proxy_profile_name) {
-        ctor_config->proxy_context = qd_proxy_context(ctor_config->config.proxy_profile_name);
-        if (!ctor_config->proxy_context) {
-            // Above call has set the qd_error_message(), which is logged below
+        qd_proxy_profile_t *profile = qd_proxy_profile(ctor_config->config.proxy_profile_name);
+        if (!profile) {
+            qd_error_clear();
+            qd_error(QD_ERROR_NOT_FOUND, "proxyProfile '%s' not found", ctor_config->config.proxy_profile_name);
             goto error;
         }
-        qd_proxy_context_incref(ctor_config->proxy_context);
+        // re-acquire fresh ref on each new connection attempt
+        qd_proxy_profile_decref(profile);
     }
     if (is_inter_router || is_edge || is_inter_edge) {
         ctor_config->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
@@ -859,7 +867,6 @@ void qd_connector_config_decref(qd_connector_config_t *ctor_config)
         sys_atomic_destroy(&ctor_config->active_control_conn_count);
         free(ctor_config->policy_vhost);
         qd_tls_config_decref(ctor_config->tls_config);
-        qd_proxy_context_decref(ctor_config->proxy_context);
         qd_server_config_free(&ctor_config->config);
         free_qd_connector_config_t(ctor_config);
     }

@@ -20,13 +20,13 @@
  */
 
 typedef struct qd_proxy_profile_t    qd_proxy_profile_t;
-typedef struct qd_proxy_context_t    qd_proxy_context_t;
 typedef struct qd_proxy_setup_info_t qd_proxy_setup_info_t;
 
 /* One for each negotiation attempt with the proxy server intermediary.
  * Holds info for separate thread startup and for completion timer callback.
  */
 struct qd_proxy_setup_info_t {
+    DEQ_LINKS(qd_proxy_setup_info_t);
     qd_connector_t     *connector;
     qd_connection_t    *qd_conn;  // Lives independently of connector until proxy negotiated
     const char         *target_host;
@@ -34,7 +34,9 @@ struct qd_proxy_setup_info_t {
     qd_proxy_profile_t *profile;
     sys_thread_t       *proxy_thread;
     qd_timer_t         *callback_timer;
+    sys_mutex_t         lock;    // Protects next two vars, needed against shutdown thread only
     int                 proxy_socket;
+    bool                shutdown;
 };
 
 void qd_proxy_initialize(void);
@@ -44,13 +46,13 @@ void qd_proxy_free(qd_proxy_setup_info_t *info);
 
 typedef void (*qd_timer_cb_t)(void *context);
 void  qd_proxy_setup_lh(qd_connector_t *c, qd_connection_t *qd_conn, const char *host, const char *port,
-                        qd_proxy_context_t *ctx, qd_timer_cb_t cb);
+                        qd_timer_cb_t cb);
 void *qd_configure_proxy_profile(qd_dispatch_t *qd, qd_entity_t *entity);
 
 QD_EXPORT void                qd_delete_proxy_profile(qd_dispatch_t *qd, void *impl);
+QD_EXPORT void               *qd_update_proxy_profile(qd_dispatch_t *qd, qd_entity_t *entity, void *impl);
 QD_EXPORT qd_error_t          qd_entity_refresh_proxyProfile(qd_entity_t *entity, void *impl);
-QD_EXPORT qd_proxy_context_t *qd_proxy_context(const char *proxy_profile_name);
-QD_EXPORT void                qd_proxy_context_incref(qd_proxy_context_t *cntx);
-QD_EXPORT void                qd_proxy_context_decref(qd_proxy_context_t *cntx);
+QD_EXPORT qd_proxy_profile_t *qd_proxy_profile(const char *proxy_profile_name);
+QD_EXPORT void                qd_proxy_profile_decref(qd_proxy_profile_t *profile);
 
 #endif

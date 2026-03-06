@@ -758,29 +758,33 @@
             "description":"Attributes for establishing an AMQP connection via a forward proxy.",
             "referential": true,
             "extends": "configurationEntity",
-            "operations": ["CREATE", "DELETE"],
+            "operations": ["CREATE", "UPDATE", "DELETE"],
             "attributes": {
-                "proxyHost": {
+                "host": {
                     "description":"IP address: ipv4 or ipv6 literal or a host name of proxy server",
                     "type": "string",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
-                "proxyPort": {
+                "port": {
                     "description": "Port number served by proxy.",
                     "type": "string",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
-                "proxyUserName": {
+                "username": {
                     "type": "string",
                     "required": false,
                     "description": "Optional HTTP basic authorization user name.",
-                    "create": true
+                    "create": true,
+                    "update": true
                 },
-                "proxyPassword": {
+                "password": {
                     "type": "string",
                     "required": false,
                     "description": "Optional HTTP basic authorization password.",
                     "create": true,
+                    "update": true,
                     "hidden": true
                 }
             }
