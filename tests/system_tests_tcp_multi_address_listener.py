@@ -288,8 +288,7 @@ class MultiAddressListenerTest(TestCase):
                                        port=client_port,
                                        size=1,
                                        count=1,
-                                       logger=client_logger,
-                                       delay_close=True)
+                                       logger=client_logger)
                 client.wait()
             except Exception as e:
                 if "server closed" in str(e):
