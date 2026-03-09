@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import subprocess
+import resource
 
 from system_test import TestCase, Qdrouterd, retry, retry_assertion
 from system_test import Logger
@@ -35,6 +36,20 @@ class MultiAddressListenerTest(TestCase):
     configured at startup. Four and two distinct service addresses are created for the listeners, respectively.
     Each address targets a separate tcpConnector which in turn connects to a separate echo server.
     """
+
+    @classmethod
+    def set_nofile_limit(cls):
+        (cls.soft_nofile_limit, cls.hard_nofile_limit) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if cls.soft_nofile_limit < 2048:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (2048, cls.hard_nofile_limit))
+            cls.nofile_limit_changed = True
+        else:
+            cls.nofile_limit_changed = False
+
+    @classmethod
+    def restore_nofile_limit(cls):
+        if cls.nofile_limit_changed:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (cls.soft_nofile_limit, cls.hard_nofile_limit))
 
     @classmethod
     def findNewFlowId(cls, entity_type, entity_name, van_address=None, sources=None):
@@ -200,6 +215,9 @@ class MultiAddressListenerTest(TestCase):
         # listener and connector vflow ids.
         cls.matched_biflow_tport_records = {}
 
+        # Increase number of open files limit if necessary for the random weighted distribution tests
+        cls.set_nofile_limit()
+
         # Generic info messages
         cls.logger = Logger(title=cls.test_name, print_to_console=True)
 
@@ -208,6 +226,7 @@ class MultiAddressListenerTest(TestCase):
         # stop echo servers
         for _, server in cls.echo_servers.items():
             server.wait()
+        cls.restore_nofile_limit()
         super(MultiAddressListenerTest, cls).tearDownClass()
 
     def check_setup_status(self):
@@ -533,7 +552,8 @@ class MultiAddressListenerTest(TestCase):
         # 1000 new connections, addr5 and addr6 get addr5_co and addr6_co, respectively (addr5_co+addr6_co=1000)
         # We expect that addr5_co:addr6_co is close enough to 3:7 (the ratio of the weights)
         client_prefix = "Echo_client_WEIGHTED"
-        self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
         addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
         self.assertIsNotNone(addr5_co)
         addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
@@ -571,7 +591,8 @@ class MultiAddressListenerTest(TestCase):
         # check connections distributions again
         # addr5: (weight:3, reachable:True)
         # addr6: (weight:7, reachable:True)
-        self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
         addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
         self.assertIsNotNone(addr5_co)
         addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
@@ -600,7 +621,8 @@ class MultiAddressListenerTest(TestCase):
         # check connections distributions again
         # addr5: (weight:3, reachable:True)
         # addr6: (weight:7, reachable:True)
-        self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
         addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
         self.assertIsNotNone(addr5_co)
         addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
