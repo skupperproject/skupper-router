@@ -42,6 +42,9 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
+extern void qd_server_config_process_password(char **actual_val, char *pw, bool *is_file, bool allow_literal_prefix);
+extern void qd_set_password_from_file(const char *password_file, char **password_field);
+
 // proxyProfile configuration record
 struct qd_proxy_profile_t {
     DEQ_LINKS(qd_proxy_profile_t);
@@ -459,6 +462,27 @@ static qd_error_t _read_proxy_profile(qd_entity_t *entity, qd_proxy_profile_t *p
     profile->username = qd_entity_opt_string(entity, "username", 0);
     if (qd_error_code()) goto error;
     profile->password       = qd_entity_opt_string(entity, "password", 0);
+
+    if (profile->password) {
+        //
+        // Process the password to handle any modifications or lookups needed ("file:")
+        //
+        char *actual_pass = 0;
+        bool is_file_path = 0;
+        qd_server_config_process_password(&actual_pass, profile->password, &is_file_path, true);
+        if (qd_error_code()) goto error;
+
+        if (actual_pass) {
+            if (is_file_path) {
+                qd_set_password_from_file(actual_pass, &profile->password);
+                free(actual_pass);
+            }
+            else {
+                free(profile->password);
+                profile->password = actual_pass;
+            }
+        }
+    }
 
     return QD_ERROR_NONE;
 
