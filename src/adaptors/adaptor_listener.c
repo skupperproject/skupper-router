@@ -29,17 +29,24 @@
 
 // Address selection strategies for multi-address listener
 const char *ADDRESS_STRATEGY_PRIORITY = "priority";
+const char *ADDRESS_STRATEGY_WEIGHTED = "weighted";
 
 typedef enum {
     QD_ADDR_STRATEGY_NONE,
-    QD_ADDR_STRATEGY_PRIORITY // select address with highest priority
+    QD_ADDR_STRATEGY_PRIORITY, // select address with highest priority
+    QD_ADDR_STRATEGY_WEIGHTED  // likelihood of selecting an address is proportional to its weight
 } qd_multi_address_strategy_t;
+
+typedef union qd_address_strategy_context_t {
+    qd_listener_address_t *reachable_highest_priority; // priority strategy
+    uint32_t               reachable_sum_weights;      // weighted strategy
+} qd_address_strategy_context_t;
 
 struct qd_listener_address_t
 {
     DEQ_LINKS(qd_listener_address_t);
     char                  *address;
-    int                    priority;
+    int                    value; // priority or weight
     sys_atomic_t           ref_count;
     qdr_watch_handle_t     addr_watcher;
     bool                   reachable; // true if there is at least one active consumer
@@ -55,16 +62,17 @@ struct qd_adaptor_listener_t {
 
     // the following fields are mutably shared between multiple threads and
     // must be protected by holding the lock:
-    sys_mutex_t                   lock;
-    pn_listener_t                *pn_listener;
-    qd_adaptor_listener_accept_t  on_accept;
-    qd_listener_admin_status_t    admin_status;  // set by mgmt
-    qd_listener_oper_status_t     oper_status;
-    char                         *error_message;
-    int                           ref_count;
-    qd_listener_address_list_t    addresses;
-    qd_multi_address_strategy_t   address_strategy;
-    uint32_t                      reachable_address_count;
+    sys_mutex_t                    lock;
+    pn_listener_t                 *pn_listener;
+    qd_adaptor_listener_accept_t   on_accept;
+    qd_listener_admin_status_t     admin_status;  // set by mgmt
+    qd_listener_oper_status_t      oper_status;
+    char                          *error_message;
+    int                            ref_count;
+    qd_listener_address_list_t     addresses;
+    qd_multi_address_strategy_t    address_strategy;
+    qd_address_strategy_context_t  strategy_context;
+    uint32_t                       reachable_address_count;
 
     // the following fields are immutable so they may be accessed without
     // holding the lock:
@@ -128,6 +136,98 @@ static void _listener_address_free(qd_listener_address_t *addr) {
 
     free(addr->address);
     free_qd_listener_address_t(addr);
+}
+
+// Initialize address strategy
+static void _address_strategy_init(qd_adaptor_listener_t *listener, const qd_adaptor_config_t *config) {
+    if (!config->multi_address_strategy) {
+        assert(config->address);
+        listener->address_strategy = QD_ADDR_STRATEGY_NONE;
+        return;
+    }
+
+    assert(!config->address);
+
+    if (!strcmp(config->multi_address_strategy, ADDRESS_STRATEGY_PRIORITY)) {
+         listener->address_strategy = QD_ADDR_STRATEGY_PRIORITY;
+    } else if (!strcmp(config->multi_address_strategy, ADDRESS_STRATEGY_WEIGHTED)) {
+         listener->address_strategy = QD_ADDR_STRATEGY_WEIGHTED;
+         srand(time(0));
+    }
+}
+
+// Update address strategy specific context when address reachability changes
+static void _address_strategy_context_update_LH(qd_listener_address_t *addr) {
+    //
+    // addr->listener->lock is being held
+    //
+    qd_adaptor_listener_t *listener = addr->listener;
+     switch(listener->address_strategy) {
+        case QD_ADDR_STRATEGY_PRIORITY : {
+            qd_listener_address_t *best_addr = listener->strategy_context.reachable_highest_priority;
+            if (addr->reachable) {
+                if (!best_addr || best_addr->value < addr->value) {
+                    listener->strategy_context.reachable_highest_priority = addr;
+                }
+            } else {
+                if (best_addr == addr) {
+                    best_addr = DEQ_HEAD(listener->addresses);
+                    DEQ_FIND(best_addr, best_addr->reachable);
+                    // Note that best_addr can be NULL here
+                    listener->strategy_context.reachable_highest_priority = best_addr;
+                }
+            }
+            break;
+        }
+        case QD_ADDR_STRATEGY_WEIGHTED :
+            if (addr->reachable) {
+                  listener->strategy_context.reachable_sum_weights += addr->value;
+            } else {
+                assert(listener->strategy_context.reachable_sum_weights >= addr->value);
+                listener->strategy_context.reachable_sum_weights -= addr->value;
+            }
+            break;
+        default:
+            break;
+     }
+}
+
+// Return an optimal reachable address depending on the address selection strategy
+static qd_listener_address_t *_best_reachable_address_LH(qd_adaptor_listener_t *listener) {
+    //
+    // listener->lock is being held
+    //
+    assert(listener->address_strategy != QD_ADDR_STRATEGY_NONE);
+
+    qd_listener_address_t *addr = 0;
+    switch(listener->address_strategy) {
+        case QD_ADDR_STRATEGY_PRIORITY :
+            addr = listener->strategy_context.reachable_highest_priority;
+            break;
+        case QD_ADDR_STRATEGY_WEIGHTED :
+            if (listener->strategy_context.reachable_sum_weights > 0) {
+                int r = rand() % listener->strategy_context.reachable_sum_weights;
+                int partial_sum_weight = 0;
+                // addresses are in decreasing order by weight
+                addr = DEQ_TAIL(listener->addresses);
+                while (addr) {
+                    if (addr->reachable) {
+                        partial_sum_weight += addr->value;
+                        if (r < partial_sum_weight) {
+                            break;
+                        }
+                    }
+                    addr = DEQ_PREV(addr);
+                }
+                assert(r < partial_sum_weight);
+            }
+            break;
+        default:
+            assert(listener->address_strategy == QD_ADDR_STRATEGY_PRIORITY ||
+                    listener->address_strategy == QD_ADDR_STRATEGY_WEIGHTED);
+            break;
+    }
+    return addr;
 }
 
 // called during shutdown: must not schedule work!
@@ -343,9 +443,11 @@ static void _on_watched_address_update(void     *context,
                 addr->reachable = false;
                 assert(li->reachable_address_count > 0);
                 li->reachable_address_count--;
+                _address_strategy_context_update_LH(addr);
             } else if (!addr->reachable && has_consumers) {
                 addr->reachable = true;
                 li->reachable_address_count++;
+                _address_strategy_context_update_LH(addr);
             }
 
             if (li->reachable_address_count > 0) {
@@ -409,6 +511,8 @@ static void _on_watched_address_cancel(void *context)
         if (addr->reachable) {
             assert(li->reachable_address_count > 0);
             li->reachable_address_count--;
+            addr->reachable = false;
+            _address_strategy_context_update_LH(addr);
         }
 
         bool stopped = false;
@@ -461,11 +565,7 @@ qd_adaptor_listener_t *qd_adaptor_listener(const qd_dispatch_t       *qd,
     li->backlog    = config->backlog;
     li->log_module = module;
 
-    if (!!config->multi_address_strategy &&
-        !strcmp(config->multi_address_strategy, ADDRESS_STRATEGY_PRIORITY)) {
-        assert(!config->address);
-        li->address_strategy = QD_ADDR_STRATEGY_PRIORITY;
-    }
+    _address_strategy_init(li, config);
 
     if (li->address_strategy == QD_ADDR_STRATEGY_NONE) {
         // this is a single address listener
@@ -596,15 +696,11 @@ void qd_adaptor_listener_deny_conn(qd_adaptor_listener_t *listener, pn_listener_
 qd_listener_address_t *qd_adaptor_listener_best_address_incref_LH(qd_adaptor_listener_t *listener)
 {
     //
-    //  NOTE: listener->lock is held by the caller
+    //  NOTE: listener->lock is being held
     //
+    assert(DEQ_HEAD(listener->addresses));
 
-    assert(listener->address_strategy == QD_ADDR_STRATEGY_PRIORITY);
-
-    // Addresses are ordered by priority in the address list. Find and return the first reachable one.
-    qd_listener_address_t *addr = DEQ_HEAD(listener->addresses);
-    assert(addr);
-    DEQ_FIND(addr, addr->reachable);
+    qd_listener_address_t *addr = _best_reachable_address_LH(listener);
 
     // Return an address even if none of them are reachable
     if (!addr)
@@ -625,7 +721,7 @@ void *qd_adaptor_listener_add_address(qd_listener_address_config_t *config)
     ZERO(new_addr);
     sys_atomic_init(&new_addr->ref_count, 1);
     new_addr->address = strdup(config->address);
-    new_addr->priority = config->value;
+    new_addr->value = config->value;
 
     sys_mutex_lock(&_listeners_lock);
     qd_adaptor_listener_t *li = DEQ_HEAD(_listeners);
@@ -642,10 +738,10 @@ void *qd_adaptor_listener_add_address(qd_listener_address_config_t *config)
 
             //
             // Insert the new address into the address list.
-            // The list is in decreasing order by priority.
+            // The list is in decreasing order by value.
             //
             qd_listener_address_t *addr = DEQ_HEAD(li->addresses);
-            DEQ_FIND(addr, addr->priority <= new_addr->priority);
+            DEQ_FIND(addr, addr->value <= new_addr->value);
             if (addr) {
                 addr = DEQ_PREV(addr);
                 if (addr)
@@ -759,6 +855,20 @@ void qd_adaptor_listener_address_connection_opened(qd_listener_address_t  *addr)
     addr->connections_opened++;
     assert(!!addr->vflow);
     vflow_set_uint64(addr->vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4, addr->connections_opened);
+}
+
+qd_error_t qd_adaptor_listener_refresh_address(qd_entity_t* entity, void *impl) {
+    qd_error_t ret;
+    uint64_t co = 0;
+
+    qd_listener_address_t  *addr = (qd_listener_address_t  *)impl;
+    if(!!addr->listener) {
+        sys_mutex_lock(&addr->listener->lock);
+        co = addr->connections_opened;
+        sys_mutex_unlock(&addr->listener->lock);
+    }
+    ret = qd_entity_set_long(entity, "connectionsOpened", co);
+    return ret;
 }
 
 void qd_adaptor_listener_init(void)

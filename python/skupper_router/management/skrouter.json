@@ -1110,8 +1110,8 @@
                     "create": true
                 },
                 "multiAddressStrategy": {
-                    "description": "Connection target address selection strategy for multi-address listener. If not 'none', the 'address' field is ignored and multiple service addresses can be specified for the listener by creating 'listenerAddress' entities. The strategy value determines how new connections select a target address. The only supported value is 'priority' currently.  Priority strategy always selects the address with the highest priority value from the current set of reachable addresses.",
-                    "type": ["none", "priority"],
+                    "description": "Connection target address selection strategy for multi-address listener. If not 'none', the 'address' field is ignored and multiple service addresses can be specified for the listener by creating 'listenerAddress' entities. The strategy value determines how new connections select a target address. 'Priority' strategy selects a reachable address with the highest priority value. 'Weighted' strategy applies randomized selection: the higher the weight value of an address (relative to the weight values of other addresses), the higher the likelihood that it will be selected.",
+                    "type": ["none", "priority", "weighted"],
                     "default": "none",
                     "create": true
                 },
@@ -1263,6 +1263,10 @@
                     "type": "string",
                     "create": true,
                     "required": true
+                },
+                "connectionsOpened": {
+                    "type": "integer",
+                    "description": "The number of connections opened for this listener address."
                 }
             }
        },

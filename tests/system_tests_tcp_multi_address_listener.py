@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import subprocess
+import resource
 
 from system_test import TestCase, Qdrouterd, retry, retry_assertion
 from system_test import Logger
@@ -31,22 +32,28 @@ from TCP_echo_server import TcpEchoServer
 
 class MultiAddressListenerTest(TestCase):
     """
-    Test for the multi address listener. Two routers are run. The first one has a multi address listener
-    configured at startup. Four distinct service addresses are created for the listener. Each address targets a
-    separate tcpConnector which in turn connects to a separate echo server. The test uses a vanflow snooper thread
-    to check if the correct connection flow got exercised under the specific configuration. Possible flows are
-    as follows.
-    addr1 -> connector_1
-    addr2 -> connector_2
-    addr3 -? connector_3
-    addr4 -? connector_4
-    The test create and delete listener addresses and tcpConnecters. It launches an echo client after each
-    configuration change to check if new tcp connections target the expected tcpConnecter.
+    Test for the multi address listener. Two routers are run. The first one has two multi address listener
+    configured at startup. Four and two distinct service addresses are created for the listeners, respectively.
+    Each address targets a separate tcpConnector which in turn connects to a separate echo server.
     """
 
     @classmethod
+    def set_nofile_limit(cls):
+        (cls.soft_nofile_limit, cls.hard_nofile_limit) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if cls.soft_nofile_limit < 2048:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (2048, cls.hard_nofile_limit))
+            cls.nofile_limit_changed = True
+        else:
+            cls.nofile_limit_changed = False
+
+    @classmethod
+    def restore_nofile_limit(cls):
+        if cls.nofile_limit_changed:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (cls.soft_nofile_limit, cls.hard_nofile_limit))
+
+    @classmethod
     def findNewFlowId(cls, entity_type, entity_name, van_address=None, sources=None):
-        def findIdOnce(sources):
+        def findId(sources):
             flow_id = None
             for _, records in sources.items():
                 for rec in records:
@@ -54,26 +61,17 @@ class MultiAddressListenerTest(TestCase):
                         return rec['IDENTITY']
             return None
 
-        def findIdRepeat():
+        def findIdRetry():
             sources = cls.snooper_thread.get_results()
-            return findIdOnce(sources)
+            return findId(sources)
 
         if sources is not None:
-            return findIdOnce(sources)
+            return findId(sources)
         else:
-            return retry(findIdRepeat)
+            return retry(findIdRetry)
 
     @classmethod
     def setUpClass(cls):
-        """
-        Start two routers: R1 and R2. Both have two tcpConnectors with two TCP echo
-        server attached. Both router also  has four tcpListeners. One of the
-        tcpConnectors and two of the tcpListeners are using SSL at both routers.
-        The new config flag is tuned on for R1 but not for R2.
-        Each tcpConnector has a unique VAN address which is also used by one tcpListener
-        at each router. The four distinct VAN addresses are used to test deletion of a
-        tcpListeners and tcpConnectors with ot without using SSL.
-        """
         super(MultiAddressListenerTest, cls).setUpClass()
 
         cls.test_name = 'MultiAddressListenerTest'
@@ -85,84 +83,62 @@ class MultiAddressListenerTest(TestCase):
         cls.van_address = [cls.test_name + '_addr_1',
                            cls.test_name + '_addr_2',
                            cls.test_name + '_addr_3',
-                           cls.test_name + '_addr_4']
+                           cls.test_name + '_addr_4',
+                           cls.test_name + '_addr_5',
+                           cls.test_name + '_addr_6']
         # listener addresses
-        cls.listener_address_name =     ['addr1', 'addr2', 'addr3', 'addr4']
-        cls.listener_address_priority = ['10',    '20',    '5',     '15']
-        cls.listener_address_startup =  [True,    True,    False,   False]
+        cls.listener_address_name =    ['addr1', 'addr2', 'addr3', 'addr4', 'addr5', 'addr6']
+        cls.listener_address_value =   ['10',    '20',    '5',     '15',     '3',    '7']
+        cls.listener_address_startup = [True,    True,    False,   False,    True,   True]
         # Listener
-        cls.listener_name = 'listener_multi_1'
-        cls.listener_port = cls.tester.get_port()
+        cls.listener_name = ['listener_multi_1', 'listener_multi_2']
+        cls.listener_port = [cls.tester.get_port(), cls.tester.get_port()]
         # Connectors
-        cls.connector_name = ['connector_1', 'connector_2', 'connector_3', 'connector_4']
+        cls.connector_name = ['connector_1', 'connector_2', 'connector_3', 'connector_4', 'connector_5', 'connector_6']
 
         # Launch TCP echo servers
-        server_logger = Logger(title=cls.test_name,
-                               print_to_console=True,
-                               save_for_dump=False,
-                               ofilename=os.path.join(os.path.dirname(os.getcwd()),
-                                                      f"{cls.test_name}_echo_server.log"))
+        server_logger = [Logger(title=cls.test_name,
+                                print_to_console=True,
+                                save_for_dump=False,
+                                ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                       f"{cls.test_name}_echo_server.log")),
+                         Logger(title=cls.test_name + "_weighted",
+                                save_for_dump=False,
+                                ofilename=os.path.join(os.path.dirname(os.getcwd()),
+                                                       f"{cls.test_name}_echo_server_weighted.log"))]
         echo_servers = {}
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_1"
-        echo_servers[cls.van_address[0]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[0]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_2"
-        echo_servers[cls.van_address[1]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[1]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_3"
-        echo_servers[cls.van_address[2]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[2]].is_running
-        server_prefix = f"{cls.test_name} ECHO_SERVER_addr_4"
-        echo_servers[cls.van_address[3]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger)
-        assert echo_servers[cls.van_address[3]].is_running
+        for i in range(6):
+            server_prefix = f"{cls.test_name} ECHO_SERVER_addr_{i + 1}"
+            echo_servers[cls.van_address[i]] = TcpEchoServer(prefix=server_prefix, port=0, logger=server_logger[i // 4])
+            assert echo_servers[cls.van_address[i]].is_running
 
         cls.echo_servers = echo_servers
 
         # listener config
         cls.listener_config = [
             ('tcpListener', {'host': "0.0.0.0",
-                             'port': cls.listener_port,
+                             'port': cls.listener_port[0],
                              'multiAddressStrategy': "priority",
-                             'name': cls.listener_name})]
+                             'name': cls.listener_name[0]}),
+            ('tcpListener', {'host': "0.0.0.0",
+                             'port': cls.listener_port[1],
+                             'multiAddressStrategy': "weighted",
+                             'name': cls.listener_name[1]})]
 
-        # listener address config
-        cls.listener_address_config = [
-            ('listenerAddress', {'name': cls.listener_address_name[0],
-                                 'value': cls.listener_address_priority[0],
-                                 'address': cls.van_address[0],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[1],
-                                 'value': cls.listener_address_priority[1],
-                                 'address': cls.van_address[1],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[2],
-                                 'value': cls.listener_address_priority[2],
-                                 'address': cls.van_address[2],
-                                 'listener': cls.listener_name}),
-            ('listenerAddress', {'name': cls.listener_address_name[3],
-                                 'value': cls.listener_address_priority[3],
-                                 'address': cls.van_address[3],
-                                 'listener': cls.listener_name})]
-
-        # tcp connector configs
-        cls.connector_config = [
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[0],
-                              'port': echo_servers[cls.van_address[0]].port,
-                              'name': cls.connector_name[0]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[1],
-                              'port': echo_servers[cls.van_address[1]].port,
-                              'name': cls.connector_name[1]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[2],
-                              'port': echo_servers[cls.van_address[2]].port,
-                              'name': cls.connector_name[2]}),
-            ('tcpConnector', {'host': "localhost",
-                              'address': cls.van_address[3],
-                              'port': echo_servers[cls.van_address[3]].port,
-                              'name': cls.connector_name[3]})
-        ]
+        # listener address amd tcp connector configs
+        cls.listener_address_config = []
+        cls.connector_config = []
+        for i in range(6):
+            cls.listener_address_config.append(
+                ('listenerAddress', {'name': cls.listener_address_name[i],
+                                     'value': cls.listener_address_value[i],
+                                     'address': cls.van_address[i],
+                                     'listener': cls.listener_name[i // 4]}))
+            cls.connector_config.append(
+                ('tcpConnector', {'host': "localhost",
+                                  'address': cls.van_address[i],
+                                  'port': echo_servers[cls.van_address[i]].port,
+                                  'name': cls.connector_name[i]}))
 
         # Launch routers
         inter_router_port = cls.tester.get_port()
@@ -171,8 +147,11 @@ class MultiAddressListenerTest(TestCase):
             ('listener', {'port': cls.tester.get_port()}),
             ('connector', {'role': 'inter-router', 'port': inter_router_port}),
             cls.listener_config[0],
+            cls.listener_config[1],
             cls.listener_address_config[0],
             cls.listener_address_config[1],
+            cls.listener_address_config[4],
+            cls.listener_address_config[5],
             cls.connector_config[0]
         ])
         config_2 = Qdrouterd.Config([
@@ -181,7 +160,9 @@ class MultiAddressListenerTest(TestCase):
             ('listener', {'role': 'inter-router', 'port': inter_router_port}),
             cls.connector_config[1],
             cls.connector_config[2],
-            cls.connector_config[3]
+            cls.connector_config[3],
+            cls.connector_config[4],
+            cls.connector_config[5]
         ])
 
         cls.router_2 = cls.tester.qdrouterd('test_router_2', config_2)
@@ -196,13 +177,18 @@ class MultiAddressListenerTest(TestCase):
         expected = {
             router_1_id : [
                 ('CONNECTOR', {'NAME': cls.connector_name[0], 'VAN_ADDRESS': cls.van_address[0]},
-                 'LISTENER', {'NAME': cls.listener_name, 'VAN_ADDRESS': cls.van_address[0]},
-                 'LISTENER', {'NAME': cls.listener_name, 'VAN_ADDRESS': cls.van_address[1]})
+                 'LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[0]},
+                 'LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[1]},
+                 'LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[4]},
+                 'LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[5]}
+                 )
             ],
             router_2_id : [
                 ('CONNECTOR', {'NAME': cls.connector_name[1], 'VAN_ADDRESS': cls.van_address[1]}),
                 ('CONNECTOR', {'NAME': cls.connector_name[2], 'VAN_ADDRESS': cls.van_address[2]}),
-                ('CONNECTOR', {'NAME': cls.connector_name[3], 'VAN_ADDRESS': cls.van_address[3]})
+                ('CONNECTOR', {'NAME': cls.connector_name[3], 'VAN_ADDRESS': cls.van_address[3]}),
+                ('CONNECTOR', {'NAME': cls.connector_name[4], 'VAN_ADDRESS': cls.van_address[4]}),
+                ('CONNECTOR', {'NAME': cls.connector_name[5], 'VAN_ADDRESS': cls.van_address[5]})
             ]
         }
 
@@ -218,7 +204,7 @@ class MultiAddressListenerTest(TestCase):
             cls.listener_vflow_id = {}
             for i, aname in enumerate(cls.listener_address_name):
                 if cls.listener_address_startup[i]:
-                    cls.listener_vflow_id[aname] = cls.findNewFlowId('LISTENER', cls.listener_name, cls.van_address[i], vflow_records)
+                    cls.listener_vflow_id[aname] = cls.findNewFlowId('LISTENER', cls.listener_name[i // 4], cls.van_address[i], vflow_records)
             for i, cname in enumerate(cls.connector_name):
                 cls.connector_vflow_id[cname] = cls.findNewFlowId('CONNECTOR', cname, cls.van_address[i], vflow_records)
         cls.setup_vflow_records = vflow_records
@@ -229,7 +215,10 @@ class MultiAddressListenerTest(TestCase):
         # listener and connector vflow ids.
         cls.matched_biflow_tport_records = {}
 
-        # Generix info messages
+        # Increase number of open files limit if necessary for the random weighted distribution tests
+        cls.set_nofile_limit()
+
+        # Generic info messages
         cls.logger = Logger(title=cls.test_name, print_to_console=True)
 
     @classmethod
@@ -237,6 +226,7 @@ class MultiAddressListenerTest(TestCase):
         # stop echo servers
         for _, server in cls.echo_servers.items():
             server.wait()
+        cls.restore_nofile_limit()
         super(MultiAddressListenerTest, cls).tearDownClass()
 
     def check_setup_status(self):
@@ -273,7 +263,17 @@ class MultiAddressListenerTest(TestCase):
         # check that the entity has been created
         retry_assertion(lambda: self.find_entity(entity_type, entity_name, router))
 
-    def is_listener_port_closed(self):
+    def read_entity_attribute(self, attr_name, entity_type, entity_name, router):
+        cmd = 'READ --type=' + entity_type + ' --name=' + entity_name
+        out = router.sk_manager(cmd)
+        try:
+            e = json.loads(out)
+            res = e[attr_name]
+        except Exception:
+            return None
+        return res
+
+    def is_listener_port_closed(self, port):
         cmd = shutil.which("lsof")
         if cmd is None:
             self.logger.log("(INFO) Skipping listening port check because 'lsof' command is not available")
@@ -281,7 +281,7 @@ class MultiAddressListenerTest(TestCase):
 
         def check_port():
             try:
-                res = subprocess.run([cmd, "-nP", f"-iTCP:{self.listener_port}", "-sTCP:LISTEN"],
+                res = subprocess.run([cmd, "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
                                      stdout=subprocess.DEVNULL, check=True)
             except subprocess.CalledProcessError:
                 return True
@@ -289,36 +289,41 @@ class MultiAddressListenerTest(TestCase):
 
         return retry(check_port, delay=0.1)
 
-    def create_echo_client(self, client_prefix, client_port):
+    def create_echo_client(self, client_prefix, client_port, num_clients=1, verbose_log=True):
         # There may be a delay before address watch marks a listener address unreachable
         # when the corresponding tcpConnector is deleted. We use the retry() function to re-launch
         # echo client when the client gets stuck trying to send via the tcpConnector already
-        # closed. This manifest as a "server closed" exception when we call the client wait()
+        # closed. This manifests as a "server closed" exception when we call the client wait()
         # function.
         client_logger = Logger(title=client_prefix,
-                               print_to_console=True)
+                               print_to_console=verbose_log)
+        num_failures = 0
 
         def echo_client():
+            nonlocal num_failures
             try:
                 client = TcpEchoClient(client_prefix,
                                        host='localhost',
                                        port=client_port,
                                        size=1,
                                        count=1,
-                                       logger=client_logger,
-                                       delay_close=True)
+                                       logger=client_logger)
                 client.wait()
             except Exception as e:
                 if "server closed" in str(e):
+                    num_failures += 1
                     return False
                 raise
             return True
 
-        retry(echo_client, delay=0.2)
+        for i in range(num_clients):
+            retry(echo_client, delay=0.2)
+
+        return num_failures
 
     def check_biflow_tport_vflow_record(self, router_id, listener_vflow_id, connector_vflow_id):
         """
-        Check if BIFLOW_TPORT vflow record for the specific listener and connector
+        Check if BIFLOW_TPORT vflow record exists for the specific listener and connector
         """
 
         # Add the new expected record description to the ones that have been matched already (in previous calls
@@ -354,13 +359,23 @@ class MultiAddressListenerTest(TestCase):
 
     def check_flow(self, flow_index, echo_client_name):
         client_prefix = self.test_name + echo_client_name +  self.van_address[flow_index]
-        self.create_echo_client(client_prefix, self.listener_port)
+        self.create_echo_client(client_prefix, self.listener_port[0])
         connector_vflow_id = self.connector_vflow_id[self.connector_name[flow_index]]
         listener_vflow_id = self.listener_vflow_id[self.listener_address_name[flow_index]]
         router_1_id = self.router_1.config.router_id
         self.check_biflow_tport_vflow_record(router_1_id, listener_vflow_id, connector_vflow_id)
 
-    def test_multi_address_listener(self):
+    def test_multi_address_listener_priority(self):
+        '''
+        Testing `priority`address selection strategy. The test uses a vanflow snooper thread to check if the correct
+        connection flow got exercised under the specific configuration. Possible flows are as follows.
+        addr1 -> connector_1
+        addr2 -> connector_2
+        addr3 -? connector_3
+        addr4 -? connector_4
+        The test create and delete listener addresses and tcpConnecters. It launches an echo client after each
+        configuration change to check if new tcp connections target the expected tcpConnecter.
+        '''
         self.check_setup_status()  # throw here if something failed in setUp()
 
         router_1_id = self.router_1.config.router_id
@@ -385,14 +400,14 @@ class MultiAddressListenerTest(TestCase):
         self.delete_entity('listenerAddress', self.listener_address_name[0], self.router_1)
         # no listener address
         # check that listener socket is closed
-        ret = self.is_listener_port_closed()
+        ret = self.is_listener_port_closed(self.listener_port[0])
         if ret is not None:
             self.assertTrue(ret)
 
         # re-create addr1
         self.create_entity(self.listener_address_name[0], self.listener_address_config[0], self.router_1)
         self.listener_vflow_id[self.listener_address_name[0]] = self.findNewFlowId('LISTENER',
-                                                                                   self.listener_name,
+                                                                                   self.listener_name[0],
                                                                                    self.van_address[0])
         self.assertIsNotNone(self.listener_vflow_id[self.listener_address_name[0]])
         # addr1:(prio=10, reachable:True)
@@ -404,7 +419,7 @@ class MultiAddressListenerTest(TestCase):
         # re-create addr2
         self.create_entity(self.listener_address_name[1], self.listener_address_config[1], self.router_1)
         self.listener_vflow_id[self.listener_address_name[1]] = self.findNewFlowId('LISTENER',
-                                                                                   self.listener_name,
+                                                                                   self.listener_name[0],
                                                                                    self.van_address[1])
         self.assertIsNotNone(self.listener_vflow_id[self.listener_address_name[1]])
         # addr2:(prio=20, reachable:True)
@@ -417,7 +432,7 @@ class MultiAddressListenerTest(TestCase):
         # create addr3
         self.create_entity(self.listener_address_name[2], self.listener_address_config[2], self.router_1)
         self.listener_vflow_id[self.listener_address_name[2]] = self.findNewFlowId('LISTENER',
-                                                                                   self.listener_name,
+                                                                                   self.listener_name[0],
                                                                                    self.van_address[2])
         self.assertIsNotNone(self.listener_vflow_id[self.listener_address_name[2]])
         # addr2:(prio=20, reachable:True)
@@ -431,7 +446,7 @@ class MultiAddressListenerTest(TestCase):
         # create addr4
         self.create_entity(self.listener_address_name[3], self.listener_address_config[3], self.router_1)
         self.listener_vflow_id[self.listener_address_name[3]] = self.findNewFlowId('LISTENER',
-                                                                                   self.listener_name,
+                                                                                   self.listener_name[0],
                                                                                    self.van_address[3])
         self.assertIsNotNone(self.listener_vflow_id[self.listener_address_name[3]])
         # addr2:(prio=20, reachable:True)
@@ -499,7 +514,7 @@ class MultiAddressListenerTest(TestCase):
         # addr1:(prio=10, reachable:False)
         # addr3:(prio=5,  reachable:False)
         # check that listening socket got closed
-        ret = self.is_listener_port_closed()
+        ret = self.is_listener_port_closed(self.listener_port[0])
         if ret is not None:
             self.assertTrue(ret)
 
@@ -516,3 +531,106 @@ class MultiAddressListenerTest(TestCase):
         flow_index = 0
         client_name = "ECHO_CLIENT_10_"
         self.check_flow(flow_index, client_name)
+
+    def test_multi_address_listener_weighted(self):
+        '''
+        Testing ´weighted´ random address selection strategy. The test uses READ management actions to check
+        if the ratio of the opened connections counts is close enough to that of the weight values of the
+        corresponding addresses.
+        '''
+        self.check_setup_status()  # throw here if something failed in setUp()
+
+        router_1_id = self.router_1.config.router_id
+        router_2_id = self.router_2.config.router_id
+
+        num_conns_1 = 2000
+        num_conns_2 = 100
+        max_diff    = 0.3
+
+        # addr5: (weight:3, reachable:True)
+        # addr6: (weight:7, reachable:True)
+        # 1000 new connections, addr5 and addr6 get addr5_co and addr6_co, respectively (addr5_co+addr6_co=1000)
+        # We expect that addr5_co:addr6_co is close enough to 3:7 (the ratio of the weights)
+        client_prefix = "Echo_client_WEIGHTED"
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
+        addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
+        self.assertIsNotNone(addr5_co)
+        addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
+        self.assertIsNotNone(addr6_co)
+        self.assertEqual(addr5_co + addr6_co, num_conns_1)
+        # check that difference from expected value is less than 30% for addr5
+        addr5_weight = int(self.listener_address_value[4])
+        addr6_weight = int(self.listener_address_value[5])
+        total_weight = addr5_weight + addr6_weight
+        addr5_expected = (addr5_weight / total_weight) * num_conns_1
+        diff = abs(addr5_co - addr5_expected) / addr5_expected
+        self.assertLess(diff, max_diff, f"addr5_co:{addr5_co} addr5_co:{addr6_co} num_conns:{num_conns_1}")
+        self.logger.log(f"connections opened addr5:{addr5_co} addr6:{addr6_co}")
+
+        # Delete connector_6 to make addr6 unreachable
+        self.delete_entity('tcpConnector', self.connector_name[5], self.router_2)
+        connector_vflow_id = self.connector_vflow_id[self.connector_name[5]]
+        flow_count_l4 = addr6_co + 1  # +1: connector flow to the workload
+        self.check_entity_vflow_record_end(router_2_id, 'CONNECTOR', connector_vflow_id, flow_count_l4)
+        # addr5: (weight:3, reachable:True)
+        # addr6: (weight:7, reachable:False)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_2, verbose_log=False)
+        # check that all connections were assigned to addr5
+        new_addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
+        self.assertEqual(new_addr6_co, addr6_co + num_failures)
+        new_addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
+        self.assertIsNotNone(addr5_co)
+        self.assertEqual(new_addr5_co - addr5_co, num_conns_2)
+
+        # Re-create connector_6 to make addr6 reachable again
+        self.create_entity(self.connector_name[5], self.connector_config[5], self.router_2)
+        self.connector_vflow_id[self.connector_name[5]] = self.findNewFlowId('CONNECTOR',
+                                                                             self.connector_name[5],
+                                                                             self.van_address[5])
+        # check connections distributions again
+        # addr5: (weight:3, reachable:True)
+        # addr6: (weight:7, reachable:True)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
+        addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
+        self.assertIsNotNone(addr5_co)
+        addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
+        self.assertIsNotNone(addr6_co)
+        addr5_co_recent = addr5_co - new_addr5_co
+        addr6_co_recent = addr6_co - new_addr6_co
+        self.assertEqual(addr5_co_recent + addr6_co_recent, num_conns_1)
+        # check that difference from expected value is less than 30% for addr5
+        diff = abs(addr5_co_recent - addr5_expected) / addr5_expected
+        self.assertLess(diff, max_diff, f"addr5_co_recent:{addr5_co_recent} addr6_co_recent:{addr6_co_recent} num_conns:{num_conns_1}")
+        self.logger.log(f"recent connections opened addr5:{addr5_co_recent} addr6:{addr6_co_recent}")
+
+        # Delete addr6
+        self.delete_entity('listenerAddress', self.listener_address_name[5], self.router_1)
+        listener_vflow_id = self.listener_vflow_id[self.listener_address_name[5]]
+        flow_count_l4 = addr6_co
+        self.check_entity_vflow_record_end(router_1_id, 'LISTENER', listener_vflow_id, flow_count_l4)
+        # check that all connections were assigned to addr5
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_2, verbose_log=False)
+        new_addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
+        self.assertIsNotNone(addr5_co)
+        self.assertEqual(new_addr5_co - addr5_co, num_conns_2)
+
+        # Re-create addr6
+        self.create_entity(self.listener_address_name[5], self.listener_address_config[5], self.router_1)
+        # check connections distributions again
+        # addr5: (weight:3, reachable:True)
+        # addr6: (weight:7, reachable:True)
+        num_failures = self.create_echo_client(client_prefix, self.listener_port[1], num_clients=num_conns_1, verbose_log=False)
+        self.assertEqual(num_failures, 0)
+        addr5_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr5', self.router_1)
+        self.assertIsNotNone(addr5_co)
+        addr6_co = self.read_entity_attribute('connectionsOpened', 'listenerAddress', 'addr6', self.router_1)
+        self.assertIsNotNone(addr6_co)
+        addr5_co_recent = addr5_co - new_addr5_co
+        addr6_co_recent = addr6_co  # new address entity
+        self.assertEqual(addr5_co_recent + addr6_co_recent, num_conns_1)
+        # check that difference from expected value is less than 30% for addr5
+        diff = abs(addr5_co_recent - addr5_expected) / addr5_expected
+        self.assertLess(diff, max_diff, f"addr5_co_recent:{addr5_co_recent} addr6_co_recent:{addr6_co_recent} num_conns:{num_conns_1}")
+        self.logger.log(f"recent connections opened addr5:{addr5_co_recent} addr6:{addr6_co_recent}")
