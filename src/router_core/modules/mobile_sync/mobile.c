@@ -117,7 +117,7 @@ static qd_address_treatment_t qcm_mobile_sync_default_treatment(qdr_core_t *core
 static bool qcm_mobile_sync_addr_is_mobile(qdr_address_t *addr)
 {
     const char *hash_key = (const char*) qd_hash_key_by_handle(addr->hash_handle);
-    return !!strchr("MH", hash_key[0]);
+    return !!strchr("MNH", hash_key[0]);
 }
 
 
@@ -474,7 +474,7 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     //
     // Prepare a differential MAU for sending to all the other routers.
     //
-    qd_message_t *mau = qcm_mobile_sync_compose_differential_mau(msync, "_topo/0/all/qdrouter.ma");
+    qd_message_t *mau = qcm_mobile_sync_compose_differential_mau(msync, "_topo/0/0/all/qdrouter.ma");
 
     //
     // Multicast the control message.  Set the exclude_inprocess and control flags.

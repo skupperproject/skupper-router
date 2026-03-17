@@ -1578,7 +1578,7 @@ class ManagementTest(MessagingHandler):
             self.sender.send(request)
 
             request = Message()
-            request.address = "amqp:/_topo/0/QDR.B/$management"
+            request.address = "amqp:/_topo/0/0/QDR.B/$management"
             request.correlation_id = "C2"
             request.reply_to = self.receiver.remote_source.address
             request.properties = {'type': 'org.amqp.management', 'name': 'self', 'operation': 'GET-MGMT-NODES'}
