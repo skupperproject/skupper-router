@@ -569,6 +569,13 @@
                     "description": "Time in seconds after which link state is declared stale if no RA is received.",
                     "create": true
                 },
+                "unreachableHoldoffSeconds": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Time in seconds after a router is declared unreachable that the addresses for that router will be invalidated.  Valid range for this parameter is 0 .. remoteLsAgeSeconds.",
+                    "required": false,
+                    "create": true
+                },
                 "workerThreads": {
                     "type": "integer",
                     "default": 4,
