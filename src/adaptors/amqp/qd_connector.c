@@ -790,9 +790,14 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         } else {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, "amqp");
         }
-                vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, ctor_config->config.port);
+        vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, ctor_config->config.port);
         vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
         vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+        if (!!ctor_config->config.proxy_profile_name) {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_HTTP_PROXY, "yes");
+        } else {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_HTTP_PROXY, "no");
+        }
     }    
     //
     // For inter-router connectors generate a group correlator and configure the data connection count

@@ -251,7 +251,9 @@ static bool proxy_negotiate(int sockfd,
         len--;
     response_line[len] = '\0';
     ssize_t response_len = len;
-    if (strncasecmp(response_line, "HTTP/1.1 ", 9) != 0) {
+    // Expect response version to be 1.0 or 1.1
+    if (strncasecmp(response_line, "HTTP/1.", 7) != 0 || response_len < 9 ||
+        response_line[7] < '0' || response_line[7] > '1' || response_line[8] != ' ') {
         strncpy(errmsg, "proxy malformed header version", errmsg_len);
         return false;
     }
