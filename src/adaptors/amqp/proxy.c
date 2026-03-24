@@ -383,6 +383,15 @@ void qd_proxy_setup_lh(qd_connector_t *c, qd_connection_t *qd_conn, const char *
     if (!info->profile) {
         qd_log(LOG_SERVER, QD_LOG_ERROR, "Proxy connection negotiation failed trying to reach %s:%s, no proxy profile named %s",
                info->target_host, info->target_port, c->ctor_config->config.proxy_profile_name);
+    } else {
+        if (getenv("SKUPPER_ROUTER_INSECURE_PROXY_DEBUG") != 0) {
+            const char *un = info->profile->username ? info->profile->username : "none";
+            const char *pw = info->profile->password ? info->profile->password : "none";
+            qd_log(LOG_SERVER, QD_LOG_INFO, "Connector starting proxy negotiation via %s %s:%s proxyAuth %s:%s to remote destination %s:%s",
+                   c->ctor_config->config.proxy_profile_name,
+                   info->profile->host, info->profile->port, un, pw,
+                   info->target_host, info->target_port);
+        }
     }
     info->proxy_thread = sys_thread(SYS_THREAD_PROXY, proxy_setup_thread, info);
 }
