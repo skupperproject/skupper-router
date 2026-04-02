@@ -19,6 +19,7 @@
 
 #include "qd_connector.h"
 #include "qd_connection.h"
+#include "proxy.h"
 #include "private.h"
 #include "entity.h"
 
@@ -28,13 +29,16 @@
 #include "qpid/dispatch/tls_amqp.h"
 #include "qpid/dispatch/dispatch.h"
 
+#include <proton/proactor_ext.h>
 #include <proton/proactor.h>
 
 #include <inttypes.h>
-
+#include <unistd.h>
 
 ALLOC_DEFINE(qd_connector_t);
 ALLOC_DEFINE(qd_connector_config_t);
+
+static void proxy_setup_cb(void *context);
 
 
 /* Thread verification
@@ -165,6 +169,17 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
     assert(connector->state != CTOR_STATE_DELETED);
 
     const qd_connector_config_t *ctor_config = connector->ctor_config;
+    qd_failover_item_t *item = qd_connector_get_conn_info_lh(connector);
+
+    if (connector->uses_proxy && connector->proxy_socket == -1) {
+        // Negotiate a proxy relay before AMQP configuration and starting the pn_connection_t.
+        connector->proxy_pending = true;
+        sys_atomic_inc(&connector->ref_count); // For the proxy handshake thread. Decrement on join.
+        qd_proxy_setup_lh(connector, qd_conn, item->host, item->port, proxy_setup_cb);
+        // connector try_open logic resumes below at proxy_setup_cb on timer thread.
+        return;
+    }
+
     qd_connection_init(qd_conn, ctor_config->server, &ctor_config->config, connector, 0);
 
     connector->state   = CTOR_STATE_OPEN;
@@ -174,8 +189,6 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
     // Set the hostname on the pn_connection. This hostname will be used by proton as the
     // hostname in the open frame.
     //
-
-    qd_failover_item_t *item = qd_connector_get_conn_info_lh(connector);
 
     char *current_host = item->host;
     char *host_port = item->host_port;
@@ -190,9 +203,19 @@ static void try_open_lh(qd_connector_t *connector, qd_connection_t *qd_conn) TA_
     if (config->sasl_password)
         pn_connection_set_password(qd_conn->pn_conn, config->sasl_password);
 
-    qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
     /* Note: the transport is configured in the PN_CONNECTION_BOUND event */
-    pn_proactor_connect(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, host_port);
+    
+    // Start Proton connection via host_port or existing proxy socket as appropriate.
+    if (!connector->uses_proxy) {
+        qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting to %s", qd_conn->connection_id, host_port);
+
+        pn_proactor_connect(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, host_port);
+    } else {
+        assert(connector->proxy_socket != -1);
+        qd_log(LOG_SERVER, QD_LOG_DEBUG, "[C%" PRIu64 "] Connecting via proxy to %s", qd_conn->connection_id, host_port);
+        pn_proactor_import_socket(qd_server_proactor(connector->ctor_config->server), qd_conn->pn_conn, NULL, connector->proxy_socket);
+        connector->proxy_socket = -1;  // Socket now owned by proactor/pn_conn.
+    }
     // at this point the qd_conn may now be scheduled on another thread
 }
 
@@ -242,6 +265,60 @@ static void deferred_close(qd_connection_t *qd_conn, void *context, bool discard
 }
 
 
+/** Resume connection creation after proxy handshake thread completes.
+ *
+ * Scheduled on timer thread.
+ */
+static void proxy_setup_cb(void *context)
+{
+    ASSERT_MGMT_THREAD;
+    qd_proxy_setup_info_t *info = (qd_proxy_setup_info_t *) context;
+    qd_connector_t *ctor = info->connector;
+    bool log_async_deletion = false;
+    sys_thread_join(info->proxy_thread);
+    sys_thread_free(info->proxy_thread);
+
+    // This lock not technically needed due to join, but makes tsan happy
+    sys_mutex_lock(&info->lock);
+    assert(!info->shutdown);  // proactor still doing work, i.e. this callback
+    int proxyfd = info->proxy_socket;
+    sys_mutex_unlock(&info->lock);
+    
+    sys_mutex_lock(&ctor->lock);
+    ctor->proxy_pending = false;
+    if (ctor->state == CTOR_STATE_DELETED) {
+        if (proxyfd != -1) {
+            close(proxyfd);
+            proxyfd = -1;
+            log_async_deletion = true;  // Log after lock dropped.
+        }
+    }
+    if (proxyfd >= 0) {
+        // Success.  qd_conn and it's pn_conn can now be configured and started.
+        ctor->proxy_socket = proxyfd;
+        try_open_lh(ctor, info->qd_conn);
+    } else {
+        if (ctor->state != CTOR_STATE_DELETED) {
+            ctor->state = CTOR_STATE_CONNECTING;
+            qd_timer_schedule(ctor->reconnect_timer, 2000);
+        }
+    }
+    sys_mutex_unlock(&ctor->lock);
+
+    if (proxyfd == -1) {
+        // qd_conn ownership NOT moved to ctor->qd_conn, so cleanup.
+        assert(info->qd_conn != NULL);
+        free_qd_connection_t(info->qd_conn);
+    }
+    if (log_async_deletion) {
+        qd_log(LOG_SERVER, QD_LOG_DEBUG, "Connector closed while proxying to %s:%s", info->target_host, info->target_port);
+    }
+    qd_connector_decref(ctor);
+    qd_proxy_free(info);
+}
+
+
+
 const qd_server_config_t *qd_connector_get_server_config(const qd_connector_t *c)
 {
     return &c->ctor_config->config;
@@ -267,6 +344,10 @@ qd_connector_t *qd_connector_create(qd_connector_config_t *ctor_config, bool is_
     connector->conn_index  = 1;
     connector->state       = CTOR_STATE_INIT;
     connector->tls_ordinal = ctor_config->tls_ordinal;
+    if (!!ctor_config->config.proxy_profile_name) {
+        connector->uses_proxy = true;
+    }
+    connector->proxy_socket = -1;
 
     qd_failover_item_t *item = NEW(qd_failover_item_t);
     ZERO(item);
@@ -319,7 +400,7 @@ void qd_connector_close(qd_connector_t *ct)
     ct->reconnect_timer = 0;
     ct->state = CTOR_STATE_DELETED;
     qd_connection_t *conn = ct->qd_conn;
-    if (conn && conn->pn_conn) {
+    if (conn && conn->pn_conn && !ct->proxy_pending) {
         qd_connection_invoke_deferred_impl(conn, dct);
         sys_mutex_unlock(&ct->lock);
     } else {
@@ -684,6 +765,19 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
                                                    handle_connector_ssl_profile_mgmt_update);
         }
     }
+    //
+    // Check if proxyProfile exists
+    //
+    if (ctor_config->config.proxy_profile_name) {
+        qd_proxy_profile_t *profile = qd_proxy_profile(ctor_config->config.proxy_profile_name);
+        if (!profile) {
+            qd_error_clear();
+            qd_error(QD_ERROR_NOT_FOUND, "proxyProfile '%s' not found", ctor_config->config.proxy_profile_name);
+            goto error;
+        }
+        // re-acquire fresh ref on each new connection attempt
+        qd_proxy_profile_decref(profile);
+    }
     if (is_inter_router || is_edge || is_inter_edge) {
         ctor_config->vflow_record = vflow_start_record(VFLOW_RECORD_LINK, 0);
         vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_NAME, ctor_config->config.name);
@@ -696,9 +790,14 @@ qd_connector_config_t *qd_connector_config_create(qd_dispatch_t *qd, qd_entity_t
         } else {
             vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_PROTOCOL, "amqp");
         }
-                vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, ctor_config->config.port);
+        vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_DESTINATION_PORT, ctor_config->config.port);
         vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS, 0);
         vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OCTETS_REVERSE, 0);
+        if (!!ctor_config->config.proxy_profile_name) {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_HTTP_PROXY, "yes");
+        } else {
+            vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_HTTP_PROXY, "no");
+        }
     }    
     //
     // For inter-router connectors generate a group correlator and configure the data connection count

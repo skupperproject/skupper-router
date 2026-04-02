@@ -49,6 +49,7 @@ set(qpid_dispatch_SOURCES
   adaptors/amqp/qd_connection.c
   adaptors/amqp/qd_connector.c
   adaptors/amqp/server_config.c
+  adaptors/amqp/proxy.c
   observers/protocol_observer.c
   observers/tcp_observer.c
   observers/http1/http1_observer.c
@@ -159,6 +160,7 @@ set(qpid_dispatch_LIBRARIES
   Proton::core
   Proton::proactor
   Proton::tls
+  OpenSSL::SSL
   ${rt_lib}
   )
 
