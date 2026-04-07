@@ -92,7 +92,9 @@ class NodeTracker:
             if now - node.link_state.last_seen > self.ls_max_age:
                 if node.link_state.has_peers():
                     node.link_state.del_all_peers()
-                    self.recompute_topology = True
+                    if node.is_neighbor() or node.next_hop_router is not None:
+                        # Recompute topology if the node is reachable
+                        self.recompute_topology = True
 
             ##
             # If the node has empty link state, check to see if it appears in any other
@@ -153,11 +155,12 @@ class NodeTracker:
             collection = {self.my_id : self.link_state}
             for node_id, node in self.nodes.items():
                 collection[node_id] = node.link_state
-            next_hops, costs, valid_origins, radius = self.container.path_engine.calculate_routes(collection)
+            next_hops, costs, valid_origins, radius, unreachable_ids = self.container.path_engine.calculate_routes(collection)
             self.container.log_ls(LOG_INFO, "Computed next hops: %r" % next_hops)
             self.container.log_ls(LOG_INFO, "Computed costs: %r" % costs)
             self.container.log_ls(LOG_INFO, "Computed valid origins: %r" % valid_origins)
             self.container.log_ls(LOG_INFO, "Computed radius: %d" % radius)
+            self.container.log_ls(LOG_INFO, "Unreachable_ids: %s" % unreachable_ids)
 
             ##
             # Update the topology radius
@@ -165,17 +168,9 @@ class NodeTracker:
             self.container.router_adapter.set_radius(radius)
 
             ##
-            # Mark all of the nodes as un-visited so we can identify newly unreachable nodes
-            ##
-            visited = {}
-            for node_id in self.nodes.keys():
-                visited[node_id] = False
-
-            ##
             # Update the next hops and valid origins for each node
             ##
             for node_id, next_hop_id in next_hops.items():
-                visited[node_id] = True
                 node     = self.nodes[node_id]
                 next_hop = self.nodes[next_hop_id]
                 vo       = valid_origins[node_id]
@@ -187,13 +182,11 @@ class NodeTracker:
             ##
             # Keep the ids of the routers that are no longer reachable
             ##
-            self.unreachable_ids    = []
+            self.unreachable_ids    = unreachable_ids
             self.unreach_holdoff    = self.unreach_holdoff_ticks
             self.invalidate_unreach = False
-            for node_id, reachable in visited.items():
-                if not reachable:
-                    self.unreachable_ids.append(node_id)
-                    self.invalidate_unreach = True
+            if len(self.unreachable_ids) > 0:
+                self.invalidate_unreach = True
 
         ##
         # Invalidate the addresses on any remote routers after the holdoff interval
@@ -201,12 +194,12 @@ class NodeTracker:
         if self.invalidate_unreach:
             if self.unreach_holdoff == 0:
                 for node_id in self.unreachable_ids:
-                    if node_id in self.nodes:
+                    if node_id in self.nodes and self.nodes[node_id].has_mobile_addresses():
                         self.container.log_ls(LOG_INFO, "Invalidating addresses on unreachable node: %s" % node_id)
                         self.nodes[node_id].unmap_all_addresses()
                 self.invalidate_unreach = False
-                self.unreachable_ids    = []
-            self.unreach_holdoff -= 1
+            else:
+                self.unreach_holdoff -= 1
 
         ##
         # Send link-state requests and mobile-address requests to the nodes
@@ -541,6 +534,9 @@ class RouterNode:
             self.need_mobile_request = False
             return True
         return False
+
+    def has_mobile_addresses(self):
+        return self.mobile_address_sequence > 0
 
     def unmap_all_addresses(self):
         self.mobile_address_sequence = 0

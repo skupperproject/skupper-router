@@ -77,17 +77,19 @@ class PathEngine:
         # Remove unreachable nodes from the maps.  Note that this will also remove the
         # root node (has no previous node) from the map.
         ##
+        unreachables = []
         for u, val in list(prev.items()):
             if not val:
                 prev.pop(u)
                 hops.pop(u)
                 cost.pop(u)
-
+                if u != root:
+                    unreachables.append(u)
         ##
         # Return previous-node and cost maps.  Prev is a map of all reachable, remote nodes to
         # their predecessor node.  Cost is a map of all reachable nodes and their costs.
         ##
-        return prev, cost, hops
+        return prev, cost, hops, unreachables
 
     def _calculate_valid_origins(self, nodeset, collection):
         ##
@@ -101,7 +103,7 @@ class PathEngine:
                 valid_origin[node] = []
 
         for root in valid_origin.keys():
-            prev, cost, hops = self._calculate_tree_from_root(root, collection)
+            prev, _, _, _ = self._calculate_tree_from_root(root, collection)
             nodes = list(prev.keys())
             while len(nodes) > 0:
                 u = nodes[0]
@@ -124,7 +126,7 @@ class PathEngine:
         ##
         # Generate the shortest-path tree with the local node as root
         ##
-        prev, cost, hops = self._calculate_tree_from_root(self.id, collection)
+        prev, cost, hops, unreachables = self._calculate_tree_from_root(self.id, collection)
         nodes = list(prev.keys())
 
         ##
@@ -156,7 +158,7 @@ class PathEngine:
         ##
         valid_origins = self._calculate_valid_origins(list(prev.keys()), collection)
 
-        return next_hops, cost, valid_origins, radius
+        return next_hops, cost, valid_origins, radius, unreachables
 
 
 class NodeSet:
