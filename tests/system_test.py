@@ -853,12 +853,14 @@ class Qdrouterd(Process):
                     "BadRequestStatus" in exception_string:
                 pass
             else:
-                raise e
-        try:
-            super(Qdrouterd, self).teardown()
-        except Exception as exc:
-            # re-raise _after_ dumping all the state we can
-            teardown_exc = exc
+                # re-raise _after_ dumping all the state we can
+                teardown_exc = e
+        if teardown_exc is None:
+            try:
+                super(Qdrouterd, self).teardown()
+            except Exception as exc:
+                # re-raise _after_ dumping all the state we can
+                teardown_exc = exc
 
         def check_output_file(filename, description):
             """check router's debug dump file for anything interesting (should be
