@@ -194,7 +194,7 @@ class NodeTracker:
         if self.invalidate_unreach:
             if self.unreach_holdoff == 0:
                 for node_id in self.unreachable_ids:
-                    if node_id in self.nodes and self.nodes[node_id].has_mobile_addresses():
+                    if node_id in self.nodes and self.nodes[node_id].received_mobile_updates():
                         self.container.log_ls(LOG_INFO, "Invalidating addresses on unreachable node: %s" % node_id)
                         self.nodes[node_id].unmap_all_addresses()
                 self.invalidate_unreach = False
@@ -535,7 +535,7 @@ class RouterNode:
             return True
         return False
 
-    def has_mobile_addresses(self):
+    def received_mobile_updates(self):
         return self.mobile_address_sequence > 0
 
     def unmap_all_addresses(self):

@@ -27,7 +27,7 @@ from TCP_echo_client import TcpEchoClient
 from TCP_echo_server import TcpEchoServer
 
 
-class MultiAddressListenerTest(TestCase):
+class MobileAddressUnmapTest(TestCase):
     """
     Test the unmapping of mobile addresses when a node gets unreachable. Three
     routers are connected in a mesh. One router has a multi-key listener with
@@ -59,9 +59,9 @@ class MultiAddressListenerTest(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(MultiAddressListenerTest, cls).setUpClass()
+        super(MobileAddressUnmapTest, cls).setUpClass()
 
-        cls.test_name = 'MultiAddressListenerTest'
+        cls.test_name = 'MobileAddressUnmapTest'
 
         router_a_id = 'RouterA'
         router_b_id = 'RouterB'
@@ -209,7 +209,7 @@ class MultiAddressListenerTest(TestCase):
         # stop echo servers
         for _, server in cls.echo_servers.items():
             server.wait()
-        super(MultiAddressListenerTest, cls).tearDownClass()
+        super(MobileAddressUnmapTest, cls).tearDownClass()
 
     def check_setup_status(self):
         self.assertTrue(self.tcp_entities_ready, f"Match failed: {self.setup_vflow_records}")
