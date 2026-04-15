@@ -17,11 +17,15 @@
 # under the License.
 #
 import unittest
+import os
 
 from http1_tests import wait_tcp_listeners_up
 from system_test import TestCase, Qdrouterd, TIMEOUT, CA_CERT, SERVER_CERTIFICATE, SERVER_PRIVATE_KEY, \
     CLIENT_CERTIFICATE, CLIENT_PRIVATE_KEY, CLIENT_PRIVATE_KEY_PASSWORD, SERVER_PRIVATE_KEY_PASSWORD
 try:
+    # grpcio specific setting to make the test reliable on CentOS 9 (python 3.9)
+    os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "false"
+
     import grpc
     import friendship_server as fs
     from friendship_pb2_grpc import FriendshipStub
@@ -38,8 +42,7 @@ def skip_test():
     return _GRPC_UNAVAILABLE
 
 
-class GrpcServiceMethodsTest(TestCase):
-
+class GrpcServiceMethodsBase():
     """
     Data for the grpc service
     """
@@ -85,51 +88,6 @@ class GrpcServiceMethodsTest(TestCase):
         ["two@apache.org", "four@apache.org"],
         ["one@apache.org", "three@apache.org", "five@apache.org"],
     ]
-
-    @classmethod
-    def setUpClass(cls):
-        super(GrpcServiceMethodsTest, cls).setUpClass()
-        if skip_test():
-            return
-
-        # Define a random port for  the gRPC server to bind
-        cls.grpc_server_port = str(cls.tester.get_port())
-
-        # Run the gRPC server (see friendship.proto for more info)
-        cls.grpc_server = fs.serve(cls.grpc_server_port)
-
-        # Prepare router to communicate with the gRPC server
-        cls.connector_props = {
-            'port': cls.grpc_server_port,
-            'address': 'examples',
-            'host': '127.0.0.1',
-            'name': 'grpc-server'
-        }
-        cls.router_listener_port = cls.tester.get_port()
-        config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': 'QDR'}),
-            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
-
-            ('tcpListener', {'port': cls.router_listener_port, 'address': 'examples',
-                             'host': '127.0.0.1'}),
-            ('tcpConnector', cls.connector_props)
-        ])
-        cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config,
-                                              wait=True)
-        wait_tcp_listeners_up(cls.router_qdr.addresses[0])
-
-        # If you wanna try it without the router, set the grpc_channel
-        # directly to the grpc_server_port
-        cls.grpc_channel = grpc.insecure_channel('127.0.0.1:%s' %
-                                                 cls.router_listener_port)
-        cls.grpc_stub = FriendshipStub(cls.grpc_channel)
-
-    @classmethod
-    def tearDownClass(cls):
-        super(GrpcServiceMethodsTest, cls).tearDownClass()
-        if skip_test():
-            return
-        cls.grpc_server.stop(TIMEOUT)
 
     @classmethod
     def create_person(cls, name, email):
@@ -210,6 +168,54 @@ class GrpcServiceMethodsTest(TestCase):
             assert all(f in exp_friends for f in res.friends)
 
 
+class GrpcServiceMethodsTest(TestCase, GrpcServiceMethodsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(GrpcServiceMethodsTest, cls).setUpClass()
+        if skip_test():
+            return
+
+        # Define a random port for  the gRPC server to bind
+        cls.grpc_server_port = str(cls.tester.get_port())
+
+        # Run the gRPC server (see friendship.proto for more info)
+        cls.grpc_server = fs.serve(cls.grpc_server_port)
+
+        # Prepare router to communicate with the gRPC server
+        cls.connector_props = {
+            'port': cls.grpc_server_port,
+            'address': 'examples',
+            'host': '127.0.0.1',
+            'name': 'grpc-server'
+        }
+        cls.router_listener_port = cls.tester.get_port()
+        config = Qdrouterd.Config([
+            ('router', {'mode': 'standalone', 'id': 'QDR'}),
+            ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
+
+            ('tcpListener', {'port': cls.router_listener_port, 'address': 'examples',
+                             'host': '127.0.0.1'}),
+            ('tcpConnector', cls.connector_props)
+        ])
+        cls.router_qdr = cls.tester.qdrouterd("grpc-test-router", config,
+                                              wait=True)
+        wait_tcp_listeners_up(cls.router_qdr.addresses[0])
+
+        # If you wanna try it without the router, set the grpc_channel
+        # directly to the grpc_server_port
+        cls.grpc_channel = grpc.insecure_channel('127.0.0.1:%s' %
+                                                 cls.router_listener_port)
+        cls.grpc_stub = FriendshipStub(cls.grpc_channel)
+
+    @classmethod
+    def tearDownClass(cls):
+        super(GrpcServiceMethodsTest, cls).tearDownClass()
+        if skip_test():
+            return
+        cls.grpc_server.stop(TIMEOUT)
+
+
 # This following test (running GRPC over TCP Adaptor TLS) will fail
 # without the fix for https://github.com/skupperproject/skupper-router/issues/845
 # GRPC client requires that the server it is connecting to (in this case, the router)
@@ -218,7 +224,7 @@ class GrpcServiceMethodsTest(TestCase):
 # as part of the router initiated TLS handshake.
 # The TCP Adaptor now accepts h2 as the protocol when acting as the server
 # and sends h2 as the protocol when it is connecting as a client to the GRPC server.
-class GrpcServiceMethodsTestOverTcpTls(GrpcServiceMethodsTest, RouterTestSslBase):
+class GrpcServiceMethodsTestOverTcpTls(GrpcServiceMethodsBase, RouterTestSslBase):
     @classmethod
     def setUpClass(cls):
         super(GrpcServiceMethodsTestOverTcpTls, cls).setUpClass()
@@ -275,3 +281,10 @@ class GrpcServiceMethodsTestOverTcpTls(GrpcServiceMethodsTest, RouterTestSslBase
         # sslProfile as tcp-listener-ssl-profile
         cls.secure_grpc_channel = grpc.secure_channel('localhost:%s' % cls.router_tcp_port, credentials=credentials)
         cls.grpc_stub = FriendshipStub(cls.secure_grpc_channel)
+
+    @classmethod
+    def tearDownClass(cls):
+        super(GrpcServiceMethodsTestOverTcpTls, cls).tearDownClass()
+        if skip_test():
+            return
+        cls.grpc_server.stop(TIMEOUT)
