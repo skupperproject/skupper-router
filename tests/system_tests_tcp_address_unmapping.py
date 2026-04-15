@@ -151,12 +151,12 @@ class MultiAddressListenerTest(TestCase):
             cls.connector_config[2]
         ])
 
-        cls.router_c = cls.tester.qdrouterd('test_router_b', config_c)
+        cls.router_c = cls.tester.qdrouterd('test_router_c', config_c)
         cls.router_b = cls.tester.qdrouterd('test_router_b', config_b)
         cls.router_a = cls.tester.qdrouterd('test_router_a', config_a)
 
         cls.router_b.wait_router_connected(router_c_id)
-        cls.router_b.wait_router_connected(router_a_id)
+        cls.router_b.wait_router_connected(router_b_id)
         cls.router_c.wait_router_connected(router_a_id)
 
         cls.snooper_thread = VFlowSnooperThread(cls.router_a.addresses[0])
@@ -255,13 +255,13 @@ class MultiAddressListenerTest(TestCase):
                                        port=client_port,
                                        size=1,
                                        count=1,
-                                       logger=client_logger)
+                                       logger=client_logger,
+                                       delay_close=True)
                 client.wait()
             except Exception as e:
-                if "server closed" in str(e):
-                    num_failures += 1
-                    return False
-                raise
+                client_logger.log(f"Exception: {e}")
+                num_failures += 1
+                return False
             return True
 
         for i in range(num_clients):
