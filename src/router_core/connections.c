@@ -242,6 +242,12 @@ void qdr_connection_info_set_group(qdr_connection_info_t *info, const char *corr
 }
 
 
+void qdr_connection_info_set_local_socket(qdr_connection_info_t *info, const char *host_port)
+{
+    info->local_socket = strdup(host_port);
+}
+
+
 void qdr_connection_info_set_tls(qdr_connection_info_t *conn_info, bool enabled, char *version, char *ciphers, int ssf)
 {
     //
@@ -272,6 +278,7 @@ static void qdr_connection_info_free(qdr_connection_info_t *ci)
     free(ci->container);
     free(ci->sasl_mechanisms);
     free(ci->host);
+    free(ci->local_socket);
     free(ci->tls_proto);
     free(ci->tls_cipher);
     free(ci->user);

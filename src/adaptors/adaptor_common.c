@@ -180,3 +180,17 @@ void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_
         vflow_set_string(vflow, ingress ? VFLOW_ATTRIBUTE_SOURCE_PORT : VFLOW_ATTRIBUTE_PROXY_PORT, remote_port);
     }
 }
+
+void qd_set_conninfo_local_netaddr(pn_raw_connection_t *raw_conn, qdr_connection_t *core_conn)
+{
+    char                local_host[200];
+    char                local_port[50];
+    const pn_netaddr_t *na = pn_raw_connection_local_addr(raw_conn);
+    if (pn_netaddr_host_port(na, local_host, 200, local_port, 50) == 0) {
+        char host_port[250];
+        strncpy(host_port, local_host, 200);
+        strcat(host_port, ":");
+        strncat(host_port, local_port, 50);
+        qdr_connection_info_set_local_socket(core_conn->connection_info, host_port);
+    }
+}

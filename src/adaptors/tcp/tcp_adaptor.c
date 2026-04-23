@@ -980,6 +980,7 @@ static void link_setup_LSIDE_IO(qd_tcp_connection_t *conn)
     qdr_link_set_context(conn->outbound_link, conn);
     qdr_link_set_user_streaming(conn->outbound_link);
     qdr_link_flow(tcp_context->core, conn->outbound_link, 1, false);
+    qd_set_conninfo_local_netaddr(conn->raw_conn, conn->core_conn);
 }
 
 
@@ -1008,6 +1009,7 @@ static void link_setup_CSIDE_IO(qd_tcp_connection_t *conn, qdr_delivery_t *deliv
     qd_log(LOG_TCP_ADAPTOR, QD_LOG_DEBUG, DLV_FMT " TCP enabling consumer activation", DLV_ARGS(delivery));
     qd_message_set_consumer_activation(conn->outbound_stream, &activation);
     qd_message_start_unicast_cutthrough(conn->outbound_stream);
+    qd_set_conninfo_local_netaddr(conn->raw_conn, conn->core_conn);
 }
 
 

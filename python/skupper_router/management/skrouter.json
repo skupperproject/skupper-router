@@ -1788,7 +1788,11 @@
                     "description": "The connection has been opened (i.e. AMQP OPEN)"
                 },
                 "host": {
-                    "description": "IP address and port number in the form addr:port.",
+                    "description": "IP address and port number of the remote host in the form addr:port.",
+                    "type": "string"
+                },
+                "localSocket": {
+                    "description": "IP address and port number of the local host in the form addr:port.",
                     "type": "string"
                 },
                 "dir": {
