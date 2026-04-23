@@ -935,6 +935,7 @@ qdr_connection_info_t *qdr_connection_info(bool             is_encrypted,
                                            bool             connection_trunking);
 
 void qdr_connection_info_set_group(qdr_connection_info_t *info, const char *correlator, uint64_t ordinal);
+void qdr_connection_info_set_local_socket(qdr_connection_info_t *info, const char *host_port);
 void qdr_connection_info_set_tls(qdr_connection_info_t *info, bool enabled, char *version, char *ciphers, int ssf);
 
 void qd_adaptor_listener_init(void);

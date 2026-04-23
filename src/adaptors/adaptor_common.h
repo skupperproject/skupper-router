@@ -29,6 +29,7 @@
 #include "qpid/dispatch/threading.h"
 #include "qpid/dispatch/vanflow.h"
 #include "qpid/dispatch/router_core.h"
+#include <qpid/dispatch/protocol_adaptor.h>
 #include <qpid/dispatch/protocol_observer.h>
 
 #include <proton/raw_connection.h>
@@ -98,6 +99,11 @@ size_t qd_raw_conn_get_address_buf(pn_raw_connection_t *pn_raw_conn, char *buf, 
  * bool is this connection ingress or egress.
  */
 void qd_set_vflow_netaddr_string(vflow_record_t *vflow, pn_raw_connection_t *pn_raw_conn, bool ingress);
+
+/**
+ * Set the local_socket address in the connection_info.
+ */
+void qd_set_conninfo_local_netaddr(pn_raw_connection_t *raw_conn, qdr_connection_t *core_conn);
 
 /**
  * Sets the VFLOW_ATTRIBUTE_RESULT and VFLOW_ATTRIBUTE_REASON from the

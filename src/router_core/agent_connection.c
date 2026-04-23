@@ -27,31 +27,32 @@
 #define QDR_CONNECTION_NAME                   0
 #define QDR_CONNECTION_IDENTITY               1
 #define QDR_CONNECTION_HOST                   2
-#define QDR_CONNECTION_ROLE                   3
-#define QDR_CONNECTION_PROTOCOL               4
-#define QDR_CONNECTION_DIR                    5
-#define QDR_CONNECTION_CONTAINER_ID           6
-#define QDR_CONNECTION_SASL_MECHANISMS        7
-#define QDR_CONNECTION_IS_AUTHENTICATED       8
-#define QDR_CONNECTION_USER                   9
-#define QDR_CONNECTION_IS_ENCRYPTED          10
-#define QDR_CONNECTION_TLSPROTO              11
-#define QDR_CONNECTION_TLSCIPHER             12
-#define QDR_CONNECTION_PROPERTIES            13
-#define QDR_CONNECTION_TLSSSF                14
-#define QDR_CONNECTION_TYPE                  15
-#define QDR_CONNECTION_TLS                   16
-#define QDR_CONNECTION_OPENED                17
-#define QDR_CONNECTION_ACTIVE                18
-#define QDR_CONNECTION_ADMIN_STATUS          19
-#define QDR_CONNECTION_OPER_STATUS           20
-#define QDR_CONNECTION_UPTIME_SECONDS        21
-#define QDR_CONNECTION_LAST_DLV_SECONDS      22
-#define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 23
-#define QDR_CONNECTION_MESH_ID               24
-#define QDR_CONNECTION_TLS_ORDINAL           25
-#define QDR_CONNECTION_GROUP_CORRELATOR      26
-#define QDR_CONNECTION_GROUP_ORDINAL         27
+#define QDR_CONNECTION_LOCAL_SOCKET           3
+#define QDR_CONNECTION_ROLE                   4
+#define QDR_CONNECTION_PROTOCOL               5
+#define QDR_CONNECTION_DIR                    6
+#define QDR_CONNECTION_CONTAINER_ID           7
+#define QDR_CONNECTION_SASL_MECHANISMS        8
+#define QDR_CONNECTION_IS_AUTHENTICATED       9
+#define QDR_CONNECTION_USER                  10
+#define QDR_CONNECTION_IS_ENCRYPTED          11
+#define QDR_CONNECTION_TLSPROTO              12
+#define QDR_CONNECTION_TLSCIPHER             13
+#define QDR_CONNECTION_PROPERTIES            14
+#define QDR_CONNECTION_TLSSSF                15
+#define QDR_CONNECTION_TYPE                  16
+#define QDR_CONNECTION_TLS                   17
+#define QDR_CONNECTION_OPENED                18
+#define QDR_CONNECTION_ACTIVE                19
+#define QDR_CONNECTION_ADMIN_STATUS          20
+#define QDR_CONNECTION_OPER_STATUS           21
+#define QDR_CONNECTION_UPTIME_SECONDS        22
+#define QDR_CONNECTION_LAST_DLV_SECONDS      23
+#define QDR_CONNECTION_ENABLE_PROTOCOL_TRACE 24
+#define QDR_CONNECTION_MESH_ID               25
+#define QDR_CONNECTION_TLS_ORDINAL           26
+#define QDR_CONNECTION_GROUP_CORRELATOR      27
+#define QDR_CONNECTION_GROUP_ORDINAL         28
 
 
 const char * const QDR_CONNECTION_DIR_IN  = "in";
@@ -77,6 +78,7 @@ const char *qdr_connection_columns[] =
     {"name",
      "identity",
      "host",
+     "localSocket",
      "role",
      "protocol",
      "dir",
@@ -160,6 +162,14 @@ static void qdr_connection_insert_column_CT(qdr_core_t *core, qdr_connection_t *
 
     case QDR_CONNECTION_HOST:
         qd_compose_insert_string(body, conn->connection_info->host);
+        break;
+
+    case QDR_CONNECTION_LOCAL_SOCKET:
+        if (!!conn->connection_info->local_socket) {
+            qd_compose_insert_string(body, conn->connection_info->local_socket);
+        } else {
+            qd_compose_insert_null(body);
+        }
         break;
 
     case QDR_CONNECTION_ROLE:

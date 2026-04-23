@@ -654,6 +654,7 @@ struct qdr_connection_info_t {
     char                  *container;
     char                  *sasl_mechanisms;
     char                  *host;
+    char                  *local_socket;
     char                  *tls_proto;
     char                  *tls_cipher;
     char                  *user;
