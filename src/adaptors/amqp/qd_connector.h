@@ -66,12 +66,15 @@ typedef struct qd_connector_t {
     qd_connection_t          *qd_conn;
     bool                      oper_status_down;  // set when oper-status transitions to 'down' to avoid repeated error indications.
     bool                      is_data_connector; // inter-router conn for streaming messages
-
-    /* This conn_list contains all the connection information needed to make a connection. It also includes failover connection information */
+    bool                      uses_proxy;        // conn passes through a proxy server
+    bool                      proxy_pending;     // proxy negotiation in progress
+    int                       proxy_socket;      // -1 if owned by proactor or not negotiated
+    /* This conn_list contains all the connection information needed to make a connection. It also includes failover
+     * connection information */
     qd_failover_item_list_t   conn_info_list;
     int                       conn_index; // Which connection in the connection list to connect to next.
 
-    /* holds proton transport error condition text on connection failure */
+    /* holds proton transport error condition text (or proxy error) on connection failure */
 #define QD_CTOR_CONN_MSG_BUF_SIZE 300
     char conn_msg[QD_CTOR_CONN_MSG_BUF_SIZE];
 } qd_connector_t;

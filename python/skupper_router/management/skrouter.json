@@ -761,6 +761,42 @@
             }
         },
 
+        "proxyProfile": {
+            "description":"Attributes for establishing an AMQP connection via a forward proxy.",
+            "referential": true,
+            "extends": "configurationEntity",
+            "operations": ["CREATE", "UPDATE", "DELETE"],
+            "attributes": {
+                "host": {
+                    "description":"IP address: ipv4 or ipv6 literal or a host name of proxy server",
+                    "type": "string",
+                    "create": true,
+                    "update": true
+                },
+                "port": {
+                    "description": "Port number served by proxy.",
+                    "type": "string",
+                    "create": true,
+                    "update": true
+                },
+                "username": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Optional HTTP basic authorization user name.",
+                    "create": true,
+                    "update": true
+                },
+                "password": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Optional HTTP basic authorization password.",
+                    "create": true,
+                    "update": true,
+                    "hidden": true
+                }
+            }
+        },
+
         "listener": {
             "description": "Listens for incoming connections to the router.",
             "extends": "configurationEntity",
@@ -982,6 +1018,12 @@
                     "type": "string",
                     "required": false,
                     "description": "Name of the sslProfile.",
+                    "create": true
+                },
+                "proxyProfile": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Name of the proxyProfile.",
                     "create": true
                 },
                 "saslMechanisms": {
