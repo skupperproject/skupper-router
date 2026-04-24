@@ -556,8 +556,10 @@ static void qdr_link_forward_CT(qdr_core_t *core, qdr_link_t *link, qdr_delivery
             if (qdr_connection_route_container(link->conn)) {
                 addr->deliveries_ingress_route_container++;
                 core->deliveries_ingress_route_container++;
+            } else if (qdr_connection_inter_network(link->conn)) {
+                core->deliveries_ingress_inter_network++;
+                addr->deliveries_ingress_inter_network++;
             }
-
         }
     } else {
         //

@@ -100,10 +100,10 @@ qd_error_t qd_load_adaptor_config(qdr_core_t *core, qd_adaptor_config_t *config,
     //
     // If this router is annotated with a van-id, add the van-id to the address
     //
-    const char *van_id = qdr_core_van_id(core);
-    if (!!van_id) {
-        char *address = (char*) malloc(strlen(config_address) + strlen(van_id) + 2);
-        strcpy(address, van_id);
+    const char *tenant_id = qdr_core_tenant_id(core);
+    if (!!tenant_id) {
+        char *address = (char*) malloc(strlen(config_address) + strlen(tenant_id) + 2);
+        strcpy(address, tenant_id);
         strcat(address, "/");
         strcat(address, config_address);
         config->address = address;
