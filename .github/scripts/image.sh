@@ -39,9 +39,9 @@ TAGS=(
 if [[ -n "${BUILD_NUMBER:-}" ]]; then
     TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG}-${BUILD_NUMBER}")
 fi
-if [[ -n "${PUSH_LATEST:-}" ]]; then
-    TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}")
-fi
+#if [[ -n "${PUSH_LATEST:-}" ]]; then
+#    TAGS+=("-t ${CONTAINER_REGISTRY}/${CONTAINER_ORG}/${PROJECT_NAME}:${PROJECT_TAG_LATEST}")
+#fi
 
 # Building the skupper-router image
 # Pass the VERSION as a build argument so Containerfile can use it when calling compile.sh
