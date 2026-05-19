@@ -474,7 +474,7 @@ static void qcm_mobile_sync_on_timer_CT(qdr_core_t *core, void *context)
     //
     // Prepare a differential MAU for sending to all the other routers.
     //
-    qd_message_t *mau = qcm_mobile_sync_compose_differential_mau(msync, "_topo/0/0/all/qdrouter.ma");
+    qd_message_t *mau = qcm_mobile_sync_compose_differential_mau(msync, "_topo/0/all/qdrouter.ma");
 
     //
     // Multicast the control message.  Set the exclude_inprocess and control flags.

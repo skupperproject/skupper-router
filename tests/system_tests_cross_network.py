@@ -63,7 +63,7 @@ class CrossNetworkPreconfiguredTest(TestCase):
         router('NET.X.INT.A', 'interior', 'net-x',
                ('listener', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
                ('listener', {'name': 'cross-net', 'role': 'inter-network', 'port': cross_network_port, 'linkCapacity': '10'}),
-               ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'externalAddress': '_topo/net-x'}))
+               ('autoLink', {'connection': 'cross-net', 'direction': 'in', 'externalAddress': '_xtopo/net-x'}))
         router('NET.X.INT.B', 'interior', 'net-x',
                ('connector', {'role': 'inter-router', 'port': inter_router_port_X, 'linkCapacity': '10'}),
                ('listener', {'role': 'edge', 'port': edge_port_X, 'linkCapacity': '10'}))

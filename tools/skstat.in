@@ -1047,7 +1047,7 @@ class BusManager:
             for node in nodes:
                 self.node.set_client(node[6:])
                 parts = node.split("/")
-                print("Router ", parts[4])
+                print("Router ", parts[3])
                 print("")
                 if self.show.__name__ == 'show_all':
                     self.show(show_summary=False)

@@ -40,15 +40,27 @@ typedef struct qcm_lookup_client_t {
  */
 static char *qdr_generate_temp_addr(qdr_core_t *core)
 {
-    static const char *edge_template      = "amqp:/_edge/%s/%s/temp.%s";
-    static const char *edge_template_van  = "amqp:/_edge/%s/%s/%s/temp.%s";
-    static const char *topo_template      = "amqp:/_topo/%s/%s/%s/temp.%s";
-    static const char *topo_template_van  = "amqp:/_topo/%s/%s/%s/%s/temp.%s";
+    static const char *edge_template      = "amqp:/%sedge/%s%s/temp.%s";
+    static const char *edge_template_van  = "amqp:/%sedge/%s%s/%s/temp.%s";
+    static const char *topo_template      = "amqp:/%stopo/%s%s/%s/temp.%s";
+    static const char *topo_template_van  = "amqp:/%stopo/%s%s/%s/%s/temp.%s";
     const size_t       max_template       = 21;  // printable chars
     char discriminator[QD_DISCRIMINATOR_SIZE];
 
+    char network[64];
+    char *prefix;
+    if (strcmp(core->network_id, "0") == 0) {
+        network[0] = '\0';
+        prefix     = "_";
+    } else {
+        strncpy(network, core->network_id, 62);
+        strcat(network, "/");
+        prefix = "_x";
+    }
+
     qd_generate_discriminator(discriminator);
     size_t len = max_template + QD_DISCRIMINATOR_SIZE + 1
+        + strlen(network)
         + strlen(core->router_id) + strlen(core->router_area) + strlen(core->network_id)
         + (!!core->tenant_id ? strlen(core->tenant_id) : 0);
 
@@ -56,15 +68,15 @@ static char *qdr_generate_temp_addr(qdr_core_t *core)
     char *buffer = qd_malloc(len);
     if (core->router_mode == QD_ROUTER_MODE_EDGE) {
         if (!!core->tenant_id) {
-            rc = snprintf(buffer, len, edge_template_van, core->network_id, core->router_id, core->tenant_id, discriminator);
+            rc = snprintf(buffer, len, edge_template_van, prefix, network, core->router_id, core->tenant_id, discriminator);
         } else {
-            rc = snprintf(buffer, len, edge_template, core->network_id, core->router_id, discriminator);
+            rc = snprintf(buffer, len, edge_template, prefix, network, core->router_id, discriminator);
         }
     } else {
         if (!!core->tenant_id) {
-            rc = snprintf(buffer, len, topo_template_van, core->network_id, core->router_area, core->router_id, core->tenant_id, discriminator);
+            rc = snprintf(buffer, len, topo_template_van, prefix, network, core->router_area, core->router_id, core->tenant_id, discriminator);
         } else {
-            rc = snprintf(buffer, len, topo_template, core->network_id, core->router_area, core->router_id, discriminator);
+            rc = snprintf(buffer, len, topo_template, prefix, network, core->router_area, core->router_id, discriminator);
         }
     }
     (void)rc; assert(rc < len);

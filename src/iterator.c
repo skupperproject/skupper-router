@@ -150,6 +150,7 @@ static void parse_address_view(qd_iterator_t *iter)
     // ITER_VIEW_ADDRESS_NO_HOST.  We will now further refine the view
     // in order to aid the router in looking up addresses.
     //
+    bool has_network_element = false;
 
     qd_buffer_field_t save_pointer = iter->view_pointer;
     iter->annotation_length = 1;
@@ -161,9 +162,17 @@ static void parse_address_view(qd_iterator_t *iter)
             return;
         }
 
+        //
+        // Look for the leading 'x' in the prefix (i.e. xtopo or xedge).  If present, expect a network
+        // element in the address format.
+        //
+        if (qd_iterator_prefix(iter, "x")) {
+            has_network_element = true;
+        }
+
         if (qd_iterator_prefix(iter, "topo/")) {
             assert(my_area && my_router);  // ensure qd_iterator_set_address called!
-            if (qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
+            if (!has_network_element || qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
                 if (qd_iterator_prefix(iter, "all/") || qd_iterator_prefix(iter, my_area)) {
                     if (qd_iterator_prefix(iter, "all/")) {
                         iter->prefix = QD_ITER_HASH_PREFIX_TOPOLOGICAL;
@@ -206,7 +215,7 @@ static void parse_address_view(qd_iterator_t *iter)
         }
 
         if (qd_iterator_prefix(iter, "edge/")) {
-            if (qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
+            if (!has_network_element || qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
                 if (qd_iterator_prefix(iter, my_router)) {
                     iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
                     iter->state  = STATE_AT_PREFIX;
