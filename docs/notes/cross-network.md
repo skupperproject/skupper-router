@@ -86,7 +86,7 @@ If a network in a federation relationship is going to host clients using dynamic
 autoLink {
     connection: <name of listener/connector>
     direction: in
-    externalAddress: _topo/<local-network-id>
+    externalAddress: _xtopo/<local-network-id>
 }
 ```
 
@@ -123,7 +123,7 @@ listener {
 autoLink {
     connection: federation
     direction: in
-    externalAddress: _topo/net-A
+    externalAddress: _xtopo/net-A
 }
 
 autoLink {
@@ -158,7 +158,7 @@ connector {
 autoLink {
     connection: federation
     direction: in
-    externalAddress: _topo/net-B
+    externalAddress: _xtopo/net-B
 }
 
 autoLink {
