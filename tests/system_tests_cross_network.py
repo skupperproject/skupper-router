@@ -26,7 +26,7 @@ from system_test import unittest
 
 
 class CrossNetworkPreconfiguredTest(TestCase):
-    """System tests involving a single router"""
+    """System tests for routers in different networks connected by inter-network connections"""
     @classmethod
     def setUpClass(cls):
         """Start a router and a messenger"""
