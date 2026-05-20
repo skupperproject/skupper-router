@@ -143,6 +143,15 @@ static void set_to_edge_connection(qd_iterator_t *iter)
 }
 
 
+static void consume_through_slash(qd_iterator_t *iter)
+{
+    unsigned char octet;
+    do {
+        octet = qd_iterator_octet(iter);
+    } while (octet != '/' && octet != 0);
+}
+
+
 static void parse_address_view(qd_iterator_t *iter)
 {
     //
@@ -150,7 +159,8 @@ static void parse_address_view(qd_iterator_t *iter)
     // ITER_VIEW_ADDRESS_NO_HOST.  We will now further refine the view
     // in order to aid the router in looking up addresses.
     //
-    bool has_network_element = false;
+    bool has_network_element    = false;
+    bool ignore_network_element = !my_network;
 
     qd_buffer_field_t save_pointer = iter->view_pointer;
     iter->annotation_length = 1;
@@ -172,6 +182,10 @@ static void parse_address_view(qd_iterator_t *iter)
 
         if (qd_iterator_prefix(iter, "topo/")) {
             assert(my_area && my_router);  // ensure qd_iterator_set_address called!
+            if (has_network_element && ignore_network_element) {
+                consume_through_slash(iter);
+                has_network_element = false;
+            }
             if (!has_network_element || qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
                 if (qd_iterator_prefix(iter, "all/") || qd_iterator_prefix(iter, my_area)) {
                     if (qd_iterator_prefix(iter, "all/")) {
@@ -215,6 +229,10 @@ static void parse_address_view(qd_iterator_t *iter)
         }
 
         if (qd_iterator_prefix(iter, "edge/")) {
+            if (has_network_element && ignore_network_element) {
+                consume_through_slash(iter);
+                has_network_element = false;
+            }
             if (!has_network_element || qd_iterator_prefix(iter, my_network) || qd_iterator_prefix(iter, "0/")) {
                 if (qd_iterator_prefix(iter, my_router)) {
                     iter->prefix = QD_ITER_HASH_PREFIX_LOCAL;
@@ -538,7 +556,7 @@ void qd_iterator_set_address(bool _edge_mode, const char *area, const char *rout
 void qd_iterator_set_network(const char *network)
 {
     free(my_network);
-    if (!network) {
+    if (!network || strcmp(network, "0") == 0) {
         my_network = 0;
     } else {
         const size_t network_size = strlen(network);
