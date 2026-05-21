@@ -221,7 +221,7 @@ jobs:
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           # replace SHA with 0.41.0 when available
-          - 169e19a757ca8a3c998e29266f319a41a70d39ba
+          - e5d5c2badb964684bf41ba509a110bf06a24712a
         shard: [1, 2]
         shards: [2]
         exclude:
@@ -341,7 +341,7 @@ jobs:
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           # replace SHA with 0.41.0 when available
-          - 169e19a757ca8a3c998e29266f319a41a70d39ba
+          - e5d5c2badb964684bf41ba509a110bf06a24712a
         shard: [ 1, 2 ]
         shards: [ 2 ]
         exclude:
