@@ -172,6 +172,6 @@ autoLink {
 
 It is the intent of the implementation that cross-network operations are transparent to the endpoints involved.  No changes to endpoint (producer, consumer, client, server) code need to be made to use this feature.
 
-## Backward Compatibility and Breaking Changes
+## Backward Compatibility
 
-This feature represents an incompatible change from the version 3 router because the format of dynamic addresses has been changed to include a field for the network ID.  This feature must be introduced in a major release (version 4).  Until that time, the project team shall maintain a development branch that tracks main and carries a patch for this feature.
+This feature adds a new format for dynamic addresses that was unknown prior to its introduction.  With this feature, if the `network` entity is not configured, the router is compatible with earlier and later versions.  Networks using the cross-network features should consist entirely of routers with this new feature.
