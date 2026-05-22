@@ -1,0 +1,147 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Test skupper-router main
+description: Execute skupper integration testing
+
+inputs:
+
+  qdrouterdImage:
+    required: true
+    description: Image to use in skupper integration tests
+
+  skupperGitRef:
+    required: false
+    description: Reference to skupper version
+    default: "master"
+
+runs:
+  using: "composite"
+  steps:
+
+      - name: Install gotestsum
+        run: |
+          curl -OL https://github.com/gotestyourself/gotestsum/releases/download/v1.8.0/gotestsum_1.8.0_linux_amd64.tar.gz
+          sudo tar -xvf gotestsum_1.8.0_linux_amd64.tar.gz -C /usr/bin gotestsum
+        shell: bash
+
+      - name: Get Go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+        shell: bash
+
+      - name: Install microk8s
+        run: |
+          sudo snap install microk8s --classic --channel=1.23/stable
+          sudo microk8s enable dns ingress storage registry:size=20Gi host-access:ip=10.0.1.1 metallb:10.64.140.18-10.64.140.88
+          sudo microk8s status --wait-ready
+        shell: bash
+
+      - name: Export microk8s config
+        if: "${{ always() }}"
+        run: |
+          mkdir -p $HOME/.kube
+          sudo microk8s config > $HOME/.kube/config
+        shell: bash
+
+      - name: Push image into microk8s
+        run: |
+          docker tag "${{ inputs.qdrouterdImage }}" localhost:32000/skupper-router:registry
+          timeout 5m bash -c 'until nc -z localhost 32000; do sleep 1; done' || :
+          docker push localhost:32000/skupper-router:registry
+          podman pull --tls-verify=false localhost:32000/skupper-router:registry
+        shell: bash
+
+      - name: Checkout Skupper
+        uses: actions/checkout@v2
+        with:
+          repository: 'skupperproject/skupper'
+          ref: "${{ inputs.skupperGitRef }}"
+          path: 'skupper'
+
+      - name: Restore Go cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ${{ steps.go-cache-paths.outputs.go-build }}
+            ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+
+      - name: Compile Skupper
+        run: |
+          make all
+          sudo install skupper /usr/local/bin
+        working-directory: skupper
+        shell: bash
+
+      # https://www.gnu.org/software/make/manual/make.html#Environment
+      - name: Build and push the controller image
+        run: |
+          make -e docker-build
+          make -e docker-push
+        shell: bash
+        working-directory: skupper
+        env:
+          # not used, so far; but have to build somewhere we have perms to push
+          TEST_IMAGE: 'localhost:32000/skupper-test:registry'
+
+          SERVICE_CONTROLLER_IMAGE: 'localhost:32000/skupper-service-controller:registry'
+          SITE_CONTROLLER_IMAGE: 'localhost:32000/skupper-site-controller:registry'
+          CONFIG_SYNC_IMAGE: 'localhost:32000/skupper-config-sync:registry'
+
+      - name: Run Skupper integration tests
+        run: |
+          gotestsum --format=standard-verbose -- -p=3 -count=1 -tags=integration -timeout=60m ./...
+        working-directory: skupper
+        shell: bash
+        env:
+          PUBLIC_1_INGRESS_HOST: '10.0.1.1'
+          QDROUTERD_IMAGE: 'localhost:32000/skupper-router:registry'
+          SKUPPER_SERVICE_CONTROLLER_IMAGE: 'localhost:32000/skupper-service-controller:registry'
+          SKUPPER_CONFIG_SYNC_IMAGE: 'localhost:32000/skupper-config-sync:registry'
+          SKUPPER_SITE_CONTROLLER_IMAGE: 'localhost:32000/skupper-site-controller:registry'
+
+      - name: Dump microk8s log (apiserver)
+        if: "${{ always() }}"
+        run: |
+          sudo journalctl -u snap.microk8s.daemon-apiserver > apiserver.log
+        shell: bash
+
+      - name: Dump microk8s log (kubelet)
+        if: "${{ always() }}"
+        run: |
+          sudo journalctl -u snap.microk8s.daemon-kubelet > kubelet.log
+        shell: bash
+
+      - name: Dump microk8s log (kubelite)
+        if: "${{ always() }}"
+        run: |
+          sudo journalctl -u snap.microk8s.daemon-kubelite > kubelite.log
+        shell: bash
+
+      - name: archive logs
+        if: "${{ always() }}"
+        uses: actions/upload-artifact@v3
+        with:
+          name: TestLogs
+          path: |
+            **/*.tar.gz
+            **/*.log
