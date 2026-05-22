@@ -54,6 +54,8 @@ extern "C" {
 
 void __asan_poison_memory_region(void const volatile *addr, size_t size);
 void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+void __lsan_do_leak_check(void);
+int  __lsan_do_recoverable_leak_check(void);
 
 /// Marks a memory region as unaddressable.
 ///
@@ -73,6 +75,25 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 /// \param size Size of memory region.
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) __asan_unpoison_memory_region((addr), (size))
 
+// Check for leaks now. This function behaves identically to the default
+// end-of-process leak check. In particular, it will terminate the process if
+// leaks are found and the exitcode runtime flag is non-zero.
+// Subsequent calls to this function will have no effect and end-of-process
+// leak check will not run. Effectively, end-of-process leak check is moved to
+// the time of first invocation of this function.
+// By calling this function early during process shutdown, you can instruct
+// LSan to ignore shutdown-only leaks which happen later on.
+#define LSAN_DO_LEAK_CHECK() __lsan_do_leak_check()
+
+// Check for leaks now. Returns zero if no leaks have been found or if leak
+// detection is disabled, non-zero otherwise.
+// This function may be called repeatedly, e.g. to periodically check a
+// long-running process. It prints a leak report if appropriate, but does not
+// terminate the process. It does not affect the behavior of
+// __lsan_do_leak_check() or the end-of-process leak check, and is not
+// affected by them.
+#define LSAN_DO_RECOVERABLE_LEAK_CHECK() __lsan_do_recoverable_leak_check()
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
@@ -83,6 +104,9 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
   ((void)(addr), (void)(size))
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) \
   ((void)(addr), (void)(size))
+
+#define LSAN_DO_LEAK_CHECK() /**/
+#define LSAN_DO_RECOVERABLE_LEAK_CHECK() 0
 
 #endif  // QD_HAS_ADDRESS_SANITIZER
 
