@@ -556,7 +556,7 @@ void qd_iterator_set_address(bool _edge_mode, const char *area, const char *rout
 void qd_iterator_set_network(const char *network)
 {
     free(my_network);
-    if (!network || strcmp(network, "0") == 0) {
+    if (!network || network[0] == '\0' || strcmp(network, "0") == 0) {
         my_network = 0;
     } else {
         const size_t network_size = strlen(network);

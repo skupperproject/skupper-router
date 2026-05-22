@@ -49,7 +49,7 @@ static char *qdr_generate_temp_addr(qdr_core_t *core)
 
     char network[64];
     char *prefix;
-    if (strcmp(core->network_id, "0") == 0) {
+    if (strcmp(core->network_id, "0") == 0 || core->network_id[0] == '\0') {
         network[0] = '\0';
         prefix     = "_";
     } else {
