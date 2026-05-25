@@ -375,6 +375,18 @@ class NodeTracker:
             self.recompute_topology = True
 
             ##
+            # If this is a neighbor router and the cost has changed in the received
+            # link state, call the C core to update the connection cost locally. The
+            # C core then calls back to python to update the local link state.
+            ##
+            if node.is_neighbor() and self.my_id in link_state.peers:
+                new_cost = link_state.peers[self.my_id]
+                old_cost = self.link_state.peers[node_id]
+                if old_cost != new_cost:
+                    self.container.log(LOG_DEBUG, "Neighbor LSU received from node %s - cost change %d -> %d" % (node_id, old_cost, new_cost))
+                    self.container.router_adapter.update_connection_cost(node.peer_link_id, new_cost)
+
+            ##
             # Look through the new link state for references to nodes that we don't
             # know about.  Schedule link state requests for those nodes to be sent
             # after we next recompute the topology.

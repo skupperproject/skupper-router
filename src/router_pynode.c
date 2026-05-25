@@ -280,6 +280,35 @@ static PyObject* qd_mobile_seq_advanced(PyObject *self, PyObject *args)
 }
 
 
+static PyObject* qd_update_connection_cost(PyObject *self, PyObject *args)
+{
+    RouterAdapter *adapter = (RouterAdapter*) self;
+    qd_router_t   *router  = adapter->router;
+    int            mask_bit;
+    int            new_cost;
+
+    if (!PyArg_ParseTuple(args, "ii", &mask_bit, &new_cost))
+        return 0;
+
+    if (mask_bit >= qd_bitmask_width() || mask_bit < 0) {
+        PyErr_SetString(PyExc_Exception, "Router bit mask out of range");
+        return 0;
+    }
+
+    if (new_cost < 1) {
+        PyErr_SetString(PyExc_Exception, "Cost must be >= 1");
+        return 0;
+    }
+
+    // Update the connection cost via the core using the mask_bit
+    const bool use_maskbit = true;
+    qdr_core_update_connection_cost(router->router_core, mask_bit, new_cost, use_maskbit);
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+
 static PyObject* qd_topology_changed(PyObject *self, PyObject *args)
 {
     RouterAdapter *adapter = (RouterAdapter*) self;
@@ -307,19 +336,20 @@ static PyObject* qd_get_agent(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef RouterAdapter_methods[] = {
-    {"add_router",          qd_add_router,          METH_VARARGS, "A new remote/reachable router has been discovered"},
-    {"del_router",          qd_del_router,          METH_VARARGS, "We've lost reachability to a remote router"},
-    {"set_link",            qd_set_link,            METH_VARARGS, "Set the link for a neighbor router"},
-    {"remove_link",         qd_remove_link,         METH_VARARGS, "Remove the link for a neighbor router"},
-    {"set_next_hop",        qd_set_next_hop,        METH_VARARGS, "Set the next hop for a remote router"},
-    {"remove_next_hop",     qd_remove_next_hop,     METH_VARARGS, "Remove the next hop for a remote router"},
-    {"set_cost",            qd_set_cost,            METH_VARARGS, "Set the cost to reach a remote router"},
-    {"set_valid_origins",   qd_set_valid_origins,   METH_VARARGS, "Set the valid origins for a remote router"},
-    {"set_radius",          qd_set_radius,          METH_VARARGS, "Set the current topology radius"},
-    {"flush_destinations",  qd_flush_destinations,  METH_VARARGS, "Remove all mapped destinations from a router"},
-    {"mobile_seq_advanced", qd_mobile_seq_advanced, METH_VARARGS, "Mobile sequence for a router moved ahead of the local value"},
-    {"topology_changed",    qd_topology_changed,    METH_VARARGS, "The computed topology has changed.  Passes in the timestamp"},
-    {"get_agent",           qd_get_agent,           METH_VARARGS, "Get the management agent"},
+    {"add_router",             qd_add_router,             METH_VARARGS, "A new remote/reachable router has been discovered"},
+    {"del_router",             qd_del_router,             METH_VARARGS, "We've lost reachability to a remote router"},
+    {"set_link",               qd_set_link,               METH_VARARGS, "Set the link for a neighbor router"},
+    {"remove_link",            qd_remove_link,            METH_VARARGS, "Remove the link for a neighbor router"},
+    {"set_next_hop",           qd_set_next_hop,           METH_VARARGS, "Set the next hop for a remote router"},
+    {"remove_next_hop",        qd_remove_next_hop,        METH_VARARGS, "Remove the next hop for a remote router"},
+    {"set_cost",               qd_set_cost,               METH_VARARGS, "Set the cost to reach a remote router"},
+    {"set_valid_origins",      qd_set_valid_origins,      METH_VARARGS, "Set the valid origins for a remote router"},
+    {"set_radius",             qd_set_radius,             METH_VARARGS, "Set the current topology radius"},
+    {"flush_destinations",     qd_flush_destinations,     METH_VARARGS, "Remove all mapped destinations from a router"},
+    {"mobile_seq_advanced",    qd_mobile_seq_advanced,    METH_VARARGS, "Mobile sequence for a router moved ahead of the local value"},
+    {"update_connection_cost", qd_update_connection_cost, METH_VARARGS, "Update the cost of an inter-router connection"},
+    {"topology_changed",       qd_topology_changed,       METH_VARARGS, "The computed topology has changed.  Passes in the timestamp"},
+    {"get_agent",              qd_get_agent,              METH_VARARGS, "Get the management agent"},
     {0, 0, 0, 0}
 };
 
