@@ -163,6 +163,18 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
 void qdr_core_unsubscribe(qdr_subscription_t *sub);
 
 /**
+ * qdr_core_update_connection_cost
+ *
+ * Update the cost of an inter-router connection identified by conn_id or maskbit
+ *
+ * @param core Pointer to the core module
+ * @param conn_id The connection identity or maskbit
+ * @param new_cost The new cost value (must be >= 1)
+ * @param use_maskbit True if conn_id holds the maskbit of the connection, False if it holds the connection identity
+ */
+void qdr_core_update_connection_cost(qdr_core_t *core, uint64_t conn_id, int new_cost, bool use_maskbit);
+
+/**
  * qdr_send_to
  *
  * Send a message to a destination.  This function is used only by in-process components that

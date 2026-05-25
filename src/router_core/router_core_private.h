@@ -184,6 +184,15 @@ struct qdr_action_t {
         } stats_request;
 
         //
+        // Arguments for connection cost update
+        //
+        struct {
+            uint64_t conn_id;  // connection identity or mask_bit depending on use_maskbit flag
+            int      cost;
+            bool     use_maskbit;  // true if conn_id field contains mask_bit, false if it contains connection identity
+        } cost_update;
+
+        //
         // Arguments for general use
         //
         struct {
@@ -700,6 +709,7 @@ struct qdr_connection_t {
     bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
     bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
     int                         inter_router_cost;
+    int                         remote_cost;  // Remote connection cost from the OPEN frame
     int                         link_capacity;
     int                         mask_bit;  ///< set only if inter-router control connection
     int                         group_parent_mask_bit;  ///< if inter-router data connection maskbit of group parent inter-router control conn

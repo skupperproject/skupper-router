@@ -84,6 +84,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
                                         bool                          incoming,
                                         qdr_connection_role_t         role,
                                         int                           cost,
+                                        int                           remote_cost,
                                         uint64_t                      management_id,
                                         const char                   *label,
                                         bool                          strip_annotations_in,
@@ -106,6 +107,7 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     conn->incoming              = incoming;
     conn->role                  = role;
     conn->inter_router_cost     = cost;
+    conn->remote_cost           = remote_cost;
     conn->strip_annotations_in  = strip_annotations_in;
     conn->strip_annotations_out = strip_annotations_out;
     conn->policy_spec           = policy_spec;
@@ -2809,4 +2811,130 @@ static void setup_inter_router_control_conn_CT(qdr_core_t *core, qdr_connection_
             qdr_close_connection_CT(core, conn);
         }
     }
+}
+
+/** Inter-router connection cost update function
+ *
+ * Dynamic connection cost update happens in two steps:
+ *   (1) connector side cost is updated by mgmt call, LS seq bumped
+ *   (2) listener side updates the connection cost from LSU reveived from peer
+ *
+ * This core function is called when either mgmt updates the local connector cost (step 1),
+ * or an LSU is recieved from a neighbor with our connection cost changed (which happens
+ * at step 2).
+ *
+ * The action->args.cost_update.use_maskbit flag is set if it is called from LSU processing.
+ * In that case, action->args.cost_update.conn_id holds the maskbit of the connection. If the
+ * flag is not set then the function is called from the managment thread (step 1) and
+ * action->args.cost_update.conn_id holds the coonnection identity.
+ *
+ * */
+static void qdr_core_update_connection_cost_CT(qdr_core_t *core,
+                                          qdr_action_t *action,
+                                          bool discard)
+{
+    if (discard) return;
+
+    int new_cost = action->args.cost_update.cost;
+    qdr_connection_t *conn = 0;
+    const bool local_mgmt_update = !action->args.cost_update.use_maskbit;
+
+    if (action->args.cost_update.use_maskbit) {
+        // Look up connection by mask_bit. We are called due to a neighbour LSU was received.
+        int mask_bit = (int)action->args.cost_update.conn_id;
+
+        if (mask_bit >= 0 && mask_bit < qd_bitmask_width()) {
+            conn = core->rnode_conns_by_mask_bit[mask_bit];
+        }
+
+        if (!conn) {
+            qd_log(LOG_ROUTER_CORE, QD_LOG_WARNING,
+                   "Cost update failed: no connection found for mask_bit %d", mask_bit);
+            return;
+        }
+    } else {
+        // Find the connection by id. We are called by local management.
+        uint64_t conn_id = action->args.cost_update.conn_id;
+        for (qdr_connection_t *c = DEQ_HEAD(core->open_connections); c; c = DEQ_NEXT(c)) {
+            if (c->identity == conn_id) {
+                conn = c;
+                break;
+            }
+        }
+
+        if (!conn) {
+            qd_log(LOG_ROUTER_CORE, QD_LOG_WARNING,
+                   "Cost update failed: connection C%"PRIu64" not found", conn_id);
+            return;
+        }
+    }
+
+    if (conn->role != QDR_ROLE_INTER_ROUTER) {
+        if (conn->role == QDR_ROLE_INTER_ROUTER_DATA)
+            return;
+        qd_log(LOG_ROUTER_CORE, QD_LOG_WARNING,
+               "Cost update ignored: connection C%"PRIu64" is not inter-router (role: %d)", conn->identity, conn->role);
+        return;
+    }
+
+    const int old_cost = conn->inter_router_cost;
+    if (old_cost == new_cost) {
+        if (local_mgmt_update) {
+            // Connector cost got changed by mgmt but connection cost does not change.
+            // This can happen if local connector cost had been smaller then peer
+            // listener cost but they got equal now.
+            return;
+        }
+        // A peer sent us an LSU with a cost value that is different from the cost of that peer in our local link
+        // state. However, the cost of this connection is the same as the peer cost from the LSU, i.e. it is
+        // different from the peer cost in the local link state. This can happen only if we are connected by multiple
+        // inter-router connections. This is unsupported configuration.
+        qd_log(LOG_ROUTER_CORE, QD_LOG_WARNING, "[C%"PRIu64"] Multiple inter-router connections to peer router %s",
+            conn->identity, conn->connection_info->container);
+        return;
+    } else if (!conn->incoming && !local_mgmt_update) {
+        // We can get here if the peer (listener side) sends us an LSU right after the connector cost
+        // has updated locally by mgmt but before the peer receives our updated LSU. This can be ignored.
+        qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG,
+            "[C%"PRIu64"] Ignoring cost update: peer listener side cost does not match connector side cost: %d != %d",
+            conn->identity, new_cost,  old_cost);
+            return;
+    }
+
+    if (conn->incoming) {
+        // Peer updated connector cost and notified us (listener side) via LSU
+        qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+           "[C%"PRIu64"] Connection cost updated at listener side: %d -> %d",
+           conn->identity, conn->inter_router_cost , new_cost);
+        conn->inter_router_cost = new_cost;
+    } else {
+        // Local mgmt cost update. New connection cost is the max of the new connector cost and
+        // the immutable listener cost
+        const int max_cost = MAX(new_cost, conn->remote_cost);
+        if (max_cost == old_cost)
+            return; // no change for connection cost
+
+        conn->inter_router_cost = max_cost;
+        qd_log(LOG_ROUTER_CORE, QD_LOG_INFO,
+           "[C%"PRIu64"] Connection cost updated at connector side: %d -> %d (new connector cost: %d listener cost: %d)",
+           conn->identity, old_cost, conn->inter_router_cost, new_cost, conn->remote_cost);
+    }
+
+    // Notify Python routing engine to update local link state. Container ID
+    // indentifies the peer router node.
+    qdr_post_peer_cost_update_CT(core, conn->connection_info->container, conn->inter_router_cost);
+}
+
+
+void qdr_core_update_connection_cost(qdr_core_t *core,
+                                uint64_t conn_id,
+                                int new_cost,
+                                bool use_maskbit)
+{
+    qdr_action_t *action = qdr_action(qdr_core_update_connection_cost_CT,
+                                      "connection_update_cost");
+    action->args.cost_update.conn_id = conn_id;
+    action->args.cost_update.cost = new_cost;
+    action->args.cost_update.use_maskbit = use_maskbit;
+    qdr_action_enqueue(core, action);
 }
