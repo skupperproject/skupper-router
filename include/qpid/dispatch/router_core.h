@@ -108,12 +108,14 @@ void qdr_core_topology_changed(qdr_core_t *core, int router_maskbit);
 typedef void (*qdr_set_mobile_seq_t)    (void *context, int router_maskbit, uint64_t mobile_seq);
 typedef void (*qdr_set_my_mobile_seq_t) (void *context, uint64_t mobile_seq);
 typedef void (*qdr_link_lost_t)         (void *context, int link_maskbit);
+typedef void (*qdr_peer_cost_update_t)(void *context, const char *container_id, int new_cost);
 
-void qdr_core_route_table_handlers(qdr_core_t              *core, 
-                                   void                    *context,
-                                   qdr_set_mobile_seq_t     set_mobile_seq,
-                                   qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost);
+void qdr_core_route_table_handlers(qdr_core_t             *core,
+                                   void                   *context,
+                                   qdr_set_mobile_seq_t    set_mobile_seq,
+                                   qdr_set_my_mobile_seq_t set_my_mobile_seq,
+                                   qdr_link_lost_t         link_lost,
+                                   qdr_peer_cost_update_t  peer_cost_update);
 
 /**
  ******************************************************************************

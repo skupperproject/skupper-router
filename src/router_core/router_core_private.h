@@ -244,6 +244,7 @@ struct qdr_general_work_t {
     qdr_general_work_handler_t   handler;
     int                          maskbit;
     int                          inter_router_cost;
+    char                        *container;
     qd_message_t                *msg;
     qdr_receive_t                on_message;
     void                        *on_message_context;
@@ -871,6 +872,7 @@ struct qdr_core_t {
     qdr_set_mobile_seq_t     rt_set_mobile_seq;
     qdr_set_my_mobile_seq_t  rt_set_my_mobile_seq;
     qdr_link_lost_t          rt_link_lost;
+    qdr_peer_cost_update_t   rt_peer_cost_update;
 
     //
     // Events section
@@ -991,6 +993,7 @@ void qdr_agent_enqueue_response_CT(qdr_core_t *core, qdr_query_t *query);
 void qdr_post_set_mobile_seq_CT(qdr_core_t *core, int router_maskbit, uint64_t mobile_seq);
 void qdr_post_set_my_mobile_seq_CT(qdr_core_t *core, uint64_t mobile_seq);
 void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit);
+void qdr_post_peer_cost_update_CT(qdr_core_t *core, const char *container, int new_cost);
 
 void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work);
 void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr);

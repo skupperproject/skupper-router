@@ -272,6 +272,16 @@ class NodeTracker:
             if self.link_state.del_peer(node_id):
                 self.link_state_changed = True
 
+    def peer_cost_update(self, node_id, new_cost):
+        """
+        Invoked when neighbor cost got changed dynamically
+        """
+        if self.link_state.is_peer(node_id):
+            old_cost = self.link_state.peers[node_id]
+            if self.link_state.update_peer_cost(node_id, new_cost):
+                self.link_state_changed = True
+                self.container.log_ls(LOG_DEBUG, "Updated cost to neighbor %s in local link state: %d -> %d" % (node_id, old_cost, new_cost))
+
     def set_mobile_seq(self, router_maskbit, mobile_seq):
         """
         """
