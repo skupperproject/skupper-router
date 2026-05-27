@@ -73,7 +73,7 @@ jobs:
 
       # To make sure that pip can upgrade typing-extensions
     - name: Prepare compilation database
-      run: sudo apt remove -y python3-typing-extensions
+      run: sudo apt remove -y python3-typing-extensions python3-cryptography
       continue-on-error: true
 
     # https://clang-analyzer.llvm.org/command-line.html
