@@ -782,6 +782,9 @@ int qdr_forward_closest_CT(qdr_core_t      *core,
             if (qdr_connection_route_container(out_link->conn)) {
                 core->deliveries_egress_route_container++;
                 addr->deliveries_egress_route_container++;
+            } else if (qdr_connection_inter_network(out_link->conn)) {
+                core->deliveries_egress_inter_network++;
+                addr->deliveries_egress_inter_network++;
             }
 
             return 1;
@@ -1107,6 +1110,9 @@ int qdr_forward_balanced_CT(qdr_core_t      *core,
             if (qdr_connection_route_container(chosen_link->conn)) {
                 core->deliveries_egress_route_container++;
                 addr->deliveries_egress_route_container++;
+            } else if (qdr_connection_inter_network(chosen_link->conn)) {
+                core->deliveries_egress_inter_network++;
+                addr->deliveries_egress_inter_network++;
             }
         }
         return 1;

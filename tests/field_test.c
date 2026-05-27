@@ -313,41 +313,128 @@ static char *verify_iterator(void *context, qd_iterator_t *iter,
 static char* test_view_address_hash(void *context)
 {
     struct {const char *addr; const char *view;} cases[] = {
-    {"amqp:/_local/my-addr/sub",                "Lmy-addr/sub"},
-    {"amqp:/_local/my-addr",                    "Lmy-addr"},
-    {"_local/my-addr",                          "Lmy-addr"},
-    {"amqp:/_topo/area/router/local/sub",       "Aarea"},
-    {"amqp:/_topo/my-area/router/local/sub",    "Rrouter"},
-    {"amqp:/_topo/my-area/my-router/local/sub", "Llocal/sub"},
-    {"amqp:/_topo/area/all/local/sub",          "Aarea"},
-    {"amqp:/_topo/my-area/all/local/sub",       "Tlocal/sub"},
-    {"amqp:/_topo/all/all/local/sub",           "Tlocal/sub"},
-    {"amqp://host:port/_local/my-addr",         "Lmy-addr"},
-    {"_topo/area/router/my-addr",               "Aarea"},
-    {"_topo/my-area/router/my-addr",            "Rrouter"},
-    {"_topo/my-area/my-router/my-addr",         "Lmy-addr"},
-    {"_topo/my-area/router",                    "Rrouter"},
-    {"amqp:/mobile",                            "Mmobile"},
-    {"mobile",                                  "Mmobile"},
-    {"/mobile",                                 "Mmobile"},
-    {"amqp:/_edge/router/sub",                  "Hrouter"},
-    {"_edge/router/sub",                        "Hrouter"},
+    {"amqp:/_local/my-addr/sub",                            "Lmy-addr/sub"},
+    {"amqp:/_local/my-addr",                                "Lmy-addr"},
+    {"_local/my-addr",                                      "Lmy-addr"},
+    {"amqp://host:port/_local/my-addr",                     "Lmy-addr"},
+    {"amqp:/_topo/area/router/local/sub",                   "Aarea"},
+    {"amqp:/_topo/my-area/router/local/sub",                "Rrouter"},
+    {"amqp:/_topo/my-area/my-router/local/sub",             "Llocal/sub"},
+    {"amqp:/_topo/area/all/local/sub",                      "Aarea"},
+    {"amqp:/_topo/my-area/all/local/sub",                   "Tlocal/sub"},
+    {"amqp:/_topo/all/all/local/sub",                       "Tlocal/sub"},
+    {"_topo/area/router/my-addr",                           "Aarea"},
+    {"_topo/my-area/router/my-addr",                        "Rrouter"},
+    {"_topo/my-area/my-router/my-addr",                     "Lmy-addr"},
+    {"_topo/my-area/router",                                "Rrouter"},
 
-    // Re-run the above tests to make sure trailing dots are ignored.
-    {"amqp:/_local/my-addr/sub.",                "Lmy-addr/sub"},
-    {"amqp:/_local/my-addr.",                    "Lmy-addr"},
-    {"amqp:/_topo/area/router/local/sub.",       "Aarea"},
-    {"amqp:/_topo/my-area/router/local/sub.",    "Rrouter"},
-    {"amqp:/_topo/my-area/my-router/local/sub.", "Llocal/sub"},
-    {"amqp:/_topo/area/all/local/sub.",          "Aarea"},
-    {"amqp:/_topo/my-area/all/local/sub.",       "Tlocal/sub"},
-    {"amqp:/_topo/all/all/local/sub.",           "Tlocal/sub"},
-    {"amqp://host:port/_local/my-addr.",         "Lmy-addr"},
-    {"_topo/area/router/my-addr.",               "Aarea"},
-    {"_topo/my-area/router/my-addr.",            "Rrouter"},
-    {"_topo/my-area/my-router/my-addr.",         "Lmy-addr"},
-    {"_topo/my-area/router.",                    "Rrouter"},
-    {"_topo/my-area/router:",                    "Rrouter:"},
+    {"amqp:/_xtopo/network/area/router/local/sub",          "Nnetwork"},
+    {"amqp:/_xtopo/my-network/area/router/local/sub",       "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/router/local/sub",    "Rrouter"},
+    {"amqp:/_xtopo/my-network/my-area/my-router/local/sub", "Llocal/sub"},
+    {"amqp:/_xtopo/my-network/area/all/local/sub",          "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/all/local/sub",       "Tlocal/sub"},
+    {"amqp:/_xtopo/my-network/all/all/local/sub",           "Tlocal/sub"},
+    {"_xtopo/network/area/router/my-addr",                  "Nnetwork"},
+    {"_xtopo/my-network/area/router/my-addr",               "Aarea"},
+    {"_xtopo/my-network/my-area/router/my-addr",            "Rrouter"},
+    {"_xtopo/my-network/my-area/my-router/my-addr",         "Lmy-addr"},
+    {"_xtopo/my-network/my-area/router",                    "Rrouter"},
+    {"_xtopo/network",                                      "Nnetwork"},
+    {"_xtopo/0/area",                                       "Aarea"},
+    {"amqp:/mobile",                                        "Mmobile"},
+    {"mobile",                                              "Mmobile"},
+    {"/mobile",                                             "Mmobile"},
+    {"amqp:/_edge/router/sub",                              "Hrouter"},
+    {"_edge/router/sub",                                    "Hrouter"},
+    {"amqp:/_xedge/my-network/router/sub",                  "Hrouter"},
+    {"_xedge/my-network/router/sub",                        "Hrouter"},
+    {"_xedge/network/router/sub",                           "Nnetwork"},
+
+    // Re-run some of the above tests to make sure trailing dots are ignored.
+    {"amqp:/_local/my-addr/sub.",                            "Lmy-addr/sub"},
+    {"amqp:/_local/my-addr.",                                "Lmy-addr"},
+    {"amqp:/_xtopo/my-network/area/router/local/sub.",       "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/router/local/sub.",    "Rrouter"},
+    {"amqp:/_xtopo/my-network/my-area/my-router/local/sub.", "Llocal/sub"},
+    {"amqp:/_xtopo/my-network/area/all/local/sub.",          "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/all/local/sub.",       "Tlocal/sub"},
+    {"amqp:/_xtopo/my-network/all/all/local/sub.",           "Tlocal/sub"},
+    {"amqp://host:port/_local/my-addr.",                     "Lmy-addr"},
+    {"_topo/area/router/my-addr.",                           "Aarea"},
+    {"_topo/my-area/router/my-addr.",                        "Rrouter"},
+    {"_topo/my-area/my-router/my-addr.",                     "Lmy-addr"},
+    {"_topo/my-area/router.",                                "Rrouter"},
+    {"_topo/my-area/router:",                                "Rrouter:"},
+
+    {0, 0}
+    };
+    int idx;
+
+    for (idx = 0; cases[idx].addr; idx++) {
+        qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
+        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
+        qd_iterator_free(iter);
+        if (ret) return ret;
+    }
+
+    for (idx = 0; cases[idx].addr; idx++) {
+        qd_buffer_list_t chain;
+        DEQ_INIT(chain);
+        build_buffer_chain(&chain, cases[idx].addr, 3);
+        qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0,
+                                                 strlen(cases[idx].addr),
+                                                 ITER_VIEW_ADDRESS_HASH);
+        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
+        release_buffer_chain(&chain);
+        qd_iterator_free(iter);
+        if (ret) return ret;
+    }
+
+    return 0;
+}
+
+
+static char* test_view_address_hash_no_network(void *context)
+{
+    struct {const char *addr; const char *view;} cases[] = {
+    {"amqp:/_local/my-addr/sub",                            "Lmy-addr/sub"},
+    {"amqp:/_local/my-addr",                                "Lmy-addr"},
+    {"_local/my-addr",                                      "Lmy-addr"},
+    {"amqp://host:port/_local/my-addr",                     "Lmy-addr"},
+    {"amqp:/_topo/area/router/local/sub",                   "Aarea"},
+    {"amqp:/_topo/my-area/router/local/sub",                "Rrouter"},
+    {"amqp:/_topo/my-area/my-router/local/sub",             "Llocal/sub"},
+    {"amqp:/_topo/area/all/local/sub",                      "Aarea"},
+    {"amqp:/_topo/my-area/all/local/sub",                   "Tlocal/sub"},
+    {"amqp:/_topo/all/all/local/sub",                       "Tlocal/sub"},
+    {"_topo/area/router/my-addr",                           "Aarea"},
+    {"_topo/my-area/router/my-addr",                        "Rrouter"},
+    {"_topo/my-area/my-router/my-addr",                     "Lmy-addr"},
+    {"_topo/my-area/router",                                "Rrouter"},
+
+    {"amqp:/_xtopo/network/area/router/local/sub",          "Aarea"},
+    {"amqp:/_xtopo/my-network/area/router/local/sub",       "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/router/local/sub",    "Rrouter"},
+    {"amqp:/_xtopo/my-network/my-area/my-router/local/sub", "Llocal/sub"},
+    {"amqp:/_xtopo/my-network/area/all/local/sub",          "Aarea"},
+    {"amqp:/_xtopo/my-network/my-area/all/local/sub",       "Tlocal/sub"},
+    {"amqp:/_xtopo/my-network/all/all/local/sub",           "Tlocal/sub"},
+    {"_xtopo/network/area/router/my-addr",                  "Aarea"},
+    {"_xtopo/my-network/area/router/my-addr",               "Aarea"},
+    {"_xtopo/my-network/my-area/router/my-addr",            "Rrouter"},
+    {"_xtopo/my-network/my-area/my-router/my-addr",         "Lmy-addr"},
+    {"_xtopo/my-network/my-area/router",                    "Rrouter"},
+    {"_xtopo/network",                                      "A"},
+    {"_xtopo/0/area",                                       "Aarea"},
+    {"amqp:/mobile",                                        "Mmobile"},
+    {"mobile",                                              "Mmobile"},
+    {"/mobile",                                             "Mmobile"},
+    {"amqp:/_edge/router/sub",                              "Hrouter"},
+    {"_edge/router/sub",                                    "Hrouter"},
+    {"amqp:/_xedge/my-network/router/sub",                  "Hrouter"},
+    {"_xedge/my-network/router/sub",                        "Hrouter"},
+    {"_xedge/network/router/sub",                           "Hrouter"},
 
     {0, 0}
     };
@@ -380,30 +467,117 @@ static char* test_view_address_hash(void *context)
 static char* test_view_address_hash_edge(void *context)
 {
     struct {const char *addr; const char *view;} cases[] = {
-    {"amqp:/_local/my-addr/sub",                "Lmy-addr/sub"},
-    {"amqp:/_local/my-addr",                    "Lmy-addr"},
-    {"amqp:/_topo/area/router/local/sub",       "L_edge"},
-    {"amqp:/_topo/my-area/router/local/sub",    "L_edge"},
-    {"amqp:/_topo/my-area/my-router/local/sub", "Llocal/sub"},
-    {"amqp:/_topo/area/all/local/sub",          "L_edge"},
-    {"amqp:/_topo/my-area/all/local/sub",       "Tlocal/sub"},
-    {"amqp:/_topo/all/all/local/sub",           "Tlocal/sub"},
-    {"amqp://host:port/_local/my-addr",         "Lmy-addr"},
-    {"_topo/area/router/my-addr",               "L_edge"},
-    {"_topo/my-area/router/my-addr",            "L_edge"},
-    {"_topo/my-area/my-router/my-addr",         "Lmy-addr"},
-    {"_topo/my-area/router",                    "L_edge"},
-    {"amqp:/mobile",                            "Mmobile"},
-    {"mobile",                                  "Mmobile"},
-    {"/mobile",                                 "Mmobile"},
-    {"amqp:/_edge/router/sub",                  "L_edge"},
-    {"_edge/router/sub",                        "L_edge"},
-    {"amqp:/_edge/my-router/sub",               "Lsub"},
-    {"_edge/my-router/sub",                     "Lsub"},
-    {"_edge/edgerouter-1/sub",                  "Hedgerouter-1"},
-    {"amqp:/_edge/edgerouter-2/sub",            "Hedgerouter-2"},
-    {"_edge/edgerouter-3/sub",                  "Hedgerouter-3"},
-    {"_edge/edgerouter-4/sub",                  "L_edge"},
+    {"amqp:/_local/my-addr/sub",                            "Lmy-addr/sub"},
+    {"amqp:/_local/my-addr",                                "Lmy-addr"},
+    {"amqp://host:port/_local/my-addr",                     "Lmy-addr"},
+    {"amqp:/_topo/area/router/local/sub",                   "L_edge"},
+    {"amqp:/_topo/area/router/local/sub",                   "L_edge"},
+    {"amqp:/_topo/my-area/router/local/sub",                "L_edge"},
+    {"amqp:/_topo/my-area/my-router/local/sub",             "Llocal/sub"},
+    {"amqp:/_topo/area/all/local/sub",                      "L_edge"},
+    {"amqp:/_topo/my-area/all/local/sub",                   "Tlocal/sub"},
+    {"amqp:/_topo/all/all/local/sub",                       "Tlocal/sub"},
+    {"_topo/area/router/my-addr",                           "L_edge"},
+    {"_topo/my-area/router/my-addr",                        "L_edge"},
+    {"_topo/my-area/my-router/my-addr",                     "Lmy-addr"},
+    {"_topo/my-area/router",                                "L_edge"},
+
+    {"amqp:/_xtopo/network/area/router/local/sub",          "L_edge"},
+    {"amqp:/_xtopo/my-network/area/router/local/sub",       "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/router/local/sub",    "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/my-router/local/sub", "Llocal/sub"},
+    {"amqp:/_xtopo/my-network/area/all/local/sub",          "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/all/local/sub",       "Tlocal/sub"},
+    {"amqp:/_xtopo/my-network/all/all/local/sub",           "Tlocal/sub"},
+    {"_xtopo/my-network/area/router/my-addr",               "L_edge"},
+    {"_xtopo/my-network/my-area/router/my-addr",            "L_edge"},
+    {"_xtopo/my-network/my-area/my-router/my-addr",         "Lmy-addr"},
+    {"_xtopo/my-network/my-area/router",                    "L_edge"},
+    {"amqp:/mobile",                                        "Mmobile"},
+    {"mobile",                                              "Mmobile"},
+    {"/mobile",                                             "Mmobile"},
+    {"amqp:/_edge/router/sub",                              "L_edge"},
+    {"_edge/router/sub",                                    "L_edge"},
+    {"amqp:/_edge/my-router/sub",                           "Lsub"},
+    {"_edge/my-router/sub",                                 "Lsub"},
+    {"_edge/edgerouter-1/sub",                              "Hedgerouter-1"},
+    {"amqp:/_edge/edgerouter-2/sub",                        "Hedgerouter-2"},
+    {"_edge/edgerouter-3/sub",                              "Hedgerouter-3"},
+    {"_edge/edgerouter-4/sub",                              "L_edge"},
+    {"amqp:/_xedge/my-network/router/sub",                  "L_edge"},
+    {"_xedge/my-network/router/sub",                        "L_edge"},
+    {"amqp:/_xedge/my-network/my-router/sub",               "Lsub"},
+    {"_xedge/my-network/my-router/sub",                     "Lsub"},
+    {"_xedge/my-network/edgerouter-1/sub",                  "Hedgerouter-1"},
+    {"amqp:/_xedge/my-network/edgerouter-2/sub",            "Hedgerouter-2"},
+    {"_xedge/my-network/edgerouter-3/sub",                  "Hedgerouter-3"},
+    {"_xedge/my-network/edgerouter-4/sub",                  "L_edge"},
+    {"_xedge/network/edgerouter-3/sub",                     "L_edge"},
+
+    {0, 0}
+    };
+    int idx;
+
+    static const char *edge1 = "edgerouter-1";
+    static const char *edge2 = "edgerouter-2";
+    static const char *edge3 = "edgerouter-3";
+
+    qd_iterator_add_peer_edge(edge1);
+    qd_iterator_add_peer_edge(edge2);
+    qd_iterator_add_peer_edge(edge3);
+
+    for (idx = 0; cases[idx].addr; idx++) {
+        qd_iterator_t *iter = qd_iterator_string(cases[idx].addr, ITER_VIEW_ADDRESS_HASH);
+        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
+        qd_iterator_free(iter);
+        if (ret) return ret;
+    }
+
+    for (idx = 0; cases[idx].addr; idx++) {
+        qd_buffer_list_t chain;
+        DEQ_INIT(chain);
+        build_buffer_chain(&chain, cases[idx].addr, 3);
+        qd_iterator_t *iter = qd_iterator_buffer(DEQ_HEAD(chain), 0,
+                                                 strlen(cases[idx].addr),
+                                                 ITER_VIEW_ADDRESS_HASH);
+        char *ret = verify_iterator(context, iter, cases[idx].addr, cases[idx].view);
+        release_buffer_chain(&chain);
+        qd_iterator_free(iter);
+        if (ret) return ret;
+    }
+
+    qd_iterator_del_peer_edge(edge1);
+    qd_iterator_del_peer_edge(edge2);
+    qd_iterator_del_peer_edge(edge3);
+
+    return 0;
+}
+
+
+static char* test_view_address_hash_edge_no_network(void *context)
+{
+    struct {const char *addr; const char *view;} cases[] = {
+    {"amqp:/_xtopo/network/area/router/local/sub",          "L_edge"},
+    {"amqp:/_xtopo/my-network/area/router/local/sub",       "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/router/local/sub",    "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/my-router/local/sub", "Llocal/sub"},
+    {"amqp:/_xtopo/my-network/area/all/local/sub",          "L_edge"},
+    {"amqp:/_xtopo/my-network/my-area/all/local/sub",       "Tlocal/sub"},
+    {"amqp:/_xtopo/my-network/all/all/local/sub",           "Tlocal/sub"},
+    {"amqp:/_xtopo/network/all/all/local/sub",              "Tlocal/sub"},
+    {"_xtopo/my-network/area/router/my-addr",               "L_edge"},
+    {"_xtopo/my-network/my-area/router/my-addr",            "L_edge"},
+    {"_xtopo/my-network/my-area/my-router/my-addr",         "Lmy-addr"},
+    {"_xtopo/my-network/my-area/router",                    "L_edge"},
+    {"amqp:/_xedge/my-network/router/sub",                  "L_edge"},
+    {"_xedge/my-network/router/sub",                        "L_edge"},
+    {"amqp:/_xedge/my-network/my-router/sub",               "Lsub"},
+    {"_xedge/my-network/my-router/sub",                     "Lsub"},
+    {"_xedge/my-network/edgerouter-1/sub",                  "Hedgerouter-1"},
+    {"amqp:/_xedge/my-network/edgerouter-2/sub",            "Hedgerouter-2"},
+    {"_xedge/my-network/edgerouter-3/sub",                  "Hedgerouter-3"},
+    {"_xedge/my-network/edgerouter-4/sub",                  "L_edge"},
+    {"_xedge/network/edgerouter-3/sub",                     "Hedgerouter-3"},
 
     {0, 0}
     };
@@ -988,6 +1162,7 @@ int field_tests(void)
     char *test_group = "field_tests";
 
     qd_iterator_set_address(false, "my-area", "my-router");
+    qd_iterator_set_network("my-network");
 
     TEST_CASE(test_view_global_dns, 0);
     TEST_CASE(test_view_global_non_dns, 0);
@@ -1012,8 +1187,14 @@ int field_tests(void)
     TEST_CASE(test_prefix_hash, 0);
     TEST_CASE(test_iterator_copy_octet, 0);
 
+    qd_iterator_set_network(0);
+    TEST_CASE(test_view_address_hash_no_network, 0);
+
     qd_iterator_set_address(true, "my-area", "my-router");
+    qd_iterator_set_network("my-network");
     TEST_CASE(test_view_address_hash_edge, 0);
+    qd_iterator_set_network(0);
+    TEST_CASE(test_view_address_hash_edge_no_network, 0);
 
     return result;
 }
