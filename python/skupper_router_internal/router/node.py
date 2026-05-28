@@ -272,6 +272,16 @@ class NodeTracker:
             if self.link_state.del_peer(node_id):
                 self.link_state_changed = True
 
+    def peer_cost_update(self, node_id, new_cost):
+        """
+        Invoked when neighbor cost got changed dynamically
+        """
+        if self.link_state.is_peer(node_id):
+            old_cost = self.link_state.peers[node_id]
+            if self.link_state.update_peer_cost(node_id, new_cost):
+                self.link_state_changed = True
+                self.container.log_ls(LOG_DEBUG, "Updated cost to neighbor %s in local link state: %d -> %d" % (node_id, old_cost, new_cost))
+
     def set_mobile_seq(self, router_maskbit, mobile_seq):
         """
         """
@@ -363,6 +373,18 @@ class NodeTracker:
             node.link_state = link_state
             node.link_state.last_seen = now
             self.recompute_topology = True
+
+            ##
+            # If this is a neighbor router and the cost has changed in the received
+            # link state, call the C core to update the connection cost locally. The
+            # C core then calls back to python to update the local link state.
+            ##
+            if node.is_neighbor() and self.my_id in link_state.peers:
+                new_cost = link_state.peers[self.my_id]
+                old_cost = self.link_state.peers[node_id]
+                if old_cost != new_cost:
+                    self.container.log(LOG_DEBUG, "Neighbor LSU received from node %s - cost change %d -> %d" % (node_id, old_cost, new_cost))
+                    self.container.router_adapter.update_connection_cost(node.peer_link_id, new_cost)
 
             ##
             # Look through the new link state for references to nodes that we don't

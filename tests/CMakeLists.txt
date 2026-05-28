@@ -142,6 +142,7 @@ foreach(py_test_module
     system_tests_topology
     system_tests_topology_disposition
     system_tests_topology_addition
+    system_tests_topology_dynamic_cost
     system_tests_delivery_counts
     system_tests_cmdline_parsing
     system_tests_bad_configuration
