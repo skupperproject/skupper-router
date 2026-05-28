@@ -140,8 +140,8 @@ class TopologyTests (TestCase):
         # Initial connector costs
         cls.A_B_cost = 100
         cls.A_C_cost =  50
-        cls.A_D_cost =   5
-        cls.B_C_cost =   1
+        cls.A_D_cost =   1
+        cls.B_C_cost =  10
         cls.B_D_cost =  20
         cls.C_D_cost =   1
 
