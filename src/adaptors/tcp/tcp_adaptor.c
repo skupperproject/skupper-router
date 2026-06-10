@@ -17,6 +17,7 @@
  * under the License.
  */
 
+
 #include <qpid/dispatch/ctools.h>
 #include <qpid/dispatch/amqp.h>
 #include <qpid/dispatch/enum.h>
