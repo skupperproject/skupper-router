@@ -8,7 +8,7 @@ Terminal 1 — start the router:
   /root/skupper-router/build/router/skrouterd -c /root/skupper-router/build/a.conf
 
 Terminal 2 — start backend and clients:
-  python3 /root/skupper-router/half_close_sim.py --port 9090 --count 5
+  python3 /root/skupper-router/scripts/half_close_sim.py --port 9090 --count 5
 
 Terminal 3 — inspect connections:
   ss -tnp | grep -E '9090|9091'
