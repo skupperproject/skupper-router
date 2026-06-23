@@ -19,12 +19,30 @@ Terminal 3 — inspect connections:
 """
 
 import argparse
-import os
 import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
+
+
+def _router_rss_mib() -> str:
+    """Return RSS stats every 50 connections (starts at 5) and at the end of the test"""
+    try:
+        out = subprocess.run(
+            '. /root/skupper-router/build/config.sh && skstat -g',
+            shell=True, capture_output=True, text=True, timeout=5,
+        ).stdout
+        for line in out.splitlines():
+            stripped = line.strip()
+            if stripped.startswith('RSS'):
+                parts = stripped.split()
+                if len(parts) >= 3:
+                    return f"{parts[1]} {parts[2]}"
+    except Exception:
+        pass
+    return '?'
 
 
 #Simulates the bug by calling sleeping instead of doing conn.close() which leaves the connection stuck in CLOSE_WAIT.
@@ -101,11 +119,13 @@ def main() -> None:
     # Spawn client threads staggered by 50ms to avoid jams
     stop_event = threading.Event()
     threads = []
-    for _ in range(args.count):
+    for i in range(1, args.count + 1):
         t = threading.Thread(target=_half_close_worker, args=(args.host, args.port, stop_event), daemon=True)
         t.start()
         threads.append(t)
         time.sleep(0.05)
+        if i % 50 == 0:
+            print(f"TCP count {i}: {_router_rss_mib()}", flush=True)
     # Hold connections open for hold_secs, then signal all threads to stop
     try:
         time.sleep(args.hold)
@@ -114,6 +134,7 @@ def main() -> None:
     stop_event.set()
     for t in threads:
         t.join(timeout=3)
+    print(f"Final RSS after {args.count} connections: {_router_rss_mib()}", flush=True)
 
 
 if __name__ == "__main__":
