@@ -17,7 +17,7 @@ DEFAULT_ROUTER_URL   = "amqp://127.0.0.1:5672"
 CONN_TYPE            = "io.skupper.router.connection"
 TCP_CONTAINER        = "TcpAdaptor"
 EGRESS_DISPATCH_HOST = "egress-dispatch"
-
+IDLE_THRESHOLD_SECS  = 5 * 60  #kill connection idle for 5 minutes. Do (4 * 3600) for 4 hrs
 
 #Helpers
 
@@ -88,11 +88,21 @@ def is_tcp_adaptor_conn(conn: dict) -> bool:
     return True
 
 
+def is_orphaned(conn: dict) -> bool:
+    """True if the connection has had no data flowing for longer than IDLE_THRESHOLD_SECS.
+    lastDlvSeconds is how many seconds ago the last delivery was seen on this connection.
+    If it is None, no delivery has ever been recorded — also treated as orphaned."""
+    last_dlv = conn.get("lastDlvSeconds")
+    if last_dlv is None:
+        return True
+    return int(last_dlv) >= IDLE_THRESHOLD_SECS
+
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-def run_once(url: str, skmanage_bin: str, dry_run: bool) -> int:
+def run_once(url: str, skmanage_bin: str) -> int:
     """
-    Query connections, print a report, kill all TCP adaptor connections (unless dry_run to be used later when filtering out which are half closed or not).
+    Query connections, identify orphaned ones, and kill them.
     Returns the number of connections killed.
     """
     try:
@@ -101,38 +111,33 @@ def run_once(url: str, skmanage_bin: str, dry_run: bool) -> int:
         log(f"ERROR: could not query router at {url}: {exc}")
         return 0
 
-    tcp_conns = [c for c in all_conns if is_tcp_adaptor_conn(c)]
+    tcp_conns      = [c for c in all_conns if is_tcp_adaptor_conn(c)]
+    orphaned_conns = [c for c in tcp_conns if is_orphaned(c)]
 
-    log(f"Connections — total:{len(all_conns)}  tcp-adaptor:{len(tcp_conns)}")
+    log(f"Connections — total:{len(all_conns)}  tcp-adaptor:{len(tcp_conns)}  orphaned:{len(orphaned_conns)}")
 
-    if not tcp_conns:
-        log("No TCP adaptor connections to kill.")
+    if not orphaned_conns:
+        log(f"No orphaned connections found (idle > {IDLE_THRESHOLD_SECS // 3600}h).")
         return 0
 
-    action = "would kill" if dry_run else "killing"
-    log(f"--- {action.upper()} {len(tcp_conns)} TCP connection(s) ---")
-
-    if dry_run:
-        for conn in tcp_conns:
-            log(f"  [DRY-RUN] id={conn.get('identity','?')}  host={conn.get('host','?')}  "
-                f"dir={conn.get('dir','?')}  uptime={fmt_seconds(conn.get('uptimeSeconds'))}")
-        return len(tcp_conns)
+    log(f"--- KILLING {len(orphaned_conns)} orphaned connection(s) ---")
 
     def _kill(conn):
         ident    = conn.get("identity", "?")
         ok, err  = delete_connection(url, ident, skmanage_bin)
-        return ident, conn.get("host", "?"), conn.get("dir", "?"), conn.get("uptimeSeconds"), ok, err
+        return ident, conn.get("host", "?"), conn.get("dir", "?"), conn.get("uptimeSeconds"), conn.get("lastDlvSeconds"), ok, err
 
      #Runs the script in parallel. I have no clue how many threads other machines can handle so 
      #I just kept it at 20 for now. Ask Andy / TED abt how much this should be later
     with ThreadPoolExecutor(max_workers=20) as pool:
-        futures = {pool.submit(_kill, c): c for c in tcp_conns}
+        futures = {pool.submit(_kill, c): c for c in orphaned_conns}
         for fut in as_completed(futures):
-            ident, host, direction, uptime, ok, err = fut.result()
+            ident, host, direction, uptime, last_dlv, ok, err = fut.result()
             status = "killed" if ok else f"failed: {err}"
-            log(f"  id={ident}  host={host}  dir={direction}  uptime={fmt_seconds(uptime)}  → {status}")
+            log(f"  id={ident}  host={host}  dir={direction}  uptime={fmt_seconds(uptime)}  "
+                f"last-dlv={fmt_seconds(last_dlv)}  → {status}")
 
-    return len(tcp_conns)
+    return len(orphaned_conns)
 
 
 def main() -> None:
@@ -153,18 +158,13 @@ def main() -> None:
         metavar="PATH",
         help="Path to the skmanage binary (default: skmanage, found via PATH)",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print orphaned connections but do NOT kill them",
-    )
     args = parser.parse_args()
 
     log(f"router : {args.url}")
-    log(f"mode   : {'dry-run (no kills)' if args.dry_run else 'active (will kill all TCP connections)'}")
+    log(f"mode   : active (will kill TCP connections idle > {IDLE_THRESHOLD_SECS // 3600}h)")
     print(flush=True)
 
-    run_once(args.url, args.skmanage, args.dry_run)
+    run_once(args.url, args.skmanage)
 
 
 if __name__ == "__main__":
