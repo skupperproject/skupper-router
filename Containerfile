@@ -60,7 +60,7 @@ FROM registry.access.redhat.com/ubi9/ubi:latest AS packager
 
 RUN dnf -y --setopt=install_weak_deps=0 --nodocs \
     --installroot /output install \
-    coreutils-single \
+    coreutils-single iproute \
     cyrus-sasl-lib cyrus-sasl-plain openssl \
     python3 \
     libnghttp2 \
