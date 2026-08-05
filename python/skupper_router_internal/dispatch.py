@@ -123,6 +123,7 @@ class QdDll(PyDLL):
         self._prototype(self.qd_dispatch_delete_tcp_connector, None, [self.qd_dispatch_p, c_void_p])
         self._prototype(self.qd_dispatch_configure_connector, c_void_p, [self.qd_dispatch_p, py_object])
         self._prototype(self.qd_connection_manager_delete_connector, None, [self.qd_dispatch_p, c_void_p])
+        self._prototype(self.qd_dispatch_update_connector, None, [self.qd_dispatch_p, c_void_p, c_long])
 
         #sslProfile and display name service
         self._prototype(self.qd_tls_configure_ssl_profile, c_void_p, [self.qd_dispatch_p, py_object])

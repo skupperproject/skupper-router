@@ -1373,6 +1373,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
 {
     qdr_connection_role_t  role = 0;
     int                    cost = 1;
+    int                    remote_cost = 1;
     int                    link_capacity = 1;
     const char            *name = 0;
     bool                   streaming_links = false;
@@ -1464,7 +1465,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                     if (!pn_data_next(props)) break;
                     if (is_router) {
                         if (pn_data_type(props) == PN_INT) {
-                            const int remote_cost = (int) pn_data_get_int(props);
+                            remote_cost = (int) pn_data_get_int(props);
                             if (remote_cost > cost)
                                 cost = remote_cost;
                         }
@@ -1612,6 +1613,7 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
                           inbound,
                           role,
                           cost,
+                          remote_cost,
                           connection_id,
                           name,
                           conn->strip_annotations_in,

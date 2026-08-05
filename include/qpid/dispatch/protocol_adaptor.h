@@ -363,6 +363,7 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param incoming True iff this connection is associated with a listener, False if a connector
  * @param role The configured role of this connection
  * @param cost If the role is inter_router, this is the configured cost for the connection.
+ * @param remote_cost If the role is inter_router, this is the cost sent by the peer router in the open frame
  * @param management_id - A unique identifier that is used in management and logging operations.
  * @param label Optional label provided in the connection's configuration.
  * @param strip_annotations_in True if configured to remove annotations on inbound messages.
@@ -370,20 +371,21 @@ typedef void (*qdr_connection_bind_context_t) (qdr_connection_t *context, void *
  * @param link_capacity The capacity, in deliveries, for links in this connection.
  * @return Pointer to a connection object that can be used to refer to this connection over its lifetime.
  */
-qdr_connection_t *qdr_connection_opened(qdr_core_t                    *core,
-                                        qdr_protocol_adaptor_t        *protocol_adaptor,
-                                        bool                           incoming,
-                                        qdr_connection_role_t          role,
-                                        int                            cost,
-                                        uint64_t                       management_id,
-                                        const char                    *label,
-                                        bool                           strip_annotations_in,
-                                        bool                           strip_annotations_out,
-                                        int                            link_capacity,
-                                        const qd_policy_spec_t        *policy_spec,
-                                        qdr_connection_info_t         *connection_info,
-                                        qdr_connection_bind_context_t  context_binder,
-                                        void                          *bind_token);
+qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
+                                        qdr_protocol_adaptor_t       *protocol_adaptor,
+                                        bool                          incoming,
+                                        qdr_connection_role_t         role,
+                                        int                           cost,
+                                        int                           remote_cost,
+                                        uint64_t                      management_id,
+                                        const char                   *label,
+                                        bool                          strip_annotations_in,
+                                        bool                          strip_annotations_out,
+                                        int                           link_capacity,
+                                        const qd_policy_spec_t       *policy_spec,
+                                        qdr_connection_info_t        *connection_info,
+                                        qdr_connection_bind_context_t context_binder,
+                                        void                         *bind_token);
 
 /**
  * qdr_connection_notify_closed
