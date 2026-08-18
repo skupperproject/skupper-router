@@ -172,7 +172,9 @@ typedef enum vflow_attribute {
     VFLOW_ATTRIBUTE_ERROR_LISTENER_SIDE  = 64,  // String
     VFLOW_ATTRIBUTE_ERROR_CONNECTOR_SIDE = 65,  // String
     VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL   = 66,  // uint The SSL Profile ordinal field that is currently in operation
-    VFLOW_ATTRIBUTE_HTTP_PROXY           = 67   // String as boolean "yes"/"no"
+    VFLOW_ATTRIBUTE_HTTP_PROXY           = 67,  // String as boolean "yes"/"no"
+    VFLOW_ATTRIBUTE_STRATEGY             = 68,  // String
+    VFLOW_ATTRIBUTE_STRATEGY_VALUE       = 69   // uint
 } vflow_attribute_t;
 // clang-format on
 

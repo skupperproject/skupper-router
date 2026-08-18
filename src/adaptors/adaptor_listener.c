@@ -780,12 +780,20 @@ void *qd_adaptor_listener_add_address(qd_listener_address_config_t *config)
         //
         //  Create a vflow record for this listener address
         //
+        assert(new_addr->listener->address_strategy == QD_ADDR_STRATEGY_PRIORITY ||
+               new_addr->listener->address_strategy == QD_ADDR_STRATEGY_WEIGHTED);
+        const char *strategy = new_addr->listener->address_strategy == QD_ADDR_STRATEGY_PRIORITY
+            ? ADDRESS_STRATEGY_PRIORITY : ADDRESS_STRATEGY_WEIGHTED;
+        const uint64_t strategy_value = new_addr->value < 0 ? 0 : (uint64_t) new_addr->value;
+
         new_addr->vflow = vflow_start_record(VFLOW_RECORD_LISTENER, 0);
         vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_PROTOCOL,         "tcp");
         vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_NAME,             new_addr->listener->name);
         vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_DESTINATION_HOST, new_addr->listener->host);
         vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_DESTINATION_PORT, new_addr->listener->port);
         vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_VAN_ADDRESS,      new_addr->address);
+        vflow_set_string(new_addr->vflow, VFLOW_ATTRIBUTE_STRATEGY,         strategy);
+        vflow_set_uint64(new_addr->vflow, VFLOW_ATTRIBUTE_STRATEGY_VALUE,   strategy_value);
         vflow_set_uint64(new_addr->vflow, VFLOW_ATTRIBUTE_FLOW_COUNT_L4,    0);
     } else {
         // error occured

@@ -129,7 +129,9 @@ attribute_types = {
     64: "ERROR_LISTENER_SIDE",
     65: "ERROR_CONNECTOR_SIDE",
     66: "ACTIVE_TLS_ORDINAL",
-    67: "HTTP_PROXY"
+    67: "HTTP_PROXY",
+    68: "STRATEGY",
+    69: "STRATEGY_VALUE"
 }
 
 
