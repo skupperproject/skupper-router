@@ -29,6 +29,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#define MAX_FIELD_RECURSION 32
+
 DEQ_DECLARE(qd_parsed_field_t, qd_parsed_field_list_t);
 
 
@@ -183,7 +185,7 @@ static inline char *parse_amqp_field(qd_buffer_field_t *bfield, qd_amqp_field_t 
 // type tag octet and should be long enough to hold the entire AMQP data type.
 // On return bfield has been advanced past the encoded AMQP data.
 //
-static qd_parsed_field_t *qd_parse_internal(qd_buffer_field_t *bfield, qd_parsed_field_t *p)
+static qd_parsed_field_t *qd_parse_internal(qd_buffer_field_t *bfield, qd_parsed_field_t *p, int recursion_depth)
 {
     qd_parsed_field_t *field = new_qd_parsed_field_t();
     if (!field)
@@ -194,20 +196,24 @@ static qd_parsed_field_t *qd_parse_internal(qd_buffer_field_t *bfield, qd_parsed
     field->parent     = p;
     field->full_field = *bfield;
 
-    field->parse_error = parse_amqp_field(bfield, &field->amqp);
-    if (!field->parse_error) {
-        // truncate full_field in case bfield holds multiple values.
-        // since bfield has advanced past the parsed field we just subtract it.
-        field->full_field.remaining -= bfield->remaining;
+    if (recursion_depth >= MAX_FIELD_RECURSION) {
+        field->parse_error = "Maximum field recursion exceeded";
+    } else {
+        field->parse_error = parse_amqp_field(bfield, &field->amqp);
+        if (!field->parse_error) {
+            // truncate full_field in case bfield holds multiple values.
+            // since bfield has advanced past the parsed field we just subtract it.
+            field->full_field.remaining -= bfield->remaining;
 
-        // now parse out the content of any contained types:
-        qd_buffer_field_t children = field->amqp.value;
-        for (uint32_t idx = 0; idx < field->amqp.count; idx++) {
-            qd_parsed_field_t *child = qd_parse_internal(&children, field);
-            DEQ_INSERT_TAIL(field->children, child);
-            if (!qd_parse_ok(child)) {
-                field->parse_error = child->parse_error;
-                break;
+            // now parse out the content of any contained types:
+            qd_buffer_field_t children = field->amqp.value;
+            for (uint32_t idx = 0; idx < field->amqp.count; idx++) {
+                qd_parsed_field_t *child = qd_parse_internal(&children, field, recursion_depth + 1);
+                DEQ_INSERT_TAIL(field->children, child);
+                if (!qd_parse_ok(child)) {
+                    field->parse_error = child->parse_error;
+                    break;
+                }
             }
         }
     }
@@ -222,7 +228,7 @@ qd_parsed_field_t *qd_parse(const qd_iterator_t *iter)
         return 0;
 
     qd_buffer_field_t bfield = qd_iterator_get_view_cursor(iter);
-    return qd_parse_internal(&bfield, 0);
+    return qd_parse_internal(&bfield, 0, 0);
 }
 
 
@@ -740,12 +746,12 @@ const char *qd_parse_router_annotations(
     qd_buffer_field_t ra_fields = ra_list.value;
 
     // index 0: flags
-    (*ra_flags) = qd_parse_internal(&ra_fields, 0);
+    (*ra_flags) = qd_parse_internal(&ra_fields, 0, 0);
     if (!qd_parse_ok((*ra_flags)))
         return (*ra_flags)->parse_error;
 
     // index 1: to-override (optional)
-    (*ra_to_override) = qd_parse_internal(&ra_fields, 0);
+    (*ra_to_override) = qd_parse_internal(&ra_fields, 0, 0);
     if (!qd_parse_ok((*ra_to_override)))
         return (*ra_to_override)->parse_error;
     if ((*ra_to_override)->amqp.tag == QD_AMQP_NULL) {
@@ -756,7 +762,7 @@ const char *qd_parse_router_annotations(
         return "Invalid router to-override annotation: wrong type";
 
     // index 2: ingress router id
-    (*ra_ingress) = qd_parse_internal(&ra_fields, 0);
+    (*ra_ingress) = qd_parse_internal(&ra_fields, 0, 0);
     if (!qd_parse_ok((*ra_ingress)))
         return (*ra_ingress)->parse_error;
     if ((*ra_ingress)->amqp.tag == QD_AMQP_NULL) {
@@ -767,7 +773,7 @@ const char *qd_parse_router_annotations(
         return "Invalid router ingress annotation: wrong type";
 
     // index 3: trace list
-    (*ra_trace) = qd_parse_internal(&ra_fields, 0);
+    (*ra_trace) = qd_parse_internal(&ra_fields, 0, 0);
     if (!qd_parse_ok((*ra_trace)))
         return (*ra_trace)->parse_error;
     if (!qd_parse_is_list((*ra_trace)))
@@ -783,7 +789,7 @@ const char *qd_parse_router_annotations(
 
     // index 4: ingress mesh id
     if (ra_list.count >= 5) {
-        (*ra_ingress_mesh) = qd_parse_internal(&ra_fields, 0);
+        (*ra_ingress_mesh) = qd_parse_internal(&ra_fields, 0, 0);
         if (!qd_parse_ok(*ra_ingress_mesh)) {
             return (*ra_ingress_mesh)->parse_error;
         } else if (!qd_parse_is_string(*ra_ingress_mesh)) {
