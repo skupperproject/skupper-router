@@ -1,0 +1,71 @@
+////
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License
+////
+
+= How does a Router communicate to the other Routers that it has a new consumer?
+
+== The Scenario
+
+1. Routers A and B are connected and in steady-state.
+2. Receiver connects to A.
+3. How does A tell B about its new receiver?
+
+
+== Overview
+1. A receiving client attaches to the router.
+2. The router stores the client's address in its own data structures.
+3. The router formats and sends an address update to all other routers.
+4. The other routers receive and incorporate the address update.
+
+
+== The Forwarding Layer
+There are several code layers involved in this process, but the most relevant one could be called ‘forwarding’. Its job is to receive knowledge about the new address, and prepare it to be sent to all other routers.
+
+The two most relevant data structures are *qdr_address_t* and *qdr_node_t*.
+
+*qdr_address_t* is a record that describes a single address known to the router.  It has two relevant fields:
+
+* rlinks - A linked list of local destinations (attached to this router)
+* rnodes - A bitmask (set) of pointers to qdr_node_t records that represent remote routers on which there is at least one local destination for the address.
+
+*qdr_node_t* is a record that describes a router in the network.  It contains either a neighbor_link (if the router is directly attached to this router) or a next_hop_router (if the router is not a neighbor).  In the latter case, the next_hop_router refers to a router that is a neighbor and is the best next-hop to reach the destination router.
+
+
+
+
+
+
+== What Happens On Router A (the one with the client)
+
+1. A new local destination for the address is attached
+2. The destination link is placed into the address's 'rlinks' list
+3. The ADDED_LOCAL_DEST event is raised.
+4. The mobile-sync module reacts to the ADDED_LOCAL_DEST event.  If this is the first local dest for this address, mobile-sync composes a MAU (Mobile Address Update) message saying 'address X has at least one destination here on router-A' and sends it to all the other routers.
+
+
+== What Happens on Router B 
+
+1. Router B receives the MAU message, looks up the address in the address table and adds router-A to the set (rnodes) of remote destinations for the address.
+2. The qdr_node_t for router-A is already known, and the path to it (direct or next-hop) has already been computed.  A reference to the existing node is simply being placed in the address's rnodes set.
+3. Messages that arrive on router-B destined for the address cause the address to be looked up in the table.
+
+
+Now, when a message that is destined for this address arrives at router-B, it will cause the address to be looked up in the table.
+
+Seeing that there are no local destinations (rlinks) and one remote destination (rnodes), router-B forwards the message on to router-A either directly if it's a neighbor or via the next-hop if it's not.
+
