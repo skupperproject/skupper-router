@@ -1,0 +1,34 @@
+2023-03-12 11:54:24.077669 +0100 SERVER (info) Container Name: Standalone_ZIsKPjNEXUzhcok
+2023-03-12 11:54:24.078884 +0100 ROUTER (info) Router started in Standalone mode
+2023-03-12 11:54:24.078984 +0100 ROUTER (info) Version: 2.1.0-156-g2a85d022
+2023-03-12 11:54:24.080946 +0100 ROUTER_CORE (info) Streaming link scrubber: Scan interval: 30 seconds, max free pool: 128 links
+2023-03-12 11:54:24.081033 +0100 ROUTER_CORE (info) Core module enabled: streaming_link_scrubber
+2023-03-12 11:54:24.081103 +0100 ROUTER_CORE (info) Core module present but disabled: mobile_sync
+2023-03-12 11:54:24.081208 +0100 ROUTER_CORE (info) Stuck delivery detection: Scan interval: 30 seconds, Delivery age threshold: 10 seconds
+2023-03-12 11:54:24.081326 +0100 ROUTER_CORE (info) Core module enabled: stuck_delivery_detection
+2023-03-12 11:54:24.082128 +0100 ROUTER_CORE (info) Core module enabled: heartbeat_server
+2023-03-12 11:54:24.082205 +0100 ROUTER_CORE (info) Core module present but disabled: heartbeat_edge
+2023-03-12 11:54:24.082301 +0100 ROUTER_CORE (info) Core module enabled: address_lookup_client
+2023-03-12 11:54:24.082352 +0100 ROUTER_CORE (info) Core module present but disabled: mesh_discovery_interior
+2023-03-12 11:54:24.082411 +0100 ROUTER_CORE (info) Core module present but disabled: mesh_discovery_edge
+2023-03-12 11:54:24.082473 +0100 ROUTER_CORE (info) Core module present but disabled: edge_addr_tracking
+2023-03-12 11:54:24.082528 +0100 ROUTER_CORE (info) Core module present but disabled: core_test_hooks
+2023-03-12 11:54:24.082578 +0100 ROUTER_CORE (info) Core module present but disabled: edge_router
+2023-03-12 11:54:24.083734 +0100 FLOW_LOG (info) Protocol logging started
+2023-03-12 11:54:24.084008 +0100 ROUTER_CORE (info) Protocol adaptor registered: tcp
+2023-03-12 11:54:24.084180 +0100 ROUTER_CORE (info) Protocol adaptor registered: http2
+2023-03-12 11:54:24.084418 +0100 ROUTER_CORE (info) Protocol adaptor registered: http/1.x
+2023-03-12 11:54:24.085748 +0100 ROUTER_CORE (info) Router Core thread running. 0/Standalone_ZIsKPjNEXUzhcok
+2023-03-12 11:54:24.085979 +0100 ROUTER_CORE (info) Protocol adaptor registered: amqp
+2023-03-12 11:54:24.086084 +0100 ROUTER_CORE (info) In-process subscription M/$management
+2023-03-12 11:54:24.105875 +0100 AGENT (info) Activating management agent on $_management_internal
+2023-03-12 11:54:24.105934 +0100 ROUTER_CORE (info) In-process subscription L/$management
+2023-03-12 11:54:24.106039 +0100 ROUTER_CORE (info) In-process subscription M/sfe.VbCkR:0
+2023-03-12 11:54:24.106079 +0100 ROUTER_CORE (info) In-process subscription L/$_management_internal
+2023-03-12 11:54:24.107232 +0100 POLICY (info) Policy configured maxConnections: 65535, policyDir: '',access rules enabled: 'false', use hostname patterns: 'false'
+2023-03-12 11:54:24.108581 +0100 POLICY (info) Policy fallback defaultVhost is defined: '$default'
+2023-03-12 11:54:24.112510 +0100 CONN_MGR (info) Configured Listener: 0.0.0.0:amqp proto=any, role=normal
+2023-03-12 11:54:24.113131 +0100 SERVER (notice) Operational, 4 Threads Running (process ID 2151406)
+2023-03-12 11:54:24.113479 +0100 SERVER (notice) Process VmSize 20.00 TiB (31.11 GiB available memory)
+2023-03-12 11:54:24.113508 +0100 SERVER (info) Running in DEBUG Mode
+2023-03-12 11:54:24.114054 +0100 SERVER (notice) Listening on 0.0.0.0:amqp

@@ -1,0 +1,3 @@
+path:
+  data: elastic_home/var/lib/elasticsearch
+  logs: elastic_home/var/log/elasticsearch
