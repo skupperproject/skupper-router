@@ -1804,6 +1804,7 @@ qdr_link_t *qdr_connection_new_streaming_link_CT(qdr_core_t *core, qdr_connectio
                                       QD_SSN_LINK_STREAMING, QDR_DEFAULT_PRIORITY);
         break;
     case QDR_ROLE_EDGE_CONNECTION:
+    case QDR_ROLE_INTER_EDGE:
     case QDR_ROLE_INTER_ROUTER_DATA:
     case QDR_ROLE_ROUTE_CONTAINER:
     case QDR_ROLE_INTER_NETWORK:
