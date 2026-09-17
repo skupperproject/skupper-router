@@ -27,8 +27,8 @@ def main():
         prog='gha_sarif_masher',
         description='Processes SARIF files from GCC so that GitHub Actions ingest them.',
         epilog='This complements @microsoft/sarif-multitool with additional transformations.')
-    parser.add_argument('filename', type=argparse.FileType('rt'))
-    parser.add_argument('--output', required=True, type=argparse.FileType('wt'))
+    parser.add_argument('filename', type=str)   # rt
+    parser.add_argument('--output', required=True, type=str)  # wt
     parser.add_argument('--basedir', required=True)
 
     args = parser.parse_args()
@@ -36,12 +36,14 @@ def main():
     output = args.output
     basedir = args.basedir
 
-    sarif = json.load(filename)
+    with open(args.filename, 'r') as f:
+        sarif = json.load(f)
 
-    relativize_urls(sarif, basedir=basedir)
-    fill_in_missing_pysicalLocations(sarif)
+        relativize_urls(sarif, basedir=basedir)
+        fill_in_missing_pysicalLocations(sarif)
 
-    json.dump(sarif, fp=output)
+        with open(args.output, 'w') as o:
+            json.dump(sarif, fp=o)
 
 
 def iterate_subtrees(o):
