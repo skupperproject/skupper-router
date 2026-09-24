@@ -1664,7 +1664,7 @@ class StreamingLinkScrubberTest(TestCase):
         cls.RouterA.wait_router_connected('RouterB')
         cls.RouterB.wait_router_connected('RouterA')
 
-    def no_test_01_streaming_link_scrubber(self):
+    def test_01_streaming_link_scrubber(self):
         """
         Ensure extra streaming links are closed by the periodic scrubber
         """
