@@ -220,6 +220,7 @@ def main_except(argv):
                                                                            "")  # router that sent the open
                 if peer_conn != "" and plf.data.conn_peer != "":
                     pid_peer = plf.data.conn_peer.strip('\"')
+# pylint: disable=c-extension-no-member
                     rtr, rtridx = router.which_router_id_tod(comn.routers, pid_peer, plf.datetime)
                     if rtr is not None:
                         pid = rtr.conn_id(peer_conn)

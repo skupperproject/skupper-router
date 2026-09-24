@@ -37,6 +37,7 @@
 #include <qpid/dispatch/tls_amqp.h>
 
 #include <proton/sasl.h>
+#include <proton/version.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -1568,6 +1569,10 @@ static void AMQP_opened_handler(qd_router_t *router, qd_connection_t *conn, bool
         tport = pn_connection_transport(conn->pn_conn);
     }
     if (tport) {
+#if (PN_VERSION_MAJOR > 0 || PN_VERSION_MINOR > 41 || (PN_VERSION_MINOR == 41 && PN_VERSION_POINT > 0))
+        // Disable Proton's limit on per-connection buffered data (introduced in Proton 0.41.1)
+        pn_transport_set_max_buffered_delivery_bytes(tport, 0);
+#endif
         sasl = pn_sasl(tport);
         if(conn->user_id)
             user = conn->user_id;
