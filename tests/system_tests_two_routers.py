@@ -1867,7 +1867,7 @@ class ExtensionStateTester(MessagingHandler):
         self._received = 0
         self._settled = 0
         self._total = 10
-        self._message = Message(body="XYZ" * (1024 * 1024 * 2))
+        self._message = Message(body="XYZ" * (1024 * 256))
         self.error = None
 
     def on_start(self, event):

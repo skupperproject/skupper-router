@@ -3229,11 +3229,12 @@ class Q2HoldoffDropTest(MessagingHandler):
         self.n_rx = 0
         self.n_tx = 0
         self.close_timer = 0
+        self.closed_slow = False
 
-        # currently the router buffer size is 512 bytes and the Q2 holdoff
-        # buffer chain high watermark is 256 buffers.  We need to send a
+        # currently the router buffer size is 4096 bytes and the Q2 holdoff
+        # buffer chain high watermark is 64 buffers.  We need to send a
         # message that will be big enough to trigger Q2 holdoff
-        self.big_msg = Message(body=["DISPATCH-1330" * (512 * 256 * 4)])
+        self.big_msg = Message(body=["XY" * (4096 * 64)])
 
     def done(self):
         if self.timer:
@@ -3295,6 +3296,7 @@ class Q2HoldoffDropTest(MessagingHandler):
 
     def close_rx_slow(self, event):
         if self.rx_slow_conn:
+            self.closed_slow = True
             self.rx_slow_conn.close()
             self.rx_slow_conn = None
             self.rx_slow = None
@@ -3315,6 +3317,8 @@ class Q2HoldoffDropTest(MessagingHandler):
 
         if self.n_rx == 5:
             # succesfully received on last two receivers
+            if not self.closed_slow:
+                self.error = "Q2 block did not occur"
             self.done()
 
     def run(self):
