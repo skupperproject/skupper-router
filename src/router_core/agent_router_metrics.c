@@ -56,7 +56,7 @@
 #define QDR_ROUTER_MEMORY_USAGE                        27
 #define QDR_ROUTER_RSS_USAGE                           28
 #define QDR_ROUTER_CONNECTION_COUNTERS                 29
-#define QDR_ROUTER_VERSION                             31
+#define QDR_ROUTER_VERSION                             30
 
 const char *qdr_router_columns[] =
     {"identity",
