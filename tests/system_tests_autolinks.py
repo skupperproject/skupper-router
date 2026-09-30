@@ -780,7 +780,7 @@ class ManageAutolinksTest(MessagingHandler):
                 msg = Message(properties=props, body=body, reply_to=self.reply_to)
                 self.agent.send(msg)
                 self.n_created += 1
-        elif self.n_attached == self.count and self.n_deleted < self.count:
+        elif self.n_deleted < self.count == self.n_attached:
             while self.n_deleted < self.count and self.agent.credit > 0:
                 props = {'operation': 'DELETE',
                          'type': CONFIG_AUTOLINK_TYPE,
