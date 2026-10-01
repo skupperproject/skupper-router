@@ -118,6 +118,12 @@ class LinkState:
         self.peers = {}
         self.ls_seq = 0
 
+    def update_peer_cost(self, _id, _cost):
+        if _id in self.peers and self.peers[_id] != _cost:
+            self.peers[_id] = _cost
+            return True
+        return False
+
     def has_peers(self):
         return len(self.peers) > 0
 

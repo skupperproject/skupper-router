@@ -115,6 +115,12 @@ class RouterEngine:
         """
         self.node_tracker.link_lost(link_id)
 
+    def peerCostUpdate(self, node_id, new_cost):
+        """
+        Invoked from C core when the cost to a neighbor router changes dynamically.
+        """
+        self.node_tracker.peer_cost_update(node_id, new_cost)
+
     def handleTimerTick(self):
         """
         """
@@ -230,8 +236,3 @@ class RouterEngine:
         """
         app_props = {'opcode' : msg.get_opcode()}
         self.io_adapter[0].send(Message(address=dest, properties=app_props, body=msg.to_dict()), True, True)
-
-    def node_updated(self, addr, reachable, neighbor):
-        """
-        """
-        self.router_adapter(addr, reachable, neighbor)

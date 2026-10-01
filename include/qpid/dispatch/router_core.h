@@ -108,12 +108,14 @@ void qdr_core_topology_changed(qdr_core_t *core, int router_maskbit);
 typedef void (*qdr_set_mobile_seq_t)    (void *context, int router_maskbit, uint64_t mobile_seq);
 typedef void (*qdr_set_my_mobile_seq_t) (void *context, uint64_t mobile_seq);
 typedef void (*qdr_link_lost_t)         (void *context, int link_maskbit);
+typedef void (*qdr_peer_cost_update_t)(void *context, const char *container_id, int new_cost);
 
-void qdr_core_route_table_handlers(qdr_core_t              *core, 
-                                   void                    *context,
-                                   qdr_set_mobile_seq_t     set_mobile_seq,
-                                   qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost);
+void qdr_core_route_table_handlers(qdr_core_t             *core,
+                                   void                   *context,
+                                   qdr_set_mobile_seq_t    set_mobile_seq,
+                                   qdr_set_my_mobile_seq_t set_my_mobile_seq,
+                                   qdr_link_lost_t         link_lost,
+                                   qdr_peer_cost_update_t  peer_cost_update);
 
 /**
  ******************************************************************************
@@ -161,6 +163,18 @@ qdr_subscription_t *qdr_core_subscribe(qdr_core_t             *core,
                                        void                   *context);
 
 void qdr_core_unsubscribe(qdr_subscription_t *sub);
+
+/**
+ * qdr_core_update_connection_cost
+ *
+ * Update the cost of an inter-router connection identified by conn_id or maskbit
+ *
+ * @param core Pointer to the core module
+ * @param conn_id The connection identity or maskbit
+ * @param new_cost The new cost value (must be >= 1)
+ * @param use_maskbit True if conn_id holds the maskbit of the connection, False if it holds the connection identity
+ */
+void qdr_core_update_connection_cost(qdr_core_t *core, uint64_t conn_id, int new_cost, bool use_maskbit);
 
 /**
  * qdr_send_to
