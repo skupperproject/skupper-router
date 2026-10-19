@@ -176,12 +176,15 @@ class MultiAddressListenerTest(TestCase):
         # Wait for the TCP connectors and listeners
         expected = {
             router_1_id : [
-                ('CONNECTOR', {'NAME': cls.connector_name[0], 'VAN_ADDRESS': cls.van_address[0]},
-                 'LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[0]},
-                 'LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[1]},
-                 'LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[4]},
-                 'LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[5]}
-                 )
+                ('CONNECTOR', {'NAME': cls.connector_name[0], 'VAN_ADDRESS': cls.van_address[0]}),
+                ('LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[0],
+                              'STRATEGY': 'priority', 'STRATEGY_VALUE': 10}),
+                ('LISTENER', {'NAME': cls.listener_name[0], 'VAN_ADDRESS': cls.van_address[1],
+                              'STRATEGY': 'priority', 'STRATEGY_VALUE': 20}),
+                ('LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[4],
+                              'STRATEGY': 'weighted', 'STRATEGY_VALUE': 3}),
+                ('LISTENER', {'NAME': cls.listener_name[1], 'VAN_ADDRESS': cls.van_address[5],
+                              'STRATEGY': 'weighted', 'STRATEGY_VALUE': 7})
             ],
             router_2_id : [
                 ('CONNECTOR', {'NAME': cls.connector_name[1], 'VAN_ADDRESS': cls.van_address[1]}),
@@ -410,6 +413,18 @@ class MultiAddressListenerTest(TestCase):
                                                                                    self.listener_name[0],
                                                                                    self.van_address[0])
         self.assertIsNotNone(self.listener_vflow_id[self.listener_address_name[0]])
+        listener_id = self.listener_vflow_id[self.listener_address_name[0]]
+        expected = {
+            router_1_id: [
+                ('LISTENER', {'IDENTITY': listener_id,
+                              'NAME': self.listener_name[0],
+                              'VAN_ADDRESS': self.van_address[0],
+                              'STRATEGY': 'priority',
+                              'STRATEGY_VALUE': 10})
+            ]
+        }
+        self.assertTrue(retry(lambda: self.snooper_thread.match_records(expected)),
+                        f"Listener vflowId {listener_id} RECORDS: {self.snooper_thread.get_results()}")
         # addr1:(prio=10, reachable:True)
         # check flow: listener addr1 -> connector_1 (flow index 0)
         flow_index = 0
