@@ -63,42 +63,42 @@ class StandaloneMeshTest(TestCase):
         cls.routers[2].is_edge_routers_connected(num_edges=2, role='inter-edge')
 
     def test_01_dynamic_address_same_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[0].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[0].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_02_dynamic_address_different_edges_0_1(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_03_dynamic_address_different_edges_1_2(self):
-        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[2].addresses[0])
+        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[2].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_04_dynamic_address_different_edges_2_0(self):
-        test = DynamicAddressTest(self.routers[2].addresses[0], self.routers[0].addresses[0])
+        test = DynamicAddressTest(self.routers[2].addresses[0], self.routers[0].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_05_dynamic_address_anon_same_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[0].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[0].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_06_dynamic_address_anon_different_edges_0_1(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_07_dynamic_address_anon_different_edges_1_2(self):
-        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[2].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[2].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_08_dynamic_address_anon_different_edges_2_0(self):
-        test = DynamicAddressTest(self.routers[2].addresses[0], self.routers[0].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[2].addresses[0], self.routers[0].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
@@ -243,72 +243,72 @@ class ConnectedMeshTest(TestCase):
         cls.routers[4].is_edge_routers_connected(num_edges=2, num_meshes=2)
 
     def test_01_dynamic_address_same_edge(self):
-        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0])
+        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_02_dynamic_address_different_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_03_dynamic_address_int_to_edge(self):
-        test = DynamicAddressTest(self.routers[3].addresses[0], self.routers[1].addresses[0])
+        test = DynamicAddressTest(self.routers[3].addresses[0], self.routers[1].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_04_dynamic_address_edge_to_int(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[3].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[3].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_05_dynamic_address_far_int_to_edge(self):
-        test = DynamicAddressTest(self.routers[4].addresses[0], self.routers[1].addresses[0])
+        test = DynamicAddressTest(self.routers[4].addresses[0], self.routers[1].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_06_dynamic_address_edge_to_far_int(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[4].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[4].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_07_dynamic_address_edge_to_far_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[5].addresses[0])
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[5].addresses[0], False, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_08_dynamic_address_anon_same_edge(self):
-        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[1].addresses[0], self.routers[1].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_09_dynamic_address_anon_different_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[1].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_10_dynamic_address_anon_int_to_edge(self):
-        test = DynamicAddressTest(self.routers[3].addresses[0], self.routers[1].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[3].addresses[0], self.routers[1].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_11_dynamic_address_anon_edge_to_int(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[3].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[3].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_12_dynamic_address_anon_far_int_to_edge(self):
-        test = DynamicAddressTest(self.routers[4].addresses[0], self.routers[1].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[4].addresses[0], self.routers[1].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_13_dynamic_address_anon_edge_to_far_int(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[4].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[4].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
     def test_14_dynamic_address_anon_edge_to_far_edge(self):
-        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[5].addresses[0], anon_sender=True)
+        test = DynamicAddressTest(self.routers[0].addresses[0], self.routers[5].addresses[0], True, 150)
         test.run()
         self.assertIsNone(test.error)
 
