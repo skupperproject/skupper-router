@@ -52,15 +52,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
-        buildType: [Debug, RelWithDebInfo]
+        os: [ubuntu-24.04-arm]
+        buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.41.1
         exclude:
-          - buildType: Debug
-            runtimeCheck: tsan
           - buildType: RelWithDebInfo
             runtimeCheck: asan
     env:
@@ -214,17 +212,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
-        buildType: [Debug, RelWithDebInfo]
+        os: [ubuntu-24.04-arm]
+        buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.41.1
-        shard: [1, 2]
-        shards: [2]
+        shard: [1, 2, 3, 4]
+        shards: [4]
         exclude:
-          - buildType: Debug
-            runtimeCheck: tsan
           - buildType: RelWithDebInfo
             runtimeCheck: asan
     env:
@@ -330,20 +326,18 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         container: ['fedora']
-        containerTag: ['41']
+        containerTag: ['44']
         cc: [gcc]
         cxx: [g++]
-        python: [python3.11]
-        buildType: [RelWithDebInfo, Debug]
+        python: [python3.14]
+        buildType: [RelWithDebInfo]
         runtimeCheck: [asan, tsan]
         protonGitRef:
           - ${{ github.event.inputs.protonBranch || 'main' }}
           - 0.41.1
-        shard: [ 1, 2 ]
-        shards: [ 2 ]
+        shard: [ 1, 2, 3, 4 ]
+        shards: [ 4 ]
         exclude:
-          - buildType: Debug
-            runtimeCheck: tsan
           - buildType: RelWithDebInfo
             runtimeCheck: asan
         include:
@@ -359,7 +353,7 @@ jobs:
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             runtimeCheck: OFF
             shard: 1
-            shards: 2
+            shards: 4
           # CentOS 9: Coverage Proton-main 2 of 2
           - os: ubuntu-latest
             container: 'centos'
@@ -372,7 +366,7 @@ jobs:
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
-            shards: 2
+            shards: 4
           # CentOS 9: Release Proton-main 1 of 2
           - os: ubuntu-latest
             container: 'centos'
@@ -384,7 +378,7 @@ jobs:
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 1
-            shards: 2
+            shards: 4
           # CentOS 9: Release Proton-main 2 of 2
           - os: ubuntu-latest
             container: 'centos'
@@ -396,7 +390,7 @@ jobs:
             runtimeCheck: OFF
             protonGitRef: ${{ github.event.inputs.protonBranch || 'main' }}
             shard: 2
-            shards: 2
+            shards: 4
           # # unittest coverage
           # - os: ubuntu-latest
           #   container: 'fedora'

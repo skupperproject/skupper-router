@@ -136,7 +136,9 @@ qdr_connection_t *qdr_connection_opened(qdr_core_t                   *core,
     char   props_str[1000];
     size_t props_len = 1000;
 
+    sys_mutex_lock(&connection_info->connection_info_lock);
     pn_data_format(connection_info->connection_properties, props_str, &props_len);
+    sys_mutex_unlock(&connection_info->connection_info_lock);
 
     // High frequency log message, but still needs to show at INFO level for non-normal(non-client) connections like
     // inter-router connections and inter-edge connections etc.

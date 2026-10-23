@@ -22,6 +22,7 @@
 #include "proxy.h"
 #include "private.h"
 #include "entity.h"
+#include "tls/private.h"
 
 #include "qpid/dispatch/alloc_pool.h"
 #include "qpid/dispatch/timer.h"
@@ -551,8 +552,10 @@ void qd_connector_add_link(qd_connector_t *connector)
         qd_connector_config_t *ctor_config = connector->ctor_config;
         if (ctor_config && ctor_config->vflow_record) {
             if (ctor_config->tls_config) {
+                sys_mutex_lock(&ctor_config->tls_config->lock);
                 // connector->ctor_config->tls_ordinal is set in the handle_connector_ssl_profile_mgmt_update() callback
                 vflow_set_uint64(ctor_config->vflow_record, VFLOW_ATTRIBUTE_ACTIVE_TLS_ORDINAL, connector->ctor_config->tls_ordinal);
+                sys_mutex_unlock(&ctor_config->tls_config->lock);
             }        
             if (sys_atomic_get(&ctor_config->active_control_conn_count) == 1) {
                 vflow_set_string(ctor_config->vflow_record, VFLOW_ATTRIBUTE_OPER_STATUS, "up");
