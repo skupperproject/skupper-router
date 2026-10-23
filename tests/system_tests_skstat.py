@@ -69,7 +69,7 @@ class SkstatTest(SkstatTestBase):
         cls.router = cls.tester.qdrouterd('test-router', config)
 
     def test_help(self):
-        self.run_skstat(['--help'], regex=r'Usage: skstat')
+        self.run_skstat(['--help'], regex=r'[Uu]sage:.*?skstat')
 
     def test_general(self):
         out = self.run_skstat(['--general'],
