@@ -532,6 +532,12 @@ class ConnectorEntity(ConnectionBaseEntity):
     def __str__(self):
         return super(ConnectorEntity, self).__str__().replace("Entity(", "ConnectorEntity(")
 
+    def _update(self):
+        new_cost = self.attributes.get('cost')
+        if new_cost is None or new_cost < 1:
+            raise ValidationError("Connector configuration update failed: cost value must be >= 1")
+        self._qd.qd_dispatch_update_connector(self._dispatch, self._implementations[0].key, new_cost)
+
 
 class AddressEntity(EntityAdapter):
     def create(self):

@@ -134,12 +134,14 @@ void qdr_core_route_table_handlers(qdr_core_t              *core,
                                    void                    *context,
                                    qdr_set_mobile_seq_t     set_mobile_seq,
                                    qdr_set_my_mobile_seq_t  set_my_mobile_seq,
-                                   qdr_link_lost_t          link_lost)
+                                   qdr_link_lost_t          link_lost,
+                                   qdr_peer_cost_update_t   peer_cost_update)
 {
     core->rt_context           = context;
     core->rt_set_mobile_seq    = set_mobile_seq;
     core->rt_set_my_mobile_seq = set_my_mobile_seq;
     core->rt_link_lost         = link_lost;
+    core->rt_peer_cost_update  = peer_cost_update;
 }
 
 
@@ -757,6 +759,12 @@ static void qdr_do_link_lost(qdr_core_t *core, qdr_general_work_t *work, bool di
         core->rt_link_lost(core->rt_context, work->maskbit);
 }
 
+static void qdr_do_peer_cost_update(qdr_core_t *core, qdr_general_work_t *work, bool discard)
+{
+    if (!discard)
+        core->rt_peer_cost_update(core->rt_context, work->container, work->inter_router_cost);
+    free(work->container);
+}
 
 void qdr_post_set_mobile_seq_CT(qdr_core_t *core, int router_maskbit, uint64_t mobile_seq)
 {
@@ -779,6 +787,15 @@ void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit)
 {
     qdr_general_work_t *work = qdr_general_work(qdr_do_link_lost);
     work->maskbit = link_maskbit;
+    qdr_post_general_work_CT(core, work);
+}
+
+
+void qdr_post_peer_cost_update_CT(qdr_core_t *core, const char *container, int inter_router_cost)
+{
+    qdr_general_work_t *work = qdr_general_work(qdr_do_peer_cost_update);
+    work->container = strdup(container);
+    work->inter_router_cost = inter_router_cost;
     qdr_post_general_work_CT(core, work);
 }
 

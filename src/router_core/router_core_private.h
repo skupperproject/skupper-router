@@ -184,6 +184,15 @@ struct qdr_action_t {
         } stats_request;
 
         //
+        // Arguments for connection cost update
+        //
+        struct {
+            uint64_t conn_id;  // connection identity or mask_bit depending on use_maskbit flag
+            int      cost;
+            bool     use_maskbit;  // true if conn_id field contains mask_bit, false if it contains connection identity
+        } cost_update;
+
+        //
         // Arguments for general use
         //
         struct {
@@ -235,6 +244,7 @@ struct qdr_general_work_t {
     qdr_general_work_handler_t   handler;
     int                          maskbit;
     int                          inter_router_cost;
+    char                        *container;
     qd_message_t                *msg;
     qdr_receive_t                on_message;
     void                        *on_message_context;
@@ -700,6 +710,7 @@ struct qdr_connection_t {
     bool                        enable_protocol_trace; // Has trace level logging been turned on for this connection.
     bool                        has_streaming_links;   ///< one or more of this connection's links are for streaming messages
     int                         inter_router_cost;
+    int                         remote_cost;  // Remote connection cost from the OPEN frame
     int                         link_capacity;
     int                         mask_bit;  ///< set only if inter-router control connection
     int                         group_parent_mask_bit;  ///< if inter-router data connection maskbit of group parent inter-router control conn
@@ -861,6 +872,7 @@ struct qdr_core_t {
     qdr_set_mobile_seq_t     rt_set_mobile_seq;
     qdr_set_my_mobile_seq_t  rt_set_my_mobile_seq;
     qdr_link_lost_t          rt_link_lost;
+    qdr_peer_cost_update_t   rt_peer_cost_update;
 
     //
     // Events section
@@ -981,6 +993,7 @@ void qdr_agent_enqueue_response_CT(qdr_core_t *core, qdr_query_t *query);
 void qdr_post_set_mobile_seq_CT(qdr_core_t *core, int router_maskbit, uint64_t mobile_seq);
 void qdr_post_set_my_mobile_seq_CT(qdr_core_t *core, uint64_t mobile_seq);
 void qdr_post_link_lost_CT(qdr_core_t *core, int link_maskbit);
+void qdr_post_peer_cost_update_CT(qdr_core_t *core, const char *container, int new_cost);
 
 void qdr_post_general_work_CT(qdr_core_t *core, qdr_general_work_t *work);
 void qdr_check_addr_CT(qdr_core_t *core, qdr_address_t *addr);

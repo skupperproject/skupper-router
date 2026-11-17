@@ -341,6 +341,50 @@ QD_EXPORT void qd_connection_manager_delete_connector(qd_dispatch_t *qd, void *i
     qd_connector_config_delete(ctor_config);
 }
 
+QD_EXPORT void qd_dispatch_update_connector(qd_dispatch_t *qd, void *impl, int new_cost)
+{
+    qd_connector_config_t *ctor_config = (qd_connector_config_t *) impl;
+    if (!ctor_config) {
+        return;
+    }
+
+    int old_cost = ctor_config->config.inter_router_cost;
+    if (old_cost == new_cost) {
+        qd_log(LOG_CONN_MGR, QD_LOG_DEBUG,
+               "Connector '%s' cost unchanged (already %d)",
+               ctor_config->config.name, new_cost);
+        return;
+    }
+
+    // Update the connector's configuration
+    ctor_config->config.inter_router_cost = new_cost;
+
+    // Update all active connectors using this configuration
+    qd_connector_t *ctor = DEQ_HEAD(ctor_config->connectors);
+    while (ctor) {
+        sys_mutex_lock(&ctor->lock);
+
+        // If there's an active connection, update its cost
+        qd_connection_t *conn = ctor->qd_conn;
+        if (conn && conn->pn_conn) {
+            // Get the connection's identity for the core
+            uint64_t conn_id = qd_connection_connection_id(conn);
+
+            // Update the cost in the router core
+            // This will trigger the link state update
+            const bool use_maskbit = false;
+            qdr_core_update_connection_cost(qd->router->router_core, conn_id, new_cost, use_maskbit);
+        }
+
+        sys_mutex_unlock(&ctor->lock);
+        ctor = DEQ_NEXT(ctor);
+    }
+
+    qd_log(LOG_CONN_MGR, QD_LOG_INFO,
+           "Connector '%s' cost updated: %d -> %d",
+           ctor_config->config.name, old_cost, new_cost);
+}
+
 
 const char *qd_connector_name(qd_connector_t *ct)
 {
